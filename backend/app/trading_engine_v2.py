@@ -19,6 +19,7 @@ from app.trading_client import TradingClient
 # Import extracted modules
 from app.trading_engine import position_manager
 from app.trading_engine import order_logger
+from app.trading_engine.order_logger import OrderLogEntry
 from app.trading_engine import buy_executor
 from app.trading_engine import sell_executor
 from app.trading_engine import signal_processor
@@ -102,15 +103,17 @@ class StrategyTradingEngine:
         await order_logger.log_order_to_history(
             self.db,
             self.bot,
-            self.product_id,
             position,
-            side,
-            order_type,
-            trade_type,
-            quote_amount,
-            price,
-            status,
-            **kwargs
+            OrderLogEntry(
+                product_id=self.product_id,
+                side=side,
+                order_type=order_type,
+                trade_type=trade_type,
+                quote_amount=quote_amount,
+                price=price,
+                status=status,
+                **kwargs,
+            ),
         )
 
     async def execute_buy(

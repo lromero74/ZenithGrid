@@ -8,7 +8,7 @@ and broadcasts order fill events to connected clients scoped by user_id.
 import pytest
 from unittest.mock import AsyncMock
 
-from app.services.websocket_manager import WebSocketManager, MAX_CONNECTIONS_PER_USER
+from app.services.websocket_manager import WebSocketManager, MAX_CONNECTIONS_PER_USER, OrderFillEvent
 
 
 def _make_ws(accept_side_effect=None, send_json_side_effect=None, close_side_effect=None):
@@ -167,7 +167,7 @@ class TestBroadcastOrderFill:
         ws = _make_ws()
         await mgr.connect(ws, user_id=1)
 
-        await mgr.broadcast_order_fill(
+        await mgr.broadcast_order_fill(OrderFillEvent(
             fill_type="base_order",
             product_id="BTC-USD",
             base_amount=0.001,
@@ -177,7 +177,7 @@ class TestBroadcastOrderFill:
             profit=5.0,
             profit_percentage=10.0,
             user_id=1,
-        )
+        ))
 
         ws.send_json.assert_awaited_once()
         msg = ws.send_json.call_args[0][0]
@@ -199,7 +199,7 @@ class TestBroadcastOrderFill:
         ws = _make_ws()
         await mgr.connect(ws, user_id=1)
 
-        await mgr.broadcast_order_fill(
+        await mgr.broadcast_order_fill(OrderFillEvent(
             fill_type="base_order",
             product_id="ETH-BTC",
             base_amount=1.0,
@@ -207,7 +207,7 @@ class TestBroadcastOrderFill:
             price=0.05,
             position_id=1,
             user_id=1,
-        )
+        ))
 
         msg = ws.send_json.call_args[0][0]
         assert msg["profit"] is None
@@ -220,7 +220,7 @@ class TestBroadcastOrderFill:
         ws = _make_ws()
         await mgr.connect(ws, user_id=1)
 
-        await mgr.broadcast_order_fill(
+        await mgr.broadcast_order_fill(OrderFillEvent(
             fill_type="sell_order",
             product_id="BTC-USD",
             base_amount=0.001,
@@ -228,7 +228,7 @@ class TestBroadcastOrderFill:
             price=50000.0,
             position_id=42,
             user_id=999,  # no such user connected
-        )
+        ))
 
         ws.send_json.assert_not_awaited()
 

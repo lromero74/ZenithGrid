@@ -123,7 +123,7 @@ def _patch_externals():
         patch("app.trading_engine.buy_executor.ws_manager", AsyncMock()),
         patch("app.trading_engine.buy_executor.log_order_to_history", new_callable=AsyncMock),
         patch("app.trading_engine.buy_executor.validate_order_size", new_callable=AsyncMock, return_value=(True, None)),
-        patch("app.trading_engine.buy_executor.get_base_precision", return_value=8),
+        patch("app.trading_engine.fill_reconciler.get_base_precision", return_value=8),
     ):
         yield sm
 

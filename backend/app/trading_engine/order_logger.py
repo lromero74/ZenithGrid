@@ -7,6 +7,7 @@ Handles logging of:
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -85,20 +86,31 @@ async def save_ai_log(
     # Don't commit here - let the main process_signal flow commit everything together
 
 
+@dataclass
+class OrderLogEntry:
+    """Data for a single order history log entry.
+
+    Groups the order-specific fields (side, type, amounts, status)
+    into a single object, reducing the parameter count of
+    log_order_to_history from 12 to 5.
+    """
+    product_id: str
+    side: str
+    order_type: str
+    trade_type: str
+    quote_amount: float
+    price: float
+    status: str
+    order_id: Optional[str] = None
+    base_amount: Optional[float] = None
+    error_message: Optional[str] = None
+
+
 async def log_order_to_history(
     db: AsyncSession,
     bot: Bot,
-    product_id: str,
     position: Optional[Position],
-    side: str,
-    order_type: str,
-    trade_type: str,
-    quote_amount: float,
-    price: float,
-    status: str,
-    order_id: Optional[str] = None,
-    base_amount: Optional[float] = None,
-    error_message: Optional[str] = None,
+    entry: OrderLogEntry,
 ):
     """
     Log order attempt to order_history table for audit trail.
@@ -107,33 +119,26 @@ async def log_order_to_history(
     Args:
         db: Database session
         bot: Bot instance
-        product_id: Trading pair
         position: Position (None for failed base orders)
-        side: "BUY" or "SELL"
-        order_type: "MARKET", "LIMIT", etc.
-        trade_type: "initial", "dca", "safety_order_1", etc.
-        quote_amount: Amount of quote currency attempted
-        price: Price at time of order
-        status: "success", "failed", "canceled"
-        order_id: Coinbase order ID (None for failed orders)
-        base_amount: Amount of base currency acquired (None for failed orders)
-        error_message: Error details if failed
+        entry: OrderLogEntry with order details (product_id, side, order_type,
+               trade_type, quote_amount, price, status, order_id, base_amount,
+               error_message)
     """
     try:
         order_history = OrderHistory(
             timestamp=datetime.utcnow(),
             bot_id=bot.id,
             position_id=position.id if position else None,
-            product_id=product_id,
-            side=side,
-            order_type=order_type,
-            trade_type=trade_type,
-            quote_amount=quote_amount,
-            base_amount=base_amount,
-            price=price,
-            status=status,
-            order_id=order_id,
-            error_message=error_message,
+            product_id=entry.product_id,
+            side=entry.side,
+            order_type=entry.order_type,
+            trade_type=entry.trade_type,
+            quote_amount=entry.quote_amount,
+            base_amount=entry.base_amount,
+            price=entry.price,
+            status=entry.status,
+            order_id=entry.order_id,
+            error_message=entry.error_message,
         )
         db.add(order_history)
         # Note: Don't commit here - let caller handle commits

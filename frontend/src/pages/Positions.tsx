@@ -222,7 +222,7 @@ export default function Positions() {
                 onClick={async () => {
                   if (!await confirm({ title: 'Resize All Budgets', message: 'Resize all deal budgets to their true max potential (base + all safety orders)?\n\nThis may result in overallocation if total exceeds available balance.', variant: 'warning', confirmLabel: 'Resize' })) return
                   try {
-                    const result = await positionsApi.resizeAllBudgets()
+                    const result = await positionsApi.resizeAllBudgets(selectedAccount?.id)
                     addToast({ type: 'success', title: 'Budgets Resized', message: `${result.message}` })
                     refetchPositions()
                   } catch (err: any) {

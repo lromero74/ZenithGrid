@@ -9,6 +9,8 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.exceptions import AppError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -129,7 +131,7 @@ async def market_sell(
             "status": success_response.get('status', 'unknown'),
         }
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Market sell failed for {request.product_id}: {e}")

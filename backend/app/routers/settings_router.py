@@ -13,13 +13,15 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+
+from app.exceptions import AppError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
+from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Settings, User
 from app.auth.dependencies import get_current_user, require_superuser
 from app.schemas import SettingsUpdate, TestConnectionRequest
@@ -65,11 +67,13 @@ async def get_coinbase(
         private_key = decrypt_value(private_key)
 
     # Create and return the client
-    client = create_exchange_client(
+    client = create_exchange_client(ExchangeClientConfig(
         exchange_type="cex",
-        coinbase_key_name=account.api_key_name,
-        coinbase_private_key=private_key,
-    )
+        coinbase=CoinbaseCredentials(
+            key_name=account.api_key_name,
+            private_key=private_key,
+        ),
+    ))
 
     if not client:
         raise HTTPException(
@@ -206,7 +210,7 @@ async def test_connection(request: TestConnectionRequest, current_user: User = D
                 )
             else:
                 raise HTTPException(status_code=400, detail=f"Connection failed: {error_msg}")
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")

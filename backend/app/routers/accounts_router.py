@@ -10,13 +10,13 @@ and the UI can filter by selected account.
 """
 
 import logging
-import re
 from datetime import datetime
 from typing import List, Optional
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from app.exceptions import AppError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,11 +24,15 @@ from app.database import get_db
 from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import Account, Bot, User
 from app.auth.dependencies import get_current_user
-from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio, get_generic_cex_portfolio
+from app.services.account_service import (
+    VALID_PROP_FIRMS,
+    create_exchange_account,
+    get_portfolio_for_account,
+    validate_prop_firm_config,
+)
 from app.services.exchange_service import (
     clear_exchange_client_cache,
     get_coinbase_for_account,
-    get_exchange_client_for_account,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,53 +47,6 @@ def _mask_key_name(val: Optional[str]) -> Optional[str]:
     if len(plain) <= 8:
         return "****"
     return plain[:4] + "****" + plain[-4:]
-
-
-VALID_EXCHANGES = {"coinbase", "bybit", "mt5_bridge"}
-VALID_PROP_FIRMS = {"hyrotrader", "ftmo"}
-
-
-def _validate_prop_firm_config(config: dict, exchange: str) -> None:
-    """Validate prop_firm_config schema and prevent SSRF via bridge_url."""
-    if not isinstance(config, dict):
-        raise HTTPException(status_code=400, detail="prop_firm_config must be a JSON object")
-
-    # MT5 bridge requires a bridge_url
-    if exchange == "mt5_bridge":
-        bridge_url = config.get("bridge_url", "")
-        if bridge_url:
-            parsed = urlparse(bridge_url)
-            # Only allow http/https schemes
-            if parsed.scheme not in ("http", "https"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="bridge_url must use http:// or https:// scheme",
-                )
-            # Block obvious internal/private IPs
-            host = parsed.hostname or ""
-            if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or \
-               host.startswith("10.") or host.startswith("192.168.") or \
-               re.match(r"^172\.(1[6-9]|2\d|3[01])\.", host):
-                raise HTTPException(
-                    status_code=400,
-                    detail="bridge_url must not point to a private/internal address",
-                )
-
-    # Validate testnet flag if present
-    if "testnet" in config and not isinstance(config["testnet"], bool):
-        raise HTTPException(
-            status_code=400,
-            detail="prop_firm_config.testnet must be a boolean",
-        )
-
-    # Only allow known keys to prevent arbitrary data injection
-    allowed_keys = {"bridge_url", "testnet", "api_key", "api_secret", "broker", "server"}
-    unknown = set(config.keys()) - allowed_keys
-    if unknown:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown keys in prop_firm_config: {', '.join(sorted(unknown))}",
-        )
 
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
@@ -366,7 +323,7 @@ async def get_account(
             bot_count=bot_count
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error getting account {account_id}: {e}")
@@ -386,108 +343,7 @@ async def create_account(
     For DEX accounts, provide chain_id, wallet_address, and optionally rpc_url and wallet_private_key.
     """
     try:
-        # Validate account type
-        if account_data.type not in ["cex", "dex"]:
-            raise HTTPException(status_code=400, detail="Account type must be 'cex' or 'dex'")
-
-        # Validate required fields based on type
-        if account_data.type == "cex":
-            if not account_data.exchange:
-                raise HTTPException(status_code=400, detail="CEX accounts require 'exchange' field")
-            if account_data.exchange not in VALID_EXCHANGES:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported exchange '{account_data.exchange}'. "
-                           f"Valid: {', '.join(sorted(VALID_EXCHANGES))}",
-                )
-        else:  # dex
-            if not account_data.chain_id:
-                raise HTTPException(status_code=400, detail="DEX accounts require 'chain_id' field")
-            if not account_data.wallet_address:
-                raise HTTPException(status_code=400, detail="DEX accounts require 'wallet_address' field")
-
-        # Validate prop firm fields
-        if account_data.prop_firm:
-            if account_data.prop_firm not in VALID_PROP_FIRMS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported prop firm '{account_data.prop_firm}'. "
-                           f"Valid: {', '.join(sorted(VALID_PROP_FIRMS))}",
-                )
-        if account_data.prop_firm_config:
-            _validate_prop_firm_config(
-                account_data.prop_firm_config,
-                account_data.exchange or "",
-            )
-
-        # If this is set as default, unset other defaults for this user
-        if account_data.is_default:
-            default_filter = Account.is_default & (Account.user_id == current_user.id)
-            await db.execute(
-                update(Account).where(default_filter).values(is_default=False)
-            )
-
-        # Create the account
-        account = Account(
-            name=account_data.name,
-            type=account_data.type,
-            is_default=account_data.is_default,
-            user_id=current_user.id,
-            is_active=True,
-            exchange=account_data.exchange,
-            api_key_name=(
-                encrypt_value(account_data.api_key_name)
-                if account_data.api_key_name
-                else None
-            ),
-            api_private_key=encrypt_value(account_data.api_private_key) if account_data.api_private_key else None,
-            chain_id=account_data.chain_id,
-            wallet_address=account_data.wallet_address,
-            wallet_private_key=(
-                encrypt_value(account_data.wallet_private_key)
-                if account_data.wallet_private_key else None
-            ),
-            rpc_url=account_data.rpc_url,
-            wallet_type=account_data.wallet_type,
-            # Prop firm fields
-            prop_firm=account_data.prop_firm,
-            prop_firm_config=account_data.prop_firm_config,
-            prop_daily_drawdown_pct=account_data.prop_daily_drawdown_pct,
-            prop_total_drawdown_pct=account_data.prop_total_drawdown_pct,
-            prop_initial_deposit=account_data.prop_initial_deposit,
-        )
-
-        db.add(account)
-        await db.commit()
-        await db.refresh(account)
-
-        # Verify credentials by testing connection
-        # Include prop_firm_config for MT5 accounts (use bridge_url instead of API keys)
-        if account.api_key_name or account.wallet_private_key or account.prop_firm_config:
-            try:
-                client = await get_exchange_client_for_account(db, account.id, use_cache=False)
-                if client:
-                    connected = await client.test_connection()
-                    if not connected:
-                        # Credentials don't work — delete the account
-                        await db.delete(account)
-                        await db.commit()
-                        raise HTTPException(
-                            status_code=400,
-                            detail="Connection test failed. Please verify your API credentials.",
-                        )
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.warning(f"Connection test error for account {account.id}: {e}")
-                await db.delete(account)
-                await db.commit()
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Connection test failed: {str(e)}",
-                )
-
-        logger.info(f"Created account: {account.name} (type={account.type}, id={account.id})")
+        account = await create_exchange_account(db, current_user, account_data)
 
         return AccountResponse(
             id=account.id,
@@ -517,7 +373,7 @@ async def create_account(
             bot_count=0
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error creating account: {e}")
@@ -554,7 +410,7 @@ async def update_account(
                            f"Valid: {', '.join(sorted(VALID_PROP_FIRMS))}",
                 )
         if 'prop_firm_config' in update_data and update_data['prop_firm_config']:
-            _validate_prop_firm_config(
+            validate_prop_firm_config(
                 update_data['prop_firm_config'],
                 update_data.get('exchange') or account.exchange or "",
             )
@@ -624,7 +480,7 @@ async def update_account(
             bot_count=bot_count
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error updating account {account_id}: {e}")
@@ -676,7 +532,7 @@ async def delete_account(
 
         return {"message": f"Account '{account.name}' deleted successfully"}
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error deleting account {account_id}: {e}")
@@ -715,7 +571,7 @@ async def set_default_account(
 
         return {"message": f"Account '{account.name}' is now the default"}
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error setting default account {account_id}: {e}")
@@ -760,7 +616,7 @@ async def get_account_bots(
             ]
         }
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error getting bots for account {account_id}: {e}")
@@ -821,7 +677,7 @@ async def get_default_account(
             bot_count=bot_count
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error getting default account: {e}")
@@ -843,103 +699,8 @@ async def get_account_portfolio(
     For Paper Trading accounts: Returns virtual balances
     """
     try:
-        import json
-
-        # Get the account (filtered by user)
-        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
-        result = await db.execute(query)
-        account = result.scalar_one_or_none()
-
-        if not account:
-            raise HTTPException(status_code=404, detail="Not found")
-
-        # Handle paper trading accounts
-        if account.is_paper_trading:
-            # Parse virtual balances from JSON
-            if account.paper_balances:
-                balances = json.loads(account.paper_balances)
-            else:
-                balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
-
-            # Get real prices for valuation (public market data, cached)
-            from app.coinbase_api.public_market_data import (
-                get_btc_usd_price as get_public_btc_price,
-                get_current_price as get_public_price,
-            )
-
-            btc_usd_price = await get_public_btc_price()
-
-            # Fetch BTC prices for all non-stablecoin currencies
-            altcoin_btc_prices = {}
-            for currency in balances:
-                if currency in ("BTC", "USD", "USDC", "USDT"):
-                    continue
-                try:
-                    altcoin_btc_prices[currency] = await get_public_price(f"{currency}-BTC")
-                except Exception:
-                    altcoin_btc_prices[currency] = 0.0
-
-            # Build holdings array (compatible with frontend Portfolio page)
-            holdings = []
-            total_btc = 0.0
-            total_usd = 0.0
-            for currency, amount in balances.items():
-                if amount > 0:
-                    if currency == "BTC":
-                        btc_value = amount
-                        usd_value = amount * btc_usd_price
-                        current_price_usd = btc_usd_price
-                    elif currency in ("USD", "USDC", "USDT"):
-                        usd_value = amount
-                        btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0
-                        current_price_usd = 1.0
-                    else:
-                        btc_price = altcoin_btc_prices.get(currency, 0.0)
-                        btc_value = amount * btc_price
-                        usd_value = btc_value * btc_usd_price
-                        current_price_usd = btc_price * btc_usd_price
-
-                    total_btc += btc_value
-                    total_usd += usd_value
-
-                    holdings.append({
-                        "asset": currency,
-                        "total_balance": amount,
-                        "available": amount,
-                        "hold": 0.0,
-                        "current_price_usd": current_price_usd,
-                        "usd_value": usd_value,
-                        "btc_value": btc_value,
-                        "percentage": 0.0,
-                    })
-
-            # Calculate allocation percentages now that we have totals
-            for holding in holdings:
-                if total_usd > 0:
-                    holding["percentage"] = (holding["usd_value"] / total_usd) * 100
-
-            return {
-                "holdings": holdings,
-                "holdings_count": len(holdings),
-                "total_btc_value": total_btc,
-                "total_usd_value": total_usd,
-                "btc_usd_price": btc_usd_price,
-                "is_paper_trading": True
-            }
-
-        if account.type == "cex":
-            exchange_name = account.exchange or "coinbase"
-            if exchange_name in ("bybit", "mt5_bridge"):
-                # Non-Coinbase exchange: use generic portfolio builder
-                return await get_generic_cex_portfolio(account, db)
-            else:
-                # Coinbase: use existing rich portfolio logic
-                return await get_cex_portfolio(account, db, get_coinbase_for_account, force_fresh=force_fresh)
-        else:
-            # Use DEX wallet service for blockchain balances
-            return await get_dex_portfolio(account, db, get_coinbase_for_account)
-
-    except HTTPException:
+        return await get_portfolio_for_account(db, current_user, account_id, force_fresh)
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error getting portfolio for account {account_id}: {e}")
@@ -1102,7 +863,7 @@ async def link_perps_portfolio(
             "message": "Perpetuals portfolio linked successfully",
         }
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Failed to discover perps portfolio: {e}")

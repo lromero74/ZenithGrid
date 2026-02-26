@@ -19,6 +19,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from app.exceptions import AppError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -263,7 +265,7 @@ async def create_or_update_ai_credential(
             last_used_at=credential.last_used_at,
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error creating/updating AI credential: {e}")
@@ -310,7 +312,7 @@ async def get_ai_credential(
             last_used_at=credential.last_used_at,
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error getting AI credential for {provider}: {e}")
@@ -370,7 +372,7 @@ async def update_ai_credential(
             last_used_at=credential.last_used_at,
         )
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error updating AI credential for {provider}: {e}")
@@ -413,7 +415,7 @@ async def delete_ai_credential(
 
         return {"message": f"AI credential for '{provider}' deleted successfully"}
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Error deleting AI credential for {provider}: {e}")

@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import selectinload
@@ -26,7 +26,6 @@ from app.models import (
     Report,
     ReportGoal,
     ReportSchedule,
-    ReportScheduleGoal,
     User,
 )
 
@@ -374,27 +373,6 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
     if include_html:
         result["html_content"] = report.html_content
     return result
-
-
-def _compute_next_run_for_new_schedule(body) -> datetime:
-    """Compute the first next_run_at for a newly created schedule."""
-    from app.services.report_scheduler import compute_next_run_flexible
-
-    # Build a lightweight object with the schedule fields
-    class _Sched:
-        pass
-
-    sched = _Sched()
-    sched.schedule_type = body.schedule_type
-    sched.schedule_days = (
-        json.dumps(body.schedule_days) if body.schedule_days else None
-    )
-    sched.quarter_start_month = body.quarter_start_month
-    sched.period_window = body.period_window
-    sched.lookback_value = body.lookback_value
-    sched.lookback_unit = body.lookback_unit
-
-    return compute_next_run_flexible(sched, datetime.utcnow())
 
 
 # ----- Goals CRUD -----
@@ -850,79 +828,8 @@ async def create_schedule(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Create a new report schedule."""
-    # Validate goal IDs belong to this user
-    if body.goal_ids:
-        result = await db.execute(
-            select(ReportGoal.id).where(
-                ReportGoal.id.in_(body.goal_ids),
-                ReportGoal.user_id == current_user.id,
-            )
-        )
-        valid_ids = {row[0] for row in result.fetchall()}
-        invalid = set(body.goal_ids) - valid_ids
-        if invalid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid goal IDs: {list(invalid)}",
-            )
-
-    from app.services.report_scheduler import build_periodicity_label
-
-    next_run = _compute_next_run_for_new_schedule(body)
-    # Serialize recipients as plain email strings for JSON storage
-    recipients_data = [r.email for r in body.recipients]
-    # Build human-readable periodicity label
-    schedule_days_json = (
-        json.dumps(body.schedule_days) if body.schedule_days else None
-    )
-    force_standard_json = (
-        json.dumps(body.force_standard_days)
-        if body.force_standard_days else None
-    )
-    periodicity_label = body.periodicity or build_periodicity_label(
-        body.schedule_type,
-        schedule_days_json,
-        body.quarter_start_month,
-        body.period_window,
-        body.lookback_value,
-        body.lookback_unit,
-        force_standard_json,
-    )
-    schedule = ReportSchedule(
-        user_id=current_user.id,
-        account_id=body.account_id,
-        name=body.name,
-        periodicity=periodicity_label,
-        schedule_type=body.schedule_type,
-        schedule_days=schedule_days_json,
-        quarter_start_month=body.quarter_start_month,
-        period_window=body.period_window,
-        lookback_value=body.lookback_value,
-        lookback_unit=body.lookback_unit,
-        force_standard_days=force_standard_json,
-        is_enabled=body.is_enabled,
-        show_expense_lookahead=body.show_expense_lookahead,
-        recipients=recipients_data,
-        ai_provider=body.ai_provider,
-        generate_ai_summary=body.generate_ai_summary,
-        next_run_at=next_run,
-    )
-    db.add(schedule)
-    await db.flush()  # Get the schedule.id
-
-    # Create goal links
-    for gid in body.goal_ids:
-        db.add(ReportScheduleGoal(schedule_id=schedule.id, goal_id=gid))
-
-    await db.commit()
-
-    # Refresh with goal_links loaded
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(ReportSchedule.id == schedule.id)
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one()
+    from app.services.report_schedule_service import create_schedule_record
+    schedule = await create_schedule_record(db, current_user.id, body)
     return _schedule_to_dict(schedule)
 
 
@@ -934,112 +841,8 @@ async def update_schedule(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Update an existing report schedule."""
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(
-            ReportSchedule.id == schedule_id,
-            ReportSchedule.user_id == current_user.id,
-        )
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one_or_none()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-
-    from app.services.report_scheduler import (
-        build_periodicity_label,
-        compute_next_run_flexible,
-    )
-
-    update_data = body.model_dump(exclude_unset=True)
-    goal_ids = update_data.pop("goal_ids", None)
-
-    # Serialize recipients as plain email strings
-    if "recipients" in update_data and update_data["recipients"] is not None:
-        update_data["recipients"] = [
-            r.email if hasattr(r, "email") else str(r)
-            for r in update_data["recipients"]
-        ]
-
-    # Convert list fields to JSON strings for DB storage
-    if "schedule_days" in update_data:
-        sd = update_data["schedule_days"]
-        update_data["schedule_days"] = (
-            json.dumps(sd) if sd is not None else None
-        )
-    if "force_standard_days" in update_data:
-        fsd = update_data["force_standard_days"]
-        update_data["force_standard_days"] = (
-            json.dumps(fsd) if fsd is not None else None
-        )
-
-    # Track whether schedule config changed (for recompute)
-    schedule_fields = {
-        "schedule_type", "schedule_days", "quarter_start_month",
-        "period_window", "lookback_value", "lookback_unit",
-        "force_standard_days",
-    }
-    schedule_changed = bool(schedule_fields & set(update_data.keys()))
-
-    # Don't write a user-supplied periodicity — it's auto-generated
-    update_data.pop("periodicity", None)
-
-    for key, value in update_data.items():
-        setattr(schedule, key, value)
-
-    # Recompute next_run_at and periodicity label if schedule changed
-    if schedule_changed:
-        schedule.periodicity = build_periodicity_label(
-            schedule.schedule_type,
-            schedule.schedule_days,
-            schedule.quarter_start_month,
-            schedule.period_window or "full_prior",
-            schedule.lookback_value,
-            schedule.lookback_unit,
-            schedule.force_standard_days,
-        )
-        schedule.next_run_at = compute_next_run_flexible(
-            schedule, datetime.utcnow()
-        )
-
-    # Update goal links if provided
-    if goal_ids is not None:
-        # Validate goal IDs
-        if goal_ids:
-            result = await db.execute(
-                select(ReportGoal.id).where(
-                    ReportGoal.id.in_(goal_ids),
-                    ReportGoal.user_id == current_user.id,
-                )
-            )
-            valid_ids = {row[0] for row in result.fetchall()}
-            invalid = set(goal_ids) - valid_ids
-            if invalid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid goal IDs: {list(invalid)}",
-                )
-
-        # Remove existing links
-        await db.execute(
-            delete(ReportScheduleGoal).where(
-                ReportScheduleGoal.schedule_id == schedule.id
-            )
-        )
-        # Add new links
-        for gid in goal_ids:
-            db.add(ReportScheduleGoal(schedule_id=schedule.id, goal_id=gid))
-
-    schedule.updated_at = datetime.utcnow()
-    await db.commit()
-
-    # Refresh with goal_links
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(ReportSchedule.id == schedule.id)
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one()
+    from app.services.report_schedule_service import update_schedule_record
+    schedule = await update_schedule_record(db, current_user.id, schedule_id, body)
     return _schedule_to_dict(schedule)
 
 

@@ -8,7 +8,7 @@ account creation/update logic.
 import pytest
 from unittest.mock import MagicMock, patch
 
-from fastapi import HTTPException
+from app.exceptions import ExchangeUnavailableError, ValidationError
 
 from app.models import Account, User
 from app.services.exchange_service import (
@@ -78,35 +78,35 @@ class TestGetCoinbaseForAccount:
 
     @pytest.mark.asyncio
     async def test_non_cex_account_raises(self, db_session):
-        """Failure: non-CEX account raises HTTPException."""
+        """Failure: non-CEX account raises ValidationError."""
         _, account = await _create_user_and_account(
             db_session, email="dex@test.com", account_type="dex"
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             await get_coinbase_for_account(account)
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
     async def test_missing_credentials_raises(self, db_session):
-        """Failure: missing API credentials raises HTTPException."""
+        """Failure: missing API credentials raises ExchangeUnavailableError."""
         _, account = await _create_user_and_account(
             db_session, email="nocred@test.com", api_key=None, api_private_key=None
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ExchangeUnavailableError) as exc_info:
             await get_coinbase_for_account(account)
         assert exc_info.value.status_code == 503
-        assert "missing API credentials" in exc_info.value.detail
+        assert "missing API credentials" in exc_info.value.message
 
     @pytest.mark.asyncio
     @patch("app.services.exchange_service.create_exchange_client", return_value=None)
     @patch("app.services.exchange_service.is_encrypted", return_value=False)
     async def test_factory_returns_none_raises(self, mock_enc, mock_create, db_session):
-        """Failure: factory returning None raises HTTPException."""
+        """Failure: factory returning None raises ExchangeUnavailableError."""
         _, account = await _create_user_and_account(db_session, email="badclient@test.com")
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ExchangeUnavailableError) as exc_info:
             await get_coinbase_for_account(account)
         assert exc_info.value.status_code == 503
 

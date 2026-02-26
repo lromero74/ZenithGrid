@@ -7,6 +7,7 @@ Connections are scoped by user_id so notifications only reach the owning user.
 
 import logging
 import asyncio
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 from datetime import datetime
 
@@ -18,6 +19,25 @@ logger = logging.getLogger(__name__)
 MAX_CONNECTIONS_PER_USER = 5
 MAX_MESSAGE_SIZE = 4096  # 4 KB
 RECEIVE_TIMEOUT_SECONDS = 300  # 5 minutes
+
+
+@dataclass
+class OrderFillEvent:
+    """Data for an order fill WebSocket notification.
+
+    Groups the fill-specific fields into a single object,
+    reducing the parameter count of broadcast_order_fill from 10 to 2.
+    """
+    fill_type: str       # base_order, dca_order, sell_order, partial_fill, close_short
+    product_id: str
+    base_amount: float
+    quote_amount: float
+    price: float
+    position_id: int
+    profit: Optional[float] = None
+    profit_percentage: Optional[float] = None
+    user_id: Optional[int] = None
+    is_paper_trading: bool = False
 
 
 class WebSocketManager:
@@ -97,35 +117,26 @@ class WebSocketManager:
                     (ws, uid) for ws, uid in self.active_connections if ws not in disconnected
                 ]
 
-    async def broadcast_order_fill(
-        self,
-        fill_type: str,
-        product_id: str,
-        base_amount: float,
-        quote_amount: float,
-        price: float,
-        position_id: int,
-        profit: Optional[float] = None,
-        profit_percentage: Optional[float] = None,
-        user_id: Optional[int] = None,
-        is_paper_trading: bool = False,
-    ):
+    async def broadcast_order_fill(self, event: OrderFillEvent):
         """Broadcast an order fill event to the owning user's connections"""
         message = {
             "type": "order_fill",
-            "fill_type": fill_type,  # base_order, dca_order, sell_order, partial_fill
-            "product_id": product_id,
-            "base_amount": base_amount,
-            "quote_amount": quote_amount,
-            "price": price,
-            "position_id": position_id,
-            "profit": profit,
-            "profit_percentage": profit_percentage,
-            "is_paper_trading": is_paper_trading,
+            "fill_type": event.fill_type,
+            "product_id": event.product_id,
+            "base_amount": event.base_amount,
+            "quote_amount": event.quote_amount,
+            "price": event.price,
+            "position_id": event.position_id,
+            "profit": event.profit,
+            "profit_percentage": event.profit_percentage,
+            "is_paper_trading": event.is_paper_trading,
             "timestamp": datetime.utcnow().isoformat(),
         }
-        logger.info(f"Broadcasting order fill: {fill_type} for {product_id} (user_id={user_id})")
-        await self.broadcast(message, user_id=user_id)
+        logger.info(
+            f"Broadcasting order fill: {event.fill_type} for {event.product_id} "
+            f"(user_id={event.user_id})"
+        )
+        await self.broadcast(message, user_id=event.user_id)
 
 
 # Global singleton instance

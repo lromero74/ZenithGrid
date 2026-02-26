@@ -13,6 +13,7 @@ import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import HTTPException
 from app.models import Account, Bot, Position, User
 
 
@@ -705,3 +706,51 @@ class TestResizeAllBudgets:
         assert result["total_count"] == 0
         assert result["updated_count"] == 0
         assert "already have correct budgets" in result["message"]
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_actions_router.compute_resize_budget", return_value=0.05)
+    async def test_resize_all_budgets_filters_by_account_id(self, mock_resize, db_session):
+        """Only positions on the specified account are resized."""
+        from app.position_routers.position_actions_router import resize_all_budgets
+
+        user, account1 = await _create_user_with_account(db_session, email="resize_acct@example.com")
+        # Create a second account for the same user
+        account2 = Account(
+            user_id=user.id, name="Second Account", type="cex",
+            exchange="coinbase", is_active=True, created_at=datetime.utcnow(),
+        )
+        db_session.add(account2)
+        await db_session.flush()
+
+        bot1 = await _create_bot(db_session, user, account1)
+        bot2 = await _create_bot(db_session, user, account2, name="Test Bot 2")
+        await _create_position(
+            db_session, account1, bot=bot1, status="open", max_quote_allowed=0.01,
+        )
+        await _create_position(
+            db_session, account2, bot=bot2, status="open", max_quote_allowed=0.01,
+            product_id="SOL-BTC",
+        )
+
+        # Resize only account1's positions
+        result = await resize_all_budgets(
+            account_id=account1.id, db=db_session, current_user=user,
+        )
+
+        assert result["total_count"] == 1
+        assert result["updated_count"] == 1
+        assert result["results"][0]["pair"] == "ETH-BTC"
+
+    @pytest.mark.asyncio
+    async def test_resize_all_budgets_rejects_other_users_account(self, db_session):
+        """Passing another user's account_id returns 404."""
+        from app.position_routers.position_actions_router import resize_all_budgets
+
+        user1, account1 = await _create_user_with_account(db_session, email="resize_u1@example.com")
+        user2, account2 = await _create_user_with_account(db_session, email="resize_u2@example.com")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await resize_all_budgets(
+                account_id=account2.id, db=db_session, current_user=user1,
+            )
+        assert exc_info.value.status_code == 404

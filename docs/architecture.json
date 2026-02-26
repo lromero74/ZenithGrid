@@ -1,7 +1,7 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.59.4",
-  "updated": "2026-02-25",
+  "version": "v2.60.0",
+  "updated": "2026-02-26",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
     "backend": {
@@ -61,7 +61,7 @@
       {
         "file": "routers/auth_router.py",
         "prefix": "/api/auth",
-        "purpose": "Login (with MFA), signup, token refresh, password change, TOTP MFA setup/verify/disable, email MFA, trusted devices, email verification, password reset"
+        "purpose": "Thin aggregator that includes all auth sub-routers (auth_routers package)"
       },
       {
         "file": "routers/blacklist_router.py",
@@ -236,6 +236,52 @@
         {
           "file": "news_data/debt_ceiling_data.py",
           "purpose": "Historical US debt ceiling data (1939-present)"
+        }
+      ],
+      "auth_routers": [
+        {
+          "file": "auth_routers/__init__.py",
+          "purpose": "Package init"
+        },
+        {
+          "file": "auth_routers/schemas.py",
+          "purpose": "Pydantic request/response schemas for all auth endpoints"
+        },
+        {
+          "file": "auth_routers/helpers.py",
+          "purpose": "Shared helpers: password hashing, JWT creation, device trust, IP geolocation, MFA login completion"
+        },
+        {
+          "file": "auth_routers/rate_limiters.py",
+          "purpose": "In-memory rate limiting for login, signup, forgot-password, resend verification, MFA verification"
+        },
+        {
+          "file": "auth_routers/auth_core_router.py",
+          "purpose": "Core auth endpoints: login, register, logout, refresh, /me, change-password"
+        },
+        {
+          "file": "auth_routers/email_verify_router.py",
+          "purpose": "Email verification: verify-email, resend-verification, verify-email-code"
+        },
+        {
+          "file": "auth_routers/password_router.py",
+          "purpose": "Password reset: forgot-password, reset-password"
+        },
+        {
+          "file": "auth_routers/mfa_totp_router.py",
+          "purpose": "TOTP MFA: setup, verify-setup, disable, verify during login"
+        },
+        {
+          "file": "auth_routers/mfa_email_router.py",
+          "purpose": "Email MFA: verify-email-code, verify-email-link, enable, disable, resend"
+        },
+        {
+          "file": "auth_routers/device_trust_router.py",
+          "purpose": "Trusted device management: list, revoke, revoke-all"
+        },
+        {
+          "file": "auth_routers/preferences_router.py",
+          "purpose": "User preferences: accept-terms, last-seen-history"
         }
       ]
     },
@@ -722,6 +768,11 @@
     ],
     "services": [
       {
+        "file": "services/account_service.py",
+        "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval",
+        "type": "infrastructure"
+      },
+      {
         "file": "services/account_snapshot_service.py",
         "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture; aggregates daily activity (closed trades, transfers) for chart markers",
         "type": "background"
@@ -822,6 +873,11 @@
         "type": "background"
       },
       {
+        "file": "services/market_metrics_service.py",
+        "purpose": "External API fetch functions for market sentiment and blockchain metrics (Fear & Greed, BTC dominance, altseason, mempool, hash rate, lightning, ATH, RSI, stablecoin mcap, US debt); includes metric snapshot recording and pruning",
+        "type": "background"
+      },
+      {
         "file": "services/news_fetch_service.py",
         "purpose": "Fetches individual article content from source URLs with robots.txt compliance",
         "type": "background"
@@ -872,6 +928,11 @@
         "type": "analysis"
       },
       {
+        "file": "services/report_schedule_service.py",
+        "purpose": "Report schedule CRUD business logic: create and update report schedules with goal associations; extracted from reports_router.py",
+        "type": "infrastructure"
+      },
+      {
         "file": "services/report_scheduler.py",
         "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function",
         "type": "background"
@@ -909,7 +970,7 @@
         },
         {
           "file": "multi_bot_monitor.py",
-          "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation"
+          "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation. Heavy processing extracted to monitor/ package"
         },
         {
           "file": "order_validation.py",
@@ -952,6 +1013,24 @@
         {
           "file": "trading_engine/trailing_stops.py",
           "purpose": "Trailing stop loss and trailing take profit management"
+        },
+        {
+          "file": "trading_engine/fill_reconciler.py",
+          "purpose": "Shared fill reconciliation logic with retry-based order fill retrieval and exponential backoff, used by buy_executor and sell_executor"
+        }
+      ],
+      "monitor_modules": [
+        {
+          "file": "monitor/batch_analyzer.py",
+          "purpose": "Batch analysis of multiple trading pairs using AI batch analysis (single API call); extracted from MultiBotMonitor.process_bot_batch()"
+        },
+        {
+          "file": "monitor/pair_processor.py",
+          "purpose": "Signal processing for a single bot/pair combination; extracted from MultiBotMonitor.process_bot_pair()"
+        },
+        {
+          "file": "monitor/bull_flag_processor.py",
+          "purpose": "Bull flag strategy bot processing: volume spike scanning, pattern detection, trailing stop management; extracted from MultiBotMonitor.process_bull_flag_bot()"
         }
       ]
     },
@@ -1106,6 +1185,10 @@
       {
         "file": "database.py",
         "purpose": "SQLAlchemy async engine, session maker, default content sources"
+      },
+      {
+        "file": "exceptions.py",
+        "purpose": "Domain exceptions (AppError, ValidationError, NotFoundError, ExchangeUnavailableError) replacing HTTPException in services for framework decoupling"
       },
       {
         "file": "encryption.py",
@@ -1503,6 +1586,14 @@
           "purpose": "Modal form for creating/editing bots"
         },
         {
+          "file": "pages/bots/components/CoinCategorySelector.tsx",
+          "purpose": "Coin category badge display and category-based pair selection for bot forms"
+        },
+        {
+          "file": "pages/bots/components/StrategyConfigSection.tsx",
+          "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params)"
+        },
+        {
           "file": "pages/bots/components/BotListItem.tsx",
           "purpose": "Bot card component for bot list"
         },
@@ -1637,6 +1728,22 @@
         {
           "file": "pages/news/components/ArticleContent.tsx",
           "purpose": "Article content display"
+        },
+        {
+          "file": "pages/news/components/ArticlePreviewModal.tsx",
+          "purpose": "Full-screen modal for article preview with reader mode and TTS"
+        },
+        {
+          "file": "pages/news/components/ArticleSection.tsx",
+          "purpose": "Articles tab: Read All controls, category/source filters, article grid, pagination"
+        },
+        {
+          "file": "pages/news/components/NewsFilterBar.tsx",
+          "purpose": "Seen/unseen filter pills, full-articles-only toggle, bulk mark buttons for articles and videos"
+        },
+        {
+          "file": "pages/news/components/VideoSection.tsx",
+          "purpose": "Videos tab: category/source filters, Play All controls, video grid, pagination"
         },
         {
           "file": "pages/news/components/TTSControls.tsx",
@@ -1995,6 +2102,10 @@
       ],
       "page_specific": {
         "bots": [
+          {
+            "file": "pages/bots/hooks/useBotForm.ts",
+            "purpose": "Bot form state management: form data, validation, coin categories, pair selection"
+          },
           {
             "file": "pages/bots/hooks/useBotMutations.ts",
             "purpose": "Create/update/delete/start/stop bot mutations"

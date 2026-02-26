@@ -6,6 +6,7 @@ Handles basic position actions: cancel, force-close, and update settings.
 
 import logging
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -314,10 +315,15 @@ async def resize_position_budget(
 
 @router.post("/resize-all-budgets")
 async def resize_all_budgets(
+    account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Recalculate and update max_quote_allowed for all open positions."""
+    """Recalculate and update max_quote_allowed for open positions.
+
+    If account_id is provided, only resize positions for that account.
+    Otherwise, resize positions across all user accounts.
+    """
     try:
         from sqlalchemy.orm import selectinload
 
@@ -325,11 +331,23 @@ async def resize_all_budgets(
             Position.status == "open"
         )
 
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
+        if account_id is not None:
+            # Verify the account belongs to this user
+            acct = await db.execute(
+                select(Account.id).where(
+                    Account.id == account_id,
+                    Account.user_id == current_user.id,
+                )
+            )
+            if not acct.scalar_one_or_none():
+                raise HTTPException(status_code=404, detail="Account not found")
+            query = query.where(Position.account_id == account_id)
+        else:
+            accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+            accounts_result = await db.execute(accounts_query)
+            user_account_ids = [row[0] for row in accounts_result.fetchall()]
+            if user_account_ids:
+                query = query.where(Position.account_id.in_(user_account_ids))
 
         result = await db.execute(query)
         positions = result.scalars().all()

@@ -13,12 +13,15 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import HTTPException
+from app.exceptions import ExchangeUnavailableError, ValidationError
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.base import ExchangeClient
-from app.exchange_clients.factory import create_exchange_client
+from app.exchange_clients.factory import (
+    create_exchange_client, ExchangeClientConfig, CoinbaseCredentials,
+    ByBitCredentials, MT5BridgeCredentials, DEXCredentials,
+)
 from app.exchange_clients.paper_trading_client import PaperTradingClient
 from app.models import Account
 
@@ -43,15 +46,11 @@ async def get_coinbase_for_account(
         CoinbaseClient instance
     """
     if account.type != "cex":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot create Coinbase client for non-CEX account",
-        )
+        raise ValidationError("Cannot create Coinbase client for non-CEX account")
 
     if not account.api_key_name or not account.api_private_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Coinbase account missing API credentials. Please update in Settings.",
+        raise ExchangeUnavailableError(
+            "Coinbase account missing API credentials. Please update in Settings."
         )
 
     # Decrypt credentials if encrypted
@@ -62,16 +61,14 @@ async def get_coinbase_for_account(
     if is_encrypted(private_key):
         private_key = decrypt_value(private_key)
 
-    client = create_exchange_client(
+    client = create_exchange_client(ExchangeClientConfig(
         exchange_type="cex",
-        coinbase_key_name=key_name,
-        coinbase_private_key=private_key,
-    )
+        coinbase=CoinbaseCredentials(key_name=key_name, private_key=private_key),
+    ))
 
     if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to create Coinbase client. Please check your API credentials.",
+        raise ExchangeUnavailableError(
+            "Failed to create Coinbase client. Please check your API credentials."
         )
 
     return client
@@ -175,12 +172,12 @@ async def get_exchange_client_for_account(
                     pk = cex_account.api_private_key
                     if is_encrypted(pk):
                         pk = decrypt_value(pk)
-                    real_client = create_exchange_client(
+                    real_client = create_exchange_client(ExchangeClientConfig(
                         exchange_type="cex",
-                        coinbase_key_name=kn,
-                        coinbase_private_key=pk,
-                        account_id=cex_account.id,
-                    )
+                        coinbase=CoinbaseCredentials(
+                            key_name=kn, private_key=pk, account_id=cex_account.id,
+                        ),
+                    ))
                     logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
             except Exception as e:
                 logger.warning(f"Failed to get real client for paper trading price data: {e}")
@@ -208,13 +205,11 @@ async def get_exchange_client_for_account(
                 # Testnet flag from prop_firm_config
                 config = account.prop_firm_config or {}
                 testnet = config.get("testnet", False)
-                client = create_exchange_client(
+                client = create_exchange_client(ExchangeClientConfig(
                     exchange_type="cex",
                     exchange_name="bybit",
-                    bybit_api_key=ak,
-                    bybit_api_secret=sk,
-                    bybit_testnet=testnet,
-                )
+                    bybit=ByBitCredentials(api_key=ak, api_secret=sk, testnet=testnet),
+                ))
 
             elif exchange_name == "mt5_bridge":
                 # MT5 Bridge (FTMO)
@@ -223,13 +218,15 @@ async def get_exchange_client_for_account(
                 if not bridge_url:
                     logger.warning(f"Account {account_id} missing MT5 bridge_url")
                     return None
-                client = create_exchange_client(
+                client = create_exchange_client(ExchangeClientConfig(
                     exchange_type="cex",
                     exchange_name="mt5_bridge",
-                    mt5_bridge_url=bridge_url,
-                    mt5_magic_number=config.get("magic_number", 12345),
-                    mt5_account_balance=account.prop_initial_deposit or 100000.0,
-                )
+                    mt5=MT5BridgeCredentials(
+                        bridge_url=bridge_url,
+                        magic_number=config.get("magic_number", 12345),
+                        account_balance=account.prop_initial_deposit or 100000.0,
+                    ),
+                ))
 
             else:
                 # Default: Coinbase
@@ -242,12 +239,12 @@ async def get_exchange_client_for_account(
                 pk = account.api_private_key
                 if is_encrypted(pk):
                     pk = decrypt_value(pk)
-                client = create_exchange_client(
+                client = create_exchange_client(ExchangeClientConfig(
                     exchange_type="cex",
-                    coinbase_key_name=kn,
-                    coinbase_private_key=pk,
-                    account_id=account_id,
-                )
+                    coinbase=CoinbaseCredentials(
+                        key_name=kn, private_key=pk, account_id=account_id,
+                    ),
+                ))
 
         elif account.type == "dex":
             if not account.wallet_private_key or not account.rpc_url:
@@ -257,13 +254,15 @@ async def get_exchange_client_for_account(
             wpk = account.wallet_private_key
             if is_encrypted(wpk):
                 wpk = decrypt_value(wpk)
-            client = create_exchange_client(
+            client = create_exchange_client(ExchangeClientConfig(
                 exchange_type="dex",
-                chain_id=account.chain_id,
-                private_key=wpk,
-                rpc_url=account.rpc_url,
-                dex_router=None,  # TODO: Get from account or default
-            )
+                dex=DEXCredentials(
+                    chain_id=account.chain_id,
+                    private_key=wpk,
+                    rpc_url=account.rpc_url,
+                    dex_router=None,  # TODO: Get from account or default
+                ),
+            ))
         else:
             logger.error(f"Unknown account type: {account.type}")
             return None

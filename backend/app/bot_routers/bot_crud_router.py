@@ -17,7 +17,7 @@ from app.bot_routers.schemas import BotCreate, BotResponse, BotStats, BotUpdate
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
+from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user
 from app.strategies import StrategyDefinition, StrategyRegistry
@@ -48,11 +48,13 @@ async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> Coinbas
     if private_key and is_encrypted(private_key):
         private_key = decrypt_value(private_key)
 
-    return create_exchange_client(
+    return create_exchange_client(ExchangeClientConfig(
         exchange_type="cex",
-        coinbase_key_name=account.api_key_name,
-        coinbase_private_key=private_key,
-    )
+        coinbase=CoinbaseCredentials(
+            key_name=account.api_key_name,
+            private_key=private_key,
+        ),
+    ))
 router = APIRouter()
 
 

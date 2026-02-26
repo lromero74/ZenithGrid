@@ -33,7 +33,7 @@ interface UseTTSSyncOptions {
   defaultRate?: number
 }
 
-interface UseTTSSyncReturn {
+export interface UseTTSSyncReturn {
   // State
   isLoading: boolean
   isPlaying: boolean

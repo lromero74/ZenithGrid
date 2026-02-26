@@ -1140,7 +1140,7 @@ class TestSignupEndpoint:
     """Tests for POST /api/auth/signup"""
 
     @pytest.mark.asyncio
-    @patch("app.routers.auth_router.settings")
+    @patch("app.auth_routers.auth_core_router.settings")
     async def test_signup_disabled_returns_403(self, mock_settings, db_session):
         """Failure: signup returns 403 when public_signup_enabled=False."""
         from fastapi import HTTPException
