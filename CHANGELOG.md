@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.60.1] - 2026-02-26
+
+### Fixed
+- **Volume slider stutter during drag**: The TTS volume slider in the Article Reader now drags smoothly on both desktop and iOS. Previously, frequent time-position updates caused the entire player to re-render during drag, causing visible jank.
+
 ## [v2.60.0] - 2026-02-26
 
 ### Changed
