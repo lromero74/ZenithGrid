@@ -267,6 +267,28 @@ export default function Positions() {
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Mobile Sort Controls */}
+            <div className="sm:hidden flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+              <span className="text-xs text-slate-400 whitespace-nowrap">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                className="flex-1 bg-slate-700 text-white text-sm rounded px-2 py-1 border border-slate-600 focus:outline-none focus:border-blue-500"
+              >
+                <option value="created">Date</option>
+                <option value="pnl">PnL</option>
+                <option value="invested">Volume</option>
+                <option value="pair">Pair</option>
+                <option value="bot">Bot</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-slate-300 hover:text-white"
+              >
+                {sortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+              </button>
+            </div>
+
             {/* Column Headers (hidden on mobile) */}
             <div className="hidden sm:block bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
               <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">

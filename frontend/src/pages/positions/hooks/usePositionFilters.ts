@@ -77,6 +77,10 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
           aVal = a.product_id || 'ETH-BTC'
           bVal = b.product_id || 'ETH-BTC'
           break
+        case 'bot':
+          aVal = a.bot_id || 0
+          bVal = b.bot_id || 0
+          break
         default:
           aVal = 0
           bVal = 0

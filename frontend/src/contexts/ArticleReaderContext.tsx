@@ -670,6 +670,48 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [tts.isPlaying])
 
+  // Media Session API — enables background playback + lock screen controls on mobile
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    ms.setActionHandler('play', () => tts.resume())
+    ms.setActionHandler('pause', () => tts.pause())
+    ms.setActionHandler('nexttrack', () => nextArticle())
+    ms.setActionHandler('previoustrack', () => previousArticle())
+    return () => {
+      ms.setActionHandler('play', null)
+      ms.setActionHandler('pause', null)
+      ms.setActionHandler('nexttrack', null)
+      ms.setActionHandler('previoustrack', null)
+    }
+  }, [tts, nextArticle, previousArticle])
+
+  // Update media session metadata when article changes
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    if (currentArticle && isPlaying) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentArticle.title,
+        artist: currentArticle.source_name || 'Article Reader',
+        album: 'BTC-Bot News',
+      })
+    } else if (!isPlaying) {
+      navigator.mediaSession.metadata = null
+    }
+  }, [currentArticle, isPlaying])
+
+  // Sync media session playback state
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    if (tts.isPlaying) {
+      navigator.mediaSession.playbackState = 'playing'
+    } else if (tts.isPaused) {
+      navigator.mediaSession.playbackState = 'paused'
+    } else {
+      navigator.mediaSession.playbackState = 'none'
+    }
+  }, [tts.isPlaying, tts.isPaused])
+
   // Handle TTS ended - auto-advance to next article
   useEffect(() => {
     // Only auto-advance if:
