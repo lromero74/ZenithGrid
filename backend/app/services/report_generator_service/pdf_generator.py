@@ -237,6 +237,23 @@ def _build_pdf_goals_section(pdf, report_data: Dict, brand_rgb: tuple):
                     _render_pdf_trend_chart(
                         pdf, trend_data, (br, bg, bb),
                     )
+                # Render minimap if enabled and far from target
+                chart_settings = g.get("chart_settings", {})
+                if chart_settings.get("show_minimap"):
+                    from datetime import datetime as _dt_pdf
+                    try:
+                        today = _dt_pdf.utcnow()
+                        tgt = _dt_pdf.strptime(chart_settings["target_date"], "%Y-%m-%d")
+                        if (tgt - today).days > chart_settings.get("minimap_threshold_days", 90):
+                            _render_pdf_minimap(
+                                pdf,
+                                chart_settings.get("full_data_points", []),
+                                chart_settings.get("horizon_date", ""),
+                                chart_settings["target_date"],
+                                (br, bg, bb),
+                            )
+                    except (KeyError, ValueError):
+                        pass
 
     # Expense Coverage goals
     if expense_goals:
@@ -283,6 +300,23 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
     trend_data = g.get("trend_data")
     if trend_data:
         _render_pdf_trend_chart(pdf, trend_data, (br, bg, bb))
+    # Minimap
+    chart_settings = g.get("chart_settings", {})
+    if chart_settings.get("show_minimap"):
+        from datetime import datetime as _dt_pdf
+        try:
+            today = _dt_pdf.utcnow()
+            tgt = _dt_pdf.strptime(chart_settings["target_date"], "%Y-%m-%d")
+            if (tgt - today).days > chart_settings.get("minimap_threshold_days", 90):
+                _render_pdf_minimap(
+                    pdf,
+                    chart_settings.get("full_data_points", []),
+                    chart_settings.get("horizon_date", ""),
+                    chart_settings["target_date"],
+                    (br, bg, bb),
+                )
+        except (KeyError, ValueError):
+            pass
     # Coverage items table header
     cov_items = coverage.get("items", [])
     if cov_items:
@@ -1143,6 +1177,86 @@ def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
     )
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(30, 30, 30)
+
+
+def _render_pdf_minimap(pdf, full_data_points: list, horizon_date: str,
+                        target_date: str, brand_rgb: tuple):
+    """Render a compact minimap chart in the PDF with viewport indicator."""
+    if len(full_data_points) < 2:
+        return
+
+    from datetime import datetime as _dt
+
+    actual = [p["current_value"] for p in full_data_points]
+    ideal = [p["ideal_value"] for p in full_data_points]
+    all_vals = [v for v in actual + ideal if v is not None]
+    if not all_vals:
+        return
+
+    min_val = min(all_vals)
+    max_val = max(all_vals)
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = max_val * 0.1 or 1.0
+    min_val -= val_range * 0.05
+    max_val += val_range * 0.05
+    val_range = max_val - min_val
+
+    chart_x = pdf.l_margin
+    chart_y = pdf.get_y() + 1
+    chart_w = pdf.w - pdf.l_margin - pdf.r_margin
+    chart_h = 15
+    n = len(full_data_points)
+
+    if chart_y + chart_h + 6 > pdf.h - pdf.b_margin:
+        pdf.add_page()
+        chart_y = pdf.get_y() + 1
+
+    date_ts = [_dt.strptime(p["date"], "%Y-%m-%d").timestamp() for p in full_data_points]
+    first_ts, last_ts = date_ts[0], date_ts[-1]
+    ts_range = last_ts - first_ts or 1.0
+
+    def px(i):
+        return chart_x + ((date_ts[i] - first_ts) / ts_range) * chart_w
+
+    def py(v):
+        return chart_y + (1 - (v - min_val) / val_range) * chart_h
+
+    # Viewport rectangle
+    horizon_ts = _dt.strptime(horizon_date, "%Y-%m-%d").timestamp()
+    vp_w = ((horizon_ts - first_ts) / ts_range) * chart_w
+    vp_w = min(vp_w, chart_w)
+    pdf.set_fill_color(59, 130, 246)
+    pdf.set_draw_color(59, 130, 246)
+    with pdf.local_context():
+        pdf.set_alpha(0.08)
+        pdf.rect(chart_x, chart_y, vp_w, chart_h, style="F")
+    pdf.set_line_width(0.15)
+    pdf.rect(chart_x, chart_y, vp_w, chart_h)
+
+    # Chart border
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.15)
+    pdf.rect(chart_x, chart_y, chart_w, chart_h)
+
+    # Ideal line
+    pdf.set_draw_color(*brand_rgb)
+    pdf.set_line_width(0.2)
+    for i in range(n - 1):
+        pdf.line(px(i), py(ideal[i]), px(i + 1), py(ideal[i + 1]))
+
+    # Actual line
+    pdf.set_draw_color(16, 185, 129)
+    pdf.set_line_width(0.3)
+    actual_indices = [(i, v) for i, v in enumerate(actual) if v is not None]
+    for j in range(len(actual_indices) - 1):
+        i0, v0 = actual_indices[j]
+        i1, v1 = actual_indices[j + 1]
+        pdf.line(px(i0), py(v0), px(i1), py(v1))
+
+    pdf.set_line_width(0.2)
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_y(chart_y + chart_h + 2)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple:

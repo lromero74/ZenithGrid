@@ -188,6 +188,8 @@ async def generate_report_for_schedule(
     # Fetch trend data for non-income goals (for chart embedding)
     from app.services.goal_snapshot_service import (
         backfill_goal_snapshots,
+        clip_trend_data,
+        compute_horizon_date,
         get_goal_trend_data,
     )
     goal_orm_map = {g.id: g for g in goals}
@@ -206,6 +208,27 @@ async def generate_report_for_schedule(
                     await backfill_goal_snapshots(db, goal_orm)
                 trend = await get_goal_trend_data(db, goal_orm)
                 goal_dict["trend_data"] = trend
+
+                # Compute chart horizon and attach settings for renderers
+                chart_horizon = getattr(goal_orm, "chart_horizon", "auto") or "auto"
+                show_minimap = getattr(goal_orm, "show_minimap", True)
+                minimap_threshold_days = getattr(goal_orm, "minimap_threshold_days", 90) or 90
+                target_date_str = goal_orm.target_date.strftime("%Y-%m-%d")
+
+                horizon_date = compute_horizon_date(
+                    trend["data_points"], target_date_str, chart_horizon,
+                )
+
+                goal_dict["chart_settings"] = {
+                    "horizon_date": horizon_date,
+                    "show_minimap": show_minimap if show_minimap is not None else True,
+                    "minimap_threshold_days": minimap_threshold_days,
+                    "target_date": target_date_str,
+                    "full_data_points": trend["data_points"],
+                }
+
+                # Clip main chart data to horizon
+                goal_dict["trend_data"] = clip_trend_data(trend, horizon_date)
             except Exception as e:
                 logger.warning(
                     f"Failed to fetch trend data for goal {gid}: {e}"

@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.62.0] - 2026-02-26
+
+### Added
+- **Configurable chart horizon**: Goal trend charts now zoom into the relevant data range instead of showing mostly empty future space. Auto mode keeps data filling ~2/3 of the chart width with a smart look-ahead. Per-goal overrides available: "Full Timeline", "Auto", or custom days.
+- **Minimap overview**: A compact full-timeline chart appears below the main trend chart when the goal is far from its target date, with a viewport indicator showing the zoomed region. Rendered in all formats: web preview, email, PDF, and the interactive frontend chart.
+- **Chart display settings in goal form**: New collapsible "Chart Display" section lets you configure horizon mode, enable/disable the minimap, and set the minimap visibility threshold (days from target).
+
 ## [v2.61.1] - 2026-02-26
 
 ### Fixed

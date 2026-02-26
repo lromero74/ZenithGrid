@@ -729,6 +729,26 @@ def _build_standard_goal_card(
         else:
             trend_html = _build_trend_chart_svg(trend_data, brand_color, currency)
 
+    # Minimap: show full timeline overview when enabled and far from target
+    minimap_html = ""
+    chart_settings = g.get("chart_settings", {})
+    if chart_settings.get("show_minimap") and trend_html:
+        from datetime import datetime as _dt_mm
+        try:
+            today = _dt_mm.utcnow()
+            target_dt = _dt_mm.strptime(chart_settings["target_date"], "%Y-%m-%d")
+            days_to_target = (target_dt - today).days
+            if days_to_target > chart_settings.get("minimap_threshold_days", 90):
+                minimap_html = _build_minimap_svg(
+                    full_data_points=chart_settings.get("full_data_points", []),
+                    horizon_date=chart_settings.get("horizon_date", ""),
+                    target_date=chart_settings["target_date"],
+                    brand_color=brand_color,
+                    currency=currency,
+                )
+        except (KeyError, ValueError):
+            pass
+
     return f"""
         <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155;">
@@ -750,6 +770,7 @@ def _build_standard_goal_card(
                 <span style="color: #94a3b8; font-size: 12px;">{pct:.1f}%</span>
             </div>
             {trend_html}
+            {minimap_html}
         </div>"""
 
 
@@ -986,6 +1007,100 @@ def _build_trend_chart_svg(
                     <text x="{leg_x + 105}" y="{leg_y + 4}"
                         fill="#94a3b8" font-size="9"
                         font-family="sans-serif">Ideal</text>
+                </svg>
+            </div>"""
+
+
+def _build_minimap_svg(
+    full_data_points: list,
+    horizon_date: str,
+    target_date: str,
+    brand_color: str = "#3b82f6",
+    currency: str = "USD",
+) -> str:
+    """Build a compact minimap SVG showing the full timeline with a viewport indicator.
+
+    Returns HTML containing the SVG with class 'minimap', or empty string.
+    """
+    if len(full_data_points) < 2:
+        return ""
+
+    from datetime import datetime as _dt
+
+    width, height = 660, 45
+    ml, mr, mt, mb = 5, 5, 5, 18
+    cw = width - ml - mr
+    ch = height - mt - mb
+
+    # Extract values
+    actual = [p["current_value"] for p in full_data_points]
+    ideal = [p["ideal_value"] for p in full_data_points]
+    all_vals = [v for v in actual + ideal if v is not None]
+    if not all_vals:
+        return ""
+
+    min_val = min(all_vals)
+    max_val = max(all_vals)
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = max_val * 0.1 or 1.0
+    min_val -= val_range * 0.05
+    max_val += val_range * 0.05
+    val_range = max_val - min_val
+
+    # Map x-axis by date proportion
+    date_ts = [_dt.strptime(p["date"], "%Y-%m-%d").timestamp() for p in full_data_points]
+    first_ts, last_ts = date_ts[0], date_ts[-1]
+    ts_range = last_ts - first_ts or 1.0
+
+    def sx(i):
+        return ml + ((date_ts[i] - first_ts) / ts_range) * cw
+
+    def sy(v):
+        return mt + (1 - (v - min_val) / val_range) * ch
+
+    # Ideal line (dashed)
+    ideal_pts = " ".join(
+        f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(ideal)
+    )
+
+    # Actual line (solid, only non-None)
+    actual_real = [(i, v) for i, v in enumerate(actual) if v is not None]
+    actual_pts = " ".join(
+        f"{sx(i):.1f},{sy(v):.1f}" for i, v in actual_real
+    )
+
+    # Viewport rectangle: from first data to horizon_date
+    horizon_ts = _dt.strptime(horizon_date, "%Y-%m-%d").timestamp()
+    vp_x1 = ml
+    vp_x2 = ml + ((horizon_ts - first_ts) / ts_range) * cw
+    vp_x2 = min(vp_x2, ml + cw)  # clamp
+
+    # Date labels
+    first_date = full_data_points[0]["date"]
+    last_date = full_data_points[-1]["date"]
+
+    return f"""
+            <div style="margin-top: 4px;" class="minimap">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     viewBox="0 0 {width} {height}"
+                     style="width:100%;height:auto;display:block;">
+                    <rect width="{width}" height="{height}"
+                          rx="4" fill="#131c2a"/>
+                    <rect x="{vp_x1:.1f}" y="{mt}" width="{vp_x2 - vp_x1:.1f}"
+                          height="{ch}" rx="2" fill="#3b82f6" opacity="0.12"
+                          stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.4"
+                          class="viewport"/>
+                    <polyline points="{ideal_pts}" fill="none"
+                        stroke="{brand_color}" stroke-width="1"
+                        stroke-dasharray="4,3" opacity="0.5"/>
+                    <polyline points="{actual_pts}" fill="none"
+                        stroke="#10b981" stroke-width="1.5" opacity="0.8"/>
+                    <text x="{ml}" y="{height - 3}" fill="#475569"
+                        font-size="8" font-family="sans-serif">{first_date}</text>
+                    <text x="{width - mr}" y="{height - 3}"
+                        text-anchor="end" fill="#475569"
+                        font-size="8" font-family="sans-serif">{last_date}</text>
                 </svg>
             </div>"""
 

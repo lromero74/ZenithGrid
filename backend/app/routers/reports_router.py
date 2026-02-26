@@ -56,6 +56,9 @@ class GoalCreate(BaseModel):
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
     account_id: Optional[int] = None
+    chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|full|[0-9]+)$")
+    show_minimap: Optional[bool] = True
+    minimap_threshold_days: Optional[int] = Field(90, ge=7, le=3650)
 
     @model_validator(mode="after")
     def validate_goal_fields(self):
@@ -86,6 +89,9 @@ class GoalUpdate(BaseModel):
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
+    chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|full|[0-9]+)$")
+    show_minimap: Optional[bool] = None
+    minimap_threshold_days: Optional[int] = Field(None, ge=7, le=3650)
 
 
 class RecipientItem(BaseModel):
@@ -269,6 +275,9 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "is_active": goal.is_active,
         "achieved_at": goal.achieved_at.isoformat() if goal.achieved_at else None,
         "created_at": goal.created_at.isoformat() if goal.created_at else None,
+        "chart_horizon": goal.chart_horizon or "auto",
+        "show_minimap": goal.show_minimap if goal.show_minimap is not None else True,
+        "minimap_threshold_days": goal.minimap_threshold_days or 90,
     }
     # Include expense item count (only if relationship is already loaded)
     if goal.target_type == "expenses":
@@ -446,6 +455,9 @@ async def create_goal(
         time_horizon_months=body.time_horizon_months,
         start_date=start_date,
         target_date=target_date,
+        chart_horizon=body.chart_horizon or "auto",
+        show_minimap=body.show_minimap if body.show_minimap is not None else True,
+        minimap_threshold_days=body.minimap_threshold_days or 90,
     )
     db.add(goal)
     await db.commit()
@@ -586,6 +598,14 @@ async def get_goal_trend(
             raise HTTPException(status_code=400, detail="Invalid to_date format")
 
     trend_data = await get_goal_trend_data(db, goal, parsed_from, parsed_to)
+
+    # Include chart display settings for frontend clipping/minimap
+    trend_data["chart_settings"] = {
+        "chart_horizon": goal.chart_horizon or "auto",
+        "show_minimap": goal.show_minimap if goal.show_minimap is not None else True,
+        "minimap_threshold_days": goal.minimap_threshold_days or 90,
+    }
+
     return trend_data
 
 

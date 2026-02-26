@@ -501,6 +501,9 @@ export interface ReportGoal {
   is_active: boolean
   achieved_at: string | null
   created_at: string | null
+  chart_horizon?: string
+  show_minimap?: boolean
+  minimap_threshold_days?: number
 }
 
 export interface ExpenseItem {
@@ -597,4 +600,9 @@ export interface GoalTrendData {
   ideal_start_value: number
   ideal_end_value: number
   data_points: GoalTrendPoint[]
+  chart_settings?: {
+    chart_horizon: string
+    show_minimap: boolean
+    minimap_threshold_days: number
+  }
 }
