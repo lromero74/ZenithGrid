@@ -102,6 +102,7 @@ async def create_schedule_record(
         show_expense_lookahead=body.show_expense_lookahead,
         chart_horizon=getattr(body, "chart_horizon", "auto") or "auto",
         chart_lookahead_multiplier=getattr(body, "chart_lookahead_multiplier", 1.0) or 1.0,
+        show_minimap=getattr(body, "show_minimap", True) if getattr(body, "show_minimap", True) is not None else True,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
         generate_ai_summary=body.generate_ai_summary,

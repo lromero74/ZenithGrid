@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, ChevronDown, ChevronRight } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { ReportGoal } from '../../types'
 
 interface GoalFormProps {
@@ -22,8 +22,6 @@ export interface GoalFormData {
   time_horizon_months: number
   target_date?: string | null
   account_id?: number | null
-  show_minimap?: boolean
-  minimap_threshold_days?: number
 }
 
 const HORIZON_OPTIONS = [
@@ -64,9 +62,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
   const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
   const [customDate, setCustomDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [chartSettingsOpen, setChartSettingsOpen] = useState(false)
-  const [showMinimap, setShowMinimap] = useState(true)
-  const [minimapThresholdDays, setMinimapThresholdDays] = useState('90')
 
   useEffect(() => {
     if (initialData) {
@@ -80,10 +75,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setExpensePeriod(initialData.expense_period || 'monthly')
       setTaxWithholding(initialData.tax_withholding_pct ? String(initialData.tax_withholding_pct) : '')
       setTimeHorizon(initialData.time_horizon_months)
-
-      // Chart display settings
-      setShowMinimap(initialData.show_minimap !== false)
-      setMinimapThresholdDays(String(initialData.minimap_threshold_days || 90))
 
       // Detect if stored date matches a preset horizon
       const isPreset = HORIZON_OPTIONS.some(o => o.value === initialData.time_horizon_months)
@@ -123,9 +114,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTimeHorizon(12)
       setDateMode('horizon')
       setCustomDate('')
-      setChartSettingsOpen(false)
-      setShowMinimap(true)
-      setMinimapThresholdDays('90')
     }
   }, [initialData, isOpen])
 
@@ -146,8 +134,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         expense_period: targetType === 'expenses' ? expensePeriod : undefined,
         tax_withholding_pct: targetType === 'expenses' ? (parseFloat(taxWithholding) || 0) : undefined,
         time_horizon_months: timeHorizon,
-        show_minimap: showMinimap,
-        minimap_threshold_days: parseInt(minimapThresholdDays) || 90,
       }
 
       if (dateMode === 'date' && customDate) {
@@ -381,59 +367,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
             )}
             <p className="text-xs text-slate-500 mt-1">When you want to reach this goal by</p>
           </div>
-
-          {/* Chart Display Settings (collapsible) */}
-          {targetType !== 'income' && (
-            <div className="border border-slate-600 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setChartSettingsOpen(!chartSettingsOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-slate-700/50 text-sm text-slate-300 hover:text-white transition-colors"
-              >
-                <span>Chart Display</span>
-                {chartSettingsOpen
-                  ? <ChevronDown className="w-4 h-4" />
-                  : <ChevronRight className="w-4 h-4" />}
-              </button>
-              {chartSettingsOpen && (
-                <div className="p-3 space-y-3 bg-slate-800/50">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="showMinimap"
-                      checked={showMinimap}
-                      onChange={e => setShowMinimap(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showMinimap" className="text-xs text-slate-400">
-                      Show overview minimap when far from target
-                    </label>
-                  </div>
-                  {showMinimap && (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">
-                        Minimap Threshold (days)
-                      </label>
-                      <input
-                        type="number"
-                        min="7"
-                        max="3650"
-                        value={minimapThresholdDays}
-                        onChange={e => setMinimapThresholdDays(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                      />
-                      <p className="text-xs text-slate-500 mt-1">
-                        Show minimap when more than this many days from target
-                      </p>
-                    </div>
-                  )}
-                  <p className="text-xs text-slate-500">
-                    Chart horizon is configured per schedule in the schedule settings.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="flex justify-end space-x-3 pt-2">
             <button

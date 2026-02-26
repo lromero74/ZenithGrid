@@ -212,8 +212,9 @@ async def generate_report_for_schedule(
                 # Compute chart horizon using schedule-level settings
                 sched_horizon = getattr(schedule, "chart_horizon", "auto") or "auto"
                 sched_mult = getattr(schedule, "chart_lookahead_multiplier", 1.0) or 1.0
-                show_minimap = getattr(goal_orm, "show_minimap", True)
-                minimap_threshold_days = getattr(goal_orm, "minimap_threshold_days", 90) or 90
+                show_minimap = getattr(schedule, "show_minimap", True)
+                if show_minimap is None:
+                    show_minimap = True
                 target_date_str = goal_orm.target_date.strftime("%Y-%m-%d")
 
                 horizon_date = compute_horizon_date(
@@ -224,8 +225,7 @@ async def generate_report_for_schedule(
 
                 goal_dict["chart_settings"] = {
                     "horizon_date": horizon_date,
-                    "show_minimap": show_minimap if show_minimap is not None else True,
-                    "minimap_threshold_days": minimap_threshold_days,
+                    "show_minimap": show_minimap and horizon_date < target_date_str,
                     "target_date": target_date_str,
                     "full_data_points": trend["data_points"],
                 }

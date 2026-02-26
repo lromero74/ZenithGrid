@@ -199,15 +199,8 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
       data.ideal_start_value, data.ideal_end_value,
     )
 
-    // Minimap: show when enabled and far from target
-    let showMm = false
-    if (settings?.show_minimap !== false) {
-      const now = new Date()
-      const target = new Date(targetDate + 'T00:00:00')
-      const daysToTarget = Math.floor((target.getTime() - now.getTime()) / 86400000)
-      const threshold = settings?.minimap_threshold_days || 90
-      showMm = daysToTarget > threshold
-    }
+    // Minimap: show when chart doesn't reach target date
+    const showMm = hDate < targetDate
 
     return {
       clippedPoints: clipped,
