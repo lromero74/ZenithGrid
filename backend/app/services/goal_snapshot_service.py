@@ -630,6 +630,17 @@ async def get_goal_trend_data(
             "on_track": snap.on_track,
         })
 
+    # Add target endpoint so the ideal line shows the full trajectory
+    target_date_str = goal.target_date.strftime("%Y-%m-%d")
+    if data_points and data_points[-1]["date"] != target_date_str:
+        data_points.append({
+            "date": target_date_str,
+            "current_value": None,
+            "ideal_value": round(target, precision),
+            "progress_pct": None,
+            "on_track": None,
+        })
+
     return {
         "goal": {
             "id": goal.id,

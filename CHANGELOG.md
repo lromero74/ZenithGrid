@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.61.0] - 2026-02-26
+
+### Added
+- **Expense goal trend charts**: Expense coverage goals now show interactive progress trend charts in the UI and in emailed reports. The chart plots your actual projected income against the ideal path to full coverage by your target date.
+
+### Changed
+- **Expense goal on-track calculation**: "On Track" / "Behind" status for expense goals now compares coverage progress against time elapsed toward the target date, matching how balance and profit goals work. Previously it only showed "On Track" at 100% coverage.
+
+### Fixed
+- **Missing on-track indicator for expense goals**: The HTML report now shows "On Track" or "Behind" next to the coverage percentage for expense goals, matching the status badges already shown on balance and profit goals.
+
 ## [v2.60.5] - 2026-02-26
 
 ### Fixed

@@ -735,6 +735,9 @@ def _build_expenses_goal_card(
             </div>"""
 
     # ---- Card header (shared) ----
+    track_label = "On Track" if g.get("on_track") else "Behind"
+    track_color = "#10b981" if g.get("on_track") else "#f59e0b"
+
     header_html = f"""
         <div style="margin: 0 0 15px 0; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
@@ -746,8 +749,11 @@ def _build_expenses_goal_card(
                         <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
                                      margin-left: 6px;">Expenses / {period.capitalize()}</span>
                     </span>
-                    <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
-                        {_fmt_coverage_pct(pct)} Covered</span>
+                    <span style="font-size: 12px; font-weight: 600;">
+                        <span style="color: {bar_color};">{_fmt_coverage_pct(pct)} Covered</span>
+                        <span style="color: {track_color}; margin-left: 8px;">
+                            &bull; {track_label}</span>
+                    </span>
                 </div>
                 <div style="background-color: #334155; border-radius: 4px; height: 8px;
                             overflow: hidden; margin-bottom: 10px;">
