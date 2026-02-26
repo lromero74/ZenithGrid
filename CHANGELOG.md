@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.64.0] - 2026-02-26
+
+### Added
+- **Mobile sort on Positions page**: Deals can now be sorted on mobile via a dropdown menu (by Date, PnL, Volume, Pair, or Bot) with ascending/descending toggle, visible below the desktop breakpoint.
+- **Background audio playback**: Article reader TTS now continues playing when you switch apps on mobile. Lock screen shows article title, source, and play/pause/next/previous controls via the Media Session API.
+- **Safety order cascade execution**: When price drops past multiple safety order trigger levels at once and a DCA condition fires, all eligible safety orders now execute in a single cycle instead of requiring one evaluation per level. Budget-aware — stops when balance is exhausted.
+
+### Fixed
+- **Mobile chart modal accessibility**: Chart popup on Positions page now dismisses with Escape key or tapping outside the modal. Improved header wrapping and added bottom padding so the MiniPlayer doesn't overlap chart controls.
+- **Bot sort not working**: Sorting deals by "Bot" on the Positions page was silently doing nothing due to a missing switch case.
+
 ## [v2.63.3] - 2026-02-26
 
 ### Changed
