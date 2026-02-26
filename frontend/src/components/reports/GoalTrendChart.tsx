@@ -57,10 +57,14 @@ function computeHorizonDate(
   return new Date(Math.min(h, targetTs)).toISOString().split('T')[0]
 }
 
-/** Clip data points to horizon date, keeping one ideal-only endpoint. */
+/** Clip data points to horizon date with a synthetic ideal endpoint at the horizon. */
 function clipPoints(
   points: GoalTrendPoint[],
   horizonDate: string,
+  goalStartDate: string,
+  goalTargetDate: string,
+  idealStart: number,
+  idealEnd: number,
 ): GoalTrendPoint[] {
   const horizonTs = new Date(horizonDate + 'T00:00:00').getTime()
   const clipped: GoalTrendPoint[] = []
@@ -69,17 +73,33 @@ function clipPoints(
     const pTs = new Date(p.date + 'T00:00:00').getTime()
     if (pTs <= horizonTs) {
       clipped.push(p)
-    } else if (p.current_value == null) {
-      clipped.push(p)
-      break
     }
   }
 
-  // Ensure we have an ideal-only endpoint for line continuity
-  if (clipped.length && clipped[clipped.length - 1].current_value != null) {
-    const idealEnd = points.find(p => p.current_value == null)
-    if (idealEnd) clipped.push(idealEnd)
+  if (!clipped.length) return clipped
+
+  // If last point is already ideal-only at the horizon, no need for synthetic endpoint
+  const last = clipped[clipped.length - 1]
+  if (last.current_value == null) return clipped
+
+  // Interpolate ideal value at the horizon date
+  const startTs = new Date(goalStartDate + 'T00:00:00').getTime()
+  const targetTs = new Date(goalTargetDate + 'T00:00:00').getTime()
+  const totalDays = targetTs - startTs
+  let idealAtHorizon = idealEnd
+  if (totalDays > 0) {
+    const elapsed = horizonTs - startTs
+    const progress = Math.min(Math.max(elapsed / totalDays, 0), 1)
+    idealAtHorizon = idealStart + (idealEnd - idealStart) * progress
   }
+
+  clipped.push({
+    date: horizonDate,
+    current_value: null as unknown as number,
+    ideal_value: idealAtHorizon,
+    progress_pct: null as unknown as number,
+    on_track: null as unknown as boolean,
+  })
 
   return clipped
 }
@@ -173,7 +193,11 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
     const allPoints = data.data_points
 
     const hDate = computeHorizonDate(allPoints, targetDate, horizon)
-    const clipped = clipPoints(allPoints, hDate)
+    const clipped = clipPoints(
+      allPoints, hDate,
+      data.goal.start_date, targetDate,
+      data.ideal_start_value, data.ideal_end_value,
+    )
 
     // Minimap: show when enabled and far from target
     let showMm = false

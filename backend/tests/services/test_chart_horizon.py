@@ -269,32 +269,32 @@ class TestClipTrendData:
             "on_track": None,
         })
         return {
-            "goal": {"id": 1, "name": "Test", "target_date": target_date},
+            "goal": {"id": 1, "name": "Test", "start_date": start_date,
+                     "target_date": target_date},
             "ideal_start_value": 100,
             "ideal_end_value": 500,
             "data_points": data_points,
         }
 
     def test_clip_removes_points_beyond_horizon(self):
-        """Points beyond horizon_date should be removed (except one ideal-only kept)."""
+        """Points beyond horizon_date should be removed; synthetic endpoint at horizon."""
         from app.services.goal_snapshot_service import clip_trend_data
 
         trend = self._make_trend_data("2026-01-01", 30, "2027-01-01")
-        # Clip at day 15 (2026-01-16)
         horizon = "2026-01-16"
         clipped = clip_trend_data(trend, horizon)
 
-        dates = [p["date"] for p in clipped["data_points"]]
         # All real data dates should be <= horizon
-        real_dates = [d for d, p in zip(dates, clipped["data_points"])
+        real_dates = [p["date"] for p in clipped["data_points"]
                       if p["current_value"] is not None]
         for d in real_dates:
             assert d <= horizon
 
-        # Should keep one ideal-only point at the end for line continuity
+        # Last point should be ideal-only endpoint AT the horizon (not target)
         last = clipped["data_points"][-1]
         assert last["current_value"] is None
         assert last["ideal_value"] is not None
+        assert last["date"] == horizon
 
     def test_clip_preserves_original(self):
         """clip_trend_data should not modify the original dict."""
@@ -314,7 +314,7 @@ class TestClipTrendData:
         assert len(clipped["data_points"]) == len(trend["data_points"])
 
     def test_clip_adds_ideal_endpoint_at_horizon(self):
-        """Clipped data should end with an ideal-only point at or near horizon."""
+        """Clipped data should end with a synthetic ideal-only point at horizon."""
         from app.services.goal_snapshot_service import clip_trend_data
 
         trend = self._make_trend_data("2026-01-01", 30, "2027-01-01")
@@ -323,7 +323,11 @@ class TestClipTrendData:
 
         last = clipped["data_points"][-1]
         assert last["current_value"] is None
-        assert last["date"] <= "2027-01-01"  # Never beyond target
+        assert last["date"] == horizon  # Endpoint is at horizon, not target
+        assert last["ideal_value"] is not None
+        # Ideal value should be interpolated (between start and end)
+        assert last["ideal_value"] > trend["ideal_start_value"]
+        assert last["ideal_value"] < trend["ideal_end_value"]
 
     def test_clip_empty_data_points(self):
         """Clipping empty data should return empty."""

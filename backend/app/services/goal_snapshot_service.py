@@ -718,7 +718,8 @@ def compute_horizon_date(
 def clip_trend_data(trend_data: dict, horizon_date_str: str) -> dict:
     """Return a copy of trend_data with data_points clipped to horizon_date.
 
-    Keeps one ideal-only point at or after the horizon for line continuity.
+    Adds a synthetic ideal-only point at the horizon date so the ideal line
+    extends to the chart edge without stretching the x-axis to the target.
     """
     data_points = trend_data.get("data_points", [])
     if not data_points:
@@ -726,26 +727,54 @@ def clip_trend_data(trend_data: dict, horizon_date_str: str) -> dict:
 
     horizon = datetime.strptime(horizon_date_str, "%Y-%m-%d")
 
-    # Separate real points (with current_value) and ideal-only endpoints
+    # Keep only points at or before the horizon
     clipped = []
     for p in data_points:
         p_date = datetime.strptime(p["date"], "%Y-%m-%d")
         if p_date <= horizon:
             clipped.append(p)
-        elif p.get("current_value") is None:
-            # Keep the first ideal-only point beyond horizon for line continuity
-            if not clipped or clipped[-1].get("current_value") is not None:
-                clipped.append(p)
-            break  # Only keep one
-        # Skip real data points beyond horizon
 
-    # If the last point is a real data point, add an ideal endpoint at horizon
-    # for line continuity (interpolated from original ideal trajectory)
-    if clipped and clipped[-1].get("current_value") is not None:
-        # Find the target endpoint from original data
-        ideal_endpoints = [p for p in data_points if p.get("current_value") is None]
-        if ideal_endpoints:
-            clipped.append(ideal_endpoints[-1])
+    if not clipped:
+        return {**trend_data, "data_points": []}
 
-    result = {**trend_data, "data_points": list(clipped)}
-    return result
+    # If the last clipped point already lands on the horizon and is ideal-only,
+    # the ideal line already reaches the edge — nothing more to add.
+    last_date = datetime.strptime(clipped[-1]["date"], "%Y-%m-%d")
+    last_is_ideal_only = clipped[-1].get("current_value") is None
+    if last_is_ideal_only and last_date >= horizon:
+        return {**trend_data, "data_points": list(clipped)}
+
+    # Interpolate ideal value at the horizon date
+    ideal_at_horizon = _interpolate_ideal(trend_data, horizon)
+
+    clipped.append({
+        "date": horizon_date_str,
+        "current_value": None,
+        "ideal_value": ideal_at_horizon,
+        "progress_pct": None,
+        "on_track": None,
+    })
+
+    return {**trend_data, "data_points": list(clipped)}
+
+
+def _interpolate_ideal(trend_data: dict, at_date: datetime) -> float:
+    """Linearly interpolate the ideal value at a given date."""
+    goal_info = trend_data.get("goal", {})
+    start_str = goal_info.get("start_date")
+    target_str = goal_info.get("target_date")
+    ideal_start = trend_data.get("ideal_start_value", 0)
+    ideal_end = trend_data.get("ideal_end_value", ideal_start)
+
+    if not start_str or not target_str:
+        return ideal_end
+
+    start_date = datetime.strptime(start_str, "%Y-%m-%d")
+    target_date = datetime.strptime(target_str, "%Y-%m-%d")
+    total_days = (target_date - start_date).days
+    if total_days <= 0:
+        return ideal_end
+
+    elapsed = (at_date - start_date).days
+    progress = min(max(elapsed / total_days, 0), 1.0)
+    return round(ideal_start + (ideal_end - ideal_start) * progress, 8)

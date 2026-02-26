@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.63.2] - 2026-02-26
+
+### Fixed
+- **Chart clipping not working**: Main trend chart still showed the full timeline to the target date even with a short horizon setting. The clipping function was keeping the original ideal-line endpoint at the target date, which stretched the x-axis. Now creates a synthetic endpoint at the horizon date with an interpolated ideal value.
+- **Multiplier precision too coarse**: Look-ahead multiplier input only accepted increments of 0.1 (e.g., 0.33 was rejected). Changed step to 0.01 and minimum to 0.01.
+
 ## [v2.63.0] - 2026-02-26
 
 ### Added
