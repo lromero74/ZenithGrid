@@ -1051,9 +1051,12 @@ def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
     if len(data_points) < 2:
         return
 
+    # Extract values (target endpoint may have current_value=None)
     actual = [p["current_value"] for p in data_points]
     ideal = [p["ideal_value"] for p in data_points]
-    all_vals = actual + ideal
+    all_vals = [v for v in actual + ideal if v is not None]
+    if not all_vals:
+        return
 
     min_val = min(all_vals)
     max_val = max(all_vals)
@@ -1076,8 +1079,14 @@ def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
         pdf.add_page()
         chart_y = pdf.get_y() + 3
 
+    # Map x-axis by date proportion (not index) for consistent spacing
+    from datetime import datetime as _dt
+    date_ts = [_dt.strptime(p["date"], "%Y-%m-%d").timestamp() for p in data_points]
+    first_ts, last_ts = date_ts[0], date_ts[-1]
+    ts_range = last_ts - first_ts or 1.0
+
     def px(i):
-        return chart_x + (i / (n - 1)) * chart_w
+        return chart_x + ((date_ts[i] - first_ts) / ts_range) * chart_w
 
     def py(v):
         return chart_y + (1 - (v - min_val) / val_range) * chart_h
@@ -1093,15 +1102,19 @@ def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
     for i in range(n - 1):
         pdf.line(px(i), py(ideal[i]), px(i + 1), py(ideal[i + 1]))
 
-    # Draw actual line (green/amber, thicker)
-    is_on_track = data_points[-1].get("on_track", False)
+    # Draw actual line (green/amber, thicker) — skip None values
+    real_points = [p for p in data_points if p.get("on_track") is not None]
+    is_on_track = real_points[-1].get("on_track", False) if real_points else False
     if is_on_track:
         pdf.set_draw_color(16, 185, 129)
     else:
         pdf.set_draw_color(245, 158, 11)
     pdf.set_line_width(0.5)
-    for i in range(n - 1):
-        pdf.line(px(i), py(actual[i]), px(i + 1), py(actual[i + 1]))
+    actual_indices = [(i, v) for i, v in enumerate(actual) if v is not None]
+    for j in range(len(actual_indices) - 1):
+        i0, v0 = actual_indices[j]
+        i1, v1 = actual_indices[j + 1]
+        pdf.line(px(i0), py(v0), px(i1), py(v1))
 
     # Reset
     pdf.set_line_width(0.2)

@@ -871,10 +871,12 @@ def _build_trend_chart_svg(
     cw = width - ml - mr
     ch = height - mt - mb
 
-    # Extract values
+    # Extract values (target endpoint may have current_value=None)
     actual = [p["current_value"] for p in data_points]
     ideal = [p["ideal_value"] for p in data_points]
-    all_vals = actual + ideal
+    all_vals = [v for v in actual + ideal if v is not None]
+    if not all_vals:
+        return ""
 
     min_val = min(all_vals)
     max_val = max(all_vals)
@@ -886,29 +888,41 @@ def _build_trend_chart_svg(
     max_val += val_range * 0.05
     val_range = max_val - min_val
 
-    n = len(data_points)
+    # Map x-axis by date proportion (not index) for consistent spacing
+    from datetime import datetime as _dt
+    date_ts = [_dt.strptime(p["date"], "%Y-%m-%d").timestamp() for p in data_points]
+    first_ts, last_ts = date_ts[0], date_ts[-1]
+    ts_range = last_ts - first_ts or 1.0
 
     def sx(i):
-        return ml + (i / (n - 1)) * cw
+        return ml + ((date_ts[i] - first_ts) / ts_range) * cw
 
     def sy(v):
         return mt + (1 - (v - min_val) / val_range) * ch
 
-    # Build polyline points
+    # Build polyline points (skip None actual values from target endpoint)
+    actual_real = [(i, v) for i, v in enumerate(actual) if v is not None]
     actual_pts = " ".join(
-        f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(actual)
+        f"{sx(i):.1f},{sy(v):.1f}" for i, v in actual_real
     )
     ideal_pts = " ".join(
         f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(ideal)
     )
 
     # Area fill under actual line
-    area_pts = (
-        actual_pts
-        + f" {sx(n - 1):.1f},{mt + ch:.1f} {sx(0):.1f},{mt + ch:.1f}"
-    )
+    if actual_real:
+        last_i = actual_real[-1][0]
+        first_i = actual_real[0][0]
+        area_pts = (
+            actual_pts
+            + f" {sx(last_i):.1f},{mt + ch:.1f} {sx(first_i):.1f},{mt + ch:.1f}"
+        )
+    else:
+        area_pts = ""
 
-    is_on_track = data_points[-1].get("on_track", False)
+    # Use last real data point for on_track (skip projected endpoint)
+    real_points = [p for p in data_points if p.get("on_track") is not None]
+    is_on_track = real_points[-1].get("on_track", False) if real_points else False
     actual_color = "#10b981" if is_on_track else "#f59e0b"
 
     # Grid lines + Y-axis labels
@@ -1014,10 +1028,12 @@ def _render_trend_chart_png(
     cw = width - ml - mr
     ch = height - mt - mb
 
-    # Extract values
+    # Extract values (target endpoint may have current_value=None)
     actual = [p["current_value"] for p in data_points]
     ideal = [p["ideal_value"] for p in data_points]
-    all_vals = actual + ideal
+    all_vals = [v for v in actual + ideal if v is not None]
+    if not all_vals:
+        return b""
 
     min_val = min(all_vals)
     max_val = max(all_vals)
@@ -1028,15 +1044,21 @@ def _render_trend_chart_png(
     max_val += val_range * 0.05
     val_range = max_val - min_val
 
-    n = len(data_points)
+    # Map x-axis by date proportion (not index) for consistent spacing
+    from datetime import datetime as _dt
+    date_ts = [_dt.strptime(p["date"], "%Y-%m-%d").timestamp() for p in data_points]
+    first_ts, last_ts = date_ts[0], date_ts[-1]
+    ts_range = last_ts - first_ts or 1.0
 
     def sx(i):
-        return ml + (i / (n - 1)) * cw
+        return ml + ((date_ts[i] - first_ts) / ts_range) * cw
 
     def sy(v):
         return mt + (1 - (v - min_val) / val_range) * ch
 
-    is_on_track = data_points[-1].get("on_track", False)
+    # Use last real data point for on_track (skip projected endpoint)
+    real_points = [p for p in data_points if p.get("on_track") is not None]
+    is_on_track = real_points[-1].get("on_track", False) if real_points else False
     actual_color = "#10b981" if is_on_track else "#f59e0b"
 
     # Parse hex colors to RGB tuples
@@ -1071,17 +1093,21 @@ def _render_trend_chart_png(
         draw.text((ml - 5 * scale - tw, gy - (bbox[3] - bbox[1]) // 2),
                   label, fill=label_rgb, font=font_label)
 
-    # Build coordinate lists
-    actual_coords = [(int(sx(i)), int(sy(v))) for i, v in enumerate(actual)]
+    # Build coordinate lists (skip None actual values from target endpoint)
+    actual_real = [(i, v) for i, v in enumerate(actual) if v is not None]
+    actual_coords = [(int(sx(i)), int(sy(v))) for i, v in actual_real]
     ideal_coords = [(int(sx(i)), int(sy(v))) for i, v in enumerate(ideal)]
 
     # Area fill under actual line (semi-transparent)
     area_fill_color = actual_rgb + (20,)  # ~8% opacity
-    area_polygon = actual_coords + [
-        (int(sx(n - 1)), int(mt + ch)),
-        (int(sx(0)), int(mt + ch)),
-    ]
-    draw.polygon(area_polygon, fill=area_fill_color)
+    if actual_coords:
+        last_actual_i = actual_real[-1][0]
+        first_actual_i = actual_real[0][0]
+        area_polygon = actual_coords + [
+            (int(sx(last_actual_i)), int(mt + ch)),
+            (int(sx(first_actual_i)), int(mt + ch)),
+        ]
+        draw.polygon(area_polygon, fill=area_fill_color)
 
     # Ideal line (dashed)
     dash_len = 6 * scale

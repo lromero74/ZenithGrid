@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.61.1] - 2026-02-26
+
+### Fixed
+- **Report generation crash on expense trend charts**: Fixed TypeError when generating reports with expense goal trend charts. The target endpoint data point (used to extend the ideal line to the goal date) had null values that crashed the SVG, PNG, and PDF chart renderers.
+- **Trend chart x-axis dog-leg**: Goal trend charts now space the x-axis proportionally by date instead of by data point index. Previously, a few days of data plus a far-future target endpoint would look flat then spike — now the ideal line slopes smoothly across the full timeline.
+- **PDF not generated for reports with expense goals**: The PDF renderer crashed on the same null values as the HTML renderer, resulting in reports stored without a PDF attachment.
+
 ## [v2.61.0] - 2026-02-26
 
 ### Added
