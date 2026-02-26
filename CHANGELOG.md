@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.60.2] - 2026-02-26
+
+### Fixed
+- **Media player UI text in articles**: Stripped "Select Voice", "Select Speed", "1.00x" and other audio player control labels that some news websites embed in their HTML and were being extracted as article text.
+
 ## [v2.60.1] - 2026-02-26
 
 ### Fixed
