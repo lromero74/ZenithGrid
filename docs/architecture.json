@@ -157,6 +157,11 @@
         "file": "routers/reports_router.py",
         "prefix": "/api/reports",
         "purpose": "Financial goals CRUD, expense item CRUD, expense categories, report schedules, generated reports, goal trend data with auto-backfill"
+      },
+      {
+        "file": "routers/transfers_router.py",
+        "prefix": "/api/transfers",
+        "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats"
       }
     ],
     "sub_routers": {
@@ -214,6 +219,10 @@
         {
           "file": "position_routers/dependencies.py",
           "purpose": "Shared dependency functions for position routes"
+        },
+        {
+          "file": "position_routers/helpers.py",
+          "purpose": "Shared helper functions (budget resize computation) used by multiple position sub-routers"
         },
         {
           "file": "position_routers/schemas.py",
@@ -750,6 +759,24 @@
         "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary"
       },
       {
+        "name": "AccountTransfer",
+        "table": "account_transfers",
+        "key_fields": [
+          "id",
+          "user_id",
+          "account_id",
+          "external_id",
+          "transfer_type",
+          "amount",
+          "currency",
+          "amount_usd",
+          "occurred_at",
+          "source",
+          "original_type"
+        ],
+        "purpose": "Deposit/withdrawal tracking for accurate P&L calculation; synced from Coinbase API or entered manually"
+      },
+      {
         "name": "GoalProgressSnapshot",
         "table": "goal_progress_snapshots",
         "key_fields": [
@@ -791,6 +818,16 @@
         "file": "services/auto_buy_monitor.py",
         "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums",
         "type": "background"
+      },
+      {
+        "file": "services/bot_stats_service.py",
+        "purpose": "Calculates PnL, win rate, trades/day, budget utilization, and daily PnL projections for bot listings",
+        "type": "analysis"
+      },
+      {
+        "file": "services/bot_validation_service.py",
+        "purpose": "Validates quote currency consistency, auto-corrects AI bot market focus, and validates bidirectional budget config",
+        "type": "trading"
       },
       {
         "file": "services/brand_service.py",
@@ -953,38 +990,18 @@
         "type": "infrastructure"
       },
       {
+        "file": "services/transfer_sync_service.py",
+        "purpose": "Syncs deposit/withdrawal transactions from Coinbase into account_transfers table with deduplication by external_id",
+        "type": "background"
+      },
+      {
         "file": "services/websocket_manager.py",
         "purpose": "WebSocket connection manager for real-time order fill notifications",
         "type": "infrastructure"
       }
     ],
     "trading_engine": {
-      "coordinators": [
-        {
-          "file": "trading_engine_v2.py",
-          "purpose": "Strategy-based trading engine coordinator; wraps all trading modules"
-        },
-        {
-          "file": "trading_client.py",
-          "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient"
-        },
-        {
-          "file": "multi_bot_monitor.py",
-          "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation. Heavy processing extracted to monitor/ package"
-        },
-        {
-          "file": "order_validation.py",
-          "purpose": "Ensures orders meet exchange minimum size requirements"
-        },
-        {
-          "file": "precision.py",
-          "purpose": "Precision handling for exchange API order sizes"
-        },
-        {
-          "file": "product_precision.py",
-          "purpose": "Per-product increment specifications from exchange APIs"
-        }
-      ],
+      "coordinators_note": "Top-level coordinators (trading_engine_v2.py, trading_client.py, multi_bot_monitor.py, order_validation.py, precision.py, product_precision.py) are listed in core_modules",
       "modules": [
         {
           "file": "trading_engine/signal_processor.py",
@@ -1209,6 +1226,42 @@
       {
         "file": "phase_conditions.py",
         "purpose": "Advanced condition grouping with AND/OR/NOT logic (phase-based)"
+      },
+      {
+        "file": "coinbase_unified_client.py",
+        "purpose": "Unified CoinbaseClient class coordinating all Coinbase API modules with rate limiting (150ms min between requests)"
+      },
+      {
+        "file": "database_seeds.py",
+        "purpose": "Default content sources, dead source lists, scrape policies, and coin categories loaded by database.init_db() on startup"
+      },
+      {
+        "file": "multi_bot_monitor.py",
+        "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation"
+      },
+      {
+        "file": "order_validation.py",
+        "purpose": "Ensures orders meet exchange minimum size requirements before submission using product precision data"
+      },
+      {
+        "file": "paths.py",
+        "purpose": "Shared filesystem path constants (BACKEND_DIR, TTS_CACHE_DIR) preventing cross-layer imports"
+      },
+      {
+        "file": "precision.py",
+        "purpose": "Quote and base currency amount formatting with proper decimal precision for exchange API orders"
+      },
+      {
+        "file": "product_precision.py",
+        "purpose": "Per-product increment specification lookup from Coinbase API precision data (JSON-backed, cached)"
+      },
+      {
+        "file": "trading_client.py",
+        "purpose": "Quote-currency agnostic buy/sell wrapper that auto-detects quote currency and calls appropriate ExchangeClient methods"
+      },
+      {
+        "file": "trading_engine_v2.py",
+        "purpose": "Strategy-based trading engine coordinator (StrategyTradingEngine) wrapping all trading engine modules"
       }
     ],
     "schemas": [
@@ -1460,12 +1513,14 @@
       }
     ],
     "migrations": {
-      "count": 33,
+      "count": 53,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
       "idempotent": true,
       "files": [
+        "add_account_id_to_goals_and_reports.py",
+        "add_account_transfers.py",
         "add_account_value_snapshots.py",
         "add_article_content_cache.py",
         "add_article_content_fetch_failed.py",
@@ -1476,6 +1531,19 @@
         "add_content_scrape_policies.py",
         "add_content_source_user_id.py",
         "add_email_verification.py",
+        "add_expense_donation_pct.py",
+        "add_expense_due_day.py",
+        "add_expense_due_month.py",
+        "add_expense_goal_support.py",
+        "add_expense_login_url.py",
+        "add_expense_lookahead.py",
+        "add_expense_sort_fields.py",
+        "add_flexible_report_scheduling.py",
+        "add_force_standard_days.py",
+        "add_generate_ai_summary.py",
+        "add_goal_chart_settings.py",
+        "add_goal_progress_snapshots.py",
+        "add_income_goal_fields.py",
         "add_metric_snapshots_table.py",
         "add_mfa_email_method.py",
         "add_mfa_totp_support.py",
@@ -1483,22 +1551,27 @@
         "add_paper_trading_accounts.py",
         "add_pending_order_reserves.py",
         "add_perpetual_futures_fields.py",
+        "add_portion_columns_to_snapshots.py",
         "add_prop_firm_support.py",
+        "add_reports_and_goals.py",
+        "add_revoked_tokens.py",
+        "add_schedule_chart_settings.py",
+        "add_snapshot_unrealized_pnl.py",
         "add_subscription_category_retention.py",
+        "add_transfer_original_type.py",
         "add_tts_content_hash.py",
         "add_tts_tables.py",
         "add_user_content_seen_status.py",
         "bot_name_per_user_unique.py",
         "convert_coin_categories_to_global.py",
+        "convert_recipients_to_objects.py",
         "encrypt_existing_credentials.py",
         "extract_bot_products.py",
+        "migrate_take_profit_mode.py",
         "move_news_images_to_filesystem.py",
-        "add_revoked_tokens.py",
         "remove_medicalxpress_source.py",
-        "replace_paywalled_sources.py",
-        "add_goal_progress_snapshots.py",
-        "add_expense_goal_support.py",
-        "add_transfer_original_type.py"
+        "repair_paper_balance_from_positions.py",
+        "replace_paywalled_sources.py"
       ]
     }
   },

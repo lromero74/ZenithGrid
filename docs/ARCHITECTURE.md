@@ -38,7 +38,7 @@ graph TB
         NGX[Nginx<br/>:443 HTTPS<br/>Let's Encrypt SSL]
         BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
         DB[(SQLite<br/>trading.db)]
-        BG[Background Tasks<br/>14 scheduled jobs]
+        BG[Background Tasks<br/>20 scheduled jobs]
         SES[AWS SES<br/>Email Service]
     end
 
@@ -95,8 +95,8 @@ graph TB
     end
 
     subgraph "Trading Engine"
-        MBM[MultiBotMonitor]
-        TEV2[TradingEngineV2]
+        MBM[MultiBotMonitor<br/><small>multi_bot_monitor.py</small>]
+        TEV2[TradingEngineV2<br/><small>trading_engine_v2.py</small>]
         subgraph "Engine Modules"
             SIG[SignalProcessor]
             BUY[BuyExecutor]
@@ -106,7 +106,7 @@ graph TB
             OL[OrderLogger]
             TS[TrailingStops]
         end
-        TC[TradingClient]
+        TC[TradingClient<br/><small>trading_client.py</small>]
         OV[OrderValidation]
         PREC[Precision]
     end
@@ -320,6 +320,8 @@ sequenceDiagram
 
 ## 5. Data Model
 
+The codebase has 40 SQLAlchemy models. The ERD below shows the core entities with their relationships, plus model groups for the remaining categories.
+
 ```mermaid
 erDiagram
     User ||--o{ Account : "has many"
@@ -337,10 +339,12 @@ erDiagram
     Account ||--o{ Bot : "has many"
     Account ||--o{ OrderHistory : "has many"
     Account ||--o{ AccountValueSnapshot : "daily snapshots"
+    Account ||--o{ AccountTransfer : "deposits/withdrawals"
     Account ||--o| PropFirmState : "has one (prop)"
     Account ||--o{ PropFirmEquitySnapshot : "equity history"
 
     Bot ||--o{ Position : "opens"
+    Bot ||--o{ BotProduct : "trades"
     Bot ||--o{ AIBotLog : "logs decisions"
     Bot ||--o{ ScannerLog : "logs scans"
     Bot ||--o{ IndicatorLog : "logs indicators"
@@ -355,6 +359,12 @@ erDiagram
 
     NewsArticle ||--o{ ArticleTTS : "has audio"
 
+    User ||--o{ ReportGoal : "has goals"
+    ReportGoal ||--o{ ExpenseItem : "has expenses"
+    ReportGoal ||--o{ GoalProgressSnapshot : "tracks progress"
+    ReportSchedule ||--o{ ReportScheduleGoal : "includes goals"
+    ReportSchedule ||--o{ Report : "generates"
+
     User {
         int id PK
         string email
@@ -367,16 +377,6 @@ erDiagram
         bool terms_accepted
     }
 
-    TrustedDevice {
-        int id PK
-        int user_id FK
-        string device_id
-        string device_name
-        string ip_address
-        string location
-        datetime expires_at
-    }
-
     Account {
         int id PK
         int user_id FK
@@ -386,29 +386,6 @@ erDiagram
         string api_key_encrypted
         bool is_default
         string prop_firm
-        json prop_firm_config
-        float prop_daily_drawdown_pct
-        float prop_total_drawdown_pct
-        float prop_initial_deposit
-    }
-
-    PropFirmState {
-        int id PK
-        int account_id FK
-        float initial_deposit
-        float current_equity
-        float daily_start_equity
-        bool is_killed
-        string kill_reason
-    }
-
-    PropFirmEquitySnapshot {
-        int id PK
-        int account_id FK
-        float equity
-        float daily_drawdown_pct
-        float total_drawdown_pct
-        datetime timestamp
     }
 
     Bot {
@@ -453,6 +430,17 @@ erDiagram
         string status
     }
 ```
+
+### Model Groups (40 models total)
+
+| Group | Count | Models |
+|-------|-------|--------|
+| **Core Trading** | 11 | User, Account, Bot, BotProduct, Position, Trade, Signal, PendingOrder, OrderHistory, BotTemplate, BotTemplateProduct |
+| **Content** | 8 | NewsArticle, VideoArticle, ContentSource, UserSourceSubscription, ArticleTTS, UserVoiceSubscription, UserArticleTTSHistory, UserContentSeenStatus |
+| **Reports** | 6 | Report, ReportGoal, ReportSchedule, ReportScheduleGoal, ExpenseItem, GoalProgressSnapshot |
+| **Market/Logs** | 6 | MarketData, BlacklistedCoin, MetricSnapshot, AIBotLog, ScannerLog, IndicatorLog |
+| **Auth/Settings** | 5 | Settings, AIProviderCredential, EmailVerificationToken, RevokedToken, TrustedDevice |
+| **Account Tracking** | 4 | AccountValueSnapshot, AccountTransfer, PropFirmState, PropFirmEquitySnapshot |
 
 ---
 
@@ -537,6 +525,7 @@ All background tasks are launched in `main.py` during the FastAPI `startup` even
 | MissingOrderDetector | 5min | `asyncio.create_task` loop |
 | TradingPairMonitor | Daily | Service `.start()` method |
 | ContentRefreshService | 30min/60min | Service `.start()` method |
+| DomainBlacklistService | Weekly | Service `.start()` method |
 | DebtCeilingMonitor | Weekly | Service `.start()` method |
 | AutoBuyMonitor | Per-account | Service `.start()` method |
 | PerpsMonitor | 60s | Service `.start()` method |
@@ -545,5 +534,10 @@ All background tasks are launched in `main.py` during the FastAPI `startup` even
 | FailedConditionCleanup | 6h | `asyncio.create_task` loop |
 | FailedOrderCleanup | 6h | `asyncio.create_task` loop |
 | AccountSnapshotCapture | Daily | `asyncio.create_task` loop |
+| RevokedTokenCleanup | Daily | `asyncio.create_task` loop |
+| ReportScheduler | 15min | `asyncio.create_task` loop |
+| ReportCleanup | Weekly | `asyncio.create_task` loop |
+| CoinReviewScheduler | 7 days | `asyncio.create_task` loop |
+| TransferSync | Daily | `asyncio.create_task` loop |
 
 All tasks are cancelled gracefully during `shutdown` event. The `ShutdownManager` ensures no orders are mid-execution before allowing shutdown.
