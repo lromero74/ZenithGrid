@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.64.1] - 2026-02-26
+
+### Fixed
+- **Architecture documentation sync**: Updated architecture.json and ARCHITECTURE.md to reflect all 40 models, 53 migrations, 25 routers, 41 services, 24 core modules, and 20 background tasks in the actual codebase.
+
 ## [v2.64.0] - 2026-02-26
 
 ### Added
