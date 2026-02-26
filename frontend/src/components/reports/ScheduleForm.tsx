@@ -780,8 +780,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 </label>
                 <input
                   type="number"
-                  step="0.1"
-                  min="0.1"
+                  step="0.01"
+                  min="0.01"
                   max="10"
                   value={lookaheadMultiplier}
                   onChange={e => setLookaheadMultiplier(e.target.value)}

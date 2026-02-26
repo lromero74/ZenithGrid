@@ -130,7 +130,7 @@ class ScheduleCreate(BaseModel):
     is_enabled: bool = True
     show_expense_lookahead: bool = True
     chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
-    chart_lookahead_multiplier: Optional[float] = Field(1.0, ge=0.1, le=10.0)
+    chart_lookahead_multiplier: Optional[float] = Field(1.0, ge=0.01, le=10.0)
 
     @model_validator(mode="after")
     def validate_schedule_fields(self):
@@ -175,7 +175,7 @@ class ScheduleUpdate(BaseModel):
     is_enabled: Optional[bool] = None
     show_expense_lookahead: Optional[bool] = None
     chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
-    chart_lookahead_multiplier: Optional[float] = Field(None, ge=0.1, le=10.0)
+    chart_lookahead_multiplier: Optional[float] = Field(None, ge=0.01, le=10.0)
 
 
 class GenerateRequest(BaseModel):
