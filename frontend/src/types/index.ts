@@ -553,6 +553,8 @@ export interface ReportSchedule {
   recipients: RecipientEntry[]
   ai_provider?: string | null
   generate_ai_summary: boolean
+  chart_horizon?: string
+  chart_lookahead_multiplier?: number
   goal_ids: number[]
   last_run_at: string | null
   next_run_at: string | null

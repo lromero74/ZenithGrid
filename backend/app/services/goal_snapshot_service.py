@@ -661,8 +661,16 @@ def compute_horizon_date(
     data_points: list,
     target_date_str: str,
     chart_horizon: str = "auto",
+    schedule_period_days: int = 30,
+    lookahead_multiplier: float = 1.0,
 ) -> str:
     """Compute the chart's visible end date based on horizon setting.
+
+    Modes:
+      "auto"    — look-ahead = schedule_period_days × lookahead_multiplier
+      "elapsed" — look-ahead = elapsed_days × lookahead_multiplier
+      "full"    — show full timeline to target_date
+      "<int>"   — fixed number of days beyond last data point
 
     Returns a date string (YYYY-MM-DD) for the rightmost point of the chart.
     """
@@ -671,22 +679,28 @@ def compute_horizon_date(
 
     target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
 
-    # Find last real data date
+    # Find real data dates (points with current_value)
     real_dates = [
         datetime.strptime(p["date"], "%Y-%m-%d")
         for p in data_points if p.get("current_value") is not None
     ]
     if not real_dates:
-        # All points are ideal-only projections; use last point date
         real_dates = [datetime.strptime(data_points[-1]["date"], "%Y-%m-%d")]
 
+    first_data_date = min(real_dates)
     last_data_date = max(real_dates)
-    first_date = datetime.strptime(data_points[0]["date"], "%Y-%m-%d")
 
     if chart_horizon == "full":
         return target_date_str
 
-    if chart_horizon != "auto":
+    if chart_horizon == "elapsed":
+        # Look-ahead = fraction of elapsed days so far
+        elapsed_days = max((last_data_date - first_data_date).days, 1)
+        look_ahead = max(int(elapsed_days * lookahead_multiplier), 1)
+        horizon = last_data_date + timedelta(days=look_ahead)
+        return min(horizon, target_date).strftime("%Y-%m-%d")
+
+    if chart_horizon not in ("auto", "elapsed"):
         # Custom integer days
         try:
             days = int(chart_horizon)
@@ -695,10 +709,9 @@ def compute_horizon_date(
         except ValueError:
             pass  # Fall through to auto
 
-    # Auto: 1/3 rule
-    data_span = (last_data_date - first_date).days
-    look_ahead = max(data_span / 2, 7)
-    horizon = last_data_date + timedelta(days=int(look_ahead))
+    # Auto: multiplier × schedule period days
+    look_ahead = max(int(schedule_period_days * lookahead_multiplier), 1)
+    horizon = last_data_date + timedelta(days=look_ahead)
     return min(horizon, target_date).strftime("%Y-%m-%d")
 
 

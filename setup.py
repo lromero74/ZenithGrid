@@ -1609,6 +1609,8 @@ def initialize_database(project_root):
                 recipients TEXT,
                 ai_provider TEXT,
                 generate_ai_summary INTEGER DEFAULT 1,
+                chart_horizon TEXT DEFAULT 'auto',
+                chart_lookahead_multiplier REAL DEFAULT 1.0,
                 last_run_at DATETIME,
                 next_run_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -25,70 +25,100 @@ class TestComputeHorizonDate:
             for i in range(num_days + 1)  # inclusive of start
         ]
 
-    def test_auto_horizon_one_third_rule(self):
-        """With data spanning 10 days and target far away, horizon ≈ 15 days."""
+    def test_auto_horizon_default_period(self):
+        """Auto mode with default period (30 days) and multiplier (1.0) → 30-day look-ahead."""
         from app.services.goal_snapshot_service import compute_horizon_date
 
         points = self._make_points("2026-01-01", 10)
-        # Target is 1000 days away — far enough that auto should clip
-        target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
-
-        result = compute_horizon_date(points, target, "auto")
-        result_date = datetime.strptime(result, "%Y-%m-%d")
-        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
-        target_date = datetime.strptime(target, "%Y-%m-%d")
-
-        # 1/3 rule: look_ahead = max(data_span / 2, 7) = max(10/2, 7) = 7
-        # But data_span=10, so look_ahead = 10/2 = 5 → capped to 7 (minimum)
-        # horizon = last_data + 7 = 2026-01-18
-        assert result_date > last_data
-        assert result_date < target_date
-        # Horizon should be roughly 7 days after last data point (min look-ahead)
-        expected = last_data + timedelta(days=7)
-        assert result_date == expected
-
-    def test_auto_horizon_larger_span(self):
-        """With data spanning 30 days, look-ahead should be 15 days (span/2)."""
-        from app.services.goal_snapshot_service import compute_horizon_date
-
-        points = self._make_points("2026-01-01", 30)
         target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
 
         result = compute_horizon_date(points, target, "auto")
         result_date = datetime.strptime(result, "%Y-%m-%d")
         last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
 
-        # look_ahead = max(30/2, 7) = 15
-        expected = last_data + timedelta(days=15)
+        expected = last_data + timedelta(days=30)
         assert result_date == expected
 
-    def test_auto_horizon_min_7_days(self):
-        """With data spanning only 1 day, minimum look-ahead is 7 days."""
+    def test_auto_horizon_weekly_period(self):
+        """Auto mode with weekly period (7 days) × multiplier 1.0 → 7-day look-ahead."""
         from app.services.goal_snapshot_service import compute_horizon_date
 
-        points = self._make_points("2026-01-01", 1)
-        target = (datetime(2026, 1, 1) + timedelta(days=365)).strftime("%Y-%m-%d")
+        points = self._make_points("2026-01-01", 10)
+        target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
 
-        result = compute_horizon_date(points, target, "auto")
+        result = compute_horizon_date(
+            points, target, "auto",
+            schedule_period_days=7, lookahead_multiplier=1.0,
+        )
         result_date = datetime.strptime(result, "%Y-%m-%d")
         last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
 
-        # look_ahead = max(1/2, 7) = 7
         expected = last_data + timedelta(days=7)
+        assert result_date == expected
+
+    def test_auto_horizon_quarterly_with_fractional_multiplier(self):
+        """Quarterly period (90 days) × 0.33 multiplier → ~30-day look-ahead."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = self._make_points("2026-01-01", 10)
+        target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
+
+        result = compute_horizon_date(
+            points, target, "auto",
+            schedule_period_days=90, lookahead_multiplier=0.33,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+
+        # int(90 * 0.33) = 29 days
+        expected = last_data + timedelta(days=29)
+        assert result_date == expected
+
+    def test_auto_horizon_multiplier_3x(self):
+        """Monthly period (30 days) × 3.0 multiplier → 90-day look-ahead."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = self._make_points("2026-01-01", 10)
+        target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
+
+        result = compute_horizon_date(
+            points, target, "auto",
+            schedule_period_days=30, lookahead_multiplier=3.0,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+
+        expected = last_data + timedelta(days=90)
+        assert result_date == expected
+
+    def test_auto_horizon_minimum_1_day(self):
+        """Look-ahead is at least 1 day even with tiny multiplier."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = self._make_points("2026-01-01", 10)
+        target = (datetime(2026, 1, 1) + timedelta(days=1000)).strftime("%Y-%m-%d")
+
+        result = compute_horizon_date(
+            points, target, "auto",
+            schedule_period_days=1, lookahead_multiplier=0.001,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+
+        expected = last_data + timedelta(days=1)
         assert result_date == expected
 
     def test_auto_horizon_target_within_range(self):
-        """When target is near the data, show full range to target."""
+        """When target is near the data, horizon is capped at target."""
         from app.services.goal_snapshot_service import compute_horizon_date
 
         points = self._make_points("2026-01-01", 10)
-        # Target is only 5 days beyond last data point
         last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+        # Target is only 5 days beyond last data point
         target = (last_data + timedelta(days=5)).strftime("%Y-%m-%d")
 
+        # Default auto: 30-day look-ahead, but capped at target (5 days away)
         result = compute_horizon_date(points, target, "auto")
-        # Horizon = last_data + 7 (min look-ahead), but capped at target
-        # Since target is 5 days away and min look-ahead is 7, horizon = target
         assert result == target
 
     def test_full_horizon_returns_target(self):
@@ -133,8 +163,8 @@ class TestComputeHorizonDate:
         result = compute_horizon_date([], "2029-01-01", "auto")
         assert result == "2029-01-01"
 
-    def test_single_data_point_returns_min_lookahead(self):
-        """With single point, use min 7-day look-ahead."""
+    def test_single_data_point(self):
+        """With single point, use default auto look-ahead (30 days)."""
         from app.services.goal_snapshot_service import compute_horizon_date
 
         points = [{"date": "2026-01-01", "current_value": 100,
@@ -143,8 +173,75 @@ class TestComputeHorizonDate:
 
         result = compute_horizon_date(points, target, "auto")
         result_date = datetime.strptime(result, "%Y-%m-%d")
-        expected = datetime(2026, 1, 1) + timedelta(days=7)
+        expected = datetime(2026, 1, 1) + timedelta(days=30)
         assert result_date == expected
+
+    def test_elapsed_fraction(self):
+        """Elapsed mode: look-ahead = elapsed_days × fraction."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        # 12 days of data, fraction 0.33 → look-ahead = int(12 * 0.33) = 3 days
+        points = self._make_points("2026-01-01", 12)
+        target = "2029-01-01"
+
+        result = compute_horizon_date(
+            points, target, "elapsed",
+            lookahead_multiplier=0.33,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+
+        expected = last_data + timedelta(days=3)  # int(12 * 0.33) = 3
+        assert result_date == expected
+
+    def test_elapsed_fraction_1x(self):
+        """Elapsed mode with multiplier 1.0: look-ahead = elapsed_days."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = self._make_points("2026-01-01", 20)
+        target = "2029-01-01"
+
+        result = compute_horizon_date(
+            points, target, "elapsed",
+            lookahead_multiplier=1.0,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+
+        expected = last_data + timedelta(days=20)
+        assert result_date == expected
+
+    def test_elapsed_single_data_point_minimum(self):
+        """Elapsed mode with 1 data point: elapsed=1 (min), look-ahead ≥ 1."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = [{"date": "2026-01-01", "current_value": 100,
+                   "ideal_value": 100, "progress_pct": 0, "on_track": True}]
+        target = "2029-01-01"
+
+        result = compute_horizon_date(
+            points, target, "elapsed",
+            lookahead_multiplier=0.5,
+        )
+        result_date = datetime.strptime(result, "%Y-%m-%d")
+        # elapsed=0 → max(0,1)=1, int(1*0.5)=0 → max(0,1)=1
+        expected = datetime(2026, 1, 1) + timedelta(days=1)
+        assert result_date == expected
+
+    def test_elapsed_capped_at_target(self):
+        """Elapsed mode should cap at target date."""
+        from app.services.goal_snapshot_service import compute_horizon_date
+
+        points = self._make_points("2026-01-01", 100)
+        last_data = datetime.strptime(points[-1]["date"], "%Y-%m-%d")
+        target = (last_data + timedelta(days=10)).strftime("%Y-%m-%d")
+
+        result = compute_horizon_date(
+            points, target, "elapsed",
+            lookahead_multiplier=1.0,
+        )
+        # 100 days elapsed × 1.0 = 100-day look-ahead, but target is only 10 days away
+        assert result == target
 
 
 class TestClipTrendData:

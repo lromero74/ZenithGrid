@@ -209,14 +209,17 @@ async def generate_report_for_schedule(
                 trend = await get_goal_trend_data(db, goal_orm)
                 goal_dict["trend_data"] = trend
 
-                # Compute chart horizon and attach settings for renderers
-                chart_horizon = getattr(goal_orm, "chart_horizon", "auto") or "auto"
+                # Compute chart horizon using schedule-level settings
+                sched_horizon = getattr(schedule, "chart_horizon", "auto") or "auto"
+                sched_mult = getattr(schedule, "chart_lookahead_multiplier", 1.0) or 1.0
                 show_minimap = getattr(goal_orm, "show_minimap", True)
                 minimap_threshold_days = getattr(goal_orm, "minimap_threshold_days", 90) or 90
                 target_date_str = goal_orm.target_date.strftime("%Y-%m-%d")
 
                 horizon_date = compute_horizon_date(
-                    trend["data_points"], target_date_str, chart_horizon,
+                    trend["data_points"], target_date_str, sched_horizon,
+                    schedule_period_days=period_days,
+                    lookahead_multiplier=sched_mult,
                 )
 
                 goal_dict["chart_settings"] = {

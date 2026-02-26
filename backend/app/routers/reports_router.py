@@ -56,7 +56,7 @@ class GoalCreate(BaseModel):
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
     account_id: Optional[int] = None
-    chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|full|[0-9]+)$")
+    chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
     show_minimap: Optional[bool] = True
     minimap_threshold_days: Optional[int] = Field(90, ge=7, le=3650)
 
@@ -89,7 +89,7 @@ class GoalUpdate(BaseModel):
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
-    chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|full|[0-9]+)$")
+    chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
     show_minimap: Optional[bool] = None
     minimap_threshold_days: Optional[int] = Field(None, ge=7, le=3650)
 
@@ -129,6 +129,8 @@ class ScheduleCreate(BaseModel):
     goal_ids: List[int] = Field(default_factory=list)
     is_enabled: bool = True
     show_expense_lookahead: bool = True
+    chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
+    chart_lookahead_multiplier: Optional[float] = Field(1.0, ge=0.1, le=10.0)
 
     @model_validator(mode="after")
     def validate_schedule_fields(self):
@@ -172,6 +174,8 @@ class ScheduleUpdate(BaseModel):
     goal_ids: Optional[List[int]] = None
     is_enabled: Optional[bool] = None
     show_expense_lookahead: Optional[bool] = None
+    chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
+    chart_lookahead_multiplier: Optional[float] = Field(None, ge=0.1, le=10.0)
 
 
 class GenerateRequest(BaseModel):
@@ -335,6 +339,11 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
         "show_expense_lookahead": (
             schedule.show_expense_lookahead
             if schedule.show_expense_lookahead is not None else True
+        ),
+        "chart_horizon": schedule.chart_horizon or "auto",
+        "chart_lookahead_multiplier": (
+            schedule.chart_lookahead_multiplier
+            if schedule.chart_lookahead_multiplier is not None else 1.0
         ),
         "goal_ids": goal_ids,
         "last_run_at": (

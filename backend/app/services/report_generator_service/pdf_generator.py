@@ -1226,13 +1226,12 @@ def _render_pdf_minimap(pdf, full_data_points: list, horizon_date: str,
     horizon_ts = _dt.strptime(horizon_date, "%Y-%m-%d").timestamp()
     vp_w = ((horizon_ts - first_ts) / ts_range) * chart_w
     vp_w = min(vp_w, chart_w)
-    pdf.set_fill_color(59, 130, 246)
-    pdf.set_draw_color(59, 130, 246)
-    with pdf.local_context():
-        pdf.set_alpha(0.08)
-        pdf.rect(chart_x, chart_y, vp_w, chart_h, style="F")
+    with pdf.local_context(
+        fill_color=(59, 130, 246), fill_opacity=0.08,
+        draw_color=(59, 130, 246),
+    ):
+        pdf.rect(chart_x, chart_y, vp_w, chart_h, style="DF")
     pdf.set_line_width(0.15)
-    pdf.rect(chart_x, chart_y, vp_w, chart_h)
 
     # Chart border
     pdf.set_draw_color(200, 200, 200)

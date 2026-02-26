@@ -100,6 +100,8 @@ async def create_schedule_record(
         force_standard_days=force_standard_json,
         is_enabled=body.is_enabled,
         show_expense_lookahead=body.show_expense_lookahead,
+        chart_horizon=getattr(body, "chart_horizon", "auto") or "auto",
+        chart_lookahead_multiplier=getattr(body, "chart_lookahead_multiplier", 1.0) or 1.0,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
         generate_ai_summary=body.generate_ai_summary,

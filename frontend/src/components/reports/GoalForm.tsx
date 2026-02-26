@@ -22,7 +22,6 @@ export interface GoalFormData {
   time_horizon_months: number
   target_date?: string | null
   account_id?: number | null
-  chart_horizon?: string
   show_minimap?: boolean
   minimap_threshold_days?: number
 }
@@ -66,8 +65,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
   const [customDate, setCustomDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [chartSettingsOpen, setChartSettingsOpen] = useState(false)
-  const [chartHorizon, setChartHorizon] = useState<string>('auto')
-  const [customHorizonDays, setCustomHorizonDays] = useState('90')
   const [showMinimap, setShowMinimap] = useState(true)
   const [minimapThresholdDays, setMinimapThresholdDays] = useState('90')
 
@@ -85,13 +82,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTimeHorizon(initialData.time_horizon_months)
 
       // Chart display settings
-      const ch = initialData.chart_horizon || 'auto'
-      if (ch === 'auto' || ch === 'full') {
-        setChartHorizon(ch)
-      } else {
-        setChartHorizon('custom')
-        setCustomHorizonDays(ch)
-      }
       setShowMinimap(initialData.show_minimap !== false)
       setMinimapThresholdDays(String(initialData.minimap_threshold_days || 90))
 
@@ -134,8 +124,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setDateMode('horizon')
       setCustomDate('')
       setChartSettingsOpen(false)
-      setChartHorizon('auto')
-      setCustomHorizonDays('90')
       setShowMinimap(true)
       setMinimapThresholdDays('90')
     }
@@ -158,7 +146,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         expense_period: targetType === 'expenses' ? expensePeriod : undefined,
         tax_withholding_pct: targetType === 'expenses' ? (parseFloat(taxWithholding) || 0) : undefined,
         time_horizon_months: timeHorizon,
-        chart_horizon: chartHorizon === 'custom' ? customHorizonDays : chartHorizon,
         show_minimap: showMinimap,
         minimap_threshold_days: parseInt(minimapThresholdDays) || 90,
       }
@@ -410,36 +397,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
               </button>
               {chartSettingsOpen && (
                 <div className="p-3 space-y-3 bg-slate-800/50">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Chart Horizon</label>
-                    <select
-                      value={chartHorizon}
-                      onChange={e => setChartHorizon(e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="auto">Auto (Smart Zoom)</option>
-                      <option value="full">Full Timeline</option>
-                      <option value="custom">Custom Days</option>
-                    </select>
-                    {chartHorizon === 'custom' && (
-                      <input
-                        type="number"
-                        min="7"
-                        max="3650"
-                        value={customHorizonDays}
-                        onChange={e => setCustomHorizonDays(e.target.value)}
-                        className="mt-1.5 w-full px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                        placeholder="Days ahead to show"
-                      />
-                    )}
-                    <p className="text-xs text-slate-500 mt-1">
-                      {chartHorizon === 'auto'
-                        ? 'Zooms in so data fills ~2/3 of the chart'
-                        : chartHorizon === 'full'
-                          ? 'Shows entire timeline from start to target date'
-                          : 'Shows a fixed number of days beyond latest data'}
-                    </p>
-                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -470,6 +427,9 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                       </p>
                     </div>
                   )}
+                  <p className="text-xs text-slate-500">
+                    Chart horizon is configured per schedule in the schedule settings.
+                  </p>
                 </div>
               )}
             </div>
