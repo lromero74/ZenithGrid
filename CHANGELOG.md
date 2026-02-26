@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.60.5] - 2026-02-26
+
+### Fixed
+- **Child voice reading adult content**: Added missing keywords to the TTS child voice content filter. Standalone words like "sex", "drug", "drugs", "illicit", and phrases like "sexual affair", "extramarital", "adultery" were not in the filter, allowing child voices (Ana, Maisie) to read articles about sensitive topics instead of automatically switching to an adult voice.
+
 ## [v2.60.4] - 2026-02-26
 
 ### Fixed

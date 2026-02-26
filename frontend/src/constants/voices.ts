@@ -84,7 +84,7 @@ export const CHILD_VOICE_IDS: Set<string> = new Set(
 // Errs on the side of caution — a false positive just means an adult voice reads it instead.
 export const ADULT_CONTENT_KEYWORDS: string[] = [
   // Sexual content
-  'sexual', 'sexuality', 'sexually', 'sex worker',
+  'sex', 'sexual', 'sexuality', 'sexually', 'sex worker',
   'intercourse', 'orgasm', 'erotic', 'erotica',
   'seduction', 'seduce', 'foreplay', 'kink', 'kinky', 'fetish',
   'arousal', 'aroused', 'libido', 'pleasure',
@@ -97,6 +97,8 @@ export const ADULT_CONTENT_KEYWORDS: string[] = [
   'pedophile', 'paedophile', 'pedophilia',
   'trafficking', 'sex trafficking',
   'transsexual', 'transexual',
+  'sexual affair', 'extramarital', 'adultery', 'infidelity',
+  'illicit', 'obscene', 'obscenity', 'indecent',
 
   // Guns and weapons
   'firearm', 'firearms', 'handgun', 'pistol', 'revolver',
@@ -119,6 +121,7 @@ export const ADULT_CONTENT_KEYWORDS: string[] = [
   'cigar', 'cigars',
 
   // Drugs
+  'drug', 'drugs',
   'cocaine', 'heroin', 'methamphetamine', 'meth',
   'fentanyl', 'opioid', 'opioids', 'opiate',
   'marijuana', 'cannabis', 'weed',
