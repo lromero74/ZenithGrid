@@ -445,7 +445,8 @@ async def get_product_precision(product_id: str):
 async def get_orderbook(
     product_id: str,
     limit: int = Query(25, ge=1, le=500),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """
     Get order book (Level 2) depth data for a product.
@@ -461,6 +462,23 @@ async def get_orderbook(
     try:
         if limit > 100:
             limit = 100
+
+        # Order book requires authenticated API access (public API doesn't support it)
+        result = await db.execute(
+            select(Account).where(
+                Account.user_id == current_user.id,
+                Account.type == "cex",
+                Account.is_active.is_(True),
+                Account.is_paper_trading.is_not(True),
+            ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
+        )
+        account = result.scalar_one_or_none()
+        if not account:
+            raise HTTPException(status_code=503, detail="No exchange account configured")
+
+        coinbase = await get_exchange_client_for_account(db, account.id)
+        if not coinbase:
+            raise HTTPException(status_code=503, detail="Could not create exchange client")
 
         book = await coinbase.get_product_book(product_id, limit=limit)
 
@@ -490,6 +508,8 @@ async def get_orderbook(
             "asks": asks,
             "time": datetime.utcnow().isoformat(),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching orderbook for {product_id}: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
