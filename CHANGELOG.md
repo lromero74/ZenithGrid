@@ -5,9 +5,10 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.64.2] - 2026-02-26
+## [v2.64.3] - 2026-02-26
 
 ### Fixed
+- **Depth chart missing from limit close modal**: The order book depth chart on the right side of the "Close at Limit" modal was not rendering. The orderbook API endpoint was falling back to an unauthenticated client that cannot fetch order book data. Now uses the user's authenticated exchange client.
 - **Force-close at market crash**: Closing a deal at market from the Positions page returned a 500 error when the position's strategy used conditions-based take profit (take_profit_percentage was null in the config snapshot). Slippage guard now correctly falls back to defaults.
 
 ## [v2.64.1] - 2026-02-26
