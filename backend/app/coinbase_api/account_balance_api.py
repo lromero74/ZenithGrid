@@ -241,6 +241,40 @@ async def get_usdt_balance(request_func: Callable, account_id: Optional[int] = N
     return balance
 
 
+async def get_currency_balance(
+    request_func: Callable, currency: str, account_id: Optional[int] = None
+) -> float:
+    """Get balance for a specific currency (cached).
+
+    Unlike the specific get_usd_balance/get_btc_balance functions, this works for
+    ANY currency. Used by calculate_aggregate_quote_value for per-market budget allocation.
+
+    Args:
+        request_func: Function to make API requests
+        currency: Exact currency code (e.g., "USD", "USDC", "USDT", "BTC")
+        account_id: Scoping key for per-user cache isolation
+
+    Returns:
+        Balance for exactly that currency (no grouping of stablecoins)
+    """
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"balance_{currency.lower()}_{acct_suffix}"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    accounts = await get_accounts(request_func, account_id=account_id)
+    balance = 0.0
+    for account in accounts:
+        if account.get("currency") == currency:
+            available = account.get("available_balance", {})
+            balance = float(available.get("value", 0))
+            break
+
+    await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+    return balance
+
+
 async def invalidate_balance_cache(account_id: Optional[int] = None):
     """Invalidate balance cache (call after trades).
 
@@ -257,6 +291,7 @@ async def invalidate_balance_cache(account_id: Optional[int] = None):
         await api_cache.delete(f"accounts_list_{suffix}")
         await api_cache.delete(f"aggregate_btc_{suffix}")
         await api_cache.delete(f"aggregate_usd_{suffix}")
+        await api_cache.delete_prefix("aggregate_quote_")
     else:
         # Global invalidation — clear all scoped keys
         await api_cache.delete_prefix("balance_")
@@ -511,3 +546,144 @@ async def calculate_aggregate_usd_value(
         logger.error(f"Error calculating aggregate USD value using accounts endpoint: {e}")
         # Raise exception to trigger conservative fallback in calling code
         raise Exception(f"Failed to calculate aggregate USD value: accounts API failed ({e})")
+
+
+async def calculate_aggregate_quote_value(
+    request_func: Callable, quote_currency: str,
+    get_current_price_func: Callable = None,
+    bypass_cache: bool = False, account_id: Optional[int] = None
+) -> float:
+    """
+    Calculate total value in a specific quote currency for budget allocation.
+
+    Returns: raw balance for exactly that currency + current liquidation value
+    of open positions denominated in that currency's pairs (e.g., %-USD for USD).
+
+    This is NOT the total portfolio value — it's only the assets in this market.
+    Coinbase treats USD, USDC, and USDT as separate markets.
+
+    Args:
+        request_func: Function to make API requests
+        quote_currency: Exact quote currency (e.g., "USD", "USDC", "BTC")
+        get_current_price_func: Optional function to fetch current prices
+        bypass_cache: If True, skip cache and force fresh calculation
+        account_id: Scoping key for per-user cache isolation
+
+    Returns:
+        Total value in the specified quote currency
+    """
+    import asyncio
+    import sqlite3
+
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"aggregate_quote_{quote_currency.lower()}_{acct_suffix}"
+
+    if not bypass_cache:
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.info(
+                f"✅ Using cached aggregate {quote_currency} value: {cached}"
+            )
+            return cached
+
+    # 1. Get raw balance for exactly this currency
+    raw_balance = await get_currency_balance(
+        request_func, quote_currency, account_id
+    )
+    total_value = raw_balance
+
+    # 2. Add current value of open positions in this quote currency's pairs
+    try:
+        _backend_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        db_path = os.path.join(_backend_dir, "trading.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        like_pattern = f"%-{quote_currency}"
+        if account_id is not None:
+            cursor.execute(
+                """
+                SELECT p.product_id, p.total_base_acquired,
+                       p.average_buy_price
+                FROM positions p JOIN bots b ON p.bot_id = b.id
+                WHERE p.status = 'open'
+                  AND p.product_id LIKE ?
+                  AND b.account_id = ?
+                """,
+                (like_pattern, account_id)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT product_id, total_base_acquired, average_buy_price
+                FROM positions
+                WHERE status = 'open' AND product_id LIKE ?
+                """,
+                (like_pattern,)
+            )
+
+        positions = cursor.fetchall()
+        conn.close()
+        positions_value = 0.0
+
+        if positions and get_current_price_func:
+            unique_products = list({p[0] for p in positions if p[0]})
+
+            async def fetch_price(pid: str):
+                try:
+                    return (pid, await get_current_price_func(pid))
+                except Exception:
+                    return (pid, None)
+
+            # Batch fetch prices (15 at a time to avoid rate limits)
+            price_map = {}
+            batch_size = 15
+            for i in range(0, len(unique_products), batch_size):
+                batch = unique_products[i:i + batch_size]
+                results = await asyncio.gather(
+                    *[fetch_price(pid) for pid in batch]
+                )
+                for pid, price in results:
+                    if price is not None:
+                        price_map[pid] = price
+                if i + batch_size < len(unique_products):
+                    await asyncio.sleep(0.1)
+
+            for product_id, amount, avg_price in positions:
+                if amount:
+                    amount = float(amount)
+                    price = price_map.get(product_id)
+                    if price is not None:
+                        positions_value += amount * price
+                    elif avg_price:
+                        positions_value += amount * float(avg_price)
+        elif positions:
+            # No price function — use avg_price for all
+            for _, amount, avg_price in positions:
+                if amount and avg_price:
+                    positions_value += float(amount) * float(avg_price)
+
+        total_value += positions_value
+        if positions_value > 0:
+            logger.debug(
+                f"  💰 {quote_currency} in positions: {positions_value}"
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to get positions for {quote_currency} aggregate: {e}"
+        )
+        logger.debug(
+            f"  ⚠️  Continuing with {quote_currency} balance only"
+        )
+
+    await api_cache.set(
+        cache_key, total_value, ttl_seconds=AGGREGATE_VALUE_CACHE_TTL
+    )
+    logger.info(
+        f"✅ Aggregate {quote_currency} value (budget): {total_value} "
+        f"(cached for {AGGREGATE_VALUE_CACHE_TTL}s)"
+    )
+    return total_value

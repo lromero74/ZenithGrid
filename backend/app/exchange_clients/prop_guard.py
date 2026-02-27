@@ -605,6 +605,13 @@ class PropGuardClient(ExchangeClient):
     async def calculate_aggregate_usd_value(self) -> float:
         return await self._inner.calculate_aggregate_usd_value()
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        return await self._inner.calculate_aggregate_quote_value(
+            quote_currency, bypass_cache
+        )
+
     async def list_products(self) -> List[Dict[str, Any]]:
         return await self._inner.list_products()
 

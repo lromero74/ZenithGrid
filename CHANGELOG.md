@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.2] - 2026-02-27
+
+### Fixed
+- **Bot budget now uses only quote-currency assets**: Budget percentage calculation was based on total portfolio value across all markets. A USD bot with 20% budget was getting 20% of the entire portfolio (including BTC holdings converted to USD). Now each bot's budget is calculated from only its native market's assets — USD bots use USD assets, BTC bots use BTC assets, USDC bots use USDC assets, etc.
+- **Stablecoin balances no longer conflated**: USDC and USDT balances were being aliased to USD. Each currency is now treated as its own independent market, matching how Coinbase handles them.
+
 ## [v2.66.1] - 2026-02-27
 
 ### Fixed

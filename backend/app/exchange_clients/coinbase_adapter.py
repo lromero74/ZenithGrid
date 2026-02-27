@@ -113,6 +113,14 @@ class CoinbaseAdapter(ExchangeClient):
         """Calculate total portfolio value in USD."""
         return await self._client.calculate_aggregate_usd_value()
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """Calculate aggregate value for a specific quote currency."""
+        return await self._client.calculate_aggregate_quote_value(
+            quote_currency, bypass_cache=bypass_cache
+        )
+
     # ========================================
     # MARKET DATA METHODS
     # ========================================

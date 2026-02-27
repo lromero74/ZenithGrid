@@ -59,10 +59,9 @@ async def process_bot_batch(
         # Bypass cache for position creation to ensure accurate budget allocation
         quote_currency = bot.get_quote_currency()
         try:
-            if quote_currency == "BTC":
-                aggregate_value = await monitor.exchange.calculate_aggregate_btc_value(bypass_cache=True)
-            else:  # USD
-                aggregate_value = await monitor.exchange.calculate_aggregate_usd_value()
+            aggregate_value = await monitor.exchange.calculate_aggregate_quote_value(
+                quote_currency, bypass_cache=True
+            )
         except Exception as e:
             # If portfolio API fails (403/rate limit), use a conservative fallback
             logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
@@ -344,13 +343,10 @@ async def process_bot_batch(
         max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
         # Get total bot budget using Bot's get_reserved_balance method
         quote_currency = bot.get_quote_currency()
-        if quote_currency == "BTC":
-            # Calculate aggregate BTC value if needed
-            aggregate_btc = await monitor.exchange.calculate_aggregate_btc_value()
-            total_bot_budget = bot.get_reserved_balance(aggregate_btc)
-        else:
-            # USD bots - get balance directly (no aggregation needed)
-            total_bot_budget = bot.get_reserved_balance()
+        aggregate_value = await monitor.exchange.calculate_aggregate_quote_value(
+            quote_currency
+        )
+        total_bot_budget = bot.get_reserved_balance(aggregate_value)
 
         # Only split budget if split_budget_across_pairs is enabled
         # Otherwise each deal gets the full budget (deal-based allocation)

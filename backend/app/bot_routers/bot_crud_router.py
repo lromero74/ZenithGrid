@@ -692,10 +692,9 @@ async def get_bot_stats(
 
         quote_currency = bot.get_quote_currency()
 
-        if quote_currency == "BTC":
-            aggregate_value = await coinbase.calculate_aggregate_btc_value()
-        else:  # USD
-            aggregate_value = await coinbase.calculate_aggregate_usd_value()
+        aggregate_value = await coinbase.calculate_aggregate_quote_value(
+            quote_currency
+        )
 
         reserved_balance = bot.get_reserved_balance(aggregate_value)
 

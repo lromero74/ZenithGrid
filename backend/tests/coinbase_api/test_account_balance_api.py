@@ -10,10 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.coinbase_api.account_balance_api import (
     calculate_aggregate_btc_value,
+    calculate_aggregate_quote_value,
     calculate_aggregate_usd_value,
     get_account,
     get_accounts,
     get_btc_balance,
+    get_currency_balance,
     get_eth_balance,
     get_portfolio_breakdown,
     get_portfolios,
@@ -754,3 +756,228 @@ class TestCalculateAggregateUsdValue:
 
         assert result == pytest.approx(100.0)
         mock_price_func.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_currency_balance
+# ---------------------------------------------------------------------------
+
+
+class TestGetCurrencyBalance:
+    """Tests for get_currency_balance() — generic balance getter for any currency."""
+
+    @pytest.mark.asyncio
+    async def test_returns_usd_balance(self):
+        """Happy path: returns USD balance only."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+                {"currency": "USDC", "available_balance": {"value": "3000"}},
+                {"currency": "BTC", "available_balance": {"value": "1.5"}},
+            ],
+            "cursor": "",
+        })
+        result = await get_currency_balance(mock_request, "USD", account_id=100)
+        assert result == pytest.approx(5000.0)
+
+    @pytest.mark.asyncio
+    async def test_returns_usdc_balance_not_usd(self):
+        """Critical: USDC is separate from USD — must not return USD balance."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+                {"currency": "USDC", "available_balance": {"value": "3000"}},
+            ],
+            "cursor": "",
+        })
+        result = await get_currency_balance(mock_request, "USDC", account_id=101)
+        assert result == pytest.approx(3000.0)
+
+    @pytest.mark.asyncio
+    async def test_returns_btc_balance(self):
+        """Happy path: returns BTC balance."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "BTC", "available_balance": {"value": "1.5"}},
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+            ],
+            "cursor": "",
+        })
+        result = await get_currency_balance(mock_request, "BTC", account_id=102)
+        assert result == pytest.approx(1.5)
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_currency_not_found(self):
+        """Edge case: currency not in accounts returns 0."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+            ],
+            "cursor": "",
+        })
+        result = await get_currency_balance(mock_request, "USDT", account_id=103)
+        assert result == 0.0
+
+
+# ---------------------------------------------------------------------------
+# calculate_aggregate_quote_value
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateAggregateQuoteValue:
+    """Tests for calculate_aggregate_quote_value() — per-quote budget allocation."""
+
+    @pytest.mark.asyncio
+    async def test_usd_only_returns_usd_balance(self):
+        """Happy path: USD aggregate returns only USD, not USDC or BTC."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+                {"currency": "USDC", "available_balance": {"value": "3000"}},
+                {"currency": "BTC", "available_balance": {"value": "1.5"}},
+            ],
+            "cursor": "",
+        })
+        mock_price = AsyncMock(return_value=50000.0)
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchall.return_value = []  # No open positions
+            mock_conn.cursor.return_value = mock_cursor
+            mock_connect.return_value = mock_conn
+
+            result = await calculate_aggregate_quote_value(
+                mock_request, "USD", mock_price,
+                bypass_cache=True, account_id=200
+            )
+
+        # Only USD balance — not USDC (3000) or BTC (1.5 * 50000)
+        assert result == pytest.approx(5000.0)
+
+    @pytest.mark.asyncio
+    async def test_usdc_separate_from_usd(self):
+        """Critical: USDC aggregate must not include USD balance."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "5000"}},
+                {"currency": "USDC", "available_balance": {"value": "3000"}},
+            ],
+            "cursor": "",
+        })
+        mock_price = AsyncMock(return_value=50000.0)
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchall.return_value = []
+            mock_conn.cursor.return_value = mock_cursor
+            mock_connect.return_value = mock_conn
+
+            result = await calculate_aggregate_quote_value(
+                mock_request, "USDC", mock_price,
+                bypass_cache=True, account_id=201
+            )
+
+        assert result == pytest.approx(3000.0)
+
+    @pytest.mark.asyncio
+    async def test_btc_includes_position_values(self):
+        """Happy path: BTC aggregate includes balance + open BTC-pair positions."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "BTC", "available_balance": {"value": "1.0"}},
+            ],
+            "cursor": "",
+        })
+        # ETH-BTC price = 0.05
+        mock_price = AsyncMock(return_value=0.05)
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            # One open position: 10 ETH in ETH-BTC pair
+            mock_cursor.fetchall.return_value = [
+                ("ETH-BTC", 10.0, 0.04),
+            ]
+            mock_conn.cursor.return_value = mock_cursor
+            mock_connect.return_value = mock_conn
+
+            result = await calculate_aggregate_quote_value(
+                mock_request, "BTC", mock_price,
+                bypass_cache=True, account_id=202
+            )
+
+        # 1.0 BTC + (10 ETH * 0.05 BTC/ETH) = 1.5 BTC
+        assert result == pytest.approx(1.5)
+
+    @pytest.mark.asyncio
+    async def test_uses_cache_when_available(self):
+        """Edge case: returns cached value when not bypassing."""
+        from app.cache import api_cache
+        await api_cache.set("aggregate_quote_usd_203", 9999.0, ttl_seconds=60)
+
+        mock_request = AsyncMock()  # Should not be called
+
+        result = await calculate_aggregate_quote_value(
+            mock_request, "USD", None,
+            bypass_cache=False, account_id=203
+        )
+
+        assert result == pytest.approx(9999.0)
+        mock_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bypasses_cache_when_requested(self):
+        """Edge case: bypass_cache=True fetches fresh data."""
+        from app.cache import api_cache
+        await api_cache.set("aggregate_quote_usd_204", 9999.0, ttl_seconds=60)
+
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "1000"}},
+            ],
+            "cursor": "",
+        })
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchall.return_value = []
+            mock_conn.cursor.return_value = mock_cursor
+            mock_connect.return_value = mock_conn
+
+            result = await calculate_aggregate_quote_value(
+                mock_request, "USD", None,
+                bypass_cache=True, account_id=204
+            )
+
+        assert result == pytest.approx(1000.0)
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_avg_price_when_no_price_func(self):
+        """Edge case: uses average_buy_price when no price function provided."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "BTC", "available_balance": {"value": "0.5"}},
+            ],
+            "cursor": "",
+        })
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            # Position: 5 ETH at avg price 0.04 BTC
+            mock_cursor.fetchall.return_value = [
+                ("ETH-BTC", 5.0, 0.04),
+            ]
+            mock_conn.cursor.return_value = mock_cursor
+            mock_connect.return_value = mock_conn
+
+            result = await calculate_aggregate_quote_value(
+                mock_request, "BTC", None,  # No price func
+                bypass_cache=True, account_id=205
+            )
+
+        # 0.5 BTC + (5 * 0.04) = 0.7 BTC
+        assert result == pytest.approx(0.7)

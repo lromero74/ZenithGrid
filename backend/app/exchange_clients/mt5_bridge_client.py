@@ -220,6 +220,14 @@ class MT5BridgeClient(ExchangeClient):
         except (ConnectionError, ValueError, RuntimeError):
             return self._last_equity
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """MT5 operates in USD only — return equity for USD, 0 otherwise."""
+        if quote_currency == "USD":
+            return await self.get_usd_balance()
+        return 0.0
+
     # ==========================================================
     # MARKET DATA
     # ==========================================================

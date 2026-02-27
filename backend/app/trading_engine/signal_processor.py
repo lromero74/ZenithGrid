@@ -282,15 +282,13 @@ async def _calculate_budget(
     print(f"🔍 Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
     if bot.budget_percentage > 0:
         # Bot uses percentage-based budgeting - calculate aggregate value
-        # CRITICAL: Bypass cache for position creation to ensure accurate budget allocation after deposits/withdrawals
-        if quote_currency == "USD":
-            aggregate_value = await exchange.calculate_aggregate_usd_value()
-            print(f"🔍 Aggregate USD value: ${aggregate_value:.2f}")
-            logger.info(f"  💰 Aggregate USD value: ${aggregate_value:.2f}")
-        else:
-            aggregate_value = await exchange.calculate_aggregate_btc_value(bypass_cache=True)
-            print(f"🔍 Aggregate BTC value (fresh): {aggregate_value:.8f} BTC")
-            logger.info(f"  💰 Aggregate BTC value (fresh): {aggregate_value:.8f} BTC")
+        # CRITICAL: Only considers assets in this bot's quote currency market
+        # (e.g., USD bot gets 20% of USD only, not USDC or BTC)
+        aggregate_value = await exchange.calculate_aggregate_quote_value(
+            quote_currency, bypass_cache=True
+        )
+        print(f"🔍 Aggregate {quote_currency} value: {aggregate_value}")
+        logger.info(f"  💰 Aggregate {quote_currency} value: {aggregate_value}")
 
     reserved_balance = bot.get_reserved_balance(aggregate_value)
     print(f"🔍 Reserved balance (total bot budget): {reserved_balance:.8f}")

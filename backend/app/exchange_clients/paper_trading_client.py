@@ -495,6 +495,34 @@ class PaperTradingClient(ExchangeClient):
 
         return total_usd
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """Calculate value for a specific quote currency (budget allocation).
+
+        Returns only the balance for exactly that currency plus the current
+        value of simulated positions in that currency's pairs.
+        """
+        total = self.balances.get(quote_currency, 0.0)
+
+        # Add value of positions in this quote currency's pairs
+        for pos in self.positions.values():
+            if pos.get("status") != "open":
+                continue
+            pid = pos.get("product_id", "")
+            if pid.endswith(f"-{quote_currency}"):
+                amount = pos.get("total_base_acquired", 0.0)
+                if amount:
+                    try:
+                        price = await self.get_current_price(pid)
+                        total += amount * price
+                    except Exception:
+                        avg = pos.get("average_buy_price", 0.0)
+                        if avg:
+                            total += amount * avg
+
+        return total
+
     async def list_products(self) -> List[Dict[str, Any]]:
         """List available trading pairs from real exchange."""
         return await self.get_products()

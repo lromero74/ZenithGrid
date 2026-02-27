@@ -22,6 +22,8 @@ def exchange():
     mock = MagicMock()
     mock.get_btc_balance = AsyncMock(return_value=1.5)
     mock.get_usd_balance = AsyncMock(return_value=10000.0)
+    mock.get_usdc_balance = AsyncMock(return_value=3000.0)
+    mock.get_usdt_balance = AsyncMock(return_value=500.0)
     mock.buy_eth_with_btc = AsyncMock(return_value={"order_id": "buy-btc-123", "success": True})
     mock.buy_with_usd = AsyncMock(return_value={"order_id": "buy-usd-456", "success": True})
     mock.sell_eth_for_btc = AsyncMock(return_value={"order_id": "sell-btc-789", "success": True})
@@ -63,18 +65,20 @@ class TestGetBalance:
         exchange.get_usd_balance.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_get_balance_usdt_returns_usd_balance(self, client, exchange):
-        """Edge case: USDT treated as stablecoin, uses get_usd_balance."""
+    async def test_get_balance_usdt_returns_usdt_balance(self, client, exchange):
+        """USDT is a separate market — must use get_usdt_balance, not get_usd_balance."""
         result = await client.get_balance("USDT")
-        assert result == 10000.0
-        exchange.get_usd_balance.assert_awaited_once()
+        assert result == 500.0
+        exchange.get_usdt_balance.assert_awaited_once()
+        exchange.get_usd_balance.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_get_balance_usdc_returns_usd_balance(self, client, exchange):
-        """Edge case: USDC treated as stablecoin, uses get_usd_balance."""
+    async def test_get_balance_usdc_returns_usdc_balance(self, client, exchange):
+        """USDC is a separate market — must use get_usdc_balance, not get_usd_balance."""
         result = await client.get_balance("USDC")
-        assert result == 10000.0
-        exchange.get_usd_balance.assert_awaited_once()
+        assert result == 3000.0
+        exchange.get_usdc_balance.assert_awaited_once()
+        exchange.get_usd_balance.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_balance_unsupported_currency_raises(self, client):
@@ -113,10 +117,10 @@ class TestGetQuoteBalance:
 
     @pytest.mark.asyncio
     async def test_get_quote_balance_usdt_pair(self, client, exchange):
-        """Edge case: USDT pair returns USD balance via stablecoin mapping."""
+        """USDT pair returns USDT balance (separate market from USD)."""
         result = await client.get_quote_balance("ETH-USDT")
-        assert result == 10000.0
-        exchange.get_usd_balance.assert_awaited_once()
+        assert result == 500.0
+        exchange.get_usdt_balance.assert_awaited_once()
 
 
 # ===========================================================================
@@ -445,10 +449,10 @@ class TestAdditionalEdgeCases:
 
     @pytest.mark.asyncio
     async def test_get_quote_balance_usdc_pair(self, client, exchange):
-        """Edge case: USDC pair returns USD balance."""
+        """USDC pair returns USDC balance (separate market from USD)."""
         result = await client.get_quote_balance("ETH-USDC")
-        assert result == 10000.0
-        exchange.get_usd_balance.assert_awaited_once()
+        assert result == 3000.0
+        exchange.get_usdc_balance.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_buy_limit_zero_amount(self, client, exchange):
