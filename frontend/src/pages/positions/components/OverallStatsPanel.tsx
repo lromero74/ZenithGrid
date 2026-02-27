@@ -129,10 +129,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             </div>
             <div className="flex justify-between items-baseline">
               <span className="text-slate-400 text-xs">uPnL (active):</span>
-              <span className={`font-medium text-xs ${stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <span className="font-medium text-xs">
                 {Object.entries(stats.uPnLByQuote).map(([currency, amount], i) => (
-                  <span key={currency}>
-                    {i > 0 && ', '}
+                  <span key={currency} className={amount >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {i > 0 && <span className="text-slate-500">, </span>}
                     {amount >= 0 ? '+' : ''}
                     {currency === 'USD' || currency === 'USDC' || currency === 'USDT'
                       ? `$${Math.abs(amount).toFixed(2)}`
@@ -141,8 +141,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     {' '}{currency}
                   </span>
                 ))}
-                {Object.keys(stats.uPnLByQuote).length > 0 && ' / '}
-                {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
+                <span className="text-slate-500">{Object.keys(stats.uPnLByQuote).length > 0 && ' / '}</span>
+                <span className={stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
+                </span>
               </span>
             </div>
             {realizedPnL && (
