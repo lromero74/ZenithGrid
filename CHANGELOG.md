@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.5] - 2026-02-27
+
+### Fixed
+- **Balances table compact on mobile**: Currency column narrowed from flexible-width to a tight fixed width, eliminating wasted space between the currency name and value columns. All columns now sit in a flat row with consistent spacing.
+
 ## [v2.66.4] - 2026-02-27
 
 ### Fixed
