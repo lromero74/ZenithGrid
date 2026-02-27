@@ -124,14 +124,14 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
 
     return allPositions.map(position => {
       const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
-      const pnl = calculateUnrealizedPnL(position, currentPrice)
+      const pnl = calculateUnrealizedPnL(position, currentPrice, btcUsdPrice)
 
       return {
         ...position,
         _cachedPnL: pnl // Cache the P&L calculation result
       }
     })
-  }, [allPositions, currentPrices])
+  }, [allPositions, currentPrices, btcUsdPrice])
 
   return {
     allPositions,
