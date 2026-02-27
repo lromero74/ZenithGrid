@@ -131,7 +131,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     const isUsdLike = (c: string) => c === 'USD' || c === 'USDC' || c === 'USDT'
     const entries = Object.entries(data.byQuote).sort(([a], [b]) => a.localeCompare(b))
     return (
-      <span className="font-medium text-xs whitespace-nowrap">
+      <span className="font-medium text-xs flex flex-wrap justify-end gap-x-1">
         {entries.map(([currency, amount], i) => (
           <span key={currency} className={amount >= 0 ? 'text-green-400' : 'text-red-400'}>
             {i > 0 && <span className="text-slate-500">, </span>}
@@ -153,27 +153,27 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   const cumulativeData = getCumulativeData()
 
   return (
-    <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 sm:p-6 mb-4">
       <div className="grid grid-cols-1 md:grid-cols-[2fr_1.2fr_2fr] gap-6">
         {/* Overall Stats */}
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Overall stats</h3>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-400 text-xs">Active trades:</span>
               <span className="text-white font-medium text-xs">{stats.activeTrades}</span>
             </div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-slate-400 text-xs">uPnL (active):</span>
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
+              <span className="text-slate-400 text-xs flex-shrink-0">uPnL (active):</span>
               {renderPnLBreakdown({ byQuote: stats.uPnLByQuote, usd: stats.uPnLUSD })}
             </div>
             {realizedPnL && (
               <>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-slate-400 text-xs">Realized (today):</span>
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
+                  <span className="text-slate-400 text-xs flex-shrink-0">Realized (today):</span>
                   {renderPnLBreakdown({ byQuote: realizedPnL.daily_profit_by_quote || {}, usd: realizedPnL.daily_profit_usd })}
                 </div>
-                <div className="flex justify-between items-baseline gap-2">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
                     Realized (
                     <select
@@ -191,7 +191,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   </span>
                   {renderPnLBreakdown(historicalData)}
                 </div>
-                <div className="flex justify-between items-baseline gap-2">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
                     Realized (
                     <select
@@ -208,7 +208,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   </span>
                   {renderPnLBreakdown(toDateData)}
                 </div>
-                <div className="flex justify-between items-baseline gap-2">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
                     <select
                       value={selectedCumulative}
@@ -233,25 +233,25 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
           <div className="space-y-2">
             {completedStats ? (
               <>
-                <div className="flex justify-between items-baseline">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs">Total profit (USD):</span>
                   <span className={`font-medium text-xs ${completedStats.total_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${completedStats.total_profit_usd.toFixed(2)}
                   </span>
                 </div>
                 {completedStats.total_profit_btc !== 0 && (
-                  <div className="flex justify-between items-baseline">
+                  <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                     <span className="text-slate-400 text-xs">Total profit (BTC):</span>
                     <span className={`font-medium text-xs ${completedStats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {completedStats.total_profit_btc >= 0 ? '+' : ''}{completedStats.total_profit_btc.toFixed(8)} BTC
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between items-baseline">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs">Completed trades:</span>
                   <span className="text-white font-medium text-xs">{completedStats.total_trades}</span>
                 </div>
-                <div className="flex justify-between items-baseline">
+                <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs">Win rate:</span>
                   <span className={`font-medium text-xs ${completedStats.win_rate >= 50 ? 'text-green-400' : 'text-yellow-400'}`}>
                     {completedStats.win_rate.toFixed(1)}% ({completedStats.winning_trades}W / {completedStats.losing_trades}L)
@@ -286,7 +286,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* BTC - Always show */}
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-300 font-medium text-xs">BTC</span>
               <div className="flex gap-1.5 sm:gap-3">
                 <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-[10px] sm:text-xs">
@@ -304,7 +304,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* ETH - Always show */}
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-300 font-medium text-xs">ETH</span>
               <div className="flex gap-1.5 sm:gap-3">
                 <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
@@ -322,7 +322,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USD - Always show */}
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-300 font-medium text-xs">USD</span>
               <div className="flex gap-1.5 sm:gap-3">
                 <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
@@ -340,7 +340,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USDC - Always show */}
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-300 font-medium text-xs">USDC</span>
               <div className="flex gap-1.5 sm:gap-3">
                 <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
@@ -358,7 +358,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USDT - Always show */}
-            <div className="flex justify-between items-baseline">
+            <div className="flex flex-wrap justify-between items-baseline gap-x-2">
               <span className="text-slate-300 font-medium text-xs">USDT</span>
               <div className="flex gap-1.5 sm:gap-3">
                 <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">

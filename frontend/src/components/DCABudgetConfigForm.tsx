@@ -506,7 +506,7 @@ function DCABudgetConfigForm({
                 readOnly={useBudgetCalculator}
                 min={calculateMinPercentage()}
                 max="100"
-                step="0.1"
+                step="0.01"
                 className={`w-full px-3 py-2 rounded border transition-colors duration-200 ${
                   useBudgetCalculator
                     ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
@@ -739,7 +739,7 @@ function DCABudgetConfigForm({
               onChange={(e) => updateConfig('price_deviation', safeParseFloat(e.target.value) ?? 2.0)}
               min="0.1"
               max="20"
-              step="0.1"
+              step="0.01"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
@@ -803,8 +803,8 @@ function DCABudgetConfigForm({
                   updateConfig('safety_order_volume_scale', safeParseFloat(e.target.value) ?? 1.0)
                 }
                 min="1.0"
-                max="5.0"
-                step="0.1"
+                max="10.0"
+                step="0.01"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
               <p className="text-xs text-slate-400 mt-1">1.0 = same size, 2.0 = double each time</p>
@@ -821,8 +821,8 @@ function DCABudgetConfigForm({
                   updateConfig('safety_order_step_scale', safeParseFloat(e.target.value) ?? 1.0)
                 }
                 min="1.0"
-                max="5.0"
-                step="0.1"
+                max="10.0"
+                step="0.01"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
               <p className="text-xs text-slate-400 mt-1">
@@ -851,7 +851,7 @@ function DCABudgetConfigForm({
               onChange={(e) => updateConfig('take_profit_percentage', safeParseFloat(e.target.value) ?? 3.0)}
               min="0.1"
               max="50"
-              step="0.1"
+              step="0.01"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
@@ -889,7 +889,7 @@ function DCABudgetConfigForm({
               }
               min="0.1"
               max="10"
-              step="0.1"
+              step="0.01"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
@@ -933,7 +933,7 @@ function DCABudgetConfigForm({
                     }
                     min="-50"
                     max="-0.1"
-                    step="0.1"
+                    step="0.01"
                     className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
                   />
                   <span className="text-slate-400 text-sm whitespace-nowrap">%</span>

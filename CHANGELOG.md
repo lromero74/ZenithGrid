@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.4] - 2026-02-27
+
+### Fixed
+- **Form inputs accept finer granularity**: All percentage and scale inputs on the bot strategy form now accept values with 2 decimal places (e.g., 1.55% take profit, 2.75% deviation, 1.05x scale). Previously only exact tenths were valid.
+- **Safety order scale max raised to 10x**: Volume scale and step scale max increased from 5.0 to 10.0 to support more aggressive DCA strategies.
+- **Overall stats panel responsive on mobile**: PnL rows and balances wrap gracefully on narrow screens instead of overflowing. Reduced padding on small viewports.
+
 ## [v2.66.3] - 2026-02-27
 
 ### Fixed
