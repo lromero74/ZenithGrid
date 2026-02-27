@@ -141,7 +141,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     {' '}{currency}
                   </span>
                 ))}
-                <span className="text-slate-500">{Object.keys(stats.uPnLByQuote).length > 0 && ' / '}</span>
+                <span className="text-slate-500">{Object.keys(stats.uPnLByQuote).length > 0 && ' | '}</span>
                 <span className={stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}>
                   {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
                 </span>
@@ -151,8 +151,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               <>
                 <div className="flex justify-between items-baseline">
                   <span className="text-slate-400 text-xs">Realized (today):</span>
-                  <span className={`font-medium text-xs ${realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {realizedPnL.daily_profit_btc >= 0 ? '+' : ''}{realizedPnL.daily_profit_btc.toFixed(8)} BTC / {realizedPnL.daily_profit_usd >= 0 ? '+' : ''}${realizedPnL.daily_profit_usd.toFixed(2)}
+                  <span className="font-medium text-xs whitespace-nowrap">
+                    <span className={realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}>{realizedPnL.daily_profit_btc >= 0 ? '+' : ''}{realizedPnL.daily_profit_btc.toFixed(8)} BTC</span>
+                    <span className="text-slate-500"> | </span>
+                    <span className={realizedPnL.daily_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}>{realizedPnL.daily_profit_usd >= 0 ? '+' : ''}${realizedPnL.daily_profit_usd.toFixed(2)}</span>
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
@@ -171,8 +173,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium text-xs ${historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
-                    {historicalData.btc >= 0 ? '+' : ''}{historicalData.btc.toFixed(8)} BTC / {historicalData.usd >= 0 ? '+' : ''}${historicalData.usd.toFixed(2)}
+                  <span className="font-medium text-xs whitespace-nowrap">
+                    <span className={historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{historicalData.btc >= 0 ? '+' : ''}{historicalData.btc.toFixed(8)} BTC</span>
+                    <span className="text-slate-500"> | </span>
+                    <span className={historicalData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{historicalData.usd >= 0 ? '+' : ''}${historicalData.usd.toFixed(2)}</span>
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
@@ -190,8 +194,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium text-xs ${toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
-                    {toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC / {toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}
+                  <span className="font-medium text-xs whitespace-nowrap">
+                    <span className={toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC</span>
+                    <span className="text-slate-500"> | </span>
+                    <span className={toDateData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}</span>
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
@@ -206,8 +212,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     :
                   </span>
-                  <span className={`font-medium text-xs ${cumulativeData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
-                    {cumulativeData.btc >= 0 ? '+' : ''}{cumulativeData.btc.toFixed(8)} BTC / {cumulativeData.usd >= 0 ? '+' : ''}${cumulativeData.usd.toFixed(2)}
+                  <span className="font-medium text-xs whitespace-nowrap">
+                    <span className={cumulativeData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{cumulativeData.btc >= 0 ? '+' : ''}{cumulativeData.btc.toFixed(8)} BTC</span>
+                    <span className="text-slate-500"> | </span>
+                    <span className={cumulativeData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{cumulativeData.usd >= 0 ? '+' : ''}${cumulativeData.usd.toFixed(2)}</span>
                   </span>
                 </div>
               </>
