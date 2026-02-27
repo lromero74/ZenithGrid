@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.65.4] - 2026-02-27
+
+### Changed
+- **Independent colors for all PnL values**: Every BTC and USD amount across all PnL rows (uPnL, Realized today, historical, to-date, cumulative/net) is now colored green or red based on its own sign. Previously the entire line used one color.
+- **Pipe divider for PnL values**: Replaced `/` with `|` between BTC and USD amounts for cleaner readability.
+
 ## [v2.65.3] - 2026-02-27
 
 ### Fixed
