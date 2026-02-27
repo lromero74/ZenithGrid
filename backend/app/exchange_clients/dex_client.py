@@ -307,6 +307,14 @@ class DEXClient(ExchangeClient):
 
         return usdc_balance
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """DEX only supports USDC — return USDC balance for USDC, 0 otherwise."""
+        if quote_currency == "USDC":
+            return await self.get_usd_balance()
+        return 0.0
+
     # ========================================
     # MARKET DATA METHODS
     # ========================================

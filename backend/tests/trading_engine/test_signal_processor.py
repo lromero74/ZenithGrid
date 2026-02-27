@@ -78,6 +78,7 @@ def _make_exchange(**overrides):
     })
     exchange.calculate_aggregate_usd_value = AsyncMock(return_value=10000.0)
     exchange.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
+    exchange.calculate_aggregate_quote_value = AsyncMock(return_value=10000.0)
     for k, v in overrides.items():
         setattr(exchange, k, v)
     return exchange

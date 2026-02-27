@@ -144,6 +144,29 @@ class ExchangeClient(ABC):
         """
         pass
 
+    @abstractmethod
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """
+        Calculate total value in a specific quote currency for budget allocation.
+
+        Unlike calculate_aggregate_usd_value (total portfolio), this returns only
+        the assets in one specific market. Coinbase treats USD, USDC, and USDT as
+        completely separate markets.
+
+        Returns: raw balance for exactly that currency + current liquidation value
+        of open positions denominated in that currency's pairs.
+
+        Args:
+            quote_currency: Exact quote currency (e.g., "USD", "USDC", "BTC")
+            bypass_cache: If True, skip cache and force fresh calculation
+
+        Returns:
+            Total value in the specified quote currency
+        """
+        pass
+
     # ========================================
     # MARKET DATA METHODS
     # ========================================

@@ -47,12 +47,16 @@ class TradingClient:
         """
         if currency == "BTC":
             return await self.exchange.get_btc_balance()
-        elif currency in ("USD", "USDT", "USDC"):
+        elif currency == "USD":
             return await self.exchange.get_usd_balance()
+        elif currency == "USDC":
+            return await self.exchange.get_usdc_balance()
+        elif currency == "USDT":
+            return await self.exchange.get_usdt_balance()
         else:
             raise ValueError(
                 f"Unsupported quote currency: {currency}. "
-                f"Supported: BTC, USD, USDT, USDC."
+                f"Supported: BTC, USD, USDC, USDT."
             )
 
     async def get_quote_balance(self, product_id: str) -> float:

@@ -198,6 +198,15 @@ class CoinbaseClient:
             account_id=self.account_id
         )
 
+    async def calculate_aggregate_quote_value(
+        self, quote_currency: str, bypass_cache: bool = False
+    ) -> float:
+        """Calculate aggregate value for a specific quote currency (budget allocation)"""
+        return await account_balance_api.calculate_aggregate_quote_value(
+            self._request, quote_currency, self.get_current_price,
+            bypass_cache=bypass_cache, account_id=self.account_id
+        )
+
     # ===== Product & Market Data Methods =====
 
     async def list_products(self) -> List[Dict[str, Any]]:

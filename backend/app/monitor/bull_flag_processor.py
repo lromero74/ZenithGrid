@@ -175,10 +175,13 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                 if budget_mode == "fixed_usd":
                     usd_amount = bot.strategy_config.get("fixed_usd_amount", 100.0)
                 else:
-                    # Get aggregate USD value
-                    aggregate_usd = await monitor.exchange.calculate_aggregate_usd_value()
+                    # Get aggregate value for this bot's quote currency
+                    quote_currency = bot.get_quote_currency()
+                    aggregate_val = await monitor.exchange.calculate_aggregate_quote_value(
+                        quote_currency
+                    )
                     budget_pct = bot.strategy_config.get("budget_percentage", 5.0)
-                    usd_amount = aggregate_usd * (budget_pct / 100.0)
+                    usd_amount = aggregate_val * (budget_pct / 100.0)
 
                 # Check minimum
                 if usd_amount < 10.0:

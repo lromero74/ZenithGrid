@@ -103,28 +103,15 @@ async def validate_bidirectional_budget_config(
     except Exception:
         raise ValidationError("Failed to connect to exchange")
 
-    # Get balances and aggregate values
+    # Get balances and aggregate values per quote currency
     try:
-        balances = await exchange.get_account()
-        if is_update:
-            if quote_currency == "USD":
-                aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
-                aggregate_btc_value = balances.get("BTC", 0.0)
-            else:
-                aggregate_btc_value = await exchange.calculate_aggregate_btc_value(bypass_cache=True)
-                aggregate_usd_value = (
-                    balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
-                )
-        else:
-            raw_usd = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
-            raw_btc = balances.get("BTC", 0.0)
-            if quote_currency == "USD":
-                aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
-                aggregate_btc_value = raw_btc
-            else:
-                aggregate_btc_value = await exchange.calculate_aggregate_btc_value(bypass_cache=True)
-                aggregate_usd_value = raw_usd
-
+        # Use per-market aggregate for budget (not total portfolio)
+        aggregate_usd_value = await exchange.calculate_aggregate_quote_value(
+            "USD", bypass_cache=True
+        )
+        aggregate_btc_value = await exchange.calculate_aggregate_quote_value(
+            "BTC", bypass_cache=True
+        )
         current_btc_price = await exchange.get_btc_usd_price()
     except ValidationError:
         raise
