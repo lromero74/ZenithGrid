@@ -41,7 +41,7 @@ interface OverallStatsPanelProps {
     activeTrades: number
     reservedByQuote: Record<string, number>
     totalBudgetByQuote: Record<string, number>
-    uPnL: number
+    uPnLByQuote: Record<string, number>
     uPnLUSD: number
   }
   completedStats?: CompletedStats
@@ -105,9 +105,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     if (selectedCumulative === 'alltime') {
       return { btc: allBtc, usd: allUsd }
     }
-    // Net = all-time realized + current uPnL
+    // Net = all-time realized + current uPnL (only BTC-quoted uPnL adds to BTC total)
     return {
-      btc: allBtc + stats.uPnL,
+      btc: allBtc + (stats.uPnLByQuote['BTC'] || 0),
       usd: allUsd + stats.uPnLUSD
     }
   }
@@ -129,8 +129,20 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             </div>
             <div className="flex justify-between items-baseline">
               <span className="text-slate-400 text-xs">uPnL (active):</span>
-              <span className={`font-medium text-xs ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC / {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
+              <span className={`font-medium text-xs ${stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {Object.entries(stats.uPnLByQuote).map(([currency, amount], i) => (
+                  <span key={currency}>
+                    {i > 0 && ', '}
+                    {amount >= 0 ? '+' : ''}
+                    {currency === 'USD' || currency === 'USDC' || currency === 'USDT'
+                      ? `$${Math.abs(amount).toFixed(2)}`
+                      : `${amount.toFixed(8)}`
+                    }
+                    {' '}{currency}
+                  </span>
+                ))}
+                {Object.keys(stats.uPnLByQuote).length > 0 && ' / '}
+                {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
               </span>
             </div>
             {realizedPnL && (

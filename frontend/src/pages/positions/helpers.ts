@@ -4,7 +4,7 @@ import { authFetch } from '../../services/api'
 /**
  * Calculate unrealized P&L for an open position
  */
-export const calculateUnrealizedPnL = (position: Position, currentPrice?: number) => {
+export const calculateUnrealizedPnL = (position: Position, currentPrice?: number, btcUsdPrice?: number) => {
   if (position.status !== 'open') return null
 
   // Use real-time price if available, otherwise fall back to average buy price
@@ -16,10 +16,21 @@ export const calculateUnrealizedPnL = (position: Position, currentPrice?: number
   // Prevent division by zero for new positions with no trades yet
   const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0
 
+  const quoteCurrency = position.product_id?.split('-')[1] || 'BTC'
+  let usd: number
+  if (quoteCurrency === 'USD' || quoteCurrency === 'USDC' || quoteCurrency === 'USDT') {
+    usd = unrealizedPnL
+  } else if (quoteCurrency === 'BTC') {
+    usd = unrealizedPnL * (btcUsdPrice || position.btc_usd_price_at_open || 0)
+  } else {
+    usd = 0 // Other quotes (ETH, etc.) — no conversion yet
+  }
+
   return {
-    btc: unrealizedPnL,
+    quote: unrealizedPnL,
+    quoteCurrency,
     percent: unrealizedPnLPercent,
-    usd: unrealizedPnL * (position.btc_usd_price_at_open || 0),
+    usd,
     currentPrice: price
   }
 }
@@ -45,18 +56,22 @@ export const calculateOverallStats = (openPositions: (Position & { _cachedPnL?: 
     totalBudgetByQuote[quoteCurrency] += pos.max_quote_allowed || 0
   })
 
-  const totalUPnL = openPositions.reduce((sum, pos) => {
-    return sum + (pos._cachedPnL?.btc || 0)
-  }, 0)
-  const totalUPnLUSD = openPositions.reduce((sum, pos) => {
-    return sum + (pos._cachedPnL?.usd || 0)
-  }, 0)
+  const uPnLByQuote: Record<string, number> = {}
+  let totalUPnLUSD = 0
+  openPositions.forEach(pos => {
+    const pnl = pos._cachedPnL
+    if (pnl) {
+      const qc = pnl.quoteCurrency || 'BTC'
+      uPnLByQuote[qc] = (uPnLByQuote[qc] || 0) + (pnl.quote || 0)
+      totalUPnLUSD += (pnl.usd || 0)
+    }
+  })
 
   return {
     activeTrades: openPositions.length,
     reservedByQuote, // Reserved funds broken down by quote currency
     totalBudgetByQuote, // Total assigned budget (max_quote_allowed) by quote currency
-    uPnL: totalUPnL,
+    uPnLByQuote,
     uPnLUSD: totalUPnLUSD
   }
 }

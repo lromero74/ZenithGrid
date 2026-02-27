@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.65.2] - 2026-02-27
+
+### Fixed
+- **Wildly inflated unrealized PnL when mixing quote currencies**: Paper trading showed "+$6M" when BTC-USD and ETH-BTC deals were open simultaneously. The USD-quoted profit was being multiplied by the BTC/USD price again. Now correctly handles USD, USDC, USDT (pass through), BTC (convert with live price), and other quote currencies. uPnL display shows per-currency breakdown with accurate USD total.
+
 ## [v2.65.1] - 2026-02-27
 
 ### Fixed

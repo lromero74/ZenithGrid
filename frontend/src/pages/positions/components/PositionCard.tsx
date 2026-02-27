@@ -324,8 +324,8 @@ export const PositionCard = ({
               </div>
               <div className="text-slate-400">{formatBaseAmount(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
               {pnl && pnl.usd !== undefined && (
-                <div className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {pnl.btc >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
+                <div className={pnl.quote >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {pnl.quote >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
                 </div>
               )}
             </div>
