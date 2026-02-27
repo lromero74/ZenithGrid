@@ -650,3 +650,58 @@ class TestCheckBuySlippage:
         config = {}  # no max_buy_slippage_pct
         proceed, reason = await check_buy_slippage(exchange, "BTC-USD", 1000.0, config)
         assert proceed is True
+
+
+# ===========================================================================
+# _fmt_price — adaptive price formatting for small-value coins
+# ===========================================================================
+
+
+class TestFmtPrice:
+    """Tests for the adaptive price formatter."""
+
+    def test_large_price_two_decimals(self):
+        """BTC-scale prices show 2 decimals."""
+        from app.trading_engine.book_depth_guard import _fmt_price
+        assert _fmt_price(50000.123) == "$50000.12"
+
+    def test_medium_price_four_decimals(self):
+        """Sub-dollar prices show 4 decimals."""
+        from app.trading_engine.book_depth_guard import _fmt_price
+        assert _fmt_price(0.0355) == "$0.0355"
+
+    def test_small_price_six_decimals(self):
+        """Sub-cent prices show 6 decimals."""
+        from app.trading_engine.book_depth_guard import _fmt_price
+        assert _fmt_price(0.003456) == "$0.003456"
+
+    def test_micro_price_eight_decimals(self):
+        """Micro prices show 8 decimals."""
+        from app.trading_engine.book_depth_guard import _fmt_price
+        assert _fmt_price(0.00001234) == "$0.00001234"
+
+    def test_zero_price(self):
+        """Zero shows as $0.00000000 (falls through to max precision)."""
+        from app.trading_engine.book_depth_guard import _fmt_price
+        assert _fmt_price(0.0) == "$0.00000000"
+
+    @pytest.mark.asyncio
+    async def test_sell_block_reason_shows_meaningful_prices_for_altcoins(self):
+        """Block reason for sub-penny altcoins should NOT show $0.00."""
+        exchange = AsyncMock()
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [{"price": "0.003500", "size": "100000.0"}],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 5000.0
+        position.average_buy_price = 0.003400  # profit ~2.94% < 3.0%
+
+        config = {"take_profit_mode": "minimum", "take_profit_percentage": 3.0}
+
+        proceed, reason = await check_sell_slippage(exchange, "SHIB-USD", position, config)
+        assert proceed is False
+        assert "$0.00)" not in reason  # Must NOT show $0.00
+        assert "$0.0035" in reason  # Should show meaningful decimals

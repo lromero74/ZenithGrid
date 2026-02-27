@@ -18,6 +18,18 @@ from typing import Any, Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def _fmt_price(price: float) -> str:
+    """Format a price with enough decimals to be meaningful for any coin."""
+    if price >= 1.0:
+        return f"${price:.2f}"
+    elif price >= 0.01:
+        return f"${price:.4f}"
+    elif price >= 0.0001:
+        return f"${price:.6f}"
+    else:
+        return f"${price:.8f}"
+
+
 def calculate_vwap_from_bids(
     bids: list, sell_amount: float
 ) -> Tuple[float, float, bool]:
@@ -153,7 +165,7 @@ async def check_sell_slippage(
     if not fully_filled:
         reason = (
             f"Insufficient book depth: only {filled:.8f} of {sell_amount:.8f}"
-            f" base fillable at VWAP ${vwap:.2f}"
+            f" base fillable at VWAP {_fmt_price(vwap)}"
         )
         logger.warning(f"Slippage guard BLOCKED sell: {reason}")
         return False, reason
@@ -179,7 +191,7 @@ async def check_sell_slippage(
             if vwap_profit_pct < tp_pct:
                 reason = (
                     f"VWAP profit {vwap_profit_pct:.2f}% < TP floor {tp_pct}%"
-                    f" (VWAP ${vwap:.2f} vs avg ${avg_price:.2f})"
+                    f" (VWAP {_fmt_price(vwap)} vs avg {_fmt_price(avg_price)})"
                 )
                 logger.warning(f"Slippage guard BLOCKED sell: {reason}")
                 return False, reason
@@ -191,7 +203,7 @@ async def check_sell_slippage(
             if slip_pct > max_sell_slip:
                 reason = (
                     f"Sell slippage {slip_pct:.2f}% > max {max_sell_slip}%"
-                    f" (VWAP ${vwap:.2f} vs best bid ${best_bid:.2f})"
+                    f" (VWAP {_fmt_price(vwap)} vs best bid {_fmt_price(best_bid)})"
                 )
                 logger.warning(f"Slippage guard BLOCKED sell: {reason}")
                 return False, reason
@@ -237,8 +249,8 @@ async def check_buy_slippage(
 
     if not fully_filled:
         reason = (
-            f"Insufficient book depth: only ${filled_quote:.2f} of"
-            f" ${quote_amount:.2f} fillable at VWAP ${vwap:.2f}"
+            f"Insufficient book depth: only {_fmt_price(filled_quote)} of"
+            f" {_fmt_price(quote_amount)} fillable at VWAP {_fmt_price(vwap)}"
         )
         logger.warning(f"Slippage guard BLOCKED buy: {reason}")
         return False, reason
@@ -251,7 +263,7 @@ async def check_buy_slippage(
         if slip_pct > max_buy_slip:
             reason = (
                 f"Buy slippage {slip_pct:.2f}% > max {max_buy_slip}%"
-                f" (VWAP ${vwap:.2f} vs best ask ${best_ask:.2f})"
+                f" (VWAP {_fmt_price(vwap)} vs best ask {_fmt_price(best_ask)})"
             )
             logger.warning(f"Slippage guard BLOCKED buy: {reason}")
             return False, reason

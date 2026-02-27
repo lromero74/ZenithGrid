@@ -293,6 +293,24 @@ DEFAULT_CONTENT_SOURCES = [
         'bbc_politics', 'BBC Politics', 'news', 'https://feeds.bbci.co.uk/news/politics/rss.xml',
         'https://www.bbc.com/news/politics', 'BBC UK & global politics', None, 'Politics',
     ),
+    # Full-article sources (robots.txt verified)
+    (
+        'salon_politics', 'Salon Politics', 'news', 'https://www.salon.com/category/politics/feed',
+        'https://www.salon.com', 'Progressive news & commentary', None, 'Politics',
+    ),
+    (
+        'propublica', 'ProPublica', 'news', 'https://feeds.propublica.org/propublica/main',
+        'https://www.propublica.org', 'Pulitzer-winning investigative journalism', None, 'Politics',
+    ),
+    (
+        'democracy_now', 'Democracy Now!', 'news', 'https://www.democracynow.org/democracynow.rss',
+        'https://www.democracynow.org', 'Independent news & analysis', None, 'Politics',
+    ),
+    (
+        'independent_politics', 'The Independent Politics', 'news',
+        'https://www.independent.co.uk/news/world/americas/us-politics/rss',
+        'https://www.independent.co.uk', 'UK perspective on US politics', None, 'Politics',
+    ),
     # ===== Nation (US) =====
     (
         'npr_news', 'NPR News', 'news', 'https://feeds.npr.org/1001/rss.xml', 'https://www.npr.org',
@@ -317,6 +335,19 @@ DEFAULT_CONTENT_SOURCES = [
     (
         'abc_news_us', 'ABC News US', 'news', 'https://abcnews.go.com/abcnews/usheadlines',
         'https://abcnews.com/us', 'ABC US headlines', None, 'Nation',
+    ),
+    # Full-article sources (robots.txt verified)
+    (
+        'salon', 'Salon', 'news', 'https://www.salon.com/feed/',
+        'https://www.salon.com', 'News, politics & culture', None, 'Nation',
+    ),
+    (
+        'independent_nation', 'The Independent US', 'news', 'https://www.independent.co.uk/news/rss',
+        'https://www.independent.co.uk', 'UK perspective on US & world news', None, 'Nation',
+    ),
+    (
+        'common_dreams', 'Common Dreams', 'news', 'https://www.commondreams.org/rss.xml',
+        'https://www.commondreams.org', 'Progressive US news', None, 'Nation',
     ),
     # ===== Business =====
     (
@@ -434,6 +465,21 @@ DEFAULT_CONTENT_SOURCES = [
         'pbs_arts', 'PBS NewsHour Arts', 'news', 'https://www.pbs.org/newshour/feeds/rss/arts',
         'https://www.pbs.org/newshour/arts', 'PBS arts coverage', None, 'Entertainment',
     ),
+    # Full-article sources (robots.txt verified)
+    (
+        'salon_entertainment', 'Salon Entertainment', 'news',
+        'https://www.salon.com/category/entertainment/feed',
+        'https://www.salon.com', 'Entertainment news & culture', None, 'Entertainment',
+    ),
+    (
+        'et_online', 'ET Online', 'news', 'https://www.etonline.com/news/rss',
+        'https://www.etonline.com', 'Celebrity & entertainment news', None, 'Entertainment',
+    ),
+    (
+        'independent_entertainment', 'The Independent Entertainment', 'news',
+        'https://www.independent.co.uk/arts-entertainment/rss',
+        'https://www.independent.co.uk', 'Arts & entertainment coverage', None, 'Entertainment',
+    ),
     # ===== Sports =====
     (
         'espn', 'ESPN', 'news', 'https://www.espn.com/espn/rss/news', 'https://www.espn.com', 'Sports news & scores',
@@ -458,6 +504,16 @@ DEFAULT_CONTENT_SOURCES = [
     (
         'abc_news_sports', 'ABC News Sports', 'news', 'https://abcnews.go.com/abcnews/sportsheadlines',
         'https://abcnews.com/sports', 'ABC sports headlines', None, 'Sports',
+    ),
+    # Full-article sources (robots.txt verified)
+    (
+        'sports_illustrated', 'Sports Illustrated', 'news', 'https://www.si.com/feed',
+        'https://www.si.com', 'Iconic sports journalism', None, 'Sports',
+    ),
+    (
+        'independent_sports', 'The Independent Sports', 'news',
+        'https://www.independent.co.uk/sport/rss',
+        'https://www.independent.co.uk', 'UK sports coverage', None, 'Sports',
     ),
     # ===== Science =====
     (
@@ -709,7 +765,7 @@ DEFAULT_CONTENT_SOURCES = [
 # Dead sources to remove on startup (replaced with working alternatives)
 DEAD_SOURCES = [
     'reuters_world', 'techcrunch', 'ew', 'bleacher_report',
-    'sports_illustrated', 'medical_news_today', 'healthline', 'webmd',
+    'medical_news_today', 'healthline', 'webmd',
     'medical_xpress',  # IP-banned our EC2; still 400 as of 2026-02-19. Re-test after 2026-02-26.
     # Dropped in robots.txt audit — explicit legal/ToS prohibitions or broken feeds
     'reddit_artificial', 'reddit_bitcoin', 'reddit_crypto',
@@ -750,8 +806,8 @@ SOURCE_SCRAPE_POLICIES = {
     'business_insider': {'scrape': False},
     'genetic_engineering_news': {'scrape': False, 'delay': 10},
     'who_news': {'scrape': False},
-    'pbs_newshour': {'scrape': False, 'delay': 1},
-    'cbs_sports': {'scrape': False},
+    'pbs_newshour': {'delay': 1},  # Reclassified: robots.txt allows our user-agent
+    'cbs_sports': {},  # Reclassified: robots.txt only blocks GPTBot, not ZenithGrid
     # BBC — main site blocks scrapers; RSS via feeds.bbci.co.uk is fine
     'bbc_world': {'scrape': False},
     'bbc_politics': {'scrape': False},
@@ -769,13 +825,13 @@ SOURCE_SCRAPE_POLICIES = {
     'npr_culture': {'scrape': False},
     'npr_sports': {'scrape': False},
     'npr_science': {'scrape': False},
-    # CBS News — blocks scrapers
+    # CBS News — robots.txt only blocks GPTBot/MAZBot/panscient/proximic, not ZenithGrid
     'cbs_news_world': {'scrape': False},
-    'cbs_news_politics': {'scrape': False},
-    'cbs_news_us': {'scrape': False},
+    'cbs_news_politics': {},  # Reclassified for full-article coverage
+    'cbs_news_us': {},  # Reclassified for full-article coverage
     'cbs_news_business': {'scrape': False},
     'cbs_news_tech': {'scrape': False},
-    'cbs_news_entertainment': {'scrape': False},
+    'cbs_news_entertainment': {},  # Reclassified for full-article coverage
     'cbs_news_science': {'scrape': False},
     'cbs_news_health': {'scrape': False},
     # NBC News — blocks scrapers
@@ -795,11 +851,11 @@ SOURCE_SCRAPE_POLICIES = {
     'abc_news_entertainment': {'scrape': False},
     'abc_news_sports': {'scrape': False},
     'abc_news_health': {'scrape': False},
-    # PBS — blocks scrapers, 1s crawl delay (matching pbs_newshour above)
+    # PBS — no AI bot blocks in robots.txt, 1s crawl delay
     'pbs_world': {'scrape': False, 'delay': 1},
-    'pbs_politics': {'scrape': False, 'delay': 1},
+    'pbs_politics': {'delay': 1},  # Reclassified for full-article coverage
     'pbs_economy': {'scrape': False, 'delay': 1},
-    'pbs_arts': {'scrape': False, 'delay': 1},
+    'pbs_arts': {'delay': 1},  # Reclassified for full-article coverage
     'pbs_science': {'scrape': False, 'delay': 1},
     'pbs_health': {'scrape': False, 'delay': 1},
     # The Hill — blocks scrapers
@@ -814,6 +870,8 @@ SOURCE_SCRAPE_POLICIES = {
     'global_voices': {'delay': 10},
     'scmp': {'delay': 10},
     'blockchain_news': {'delay': 1},
+    # New full-article sources with crawl delays
+    'democracy_now': {'delay': 10},  # CC BY-NC-ND 3.0, requires 10s crawl delay
 }
 
 

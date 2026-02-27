@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.65.0] - 2026-02-27
+
+### Added
+- **Full-article news sources for 4 categories**: Politics, Nation, Entertainment, and Sports now have full-article sources. Added 12 new robots.txt-verified sources (Salon, ProPublica, Democracy Now, The Independent, Common Dreams, ET Online, Sports Illustrated) and reclassified 7 existing CBS/PBS sources whose robots.txt allows our user-agent. The "Full Articles Only" filter now returns results in all categories.
+
+### Fixed
+- **Slippage guard toast showing $0.00 for altcoins**: The VWAP and price values in slippage guard notifications now use adaptive decimal formatting (2-8 decimals based on price magnitude) instead of always showing 2 decimals. Sub-penny altcoins like SHIB now show meaningful prices instead of "$0.00".
+
 ## [v2.64.3] - 2026-02-26
 
 ### Fixed
