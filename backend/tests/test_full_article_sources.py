@@ -192,6 +192,49 @@ class TestCategoryCoverage:
 
 
 # ===========================================================================
+# Domain alias handling (The Independent uses redirect domain in RSS)
+# ===========================================================================
+
+
+class TestDomainAliases:
+    """Verify domain aliases are applied for sources with redirect/CDN domains."""
+
+    def test_independent_alias_in_allowed_domains(self):
+        """the-independent.com must be allowed since independent.co.uk is a source."""
+        from app.routers.news_router import DOMAIN_ALIASES
+        aliases = DOMAIN_ALIASES.get("independent.co.uk", [])
+        assert "the-independent.com" in aliases
+
+    @pytest.mark.asyncio
+    async def test_allowed_domains_includes_alias(self):
+        """get_allowed_article_domains should include the-independent.com."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        mock_source = MagicMock()
+        mock_source.website = "https://www.independent.co.uk"
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [
+            "https://www.independent.co.uk",
+        ]
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.routers.news_router.async_session_maker", return_value=mock_session):
+            from app.routers.news_router import get_allowed_article_domains
+            domains = await get_allowed_article_domains()
+            assert "the-independent.com" in domains
+            assert "www.the-independent.com" in domains
+            assert "independent.co.uk" in domains
+            assert "www.independent.co.uk" in domains
+
+
+# ===========================================================================
 # Migration idempotency
 # ===========================================================================
 
