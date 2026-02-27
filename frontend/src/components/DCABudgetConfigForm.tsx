@@ -1000,7 +1000,7 @@ function DCABudgetConfigForm({
                 }
                 min="0.01"
                 max="5"
-                step="0.1"
+                step="0.01"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
               <p className="text-xs text-slate-400 mt-1">Max % above best ask price for buy orders</p>
@@ -1017,7 +1017,7 @@ function DCABudgetConfigForm({
                 }
                 min="0.01"
                 max="5"
-                step="0.1"
+                step="0.01"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
               <p className="text-xs text-slate-400 mt-1">

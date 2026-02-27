@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.3] - 2026-02-27
+
+### Fixed
+- **Slippage guard rejected valid values**: Max slippage inputs only accepted values in 0.1 increments (e.g. 0.1, 0.2, 0.3). Values like 0.45 from sample bots triggered a browser validation error. Now accepts any value with up to 2 decimal places.
+
 ## [v2.66.2] - 2026-02-27
 
 ### Fixed
