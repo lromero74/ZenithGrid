@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.65.1] - 2026-02-27
+
+### Fixed
+- **The Independent articles returning summary only**: Article content fetcher was blocking The Independent Entertainment articles because their RSS feed uses a redirect domain (`the-independent.com`) that differed from the source's registered domain (`independent.co.uk`). Added domain alias support so redirect/CDN domains are recognized.
+
 ## [v2.65.0] - 2026-02-27
 
 ### Added

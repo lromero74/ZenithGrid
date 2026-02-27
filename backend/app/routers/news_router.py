@@ -94,6 +94,13 @@ _ARTICLE_FETCH_WINDOW = 3600  # 1 hour
 # =============================================================================
 
 
+# Domain aliases: some sources use redirect/CDN domains in their RSS feed links
+# that differ from their main website domain.
+DOMAIN_ALIASES = {
+    "independent.co.uk": ["the-independent.com"],
+}
+
+
 async def get_allowed_article_domains() -> set[str]:
     """
     Get allowed domains for article content extraction from database.
@@ -115,10 +122,13 @@ async def get_allowed_article_domains() -> set[str]:
             if domain:
                 allowed.add(domain)
                 # Also add www. variant if not present, or non-www if www present
-                if domain.startswith("www."):
-                    allowed.add(domain[4:])
-                else:
-                    allowed.add(f"www.{domain}")
+                bare = domain[4:] if domain.startswith("www.") else domain
+                allowed.add(bare)
+                allowed.add(f"www.{bare}")
+                # Add known aliases (redirect/CDN domains)
+                for alias in DOMAIN_ALIASES.get(bare, []):
+                    allowed.add(alias)
+                    allowed.add(f"www.{alias}")
         except Exception:
             pass
 
@@ -149,7 +159,12 @@ async def get_source_scrape_policy(url: str) -> Tuple[bool, int]:
             try:
                 src_domain = urlparse(source.website).netloc.lower()
                 src_bare = src_domain[4:] if src_domain.startswith("www.") else src_domain
-                if domain_bare == src_bare:
+                # Check direct match or alias match
+                match = (domain_bare == src_bare)
+                if not match:
+                    aliases = DOMAIN_ALIASES.get(src_bare, [])
+                    match = domain_bare in aliases
+                if match:
                     scrape = source.content_scrape_allowed
                     delay = source.crawl_delay_seconds
                     return (
