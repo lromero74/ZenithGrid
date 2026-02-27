@@ -129,7 +129,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   // Render per-quote breakdown with independent colors + pipe divider + USD total
   const renderPnLBreakdown = (data: { byQuote: Record<string, number>, usd: number }) => {
     const isUsdLike = (c: string) => c === 'USD' || c === 'USDC' || c === 'USDT'
-    const entries = Object.entries(data.byQuote)
+    const entries = Object.entries(data.byQuote).sort(([a], [b]) => a.localeCompare(b))
     return (
       <span className="font-medium text-xs whitespace-nowrap">
         {entries.map(([currency, amount], i) => (

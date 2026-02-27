@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.1] - 2026-02-27
+
+### Fixed
+- **Consistent currency order in PnL breakdown**: Quote currencies now sort alphabetically (BTC, USD, USDC) across all rows instead of varying by insertion order.
+
 ## [v2.66.0] - 2026-02-27
 
 ### Changed
