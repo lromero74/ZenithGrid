@@ -14,26 +14,37 @@ interface CompletedStats {
 interface RealizedPnL {
   daily_profit_btc: number
   daily_profit_usd: number
+  daily_profit_by_quote: Record<string, number>
   yesterday_profit_btc: number
   yesterday_profit_usd: number
+  yesterday_profit_by_quote: Record<string, number>
   last_week_profit_btc: number
   last_week_profit_usd: number
+  last_week_profit_by_quote: Record<string, number>
   last_month_profit_btc: number
   last_month_profit_usd: number
+  last_month_profit_by_quote: Record<string, number>
   last_quarter_profit_btc: number
   last_quarter_profit_usd: number
+  last_quarter_profit_by_quote: Record<string, number>
   last_year_profit_btc: number
   last_year_profit_usd: number
+  last_year_profit_by_quote: Record<string, number>
   wtd_profit_btc: number
   wtd_profit_usd: number
+  wtd_profit_by_quote: Record<string, number>
   mtd_profit_btc: number
   mtd_profit_usd: number
+  mtd_profit_by_quote: Record<string, number>
   qtd_profit_btc: number
   qtd_profit_usd: number
+  qtd_profit_by_quote: Record<string, number>
   ytd_profit_btc: number
   ytd_profit_usd: number
+  ytd_profit_by_quote: Record<string, number>
   alltime_profit_btc: number
   alltime_profit_usd: number
+  alltime_profit_by_quote: Record<string, number>
 }
 
 interface OverallStatsPanelProps {
@@ -65,51 +76,76 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   useEffect(() => { try { localStorage.setItem('zenith-stats-to-date', selectedToDate) } catch { /* ignored */ } }, [selectedToDate])
   useEffect(() => { try { localStorage.setItem('zenith-stats-cumulative', selectedCumulative) } catch { /* ignored */ } }, [selectedCumulative])
 
+  const emptyPeriod = { byQuote: {} as Record<string, number>, usd: 0 }
+
   // Get the selected historical period's data
   const getHistoricalData = () => {
-    if (!realizedPnL) return { btc: 0, usd: 0 }
+    if (!realizedPnL) return emptyPeriod
     switch (selectedHistorical) {
       case 'yesterday':
-        return { btc: realizedPnL.yesterday_profit_btc, usd: realizedPnL.yesterday_profit_usd }
+        return { byQuote: realizedPnL.yesterday_profit_by_quote || {}, usd: realizedPnL.yesterday_profit_usd }
       case 'last_week':
-        return { btc: realizedPnL.last_week_profit_btc, usd: realizedPnL.last_week_profit_usd }
+        return { byQuote: realizedPnL.last_week_profit_by_quote || {}, usd: realizedPnL.last_week_profit_usd }
       case 'last_month':
-        return { btc: realizedPnL.last_month_profit_btc, usd: realizedPnL.last_month_profit_usd }
+        return { byQuote: realizedPnL.last_month_profit_by_quote || {}, usd: realizedPnL.last_month_profit_usd }
       case 'last_quarter':
-        return { btc: realizedPnL.last_quarter_profit_btc, usd: realizedPnL.last_quarter_profit_usd }
+        return { byQuote: realizedPnL.last_quarter_profit_by_quote || {}, usd: realizedPnL.last_quarter_profit_usd }
       case 'last_year':
-        return { btc: realizedPnL.last_year_profit_btc, usd: realizedPnL.last_year_profit_usd }
+        return { byQuote: realizedPnL.last_year_profit_by_quote || {}, usd: realizedPnL.last_year_profit_usd }
     }
   }
 
   // Get the selected to-date period's data
   const getToDateData = () => {
-    if (!realizedPnL) return { btc: 0, usd: 0 }
+    if (!realizedPnL) return emptyPeriod
     switch (selectedToDate) {
       case 'wtd':
-        return { btc: realizedPnL.wtd_profit_btc, usd: realizedPnL.wtd_profit_usd }
+        return { byQuote: realizedPnL.wtd_profit_by_quote || {}, usd: realizedPnL.wtd_profit_usd }
       case 'mtd':
-        return { btc: realizedPnL.mtd_profit_btc, usd: realizedPnL.mtd_profit_usd }
+        return { byQuote: realizedPnL.mtd_profit_by_quote || {}, usd: realizedPnL.mtd_profit_usd }
       case 'qtd':
-        return { btc: realizedPnL.qtd_profit_btc, usd: realizedPnL.qtd_profit_usd }
+        return { byQuote: realizedPnL.qtd_profit_by_quote || {}, usd: realizedPnL.qtd_profit_usd }
       case 'ytd':
-        return { btc: realizedPnL.ytd_profit_btc, usd: realizedPnL.ytd_profit_usd }
+        return { byQuote: realizedPnL.ytd_profit_by_quote || {}, usd: realizedPnL.ytd_profit_usd }
     }
   }
 
   // Get cumulative (all-time or net) data
   const getCumulativeData = () => {
-    if (!realizedPnL) return { btc: 0, usd: 0 }
-    const allBtc = realizedPnL.alltime_profit_btc ?? 0
+    if (!realizedPnL) return emptyPeriod
+    const allByQuote = realizedPnL.alltime_profit_by_quote || {}
     const allUsd = realizedPnL.alltime_profit_usd ?? 0
     if (selectedCumulative === 'alltime') {
-      return { btc: allBtc, usd: allUsd }
+      return { byQuote: allByQuote, usd: allUsd }
     }
-    // Net = all-time realized + current uPnL (only BTC-quoted uPnL adds to BTC total)
-    return {
-      btc: allBtc + (stats.uPnLByQuote['BTC'] || 0),
-      usd: allUsd + stats.uPnLUSD
+    // Net = all-time realized + current uPnL, merged per quote currency
+    const merged: Record<string, number> = { ...allByQuote }
+    for (const [currency, amount] of Object.entries(stats.uPnLByQuote)) {
+      merged[currency] = (merged[currency] || 0) + amount
     }
+    return { byQuote: merged, usd: allUsd + stats.uPnLUSD }
+  }
+
+  // Render per-quote breakdown with independent colors + pipe divider + USD total
+  const renderPnLBreakdown = (data: { byQuote: Record<string, number>, usd: number }) => {
+    const isUsdLike = (c: string) => c === 'USD' || c === 'USDC' || c === 'USDT'
+    const entries = Object.entries(data.byQuote)
+    return (
+      <span className="font-medium text-xs whitespace-nowrap">
+        {entries.map(([currency, amount], i) => (
+          <span key={currency} className={amount >= 0 ? 'text-green-400' : 'text-red-400'}>
+            {i > 0 && <span className="text-slate-500">, </span>}
+            {amount >= 0 ? '+' : ''}
+            {isUsdLike(currency) ? `$${Math.abs(amount).toFixed(2)}` : amount.toFixed(8)}
+            {' '}{currency}
+          </span>
+        ))}
+        {entries.length > 0 && <span className="text-slate-500"> | </span>}
+        <span className={data.usd >= 0 ? 'text-green-400' : 'text-red-400'}>
+          {data.usd >= 0 ? '+' : ''}${data.usd.toFixed(2)}
+        </span>
+      </span>
+    )
   }
 
   const historicalData = getHistoricalData()
@@ -129,33 +165,13 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             </div>
             <div className="flex justify-between items-baseline">
               <span className="text-slate-400 text-xs">uPnL (active):</span>
-              <span className="font-medium text-xs">
-                {Object.entries(stats.uPnLByQuote).map(([currency, amount], i) => (
-                  <span key={currency} className={amount >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    {i > 0 && <span className="text-slate-500">, </span>}
-                    {amount >= 0 ? '+' : ''}
-                    {currency === 'USD' || currency === 'USDC' || currency === 'USDT'
-                      ? `$${Math.abs(amount).toFixed(2)}`
-                      : `${amount.toFixed(8)}`
-                    }
-                    {' '}{currency}
-                  </span>
-                ))}
-                <span className="text-slate-500">{Object.keys(stats.uPnLByQuote).length > 0 && ' | '}</span>
-                <span className={stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
-                </span>
-              </span>
+              {renderPnLBreakdown({ byQuote: stats.uPnLByQuote, usd: stats.uPnLUSD })}
             </div>
             {realizedPnL && (
               <>
                 <div className="flex justify-between items-baseline">
                   <span className="text-slate-400 text-xs">Realized (today):</span>
-                  <span className="font-medium text-xs whitespace-nowrap">
-                    <span className={realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}>{realizedPnL.daily_profit_btc >= 0 ? '+' : ''}{realizedPnL.daily_profit_btc.toFixed(8)} BTC</span>
-                    <span className="text-slate-500"> | </span>
-                    <span className={realizedPnL.daily_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}>{realizedPnL.daily_profit_usd >= 0 ? '+' : ''}${realizedPnL.daily_profit_usd.toFixed(2)}</span>
-                  </span>
+                  {renderPnLBreakdown({ byQuote: realizedPnL.daily_profit_by_quote || {}, usd: realizedPnL.daily_profit_usd })}
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
@@ -173,11 +189,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className="font-medium text-xs whitespace-nowrap">
-                    <span className={historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{historicalData.btc >= 0 ? '+' : ''}{historicalData.btc.toFixed(8)} BTC</span>
-                    <span className="text-slate-500"> | </span>
-                    <span className={historicalData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{historicalData.usd >= 0 ? '+' : ''}${historicalData.usd.toFixed(2)}</span>
-                  </span>
+                  {renderPnLBreakdown(historicalData)}
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
@@ -194,11 +206,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className="font-medium text-xs whitespace-nowrap">
-                    <span className={toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC</span>
-                    <span className="text-slate-500"> | </span>
-                    <span className={toDateData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}</span>
-                  </span>
+                  {renderPnLBreakdown(toDateData)}
                 </div>
                 <div className="flex justify-between items-baseline gap-2">
                   <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
@@ -212,11 +220,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     :
                   </span>
-                  <span className="font-medium text-xs whitespace-nowrap">
-                    <span className={cumulativeData.btc >= 0 ? 'text-green-400' : 'text-red-400'}>{cumulativeData.btc >= 0 ? '+' : ''}{cumulativeData.btc.toFixed(8)} BTC</span>
-                    <span className="text-slate-500"> | </span>
-                    <span className={cumulativeData.usd >= 0 ? 'text-green-400' : 'text-red-400'}>{cumulativeData.usd >= 0 ? '+' : ''}${cumulativeData.usd.toFixed(2)}</span>
-                  </span>
+                  {renderPnLBreakdown(cumulativeData)}
                 </div>
               </>
             )}

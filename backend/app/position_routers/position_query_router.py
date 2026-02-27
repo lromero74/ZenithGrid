@@ -507,30 +507,15 @@ async def get_realized_pnl(
     if user_account_ids:
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
-        return {
-            "daily_profit_btc": 0.0,
-            "daily_profit_usd": 0.0,
-            "yesterday_profit_btc": 0.0,
-            "yesterday_profit_usd": 0.0,
-            "last_week_profit_btc": 0.0,
-            "last_week_profit_usd": 0.0,
-            "last_month_profit_btc": 0.0,
-            "last_month_profit_usd": 0.0,
-            "last_quarter_profit_btc": 0.0,
-            "last_quarter_profit_usd": 0.0,
-            "last_year_profit_btc": 0.0,
-            "last_year_profit_usd": 0.0,
-            "wtd_profit_btc": 0.0,
-            "wtd_profit_usd": 0.0,
-            "mtd_profit_btc": 0.0,
-            "mtd_profit_usd": 0.0,
-            "qtd_profit_btc": 0.0,
-            "qtd_profit_usd": 0.0,
-            "ytd_profit_btc": 0.0,
-            "ytd_profit_usd": 0.0,
-            "alltime_profit_btc": 0.0,
-            "alltime_profit_usd": 0.0,
-        }
+        periods = [
+            'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
+            'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
+        empty = {}
+        for p in periods:
+            empty[f"{p}_profit_btc"] = 0.0
+            empty[f"{p}_profit_usd"] = 0.0
+            empty[f"{p}_profit_by_quote"] = {}
+        return empty
 
     # Filter by account_id if provided
     if account_id is not None:
@@ -539,125 +524,59 @@ async def get_realized_pnl(
     result = await db.execute(query)
     positions = result.scalars().all()
 
-    # Calculate PnL for all time periods
-    daily_profit_btc = 0.0
-    daily_profit_usd = 0.0
-    yesterday_profit_btc = 0.0
-    yesterday_profit_usd = 0.0
-    last_week_profit_btc = 0.0
-    last_week_profit_usd = 0.0
-    last_month_profit_btc = 0.0
-    last_month_profit_usd = 0.0
-    last_quarter_profit_btc = 0.0
-    last_quarter_profit_usd = 0.0
-    last_year_profit_btc = 0.0
-    last_year_profit_usd = 0.0
-    wtd_profit_btc = 0.0
-    wtd_profit_usd = 0.0
-    mtd_profit_btc = 0.0
-    mtd_profit_usd = 0.0
-    qtd_profit_btc = 0.0
-    qtd_profit_usd = 0.0
-    ytd_profit_btc = 0.0
-    ytd_profit_usd = 0.0
-    alltime_profit_btc = 0.0
-    alltime_profit_usd = 0.0
+    # Calculate PnL for all time periods, broken down by quote currency
+    periods = [
+        'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
+        'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
+    by_quote = {p: {} for p in periods}
+    profit_usd = {p: 0.0 for p in periods}
+
+    # Map periods to their time range checks: (period_name, start, end_or_None)
+    # end_or_None=None means "closed_at >= start" (open-ended)
+    period_checks = [
+        ('daily', start_of_today, None),
+        ('yesterday', start_of_yesterday, end_of_yesterday),
+        ('last_week', start_of_last_week, end_of_last_week),
+        ('last_month', start_of_last_month, end_of_last_month),
+        ('last_quarter', start_of_last_quarter, end_of_last_quarter),
+        ('last_year', start_of_last_year, end_of_last_year),
+        ('wtd', start_of_wtd, None),
+        ('mtd', start_of_month, None),
+        ('qtd', start_of_quarter, None),
+        ('ytd', start_of_year, None),
+    ]
 
     for pos in positions:
         if not pos.closed_at:
             continue
 
-        # Calculate BTC profit
-        profit_btc = 0.0
-        if pos.product_id and '-BTC' in pos.product_id:
-            # For BTC pairs, profit_quote is already in BTC
-            if pos.profit_quote is not None:
-                profit_btc = pos.profit_quote
-        else:
-            # For USD pairs, convert USD profit to BTC
-            if pos.profit_usd is not None and pos.btc_usd_price_at_close:
-                profit_btc = pos.profit_usd / pos.btc_usd_price_at_close
+        quote_currency = pos.product_id.split('-')[1] if pos.product_id and '-' in pos.product_id else 'BTC'
+        pq = pos.profit_quote if pos.profit_quote is not None else 0.0
+        pu = pos.profit_usd if pos.profit_usd is not None else 0.0
 
-        profit_usd = pos.profit_usd if pos.profit_usd is not None else 0.0
+        def add_to(period):
+            by_quote[period][quote_currency] = by_quote[period].get(quote_currency, 0.0) + pq
+            profit_usd[period] += pu
 
         # All-time (every closed position)
-        alltime_profit_btc += profit_btc
-        alltime_profit_usd += profit_usd
+        add_to('alltime')
 
-        # Check if closed today
-        if pos.closed_at >= start_of_today:
-            daily_profit_btc += profit_btc
-            daily_profit_usd += profit_usd
+        # Check each time period
+        for period_name, start, end in period_checks:
+            if end is None:
+                if pos.closed_at >= start:
+                    add_to(period_name)
+            else:
+                if start <= pos.closed_at <= end:
+                    add_to(period_name)
 
-        # Check if closed yesterday (previous day)
-        if start_of_yesterday <= pos.closed_at <= end_of_yesterday:
-            yesterday_profit_btc += profit_btc
-            yesterday_profit_usd += profit_usd
-
-        # Check if closed last week (previous calendar week)
-        if start_of_last_week <= pos.closed_at <= end_of_last_week:
-            last_week_profit_btc += profit_btc
-            last_week_profit_usd += profit_usd
-
-        # Check if closed last month (previous calendar month)
-        if start_of_last_month <= pos.closed_at <= end_of_last_month:
-            last_month_profit_btc += profit_btc
-            last_month_profit_usd += profit_usd
-
-        # Check if closed last quarter (previous calendar quarter)
-        if start_of_last_quarter <= pos.closed_at <= end_of_last_quarter:
-            last_quarter_profit_btc += profit_btc
-            last_quarter_profit_usd += profit_usd
-
-        # Check if closed last year (previous calendar year)
-        if start_of_last_year <= pos.closed_at <= end_of_last_year:
-            last_year_profit_btc += profit_btc
-            last_year_profit_usd += profit_usd
-
-        # Check if closed this week (week to date)
-        if pos.closed_at >= start_of_wtd:
-            wtd_profit_btc += profit_btc
-            wtd_profit_usd += profit_usd
-
-        # Check if closed this month
-        if pos.closed_at >= start_of_month:
-            mtd_profit_btc += profit_btc
-            mtd_profit_usd += profit_usd
-
-        # Check if closed this quarter
-        if pos.closed_at >= start_of_quarter:
-            qtd_profit_btc += profit_btc
-            qtd_profit_usd += profit_usd
-
-        # Check if closed this year
-        if pos.closed_at >= start_of_year:
-            ytd_profit_btc += profit_btc
-            ytd_profit_usd += profit_usd
-
-    return {
-        "daily_profit_btc": round(daily_profit_btc, 8),
-        "daily_profit_usd": round(daily_profit_usd, 2),
-        "yesterday_profit_btc": round(yesterday_profit_btc, 8),
-        "yesterday_profit_usd": round(yesterday_profit_usd, 2),
-        "last_week_profit_btc": round(last_week_profit_btc, 8),
-        "last_week_profit_usd": round(last_week_profit_usd, 2),
-        "last_month_profit_btc": round(last_month_profit_btc, 8),
-        "last_month_profit_usd": round(last_month_profit_usd, 2),
-        "last_quarter_profit_btc": round(last_quarter_profit_btc, 8),
-        "last_quarter_profit_usd": round(last_quarter_profit_usd, 2),
-        "last_year_profit_btc": round(last_year_profit_btc, 8),
-        "last_year_profit_usd": round(last_year_profit_usd, 2),
-        "wtd_profit_btc": round(wtd_profit_btc, 8),
-        "wtd_profit_usd": round(wtd_profit_usd, 2),
-        "mtd_profit_btc": round(mtd_profit_btc, 8),
-        "mtd_profit_usd": round(mtd_profit_usd, 2),
-        "qtd_profit_btc": round(qtd_profit_btc, 8),
-        "qtd_profit_usd": round(qtd_profit_usd, 2),
-        "ytd_profit_btc": round(ytd_profit_btc, 8),
-        "ytd_profit_usd": round(ytd_profit_usd, 2),
-        "alltime_profit_btc": round(alltime_profit_btc, 8),
-        "alltime_profit_usd": round(alltime_profit_usd, 2),
-    }
+    # Build response with per-quote breakdown + backward-compatible _btc (native BTC only)
+    resp = {}
+    for p in periods:
+        resp[f"{p}_profit_btc"] = round(by_quote[p].get('BTC', 0.0), 8)
+        resp[f"{p}_profit_usd"] = round(profit_usd[p], 2)
+        resp[f"{p}_profit_by_quote"] = {k: round(v, 8) for k, v in by_quote[p].items()}
+    return resp
 
 
 @router.get("/{position_id}", response_model=PositionResponse)

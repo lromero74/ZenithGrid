@@ -239,26 +239,37 @@ export const positionsApi = {
     api.get<{
       daily_profit_btc: number;
       daily_profit_usd: number;
+      daily_profit_by_quote: Record<string, number>;
       yesterday_profit_btc: number;
       yesterday_profit_usd: number;
+      yesterday_profit_by_quote: Record<string, number>;
       last_week_profit_btc: number;
       last_week_profit_usd: number;
+      last_week_profit_by_quote: Record<string, number>;
       last_month_profit_btc: number;
       last_month_profit_usd: number;
+      last_month_profit_by_quote: Record<string, number>;
       last_quarter_profit_btc: number;
       last_quarter_profit_usd: number;
+      last_quarter_profit_by_quote: Record<string, number>;
       last_year_profit_btc: number;
       last_year_profit_usd: number;
+      last_year_profit_by_quote: Record<string, number>;
       wtd_profit_btc: number;
       wtd_profit_usd: number;
+      wtd_profit_by_quote: Record<string, number>;
       mtd_profit_btc: number;
       mtd_profit_usd: number;
+      mtd_profit_by_quote: Record<string, number>;
       qtd_profit_btc: number;
       qtd_profit_usd: number;
+      qtd_profit_by_quote: Record<string, number>;
       ytd_profit_btc: number;
       ytd_profit_usd: number;
+      ytd_profit_by_quote: Record<string, number>;
       alltime_profit_btc: number;
       alltime_profit_usd: number;
+      alltime_profit_by_quote: Record<string, number>;
     }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
 };
 
