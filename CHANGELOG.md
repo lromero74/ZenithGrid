@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.66.0] - 2026-02-27
+
+### Changed
+- **Realized PnL broken down by quote currency**: All realized PnL rows (today, yesterday, historical, to-date, cumulative, net) now show per-currency amounts instead of converting everything to a single BTC number. USD-quoted trade profits display as native USD, BTC-quoted as BTC. Backend endpoint returns `_profit_by_quote` breakdown for each time period.
+
+### Fixed
+- **Realized BTC total was inflated by USD→BTC conversion**: Previously, closing a BTC-USD deal with $228 profit added a fake `0.00338 BTC` to the BTC total. Now `_profit_btc` only contains native BTC-quoted profits.
+
 ## [v2.65.4] - 2026-02-27
 
 ### Changed
