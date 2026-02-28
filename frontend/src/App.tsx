@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2 } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
@@ -40,6 +40,7 @@ const Charts = lazy(() => import('./pages/Charts'))
 const Portfolio = lazy(() => import('./pages/Portfolio'))
 const News = lazy(() => import('./pages/News'))
 const Reports = lazy(() => import('./pages/Reports'))
+const Games = lazy(() => import('./pages/Games'))
 
 // Main App content (shown when authenticated)
 function AppContent() {
@@ -556,6 +557,19 @@ function AppContent() {
               </div>
             </Link>
             <Link
+              to="/games"
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                location.pathname.startsWith('/games')
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Gamepad2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Games</span>
+              </div>
+            </Link>
+            <Link
               to="/settings"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/settings'
@@ -590,6 +604,7 @@ function AppContent() {
             <Route path="/charts" element={<Charts />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/games/*" element={<Games />} />
             {/* Redirect unknown routes to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
