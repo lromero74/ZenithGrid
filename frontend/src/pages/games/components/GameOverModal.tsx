@@ -31,7 +31,7 @@ export function GameOverModal({ status, score, bestScore, message, onPlayAgain, 
   const isNewBest = score !== undefined && bestScore !== undefined && score >= bestScore && score > 0
 
   return (
-    <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-10 rounded-lg">
+    <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-[100] rounded-lg">
       <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 text-center max-w-xs w-full mx-4">
         {/* Status icon */}
         {config.icon && (
