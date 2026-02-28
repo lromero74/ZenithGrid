@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.67.0] - 2026-02-28
+
+### Added
+- **Games Hub**: New "Games" section in the navigation bar with a hub page displaying 11 available browser games organized by category (Puzzle, Strategy, Word, Arcade). Games include Tic-Tac-Toe, Connect Four, 2048, Minesweeper, Hangman, Sudoku, Wordle, Snake, Ultimate Tic-Tac-Toe, Mahjong Solitaire, and Nonogram.
+- **Game scaffolding**: Shared components (game layout wrapper, game cards, difficulty selector, game over modal), localStorage-based high score tracking, game timer hook, and keyboard input hook. Individual games will be implemented in subsequent releases.
+
 ## [v2.66.6] - 2026-02-27
 
 ### Fixed
