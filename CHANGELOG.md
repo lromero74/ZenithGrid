@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.4] - 2026-02-28
+
+### Fixed
+- **Plinko Pyramid/Diamond layouts**: Layouts now render correct shapes — pyramid widens from 3 pegs at top to 12 at bottom, diamond narrows at top and bottom with 12 pegs in the middle. Pegs use consistent spacing and centering instead of stretching every row to full width.
+- **Solitaire black card text**: Clubs and spades are now dark text on the white card face (was nearly invisible light gray).
+- **Solitaire face-down cards**: Tableau face-down cards now render with proper card height instead of collapsing to thin blue lines.
+
 ## [v2.70.3] - 2026-02-28
 
 ### Fixed

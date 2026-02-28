@@ -71,29 +71,42 @@ export function generatePegLayout(layout: PegLayout = 'classic'): Peg[] {
       }
     }
   } else if (layout === 'pyramid') {
-    // Pyramid: grows from 3 pegs at top to 12 at bottom, staggered
+    // Pyramid: 3 pegs at top growing to 12 at bottom, centered.
+    // +1 peg per row with consistent spacing creates natural stagger —
+    // each row's pegs sit in the gaps of the row above.
+    const maxPegs = 12
+    const usableWidth = BOARD_WIDTH - margin * 2
+    const spacing = usableWidth / (maxPegs - 1)
+    const centerX = BOARD_WIDTH / 2
+
     for (let row = 0; row < PEG_ROWS; row++) {
       const pegCount = 3 + row
-      const usableWidth = BOARD_WIDTH - margin * 2
-      const spacing = usableWidth / (pegCount - 1 || 1)
       const y = startY + row * rowSpacing
 
       for (let col = 0; col < pegCount; col++) {
-        pegs.push({ x: margin + col * spacing, y, row })
+        const x = centerX + (col - (pegCount - 1) / 2) * spacing
+        pegs.push({ x, y, row })
       }
     }
   } else if (layout === 'diamond') {
-    // Diamond: starts narrow, widens to middle, narrows again
+    // Diamond: narrow top, wide middle, narrow bottom, centered.
+    // +2 pegs per row doesn't create natural stagger, so odd rows
+    // are offset by half a spacing (same technique as classic).
     const counts = [4, 6, 8, 10, 12, 12, 10, 8, 6, 4]
+    const maxPegs = 12
     const usableWidth = BOARD_WIDTH - margin * 2
+    const spacing = usableWidth / (maxPegs - 1)
+    const centerX = BOARD_WIDTH / 2
 
     for (let row = 0; row < PEG_ROWS; row++) {
       const pegCount = counts[row]
-      const spacing = usableWidth / (pegCount - 1 || 1)
+      const isOffset = row % 2 === 1
+      const offset = isOffset ? spacing / 2 : 0
       const y = startY + row * rowSpacing
 
       for (let col = 0; col < pegCount; col++) {
-        pegs.push({ x: margin + col * spacing, y, row })
+        const x = centerX + (col - (pegCount - 1) / 2) * spacing + offset
+        pegs.push({ x, y, row })
       }
     }
   }

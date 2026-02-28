@@ -407,7 +407,7 @@ export default function Solitaire() {
               {pile.map((card, cardIdx) => (
                 <div
                   key={cardIdx}
-                  className="absolute left-0 right-0 transition-transform duration-200"
+                  className="absolute left-0 right-0 transition-transform duration-200 h-[4.25rem] sm:h-[5.625rem]"
                   style={{ top: `${cardIdx * (window.innerWidth < 640 ? 16 : 22)}px` }}
                   onClick={(e) => { e.stopPropagation(); handleTableauClick(pileIdx, cardIdx) }}
                   onDoubleClick={(e) => { e.stopPropagation(); handleTableauDoubleClick(pileIdx, cardIdx) }}
@@ -480,7 +480,7 @@ function CardFace({ card, selected = false, validTarget = false }: {
   validTarget?: boolean
 }) {
   const color = getCardColor(card)
-  const textColor = color === 'red' ? 'text-red-500' : 'text-slate-100'
+  const textColor = color === 'red' ? 'text-red-500' : 'text-slate-900'
   const symbol = getSuitSymbol(card.suit)
   const rank = getRankDisplay(card.rank)
 
