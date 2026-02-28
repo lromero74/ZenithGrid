@@ -23,11 +23,13 @@ import {
   checkWin,
   canAutoComplete,
   autoComplete,
+  getHint,
   getRankDisplay,
   getSuitSymbol,
   type Card,
   type SolitaireState,
   type Suit,
+  type Hint,
 } from './solitaireEngine'
 
 // ── Persistence shape ────────────────────────────────────────────────
@@ -62,6 +64,8 @@ export default function Solitaire() {
   const [selection, setSelection] = useState<Selection | null>(null)
   const [undoStack, setUndoStack] = useState<SolitaireState[]>([])
   const [autoCompleting, setAutoCompleting] = useState(false)
+  const [activeHint, setActiveHint] = useState<Hint | null>(null)
+  const [noMoves, setNoMoves] = useState(false)
 
   // Persist on changes
   useEffect(() => {
@@ -78,6 +82,20 @@ export default function Solitaire() {
       clear()
     }
   }, [gameState, clear])
+
+  // Clear hint when user makes a move (gameState changes)
+  useEffect(() => {
+    setActiveHint(null)
+  }, [gameState])
+
+  // Check for no-moves after each state change
+  useEffect(() => {
+    if (gameStatus !== 'playing' || autoCompleting) {
+      setNoMoves(false)
+      return
+    }
+    setNoMoves(getHint(gameState) === null)
+  }, [gameState, gameStatus, autoCompleting])
 
   // Auto-complete when possible
   useEffect(() => {
@@ -106,6 +124,17 @@ export default function Solitaire() {
     setUndoStack([])
     setSelection(null)
   }, [undoStack])
+
+  // ── Hint ────────────────────────────────────────────────────────
+
+  const handleHint = useCallback(() => {
+    if (gameStatus !== 'playing' || autoCompleting) return
+    const hint = getHint(gameState)
+    if (hint) {
+      setActiveHint(hint)
+      setSelection(null)
+    }
+  }, [gameState, gameStatus, autoCompleting])
 
   // ── Try to auto-move card to foundation ──────────────────────────
 
@@ -265,6 +294,8 @@ export default function Solitaire() {
     setSelection(null)
     setUndoStack([])
     setAutoCompleting(false)
+    setActiveHint(null)
+    setNoMoves(false)
     clear()
   }, [clear])
 
@@ -321,6 +352,13 @@ export default function Solitaire() {
           Undo
         </button>
         <button
+          onClick={handleHint}
+          disabled={gameStatus !== 'playing' || noMoves}
+          className="px-3 py-1.5 text-xs rounded bg-emerald-700 text-emerald-100 hover:bg-emerald-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Hint
+        </button>
+        <button
           onClick={handleNewGame}
           className="px-3 py-1.5 text-xs rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
         >
@@ -343,7 +381,7 @@ export default function Solitaire() {
             {/* Stock */}
             <div
               onClick={handleStockClick}
-              className={`card-slot cursor-pointer ${gameState.stock.length > 0 ? '' : 'empty'}`}
+              className={`card-slot cursor-pointer ${gameState.stock.length > 0 ? '' : 'empty'} ${activeHint?.type === 'draw-stock' ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}
             >
               {gameState.stock.length > 0 ? (
                 <CardBack />
@@ -364,6 +402,7 @@ export default function Solitaire() {
                 <CardFace
                   card={gameState.waste[gameState.waste.length - 1]}
                   selected={isSelected('waste', 0, 0)}
+                  hinted={activeHint?.type === 'waste-to-foundation' || activeHint?.type === 'waste-to-tableau'}
                 />
               ) : null}
             </div>
@@ -375,7 +414,10 @@ export default function Solitaire() {
               <div
                 key={suit}
                 onClick={() => handleFoundationClick(f)}
-                className={`card-slot ${validDestinations.foundations.has(f) ? 'ring-2 ring-emerald-400/60' : ''}`}
+                className={`card-slot ${validDestinations.foundations.has(f) ? 'ring-2 ring-emerald-400/60' : ''} ${
+                  (activeHint?.type === 'tableau-to-foundation' || activeHint?.type === 'waste-to-foundation') && activeHint?.toPile === f
+                    ? 'ring-2 ring-amber-400 animate-pulse' : ''
+                }`}
               >
                 {gameState.foundations[f].length > 0 ? (
                   <CardFace card={gameState.foundations[f][gameState.foundations[f].length - 1]} />
@@ -398,6 +440,8 @@ export default function Solitaire() {
               key={pileIdx}
               className={`flex-1 relative min-h-[5.5rem] sm:min-h-[6.5rem] ${
                 pile.length === 0 && validDestinations.tableau.has(pileIdx) ? 'ring-2 ring-emerald-400/60 rounded-lg' : ''
+              } ${
+                pile.length === 0 && (activeHint?.type === 'tableau-to-tableau' || activeHint?.type === 'waste-to-tableau') && activeHint?.toPile === pileIdx ? 'ring-2 ring-amber-400 animate-pulse rounded-lg' : ''
               }`}
               onClick={() => pile.length === 0 && handleTableauClick(pileIdx, 0)}
             >
@@ -417,6 +461,11 @@ export default function Solitaire() {
                       card={card}
                       selected={isSelected('tableau', pileIdx, cardIdx)}
                       validTarget={validDestinations.tableau.has(pileIdx) && cardIdx === pile.length - 1}
+                      hinted={
+                        (activeHint?.type === 'tableau-to-foundation' && activeHint.fromPile === pileIdx && cardIdx === pile.length - 1) ||
+                        (activeHint?.type === 'tableau-to-tableau' && activeHint.fromPile === pileIdx && activeHint.fromCard !== undefined && cardIdx >= activeHint.fromCard) ||
+                        ((activeHint?.type === 'tableau-to-tableau' || activeHint?.type === 'waste-to-tableau') && activeHint.toPile === pileIdx && cardIdx === pile.length - 1)
+                      }
                     />
                   ) : (
                     <CardBack />
@@ -429,6 +478,21 @@ export default function Solitaire() {
 
         {/* Spacer for stacked cards */}
         <div style={{ minHeight: `${Math.max(...gameState.tableau.map(p => p.length)) * (window.innerWidth < 640 ? 16 : 22) + 80}px` }} />
+
+        {/* No moves warning */}
+        {noMoves && gameStatus === 'playing' && (
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center z-20 pointer-events-none">
+            <div className="bg-red-900/90 text-red-100 px-6 py-3 rounded-lg shadow-lg text-center pointer-events-auto">
+              <p className="font-semibold text-sm">No more moves available</p>
+              <button
+                onClick={handleNewGame}
+                className="mt-2 px-4 py-1.5 text-xs rounded bg-red-700 hover:bg-red-600 transition-colors"
+              >
+                New Game
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Win overlay */}
         {gameStatus === 'won' && (
@@ -474,10 +538,11 @@ function CardBack() {
   )
 }
 
-function CardFace({ card, selected = false, validTarget = false }: {
+function CardFace({ card, selected = false, validTarget = false, hinted = false }: {
   card: Card
   selected?: boolean
   validTarget?: boolean
+  hinted?: boolean
 }) {
   const color = getCardColor(card)
   const textColor = color === 'red' ? 'text-red-500' : 'text-slate-900'
@@ -491,6 +556,7 @@ function CardFace({ card, selected = false, validTarget = false }: {
       transition-all duration-150
       ${selected ? 'ring-2 ring-yellow-400 -translate-y-1 border-yellow-400' : 'border-slate-300'}
       ${validTarget ? 'ring-2 ring-emerald-400/60' : ''}
+      ${hinted ? 'ring-2 ring-amber-400 animate-pulse -translate-y-1' : ''}
     `}>
       {/* Top-left rank + suit */}
       <div className={`leading-none ${textColor}`}>

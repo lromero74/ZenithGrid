@@ -18,6 +18,7 @@ import {
   autoComplete,
   getRankDisplay,
   getSuitSymbol,
+  getHint,
   type Card,
   type Suit,
   type SolitaireState,
@@ -672,5 +673,158 @@ describe('getSuitSymbol', () => {
     expect(getSuitSymbol('diamonds')).toBe('♦')
     expect(getSuitSymbol('clubs')).toBe('♣')
     expect(getSuitSymbol('spades')).toBe('♠')
+  })
+})
+
+// ── getHint ─────────────────────────────────────────────────────────
+
+describe('getHint', () => {
+  test('suggests tableau-to-foundation when Ace is on tableau', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 1)],
+        [], [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('tableau-to-foundation')
+    expect(hint!.fromPile).toBe(0)
+  })
+
+  test('suggests waste-to-foundation when waste card fits', () => {
+    const state: SolitaireState = {
+      tableau: [[], [], [], [], [], [], []],
+      foundations: [makeFoundation('hearts', 3), [], [], []],
+      stock: [],
+      waste: [makeCard('hearts', 4)],
+      moves: 5,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('waste-to-foundation')
+    expect(hint!.toPile).toBe(0)
+  })
+
+  test('suggests tableau-to-tableau when valid move exists', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 8, false), makeCard('spades', 7)],
+        [makeCard('diamonds', 8)],
+        [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('tableau-to-tableau')
+    expect(hint!.fromPile).toBe(0)
+    expect(hint!.toPile).toBe(1)
+  })
+
+  test('suggests waste-to-tableau when no foundation moves exist', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 8)],
+        [], [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [makeCard('spades', 7)],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('waste-to-tableau')
+    expect(hint!.toPile).toBe(0)
+  })
+
+  test('suggests draw-stock when no card moves available', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 5)],
+        [makeCard('hearts', 3)],
+        [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [makeCard('clubs', 10, false)],
+      waste: [],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('draw-stock')
+  })
+
+  test('returns null when no moves available at all', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 5)],
+        [makeCard('hearts', 3)],
+        [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [],
+      moves: 10,
+    }
+    const hint = getHint(state)
+    expect(hint).toBeNull()
+  })
+
+  test('prioritizes foundation moves over tableau moves', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 1)],
+        [makeCard('diamonds', 8)],
+        [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [makeCard('spades', 7)],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('tableau-to-foundation')
+  })
+
+  test('does not suggest moving lone King to empty pile', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 13)],
+        [],
+        [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [],
+      moves: 0,
+    }
+    const hint = getHint(state)
+    expect(hint).toBeNull()
+  })
+
+  test('suggests recycling waste when stock is empty but waste has cards', () => {
+    const state: SolitaireState = {
+      tableau: [
+        [makeCard('hearts', 5)],
+        [], [], [], [], [], [],
+      ],
+      foundations: [[], [], [], []],
+      stock: [],
+      waste: [makeCard('clubs', 10)],
+      moves: 5,
+    }
+    const hint = getHint(state)
+    expect(hint).not.toBeNull()
+    expect(hint!.type).toBe('draw-stock')
   })
 })

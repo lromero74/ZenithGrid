@@ -15,11 +15,13 @@ describe('generatePegLayout', () => {
     expect(rows.size).toBe(10)
   })
 
-  test('classic layout has alternating 12/11 pegs per row', () => {
+  test('classic layout has alternating 12/13 pegs per row (slot-aligned)', () => {
     const pegs = generatePegLayout('classic')
     for (let row = 0; row < 10; row++) {
       const rowPegs = pegs.filter(p => p.row === row)
-      expect(rowPegs.length).toBe(row % 2 === 0 ? 12 : 11)
+      // Even rows: SLOT_COUNT-1 pegs at slot boundaries
+      // Odd rows: SLOT_COUNT pegs at slot centers
+      expect(rowPegs.length).toBe(row % 2 === 0 ? SLOT_COUNT - 1 : SLOT_COUNT)
     }
   })
 
