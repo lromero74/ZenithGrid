@@ -82,7 +82,7 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick
           ? 'ring-2 ring-emerald-400 bg-amber-50 border-amber-600 z-40 animate-pulse'
           : isFree
           ? 'bg-amber-50 border-amber-800 hover:bg-amber-100 cursor-pointer shadow-md'
-          : 'bg-amber-200 border-amber-800/50 cursor-default shadow'
+          : 'bg-amber-50 border-amber-800/50 brightness-[0.85] cursor-default shadow'
       }`}
       style={{
         left: `${tile.col * 40 + layerOffset + 110}px`,
