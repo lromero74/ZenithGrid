@@ -158,11 +158,19 @@ export default function Checkers() {
 
   const controls = (
     <div className="flex items-center justify-between">
-      <DifficultySelector
-        value={difficulty}
-        onChange={(d) => { setDifficulty(d); handleNewGame() }}
-        options={['easy', 'medium', 'hard']}
-      />
+      <div className="flex items-center gap-2">
+        <DifficultySelector
+          value={difficulty}
+          onChange={(d) => { setDifficulty(d); handleNewGame() }}
+          options={['easy', 'medium', 'hard']}
+        />
+        <button
+          onClick={handleNewGame}
+          className="px-3 py-1 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          New Game
+        </button>
+      </div>
       <div className="flex space-x-3 text-xs">
         <span className="text-red-400">You: {scores.red}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>

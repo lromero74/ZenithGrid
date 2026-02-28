@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.0] - 2026-02-28
+
+### Added
+- **Chess game**: Full chess implementation with AI opponent (minimax + alpha-beta pruning). Supports all rules including castling, en passant, and pawn promotion. Three difficulty levels with piece-square table evaluation.
+- **Solitaire game**: Classic Klondike solitaire with click-to-move, undo, and auto-complete. Seven tableau piles, four foundation piles, stock/waste draw.
+- **Memory game**: Card-matching game with CSS 3D flip animations. Three grid sizes (4×3, 4×4, 6×4) across easy/medium/hard difficulties. Move counter and timer.
+- **Backgammon game**: Full backgammon vs AI with dice rolling, bar/bearing-off rules, and heuristic AI opponent. Three difficulty levels with pip-count and positional evaluation.
+- **Plinko ball-to-ball collision**: Balls now collide with each other using elastic collision physics, adding realistic multi-ball interactions.
+- **Plinko slot landing animation**: Winning slot flashes and springs downward when a ball lands, giving satisfying visual feedback.
+- **Plinko slot separator pegs**: Pegs now line the borders between slots so balls are cleanly guided into a single slot.
+
+### Changed
+- All games now show a visible "New Game" button in the controls bar (previously some only offered restart from the game-over modal).
+- Games Hub now includes 17 total games (up from 13).
+
 ## [v2.69.0] - 2026-02-28
 
 ### Added
