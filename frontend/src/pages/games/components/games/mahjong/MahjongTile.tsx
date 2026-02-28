@@ -108,7 +108,7 @@ function ClassicContent({ tileDefId, suit }: { tileDefId: string; suit: string }
   return (
     <span
       className={`font-bold leading-none ${colorClass} ${
-        isEmoji ? 'text-2xl sm:text-3xl' : 'text-[28px] sm:text-[38px]'
+        isEmoji ? 'text-[28px] sm:text-4xl' : 'text-[32px] sm:text-[44px]'
       }`}
     >
       {display}
