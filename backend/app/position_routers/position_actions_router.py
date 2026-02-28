@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -224,8 +225,10 @@ async def update_position_settings(
         if not updated_fields:
             raise HTTPException(status_code=400, detail="No settings provided to update")
 
-        # Update the config snapshot
+        # Update the config snapshot — must use flag_modified because
+        # SQLAlchemy doesn't detect in-place mutations on JSON columns
         position.strategy_config_snapshot = config
+        flag_modified(position, "strategy_config_snapshot")
 
         await db.commit()
 

@@ -5,6 +5,26 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.68.0] - 2026-02-28
+
+### Added
+- **11 playable browser games**: All games in the Games Hub are now fully implemented and playable:
+  - **Tic-Tac-Toe**: Classic 3x3 with AI opponent (easy/medium/hard)
+  - **Hangman**: Random word guessing with on-screen QWERTY keyboard
+  - **Snake**: Canvas-based with arrow/WASD/swipe/D-pad controls, speed levels
+  - **2048**: Slide-to-merge puzzle with arrow/WASD/swipe, undo, score tracking
+  - **Connect Four**: Drop-disc strategy with minimax AI (3 difficulty levels)
+  - **Minesweeper**: Classic mine-clearing with beginner/intermediate/expert, first-click safety, long-press flagging on mobile
+  - **Wordle**: Daily and random modes, hard mode, share results, color-coded keyboard
+  - **Nonogram (Picross)**: Logic puzzles at 5x5, 10x10, and 15x15 with validation feedback
+  - **Sudoku**: Backtracking-generated puzzles with 4 difficulty levels, notes mode, conflict highlighting, hints
+  - **Ultimate Tic-Tac-Toe**: Meta-board strategy game with AI opponent and active-board highlighting
+  - **Mahjong Solitaire**: Tile matching with two layouts (pyramid/turtle), shuffle, hint, undo
+- **246 game engine unit tests**: TDD test coverage across all 11 game engines
+
+### Fixed
+- **Deal editing not persisting**: Editing deal settings (e.g., max safety orders) showed a success message but changes were silently lost. Root cause was SQLAlchemy not detecting in-place mutations on JSON columns. Added `flag_modified()` to ensure changes are committed to the database.
+
 ## [v2.67.0] - 2026-02-28
 
 ### Added
