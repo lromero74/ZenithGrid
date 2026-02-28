@@ -14,7 +14,7 @@ import {
   removePair, shuffleTiles, isGameWon, isGameOver,
   type GameTile,
 } from './mahjongEngine'
-import { MahjongTile } from './MahjongTile'
+import { MahjongTile, type TileTheme } from './MahjongTile'
 import { TURTLE_LAYOUT, PYRAMID_LAYOUT } from './layouts'
 import type { GameStatus } from '../../../types'
 
@@ -23,6 +23,7 @@ const LAYOUTS = { turtle: TURTLE_LAYOUT, pyramid: PYRAMID_LAYOUT }
 
 export default function Mahjong() {
   const [layoutName, setLayoutName] = useState<LayoutName>('pyramid')
+  const [tileTheme, setTileTheme] = useState<TileTheme>('kanji')
   const [game, setGame] = useState(() => createGame(LAYOUTS.pyramid))
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [hintPair, setHintPair] = useState<[number, number] | null>(null)
@@ -125,6 +126,13 @@ export default function Mahjong() {
             {l}
           </button>
         ))}
+        <button
+          onClick={() => setTileTheme(t => t === 'classic' ? 'kanji' : 'classic')}
+          className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors"
+          title={`Switch to ${tileTheme === 'classic' ? 'Kanji' : 'Classic'} tiles`}
+        >
+          {tileTheme === 'classic' ? '漢' : '🀄'}
+        </button>
       </div>
       <div className="flex items-center space-x-2">
         <span className="text-xs text-slate-400">{remaining} tiles</span>
@@ -155,6 +163,7 @@ export default function Mahjong() {
               isFree={isTileFree(tile, game.tiles)}
               isSelected={selectedId === tile.id}
               isHinted={hintPair !== null && (hintPair[0] === tile.id || hintPair[1] === tile.id)}
+              theme={tileTheme}
               onClick={handleTileClick}
             />
           ))}

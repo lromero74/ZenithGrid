@@ -1,20 +1,43 @@
 /**
- * Mahjong tile — renders a single tile with depth effect and readable labels.
+ * Mahjong tile — renders a single tile with depth effect.
+ * Supports two visual themes: "classic" (Unicode/emoji) and "kanji" (CJK characters).
  */
 
 import type { GameTile } from './mahjongEngine'
-import { UNIQUE_TILES } from './tileSet'
+import { TILE_DISPLAY, UNIQUE_TILES } from './tileSet'
+
+export type TileTheme = 'classic' | 'kanji'
 
 interface MahjongTileProps {
   tile: GameTile
   isFree: boolean
   isSelected: boolean
   isHinted: boolean
+  theme: TileTheme
   onClick: (id: number) => void
 }
 
-/** Suit colors for visual differentiation. */
-const SUIT_COLORS: Record<string, string> = {
+// ── Classic theme: high-contrast colors for Unicode/emoji on amber tiles ──
+
+const CLASSIC_COLORS: Record<string, string> = {
+  bamboo: 'text-emerald-800',
+  circle: 'text-indigo-800',
+  character: 'text-rose-800',
+  wind: 'text-slate-900',
+  dragon: 'text-slate-900',
+  flower: 'text-fuchsia-800',
+  season: 'text-cyan-800',
+}
+
+const CLASSIC_DRAGON_COLORS: Record<string, string> = {
+  'dragon-R': 'text-red-700',
+  'dragon-G': 'text-emerald-800',
+  'dragon-W': 'text-indigo-700',
+}
+
+// ── Kanji theme: suit-coded two-line display ──
+
+const KANJI_COLORS: Record<string, string> = {
   bamboo: 'text-green-700',
   circle: 'text-blue-700',
   character: 'text-red-700',
@@ -24,52 +47,30 @@ const SUIT_COLORS: Record<string, string> = {
   season: 'text-amber-700',
 }
 
-/** Suit symbols (top line of tile). */
-const SUIT_SYMBOLS: Record<string, string> = {
-  bamboo: '竹',
-  circle: '●',
-  character: '万',
-  wind: '風',
-  dragon: '龍',
-  flower: '花',
-  season: '季',
-}
-
-/** Display labels for special tiles. */
-const SPECIAL_LABELS: Record<string, string> = {
-  'wind-N': '北',
-  'wind-S': '南',
-  'wind-E': '東',
-  'wind-W': '西',
-  'dragon-R': '中',
-  'dragon-G': '發',
-  'dragon-W': '白',
-  'flower-plum': '梅',
-  'flower-orchid': '蘭',
-  'flower-chrysanthemum': '菊',
-  'flower-bamboo': '竹',
-  'season-spring': '春',
-  'season-summer': '夏',
-  'season-autumn': '秋',
-  'season-winter': '冬',
-}
-
-/** Dragon-specific colors. */
-const DRAGON_COLORS: Record<string, string> = {
+const KANJI_DRAGON_COLORS: Record<string, string> = {
   'dragon-R': 'text-red-600',
   'dragon-G': 'text-green-600',
   'dragon-W': 'text-slate-500',
 }
 
-export function MahjongTile({ tile, isFree, isSelected, isHinted, onClick }: MahjongTileProps) {
+const SUIT_SYMBOLS: Record<string, string> = {
+  bamboo: '竹', circle: '●', character: '万',
+  wind: '風', dragon: '龍', flower: '花', season: '季',
+}
+
+const SPECIAL_LABELS: Record<string, string> = {
+  'wind-N': '北', 'wind-S': '南', 'wind-E': '東', 'wind-W': '西',
+  'dragon-R': '中', 'dragon-G': '發', 'dragon-W': '白',
+  'flower-plum': '梅', 'flower-orchid': '蘭',
+  'flower-chrysanthemum': '菊', 'flower-bamboo': '竹',
+  'season-spring': '春', 'season-summer': '夏',
+  'season-autumn': '秋', 'season-winter': '冬',
+}
+
+export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick }: MahjongTileProps) {
   const tileDef = UNIQUE_TILES.find(t => t.id === tile.tileDefId)
   const suit = tileDef?.suit || 'bamboo'
   const layerOffset = tile.layer * 2
-
-  // Numbered suits show suit symbol + number
-  const isNumbered = suit === 'bamboo' || suit === 'circle' || suit === 'character'
-  const specialLabel = SPECIAL_LABELS[tile.tileDefId]
-  const colorClass = DRAGON_COLORS[tile.tileDefId] || SUIT_COLORS[suit] || 'text-slate-700'
 
   return (
     <button
@@ -90,20 +91,47 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, onClick }: Mah
       }}
       disabled={!isFree}
     >
-      {isNumbered ? (
-        <>
-          <span className={`text-[10px] sm:text-xs font-bold ${colorClass}`}>
-            {SUIT_SYMBOLS[suit]}
-          </span>
-          <span className={`text-sm sm:text-lg font-bold ${colorClass}`}>
-            {tileDef?.value}
-          </span>
-        </>
-      ) : (
-        <span className={`text-base sm:text-xl font-bold ${colorClass}`}>
-          {specialLabel}
-        </span>
-      )}
+      {theme === 'classic'
+        ? <ClassicContent tileDefId={tile.tileDefId} suit={suit} />
+        : <KanjiContent tileDefId={tile.tileDefId} suit={suit} value={tileDef?.value} />
+      }
     </button>
+  )
+}
+
+/** Classic theme: Unicode mahjong chars + emoji with high-contrast colors. */
+function ClassicContent({ tileDefId, suit }: { tileDefId: string; suit: string }) {
+  const display = TILE_DISPLAY[tileDefId]
+  const colorClass = CLASSIC_DRAGON_COLORS[tileDefId] || CLASSIC_COLORS[suit] || 'text-slate-900'
+
+  return (
+    <span className={`text-lg sm:text-2xl font-bold ${colorClass}`}>
+      {display}
+    </span>
+  )
+}
+
+/** Kanji theme: suit symbol + number for numbered suits, CJK for specials. */
+function KanjiContent({ tileDefId, suit, value }: { tileDefId: string; suit: string; value?: string }) {
+  const isNumbered = suit === 'bamboo' || suit === 'circle' || suit === 'character'
+  const colorClass = KANJI_DRAGON_COLORS[tileDefId] || KANJI_COLORS[suit] || 'text-slate-700'
+
+  if (isNumbered) {
+    return (
+      <>
+        <span className={`text-[10px] sm:text-xs font-bold ${colorClass}`}>
+          {SUIT_SYMBOLS[suit]}
+        </span>
+        <span className={`text-sm sm:text-lg font-bold ${colorClass}`}>
+          {value}
+        </span>
+      </>
+    )
+  }
+
+  return (
+    <span className={`text-base sm:text-xl font-bold ${colorClass}`}>
+      {SPECIAL_LABELS[tileDefId]}
+    </span>
   )
 }
