@@ -155,7 +155,7 @@ export default function Mahjong() {
   return (
     <GameLayout title="Mahjong Solitaire" timer={timer.formatted} controls={controls}>
       <div className="relative flex flex-col items-center">
-        <div className="relative bg-emerald-900/40 rounded-lg p-4 min-h-[400px] min-w-[300px] sm:min-w-[500px] overflow-auto">
+        <div className="relative bg-emerald-900/40 rounded-lg p-4 min-h-[400px] min-w-[300px] sm:min-w-[700px] overflow-auto">
           {game.tiles.filter(t => !t.removed).map(tile => (
             <MahjongTile
               key={tile.id}
