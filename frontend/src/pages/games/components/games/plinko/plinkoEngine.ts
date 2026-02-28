@@ -16,6 +16,7 @@ export const BOARD_HEIGHT = 500
 export const SLOT_COUNT = 13
 
 export type RiskLevel = 'low' | 'medium' | 'high'
+export type PegLayout = 'classic' | 'pyramid' | 'diamond'
 
 export interface Peg {
   x: number
@@ -40,24 +41,60 @@ const MULTIPLIERS: Record<RiskLevel, number[]> = {
 }
 
 /**
- * Generate the peg layout: 10 rows, row n has n+3 pegs, staggered horizontally.
+ * Generate a peg layout with the given style.
+ *
+ * - classic: Even grid, alternating rows offset by half a spacing (traditional Plinko)
+ * - pyramid: Fewer pegs at top, expanding toward bottom
+ * - diamond: Wide in the middle, narrow at top and bottom
  */
-export function generatePegLayout(): Peg[] {
+export function generatePegLayout(layout: PegLayout = 'classic'): Peg[] {
   const pegs: Peg[] = []
   const startY = 60
-  const rowSpacing = (BOARD_HEIGHT - startY - 60) / (PEG_ROWS - 1)
+  const endY = BOARD_HEIGHT - 60
+  const rowSpacing = (endY - startY) / (PEG_ROWS - 1)
+  const margin = 30 // keep pegs away from edges
 
-  for (let row = 0; row < PEG_ROWS; row++) {
-    const pegCount = row + 3
-    const spacing = BOARD_WIDTH / (pegCount + 1)
-    const y = startY + row * rowSpacing
+  if (layout === 'classic') {
+    // Traditional Plinko: consistent peg count per row, alternating offset
+    const pegsPerRow = 12
+    const usableWidth = BOARD_WIDTH - margin * 2
+    const spacing = usableWidth / (pegsPerRow - 1)
 
-    for (let col = 0; col < pegCount; col++) {
-      pegs.push({
-        x: spacing * (col + 1),
-        y,
-        row,
-      })
+    for (let row = 0; row < PEG_ROWS; row++) {
+      const isOffset = row % 2 === 1
+      const count = isOffset ? pegsPerRow - 1 : pegsPerRow
+      const xStart = margin + (isOffset ? spacing / 2 : 0)
+      const y = startY + row * rowSpacing
+
+      for (let col = 0; col < count; col++) {
+        pegs.push({ x: xStart + col * spacing, y, row })
+      }
+    }
+  } else if (layout === 'pyramid') {
+    // Pyramid: grows from 3 pegs at top to 12 at bottom, staggered
+    for (let row = 0; row < PEG_ROWS; row++) {
+      const pegCount = 3 + row
+      const usableWidth = BOARD_WIDTH - margin * 2
+      const spacing = usableWidth / (pegCount - 1 || 1)
+      const y = startY + row * rowSpacing
+
+      for (let col = 0; col < pegCount; col++) {
+        pegs.push({ x: margin + col * spacing, y, row })
+      }
+    }
+  } else if (layout === 'diamond') {
+    // Diamond: starts narrow, widens to middle, narrows again
+    const counts = [4, 6, 8, 10, 12, 12, 10, 8, 6, 4]
+    const usableWidth = BOARD_WIDTH - margin * 2
+
+    for (let row = 0; row < PEG_ROWS; row++) {
+      const pegCount = counts[row]
+      const spacing = usableWidth / (pegCount - 1 || 1)
+      const y = startY + row * rowSpacing
+
+      for (let col = 0; col < pegCount; col++) {
+        pegs.push({ x: margin + col * spacing, y, row })
+      }
     }
   }
 
@@ -150,6 +187,65 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
 export function getSlotIndex(ballX: number, boardWidth: number): number {
   const idx = Math.floor((ballX / boardWidth) * SLOT_COUNT)
   return Math.max(0, Math.min(SLOT_COUNT - 1, idx))
+}
+
+/**
+ * Check if two balls overlap (distance < 2 × BALL_RADIUS).
+ */
+export function checkBallCollision(a: Ball, b: Ball): boolean {
+  const dx = a.x - b.x
+  const dy = a.y - b.y
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  return dist < BALL_RADIUS * 2
+}
+
+/**
+ * Resolve elastic collision between two balls.
+ * Swaps velocity components along the collision normal.
+ * Returns a tuple of [updatedA, updatedB].
+ */
+export function resolveBallCollision(a: Ball, b: Ball): [Ball, Ball] {
+  const dx = a.x - b.x
+  const dy = a.y - b.y
+  const dist = Math.sqrt(dx * dx + dy * dy) || 0.01
+  const minDist = BALL_RADIUS * 2
+
+  // Normal vector from b to a
+  const nx = dx / dist
+  const ny = dy / dist
+
+  // Relative velocity of a w.r.t. b along normal
+  const dvx = a.vx - b.vx
+  const dvy = a.vy - b.vy
+  const relVelAlongNormal = dvx * nx + dvy * ny
+
+  // Don't resolve if balls are moving apart
+  if (relVelAlongNormal > 0) return [a, b]
+
+  // Elastic collision (equal mass): swap normal velocity components
+  const impulse = relVelAlongNormal
+
+  // Push balls apart to avoid overlap
+  const overlap = minDist - dist
+  const pushX = (nx * overlap) / 2
+  const pushY = (ny * overlap) / 2
+
+  return [
+    {
+      id: a.id,
+      x: a.x + pushX,
+      y: a.y + pushY,
+      vx: (a.vx - impulse * nx) * RESTITUTION,
+      vy: (a.vy - impulse * ny) * RESTITUTION,
+    },
+    {
+      id: b.id,
+      x: b.x - pushX,
+      y: b.y - pushY,
+      vx: (b.vx + impulse * nx) * RESTITUTION,
+      vy: (b.vy + impulse * ny) * RESTITUTION,
+    },
+  ]
 }
 
 /**

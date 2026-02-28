@@ -9,27 +9,40 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { GameLayout } from '../../GameLayout'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
-  checkPegCollision, resolveCollision, getSlotIndex,
-  type Ball, type RiskLevel,
+  checkPegCollision, resolveCollision, checkBallCollision, resolveBallCollision,
+  getSlotIndex,
+  type Ball, type Peg, type RiskLevel, type PegLayout,
   PEG_RADIUS, BALL_RADIUS, BOARD_WIDTH, BOARD_HEIGHT, SLOT_COUNT,
 } from './plinkoEngine'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 
-const BET_OPTIONS = [10, 25, 50, 100]
+const BET_OPTIONS = [10, 25, 50, 100, 250]
+const MIN_BET = 10
 const INITIAL_BALANCE = 1000
 const SLOT_HEIGHT = 30
-const pegs = generatePegLayout()
+const PEG_LAYOUTS: { value: PegLayout; label: string }[] = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'pyramid', label: 'Pyramid' },
+  { value: 'diamond', label: 'Diamond' },
+]
 
 interface PegFlash {
   pegIdx: number
   frame: number
 }
 
+interface SlotLanding {
+  slotIdx: number
+  frame: number       // countdown frames (total ~40 = ~0.67s at 60fps)
+  totalFrames: number  // starting frame count for easing
+}
+
 interface PlinkoState {
   balance: number
   bet: number
   risk: RiskLevel
+  layout: PegLayout
   lastWin: { amount: number; multiplier: number } | null
 }
 
@@ -40,7 +53,12 @@ function getSlotColor(multiplier: number): string {
 }
 
 function getScaleForContainer(containerWidth: number): number {
-  return Math.min(1, containerWidth / BOARD_WIDTH)
+  // Fit within both container width and available viewport height
+  const widthScale = containerWidth / BOARD_WIDTH
+  // Reserve ~260px for header, controls, and bottom text
+  const availableHeight = window.innerHeight - 260
+  const heightScale = availableHeight / (BOARD_HEIGHT + SLOT_HEIGHT)
+  return Math.min(1, widthScale, heightScale)
 }
 
 export default function Plinko() {
@@ -51,12 +69,15 @@ export default function Plinko() {
   const [balance, setBalance] = useState(saved?.balance ?? INITIAL_BALANCE)
   const [bet, setBet] = useState(saved?.bet ?? BET_OPTIONS[0])
   const [risk, setRisk] = useState<RiskLevel>(saved?.risk ?? 'medium')
+  const [layout, setLayout] = useState<PegLayout>(saved?.layout ?? 'classic')
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(saved?.lastWin ?? null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const ballsRef = useRef<Ball[]>([])
   const flashesRef = useRef<PegFlash[]>([])
+  const slotLandingsRef = useRef<SlotLanding[]>([])
+  const pegsRef = useRef<Peg[]>(generatePegLayout(saved?.layout ?? 'classic'))
   const balanceRef = useRef(saved?.balance ?? INITIAL_BALANCE)
   const betRef = useRef(saved?.bet ?? BET_OPTIONS[0])
   const riskRef = useRef<RiskLevel>(saved?.risk ?? 'medium')
@@ -67,10 +88,15 @@ export default function Plinko() {
   useEffect(() => { betRef.current = bet }, [bet])
   useEffect(() => { riskRef.current = risk }, [risk])
 
+  // Regenerate pegs when layout changes
+  useEffect(() => {
+    pegsRef.current = generatePegLayout(layout)
+  }, [layout])
+
   // Persist state on changes
   useEffect(() => {
-    save({ balance, bet, risk, lastWin })
-  }, [balance, bet, risk, lastWin, save])
+    save({ balance, bet, risk, layout, lastWin })
+  }, [balance, bet, risk, layout, lastWin, save])
 
   const drawBoard = useCallback(() => {
     const canvas = canvasRef.current
@@ -92,40 +118,86 @@ export default function Plinko() {
     ctx.fillStyle = '#0f172a'
     ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT + SLOT_HEIGHT)
 
+    // Drop zone indicator at top center
+    ctx.fillStyle = '#f97316'
+    ctx.globalAlpha = 0.3
+    ctx.beginPath()
+    ctx.moveTo(BOARD_WIDTH / 2 - 20, 5)
+    ctx.lineTo(BOARD_WIDTH / 2 + 20, 5)
+    ctx.lineTo(BOARD_WIDTH / 2, 20)
+    ctx.closePath()
+    ctx.fill()
+    ctx.globalAlpha = 1
+
     // Pegs
     const flashSet = new Set(flashesRef.current.map(f => f.pegIdx))
-    pegs.forEach((peg, idx) => {
+    pegsRef.current.forEach((peg, idx) => {
       ctx.beginPath()
       ctx.arc(peg.x, peg.y, PEG_RADIUS, 0, Math.PI * 2)
       ctx.fillStyle = flashSet.has(idx) ? '#fbbf24' : '#64748b'
       ctx.fill()
     })
 
+    // Slot separator pegs — small pegs at slot boundaries to guide balls
+    const slotWidth = BOARD_WIDTH / SLOT_COUNT
+    const separatorRadius = PEG_RADIUS * 0.8
+    const separatorY = BOARD_HEIGHT - 5
+    for (let i = 0; i <= SLOT_COUNT; i++) {
+      const sx = i * slotWidth
+      ctx.beginPath()
+      ctx.arc(sx, separatorY, separatorRadius, 0, Math.PI * 2)
+      ctx.fillStyle = '#94a3b8'
+      ctx.fill()
+    }
+
     // Slot dividers and labels
     const multipliers = getMultipliers(riskRef.current)
-    const slotWidth = BOARD_WIDTH / SLOT_COUNT
+    const landingSet = new Map<number, SlotLanding>()
+    for (const sl of slotLandingsRef.current) landingSet.set(sl.slotIdx, sl)
+
     for (let i = 0; i < SLOT_COUNT; i++) {
       const sx = i * slotWidth
-      const sy = BOARD_HEIGHT
+      let sy = BOARD_HEIGHT
       const m = multipliers[i]
+      const landing = landingSet.get(i)
+
+      ctx.save()
+
+      // Spring push-down + flash effect when ball lands
+      if (landing) {
+        const progress = 1 - landing.frame / landing.totalFrames // 0→1
+        // Damped spring: push down then bounce back
+        const spring = Math.sin(progress * Math.PI) * Math.exp(-progress * 2)
+        const pushDown = spring * 4  // max 4px push
+        sy += pushDown
+
+        // Glow/flash effect — bright at start, fading out
+        const flashAlpha = (1 - progress) * 0.6
+        ctx.fillStyle = getSlotColor(m)
+        ctx.globalAlpha = flashAlpha
+        ctx.fillRect(sx, sy - 2, slotWidth, SLOT_HEIGHT + 4)
+        ctx.globalAlpha = 1
+      }
 
       // Slot background
       ctx.fillStyle = getSlotColor(m)
-      ctx.globalAlpha = 0.25
+      ctx.globalAlpha = landing ? 0.5 : 0.25
       ctx.fillRect(sx, sy, slotWidth, SLOT_HEIGHT)
       ctx.globalAlpha = 1
 
       // Slot border
       ctx.strokeStyle = getSlotColor(m)
-      ctx.lineWidth = 1
+      ctx.lineWidth = landing ? 2 : 1
       ctx.strokeRect(sx, sy, slotWidth, SLOT_HEIGHT)
 
       // Multiplier label
       ctx.fillStyle = '#fff'
-      ctx.font = 'bold 10px sans-serif'
+      ctx.font = landing ? 'bold 11px sans-serif' : 'bold 10px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(`${m}x`, sx + slotWidth / 2, sy + SLOT_HEIGHT / 2)
+
+      ctx.restore()
     }
 
     // Balls with trail effect
@@ -152,6 +224,11 @@ export default function Plinko() {
       .map(f => ({ ...f, frame: f.frame - 1 }))
       .filter(f => f.frame > 0)
 
+    // Decay slot landing animations
+    slotLandingsRef.current = slotLandingsRef.current
+      .map(sl => ({ ...sl, frame: sl.frame - 1 }))
+      .filter(sl => sl.frame > 0)
+
     // Update each ball
     const landed: { slotIdx: number }[] = []
     const activeBalls: Ball[] = []
@@ -160,13 +237,28 @@ export default function Plinko() {
       ball = stepPhysics(ball)
 
       // Collision with pegs
-      for (let pi = 0; pi < pegs.length; pi++) {
-        if (checkPegCollision(ball, pegs[pi])) {
-          ball = resolveCollision(ball, pegs[pi])
+      const currentPegs = pegsRef.current
+      for (let pi = 0; pi < currentPegs.length; pi++) {
+        if (checkPegCollision(ball, currentPegs[pi])) {
+          ball = resolveCollision(ball, currentPegs[pi])
           // Flash peg
           if (!flashesRef.current.some(f => f.pegIdx === pi)) {
             flashesRef.current.push({ pegIdx: pi, frame: 8 })
           }
+        }
+      }
+
+      // Collision with slot separator pegs at the bottom
+      const sepSlotWidth = BOARD_WIDTH / SLOT_COUNT
+      const sepY = BOARD_HEIGHT - 5
+      const sepRadius = PEG_RADIUS * 0.8
+      for (let si = 0; si <= SLOT_COUNT; si++) {
+        const sepPeg: Peg = { x: si * sepSlotWidth, y: sepY, row: -1 }
+        const dx = ball.x - sepPeg.x
+        const dy = ball.y - sepPeg.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist <= BALL_RADIUS + sepRadius) {
+          ball = resolveCollision(ball, sepPeg)
         }
       }
 
@@ -186,6 +278,17 @@ export default function Plinko() {
       }
     }
 
+    // Ball-to-ball collisions (check each pair)
+    for (let i = 0; i < activeBalls.length; i++) {
+      for (let j = i + 1; j < activeBalls.length; j++) {
+        if (checkBallCollision(activeBalls[i], activeBalls[j])) {
+          const [newA, newB] = resolveBallCollision(activeBalls[i], activeBalls[j])
+          activeBalls[i] = newA
+          activeBalls[j] = newB
+        }
+      }
+    }
+
     ballsRef.current = activeBalls
 
     // Process landings
@@ -198,6 +301,15 @@ export default function Plinko() {
         const win = Math.round(betRef.current * m)
         totalWin += win
         lastMultiplier = m
+        // Trigger slot landing spring animation
+        const landingFrames = 40
+        if (!slotLandingsRef.current.some(sl => sl.slotIdx === slotIdx)) {
+          slotLandingsRef.current.push({ slotIdx, frame: landingFrames, totalFrames: landingFrames })
+        } else {
+          // Reset the animation if same slot hit again
+          const existing = slotLandingsRef.current.find(sl => sl.slotIdx === slotIdx)!
+          existing.frame = landingFrames
+        }
       }
       balanceRef.current += totalWin
       setBalance(balanceRef.current)
@@ -206,30 +318,26 @@ export default function Plinko() {
 
     drawBoard()
 
-    if (activeBalls.length > 0) {
+    // Keep animating if there are active balls or landing animations still playing
+    if (activeBalls.length > 0 || slotLandingsRef.current.length > 0) {
       animFrameRef.current = requestAnimationFrame(tick)
     }
   }, [drawBoard])
 
-  const dropBall = useCallback((clientX: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+  const dropBall = useCallback(() => {
+    if (betRef.current < MIN_BET || balanceRef.current < betRef.current) return
 
-    if (balanceRef.current < betRef.current) return
-
-    const rect = canvas.getBoundingClientRect()
-    const scale = scaleRef.current
-    const x = (clientX - rect.left) / scale
-
-    // Clamp x within board
-    const clampedX = Math.max(BALL_RADIUS + 10, Math.min(BOARD_WIDTH - BALL_RADIUS - 10, x))
+    // Ball drops from center with small random variance (±15px)
+    // Pegs create the randomness, not the click position
+    const variance = (Math.random() - 0.5) * 30
+    const dropX = BOARD_WIDTH / 2 + variance
 
     // Deduct bet
     balanceRef.current -= betRef.current
     setBalance(balanceRef.current)
     setGameStatus('playing')
 
-    const ball = createBall(clampedX)
+    const ball = createBall(dropX)
     ballsRef.current.push(ball)
 
     // Start animation if not already running
@@ -238,14 +346,13 @@ export default function Plinko() {
     }
   }, [tick])
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    dropBall(e.clientX)
+  const handleCanvasClick = useCallback(() => {
+    dropBall()
   }, [dropBall])
 
   const handleCanvasTouch = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    const touch = e.touches[0]
-    if (touch) dropBall(touch.clientX)
+    dropBall()
   }, [dropBall])
 
   // Resize observer for responsive canvas
@@ -276,6 +383,7 @@ export default function Plinko() {
   const resetGame = useCallback(() => {
     ballsRef.current = []
     flashesRef.current = []
+    slotLandingsRef.current = []
     balanceRef.current = INITIAL_BALANCE
     setBalance(INITIAL_BALANCE)
     setLastWin(null)
@@ -285,17 +393,24 @@ export default function Plinko() {
     drawBoard()
   }, [drawBoard, clear])
 
+  const handleBetChange = useCallback((value: string) => {
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= MIN_BET) {
+      setBet(num)
+    }
+  }, [])
+
   const controls = (
-    <div className="flex flex-col gap-3">
-      {/* Risk level */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">Risk</span>
-        <div className="flex gap-1">
+    <div className="flex flex-col gap-2.5">
+      {/* Row 1: Risk + Layout */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400 w-10">Risk</span>
           {(['low', 'medium', 'high'] as RiskLevel[]).map(level => (
             <button
               key={level}
               onClick={() => setRisk(level)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors capitalize ${
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors capitalize ${
                 risk === level
                   ? level === 'low' ? 'bg-emerald-900/50 text-emerald-400'
                     : level === 'medium' ? 'bg-yellow-900/50 text-yellow-400'
@@ -307,17 +422,33 @@ export default function Plinko() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400 w-12">Board</span>
+          {PEG_LAYOUTS.map(l => (
+            <button
+              key={l.value}
+              onClick={() => setLayout(l.value)}
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                layout === l.value
+                  ? 'bg-blue-900/50 text-blue-400'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Bet selector */}
+      {/* Row 2: Bet presets + custom input */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">Bet</span>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400 w-10">Bet</span>
           {BET_OPTIONS.map(b => (
             <button
               key={b}
               onClick={() => setBet(b)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                 bet === b
                   ? 'bg-orange-900/50 text-orange-400'
                   : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
@@ -327,18 +458,37 @@ export default function Plinko() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={MIN_BET}
+            max={balance}
+            value={bet}
+            onChange={e => handleBetChange(e.target.value)}
+            className="w-16 px-2 py-1 rounded text-xs font-mono bg-slate-700 text-white border border-slate-600 text-right"
+          />
+        </div>
       </div>
 
-      {/* Balance + last win */}
+      {/* Row 3: Balance + last win + New Game */}
       <div className="flex items-center justify-between text-xs">
         <span className="text-slate-400">
           Balance: <span className="text-white font-mono">{balance.toLocaleString()}</span>
+          <span className="text-slate-500 ml-1">(min {MIN_BET})</span>
         </span>
-        {lastWin && (
-          <span className={lastWin.multiplier >= 1 ? 'text-emerald-400' : 'text-red-400'}>
-            {lastWin.multiplier >= 1 ? '+' : ''}{lastWin.amount} ({lastWin.multiplier}x)
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {lastWin && (
+            <span className={lastWin.multiplier >= 1 ? 'text-emerald-400' : 'text-red-400'}>
+              {lastWin.multiplier >= 1 ? '+' : ''}{lastWin.amount} ({lastWin.multiplier}x)
+            </span>
+          )}
+          <button
+            onClick={resetGame}
+            className="px-2 py-0.5 rounded text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+          >
+            New Game
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -348,7 +498,7 @@ export default function Plinko() {
       <div className="relative flex flex-col items-center space-y-4" ref={containerRef}>
         <canvas
           ref={canvasRef}
-          className="rounded-lg border border-slate-700 cursor-pointer"
+          className="rounded-lg border border-slate-700 cursor-pointer max-w-full"
           style={{ touchAction: 'none' }}
           onClick={handleCanvasClick}
           onTouchStart={handleCanvasTouch}
@@ -362,7 +512,7 @@ export default function Plinko() {
               <button
                 onClick={() => {
                   setGameStatus('playing')
-                  dropBall(BOARD_WIDTH / 2 * scaleRef.current + (canvasRef.current?.getBoundingClientRect().left ?? 0))
+                  dropBall()
                 }}
                 className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-semibold transition-colors"
               >
@@ -389,7 +539,7 @@ export default function Plinko() {
         )}
 
         <p className="text-xs text-slate-500">
-          Click anywhere on the board to drop a ball. Choose your risk and bet amount above.
+          Click the board to drop a ball. Pegs bounce it randomly into a slot.
         </p>
       </div>
     </GameLayout>

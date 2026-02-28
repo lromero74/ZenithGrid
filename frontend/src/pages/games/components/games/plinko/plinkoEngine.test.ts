@@ -1,44 +1,66 @@
 import { describe, test, expect } from 'vitest'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
-  checkPegCollision, resolveCollision, getSlotIndex, getDropPositions,
+  checkPegCollision, resolveCollision, checkBallCollision, resolveBallCollision,
+  getSlotIndex, getDropPositions,
   type Peg, type Ball, type RiskLevel,
   PEG_RADIUS, BALL_RADIUS, GRAVITY, RESTITUTION, DAMPING,
   BOARD_WIDTH, BOARD_HEIGHT, SLOT_COUNT, PEG_ROWS,
 } from './plinkoEngine'
 
 describe('generatePegLayout', () => {
-  const pegs = generatePegLayout()
-
-  test('returns 10 rows of pegs', () => {
+  test('classic layout returns 10 rows of pegs', () => {
+    const pegs = generatePegLayout('classic')
     const rows = new Set(pegs.map(p => p.row))
     expect(rows.size).toBe(10)
   })
 
-  test('row n has n+3 pegs', () => {
+  test('classic layout has alternating 12/11 pegs per row', () => {
+    const pegs = generatePegLayout('classic')
+    for (let row = 0; row < 10; row++) {
+      const rowPegs = pegs.filter(p => p.row === row)
+      expect(rowPegs.length).toBe(row % 2 === 0 ? 12 : 11)
+    }
+  })
+
+  test('classic layout rows are staggered', () => {
+    const pegs = generatePegLayout('classic')
+    const row0 = pegs.filter(p => p.row === 0).sort((a, b) => a.x - b.x)
+    const row1 = pegs.filter(p => p.row === 1).sort((a, b) => a.x - b.x)
+    expect(row0[0].x).not.toBeCloseTo(row1[0].x, 1)
+  })
+
+  test('pyramid layout has row n with n+3 pegs', () => {
+    const pegs = generatePegLayout('pyramid')
     for (let row = 0; row < 10; row++) {
       const rowPegs = pegs.filter(p => p.row === row)
       expect(rowPegs.length).toBe(row + 3)
     }
   })
 
-  test('all pegs have positive x,y coordinates', () => {
-    for (const peg of pegs) {
-      expect(peg.x).toBeGreaterThan(0)
-      expect(peg.y).toBeGreaterThan(0)
+  test('diamond layout is symmetric (starts/ends narrow)', () => {
+    const pegs = generatePegLayout('diamond')
+    const row0 = pegs.filter(p => p.row === 0)
+    const row4 = pegs.filter(p => p.row === 4)
+    const row9 = pegs.filter(p => p.row === 9)
+    expect(row0.length).toBe(row9.length) // symmetric
+    expect(row4.length).toBeGreaterThan(row0.length) // wider in middle
+  })
+
+  test('all layouts have positive coordinates', () => {
+    for (const layout of ['classic', 'pyramid', 'diamond'] as const) {
+      const pegs = generatePegLayout(layout)
+      for (const peg of pegs) {
+        expect(peg.x).toBeGreaterThan(0)
+        expect(peg.y).toBeGreaterThan(0)
+      }
     }
   })
 
-  test('rows are staggered (odd rows offset from even)', () => {
-    const row0 = pegs.filter(p => p.row === 0).sort((a, b) => a.x - b.x)
-    const row1 = pegs.filter(p => p.row === 1).sort((a, b) => a.x - b.x)
-    // Row 1 has one more peg and should be offset from row 0
-    expect(row0[0].x).not.toBeCloseTo(row1[0].x, 1)
-  })
-
-  test('total peg count is 75', () => {
-    // sum of (n+3) for n=0..9 = 3+4+5+6+7+8+9+10+11+12 = 75
-    expect(pegs.length).toBe(75)
+  test('default layout is classic', () => {
+    const defaultPegs = generatePegLayout()
+    const classicPegs = generatePegLayout('classic')
+    expect(defaultPegs.length).toBe(classicPegs.length)
   })
 })
 
@@ -209,6 +231,77 @@ describe('resolveCollision', () => {
     const peg: Peg = { x: 105, y: 100, row: 0 }
     const resolved = resolveCollision(ball, peg)
     expect(resolved).not.toBe(ball)
+  })
+})
+
+describe('checkBallCollision', () => {
+  test('returns true when balls overlap', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    const b: Ball = { id: 2, x: 110, y: 100, vx: 0, vy: 0 }
+    // distance = 10, threshold = 2 * BALL_RADIUS = 16
+    expect(checkBallCollision(a, b)).toBe(true)
+  })
+
+  test('returns false when balls are far apart', () => {
+    const a: Ball = { id: 1, x: 0, y: 0, vx: 0, vy: 0 }
+    const b: Ball = { id: 2, x: 100, y: 100, vx: 0, vy: 0 }
+    expect(checkBallCollision(a, b)).toBe(false)
+  })
+
+  test('returns false at exactly 2*BALL_RADIUS distance (strict <)', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    const b: Ball = { id: 2, x: 100 + BALL_RADIUS * 2, y: 100, vx: 0, vy: 0 }
+    expect(checkBallCollision(a, b)).toBe(false)
+  })
+
+  test('returns true when balls are at the same position', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    const b: Ball = { id: 2, x: 100, y: 100, vx: 0, vy: 0 }
+    expect(checkBallCollision(a, b)).toBe(true)
+  })
+})
+
+describe('resolveBallCollision', () => {
+  test('balls are pushed apart', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 2, vy: 0 }
+    const b: Ball = { id: 2, x: 110, y: 100, vx: -2, vy: 0 }
+    const [ra, rb] = resolveBallCollision(a, b)
+    const dx = ra.x - rb.x
+    const dy = ra.y - rb.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    expect(dist).toBeGreaterThanOrEqual(BALL_RADIUS * 2 - 0.01)
+  })
+
+  test('velocities change after collision', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 3, vy: 0 }
+    const b: Ball = { id: 2, x: 110, y: 100, vx: -1, vy: 0 }
+    const [ra, rb] = resolveBallCollision(a, b)
+    expect(ra.vx !== a.vx || rb.vx !== b.vx).toBe(true)
+  })
+
+  test('returns new balls (immutable)', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: 2, vy: 0 }
+    const b: Ball = { id: 2, x: 110, y: 100, vx: -2, vy: 0 }
+    const [ra, rb] = resolveBallCollision(a, b)
+    expect(ra).not.toBe(a)
+    expect(rb).not.toBe(b)
+  })
+
+  test('preserves ball ids', () => {
+    const a: Ball = { id: 42, x: 100, y: 100, vx: 2, vy: 0 }
+    const b: Ball = { id: 99, x: 110, y: 100, vx: -2, vy: 0 }
+    const [ra, rb] = resolveBallCollision(a, b)
+    expect(ra.id).toBe(42)
+    expect(rb.id).toBe(99)
+  })
+
+  test('does not resolve if balls are moving apart', () => {
+    const a: Ball = { id: 1, x: 100, y: 100, vx: -2, vy: 0 }
+    const b: Ball = { id: 2, x: 110, y: 100, vx: 2, vy: 0 }
+    const [ra, rb] = resolveBallCollision(a, b)
+    // Should return unchanged balls
+    expect(ra).toBe(a)
+    expect(rb).toBe(b)
   })
 })
 

@@ -32,6 +32,12 @@ const Mahjong = lazy(() => import('./games/components/games/mahjong/Mahjong'))
 const Checkers = lazy(() => import('./games/components/games/checkers/Checkers'))
 const Plinko = lazy(() => import('./games/components/games/plinko/Plinko'))
 
+// Phase 5: Card & Board Games
+const Memory = lazy(() => import('./games/components/games/memory/Memory'))
+const Solitaire = lazy(() => import('./games/components/games/solitaire/Solitaire'))
+const Backgammon = lazy(() => import('./games/components/games/backgammon/Backgammon'))
+const Chess = lazy(() => import('./games/components/games/chess/Chess'))
+
 export default function Games() {
   return (
     <Suspense fallback={
@@ -58,6 +64,11 @@ export default function Games() {
         {/* Phase 4: New Games */}
         <Route path="checkers" element={<Checkers />} />
         <Route path="plinko" element={<Plinko />} />
+        {/* Phase 5: Card & Board Games */}
+        <Route path="memory" element={<Memory />} />
+        <Route path="solitaire" element={<Solitaire />} />
+        <Route path="backgammon" element={<Backgammon />} />
+        <Route path="chess" element={<Chess />} />
       </Routes>
     </Suspense>
   )

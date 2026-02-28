@@ -16,6 +16,10 @@ import {
   Table2,
   Crown,
   Triangle,
+  FlipHorizontal,
+  Spade,
+  Dices,
+  ChessKnight,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -151,6 +155,46 @@ export const GAMES: GameInfo[] = [
     sessionLength: '2-5 min',
     category: 'arcade',
   },
+  {
+    id: 'memory',
+    name: 'Memory',
+    description: 'Flip cards to find matching pairs',
+    icon: 'FlipHorizontal',
+    path: '/games/memory',
+    difficulty: 'easy',
+    sessionLength: '2-5 min',
+    category: 'puzzle',
+  },
+  {
+    id: 'solitaire',
+    name: 'Solitaire',
+    description: 'Classic Klondike card game',
+    icon: 'Spade',
+    path: '/games/solitaire',
+    difficulty: 'medium',
+    sessionLength: '10-20 min',
+    category: 'strategy',
+  },
+  {
+    id: 'backgammon',
+    name: 'Backgammon',
+    description: 'Classic dice board game vs AI',
+    icon: 'Dices',
+    path: '/games/backgammon',
+    difficulty: 'hard',
+    sessionLength: '15-30 min',
+    category: 'strategy',
+  },
+  {
+    id: 'chess',
+    name: 'Chess',
+    description: 'The ultimate strategy game vs AI',
+    icon: 'ChessKnight',
+    path: '/games/chess',
+    difficulty: 'hard',
+    sessionLength: '10-30 min',
+    category: 'strategy',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -168,6 +212,10 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Grip,
   Crown,
   Triangle,
+  FlipHorizontal,
+  Spade,
+  Dices,
+  ChessKnight,
 }
 
 /** Category filter options for the hub page */
