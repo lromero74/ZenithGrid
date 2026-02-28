@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.68.2] - 2026-02-28
+
+### Fixed
+- **Mahjong tiles more readable**: Replaced hard-to-distinguish Unicode mahjong characters with clear two-line labels (suit symbol + number) color-coded by suit. Winds, dragons, flowers, and seasons now show distinct CJK characters.
+
 ## [v2.68.1] - 2026-02-28
 
 ### Changed
