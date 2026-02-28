@@ -82,7 +82,7 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick
           ? 'ring-2 ring-emerald-400 bg-amber-50 border-amber-600 z-40 animate-pulse'
           : isFree
           ? 'bg-amber-50 border-amber-800 hover:bg-amber-100 cursor-pointer shadow-md'
-          : 'bg-amber-100/60 border-amber-800/50 opacity-60 cursor-default shadow'
+          : 'bg-amber-200 border-amber-800/50 cursor-default shadow'
       }`}
       style={{
         left: `${tile.col * 40 + layerOffset + 60}px`,
@@ -110,6 +110,7 @@ function ClassicContent({ tileDefId, suit }: { tileDefId: string; suit: string }
       className={`font-bold leading-none ${colorClass} ${
         isEmoji ? 'text-[28px] sm:text-4xl' : 'text-[32px] sm:text-[44px]'
       }`}
+      style={{ marginTop: isEmoji ? undefined : '-2px' }}
     >
       {display}
     </span>
