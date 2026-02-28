@@ -215,7 +215,7 @@ export const positionsApi = {
     api.post<{ message: string; trade_id: number; price: number; eth_acquired: number }>(`/positions/${id}/add-funds`, { btc_amount: btcAmount })
       .then((res) => res.data),
   updateSettings: (id: number, settings: UpdatePositionSettingsRequest) =>
-    api.patch<{ message: string; updated_fields: string[]; new_config: Record<string, unknown> }>(`/positions/${id}/settings`, settings)
+    api.patch<{ message: string; updated_fields: string[]; new_config: Record<string, unknown>; budget_resized?: boolean; old_budget?: number; new_budget?: number }>(`/positions/${id}/settings`, settings)
       .then((res) => res.data),
   getCompletedStats: (accountId?: number) =>
     api.get<{

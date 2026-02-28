@@ -166,7 +166,11 @@ async def update_position_settings(
     without affecting the bot's default configuration.
     """
     try:
-        query = select(Position).where(Position.id == position_id)
+        from sqlalchemy.orm import selectinload
+
+        query = select(Position).options(selectinload(Position.trades)).where(
+            Position.id == position_id
+        )
 
         accounts_query = select(Account.id).where(Account.user_id == current_user.id)
         accounts_result = await db.execute(accounts_query)
@@ -230,6 +234,30 @@ async def update_position_settings(
         position.strategy_config_snapshot = config
         flag_modified(position, "strategy_config_snapshot")
 
+        # Auto-resize budget if a budget-affecting field changed
+        budget_changed = settings.max_safety_orders is not None
+        resize_info = {}
+        if budget_changed:
+            bot = None
+            if position.bot_id:
+                bot_result = await db.execute(select(Bot).where(Bot.id == position.bot_id))
+                bot = bot_result.scalars().first()
+
+            old_budget = position.max_quote_allowed or 0.0
+            new_budget = compute_resize_budget(position, bot)
+
+            if new_budget > 0 and abs(old_budget - new_budget) >= 0.000000015:
+                position.max_quote_allowed = new_budget
+                resize_info = {
+                    "budget_resized": True,
+                    "old_budget": old_budget,
+                    "new_budget": new_budget,
+                }
+                logger.info(
+                    f"Auto-resized position #{position_id} budget: "
+                    f"{old_budget:.8f} → {new_budget:.8f}"
+                )
+
         await db.commit()
 
         logger.info(f"Updated position #{position_id} settings: {', '.join(updated_fields)}")
@@ -238,6 +266,7 @@ async def update_position_settings(
             "message": f"Position {position_id} settings updated successfully",
             "updated_fields": updated_fields,
             "new_config": config,
+            **resize_info,
         }
     except HTTPException:
         raise

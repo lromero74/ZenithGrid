@@ -550,6 +550,100 @@ class TestUpdatePositionSettings:
         # Unchanged fields should still be there
         assert refreshed.strategy_config_snapshot["take_profit_percentage"] == 1.5
 
+    @pytest.mark.asyncio
+    async def test_auto_resize_budget_when_max_safety_orders_changes(self, db_session):
+        """Budget should auto-resize when max_safety_orders is changed."""
+        from app.position_routers.position_actions_router import update_position_settings
+        from app.schemas.position import UpdatePositionSettingsRequest
+        from sqlalchemy import select
+        from app.models import Position
+
+        user, account = await _create_user_with_account(db_session, email="resize_auto@example.com")
+        pos = await _create_position(
+            db_session, account, status="open",
+            strategy_config_snapshot={
+                "max_safety_orders": 2,
+                "take_profit_percentage": 1.5,
+                "base_order_btc": 0.01,
+                "safety_order_btc": 0.01,
+                "volume_scale": 1.0,
+            },
+            max_quote_allowed=0.03,  # base + 2 safety orders
+        )
+
+        settings = UpdatePositionSettingsRequest(max_safety_orders=5)
+        result = await update_position_settings(
+            position_id=pos.id,
+            settings=settings,
+            db=db_session,
+            current_user=user,
+        )
+
+        # Response should include budget resize info
+        assert "budget_resized" in result
+        assert result["budget_resized"] is True
+        assert result["new_budget"] > 0.03  # Budget should have grown
+
+        # Verify persisted in DB
+        db_result = await db_session.execute(select(Position).where(Position.id == pos.id))
+        refreshed = db_result.scalars().first()
+        assert refreshed.max_quote_allowed > 0.03
+
+    @pytest.mark.asyncio
+    async def test_no_auto_resize_when_only_take_profit_changes(self, db_session):
+        """Budget should NOT auto-resize when only non-budget fields change."""
+        from app.position_routers.position_actions_router import update_position_settings
+        from app.schemas.position import UpdatePositionSettingsRequest
+
+        user, account = await _create_user_with_account(db_session, email="resize_no@example.com")
+        pos = await _create_position(
+            db_session, account, status="open",
+            strategy_config_snapshot={"take_profit_percentage": 1.5, "max_safety_orders": 3},
+            max_quote_allowed=0.05,
+        )
+
+        settings = UpdatePositionSettingsRequest(take_profit_percentage=3.0)
+        result = await update_position_settings(
+            position_id=pos.id,
+            settings=settings,
+            db=db_session,
+            current_user=user,
+        )
+
+        assert result.get("budget_resized") is None or result.get("budget_resized") is False
+
+    @pytest.mark.asyncio
+    async def test_auto_resize_reports_old_and_new_budget(self, db_session):
+        """Auto-resize response should include old and new budget for transparency."""
+        from app.position_routers.position_actions_router import update_position_settings
+        from app.schemas.position import UpdatePositionSettingsRequest
+
+        user, account = await _create_user_with_account(db_session, email="resize_report@example.com")
+        pos = await _create_position(
+            db_session, account, status="open",
+            strategy_config_snapshot={
+                "max_safety_orders": 1,
+                "base_order_btc": 0.01,
+                "safety_order_btc": 0.01,
+                "volume_scale": 1.0,
+            },
+            max_quote_allowed=0.02,  # base + 1 SO
+        )
+
+        settings = UpdatePositionSettingsRequest(max_safety_orders=4)
+        result = await update_position_settings(
+            position_id=pos.id,
+            settings=settings,
+            db=db_session,
+            current_user=user,
+        )
+
+        assert result["budget_resized"] is True
+        assert "old_budget" in result
+        assert "new_budget" in result
+        assert result["old_budget"] == pytest.approx(0.02)
+        assert result["new_budget"] > result["old_budget"]
+
 
 # =============================================================================
 # POST /{position_id}/resize-budget
