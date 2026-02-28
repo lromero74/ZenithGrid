@@ -28,6 +28,10 @@ const Sudoku = lazy(() => import('./games/components/games/sudoku/Sudoku'))
 const UltimateTicTacToe = lazy(() => import('./games/components/games/ultimate-tic-tac-toe/UltimateTicTacToe'))
 const Mahjong = lazy(() => import('./games/components/games/mahjong/Mahjong'))
 
+// Phase 4: New Games
+const Checkers = lazy(() => import('./games/components/games/checkers/Checkers'))
+const Plinko = lazy(() => import('./games/components/games/plinko/Plinko'))
+
 export default function Games() {
   return (
     <Suspense fallback={
@@ -51,6 +55,9 @@ export default function Games() {
         <Route path="sudoku" element={<Sudoku />} />
         <Route path="ultimate-tic-tac-toe" element={<UltimateTicTacToe />} />
         <Route path="mahjong" element={<Mahjong />} />
+        {/* Phase 4: New Games */}
+        <Route path="checkers" element={<Checkers />} />
+        <Route path="plinko" element={<Plinko />} />
       </Routes>
     </Suspense>
   )
