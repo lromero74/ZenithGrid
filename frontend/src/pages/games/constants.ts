@@ -14,6 +14,8 @@ import {
   Layers,
   Grip,
   Table2,
+  Crown,
+  Triangle,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -129,6 +131,26 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'puzzle',
   },
+  {
+    id: 'checkers',
+    name: 'Checkers',
+    description: 'Classic board game vs AI',
+    icon: 'Crown',
+    path: '/games/checkers',
+    difficulty: 'medium',
+    sessionLength: '10-20 min',
+    category: 'strategy',
+  },
+  {
+    id: 'plinko',
+    name: 'Plinko',
+    description: 'Drop balls for multipliers',
+    icon: 'Triangle',
+    path: '/games/plinko',
+    difficulty: 'easy',
+    sessionLength: '2-5 min',
+    category: 'arcade',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -144,6 +166,8 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   LayoutGrid,
   Layers,
   Grip,
+  Crown,
+  Triangle,
 }
 
 /** Category filter options for the hub page */

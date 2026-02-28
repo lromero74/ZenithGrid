@@ -1,0 +1,273 @@
+import { describe, test, expect } from 'vitest'
+import {
+  generatePegLayout, getMultipliers, createBall, stepPhysics,
+  checkPegCollision, resolveCollision, getSlotIndex, getDropPositions,
+  type Peg, type Ball, type RiskLevel,
+  PEG_RADIUS, BALL_RADIUS, GRAVITY, RESTITUTION, DAMPING,
+  BOARD_WIDTH, BOARD_HEIGHT, SLOT_COUNT, PEG_ROWS,
+} from './plinkoEngine'
+
+describe('generatePegLayout', () => {
+  const pegs = generatePegLayout()
+
+  test('returns 10 rows of pegs', () => {
+    const rows = new Set(pegs.map(p => p.row))
+    expect(rows.size).toBe(10)
+  })
+
+  test('row n has n+3 pegs', () => {
+    for (let row = 0; row < 10; row++) {
+      const rowPegs = pegs.filter(p => p.row === row)
+      expect(rowPegs.length).toBe(row + 3)
+    }
+  })
+
+  test('all pegs have positive x,y coordinates', () => {
+    for (const peg of pegs) {
+      expect(peg.x).toBeGreaterThan(0)
+      expect(peg.y).toBeGreaterThan(0)
+    }
+  })
+
+  test('rows are staggered (odd rows offset from even)', () => {
+    const row0 = pegs.filter(p => p.row === 0).sort((a, b) => a.x - b.x)
+    const row1 = pegs.filter(p => p.row === 1).sort((a, b) => a.x - b.x)
+    // Row 1 has one more peg and should be offset from row 0
+    expect(row0[0].x).not.toBeCloseTo(row1[0].x, 1)
+  })
+
+  test('total peg count is 75', () => {
+    // sum of (n+3) for n=0..9 = 3+4+5+6+7+8+9+10+11+12 = 75
+    expect(pegs.length).toBe(75)
+  })
+})
+
+describe('getMultipliers', () => {
+  test('returns array for each risk level', () => {
+    const levels: RiskLevel[] = ['low', 'medium', 'high']
+    for (const level of levels) {
+      const m = getMultipliers(level)
+      expect(Array.isArray(m)).toBe(true)
+      expect(m.length).toBeGreaterThan(0)
+    }
+  })
+
+  test('each array has 13 elements', () => {
+    expect(getMultipliers('low').length).toBe(13)
+    expect(getMultipliers('medium').length).toBe(13)
+    expect(getMultipliers('high').length).toBe(13)
+  })
+
+  test('arrays are symmetric', () => {
+    const levels: RiskLevel[] = ['low', 'medium', 'high']
+    for (const level of levels) {
+      const m = getMultipliers(level)
+      for (let i = 0; i < m.length; i++) {
+        expect(m[i]).toBe(m[m.length - 1 - i])
+      }
+    }
+  })
+
+  test('low risk has smaller spread', () => {
+    const low = getMultipliers('low')
+    const high = getMultipliers('high')
+    const lowMax = Math.max(...low)
+    const highMax = Math.max(...high)
+    expect(lowMax).toBeLessThan(highMax)
+  })
+
+  test('high risk has larger spread', () => {
+    const high = getMultipliers('high')
+    const highMax = Math.max(...high)
+    const highMin = Math.min(...high)
+    expect(highMax).toBeGreaterThanOrEqual(10)
+    expect(highMin).toBeLessThanOrEqual(0.3)
+  })
+
+  test('medium is between low and high', () => {
+    const lowMax = Math.max(...getMultipliers('low'))
+    const medMax = Math.max(...getMultipliers('medium'))
+    const highMax = Math.max(...getMultipliers('high'))
+    expect(medMax).toBeGreaterThan(lowMax)
+    expect(medMax).toBeLessThan(highMax)
+  })
+})
+
+describe('createBall', () => {
+  test('has the given x position', () => {
+    const ball = createBall(150)
+    expect(ball.x).toBe(150)
+  })
+
+  test('y starts at 0', () => {
+    const ball = createBall(100)
+    expect(ball.y).toBe(0)
+  })
+
+  test('vx and vy are 0', () => {
+    const ball = createBall(200)
+    expect(ball.vx).toBe(0)
+    expect(ball.vy).toBe(0)
+  })
+
+  test('has unique id', () => {
+    const ball1 = createBall(100)
+    const ball2 = createBall(100)
+    expect(ball1.id).not.toBe(ball2.id)
+  })
+})
+
+describe('stepPhysics', () => {
+  test('gravity increases vy', () => {
+    const ball = createBall(200)
+    const next = stepPhysics(ball)
+    expect(next.vy).toBeGreaterThan(ball.vy)
+    expect(next.vy).toBeCloseTo(GRAVITY)
+  })
+
+  test('position updated by velocity', () => {
+    const ball: Ball = { id: 1, x: 100, y: 50, vx: 2, vy: 3 }
+    const next = stepPhysics(ball)
+    expect(next.x).toBeCloseTo(100 + 2)
+    expect(next.y).toBeCloseTo(50 + 3 + GRAVITY)
+  })
+
+  test('returns new ball (immutable)', () => {
+    const ball = createBall(100)
+    const next = stepPhysics(ball)
+    expect(next).not.toBe(ball)
+  })
+
+  test('original ball not mutated', () => {
+    const ball = createBall(100)
+    const origY = ball.y
+    const origVy = ball.vy
+    stepPhysics(ball)
+    expect(ball.y).toBe(origY)
+    expect(ball.vy).toBe(origVy)
+  })
+
+  test('damping is NOT applied in stepPhysics', () => {
+    const ball: Ball = { id: 1, x: 100, y: 50, vx: 5, vy: 0 }
+    const next = stepPhysics(ball)
+    // vx should remain unchanged (no damping)
+    expect(next.vx).toBe(5)
+  })
+})
+
+describe('checkPegCollision', () => {
+  test('returns true when ball overlaps peg', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    const peg: Peg = { x: 105, y: 100, row: 0 }
+    // distance = 5, radii sum = BALL_RADIUS + PEG_RADIUS = 13
+    expect(checkPegCollision(ball, peg)).toBe(true)
+  })
+
+  test('returns false when ball is far from peg', () => {
+    const ball: Ball = { id: 1, x: 0, y: 0, vx: 0, vy: 0 }
+    const peg: Peg = { x: 100, y: 100, row: 0 }
+    expect(checkPegCollision(ball, peg)).toBe(false)
+  })
+
+  test('returns true at exact touching distance', () => {
+    const combinedRadius = BALL_RADIUS + PEG_RADIUS
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    const peg: Peg = { x: 100 + combinedRadius, y: 100, row: 0 }
+    // distance exactly equals radii sum — should be touching
+    expect(checkPegCollision(ball, peg)).toBe(true)
+  })
+
+  test('handles negative coordinates', () => {
+    const ball: Ball = { id: 1, x: -10, y: -10, vx: 0, vy: 0 }
+    const peg: Peg = { x: -5, y: -10, row: 0 }
+    // distance = 5, radii sum = 13 → collision
+    expect(checkPegCollision(ball, peg)).toBe(true)
+  })
+})
+
+describe('resolveCollision', () => {
+  test('ball moves away from peg', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 2, vy: 3 }
+    const peg: Peg = { x: 105, y: 100, row: 0 }
+    const resolved = resolveCollision(ball, peg)
+    const dx = resolved.x - peg.x
+    const dy = resolved.y - peg.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    expect(dist).toBeGreaterThanOrEqual(BALL_RADIUS + PEG_RADIUS - 0.01)
+  })
+
+  test('velocity direction changes', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 2, vy: 3 }
+    const peg: Peg = { x: 105, y: 100, row: 0 }
+    const resolved = resolveCollision(ball, peg)
+    // At least one velocity component should have changed
+    expect(resolved.vx !== ball.vx || resolved.vy !== ball.vy).toBe(true)
+  })
+
+  test('returns new ball (immutable)', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 2, vy: 3 }
+    const peg: Peg = { x: 105, y: 100, row: 0 }
+    const resolved = resolveCollision(ball, peg)
+    expect(resolved).not.toBe(ball)
+  })
+})
+
+describe('getSlotIndex', () => {
+  test('maps center x to middle slot', () => {
+    const idx = getSlotIndex(BOARD_WIDTH / 2, BOARD_WIDTH)
+    expect(idx).toBe(6) // middle of 0-12
+  })
+
+  test('maps leftmost x to slot 0', () => {
+    const idx = getSlotIndex(0, BOARD_WIDTH)
+    expect(idx).toBe(0)
+  })
+
+  test('maps rightmost x to last slot', () => {
+    const idx = getSlotIndex(BOARD_WIDTH, BOARD_WIDTH)
+    expect(idx).toBe(SLOT_COUNT - 1)
+  })
+
+  test('clamps out-of-bounds to 0 or max', () => {
+    expect(getSlotIndex(-50, BOARD_WIDTH)).toBe(0)
+    expect(getSlotIndex(BOARD_WIDTH + 100, BOARD_WIDTH)).toBe(SLOT_COUNT - 1)
+  })
+})
+
+describe('getDropPositions', () => {
+  test('returns array of given count', () => {
+    const positions = getDropPositions(5)
+    expect(positions.length).toBe(5)
+  })
+
+  test('all positions are positive', () => {
+    const positions = getDropPositions(5)
+    for (const pos of positions) {
+      expect(pos).toBeGreaterThan(0)
+    }
+  })
+
+  test('positions are evenly spaced', () => {
+    const positions = getDropPositions(5)
+    const diffs: number[] = []
+    for (let i = 1; i < positions.length; i++) {
+      diffs.push(positions[i] - positions[i - 1])
+    }
+    // All diffs should be roughly equal
+    for (const d of diffs) {
+      expect(d).toBeCloseTo(diffs[0], 1)
+    }
+  })
+})
+
+describe('constants', () => {
+  test('GRAVITY is 0.15', () => expect(GRAVITY).toBe(0.15))
+  test('RESTITUTION is 0.75', () => expect(RESTITUTION).toBe(0.75))
+  test('DAMPING is 0.85', () => expect(DAMPING).toBe(0.85))
+  test('PEG_RADIUS is 5', () => expect(PEG_RADIUS).toBe(5))
+  test('BALL_RADIUS is 8', () => expect(BALL_RADIUS).toBe(8))
+  test('PEG_ROWS is 10', () => expect(PEG_ROWS).toBe(10))
+  test('BOARD_WIDTH is 400', () => expect(BOARD_WIDTH).toBe(400))
+  test('BOARD_HEIGHT is 500', () => expect(BOARD_HEIGHT).toBe(500))
+  test('SLOT_COUNT is 13', () => expect(SLOT_COUNT).toBe(13))
+})

@@ -9,8 +9,8 @@ import { GAMES, GAME_ICONS, GAME_CATEGORIES } from './constants'
 import type { GameInfo } from './types'
 
 describe('GAMES registry', () => {
-  test('contains all 11 games', () => {
-    expect(GAMES).toHaveLength(11)
+  test('contains all 13 games', () => {
+    expect(GAMES).toHaveLength(13)
   })
 
   test('every game has a unique id', () => {
@@ -69,6 +69,8 @@ describe('GAMES registry', () => {
     expect(ids).toContain('ultimate-tic-tac-toe')
     expect(ids).toContain('mahjong')
     expect(ids).toContain('nonogram')
+    expect(ids).toContain('checkers')
+    expect(ids).toContain('plinko')
   })
 })
 
