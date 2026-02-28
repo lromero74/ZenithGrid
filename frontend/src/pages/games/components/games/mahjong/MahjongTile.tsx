@@ -75,7 +75,7 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick
   return (
     <button
       onClick={() => isFree && onClick(tile.id)}
-      className={`absolute w-9 h-12 sm:w-11 sm:h-[60px] rounded border flex flex-col items-center justify-center transition-all select-none leading-none ${
+      className={`absolute w-9 h-12 sm:w-11 sm:h-[60px] rounded border flex flex-col items-center justify-center transition-all select-none leading-none overflow-hidden ${
         isSelected
           ? 'ring-2 ring-yellow-400 bg-amber-100 border-amber-600 z-50'
           : isHinted
@@ -99,13 +99,18 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick
   )
 }
 
-/** Classic theme: Unicode mahjong chars + emoji with high-contrast colors. */
+/** Classic theme: Unicode mahjong chars + emoji with high-contrast colors, sized to fill tile. */
 function ClassicContent({ tileDefId, suit }: { tileDefId: string; suit: string }) {
   const display = TILE_DISPLAY[tileDefId]
   const colorClass = CLASSIC_DRAGON_COLORS[tileDefId] || CLASSIC_COLORS[suit] || 'text-slate-900'
+  const isEmoji = suit === 'flower' || suit === 'season'
 
   return (
-    <span className={`text-lg sm:text-2xl font-bold ${colorClass}`}>
+    <span
+      className={`font-bold leading-none ${colorClass} ${
+        isEmoji ? 'text-2xl sm:text-3xl' : 'text-[28px] sm:text-[38px]'
+      }`}
+    >
       {display}
     </span>
   )
