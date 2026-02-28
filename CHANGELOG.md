@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.2] - 2026-02-28
+
+### Fixed
+- **Plinko board not updating**: Changing the board layout (Classic/Pyramid/Diamond) or risk level now immediately redraws the board instead of waiting for a ball drop.
+- **Plinko controls during play**: Risk and Board layout buttons are now disabled while balls are still falling, preventing mid-game configuration changes.
+
+### Changed
+- **Plinko bet input**: Replaced preset bet buttons with a freeform number input plus ½×, 2×, and Max multiplier buttons for more flexible betting.
+
 ## [v2.70.1] - 2026-02-28
 
 ### Fixed
