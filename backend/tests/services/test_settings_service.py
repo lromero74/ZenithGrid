@@ -80,3 +80,72 @@ class TestGetAllowedCategories:
 
         result = await get_allowed_categories(db_session)
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_returns_single_category(self, db_session):
+        """Happy path: single category stored is returned."""
+        setting = Settings(
+            key=ALLOWED_CATEGORIES_KEY,
+            value=json.dumps(["SPECULATIVE"]),
+            value_type="string",
+        )
+        db_session.add(setting)
+        await db_session.commit()
+
+        result = await get_allowed_categories(db_session)
+        assert result == ["SPECULATIVE"]
+
+    @pytest.mark.asyncio
+    async def test_returns_many_categories(self, db_session):
+        """Happy path: multiple categories stored are all returned."""
+        categories = ["APPROVED", "SPECULATIVE", "STABLECOIN", "MEME"]
+        setting = Settings(
+            key=ALLOWED_CATEGORIES_KEY,
+            value=json.dumps(categories),
+            value_type="string",
+        )
+        db_session.add(setting)
+        await db_session.commit()
+
+        result = await get_allowed_categories(db_session)
+        assert result == categories
+        assert len(result) == 4
+
+    @pytest.mark.asyncio
+    async def test_ignores_other_settings_keys(self, db_session):
+        """Edge case: settings with different keys don't interfere."""
+        other_setting = Settings(
+            key="some_other_key",
+            value=json.dumps(["SHOULD_NOT_RETURN"]),
+            value_type="string",
+        )
+        db_session.add(other_setting)
+        await db_session.commit()
+
+        result = await get_allowed_categories(db_session)
+        assert result == DEFAULT_ALLOWED_CATEGORIES
+
+    @pytest.mark.asyncio
+    async def test_returns_default_when_value_is_empty_string(self, db_session):
+        """Edge case: empty string value falls back to default."""
+        setting = Settings(
+            key=ALLOWED_CATEGORIES_KEY,
+            value="",
+            value_type="string",
+        )
+        db_session.add(setting)
+        await db_session.commit()
+
+        result = await get_allowed_categories(db_session)
+        # Empty string is falsy, so falls into the default branch
+        assert result == DEFAULT_ALLOWED_CATEGORIES
+
+    @pytest.mark.asyncio
+    async def test_default_categories_is_approved_only(self):
+        """Sanity check: default constant is APPROVED only."""
+        assert DEFAULT_ALLOWED_CATEGORIES == ["APPROVED"]
+
+    @pytest.mark.asyncio
+    async def test_key_constant_value(self):
+        """Sanity check: key constant matches expected string."""
+        assert ALLOWED_CATEGORIES_KEY == "allowed_coin_categories"

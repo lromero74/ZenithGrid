@@ -74,6 +74,9 @@ def _make_exchange(**overrides):
         "best_bid": "2999.0",
         "best_ask": "3001.0",
     })
+    # is_paper_trading is a sync method (not async) — must be a regular MagicMock
+    # to avoid returning a truthy coroutine object in the boolean check
+    exchange.is_paper_trading = MagicMock(return_value=False)
     for k, v in overrides.items():
         setattr(exchange, k, v)
     return exchange

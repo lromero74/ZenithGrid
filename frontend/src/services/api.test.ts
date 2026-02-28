@@ -482,7 +482,7 @@ describe('positionsApi', () => {
     })
 
     const result = await positionsApi.close(3)
-    expect(api.post).toHaveBeenCalledWith('/positions/3/force-close')
+    expect(api.post).toHaveBeenCalledWith('/positions/3/force-close', null, { params: undefined })
     expect(result.message).toBe('closed')
   })
 
@@ -1278,7 +1278,7 @@ describe('reportsApi', () => {
     vi.mocked(api.get).mockResolvedValue({ data: [] })
 
     await reportsApi.getGoals()
-    expect(api.get).toHaveBeenCalledWith('/reports/goals')
+    expect(api.get).toHaveBeenCalledWith('/reports/goals', { params: {} })
   })
 
   test('createGoal sends data', async () => {
@@ -1322,7 +1322,7 @@ describe('reportsApi', () => {
     vi.mocked(api.get).mockResolvedValue({ data: [] })
 
     await reportsApi.getSchedules()
-    expect(api.get).toHaveBeenCalledWith('/reports/schedules')
+    expect(api.get).toHaveBeenCalledWith('/reports/schedules', { params: {} })
   })
 
   test('getHistory with default params', async () => {

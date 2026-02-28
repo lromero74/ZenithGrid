@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.71.0] - 2026-02-28
+
+### Added
+- **Comprehensive test coverage sweep**: 48+ new test files covering backend monitors, routers, services, indicators, price feeds, news data, and frontend contexts, hooks, and pages. Over 700 new tests total.
+
+### Fixed
+- **Bull flag position creation**: Fixed 3 production bugs in `bull_flag_processor.py` — position creation used non-existent `total_quantity` column (now `total_base_acquired`), exit sell orders read wrong field, and invalid `strategy_type` kwarg was passed to Position constructor.
+- **Sell executor limit order tests**: Mock exchange was incorrectly detected as paper trading, causing limit sell path to be skipped in tests.
+- **API test assertions**: Fixed frontend API test assertions that didn't match actual call signatures for `positionsApi.close`, `reportsApi.getGoals`, and `reportsApi.getSchedules`.
+
 ## [v2.70.5] - 2026-02-28
 
 ### Added
