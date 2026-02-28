@@ -1,0 +1,67 @@
+/**
+ * Categorized word lists for Hangman.
+ *
+ * Each category has 30-50 words, 4-10 letters, common/recognizable.
+ */
+
+export const WORD_LISTS: Record<string, string[]> = {
+  crypto: [
+    'BITCOIN', 'ETHEREUM', 'SOLANA', 'CARDANO', 'POLYGON', 'CHAINLINK',
+    'AVALANCHE', 'POLKADOT', 'LITECOIN', 'DOGECOIN', 'STELLAR', 'COSMOS',
+    'AIRDROP', 'ALTCOIN', 'WALLET', 'STAKING', 'MINING', 'LEDGER',
+    'TOKEN', 'DEFI', 'YIELD', 'BLOCK', 'CHAIN', 'HASH',
+    'BRIDGE', 'ORACLE', 'LAYER', 'SHARD', 'SWAP', 'POOL',
+    'VAULT', 'STAKE', 'MINER', 'NODE', 'FORK', 'GAS',
+  ],
+  trading: [
+    'BULLISH', 'BEARISH', 'MARGIN', 'SPREAD', 'VOLUME', 'TICKER',
+    'PROFIT', 'MARKET', 'LIMIT', 'ORDER', 'HEDGE', 'SHORT',
+    'CANDLE', 'CHART', 'TREND', 'RALLY', 'CRASH', 'YIELD',
+    'EQUITY', 'BOND', 'STOCK', 'ASSET', 'INDEX', 'OPTION',
+    'FUTURES', 'LEVERAGE', 'DIVIDEND', 'SUPPORT', 'BREAKOUT', 'PATTERN',
+    'BALANCE', 'CAPITAL', 'GROWTH', 'POSITION', 'EXCHANGE', 'PORTFOLIO',
+  ],
+  animals: [
+    'DOLPHIN', 'PENGUIN', 'GIRAFFE', 'ELEPHANT', 'TIGER', 'PANTHER',
+    'FALCON', 'EAGLE', 'WHALE', 'SHARK', 'OTTER', 'PANDA',
+    'COBRA', 'PYTHON', 'TOUCAN', 'PARROT', 'BISON', 'MOOSE',
+    'RABBIT', 'TURTLE', 'MONKEY', 'JAGUAR', 'ZEBRA', 'KOALA',
+    'GECKO', 'CRANE', 'HERON', 'RAVEN', 'HORSE', 'LION',
+    'LLAMA', 'CAMEL', 'LEMUR', 'HYENA', 'VIPER', 'STORK',
+  ],
+  countries: [
+    'BRAZIL', 'CANADA', 'FRANCE', 'GERMANY', 'INDIA', 'JAPAN',
+    'MEXICO', 'NORWAY', 'POLAND', 'SWEDEN', 'TURKEY', 'EGYPT',
+    'CHILE', 'CHINA', 'CUBA', 'FIJI', 'GHANA', 'HAITI',
+    'IRAN', 'ITALY', 'KENYA', 'LATVIA', 'MALTA', 'NEPAL',
+    'OMAN', 'PANAMA', 'QATAR', 'RUSSIA', 'SPAIN', 'TONGA',
+    'UKRAINE', 'VIETNAM', 'YEMEN', 'ZAMBIA', 'ICELAND', 'PORTUGAL',
+  ],
+  movies: [
+    'AVATAR', 'FROZEN', 'ROCKY', 'JAWS', 'ALIEN', 'PSYCHO',
+    'GREASE', 'DUMBO', 'BAMBI', 'SHREK', 'BRAVE', 'MULAN',
+    'MOANA', 'COCO', 'RANGO', 'TENET', 'JOKER', 'DUNKIRK',
+    'MATRIX', 'INCEPTION', 'GRAVITY', 'ARRIVAL', 'LOOPER', 'CRASH',
+    'TITANIC', 'GLADIATOR', 'MEMENTO', 'ZODIAC', 'PLATOON', 'SCREAM',
+  ],
+  food: [
+    'PIZZA', 'PASTA', 'SUSHI', 'TACO', 'BURGER', 'WAFFLE',
+    'COOKIE', 'MUFFIN', 'BAGEL', 'PRETZEL', 'SALMON', 'LOBSTER',
+    'MANGO', 'PEACH', 'GRAPE', 'MELON', 'LEMON', 'OLIVE',
+    'STEAK', 'BACON', 'TOAST', 'CURRY', 'SALAD', 'SOUP',
+    'CHEESE', 'BREAD', 'CREAM', 'HONEY', 'GINGER', 'PEPPER',
+    'CHICKEN', 'ALMOND', 'BANANA', 'CHERRY', 'COCONUT', 'AVOCADO',
+  ],
+  science: [
+    'ATOM', 'CELL', 'GENE', 'ORBIT', 'LASER', 'RADAR',
+    'PLASMA', 'QUARK', 'PHOTON', 'PROTON', 'NEUTRON', 'BOSON',
+    'ENZYME', 'PRISM', 'HELIX', 'COMET', 'NEBULA', 'QUASAR',
+    'FUSION', 'FISSION', 'VOLTAGE', 'GRAVITY', 'ENTROPY', 'ISOTOPE',
+    'GENOME', 'MITOSIS', 'NUCLEUS', 'PROTEIN', 'CATALYST', 'MOLECULE',
+    'ELEMENT', 'CRYSTAL', 'MAGNET', 'OPTICS', 'THEORY', 'FORMULA',
+  ],
+}
+
+export const CATEGORIES = Object.keys(WORD_LISTS)
+
+export const MAX_WRONG_GUESSES = 6

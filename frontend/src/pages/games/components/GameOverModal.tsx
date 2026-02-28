@@ -14,6 +14,7 @@ interface GameOverModalProps {
   bestScore?: number
   message?: string
   onPlayAgain: () => void
+  playAgainText?: string
 }
 
 const STATUS_CONFIG: Record<string, { title: string; color: string; icon?: boolean }> = {
@@ -22,7 +23,7 @@ const STATUS_CONFIG: Record<string, { title: string; color: string; icon?: boole
   draw: { title: "It's a Draw", color: 'text-yellow-400' },
 }
 
-export function GameOverModal({ status, score, bestScore, message, onPlayAgain }: GameOverModalProps) {
+export function GameOverModal({ status, score, bestScore, message, onPlayAgain, playAgainText }: GameOverModalProps) {
   const navigate = useNavigate()
   const config = STATUS_CONFIG[status]
   if (!config) return null
@@ -64,7 +65,7 @@ export function GameOverModal({ status, score, bestScore, message, onPlayAgain }
             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Play Again</span>
+            <span>{playAgainText || 'Play Again'}</span>
           </button>
           <button
             onClick={() => navigate('/games')}

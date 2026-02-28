@@ -521,6 +521,35 @@ class TestUpdatePositionSettings:
 
         assert result["new_config"]["take_profit_percentage"] == 2.0
 
+    @pytest.mark.asyncio
+    async def test_update_persists_to_database(self, db_session):
+        """Regression: verify changes actually persist after commit (not just in response)."""
+        from app.position_routers.position_actions_router import update_position_settings
+        from app.schemas.position import UpdatePositionSettingsRequest
+        from sqlalchemy import select
+        from app.models import Position
+
+        user, account = await _create_user_with_account(db_session, email="settings_persist@example.com")
+        pos = await _create_position(
+            db_session, account, status="open",
+            strategy_config_snapshot={"max_safety_orders": 2, "take_profit_percentage": 1.5},
+        )
+
+        settings = UpdatePositionSettingsRequest(max_safety_orders=5)
+        await update_position_settings(
+            position_id=pos.id,
+            settings=settings,
+            db=db_session,
+            current_user=user,
+        )
+
+        # Fresh query — verify the change actually persisted
+        result = await db_session.execute(select(Position).where(Position.id == pos.id))
+        refreshed = result.scalars().first()
+        assert refreshed.strategy_config_snapshot["max_safety_orders"] == 5
+        # Unchanged fields should still be there
+        assert refreshed.strategy_config_snapshot["take_profit_percentage"] == 1.5
+
 
 # =============================================================================
 # POST /{position_id}/resize-budget
