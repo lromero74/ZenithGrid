@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.3] - 2026-02-28
+
+### Fixed
+- **Plinko physics**: Peg collisions no longer inject energy into the ball. Randomness now comes from rotating the bounce angle (±15°) rather than adding lateral velocity, so balls always leave a peg slower than they arrived — matching real-world peg board behavior.
+
 ## [v2.70.2] - 2026-02-28
 
 ### Fixed

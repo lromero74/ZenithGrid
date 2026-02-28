@@ -164,20 +164,24 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
   const newX = peg.x + nx * minDist
   const newY = peg.y + ny * minDist
 
-  // Reflect velocity along normal
+  // Reflect velocity along normal, apply energy loss
   const dot = ball.vx * nx + ball.vy * ny
   const rvx = (ball.vx - 2 * dot * nx) * RESTITUTION * DAMPING
   const rvy = (ball.vy - 2 * dot * ny) * RESTITUTION * DAMPING
 
-  // Add small random lateral variance
-  const lateralVariance = (Math.random() - 0.5) * 2 // ±1
+  // Rotate reflected velocity by a small random angle (±15°) to simulate
+  // micro-imperfections in where the ball strikes the peg. This changes
+  // bounce direction without adding energy — speed is preserved.
+  const angle = (Math.random() - 0.5) * 0.52 // ±~15° in radians
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
 
   return {
     id: ball.id,
     x: newX,
     y: newY,
-    vx: rvx + lateralVariance,
-    vy: rvy,
+    vx: rvx * cos - rvy * sin,
+    vy: rvx * sin + rvy * cos,
   }
 }
 
