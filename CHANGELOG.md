@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.1] - 2026-02-28
+
+### Fixed
+- **Chess piece visibility**: Pieces now use filled glyphs with CSS color and outline — white pieces are bright with a dark edge, black pieces are solid dark with a subtle light edge. Both stand out clearly on light and dark squares.
+
 ## [v2.70.0] - 2026-02-28
 
 ### Added

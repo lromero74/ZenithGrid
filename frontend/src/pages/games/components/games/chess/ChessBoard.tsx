@@ -4,7 +4,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { getPieceSymbol, type ChessState, type Move, type Piece } from './chessEngine'
+import { type ChessState, type Move, type Piece, type PieceType } from './chessEngine'
+
+/** Always use filled glyphs — CSS color + stroke control white vs black appearance */
+const FILLED: Record<PieceType, string> = {
+  king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟',
+}
 
 interface ChessBoardProps {
   state: ChessState
@@ -82,9 +87,16 @@ export function ChessBoard({
   const renderPiece = (piece: Piece) => (
     <span
       className="select-none leading-none"
-      style={{ fontSize: pieceSize * 0.65 }}
+      style={{
+        fontSize: pieceSize * 0.65,
+        color: piece.color === 'white' ? '#ffffff' : '#1a1a2e',
+        WebkitTextStroke: piece.color === 'white' ? '1px #333' : '0.5px rgba(255,255,255,0.5)',
+        textShadow: piece.color === 'white'
+          ? '0 1px 3px rgba(0,0,0,0.6)'
+          : '0 1px 3px rgba(0,0,0,0.4)',
+      }}
     >
-      {getPieceSymbol(piece)}
+      {FILLED[piece.type]}
     </span>
   )
 
