@@ -199,6 +199,85 @@ export function drawFromStock(state: SolitaireState): SolitaireState {
   return next
 }
 
+// ── Hint / no-moves detection ───────────────────────────────────────
+
+export interface Hint {
+  type: 'waste-to-foundation' | 'waste-to-tableau' | 'tableau-to-foundation' | 'tableau-to-tableau' | 'draw-stock'
+  fromPile?: number    // source tableau pile index
+  fromCard?: number    // card index within source pile (for stacks)
+  toPile?: number      // destination pile/foundation index
+}
+
+/**
+ * Find the best available move. Returns null when no moves remain.
+ *
+ * Priority: foundation moves > tableau-to-tableau (exposing hidden cards) >
+ * waste-to-tableau > draw from stock / recycle waste.
+ */
+export function getHint(state: SolitaireState): Hint | null {
+  // 1. Tableau top → foundation (always beneficial)
+  for (let t = 0; t < 7; t++) {
+    const pile = state.tableau[t]
+    if (pile.length === 0) continue
+    const card = pile[pile.length - 1]
+    if (!card.faceUp) continue
+    for (let f = 0; f < 4; f++) {
+      if (canMoveToFoundation(card, state.foundations[f])) {
+        return { type: 'tableau-to-foundation', fromPile: t, toPile: f }
+      }
+    }
+  }
+
+  // 2. Waste top → foundation
+  if (state.waste.length > 0) {
+    const card = state.waste[state.waste.length - 1]
+    for (let f = 0; f < 4; f++) {
+      if (canMoveToFoundation(card, state.foundations[f])) {
+        return { type: 'waste-to-foundation', toPile: f }
+      }
+    }
+  }
+
+  // 3. Tableau → tableau (move deepest face-up run)
+  for (let t = 0; t < 7; t++) {
+    const pile = state.tableau[t]
+    if (pile.length === 0) continue
+
+    // Find the deepest face-up card in this pile
+    let startIdx = pile.length - 1
+    while (startIdx > 0 && pile[startIdx - 1].faceUp) startIdx--
+
+    const card = pile[startIdx]
+    if (!card.faceUp) continue
+
+    for (let dest = 0; dest < 7; dest++) {
+      if (dest === t) continue
+      if (canMoveToTableau(card, state.tableau[dest])) {
+        // Skip pointless King-to-empty-pile moves (King already at bottom)
+        if (card.rank === 13 && startIdx === 0 && state.tableau[dest].length === 0) continue
+        return { type: 'tableau-to-tableau', fromPile: t, fromCard: startIdx, toPile: dest }
+      }
+    }
+  }
+
+  // 4. Waste top → tableau
+  if (state.waste.length > 0) {
+    const card = state.waste[state.waste.length - 1]
+    for (let t = 0; t < 7; t++) {
+      if (canMoveToTableau(card, state.tableau[t])) {
+        return { type: 'waste-to-tableau', toPile: t }
+      }
+    }
+  }
+
+  // 5. Draw from stock or recycle waste
+  if (state.stock.length > 0 || state.waste.length > 0) {
+    return { type: 'draw-stock' }
+  }
+
+  return null
+}
+
 // ── Win detection ────────────────────────────────────────────────────
 
 export function checkWin(state: SolitaireState): boolean {

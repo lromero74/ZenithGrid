@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.70.5] - 2026-02-28
+
+### Added
+- **Solitaire hint button**: New "Hint" button highlights the best available move with amber pulse animation. Prioritizes foundation moves, then tableau moves that expose hidden cards, then waste plays. Detects and displays "No more moves available" when the game is stuck.
+
+### Changed
+- **Plinko peg alignment**: Classic layout pegs now align with slot positions — bottom row has a peg centered above each slot opening for proper 50/50 deflection. Even vertical spacing between all peg rows including the gap to the slot dividers.
+- **Plinko center bias**: Peg collisions now use a Galton board 50/50 coin flip for left vs right deflection with random magnitude (9°–30°), matching the binomial distribution used by real Plinko boards. Balls always deflect meaningfully to one side instead of occasionally going straight through.
+
 ## [v2.70.4] - 2026-02-28
 
 ### Fixed
