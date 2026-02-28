@@ -85,7 +85,7 @@ export function MahjongTile({ tile, isFree, isSelected, isHinted, theme, onClick
           : 'bg-amber-200 border-amber-800/50 cursor-default shadow'
       }`}
       style={{
-        left: `${tile.col * 40 + layerOffset + 60}px`,
+        left: `${tile.col * 40 + layerOffset + 110}px`,
         top: `${tile.row * 52 + layerOffset + 20}px`,
         zIndex: tile.layer * 10 + Math.floor(tile.row),
       }}
