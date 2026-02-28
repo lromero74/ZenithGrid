@@ -17,7 +17,6 @@ import {
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 
-const BET_OPTIONS = [10, 25, 50, 100, 250]
 const MIN_BET = 10
 const INITIAL_BALANCE = 1000
 const SLOT_HEIGHT = 30
@@ -67,10 +66,11 @@ export default function Plinko() {
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved ? 'playing' : 'idle')
   const [balance, setBalance] = useState(saved?.balance ?? INITIAL_BALANCE)
-  const [bet, setBet] = useState(saved?.bet ?? BET_OPTIONS[0])
+  const [bet, setBet] = useState(saved?.bet ?? MIN_BET)
   const [risk, setRisk] = useState<RiskLevel>(saved?.risk ?? 'medium')
   const [layout, setLayout] = useState<PegLayout>(saved?.layout ?? 'classic')
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(saved?.lastWin ?? null)
+  const [ballsActive, setBallsActive] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -79,7 +79,7 @@ export default function Plinko() {
   const slotLandingsRef = useRef<SlotLanding[]>([])
   const pegsRef = useRef<Peg[]>(generatePegLayout(saved?.layout ?? 'classic'))
   const balanceRef = useRef(saved?.balance ?? INITIAL_BALANCE)
-  const betRef = useRef(saved?.bet ?? BET_OPTIONS[0])
+  const betRef = useRef(saved?.bet ?? MIN_BET)
   const riskRef = useRef<RiskLevel>(saved?.risk ?? 'medium')
   const animFrameRef = useRef<number>(0)
   const scaleRef = useRef(1)
@@ -87,11 +87,6 @@ export default function Plinko() {
   // Keep refs in sync
   useEffect(() => { betRef.current = bet }, [bet])
   useEffect(() => { riskRef.current = risk }, [risk])
-
-  // Regenerate pegs when layout changes
-  useEffect(() => {
-    pegsRef.current = generatePegLayout(layout)
-  }, [layout])
 
   // Persist state on changes
   useEffect(() => {
@@ -218,6 +213,17 @@ export default function Plinko() {
     ctx.restore()
   }, [])
 
+  // Regenerate pegs when layout changes and redraw immediately
+  useEffect(() => {
+    pegsRef.current = generatePegLayout(layout)
+    drawBoard()
+  }, [layout, drawBoard])
+
+  // Redraw when risk changes so slot multiplier labels update immediately
+  useEffect(() => {
+    drawBoard()
+  }, [risk, drawBoard])
+
   const tick = useCallback(() => {
     // Decay flashes
     flashesRef.current = flashesRef.current
@@ -321,6 +327,8 @@ export default function Plinko() {
     // Keep animating if there are active balls or landing animations still playing
     if (activeBalls.length > 0 || slotLandingsRef.current.length > 0) {
       animFrameRef.current = requestAnimationFrame(tick)
+    } else {
+      setBallsActive(false)
     }
   }, [drawBoard])
 
@@ -336,6 +344,7 @@ export default function Plinko() {
     balanceRef.current -= betRef.current
     setBalance(balanceRef.current)
     setGameStatus('playing')
+    setBallsActive(true)
 
     const ball = createBall(dropX)
     ballsRef.current.push(ball)
@@ -410,13 +419,14 @@ export default function Plinko() {
             <button
               key={level}
               onClick={() => setRisk(level)}
+              disabled={ballsActive}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors capitalize ${
                 risk === level
                   ? level === 'low' ? 'bg-emerald-900/50 text-emerald-400'
                     : level === 'medium' ? 'bg-yellow-900/50 text-yellow-400'
                     : 'bg-red-900/50 text-red-400'
                   : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-              }`}
+              } ${ballsActive ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {level}
             </button>
@@ -428,11 +438,12 @@ export default function Plinko() {
             <button
               key={l.value}
               onClick={() => setLayout(l.value)}
+              disabled={ballsActive}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                 layout === l.value
                   ? 'bg-blue-900/50 text-blue-400'
                   : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-              }`}
+              } ${ballsActive ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {l.label}
             </button>
@@ -440,33 +451,38 @@ export default function Plinko() {
         </div>
       </div>
 
-      {/* Row 2: Bet presets + custom input */}
+      {/* Row 2: Bet input + multiplier buttons */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400 w-10">Bet</span>
-          {BET_OPTIONS.map(b => (
-            <button
-              key={b}
-              onClick={() => setBet(b)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                bet === b
-                  ? 'bg-orange-900/50 text-orange-400'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1">
           <input
             type="number"
             min={MIN_BET}
             max={balance}
             value={bet}
             onChange={e => handleBetChange(e.target.value)}
-            className="w-16 px-2 py-1 rounded text-xs font-mono bg-slate-700 text-white border border-slate-600 text-right"
+            className="w-20 px-2 py-1 rounded text-xs font-mono bg-slate-700 text-white border border-slate-600 text-right"
           />
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setBet(b => Math.max(MIN_BET, Math.floor(b / 2)))}
+            className="px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-400 hover:bg-slate-700 transition-colors"
+          >
+            ½×
+          </button>
+          <button
+            onClick={() => setBet(b => Math.min(balance, b * 2))}
+            className="px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-400 hover:bg-slate-700 transition-colors"
+          >
+            2×
+          </button>
+          <button
+            onClick={() => setBet(balance)}
+            className="px-2 py-1 rounded text-xs font-medium bg-slate-700/50 text-slate-400 hover:bg-slate-700 transition-colors"
+          >
+            Max
+          </button>
         </div>
       </div>
 
