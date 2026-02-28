@@ -90,7 +90,11 @@ export function EditPositionSettingsModal({
       }
 
       const result = await positionsApi.updateSettings(position.id, request)
-      setSuccessMessage(result.message)
+      let msg = result.message
+      if (result.budget_resized) {
+        msg += ` (budget resized: ${result.old_budget?.toFixed(8)} → ${result.new_budget?.toFixed(8)})`
+      }
+      setSuccessMessage(msg)
 
       // Wait a moment to show success, then close
       setTimeout(() => {

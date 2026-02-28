@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.68.1] - 2026-02-28
+
+### Changed
+- **Deal editing auto-resizes budget**: When changing max safety orders on a deal, the position's budget (max_quote_allowed) is automatically recalculated to reflect the new order count. Previously, users had to manually resize the budget after editing.
+
 ## [v2.68.0] - 2026-02-28
 
 ### Added
