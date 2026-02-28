@@ -662,3 +662,313 @@ class TestClosePerpsPosition:
         # Verify execute_perps_close was called with the fallback price
         call_kwargs = mock_execute_close.call_args
         assert call_kwargs.kwargs["current_price"] == 99000.0
+
+
+# =============================================================================
+# Additional edge-case and security tests
+# =============================================================================
+
+
+class TestModifyTpSlAdditional:
+    """Additional tests for modify_tp_sl endpoint."""
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.order_api.create_stop_limit_order", new_callable=AsyncMock)
+    async def test_modify_sl_only(self, mock_stop_limit, db_session):
+        """Edge case: modifying only SL preserves existing TP."""
+        from app.position_routers.perps_router import modify_tp_sl, ModifyTpSlRequest
+
+        mock_stop_limit.return_value = {"success_response": {"order_id": "new-sl-order"}}
+
+        user, account = await _create_user_with_account(
+            db_session, email="tpsl_sl@example.com",
+        )
+        pos = await _create_perps_position(
+            db_session, account,
+            tp_price=110000.0,
+            sl_price=90000.0,
+            tp_order_id=None,
+            sl_order_id=None,
+        )
+
+        mock_client = AsyncMock()
+        mock_client._request = AsyncMock()
+
+        exchange = MagicMock()
+        exchange._client = mock_client
+
+        request = ModifyTpSlRequest(sl_price=85000.0)
+
+        result = await modify_tp_sl(
+            position_id=pos.id,
+            request=request,
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        # TP should stay at the old value
+        assert result["tp_price"] == 110000.0
+        assert result["sl_price"] == 85000.0
+
+    @pytest.mark.asyncio
+    async def test_modify_tp_sl_other_users_position_returns_404(self, db_session):
+        """Security: cannot modify TP/SL on another user's position."""
+        from app.position_routers.perps_router import modify_tp_sl, ModifyTpSlRequest
+        from fastapi import HTTPException
+
+        user1, account1 = await _create_user_with_account(
+            db_session, email="tpsl_sec1@example.com",
+        )
+        user2, account2 = await _create_user_with_account(
+            db_session, email="tpsl_sec2@example.com",
+        )
+        pos = await _create_perps_position(db_session, account1)
+
+        exchange = MagicMock()
+        exchange._client = AsyncMock()
+
+        request = ModifyTpSlRequest(tp_price=999999.0)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                exchange=exchange,
+                current_user=user2,  # Wrong user
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.order_api.create_stop_limit_order", new_callable=AsyncMock)
+    async def test_modify_tp_sl_cancel_failure_continues(self, mock_stop_limit, db_session):
+        """Edge case: cancel of old orders fails but new orders still placed."""
+        from app.position_routers.perps_router import modify_tp_sl, ModifyTpSlRequest
+
+        mock_stop_limit.return_value = {"success_response": {"order_id": "tp-new"}}
+
+        user, account = await _create_user_with_account(
+            db_session, email="tpsl_cancel_fail@example.com",
+        )
+        pos = await _create_perps_position(
+            db_session, account,
+            tp_price=110000.0,
+            tp_order_id="old-tp-id",
+            sl_order_id=None,
+        )
+
+        mock_client = AsyncMock()
+        mock_client.cancel_order = AsyncMock(side_effect=Exception("Cancel failed"))
+        mock_client._request = AsyncMock()
+
+        exchange = MagicMock()
+        exchange._client = mock_client
+
+        request = ModifyTpSlRequest(tp_price=115000.0)
+
+        # Should not raise despite cancel failure
+        result = await modify_tp_sl(
+            position_id=pos.id,
+            request=request,
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        assert result["success"] is True
+        assert result["tp_price"] == 115000.0
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.order_api.create_stop_limit_order", new_callable=AsyncMock)
+    async def test_modify_tp_sl_short_position(self, mock_stop_limit, db_session):
+        """Edge case: short position uses SELL size from short_total_sold_base."""
+        from app.position_routers.perps_router import modify_tp_sl, ModifyTpSlRequest
+
+        mock_stop_limit.return_value = {"success_response": {"order_id": "short-tp"}}
+
+        user, account = await _create_user_with_account(
+            db_session, email="tpsl_short@example.com",
+        )
+        pos = await _create_perps_position(
+            db_session, account,
+            direction="short",
+            short_total_sold_base=0.05,
+            tp_price=None,
+            sl_price=None,
+        )
+
+        mock_client = AsyncMock()
+        mock_client._request = AsyncMock()
+
+        exchange = MagicMock()
+        exchange._client = mock_client
+
+        request = ModifyTpSlRequest(tp_price=80000.0)
+
+        result = await modify_tp_sl(
+            position_id=pos.id,
+            request=request,
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        assert result["success"] is True
+        assert result["tp_price"] == 80000.0
+
+
+class TestClosePerpsPositionAdditional:
+    """Additional tests for close_perps_position endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_close_other_users_position_returns_404(self, db_session):
+        """Security: cannot close another user's position."""
+        from app.position_routers.perps_router import close_perps_position, ClosePositionRequest
+        from fastapi import HTTPException
+
+        user1, account1 = await _create_user_with_account(
+            db_session, email="close_sec1@example.com",
+        )
+        user2, account2 = await _create_user_with_account(
+            db_session, email="close_sec2@example.com",
+        )
+        pos = await _create_perps_position(db_session, account1)
+
+        exchange = MagicMock()
+        exchange._client = AsyncMock()
+
+        request = ClosePositionRequest(reason="manual")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await close_perps_position(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                exchange=exchange,
+                current_user=user2,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_close_closed_position_returns_404(self, db_session):
+        """Edge case: attempting to close already-closed position returns 404."""
+        from app.position_routers.perps_router import close_perps_position, ClosePositionRequest
+        from fastapi import HTTPException
+
+        user, account = await _create_user_with_account(
+            db_session, email="close_closed@example.com",
+        )
+        pos = await _create_perps_position(
+            db_session, account,
+            status="closed",
+        )
+
+        exchange = MagicMock()
+        exchange._client = AsyncMock()
+
+        request = ClosePositionRequest(reason="manual")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await close_perps_position(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                exchange=exchange,
+                current_user=user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.trading_engine.perps_executor.execute_perps_close", new_callable=AsyncMock)
+    async def test_close_with_custom_reason(self, mock_execute_close, db_session):
+        """Happy path: custom reason string is passed to executor."""
+        from app.position_routers.perps_router import close_perps_position, ClosePositionRequest
+
+        mock_execute_close.return_value = (True, 200.0, 2.0)
+
+        user, account = await _create_user_with_account(
+            db_session, email="close_reason@example.com",
+        )
+        pos = await _create_perps_position(db_session, account)
+
+        mock_client = AsyncMock()
+        mock_client.get_current_price = AsyncMock(return_value=102000.0)
+
+        exchange = MagicMock()
+        exchange._client = mock_client
+
+        request = ClosePositionRequest(reason="stop_loss_triggered")
+
+        result = await close_perps_position(
+            position_id=pos.id,
+            request=request,
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        assert result["success"] is True
+        call_kwargs = mock_execute_close.call_args.kwargs
+        assert call_kwargs["reason"] == "stop_loss_triggered"
+
+
+class TestListPerpsPositionsAdditional:
+    """Additional tests for list_perps_positions endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_multiple_positions_returned(self, db_session):
+        """Happy path: multiple open perps positions returned for the user."""
+        from app.position_routers.perps_router import list_perps_positions
+
+        user, account = await _create_user_with_account(
+            db_session, email="lp_multi@example.com",
+        )
+        await _create_perps_position(
+            db_session, account,
+            product_id="BTC-PERP-INTX",
+            direction="long",
+        )
+        await _create_perps_position(
+            db_session, account,
+            product_id="ETH-PERP-INTX",
+            direction="short",
+            short_total_sold_base=1.0,
+            short_total_sold_quote=4000.0,
+        )
+
+        exchange = MagicMock()
+
+        result = await list_perps_positions(
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        assert result["count"] == 2
+        product_ids = {p["product_id"] for p in result["positions"]}
+        assert product_ids == {"BTC-PERP-INTX", "ETH-PERP-INTX"}
+
+    @pytest.mark.asyncio
+    async def test_no_accounts_returns_empty(self, db_session):
+        """Edge case: user with no accounts returns empty positions."""
+        from app.position_routers.perps_router import list_perps_positions
+
+        user = User(
+            email="lp_noacct@example.com",
+            hashed_password="hashed",
+            is_active=True,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        exchange = MagicMock()
+
+        result = await list_perps_positions(
+            db=db_session,
+            exchange=exchange,
+            current_user=user,
+        )
+
+        assert result["count"] == 0

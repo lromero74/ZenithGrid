@@ -862,3 +862,364 @@ class TestCheckAndRunRotation:
             )
 
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# rebalance_grid_on_breakout
+# ---------------------------------------------------------------------------
+
+
+class TestRebalanceGridOnBreakout:
+    """Tests for rebalance_grid_on_breakout()."""
+
+    @pytest.mark.asyncio
+    async def test_rebalance_cancels_old_and_places_new_orders(self):
+        """Happy path: cancels old orders and initializes new grid."""
+        from app.services.grid_trading_service import rebalance_grid_on_breakout
+
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 1
+        bot.product_id = "BTC-USD"
+        bot.bot_config = {
+            "grid_mode": "neutral",
+            "grid_type": "arithmetic",
+            "total_investment_quote": 1000.0,
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+                "breakout_count": 0,
+            },
+        }
+
+        position = MagicMock()
+        position.id = 10
+        exchange = AsyncMock()
+
+        new_levels = [56000.0, 58000.0, 60000.0, 62000.0, 64000.0]
+
+        with patch(
+            "app.services.grid_trading_service.cancel_grid_orders",
+            new_callable=AsyncMock,
+            return_value=5,
+        ) as mock_cancel, patch(
+            "app.services.grid_trading_service.initialize_grid",
+            new_callable=AsyncMock,
+            return_value={
+                "total_buy_orders": 2,
+                "total_sell_orders": 2,
+                "current_range_upper": 64000.0,
+                "current_range_lower": 56000.0,
+            },
+        ) as mock_init:
+            result = await rebalance_grid_on_breakout(
+                bot=bot,
+                position=position,
+                exchange_client=exchange,
+                db=db,
+                breakout_direction="upward",
+                current_price=60000.0,
+                new_levels=new_levels,
+                new_upper=64000.0,
+                new_lower=56000.0,
+            )
+
+        mock_cancel.assert_called_once()
+        mock_init.assert_called_once()
+        assert result["breakout_count"] == 1
+        assert result["last_breakout_direction"] == "upward"
+
+    @pytest.mark.asyncio
+    async def test_rebalance_increments_breakout_count(self):
+        """Edge case: breakout count increments from existing value."""
+        from app.services.grid_trading_service import rebalance_grid_on_breakout
+
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 2
+        bot.bot_config = {
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+                "breakout_count": 3,
+            },
+        }
+
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        with patch(
+            "app.services.grid_trading_service.cancel_grid_orders",
+            new_callable=AsyncMock,
+            return_value=0,
+        ), patch(
+            "app.services.grid_trading_service.initialize_grid",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            result = await rebalance_grid_on_breakout(
+                bot=bot,
+                position=position,
+                exchange_client=exchange,
+                db=db,
+                breakout_direction="downward",
+                current_price=40000.0,
+                new_levels=[38000.0, 40000.0, 42000.0],
+                new_upper=42000.0,
+                new_lower=38000.0,
+            )
+
+        assert result["breakout_count"] == 4
+        assert result["last_breakout_direction"] == "downward"
+
+    @pytest.mark.asyncio
+    async def test_rebalance_stores_previous_range(self):
+        """Happy path: previous range values are stored in new grid state."""
+        from app.services.grid_trading_service import rebalance_grid_on_breakout
+
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 3
+        bot.bot_config = {
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+                "breakout_count": 0,
+            },
+        }
+
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        with patch(
+            "app.services.grid_trading_service.cancel_grid_orders",
+            new_callable=AsyncMock,
+            return_value=0,
+        ), patch(
+            "app.services.grid_trading_service.initialize_grid",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            result = await rebalance_grid_on_breakout(
+                bot=bot,
+                position=position,
+                exchange_client=exchange,
+                db=db,
+                breakout_direction="upward",
+                current_price=60000.0,
+                new_levels=[58000.0, 60000.0, 62000.0],
+                new_upper=62000.0,
+                new_lower=58000.0,
+            )
+
+        assert result["previous_range_upper"] == 55000.0
+        assert result["previous_range_lower"] == 45000.0
+
+
+# ---------------------------------------------------------------------------
+# detect_and_handle_breakout — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestDetectAndHandleBreakoutAdditional:
+    """Additional tests for detect_and_handle_breakout edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_downward_breakout_triggers_rebalance(self):
+        """Happy path: price below lower-threshold triggers downward rebalance."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 1
+        bot.product_id = "BTC-USD"
+        bot.bot_config = {
+            "enable_dynamic_adjustment": True,
+            "breakout_threshold_percent": 5.0,
+            "grid_type": "arithmetic",
+            "num_grid_levels": 5,
+            "total_investment_quote": 1000.0,
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+                "breakout_count": 0,
+            },
+        }
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        # Price below lower * 0.95 = 42750
+        current_price = 40000.0
+
+        with patch(
+            "app.services.grid_trading_service.rebalance_grid_on_breakout",
+            new_callable=AsyncMock,
+            return_value={"breakout_count": 1},
+        ) as mock_rebalance, patch(
+            "app.strategies.grid_trading.calculate_arithmetic_levels",
+            return_value=[38000, 39000, 40000, 41000, 42000],
+        ):
+            result = await detect_and_handle_breakout(
+                bot, position, exchange, db, current_price=current_price
+            )
+
+        assert result is True
+        mock_rebalance.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_price_at_threshold_boundary_no_breakout(self):
+        """Edge case: price exactly at threshold boundary does NOT trigger."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.bot_config = {
+            "enable_dynamic_adjustment": True,
+            "breakout_threshold_percent": 5.0,
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+            },
+        }
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        # upper * (1 + 0.05) = 57750 — at boundary
+        result = await detect_and_handle_breakout(
+            bot, position, exchange, db, current_price=57750.0
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_geometric_grid_type_uses_geometric_levels(self):
+        """Edge case: geometric grid type uses calculate_geometric_levels."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 1
+        bot.product_id = "BTC-USD"
+        bot.bot_config = {
+            "enable_dynamic_adjustment": True,
+            "breakout_threshold_percent": 5.0,
+            "grid_type": "geometric",
+            "num_grid_levels": 5,
+            "total_investment_quote": 1000.0,
+            "grid_state": {
+                "current_range_upper": 55000.0,
+                "current_range_lower": 45000.0,
+                "breakout_count": 0,
+            },
+        }
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        with patch(
+            "app.services.grid_trading_service.rebalance_grid_on_breakout",
+            new_callable=AsyncMock,
+            return_value={"breakout_count": 1},
+        ), patch(
+            "app.strategies.grid_trading.calculate_geometric_levels",
+            return_value=[58000, 59000, 60000, 61000, 62000],
+        ) as mock_geo:
+            result = await detect_and_handle_breakout(
+                bot, position, exchange, db, current_price=60000.0
+            )
+
+        assert result is True
+        mock_geo.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_range_bounds_returns_false(self):
+        """Edge case: grid_state with missing range bounds returns False."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.bot_config = {
+            "enable_dynamic_adjustment": True,
+            "grid_state": {
+                "current_range_upper": None,
+                "current_range_lower": None,
+            },
+        }
+        position = MagicMock()
+        exchange = AsyncMock()
+
+        result = await detect_and_handle_breakout(
+            bot, position, exchange, db, current_price=50000.0
+        )
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# handle_grid_order_fill — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestHandleGridOrderFillAdditional:
+    """Additional tests for handle_grid_order_fill edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_buy_fill_exchange_error_returns_none(self):
+        """Failure: exchange error when placing sell response returns None."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 1
+        bot.product_id = "BTC-USD"
+        bot.bot_config = {
+            "grid_state": {
+                "grid_mode": "neutral",
+                "grid_levels": [
+                    {"order_type": "sell", "price": 52000, "status": "pending"},
+                ],
+            }
+        }
+
+        position = MagicMock()
+        pending_order = MagicMock()
+        pending_order.side = "BUY"
+        pending_order.filled_price = 48000.0
+        pending_order.filled_base_amount = 0.02
+
+        exchange = AsyncMock()
+        exchange.create_limit_order.side_effect = Exception("Exchange error")
+
+        result = await handle_grid_order_fill(
+            pending_order=pending_order,
+            bot=bot,
+            position=position,
+            exchange_client=exchange,
+            db=db,
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_buy_fill_no_order_id_in_response_returns_none(self):
+        """Edge case: exchange returns response without order_id."""
+        db = AsyncMock()
+        bot = MagicMock()
+        bot.id = 1
+        bot.product_id = "BTC-USD"
+        bot.bot_config = {
+            "grid_state": {
+                "grid_mode": "neutral",
+                "grid_levels": [
+                    {"order_type": "sell", "price": 52000, "status": "pending"},
+                ],
+            }
+        }
+
+        position = MagicMock()
+        pending_order = MagicMock()
+        pending_order.side = "BUY"
+        pending_order.filled_price = 48000.0
+        pending_order.filled_base_amount = 0.02
+
+        exchange = AsyncMock()
+        exchange.create_limit_order.return_value = {}  # No order_id
+
+        result = await handle_grid_order_fill(
+            pending_order=pending_order,
+            bot=bot,
+            position=position,
+            exchange_client=exchange,
+            db=db,
+        )
+
+        assert result is None

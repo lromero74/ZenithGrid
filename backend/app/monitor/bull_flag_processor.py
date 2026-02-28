@@ -86,7 +86,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                     try:
                         order = await monitor.exchange.create_market_sell_order(
                             product_id=position.product_id,
-                            quantity=position.total_quantity
+                            quantity=position.total_base_acquired
                         )
 
                         if order:
@@ -100,7 +100,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                                 "product_id": position.product_id,
                                 "reason": reason,
                                 "price": current_price,
-                                "quantity": position.total_quantity,
+                                "quantity": position.total_base_acquired,
                             })
                             logger.info(f"  ✅ Sold {position.product_id}: {reason}")
                     except Exception as e:
@@ -215,9 +215,8 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                         status="open",
                         opened_at=datetime.utcnow(),
                         average_buy_price=current_price,
-                        total_quantity=quantity,
+                        total_base_acquired=quantity,
                         total_quote_spent=usd_amount,
-                        strategy_type="bull_flag",
                         strategy_config_snapshot=bot.strategy_config.copy(),
                     )
 
