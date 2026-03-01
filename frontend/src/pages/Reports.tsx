@@ -308,15 +308,13 @@ export default function Reports() {
                         <TrendingUp className="w-4 h-4" />
                       </button>
                     )}
-                    {!isDemoAccount && (
-                      <button
-                        onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
-                        className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
-                        title="Edit"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
+                      className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
+                      title={isDemoAccount ? 'View' : 'Edit'}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
                     {!isDemoAccount && (
                       <button
                         onClick={async () => { if (await confirm({ title: 'Delete Goal', message: 'Delete this goal?', variant: 'danger', confirmLabel: 'Delete' })) deleteGoal.mutate(goal.id) }}
@@ -455,8 +453,8 @@ export default function Reports() {
                   </div>
                 </div>
 
-                {!isDemoAccount && (
-                  <div className="flex items-center gap-1 ml-3">
+                <div className="flex items-center gap-1 ml-3">
+                  {!isDemoAccount && (
                     <button
                       onClick={async () => {
                         if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
@@ -467,13 +465,15 @@ export default function Reports() {
                     >
                       <Play className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => { setEditingSchedule(schedule); setShowScheduleForm(true) }}
-                      className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                      title="Edit"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
+                  )}
+                  <button
+                    onClick={() => { setEditingSchedule(schedule); setShowScheduleForm(true) }}
+                    className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                    title={isDemoAccount ? 'View' : 'Edit'}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {!isDemoAccount && (
                     <button
                       onClick={async () => { if (await confirm({ title: 'Delete Schedule', message: 'Delete this schedule?', variant: 'danger', confirmLabel: 'Delete' })) deleteSchedule.mutate(schedule.id) }}
                       className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
@@ -481,8 +481,8 @@ export default function Reports() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -740,6 +740,7 @@ export default function Reports() {
           }
         }}
         initialData={editingGoal}
+        readOnly={isDemoAccount}
       />
 
       <ScheduleForm
@@ -754,6 +755,7 @@ export default function Reports() {
         }}
         goals={goals}
         initialData={editingSchedule}
+        readOnly={isDemoAccount}
       />
 
       <ReportViewModal

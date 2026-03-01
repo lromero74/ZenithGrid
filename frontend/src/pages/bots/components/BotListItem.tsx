@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
-import { Edit, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
+import { Edit, Eye, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import { useConfirm } from '../../../contexts/ConfirmContext'
@@ -450,18 +450,16 @@ export function BotListItem({
                 className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 max-h-[80vh] overflow-y-auto"
                 style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: window.innerHeight - menuPosition.top - 8 }}
               >
-                {canWrite && (
-                  <button
-                    onClick={() => {
-                      handleOpenEdit(bot)
-                      setOpenMenuId(null)
-                    }}
-                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Bot</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    handleOpenEdit(bot)
+                    setOpenMenuId(null)
+                  }}
+                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
+                >
+                  {canWrite ? <Edit className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{canWrite ? 'Edit Bot' : 'View Bot'}</span>
+                </button>
                 {canWrite && (
                   <button
                     onClick={() => {

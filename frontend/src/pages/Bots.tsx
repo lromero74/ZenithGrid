@@ -213,8 +213,8 @@ function Bots() {
 
   const handleOpenEdit = (bot: Bot) => {
     setEditingBot(bot)
-    setReadOnly(false)
-    setReadOnlyTitle('')
+    setReadOnly(!canWriteBots)
+    setReadOnlyTitle(!canWriteBots ? `View Bot: ${bot.name}` : '')
     // Handle both legacy single pair and new multi-pair bots
     const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
     setFormData({

@@ -244,12 +244,26 @@ describe('resolveCollision', () => {
     }
   })
 
-  test('Galton deflection: downward velocity is always positive', () => {
-    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 2 }
+  test('bounce physics: ball bounces upward when hitting peg from above', () => {
+    const ball: Ball = { id: 1, x: 100, y: 95, vx: 0, vy: 3 }
+    const peg: Peg = { x: 100, y: 100, row: 0 }
+    // Ball directly above peg, moving down — reflected + rotated should bounce up
+    let sawUpward = false
+    for (let i = 0; i < 30; i++) {
+      const resolved = resolveCollision(ball, peg)
+      if (resolved.vy < 0) sawUpward = true
+    }
+    expect(sawUpward).toBe(true) // should bounce upward at least some of the time
+  })
+
+  test('bounce physics: speed floor prevents ball death', () => {
+    // Simulate a very slow ball (as if after many bounces)
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0.1, vy: 0.2 }
     const peg: Peg = { x: 100, y: 105, row: 0 }
     for (let i = 0; i < 20; i++) {
       const resolved = resolveCollision(ball, peg)
-      expect(resolved.vy).toBeGreaterThan(0)
+      // Speed floor ensures lateral speed stays alive
+      expect(Math.abs(resolved.vx)).toBeGreaterThanOrEqual(0.7)
     }
   })
 
@@ -259,9 +273,9 @@ describe('resolveCollision', () => {
     for (let i = 0; i < 50; i++) {
       const resolved = resolveCollision(ball, peg)
       const absVx = Math.abs(resolved.vx)
-      // baseLateralSpeed=0.9, variance 0.8–1.2 → range 0.72–1.08
+      // Rotation-based: reflected velocity rotated by 9°–30°, with 0.72 floor
       expect(absVx).toBeGreaterThanOrEqual(0.7)
-      expect(absVx).toBeLessThanOrEqual(1.1)
+      expect(absVx).toBeLessThanOrEqual(2.5) // rotation of fast ball can produce higher speeds
     }
   })
 })

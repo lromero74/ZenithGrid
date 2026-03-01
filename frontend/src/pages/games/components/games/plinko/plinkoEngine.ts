@@ -174,20 +174,24 @@ export function checkPegCollision(ball: Ball, peg: Peg): boolean {
 }
 
 /**
- * Resolve a collision using pure Galton board deflection.
+ * Resolve a collision with reflection physics + Galton rotation.
  *
- * Instead of reflecting velocity (which loses 36% energy per collision and
- * kills lateral movement after a few rows), we apply a consistent lateral
- * kick at each peg:
+ * Restores the v2.70.5 approach that felt like real plinko: velocity is
+ * reflected off the peg surface (real bounce), then rotated by a random
+ * angle in a 50/50 coin-flip direction.  This couples lateral and vertical
+ * motion naturally — faster impacts produce bigger bounces.
  *
- * 1. Push ball outside peg (standard overlap resolution)
- * 2. 50/50 coin flip picks left vs right direction
- * 3. Fixed lateral speed (0.75–1.05 px/frame, ±20% variance for visual variety)
- * 4. Downward velocity reset to max(|vy| * 0.3, 0.5) — gravity rebuilds between rows
+ * The 50/50 direction preserves the binomial B(10, 0.5) bell-curve
+ * distribution.  Minimum speed floors prevent the ball from dying at
+ * lower rows (where cumulative restitution loss would otherwise kill it).
  *
- * The lateral speed is tuned so the ball traverses ~half a slot width between
- * rows.  The binomial distribution B(10, 0.5) emerges naturally from the
- * independent coin flips, producing the expected bell-curve landing pattern.
+ * Physics:
+ * 1. Push ball outside peg (with clearance to prevent re-collision)
+ * 2. Reflect velocity along collision normal (real bounce)
+ * 3. Apply restitution + damping for energy loss
+ * 4. Rotate reflected velocity by 50/50 random angle (9°–30°) for Galton spread
+ * 5. Enforce minimum lateral speed (0.72) and downward speed (0.5) so the ball
+ *    stays lively through all 10 rows
  */
 export function resolveCollision(ball: Ball, peg: Peg): Ball {
   const dx = ball.x - peg.x
@@ -199,27 +203,41 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
   const nx = dx / dist
   const ny = dy / dist
 
-  // Push ball outside peg
-  const newX = peg.x + nx * minDist
-  const newY = peg.y + ny * minDist
+  // Push ball outside peg with clearance for bounce travel
+  const newX = peg.x + nx * (minDist + 1)
+  const newY = peg.y + ny * (minDist + 1)
 
-  // Galton deflection: 50/50 coin flip for left vs right
+  // Reflect velocity along collision normal, apply energy loss
+  const dot = ball.vx * nx + ball.vy * ny
+  const rvx = (ball.vx - 2 * dot * nx) * RESTITUTION * DAMPING
+  const rvy = (ball.vy - 2 * dot * ny) * RESTITUTION * DAMPING
+
+  // Galton rotation: 50/50 coin flip picks direction, random magnitude (9°–30°)
+  // ensures meaningful lateral deflection at every peg — just like real plinko.
   const direction = Math.random() < 0.5 ? 1 : -1
+  const angle = direction * (0.15 + Math.random() * 0.37)
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
 
-  // Consistent lateral kick with ±20% variance for visual variety
-  const baseLateralSpeed = 0.9
-  const variance = 0.8 + Math.random() * 0.4 // 0.8–1.2 multiplier
-  const lateralSpeed = baseLateralSpeed * variance
+  let vx = rvx * cos - rvy * sin
+  let vy = rvx * sin + rvy * cos
 
-  // Reset downward velocity — gravity rebuilds it between rows
-  const downSpeed = Math.max(Math.abs(ball.vy) * 0.3, 0.5)
+  // Speed floors: prevent the ball from dying at lower rows due to
+  // cumulative energy loss.  Without these, restitution*damping (0.6375)
+  // across 10 rows leaves only ~1.6% of original speed.
+  if (Math.abs(vx) < 0.72) {
+    vx = direction * (0.72 + Math.random() * 0.36)
+  }
+  if (vy > -0.3 && vy < 0.5) {
+    vy = 0.5
+  }
 
   return {
     id: ball.id,
     x: newX,
     y: newY,
-    vx: direction * lateralSpeed,
-    vy: downSpeed,
+    vx,
+    vy,
   }
 }
 
