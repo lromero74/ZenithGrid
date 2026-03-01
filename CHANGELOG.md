@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.4] - 2026-03-01
+
+### Fixed
+- **Paper trading portfolio crash**: Portfolio page returned 500 for demo users with altcoins that lack BTC trading pairs (TON, BAND, HBAR, etc.). Now falls back to USD pair pricing, so all holdings show accurate values.
+- **Plinko ball drop animation**: Balls now drop from just off-screen instead of appearing mid-board — a natural gravity-drop entrance.
+
 ## [v2.75.0] - 2026-03-01
 
 ### Added

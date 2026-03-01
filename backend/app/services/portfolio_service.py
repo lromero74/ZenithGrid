@@ -798,9 +798,20 @@ async def get_account_portfolio_data(
                     continue
                 try:
                     price = await client.get_current_price(f"{currency}-BTC")
-                    altcoin_btc_prices[currency] = price
+                    if price is not None:
+                        altcoin_btc_prices[currency] = price
+                        continue
                 except Exception:
-                    altcoin_btc_prices[currency] = 0.0
+                    pass
+                # Fallback: try USD pair and convert to BTC
+                try:
+                    usd_price = await client.get_current_price(f"{currency}-USD")
+                    if usd_price is not None and btc_usd_price > 0:
+                        altcoin_btc_prices[currency] = usd_price / btc_usd_price
+                        continue
+                except Exception:
+                    pass
+                altcoin_btc_prices[currency] = 0.0
 
             holdings = []
             total_btc = 0.0

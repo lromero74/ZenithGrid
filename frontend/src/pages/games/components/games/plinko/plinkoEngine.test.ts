@@ -123,9 +123,9 @@ describe('createBall', () => {
     expect(ball.x).toBe(150)
   })
 
-  test('y starts just above first peg row', () => {
+  test('y starts just off-screen (above visible area)', () => {
     const ball = createBall(100)
-    expect(ball.y).toBe(45)
+    expect(ball.y).toBe(-BALL_RADIUS)
   })
 
   test('vx and vy are 0', () => {

@@ -136,15 +136,15 @@ export function getMultipliers(risk: RiskLevel): number[] {
 }
 
 /**
- * Create a new ball at the given x position, released just above the first
- * peg row with no velocity.  Gravity alone accelerates it into the pegs —
- * the short 15px gap gives a gentle entry, not a fast throw from y=0.
+ * Create a new ball at the given x position, released just off the top of
+ * the visible board with no velocity.  Gravity alone accelerates it down
+ * into the pegs.
  */
 export function createBall(dropX: number): Ball {
   return {
     id: nextBallId++,
     x: dropX,
-    y: 45,
+    y: -BALL_RADIUS,
     vx: 0,
     vy: 0,
   }
