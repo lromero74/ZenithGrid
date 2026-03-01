@@ -6,6 +6,7 @@
 
 import { Trophy, RotateCcw, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { clearLastGamePath } from './GameHub'
 import type { GameStatus } from '../types'
 
 interface GameOverModalProps {
@@ -68,7 +69,7 @@ export function GameOverModal({ status, score, bestScore, message, onPlayAgain, 
             <span>{playAgainText || 'Play Again'}</span>
           </button>
           <button
-            onClick={() => navigate('/games')}
+            onClick={() => { clearLastGamePath(); navigate('/games') }}
             className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />

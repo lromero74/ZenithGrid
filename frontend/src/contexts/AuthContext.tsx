@@ -62,6 +62,7 @@ interface AuthContextType {
   resetPassword: (token: string, newPassword: string) => Promise<void>
   sessionPolicy: SessionPolicy | null
   sessionExpiresAt: string | null
+  sessionExpiryCountdown: number | null
   showSessionLimitsPopup: boolean
   acknowledgeSessionLimits: () => void
 }
@@ -135,6 +136,7 @@ const AuthContext = createContext<AuthContextType>({
   resetPassword: async () => {},
   sessionPolicy: null,
   sessionExpiresAt: null,
+  sessionExpiryCountdown: null,
   showSessionLimitsPopup: false,
   acknowledgeSessionLimits: () => {},
 })
@@ -547,24 +549,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('auth-logout', handleLogout)
   }, [logout])
 
-  // Session auto-logout timer
-  useEffect(() => {
-    if (!sessionExpiresAt) return
+  // Session expiry countdown (shows 30s before auto-logout)
+  const [sessionExpiryCountdown, setSessionExpiryCountdown] = useState<number | null>(null)
 
-    const expiresMs =
-      new Date(sessionExpiresAt).getTime() - Date.now()
+  // Session auto-logout timer + countdown
+  useEffect(() => {
+    if (!sessionExpiresAt) {
+      setSessionExpiryCountdown(null)
+      return
+    }
+
+    const expiresMs = new Date(sessionExpiresAt).getTime() - Date.now()
     if (expiresMs <= 0) {
+      setSessionExpiryCountdown(null)
       if (sessionPolicy?.auto_logout) logout()
       return
     }
 
-    const timer = setTimeout(() => {
-      if (sessionPolicy?.auto_logout) {
-        logout()
-      }
+    // Auto-logout at expiry
+    const logoutTimer = setTimeout(() => {
+      setSessionExpiryCountdown(null)
+      if (sessionPolicy?.auto_logout) logout()
     }, expiresMs)
 
-    return () => clearTimeout(timer)
+    // Start countdown 30s before expiry (or immediately if <30s remain)
+    const countdownStartMs = Math.max(0, expiresMs - 30000)
+    const countdownTimer = setTimeout(() => {
+      const remaining = Math.ceil((new Date(sessionExpiresAt).getTime() - Date.now()) / 1000)
+      setSessionExpiryCountdown(Math.max(0, remaining))
+    }, countdownStartMs)
+
+    // Tick every second once countdown is active
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((new Date(sessionExpiresAt).getTime() - Date.now()) / 1000)
+      if (remaining <= 30 && remaining > 0) {
+        setSessionExpiryCountdown(remaining)
+      } else if (remaining <= 0) {
+        setSessionExpiryCountdown(null)
+      }
+    }, 1000)
+
+    return () => {
+      clearTimeout(logoutTimer)
+      clearTimeout(countdownTimer)
+      clearInterval(interval)
+    }
   }, [sessionExpiresAt, sessionPolicy, logout])
 
   // Change password function
@@ -789,6 +818,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     sessionPolicy,
     sessionExpiresAt,
+    sessionExpiryCountdown,
     showSessionLimitsPopup,
     acknowledgeSessionLimits,
   }
