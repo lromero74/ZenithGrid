@@ -23,6 +23,8 @@ import { RiskDisclaimer } from './components/RiskDisclaimer'
 import { AboutModal } from './components/AboutModal'
 import { EmailVerificationPending } from './components/EmailVerificationPending'
 import { MFAEncouragement, MFA_DISMISSED_KEY } from './components/MFAEncouragement'
+import { SessionLimitsNotice } from './components/SessionLimitsNotice'
+import { DemoLogin } from './components/DemoLogin'
 import { VerifyEmail } from './components/VerifyEmail'
 import { ResetPassword } from './components/ResetPassword'
 import MFAEmailVerify from './components/MFAEmailVerify'
@@ -770,7 +772,7 @@ function ResetPasswordRoute() {
 
 // Root App component - handles authentication wrapper
 function App() {
-  const { isAuthenticated, isLoading, user, acceptTerms, logout } = useAuth()
+  const { isAuthenticated, isLoading, user, acceptTerms, logout, showSessionLimitsPopup, sessionPolicy, acknowledgeSessionLimits } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false)
@@ -787,6 +789,14 @@ function App() {
   }
   if (location.pathname === '/mfa-email-verify') {
     return <MFAEmailVerifyRoute />
+  }
+
+  // Handle demo login shortcuts
+  const demoMatch = location.pathname.match(
+    /^\/(demo_(?:usd|btc|both))$/
+  )
+  if (demoMatch) {
+    return <DemoLogin username={demoMatch[1]} />
   }
 
   // Handle terms acceptance
@@ -845,6 +855,16 @@ function App() {
           navigate('/settings')
         }}
         onSkip={() => setMfaDismissed(true)}
+      />
+    )
+  }
+
+  // Gate: Session limits notice
+  if (user && showSessionLimitsPopup && sessionPolicy) {
+    return (
+      <SessionLimitsNotice
+        policy={sessionPolicy}
+        onAcknowledge={acknowledgeSessionLimits}
       />
     )
   }

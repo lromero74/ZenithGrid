@@ -159,7 +159,13 @@ async def mfa_email_enable(
     Enable email-based MFA for the current user.
 
     Requires password confirmation. User must have a verified email address.
+    Demo accounts are blocked from enabling MFA.
     """
+    if "@" not in (current_user.email or ""):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo accounts cannot enable MFA",
+        )
     if current_user.mfa_email_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

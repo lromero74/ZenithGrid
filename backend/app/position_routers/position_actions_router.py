@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Account, Bot, Position, User
 from app.position_routers.helpers import compute_resize_budget
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.schemas.position import UpdatePositionSettingsRequest
 from app.services.exchange_service import get_exchange_client_for_account
 
@@ -29,7 +29,7 @@ router = APIRouter()
 async def cancel_position(
     position_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """Cancel a position without selling (leave balances as-is)"""
     try:
@@ -70,7 +70,7 @@ async def force_close_position(
     position_id: int,
     skip_slippage_guard: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """Force close a position at current market price"""
     try:
@@ -156,7 +156,7 @@ async def update_position_settings(
     position_id: int,
     settings: UpdatePositionSettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """
     Update position settings (deal editing).
@@ -279,7 +279,7 @@ async def update_position_settings(
 async def resize_position_budget(
     position_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Recalculate and update a position's max_quote_allowed to reflect true max deal cost."""
     try:
@@ -349,7 +349,7 @@ async def resize_position_budget(
 async def resize_all_budgets(
     account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Recalculate and update max_quote_allowed for open positions.
 

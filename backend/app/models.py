@@ -123,6 +123,9 @@ class User(Base):
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
     account_transfers = relationship("AccountTransfer", back_populates="user", cascade="all, delete-orphan")
 
+    # Session policy override (per-user, masks group policy)
+    session_policy_override = Column(JSON, nullable=True)
+
     # RBAC
     groups = relationship("Group", secondary=user_groups, back_populates="users", lazy="selectin")
 
@@ -135,6 +138,7 @@ class Group(Base):
     name = Column(String(100), unique=True, nullable=False)
     description = Column(String(255), nullable=True)
     is_system = Column(Boolean, default=False)
+    session_policy = Column(JSON, nullable=True)  # Session limit policy for this group
     created_at = Column(DateTime, default=datetime.utcnow)
 
     roles = relationship("Role", secondary=group_roles, back_populates="groups", lazy="selectin")
@@ -234,6 +238,23 @@ class RevokedToken(Base):
     expires_at = Column(DateTime, nullable=False)  # JWT's original expiry — for cleanup
 
     user = relationship("User")
+
+
+class ActiveSession(Base):
+    """Tracks active user sessions for enforcement of session limits."""
+    __tablename__ = "active_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(String(36), unique=True, nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+
+    user = relationship("User", backref="active_sessions")
 
 
 class Account(Base):

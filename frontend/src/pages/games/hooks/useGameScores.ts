@@ -6,15 +6,17 @@
  */
 
 import { useState, useCallback } from 'react'
-import { STORAGE_PREFIX } from '../constants'
+import { getStoragePrefix } from '../constants'
 
-const SCORES_KEY = `${STORAGE_PREFIX}scores`
+function getScoresKey(): string {
+  return `${getStoragePrefix()}scores`
+}
 
 type ScoreMap = Record<string, number>
 
 function loadScores(): ScoreMap {
   try {
-    const raw = localStorage.getItem(SCORES_KEY)
+    const raw = localStorage.getItem(getScoresKey())
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -23,7 +25,7 @@ function loadScores(): ScoreMap {
 
 function persistScores(scores: ScoreMap): void {
   try {
-    localStorage.setItem(SCORES_KEY, JSON.stringify(scores))
+    localStorage.setItem(getScoresKey(), JSON.stringify(scores))
   } catch {
     // Safari private mode or quota exceeded — silently ignore
   }

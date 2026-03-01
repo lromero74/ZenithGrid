@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
 
@@ -30,7 +30,7 @@ async def add_funds_to_position(
     request: AddFundsRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Manually add funds to a position (manual safety order)"""
     quote_amount = request.btc_amount  # Multi-currency: actually quote amount (BTC or USD)
@@ -110,7 +110,7 @@ async def add_funds_to_position(
 @router.patch("/{position_id}/notes")
 async def update_position_notes(
     position_id: int, request: UpdateNotesRequest,
-    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """Update notes for a position"""
     try:

@@ -11,6 +11,7 @@ from starlette.responses import Response
 
 from app.cleanup_jobs import (
     cleanup_expired_revoked_tokens,
+    cleanup_expired_sessions,
     cleanup_failed_condition_logs,
     cleanup_old_decision_logs,
     cleanup_old_failed_orders,
@@ -125,6 +126,7 @@ account_snapshot_task = None
 revoked_token_cleanup_task = None
 report_scheduler_task = None
 report_cleanup_task = None
+session_cleanup_task = None
 transfer_sync_task = None
 
 
@@ -462,7 +464,7 @@ async def startup_event():
     global failed_condition_cleanup_task, failed_order_cleanup_task
     global account_snapshot_task, revoked_token_cleanup_task
     global report_scheduler_task, report_cleanup_task
-    global transfer_sync_task
+    global session_cleanup_task, transfer_sync_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -577,6 +579,10 @@ async def startup_event():
     coin_review_task = asyncio.create_task(run_coin_review_scheduler())  # noqa: F841
     print("🚀 Coin review scheduler started - full review every 7 days")
 
+    print("🚀 Starting session cleanup job...")
+    session_cleanup_task = asyncio.create_task(cleanup_expired_sessions())
+    print("🚀 Session cleanup job started - expiring stale sessions daily")
+
     print("🚀 Starting transfer sync job...")
     transfer_sync_task = asyncio.create_task(run_transfer_sync())
     print("🚀 Transfer sync started - syncing deposits/withdrawals daily")
@@ -688,6 +694,13 @@ async def shutdown_event():
         report_cleanup_task.cancel()
         try:
             await report_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+    if session_cleanup_task:
+        session_cleanup_task.cancel()
+        try:
+            await session_cleanup_task
         except asyncio.CancelledError:
             pass
 

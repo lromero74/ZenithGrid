@@ -9,6 +9,7 @@ import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useIsAdmin } from '../hooks/usePermission'
 import { settingsApi } from '../services/api'
 
 export default function Settings() {
@@ -16,9 +17,13 @@ export default function Settings() {
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
   const { accounts, selectedAccount } = useAccount()
   const { theme, toggleTheme } = useTheme()
+  const isAdmin = useIsAdmin()
 
   // Check if paper trading is currently active
   const isPaperTradingActive = Boolean(selectedAccount?.is_paper_trading)
+
+  // Demo accounts have non-email usernames (no "@") — hide password/MFA controls
+  const isDemoAccount = !user?.email?.includes('@')
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -68,8 +73,9 @@ export default function Settings() {
   const [retentionSuccess, setRetentionSuccess] = useState(false)
   const [retentionError, setRetentionError] = useState<string | null>(null)
 
-  // Load log retention setting on mount
+  // Load log retention setting on mount (admins only)
   useEffect(() => {
+    if (!isAdmin) return
     const loadRetentionSetting = async () => {
       try {
         const setting = await settingsApi.get('decision_log_retention_days') as { key: string; value: string; value_type: string; description: string; updated_at: string }
@@ -81,7 +87,7 @@ export default function Settings() {
       }
     }
     loadRetentionSetting()
-  }, [])
+  }, [isAdmin])
 
   const handleLogRetentionChange = async (e: FormEvent) => {
     e.preventDefault()
@@ -423,7 +429,8 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Password Change Form */}
+        {/* Password Change Form — hidden for demo accounts */}
+        {!isDemoAccount && (
         <div className="border-t border-slate-700 pt-6">
           <div className="flex items-center space-x-2 mb-4">
             <Lock className="w-5 h-5 text-slate-400" />
@@ -515,8 +522,10 @@ export default function Settings() {
             </button>
           </form>
         </div>
+        )}
 
-        {/* Multi-Factor Authentication Section */}
+        {/* Multi-Factor Authentication Section — hidden for demo accounts */}
+        {!isDemoAccount && (
         <div className="border-t border-slate-700 pt-6">
           <div className="flex items-center space-x-2 mb-4">
             <Shield className="w-5 h-5 text-slate-400" />
@@ -889,6 +898,7 @@ export default function Settings() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Accounts Management Section - Hidden when paper trading is active */}
@@ -910,7 +920,8 @@ export default function Settings() {
       {/* AI Providers Section */}
       <AIProvidersManager />
 
-      {/* Database Maintenance Section */}
+      {/* Database Maintenance Section — admins only */}
+      {isAdmin && (
       <div className="card p-6">
         <div className="flex items-center space-x-3 mb-6">
           <Database className="w-6 h-6 text-orange-400" />
@@ -973,6 +984,7 @@ export default function Settings() {
           </button>
         </form>
       </div>
+      )}
 
       {/* Add Account Modal */}
       <AddAccountModal

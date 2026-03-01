@@ -237,5 +237,25 @@ export const SORT_OPTIONS = [
   { value: 'recent', label: 'Recently Played' },
 ] as const
 
-/** localStorage key prefix for all game data */
+/** Get the current user's ID from stored auth data (returns 0 if not logged in). */
+function getStoredUserId(): number {
+  try {
+    const raw = localStorage.getItem('auth_user')
+    if (raw) {
+      const user = JSON.parse(raw)
+      return user.id || 0
+    }
+  } catch { /* ignore */ }
+  return 0
+}
+
+/** localStorage key prefix for all game data — scoped to the current user. */
+export function getStoragePrefix(): string {
+  return `zenith-games-u${getStoredUserId()}-`
+}
+
+/**
+ * @deprecated Use getStoragePrefix() for user-scoped keys.
+ * Kept as fallback for static import contexts.
+ */
 export const STORAGE_PREFIX = 'zenith-games-'

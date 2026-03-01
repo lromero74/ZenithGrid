@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import selectinload
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.database import get_db
 from app.models import (
     ExpenseItem,
@@ -428,7 +428,7 @@ async def list_goals(
 async def create_goal(
     body: GoalCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Create a new financial goal."""
     from dateutil.relativedelta import relativedelta
@@ -483,7 +483,7 @@ async def update_goal(
     goal_id: int,
     body: GoalUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Update an existing goal."""
     result = await db.execute(
@@ -532,7 +532,7 @@ async def update_goal(
 async def delete_goal(
     goal_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a goal."""
     result = await db.execute(
@@ -657,7 +657,7 @@ async def create_expense_item(
     goal_id: int,
     body: ExpenseItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Add an expense item to a goal."""
     from app.services.expense_service import recalculate_goal_target
@@ -702,7 +702,7 @@ async def reorder_expense_items(
     goal_id: int,
     body: ExpenseReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Set sort_order for expense items based on provided ID order."""
     goal = await _get_user_goal(db, goal_id, current_user.id)
@@ -738,7 +738,7 @@ async def update_expense_item(
     item_id: int,
     body: ExpenseItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Update an expense item."""
     from app.services.expense_service import recalculate_goal_target
@@ -771,7 +771,7 @@ async def delete_expense_item(
     goal_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Delete an expense item."""
     from app.services.expense_service import recalculate_goal_target
@@ -864,7 +864,7 @@ async def list_schedules(
 async def create_schedule(
     body: ScheduleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Create a new report schedule."""
     from app.services.report_schedule_service import create_schedule_record
@@ -877,7 +877,7 @@ async def update_schedule(
     schedule_id: int,
     body: ScheduleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Update an existing report schedule."""
     from app.services.report_schedule_service import update_schedule_record
@@ -889,7 +889,7 @@ async def update_schedule(
 async def delete_schedule(
     schedule_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a report schedule."""
     result = await db.execute(
@@ -973,7 +973,7 @@ async def get_report(
 async def delete_report(
     report_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a report from history."""
     result = await db.execute(
@@ -999,7 +999,7 @@ class BulkDeleteRequest(BaseModel):
 async def bulk_delete_reports(
     body: BulkDeleteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete multiple reports at once."""
     result = await db.execute(
@@ -1053,7 +1053,7 @@ async def download_report_pdf(
 async def generate_report(
     body: GenerateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Manually trigger report generation for a schedule."""
     result = await db.execute(

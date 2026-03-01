@@ -10,7 +10,10 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, Report, RevokedToken, Settings
+from app.models import (
+    ActiveSession, AIBotLog, IndicatorLog, OrderHistory, Position, Report,
+    RevokedToken, Settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +262,51 @@ async def cleanup_old_reports():
 
         # Run weekly (7 days)
         await asyncio.sleep(604800)
+
+
+async def cleanup_expired_sessions():
+    """
+    Clean up expired sessions and old inactive session records.
+
+    1. Mark expired active sessions as inactive
+    2. Delete inactive sessions older than 30 days
+
+    Runs daily.
+    """
+    # Wait 35 minutes after startup
+    await asyncio.sleep(2100)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                from app.services.session_service import expire_all_stale_sessions
+
+                expired_count = await expire_all_stale_sessions(db)
+
+                # Delete old inactive sessions (>30 days)
+                cutoff = datetime.utcnow() - timedelta(days=30)
+                result = await db.execute(
+                    delete(ActiveSession).where(
+                        and_(
+                            ActiveSession.is_active.is_(False),
+                            ActiveSession.ended_at < cutoff,
+                        )
+                    )
+                )
+                deleted_count = result.rowcount
+
+                await db.commit()
+
+                if expired_count > 0 or deleted_count > 0:
+                    logger.info(
+                        f"Session cleanup: expired {expired_count} stale sessions, "
+                        f"deleted {deleted_count} old inactive sessions"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in session cleanup job: {e}", exc_info=True)
+
+        await asyncio.sleep(86400)  # Daily
 
 
 async def get_log_retention_days(db: AsyncSession) -> int:

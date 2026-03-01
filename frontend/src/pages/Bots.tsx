@@ -23,10 +23,12 @@ import { BotFormModal } from './bots/components/BotFormModal'
 import { BotListItem } from './bots/components/BotListItem'
 import { SampleBotsSection } from './bots/components/SampleBotsSection'
 import type { SampleBot } from './bots/data/sampleBots'
+import { usePermission } from '../hooks/usePermission'
 
 function Bots() {
   const location = useLocation()
   const { selectedAccount, accounts } = useAccount()
+  const canWriteBots = usePermission('bots', 'write')
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const [showModal, setShowModal] = useState(false)
@@ -464,25 +466,27 @@ function Bots() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
-            title="Import bot from file or clipboard"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Import Bot</span>
-            <span className="sm:hidden">Import</span>
-          </button>
-          <button
-            onClick={handleOpenCreate}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Create Bot</span>
-            <span className="sm:hidden">Create</span>
-          </button>
-        </div>
+        {canWriteBots && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
+              title="Import bot from file or clipboard"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">Import Bot</span>
+              <span className="sm:hidden">Import</span>
+            </button>
+            <button
+              onClick={handleOpenCreate}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Bot</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Seasonality Toggle */}
@@ -497,7 +501,7 @@ function Bots() {
       </div>
 
       {/* Sample Bots */}
-      <SampleBotsSection onView={handleSampleView} onCopy={handleSampleCopy} />
+      <SampleBotsSection onView={handleSampleView} onCopy={handleSampleCopy} canWrite={canWriteBots} />
 
       {/* Bot List Table */}
       {bots.length === 0 ? (
@@ -519,12 +523,14 @@ function Bots() {
               'Create your first trading bot to get started'
             )}
           </p>
-          <button
-            onClick={handleOpenCreate}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded font-medium transition-colors"
-          >
-            Create Your First Bot
-          </button>
+          {canWriteBots && (
+            <button
+              onClick={handleOpenCreate}
+              className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded font-medium transition-colors"
+            >
+              Create Your First Bot
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -587,6 +593,7 @@ function Bots() {
                     setIndicatorLogsBotId={setIndicatorLogsBotId}
                     setScannerLogsBotId={setScannerLogsBotId}
                     portfolio={portfolio}
+                    canWrite={canWriteBots}
                   />
                 ))}
               </tbody>

@@ -14,6 +14,7 @@ import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
 import { AddFundsModal } from '../components/AddFundsModal'
 import { positionsApi } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 import { usePositionsData } from './positions/hooks/usePositionsData'
 import { usePositionMutations } from './positions/hooks/usePositionMutations'
 import { usePositionFilters } from './positions/hooks/usePositionFilters'
@@ -30,6 +31,7 @@ import {
 
 export default function Positions() {
   const { selectedAccount } = useAccount()
+  const canWritePositions = usePermission('positions', 'write')
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const navigate = useNavigate()
@@ -418,6 +420,7 @@ export default function Positions() {
                 onCheckSlippage={handleCheckSlippage}
                 onRefetch={refetchPositions}
                 onEditBot={(bot) => navigate('/bots', { state: { editBot: bot } })}
+                canWrite={canWritePositions}
               />
             ))}
           </div>

@@ -142,6 +142,17 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    # Check active session if token has sid claim
+    sid = payload.get("sid")
+    if sid:
+        from app.services.session_service import check_session_valid
+        if not await check_session_valid(sid, db):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired — please log in again",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     return user
 
 

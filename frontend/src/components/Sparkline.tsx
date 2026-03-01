@@ -9,12 +9,15 @@ interface SparklineProps {
 }
 
 export function Sparkline({ data, color, height = 54, timeLabel }: SparklineProps) {
-  // Defer chart mount by one frame so the container has layout dimensions
-  // before ResponsiveContainer measures itself
+  // Defer chart mount by two frames so the container has layout dimensions
+  // before ResponsiveContainer measures itself (avoids CartesianChart width/height warnings)
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true))
-    return () => cancelAnimationFrame(id)
+    let cancelled = false
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { if (!cancelled) setMounted(true) })
+    })
+    return () => { cancelled = true }
   }, [])
 
   if (!data || data.length < 2) return null

@@ -19,7 +19,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Bot, BotProduct, Position, User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ async def get_strategy_definition(strategy_id: str, current_user: User = Depends
 async def create_bot(
     bot_data: BotCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Create a new trading bot"""
     # Validate strategy exists
@@ -288,7 +288,7 @@ async def update_bot(
     bot_id: int,
     bot_update: BotUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Update bot configuration"""
     query = select(Bot).where(Bot.id == bot_id)
@@ -398,7 +398,7 @@ async def update_bot(
 async def delete_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_DELETE))
 ):
     """Delete a bot (only if it has no open positions)"""
     query = select(Bot).where(Bot.id == bot_id)
@@ -436,7 +436,7 @@ async def delete_bot(
 async def clone_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """
     Clone/duplicate a bot configuration
@@ -538,7 +538,7 @@ async def copy_bot_to_account(
     bot_id: int,
     target_account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """
     Copy bot configuration to a different account (e.g., live to paper trading or vice versa)

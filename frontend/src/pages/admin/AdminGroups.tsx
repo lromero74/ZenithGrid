@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { FolderOpen, Plus, Trash2, Edit2, RefreshCw, X } from 'lucide-react'
-import { adminApi, AdminGroup, AdminRole } from '../../services/api'
+import { FolderOpen, Plus, Trash2, Edit2, RefreshCw, X, Clock } from 'lucide-react'
+import { adminApi, AdminGroup, AdminRole, SessionPolicyConfig } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 
 export function AdminGroups() {
@@ -19,6 +19,7 @@ export function AdminGroups() {
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formRoleIds, setFormRoleIds] = useState<number[]>([])
+  const [formSessionPolicy, setFormSessionPolicy] = useState<SessionPolicyConfig>({})
   const confirm = useConfirm()
 
   const fetchData = async () => {
@@ -44,18 +45,35 @@ export function AdminGroups() {
     setFormName('')
     setFormDescription('')
     setFormRoleIds([])
+    setFormSessionPolicy({})
     setShowCreate(false)
     setEditingGroup(null)
   }
 
+  const hasSessionPolicy = (p: SessionPolicyConfig) =>
+    Object.values(p).some(v => v !== null && v !== undefined)
+
   const handleCreate = async () => {
     if (!formName.trim()) return
     try {
-      await adminApi.createGroup({ name: formName.trim(), description: formDescription.trim() || undefined, role_ids: formRoleIds.length > 0 ? formRoleIds : undefined })
+      const group = await adminApi.createGroup({
+        name: formName.trim(),
+        description: formDescription.trim() || undefined,
+        role_ids: formRoleIds.length > 0
+          ? formRoleIds : undefined,
+      })
+      if (hasSessionPolicy(formSessionPolicy)) {
+        await adminApi.updateGroupSessionPolicy(
+          group.id, formSessionPolicy
+        )
+      }
       resetForm()
       await fetchData()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create group')
+      setError(
+        err.response?.data?.detail
+          || 'Failed to create group'
+      )
     }
   }
 
@@ -64,6 +82,7 @@ export function AdminGroups() {
     setFormName(group.name)
     setFormDescription(group.description || '')
     setFormRoleIds(group.roles.map(r => r.id))
+    setFormSessionPolicy(group.session_policy || {})
     setShowCreate(false)
   }
 
@@ -75,10 +94,16 @@ export function AdminGroups() {
         description: formDescription.trim() || undefined,
         role_ids: formRoleIds,
       })
+      await adminApi.updateGroupSessionPolicy(
+        editingGroup.id, formSessionPolicy
+      )
       resetForm()
       await fetchData()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update group')
+      setError(
+        err.response?.data?.detail
+          || 'Failed to update group'
+      )
     }
   }
 
@@ -159,6 +184,102 @@ export function AdminGroups() {
               ))}
             </div>
           </div>
+          {/* Session Policy */}
+          <div>
+            <p className="text-xs text-slate-400 mb-2">
+              Session Policy (optional):
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-slate-500">
+                  Session Timeout (min)
+                </label>
+                <input
+                  type="number" min={1}
+                  value={formSessionPolicy
+                    .session_timeout_minutes ?? ''}
+                  onChange={e => setFormSessionPolicy(p => ({
+                    ...p,
+                    session_timeout_minutes:
+                      e.target.value
+                        ? Number(e.target.value) : null,
+                  }))}
+                  placeholder="No limit"
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">
+                  Max Simultaneous Sessions
+                </label>
+                <input
+                  type="number" min={1}
+                  value={formSessionPolicy
+                    .max_simultaneous_sessions ?? ''}
+                  onChange={e => setFormSessionPolicy(p => ({
+                    ...p,
+                    max_simultaneous_sessions:
+                      e.target.value
+                        ? Number(e.target.value) : null,
+                  }))}
+                  placeholder="No limit"
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">
+                  Max Sessions Per IP
+                </label>
+                <input
+                  type="number" min={1}
+                  value={formSessionPolicy
+                    .max_sessions_per_ip ?? ''}
+                  onChange={e => setFormSessionPolicy(p => ({
+                    ...p,
+                    max_sessions_per_ip:
+                      e.target.value
+                        ? Number(e.target.value) : null,
+                  }))}
+                  placeholder="No limit"
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">
+                  Re-login Cooldown (min)
+                </label>
+                <input
+                  type="number" min={1}
+                  value={formSessionPolicy
+                    .relogin_cooldown_minutes ?? ''}
+                  onChange={e => setFormSessionPolicy(p => ({
+                    ...p,
+                    relogin_cooldown_minutes:
+                      e.target.value
+                        ? Number(e.target.value) : null,
+                  }))}
+                  placeholder="None"
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 mt-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={
+                  formSessionPolicy.auto_logout ?? false
+                }
+                onChange={e => setFormSessionPolicy(p => ({
+                  ...p,
+                  auto_logout: e.target.checked || null,
+                }))}
+                className="rounded border-slate-600"
+              />
+              <span className="text-slate-300">
+                Auto-logout at expiry
+              </span>
+            </label>
+          </div>
           <button
             onClick={editingGroup ? handleUpdate : handleCreate}
             disabled={!formName.trim()}
@@ -182,6 +303,12 @@ export function AdminGroups() {
                 <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
                   <span>{group.member_count} member{group.member_count !== 1 ? 's' : ''}</span>
                   <span>{group.roles.length} role{group.roles.length !== 1 ? 's' : ''}: {group.roles.map(r => r.name).join(', ') || 'none'}</span>
+                  {group.session_policy && hasSessionPolicy(group.session_policy) && (
+                    <span className="flex items-center gap-1 text-amber-400">
+                      <Clock className="w-3 h-3" />
+                      Session policy
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-1">

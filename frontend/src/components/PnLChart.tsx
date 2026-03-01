@@ -96,11 +96,14 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const btcSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const usdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
 
-  // Defer chart mount so ResponsiveContainer measures a valid container size
+  // Defer chart mount by two frames so ResponsiveContainer measures a valid container size
   const [chartMounted, setChartMounted] = useState(false)
   useEffect(() => {
-    const id = requestAnimationFrame(() => setChartMounted(true))
-    return () => cancelAnimationFrame(id)
+    let cancelled = false
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { if (!cancelled) setChartMounted(true) })
+    })
+    return () => { cancelled = true }
   }, [])
 
   // Notify parent when timeRange changes

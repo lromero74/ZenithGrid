@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Position, Settings, User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.services.season_detector import get_seasonality_status
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ async def check_seasonality_allows_bot(db: AsyncSession, bot: Bot) -> tuple[bool
 async def start_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Activate a bot to start trading (respects seasonality restrictions)"""
     query = select(Bot).where(Bot.id == bot_id)
@@ -93,7 +93,7 @@ async def start_bot(
 async def stop_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Deactivate a bot to stop trading"""
     query = select(Bot).where(Bot.id == bot_id)
@@ -120,7 +120,7 @@ async def stop_bot(
 async def force_run_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Force bot to run immediately on next monitor cycle"""
     query = select(Bot).where(Bot.id == bot_id)
@@ -161,7 +161,7 @@ async def cancel_all_positions(
     bot_id: int,
     confirm: bool = Query(False, description="Must be true to execute"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Cancel all open positions for a bot without selling"""
     if not confirm:
@@ -217,7 +217,7 @@ async def sell_all_positions(
     bot_id: int,
     confirm: bool = Query(False, description="Must be true to execute"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Sell all open positions for a bot at market price (realize P&L)"""
     if not confirm:
