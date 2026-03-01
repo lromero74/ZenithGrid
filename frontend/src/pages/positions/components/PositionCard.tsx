@@ -249,45 +249,47 @@ export const PositionCard = ({
                   const isApproved = reason.startsWith('[APPROVED]');
                   const isBorderline = reason.startsWith('[BORDERLINE]');
                   const isQuestionable = reason.startsWith('[QUESTIONABLE]');
-                  const displayReason = reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE)\]\s*/, '');
+                  const isMeme = reason.startsWith('[MEME]');
+                  const displayReason = reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE|MEME)\]\s*/, '');
+
+                  let badgeClass = 'bg-red-600/20 border-red-600/50 text-red-400';
+                  let label = 'BLACKLISTED';
+                  let fallback = 'Blacklisted coin';
+                  let tooltipReason = reason;
 
                   if (isApproved) {
-                    return (
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-600/20 border border-green-600/50 text-green-400 cursor-help"
-                        title={displayReason || 'Approved coin'}
-                      >
-                        APPROVED
-                      </span>
-                    );
+                    badgeClass = 'bg-green-600/20 border-green-600/50 text-green-400';
+                    label = 'APPROVED';
+                    fallback = 'Approved coin';
+                    tooltipReason = displayReason;
                   } else if (isBorderline) {
-                    return (
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-600/20 border border-yellow-600/50 text-yellow-400 cursor-help"
-                        title={displayReason || 'Borderline coin'}
-                      >
-                        BORDERLINE
-                      </span>
-                    );
+                    badgeClass = 'bg-yellow-600/20 border-yellow-600/50 text-yellow-400';
+                    label = 'BORDERLINE';
+                    fallback = 'Borderline coin';
+                    tooltipReason = displayReason;
                   } else if (isQuestionable) {
-                    return (
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-600/20 border border-orange-600/50 text-orange-400 cursor-help"
-                        title={displayReason || 'Questionable coin'}
-                      >
-                        QUESTIONABLE
-                      </span>
-                    );
-                  } else {
-                    return (
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600/20 border border-red-600/50 text-red-400 cursor-help"
-                        title={reason || 'Blacklisted coin'}
-                      >
-                        BLACKLISTED
-                      </span>
-                    );
+                    badgeClass = 'bg-orange-600/20 border-orange-600/50 text-orange-400';
+                    label = 'QUESTIONABLE';
+                    fallback = 'Questionable coin';
+                    tooltipReason = displayReason;
+                  } else if (isMeme) {
+                    badgeClass = 'bg-purple-600/20 border-purple-600/50 text-purple-400';
+                    label = 'MEME';
+                    fallback = 'Meme coin';
+                    tooltipReason = displayReason;
                   }
+
+                  return (
+                    <div className="group/badge relative">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-help ${badgeClass}`}>
+                        {label}
+                      </span>
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-900 border border-slate-600 rounded shadow-xl text-[11px] text-slate-200 whitespace-nowrap opacity-0 invisible group-hover/badge:opacity-100 group-hover/badge:visible transition-all duration-150 delay-[250ms] z-50 pointer-events-none">
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900 border-r border-b border-slate-600" />
+                        {tooltipReason || fallback}
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
               <div className="flex items-center gap-2">

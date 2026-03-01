@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.0] - 2026-03-01
+
+### Added
+- **Read-only bot modal for demo users**: Demo users can now view bot configurations via "View Bot" in the actions menu — all fields visible but disabled, no save/create button.
+- **Read-only goal modal for demo users**: Demo users can click goals to view their full configuration in a read-only modal with all fields visible but disabled.
+- **Read-only schedule modal for demo users**: Demo users can click schedules to view their full configuration in a read-only modal with all fields visible but disabled.
+- **Games navigation persistence**: Navigating away from a game and back to the Games hub automatically resumes the last game you were playing. Explicitly clicking "Back to Games" returns to the hub.
+
+### Changed
+- **Plinko bounce physics restored**: Ball drops now use reflection-based bounce physics with Galton rotation (matching the v2.70.5 feel) instead of pure deflection. Minimum speed floors prevent ball death at lower rows while preserving the bell-curve distribution.
+- **Coin badge tooltips**: Status badges (Approved, Borderline, etc.) on position cards now use custom CSS tooltips with a 250ms delay instead of the native browser tooltip (~1 second delay). Added support for Meme coin category (purple badge).
+- **Session relogin cooldown reduced**: Demo account relogin cooldown reduced from 5 minutes to 1 minute.
+
 ## [v2.74.0] - 2026-03-01
 
 ### Added

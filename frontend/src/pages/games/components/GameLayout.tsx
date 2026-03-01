@@ -5,8 +5,10 @@
  * optional controls toolbar, and centered game content area.
  */
 
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { setLastGamePath, clearLastGamePath } from './GameHub'
 
 interface GameLayoutProps {
   title: string
@@ -19,13 +21,22 @@ interface GameLayoutProps {
 
 export function GameLayout({ title, children, score, bestScore, timer, controls }: GameLayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Remember this game path so navigating back to /games resumes it
+  useEffect(() => {
+    setLastGamePath(location.pathname)
+  }, [location.pathname])
 
   return (
     <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => {
+            clearLastGamePath()
+            navigate('/games')
+          }}
           className="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />

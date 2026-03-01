@@ -75,7 +75,7 @@ async def run_migration(db):
                 "auto_logout": True,
                 "max_simultaneous_sessions": 15,
                 "max_sessions_per_ip": 2,
-                "relogin_cooldown_minutes": 5,
+                "relogin_cooldown_minutes": 1,
             })
             await db.execute(
                 text("UPDATE groups SET session_policy = :policy WHERE name = 'Observers'"),

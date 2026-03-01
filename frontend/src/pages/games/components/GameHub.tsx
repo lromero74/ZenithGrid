@@ -5,7 +5,8 @@
  * category/recently played.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, ArrowUpDown } from 'lucide-react'
 import { GAMES, GAME_CATEGORIES, SORT_OPTIONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
@@ -14,7 +15,30 @@ import { sortGames } from '../sortGames'
 import { GameCard } from './GameCard'
 import type { GameCategory, GameSortOption } from '../types'
 
+const LAST_GAME_KEY = 'zenith-games-last-path'
+
+/** Store the current game path so we can resume it later. */
+export function setLastGamePath(path: string): void {
+  try { sessionStorage.setItem(LAST_GAME_KEY, path) } catch { /* ignore */ }
+}
+
+/** Clear the stored game path (used when explicitly going back to hub). */
+export function clearLastGamePath(): void {
+  try { sessionStorage.removeItem(LAST_GAME_KEY) } catch { /* ignore */ }
+}
+
 export function GameHub() {
+  const navigate = useNavigate()
+
+  // Auto-navigate to last-played game if returning from another page
+  useEffect(() => {
+    try {
+      const lastPath = sessionStorage.getItem(LAST_GAME_KEY)
+      if (lastPath) {
+        navigate(lastPath, { replace: true })
+      }
+    } catch { /* ignore */ }
+  }, [navigate])
   const { getHighScore } = useGameScores()
   const { markPlayed, getRecentMap } = useRecentlyPlayed()
   const [activeCategory, setActiveCategory] = useState<'all' | GameCategory>('all')
