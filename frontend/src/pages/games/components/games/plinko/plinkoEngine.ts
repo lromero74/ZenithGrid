@@ -136,13 +136,15 @@ export function getMultipliers(risk: RiskLevel): number[] {
 }
 
 /**
- * Create a new ball at the given x position, starting at y=0 with no velocity.
+ * Create a new ball at the given x position, released just above the first
+ * peg row with no velocity.  Gravity alone accelerates it into the pegs —
+ * the short 15px gap gives a gentle entry, not a fast throw from y=0.
  */
 export function createBall(dropX: number): Ball {
   return {
     id: nextBallId++,
     x: dropX,
-    y: 0,
+    y: 45,
     vx: 0,
     vy: 0,
   }
@@ -223,10 +225,16 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
   let vy = rvx * sin + rvy * cos
 
   // Lateral speed floor: prevent the ball from losing all horizontal motion
-  // due to cumulative energy loss across 10 rows.  Gravity handles all
-  // downward acceleration — no vy floor needed.
+  // due to cumulative energy loss across 10 rows.
   if (Math.abs(vx) < 0.72) {
     vx = direction * (0.72 + Math.random() * 0.36)
+  }
+
+  // If ball is above the peg, clamp any residual downward vy to zero.
+  // The Galton rotation can swing the reflected (upward) velocity back
+  // toward downward — gravity alone should handle all descent.
+  if (newY < peg.y && vy > 0) {
+    vy = 0
   }
 
   return {
