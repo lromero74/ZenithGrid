@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Plus, Building2, Wallet, Check, Settings } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
+import { usePermission } from '../hooks/usePermission'
 
 interface AccountSwitcherProps {
   onAddAccount?: () => void
@@ -20,6 +21,7 @@ interface AccountSwitcherProps {
 
 export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitcherProps) {
   const { accounts, selectedAccount, selectAccount, isLoading } = useAccount()
+  const canWriteAccounts = usePermission('accounts', 'write')
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -74,8 +76,14 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
   if (accounts.length === 0) {
     return (
       <button
-        onClick={onAddAccount}
-        className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
+        onClick={canWriteAccounts ? onAddAccount : undefined}
+        disabled={!canWriteAccounts}
+        className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+          canWriteAccounts
+            ? 'bg-blue-600 hover:bg-blue-500'
+            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+        }`}
+        title={!canWriteAccounts ? 'Read-only account' : undefined}
       >
         <Plus className="w-4 h-4" />
         <span>Add Account</span>
@@ -149,13 +157,19 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
           {/* Actions Section */}
           <div className="border-t border-slate-700 p-2 bg-slate-850">
             <button
-              onClick={() => {
+              onClick={canWriteAccounts ? () => {
                 setIsOpen(false)
                 onAddAccount?.()
-              }}
-              className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"
+              } : undefined}
+              disabled={!canWriteAccounts}
+              className={`flex items-center space-x-2 w-full px-3 py-2 text-sm rounded-lg transition-colors ${
+                canWriteAccounts
+                  ? 'text-slate-300 hover:bg-slate-700'
+                  : 'text-slate-500 cursor-not-allowed'
+              }`}
+              title={!canWriteAccounts ? 'Read-only account' : undefined}
             >
-              <Plus className="w-4 h-4 text-blue-400" />
+              <Plus className={`w-4 h-4 ${canWriteAccounts ? 'text-blue-400' : 'text-slate-600'}`} />
               <span>Add Account</span>
             </button>
             <button
