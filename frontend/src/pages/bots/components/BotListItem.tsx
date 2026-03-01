@@ -68,14 +68,18 @@ export function BotListItem({
     if (openMenuId === bot.id && menuButtonRef.current) {
       const rect = menuButtonRef.current.getBoundingClientRect()
       const menuWidth = 192 // w-48 = 12rem = 192px
-      const maxMenuHeight = Math.min(window.innerHeight * 0.8, 600) // 80vh or 600px
+      const estimatedMenuHeight = 320 // reasonable estimate for menu items
       const spaceBelow = window.innerHeight - rect.bottom
       const spaceAbove = rect.top
-      const top = spaceBelow >= maxMenuHeight
-        ? rect.bottom + 4 // normal downward
-        : spaceAbove >= maxMenuHeight
-          ? rect.top - maxMenuHeight // flip upward
-          : 8 // neither fits — pin to top of viewport with padding
+      let top: number
+      if (spaceBelow >= estimatedMenuHeight) {
+        top = rect.bottom + 4 // show below button
+      } else if (spaceAbove >= estimatedMenuHeight) {
+        top = rect.top - estimatedMenuHeight // flip above button
+      } else {
+        // Not enough room either way — show below and let it scroll
+        top = rect.bottom + 4
+      }
       setMenuPosition({
         top,
         left: rect.right - menuWidth,
@@ -444,7 +448,7 @@ export function BotListItem({
             {openMenuId === bot.id && menuPosition && (
               <div
                 className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 max-h-[80vh] overflow-y-auto"
-                style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: Math.min(window.innerHeight * 0.8, 600) }}
+                style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: window.innerHeight - menuPosition.top - 8 }}
               >
                 {canWrite && (
                   <button

@@ -456,8 +456,9 @@ export const PositionCard = ({
           )}
 
           {/* Show edit/cancel if there's a pending limit order */}
-          {canWrite && (position.closing_via_limit ? (
+          {position.closing_via_limit ? (
             <>
+              {canWrite && (
               <button
                 className="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"
                 onClick={(e) => {
@@ -467,15 +468,19 @@ export const PositionCard = ({
               >
                 <span>✏️</span> Edit limit price
               </button>
+              )}
+              {canWrite && (
               <button
                 className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
                 onClick={handleCancelLimitClose}
               >
                 <span>❌</span> Cancel limit order
               </button>
+              )}
             </>
           ) : (
             <>
+              {canWrite && (
               <button
                 className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
                 onClick={(e) => {
@@ -485,6 +490,7 @@ export const PositionCard = ({
               >
                 <span>💱</span> Close at market
               </button>
+              )}
               <button
                 className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
                 onClick={(e) => {
@@ -495,7 +501,7 @@ export const PositionCard = ({
                 <span>📊</span> Close at limit
               </button>
             </>
-          ))}
+          )}
           <button
             className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-200 rounded flex items-center gap-1 transition-colors"
             onClick={(e) => {
@@ -559,6 +565,7 @@ export const PositionCard = ({
 
         {/* Notes Section */}
         <div className="mt-3 px-4 pb-3">
+          {canWrite ? (
           <div
             className="text-xs inline-flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
             onClick={(e) => {
@@ -573,6 +580,12 @@ export const PositionCard = ({
               <span className="text-slate-500 italic">You can place a note here</span>
             )}
           </div>
+          ) : position.notes ? (
+          <div className="text-xs inline-flex items-center gap-2">
+            <span>📝</span>
+            <span className="text-slate-300">{position.notes}</span>
+          </div>
+          ) : null}
         </div>
       </div>
 

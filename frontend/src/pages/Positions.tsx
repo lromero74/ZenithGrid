@@ -502,6 +502,7 @@ export default function Positions() {
           totalQuoteSpent={limitClosePosition.total_quote_spent}
           isEditing={limitClosePosition.closing_via_limit}
           currentLimitPrice={limitClosePosition.limit_order_details?.limit_price}
+          readOnly={!canWritePositions}
           onClose={() => {
             setShowLimitCloseModal(false)
             setLimitClosePosition(null)

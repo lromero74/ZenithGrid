@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import { FlaskConical, Plus, Minus, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authFetch } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 
 interface PaperBalances {
   BTC: number
@@ -29,8 +30,8 @@ interface PaperAccount {
 }
 
 export function PaperTradingManager() {
-  const { getAccessToken, user } = useAuth()
-  const isDemoAccount = !user?.email?.includes('@')
+  const { getAccessToken } = useAuth()
+  const canWriteAccounts = usePermission('accounts', 'write')
   const [paperAccount, setPaperAccount] = useState<PaperAccount | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,9 +258,9 @@ export function PaperTradingManager() {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => setShowDepositModal(true)}
-          disabled={isDemoAccount}
-          className={`flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
+          disabled={!canWriteAccounts}
+          className={`flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!canWriteAccounts ? 'Only admins and traders can modify balances' : undefined}
         >
           <Plus className="w-4 h-4" />
           <span>Deposit</span>
@@ -267,9 +268,9 @@ export function PaperTradingManager() {
 
         <button
           onClick={() => setShowWithdrawModal(true)}
-          disabled={isDemoAccount}
-          className={`flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
+          disabled={!canWriteAccounts}
+          className={`flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!canWriteAccounts ? 'Only admins and traders can modify balances' : undefined}
         >
           <Minus className="w-4 h-4" />
           <span>Withdraw</span>
@@ -277,9 +278,9 @@ export function PaperTradingManager() {
 
         <button
           onClick={() => setShowResetConfirm(true)}
-          disabled={isDemoAccount}
-          className={`flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
+          disabled={!canWriteAccounts}
+          className={`flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!canWriteAccounts ? 'Only admins and traders can modify balances' : undefined}
         >
           <RotateCcw className="w-4 h-4" />
           <span>Reset to Defaults</span>

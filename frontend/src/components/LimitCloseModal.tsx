@@ -12,6 +12,7 @@ interface LimitCloseModalProps {
   totalQuoteSpent: number  // Cost basis for P/L calculation
   isEditing?: boolean  // Whether we're editing an existing order
   currentLimitPrice?: number  // Current limit price if editing
+  readOnly?: boolean
   onClose: () => void
   onSuccess: () => void
 }
@@ -38,6 +39,7 @@ export function LimitCloseModal({
   totalQuoteSpent,
   isEditing = false,
   currentLimitPrice,
+  readOnly = false,
   onClose,
   onSuccess
 }: LimitCloseModalProps) {
@@ -779,17 +781,22 @@ export function LimitCloseModal({
           <button
             onClick={handleSubmitClick}
             className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
-              showLossConfirmation
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-blue-600 hover:bg-blue-700'
+              readOnly
+                ? 'bg-slate-600 cursor-not-allowed opacity-50'
+                : showLossConfirmation
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
             }`}
-            disabled={isSubmitting || !ticker}
+            disabled={isSubmitting || !ticker || readOnly}
+            title={readOnly ? 'View only — observers cannot place orders' : undefined}
           >
-            {isSubmitting
-              ? (isEditing ? 'Updating...' : 'Placing Order...')
-              : showLossConfirmation
-                ? 'Yes, Sell at Loss'
-                : (isEditing ? 'Update Limit Order' : 'Place Limit Order')
+            {readOnly
+              ? 'View Only'
+              : isSubmitting
+                ? (isEditing ? 'Updating...' : 'Placing Order...')
+                : showLossConfirmation
+                  ? 'Yes, Sell at Loss'
+                  : (isEditing ? 'Update Limit Order' : 'Place Limit Order')
             }
           </button>
         </div>

@@ -92,6 +92,7 @@ BUILT_IN_GROUPS = [
     ("System Owners", "System owner(s). Full access to everything.", 1),
     ("Administrators", "System administrators. Manage users, groups, RBAC, settings.", 1),
     ("Traders", "Active traders. Full trading access, manage own bots/positions.", 1),
+    ("Paper Traders", "Paper traders. Can trade with simulated funds only.", 1),
     ("Observers", "Read-only observers. Can view but not modify.", 1),
 ]
 
@@ -99,7 +100,8 @@ BUILT_IN_ROLES = [
     # (name, description, is_system, requires_mfa)
     ("super_admin", "Full system access — bypasses all permission checks.", 1, 1),
     ("admin", "System administration — manage users, groups, settings.", 1, 1),
-    ("trader", "Full trading access — bots, positions, orders.", 1, 0),
+    ("trader", "Full trading access — bots, positions, orders, manage accounts.", 1, 0),
+    ("paper_trader", "Paper trading access — bots, positions, orders. Cannot manage accounts.", 1, 0),
     ("viewer", "Read-only access to all trading data.", 1, 0),
 ]
 
@@ -142,6 +144,7 @@ ROLE_PERMISSION_MAP = {
     "super_admin": [p[0] for p in PERMISSIONS],
     "admin": [
         "admin:users", "admin:groups", "admin:roles", "admin:permissions",
+        "accounts:read", "accounts:write",
         "settings:read", "settings:write",
         "system:monitor", "system:restart", "system:shutdown",
         "blacklist:read", "blacklist:write",
@@ -152,6 +155,17 @@ ROLE_PERMISSION_MAP = {
         "positions:read", "positions:write",
         "orders:read", "orders:write",
         "accounts:read", "accounts:write",
+        "reports:read", "reports:write",
+        "templates:read", "templates:write", "templates:delete",
+        "blacklist:read",
+        "news:read",
+        "games:play",
+    ],
+    "paper_trader": [
+        "bots:read", "bots:write", "bots:delete",
+        "positions:read", "positions:write",
+        "orders:read", "orders:write",
+        "accounts:read",
         "reports:read", "reports:write",
         "templates:read", "templates:write", "templates:delete",
         "blacklist:read",
@@ -173,6 +187,7 @@ GROUP_ROLE_MAP = {
     "System Owners": ["super_admin"],
     "Administrators": ["admin"],
     "Traders": ["trader"],
+    "Paper Traders": ["paper_trader"],
     "Observers": ["viewer"],
 }
 
@@ -261,7 +276,7 @@ def migrate():
                     (group_id, role_id),
                 )
 
-        # 7. Migrate existing users by is_superuser flag
+        # 7. Migrate existing users by is_superuser flag and account type
         logger.info("Migrating existing users to RBAC groups...")
 
         # Get group IDs
@@ -269,6 +284,8 @@ def migrate():
         system_owners_id = cursor.fetchone()[0]
         cursor.execute("SELECT id FROM groups WHERE name = 'Traders'")
         traders_id = cursor.fetchone()[0]
+        cursor.execute("SELECT id FROM groups WHERE name = 'Observers'")
+        observers_id = cursor.fetchone()[0]
 
         # Superusers -> System Owners
         cursor.execute("SELECT id FROM users WHERE is_superuser = 1")
@@ -279,14 +296,21 @@ def migrate():
             )
             logger.info(f"  User {user_id} -> System Owners")
 
-        # Regular users -> Traders
-        cursor.execute("SELECT id FROM users WHERE is_superuser = 0")
-        for (user_id,) in cursor.fetchall():
-            cursor.execute(
-                "INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
-                (user_id, traders_id),
-            )
-            logger.info(f"  User {user_id} -> Traders")
+        # Demo users (no @ in email) -> Observers, regular users -> Traders
+        cursor.execute("SELECT id, email FROM users WHERE is_superuser = 0")
+        for user_id, email in cursor.fetchall():
+            if "@" not in email:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
+                    (user_id, observers_id),
+                )
+                logger.info(f"  User {user_id} ({email}) -> Observers")
+            else:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
+                    (user_id, traders_id),
+                )
+                logger.info(f"  User {user_id} ({email}) -> Traders")
 
         conn.commit()
         logger.info("RBAC migration completed successfully!")
