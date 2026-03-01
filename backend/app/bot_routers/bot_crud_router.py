@@ -14,47 +14,14 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_routers.schemas import BotCreate, BotResponse, BotStats, BotUpdate
-from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
+from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.portfolio_service import get_coinbase_from_db
 from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)
-
-
-async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
-    """Get Coinbase client from the first active CEX account for a user."""
-    from sqlalchemy import select
-
-    query = select(Account).where(
-        Account.type == "cex",
-        Account.is_active.is_(True),
-        Account.is_paper_trading.is_not(True),
-    )
-    if user_id:
-        query = query.where(Account.user_id == user_id)
-    query = query.order_by(Account.is_default.desc(), Account.created_at).limit(1)
-
-    result = await db.execute(query)
-    account = result.scalar_one_or_none()
-
-    if not account or not account.api_key_name or not account.api_private_key:
-        return None
-
-    private_key = account.api_private_key
-    if private_key and is_encrypted(private_key):
-        private_key = decrypt_value(private_key)
-
-    return create_exchange_client(ExchangeClientConfig(
-        exchange_type="cex",
-        coinbase=CoinbaseCredentials(
-            key_name=account.api_key_name,
-            private_key=private_key,
-        ),
-    ))
 router = APIRouter()
 
 
@@ -196,7 +163,10 @@ async def list_bots(
     bots = result.scalars().all()
 
     # Initialize coinbase client for budget calculations (from database)
-    coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
+    try:
+        coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
+    except ExchangeUnavailableError:
+        coinbase = None
     if not coinbase:
         # Return bots without budget calculations if no CEX account configured
         bot_responses = []
@@ -687,9 +657,6 @@ async def get_bot_stats(
 
     try:
         coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
-        if not coinbase:
-            raise ValueError("No CEX account configured")
-
         quote_currency = bot.get_quote_currency()
 
         aggregate_value = await coinbase.calculate_aggregate_quote_value(

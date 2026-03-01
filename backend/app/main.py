@@ -97,7 +97,10 @@ from app.exceptions import AppError  # noqa: E402
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+    headers = {}
+    if hasattr(exc, "retry_after") and exc.retry_after is not None:
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message}, headers=headers or None)
 
 
 # Multi-bot monitor - monitors all active bots with their strategies

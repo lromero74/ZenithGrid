@@ -201,7 +201,7 @@ class TestDomainAliases:
 
     def test_independent_alias_in_allowed_domains(self):
         """the-independent.com must be allowed since independent.co.uk is a source."""
-        from app.routers.news_router import DOMAIN_ALIASES
+        from app.services.article_content_service import DOMAIN_ALIASES
         aliases = DOMAIN_ALIASES.get("independent.co.uk", [])
         assert "the-independent.com" in aliases
 
@@ -225,8 +225,8 @@ class TestDomainAliases:
         mock_session.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.routers.news_router.async_session_maker", return_value=mock_session):
-            from app.routers.news_router import get_allowed_article_domains
+        with patch("app.services.article_content_service.async_session_maker", return_value=mock_session):
+            from app.services.article_content_service import get_allowed_article_domains
             domains = await get_allowed_article_domains()
             assert "the-independent.com" in domains
             assert "www.the-independent.com" in domains

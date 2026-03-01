@@ -731,20 +731,22 @@ class TestGetBotStats:
 
 
 class TestGetCoinbaseFromDb:
-    """Tests for get_coinbase_from_db() helper"""
+    """Tests for get_coinbase_from_db() — now imported from portfolio_service"""
 
     @pytest.mark.asyncio
-    async def test_no_account_returns_none(self, db_session):
-        """Failure: no active CEX account returns None."""
+    async def test_no_account_raises_exchange_unavailable(self, db_session):
+        """Failure: no active CEX account raises ExchangeUnavailableError."""
         from app.bot_routers.bot_crud_router import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
 
-        result = await get_coinbase_from_db(db_session, user_id=99999)
-        assert result is None
+        with pytest.raises(ExchangeUnavailableError):
+            await get_coinbase_from_db(db_session, user_id=99999)
 
     @pytest.mark.asyncio
-    async def test_account_without_credentials_returns_none(self, db_session):
-        """Failure: account without API credentials returns None."""
+    async def test_account_without_credentials_raises_exchange_unavailable(self, db_session):
+        """Failure: account without API credentials raises ExchangeUnavailableError."""
         from app.bot_routers.bot_crud_router import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
 
         user = _make_user(db_session)
         db_session.add(user)
@@ -758,5 +760,5 @@ class TestGetCoinbaseFromDb:
         db_session.add(account)
         await db_session.flush()
 
-        result = await get_coinbase_from_db(db_session, user_id=user.id)
-        assert result is None
+        with pytest.raises(ExchangeUnavailableError):
+            await get_coinbase_from_db(db_session, user_id=user.id)

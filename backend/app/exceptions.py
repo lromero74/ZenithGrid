@@ -35,3 +35,18 @@ class ExchangeUnavailableError(AppError):
 
     def __init__(self, message: str = "Exchange service unavailable"):
         super().__init__(message, status_code=503)
+
+
+class RateLimitError(AppError):
+    """Too many requests (429)."""
+
+    def __init__(self, message: str, retry_after: int = None):
+        self.retry_after = retry_after
+        super().__init__(message, status_code=429)
+
+
+class SessionLimitError(AppError):
+    """Session limit exceeded (403)."""
+
+    def __init__(self, message: str = "Session limit reached"):
+        super().__init__(message, status_code=403)
