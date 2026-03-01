@@ -500,26 +500,30 @@ class PaperTradingClient(ExchangeClient):
     ) -> float:
         """Calculate value for a specific quote currency (budget allocation).
 
-        Returns only the balance for exactly that currency plus the current
-        value of simulated positions in that currency's pairs.
+        Returns the balance for that currency plus the current value of
+        open positions in that currency's pairs (queried from the DB).
         """
         total = self.balances.get(quote_currency, 0.0)
 
-        # Add value of positions in this quote currency's pairs
-        for pos in self.positions.values():
-            if pos.get("status") != "open":
-                continue
-            pid = pos.get("product_id", "")
-            if pid.endswith(f"-{quote_currency}"):
-                amount = pos.get("total_base_acquired", 0.0)
-                if amount:
-                    try:
-                        price = await self.get_current_price(pid)
-                        total += amount * price
-                    except Exception:
-                        avg = pos.get("average_buy_price", 0.0)
-                        if avg:
-                            total += amount * avg
+        # Add value of open positions in this quote currency's pairs
+        from app.models import Position
+        result = await self.db.execute(
+            select(Position).where(
+                Position.account_id == self.account_id,
+                Position.status == "open",
+                Position.product_id.like(f"%-{quote_currency}"),
+            )
+        )
+        for pos in result.scalars().all():
+            amount = pos.total_base_acquired or 0.0
+            if amount:
+                try:
+                    price = await self.get_current_price(pos.product_id)
+                    total += amount * price
+                except Exception:
+                    avg = pos.average_buy_price or 0.0
+                    if avg:
+                        total += amount * avg
 
         return total
 
