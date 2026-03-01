@@ -66,7 +66,10 @@ async def process_bot_pair(
                 logger.info("    Using CURRENT bot strategy config")
 
                 # Adjust budget percentages if splitting across pairs (only for new positions)
-                if bot.split_budget_across_pairs:
+                # Skip when auto_calculate is on — auto-calculate already receives per-position
+                # budget from _calculate_budget() and computes order sizes from that balance.
+                # Dividing percentages here would double-count the split.
+                if bot.split_budget_across_pairs and not strategy_config.get("auto_calculate_order_sizes", False):
                     max_concurrent_deals = max(strategy_config.get("max_concurrent_deals", 1), 1)
                     logger.info(f"    Splitting budget across {max_concurrent_deals} max concurrent deals")
 
