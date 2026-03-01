@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.7] - 2026-03-01
+
+### Added
+- **Session expiry countdown**: A red banner appears 30 seconds before session expiry with a live countdown ("Session expires in 15s — you will be logged out automatically").
+
+### Fixed
+- **Game over "Games" button**: Clicking the "Games" button in the game over modal now correctly returns to the games hub instead of redirecting back to the same game.
+
 ## [v2.75.6] - 2026-03-01
 
 ### Fixed
