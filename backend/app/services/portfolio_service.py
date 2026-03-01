@@ -777,117 +777,77 @@ async def get_account_balances(
     }
 
 
-async def get_account_portfolio_data(
-    db: AsyncSession, current_user: User, force_fresh: bool = False,
-) -> dict:
-    """Get full portfolio breakdown for the current user."""
-    # Paper-only users get a simulated portfolio
-    paper_account = await get_user_paper_account(db, current_user.id)
-    if paper_account:
-        client = await get_exchange_client_for_account(db, paper_account.id)
-        if client and hasattr(client, 'balances'):
-            btc_usd_price = 0.0
-            try:
-                btc_usd_price = await client.get_btc_usd_price()
-            except Exception:
-                pass
+async def _get_paper_portfolio(client, btc_usd_price: float) -> dict:
+    """Build portfolio data for a paper trading account."""
+    altcoin_btc_prices = {}
+    for currency in client.balances:
+        if currency in ("BTC", "USD", "USDC", "USDT"):
+            continue
+        try:
+            price = await client.get_current_price(f"{currency}-BTC")
+            if price is not None:
+                altcoin_btc_prices[currency] = price
+                continue
+        except Exception:
+            pass
+        try:
+            usd_price = await client.get_current_price(f"{currency}-USD")
+            if usd_price is not None and btc_usd_price > 0:
+                altcoin_btc_prices[currency] = usd_price / btc_usd_price
+                continue
+        except Exception:
+            pass
+        altcoin_btc_prices[currency] = 0.0
 
-            altcoin_btc_prices = {}
-            for currency in client.balances:
-                if currency in ("BTC", "USD", "USDC", "USDT"):
-                    continue
-                try:
-                    price = await client.get_current_price(f"{currency}-BTC")
-                    if price is not None:
-                        altcoin_btc_prices[currency] = price
-                        continue
-                except Exception:
-                    pass
-                # Fallback: try USD pair and convert to BTC
-                try:
-                    usd_price = await client.get_current_price(f"{currency}-USD")
-                    if usd_price is not None and btc_usd_price > 0:
-                        altcoin_btc_prices[currency] = usd_price / btc_usd_price
-                        continue
-                except Exception:
-                    pass
-                altcoin_btc_prices[currency] = 0.0
+    holdings = []
+    total_btc = 0.0
+    total_usd = 0.0
+    for currency, balance in client.balances.items():
+        if balance > 0:
+            if currency == "BTC":
+                btc_value = balance
+                usd_value = balance * btc_usd_price
+                price_usd = btc_usd_price
+            elif currency in ("USD", "USDC", "USDT"):
+                btc_value = balance / btc_usd_price if btc_usd_price > 0 else 0.0
+                usd_value = balance
+                price_usd = 1.0
+            else:
+                btc_price = altcoin_btc_prices.get(currency, 0.0)
+                btc_value = balance * btc_price
+                usd_value = btc_value * btc_usd_price
+                price_usd = btc_price * btc_usd_price
 
-            holdings = []
-            total_btc = 0.0
-            total_usd = 0.0
-            for currency, balance in client.balances.items():
-                if balance > 0:
-                    if currency == "BTC":
-                        btc_value = balance
-                        usd_value = balance * btc_usd_price
-                        price_usd = btc_usd_price
-                    elif currency in ("USD", "USDC", "USDT"):
-                        btc_value = balance / btc_usd_price if btc_usd_price > 0 else 0.0
-                        usd_value = balance
-                        price_usd = 1.0
-                    else:
-                        btc_price = altcoin_btc_prices.get(currency, 0.0)
-                        btc_value = balance * btc_price
-                        usd_value = btc_value * btc_usd_price
-                        price_usd = btc_price * btc_usd_price
+            total_btc += btc_value
+            total_usd += usd_value
+            holdings.append({
+                "asset": currency, "total_balance": balance,
+                "available": balance, "hold": 0.0,
+                "current_price_usd": price_usd, "usd_value": usd_value,
+                "btc_value": btc_value, "percentage": 0.0,
+            })
 
-                    total_btc += btc_value
-                    total_usd += usd_value
-                    holdings.append({
-                        "asset": currency,
-                        "total_balance": balance,
-                        "available": balance,
-                        "hold": 0.0,
-                        "current_price_usd": price_usd,
-                        "usd_value": usd_value,
-                        "btc_value": btc_value,
-                        "percentage": 0.0,
-                    })
-            # Calculate allocation percentages
-            for h in holdings:
-                if total_usd > 0:
-                    h["percentage"] = (h["usd_value"] / total_usd) * 100
-            return {
-                "holdings": holdings,
-                "holdings_count": len(holdings),
-                "total_usd_value": total_usd,
-                "total_btc_value": total_btc,
-                "btc_usd_price": btc_usd_price,
-                "is_paper_trading": True,
-            }
-        return {
-            "holdings": [], "holdings_count": 0,
-            "total_usd_value": 0, "total_btc_value": 0,
-            "btc_usd_price": 0, "is_paper_trading": True,
-        }
+    for h in holdings:
+        if total_usd > 0:
+            h["percentage"] = (h["usd_value"] / total_usd) * 100
 
-    cache_key = f"portfolio_response_{current_user.id}"
+    return {
+        "holdings": holdings, "holdings_count": len(holdings),
+        "total_usd_value": total_usd, "total_btc_value": total_btc,
+        "btc_usd_price": btc_usd_price, "is_paper_trading": True,
+    }
 
-    if not force_fresh:
-        cached = await api_cache.get(cache_key)
-        if cached is not None:
-            logger.debug("Using cached portfolio response")
-            return cached
 
-        persistent = await portfolio_cache.get(current_user.id)
-        if persistent is not None:
-            await api_cache.set(cache_key, persistent, 60)
-            logger.info("Serving persistent portfolio cache while fresh data loads")
-            return persistent
+def _process_cex_holdings(spot_positions: list, btc_usd_price: float) -> tuple:
+    """Process CEX spot positions into portfolio holdings.
 
-    coinbase = await get_coinbase_from_db(db, current_user.id)
-
-    breakdown = await coinbase.get_portfolio_breakdown()
-    spot_positions = breakdown.get("spot_positions", [])
-    btc_usd_price = await coinbase.get_btc_usd_price()
-
-    portfolio_holdings = []
+    Returns (holdings, total_usd, total_btc, actual_balances, breakdown_prices).
+    actual_balances is a dict with keys 'usd', 'usdc', 'btc'.
+    """
+    holdings = []
     total_usd_value = 0.0
     total_btc_value = 0.0
-    actual_usd_balance = 0.0
-    actual_usdc_balance = 0.0
-    actual_btc_balance = 0.0
+    actual_balances = {"usd": 0.0, "usdc": 0.0, "btc": 0.0}
     breakdown_prices = {}
 
     for position in spot_positions:
@@ -916,11 +876,11 @@ async def get_account_portfolio_data(
             current_price_usd = 0.0
 
         if asset == "USD":
-            actual_usd_balance += total_balance
+            actual_balances["usd"] += total_balance
         elif asset == "USDC":
-            actual_usdc_balance += total_balance
+            actual_balances["usdc"] += total_balance
         elif asset == "BTC":
-            actual_btc_balance += total_balance
+            actual_balances["btc"] += total_balance
 
         if current_price_usd > 0:
             breakdown_prices[asset] = current_price_usd
@@ -933,35 +893,25 @@ async def get_account_portfolio_data(
         total_usd_value += usd_value
         total_btc_value += btc_value
 
-        portfolio_holdings.append({
-            "asset": asset,
-            "total_balance": total_balance,
-            "available": available,
-            "hold": hold,
-            "current_price_usd": current_price_usd,
-            "usd_value": usd_value,
-            "btc_value": btc_value,
-            "percentage": 0.0,
-            "unrealized_pnl_usd": 0.0,
-            "unrealized_pnl_percentage": 0.0,
+        holdings.append({
+            "asset": asset, "total_balance": total_balance,
+            "available": available, "hold": hold,
+            "current_price_usd": current_price_usd, "usd_value": usd_value,
+            "btc_value": btc_value, "percentage": 0.0,
+            "unrealized_pnl_usd": 0.0, "unrealized_pnl_percentage": 0.0,
         })
 
-    for holding in portfolio_holdings:
+    for holding in holdings:
         if total_usd_value > 0:
             holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
 
-    # Unrealized PnL from open positions
-    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    user_accounts_r = await db.execute(user_accounts_q)
-    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+    return holdings, total_usd_value, total_btc_value, actual_balances, breakdown_prices
 
-    positions_query = select(Position).where(
-        Position.status == "open",
-        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
-    )
-    positions_result = await db.execute(positions_query)
-    open_positions = positions_result.scalars().all()
 
+def _apply_unrealized_pnl(
+    holdings: list, open_positions: list, breakdown_prices: dict, btc_usd_price: float,
+):
+    """Calculate and apply unrealized PnL to portfolio holdings (mutates holdings in place)."""
     asset_pnl = {}
     for position in open_positions:
         base = position.get_base_currency()
@@ -971,10 +921,7 @@ async def get_account_portfolio_data(
             current_price = breakdown_prices.get(base)
         elif quote == "BTC":
             base_usd = breakdown_prices.get(base)
-            if base_usd and btc_usd_price > 0:
-                current_price = base_usd / btc_usd_price
-            else:
-                current_price = None
+            current_price = base_usd / btc_usd_price if base_usd and btc_usd_price > 0 else None
         else:
             current_price = None
 
@@ -995,11 +942,10 @@ async def get_account_portfolio_data(
 
         if base not in asset_pnl:
             asset_pnl[base] = {"pnl_usd": 0.0, "cost_usd": 0.0}
-
         asset_pnl[base]["pnl_usd"] += profit_usd
         asset_pnl[base]["cost_usd"] += cost_usd
 
-    for holding in portfolio_holdings:
+    for holding in holdings:
         asset = holding["asset"]
         if asset in asset_pnl:
             pnl_data = asset_pnl[asset]
@@ -1009,27 +955,21 @@ async def get_account_portfolio_data(
                     pnl_data["pnl_usd"] / pnl_data["cost_usd"]
                 ) * 100
 
-    portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
-    # Balance breakdown
-    bots_query = select(Bot).where(
-        Bot.account_id.in_(user_account_ids) if user_account_ids else Bot.id < 0,
-    )
-    bots_result = await db.execute(bots_query)
-    all_bots = bots_result.scalars().all()
-
+def _calculate_balance_breakdown(
+    open_positions: list, all_bots: list,
+    actual_balances: dict, breakdown_prices: dict, btc_usd_price: float,
+) -> dict:
+    """Calculate reserved/in-positions/free balance breakdown by currency."""
     total_reserved_btc = sum(bot.reserved_btc_balance for bot in all_bots)
     total_reserved_usd = sum(bot.reserved_usd_balance for bot in all_bots)
 
-    total_in_positions_btc = 0.0
-    total_in_positions_usd = 0.0
-    total_in_positions_usdc = 0.0
-
+    in_positions = {"btc": 0.0, "usd": 0.0, "usdc": 0.0}
     for position in open_positions:
         quote = position.get_quote_currency()
         base = position.get_base_currency()
 
-        if quote == "USD" or quote == "USDC":
+        if quote in ("USD", "USDC"):
             pos_price = breakdown_prices.get(base)
         elif quote == "BTC":
             base_usd = breakdown_prices.get(base)
@@ -1037,28 +977,139 @@ async def get_account_portfolio_data(
         else:
             pos_price = None
 
-        if pos_price is not None:
-            current_value = position.total_base_acquired * pos_price
-        else:
-            current_value = position.total_quote_spent
+        current_value = (
+            position.total_base_acquired * pos_price if pos_price is not None
+            else position.total_quote_spent
+        )
 
         if quote == "USD":
-            total_in_positions_usd += current_value
+            in_positions["usd"] += current_value
         elif quote == "USDC":
-            total_in_positions_usdc += current_value
+            in_positions["usdc"] += current_value
         else:
-            total_in_positions_btc += current_value
+            in_positions["btc"] += current_value
 
-    total_btc_portfolio = actual_btc_balance + total_in_positions_btc
-    total_usd_portfolio = actual_usd_balance + total_in_positions_usd
-    total_usdc_portfolio = actual_usdc_balance + total_in_positions_usdc
+    totals = {
+        "btc": actual_balances["btc"] + in_positions["btc"],
+        "usd": actual_balances["usd"] + in_positions["usd"],
+        "usdc": actual_balances["usdc"] + in_positions["usdc"],
+    }
 
-    total_reserved_usdc = 0.0
-    free_btc = max(0.0, total_btc_portfolio - (total_reserved_btc + total_in_positions_btc))
-    free_usd = max(0.0, total_usd_portfolio - (total_reserved_usd + total_in_positions_usd))
-    free_usdc = max(0.0, total_usdc_portfolio - (total_reserved_usdc + total_in_positions_usdc))
+    return {
+        "btc": {
+            "total": totals["btc"], "reserved_by_bots": total_reserved_btc,
+            "in_open_positions": in_positions["btc"],
+            "free": max(0.0, totals["btc"] - (total_reserved_btc + in_positions["btc"])),
+        },
+        "usd": {
+            "total": totals["usd"], "reserved_by_bots": total_reserved_usd,
+            "in_open_positions": in_positions["usd"],
+            "free": max(0.0, totals["usd"] - (total_reserved_usd + in_positions["usd"])),
+        },
+        "usdc": {
+            "total": totals["usdc"], "reserved_by_bots": 0.0,
+            "in_open_positions": in_positions["usdc"],
+            "free": max(0.0, totals["usdc"] - in_positions["usdc"]),
+        },
+    }
 
-    # Realized PnL
+
+def _calculate_realized_pnl(closed_positions: list) -> dict:
+    """Calculate realized PnL (today + all-time) from closed positions."""
+    pnl = {
+        "all_time": {"usd": 0.0, "btc": 0.0, "usdc": 0.0},
+        "today": {"usd": 0.0, "btc": 0.0, "usdc": 0.0},
+    }
+    now = datetime.utcnow()
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    for position in closed_positions:
+        if position.profit_quote is None:
+            continue
+        quote = position.get_quote_currency()
+        bucket = "usd" if quote == "USD" else ("usdc" if quote == "USDC" else "btc")
+
+        pnl["all_time"][bucket] += position.profit_quote
+        if position.closed_at and position.closed_at >= start_of_today:
+            pnl["today"][bucket] += position.profit_quote
+
+    return pnl
+
+
+async def get_account_portfolio_data(
+    db: AsyncSession, current_user: User, force_fresh: bool = False,
+) -> dict:
+    """Get full portfolio breakdown for the current user."""
+    # Paper-only users get a simulated portfolio
+    paper_account = await get_user_paper_account(db, current_user.id)
+    if paper_account:
+        client = await get_exchange_client_for_account(db, paper_account.id)
+        if client and hasattr(client, 'balances'):
+            btc_usd_price = 0.0
+            try:
+                btc_usd_price = await client.get_btc_usd_price()
+            except Exception:
+                pass
+            return await _get_paper_portfolio(client, btc_usd_price)
+        return {
+            "holdings": [], "holdings_count": 0,
+            "total_usd_value": 0, "total_btc_value": 0,
+            "btc_usd_price": 0, "is_paper_trading": True,
+        }
+
+    cache_key = f"portfolio_response_{current_user.id}"
+
+    if not force_fresh:
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Using cached portfolio response")
+            return cached
+
+        persistent = await portfolio_cache.get(current_user.id)
+        if persistent is not None:
+            await api_cache.set(cache_key, persistent, 60)
+            logger.info("Serving persistent portfolio cache while fresh data loads")
+            return persistent
+
+    coinbase = await get_coinbase_from_db(db, current_user.id)
+
+    breakdown = await coinbase.get_portfolio_breakdown()
+    spot_positions = breakdown.get("spot_positions", [])
+    btc_usd_price = await coinbase.get_btc_usd_price()
+
+    # Phase 1: Process CEX holdings
+    holdings, total_usd_value, total_btc_value, actual_balances, breakdown_prices = (
+        _process_cex_holdings(spot_positions, btc_usd_price)
+    )
+
+    # Phase 2: Get open/closed positions for this user's accounts
+    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    user_accounts_r = await db.execute(user_accounts_q)
+    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+    positions_query = select(Position).where(
+        Position.status == "open",
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+    positions_result = await db.execute(positions_query)
+    open_positions = positions_result.scalars().all()
+
+    # Phase 3: Apply unrealized PnL to holdings
+    _apply_unrealized_pnl(holdings, open_positions, breakdown_prices, btc_usd_price)
+    holdings.sort(key=lambda x: x["usd_value"], reverse=True)
+
+    # Phase 4: Balance breakdown (reserved, in-positions, free)
+    bots_query = select(Bot).where(
+        Bot.account_id.in_(user_account_ids) if user_account_ids else Bot.id < 0,
+    )
+    bots_result = await db.execute(bots_query)
+    all_bots = bots_result.scalars().all()
+
+    balance_breakdown = _calculate_balance_breakdown(
+        open_positions, all_bots, actual_balances, breakdown_prices, btc_usd_price,
+    )
+
+    # Phase 5: Realized PnL
     closed_positions_query = select(Position).where(
         Position.status == "closed",
         Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
@@ -1066,70 +1117,21 @@ async def get_account_portfolio_data(
     closed_positions_result = await db.execute(closed_positions_query)
     closed_positions = closed_positions_result.scalars().all()
 
-    pnl_all_time_usd = 0.0
-    pnl_all_time_btc = 0.0
-    pnl_all_time_usdc = 0.0
-    pnl_today_usd = 0.0
-    pnl_today_btc = 0.0
-    pnl_today_usdc = 0.0
-
-    now = datetime.utcnow()
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    for position in closed_positions:
-        if position.profit_quote is not None:
-            quote = position.get_quote_currency()
-
-            if quote == "USD":
-                pnl_all_time_usd += position.profit_quote
-            elif quote == "USDC":
-                pnl_all_time_usdc += position.profit_quote
-            else:
-                pnl_all_time_btc += position.profit_quote
-
-            if position.closed_at and position.closed_at >= start_of_today:
-                if quote == "USD":
-                    pnl_today_usd += position.profit_quote
-                elif quote == "USDC":
-                    pnl_today_usdc += position.profit_quote
-                else:
-                    pnl_today_btc += position.profit_quote
+    pnl = _calculate_realized_pnl(closed_positions)
 
     logger.info(
         f"Portfolio summary: {len(spot_positions)} raw positions -> "
-        f"{len(portfolio_holdings)} after filtering (${total_usd_value:.2f} total)"
+        f"{len(holdings)} after filtering (${total_usd_value:.2f} total)"
     )
 
     result = {
         "total_usd_value": total_usd_value,
         "total_btc_value": total_btc_value,
         "btc_usd_price": btc_usd_price,
-        "holdings": portfolio_holdings,
-        "holdings_count": len(portfolio_holdings),
-        "balance_breakdown": {
-            "btc": {
-                "total": total_btc_portfolio,
-                "reserved_by_bots": total_reserved_btc,
-                "in_open_positions": total_in_positions_btc,
-                "free": free_btc,
-            },
-            "usd": {
-                "total": total_usd_portfolio,
-                "reserved_by_bots": total_reserved_usd,
-                "in_open_positions": total_in_positions_usd,
-                "free": free_usd,
-            },
-            "usdc": {
-                "total": total_usdc_portfolio,
-                "reserved_by_bots": total_reserved_usdc,
-                "in_open_positions": total_in_positions_usdc,
-                "free": free_usdc,
-            },
-        },
-        "pnl": {
-            "today": {"usd": pnl_today_usd, "btc": pnl_today_btc, "usdc": pnl_today_usdc},
-            "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc, "usdc": pnl_all_time_usdc},
-        },
+        "holdings": holdings,
+        "holdings_count": len(holdings),
+        "balance_breakdown": balance_breakdown,
+        "pnl": pnl,
     }
 
     await api_cache.set(cache_key, result, 60)
