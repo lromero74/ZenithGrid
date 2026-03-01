@@ -77,11 +77,10 @@ function AppContent() {
       .catch(() => setAppVersion('dev'))
   }, [])
 
-  // Track last seen counts for history items (separate for closed and failed) - fetched from server
+  // Track last seen count for history items (closed + failed combined) - fetched from server
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
-  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(0)
 
-  // Fetch last seen history counts from server on mount
+  // Fetch last seen history count from server on mount
   useEffect(() => {
     const fetchLastSeenCounts = async () => {
       const token = getAccessToken()
@@ -92,7 +91,6 @@ function AppContent() {
         if (response.ok) {
           const data = await response.json()
           setLastSeenClosedCount(data.last_seen_history_count || 0)
-          setLastSeenFailedCount(data.last_seen_failed_count || 0)
         }
       } catch (error) {
         console.error('Failed to fetch last seen history counts:', error)
@@ -163,7 +161,8 @@ function AppContent() {
   const ethUsdPrice = ethPriceData?.price || 0
   const usdEthPrice = ethUsdPrice > 0 ? 1 / ethUsdPrice : 0
 
-  // Fetch closed and failed positions to count total history items (deferred)
+  // Fetch closed + failed positions to count total history items (deferred)
+  // The 'closed' status filter now includes both closed and failed positions
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
     queryFn: () => positionsApi.getAll('closed', 100),
@@ -171,20 +170,9 @@ function AppContent() {
     enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 
-  const { data: failedPositions = [] } = useQuery({
-    queryKey: ['failed-positions-badge'],
-    queryFn: () => positionsApi.getAll('failed', 100),
-    refetchInterval: 60000, // Check every 60 seconds (reduced from 10s to save memory)
-    enabled: deferredQueriesEnabled, // Defer until 2s after initial render
-  })
-
-  // Calculate badge counts separately for closed and failed
+  // Badge: total unseen items (closed + failed combined in one query)
   const currentClosedCount = closedPositions.length
-  const currentFailedCount = failedPositions.length
-  const newClosedItemsCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
-  const newFailedItemsCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
-  // Header badge shows combined total of unseen items from both categories
-  const newHistoryItemsCount = newClosedItemsCount + newFailedItemsCount
+  const newHistoryItemsCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
 
   // Refetch last seen counts when navigating to History page
   // This ensures App.tsx stays in sync after ClosedPositions.tsx clears individual counts
@@ -199,7 +187,6 @@ function AppContent() {
           if (response.ok) {
             const data = await response.json()
             setLastSeenClosedCount(data.last_seen_history_count || 0)
-            setLastSeenFailedCount(data.last_seen_failed_count || 0)
           }
         } catch (error) {
           console.error('Failed to refetch last seen history counts:', error)

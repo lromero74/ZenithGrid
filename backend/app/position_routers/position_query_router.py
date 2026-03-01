@@ -55,11 +55,12 @@ async def get_positions(
         return []
 
     if status:
-        query = query.where(Position.status == status)
-        # Sort closed positions by close date (most recent first), others by opened_at
         if status == "closed":
+            # Include both closed and failed positions in the history view
+            query = query.where(Position.status.in_(["closed", "failed"]))
             query = query.order_by(desc(Position.closed_at)).limit(limit)
         else:
+            query = query.where(Position.status == status)
             query = query.order_by(desc(Position.opened_at)).limit(limit)
     else:
         query = query.order_by(desc(Position.opened_at)).limit(limit)
