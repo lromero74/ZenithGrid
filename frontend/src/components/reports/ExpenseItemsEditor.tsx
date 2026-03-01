@@ -27,6 +27,7 @@ interface ExpenseItemsEditorProps {
   expensePeriod: string
   currency: string
   onClose: () => void
+  readOnly?: boolean
 }
 
 const FREQUENCY_PILLS = [
@@ -262,7 +263,7 @@ function SortableExpenseRow({
   )
 }
 
-export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
+export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, readOnly }: ExpenseItemsEditorProps) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const prefix = currency === 'BTC' ? '' : '$'
@@ -777,26 +778,76 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     </form>
   )
 
+  const readOnlyRow = (item: ExpenseItem, index: number) => {
+    const badge = formatDueBadge(item)
+    return (
+      <div key={item.id} className="flex items-center gap-2 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+        <span className="text-[10px] font-mono text-slate-500 shrink-0 w-10 text-center">
+          #{index + 1}/{displayItems.length}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
+              {item.category}
+            </span>
+            <span className="font-medium text-white truncate">{item.name}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+            {item.amount_mode === 'percent_of_income' ? (
+              <span>
+                {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
+              </span>
+            ) : (
+              <>
+                <span>
+                  {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+                </span>
+                {item.frequency === 'every_n_days' && item.frequency_n && (
+                  <span>(every {item.frequency_n} days)</span>
+                )}
+              </>
+            )}
+            {badge && (
+              <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+                {badge}
+              </span>
+            )}
+            <span className="text-slate-500">|</span>
+            <span className="text-blue-400">
+              {prefix}{(item.normalized_amount || 0).toLocaleString(
+                undefined, { maximumFractionDigits: 2 }
+              )}{periodLabel}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const itemsList = (
     <div className="space-y-2">
-      {displayItems.map((item, index) => (
-        <SortableExpenseRow
-          key={item.id}
-          item={item}
-          index={index}
-          total={displayItems.length}
-          prefix={prefix}
-          periodLabel={periodLabel}
-          onEdit={setEditing}
-          onDelete={async (id) => {
-            if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' }))
-              deleteItem.mutate(id)
-          }}
-          onMoveToTop={handleMoveToTop}
-          onMoveToBottom={handleMoveToBottom}
-          onMoveTo={handleMoveTo}
-        />
-      ))}
+      {readOnly ? (
+        displayItems.map((item, index) => readOnlyRow(item, index))
+      ) : (
+        displayItems.map((item, index) => (
+          <SortableExpenseRow
+            key={item.id}
+            item={item}
+            index={index}
+            total={displayItems.length}
+            prefix={prefix}
+            periodLabel={periodLabel}
+            onEdit={setEditing}
+            onDelete={async (id) => {
+              if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' }))
+                deleteItem.mutate(id)
+            }}
+            onMoveToTop={handleMoveToTop}
+            onMoveToBottom={handleMoveToBottom}
+            onMoveTo={handleMoveTo}
+          />
+        ))
+      )}
     </div>
   )
 
@@ -806,8 +857,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
         flex flex-col relative">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div>
-            <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
-            {displayItems.length > 1 && (
+            <h3 className="text-lg font-semibold text-white">{readOnly ? 'Expense Items' : 'Manage Expenses'}</h3>
+            {!readOnly && displayItems.length > 1 && (
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-xs text-slate-500">Sort:</p>
                 <button
@@ -842,6 +893,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             <div className="text-center py-6 text-slate-500">
               No expense items yet. Add your first expense below.
             </div>
+          ) : readOnly ? (
+            itemsList
           ) : (
             <DndContext
               sensors={sensors}
@@ -867,8 +920,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             </div>
           )}
 
-          {/* Add button (only when form overlay is NOT showing) */}
-          {!showForm && (
+          {/* Add button (only when form overlay is NOT showing, hidden in read-only) */}
+          {!readOnly && !showForm && (
             <button
               onClick={() => { resetForm(); setShowForm(true) }}
               className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400
@@ -880,8 +933,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           )}
         </div>
 
-        {/* Form overlay — renders on top of the list */}
-        {showForm && (
+        {/* Form overlay — renders on top of the list (hidden in read-only) */}
+        {!readOnly && showForm && (
           <div className="absolute inset-0 bg-black/85 rounded-lg flex items-center justify-center p-6 z-10">
             <div className="w-full max-w-lg">
               {expenseForm}
