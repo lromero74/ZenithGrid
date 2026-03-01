@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.1] - 2026-03-01
+
+### Fixed
+- **Add Account button RBAC**: The "Add Account" button in the account switcher (both empty-state and dropdown) is now disabled for users without `accounts:write` permission.
+
 ## [v2.76.0] - 2026-03-01
 
 ### Security
