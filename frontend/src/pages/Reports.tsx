@@ -349,14 +349,12 @@ export default function Reports() {
                           {goal.tax_withholding_pct}% tax
                         </span>
                       )}
-                      {!isDemoAccount && (
                         <button
                           onClick={() => setExpenseEditorGoal(goal)}
                           className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
                         >
-                          <Receipt className="w-3 h-3" /> Manage Expenses
+                          <Receipt className="w-3 h-3" /> {isDemoAccount ? 'View Expenses' : 'Manage Expenses'}
                         </button>
-                      )}
                     </div>
                   ) : (
                     <span className="text-lg font-semibold text-white">
@@ -775,6 +773,7 @@ export default function Reports() {
           expensePeriod={expenseEditorGoal.expense_period || 'monthly'}
           currency={expenseEditorGoal.target_currency}
           onClose={() => setExpenseEditorGoal(null)}
+          readOnly={isDemoAccount}
         />
       )}
     </div>

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.73.2] - 2026-03-01
+
+### Fixed
+- **Expense items viewable by demo users**: "View Expenses" button now visible on expense goals for demo users (was completely hidden). Opens the expense list in read-only mode — no add, edit, delete, or reorder controls.
+
 ## [v2.73.1] - 2026-03-01
 
 ### Added
