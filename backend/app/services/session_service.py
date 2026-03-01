@@ -171,7 +171,9 @@ async def expire_stale_sessions_for_user(user_id: int, db: AsyncSession):
     )
     for session in result.scalars().all():
         session.is_active = False
-        session.ended_at = now
+        # Use the actual expiry time, not now — otherwise cooldown triggers
+        # against the cleanup time instead of when the session really ended.
+        session.ended_at = session.expires_at
 
 
 async def expire_all_stale_sessions(db: AsyncSession) -> int:
@@ -189,7 +191,7 @@ async def expire_all_stale_sessions(db: AsyncSession) -> int:
     count = 0
     for session in result.scalars().all():
         session.is_active = False
-        session.ended_at = now
+        session.ended_at = session.expires_at
         count += 1
     return count
 
