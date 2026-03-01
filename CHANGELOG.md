@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.0] - 2026-03-01
+
+### Security
+- **Portfolio sell endpoint RBAC**: `POST /trading/market-sell` now requires `accounts:write` permission. Previously any authenticated user could execute sell orders.
+
+### Changed
+- **Eliminated all hardcoded demo account checks**: Replaced every `isDemoAccount` email-pattern check across the frontend with proper RBAC permission hooks (`usePermission`). Affected: Settings page (password/MFA sections), AI Providers manager (key management buttons).
+- **Seasonality toggle uses RBAC**: Backend changed from superuser-only to `settings:write` permission; frontend uses `usePermission` instead of `is_superuser` check.
+- **Portfolio sell buttons**: Disabled for users without `accounts:write` permission (visible but grayed out with "Read-only account" tooltip).
+- **Auto-buy stablecoin inputs**: All sub-controls (checkboxes, min-value inputs) now properly disabled for read-only users. Previously only the Save button was disabled.
+- **Position modals defense-in-depth**: Edit Position Settings and Add Funds modals now accept a `readOnly` prop and hide their submit buttons when the user lacks `positions:write`.
+
 ## [v2.75.9] - 2026-03-01
 
 ### Fixed

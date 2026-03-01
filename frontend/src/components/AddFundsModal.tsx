@@ -21,9 +21,10 @@ interface AddFundsModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  readOnly?: boolean
 }
 
-export function AddFundsModal({ position, isOpen, onClose, onSuccess }: AddFundsModalProps) {
+export function AddFundsModal({ position, isOpen, onClose, onSuccess, readOnly = false }: AddFundsModalProps) {
   const [amount, setAmount] = useState(0)
   const [inputValue, setInputValue] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -327,13 +328,15 @@ export function AddFundsModal({ position, isOpen, onClose, onSuccess }: AddFunds
           >
             Cancel
           </button>
-          <button
-            onClick={handleSubmit}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isSubmitting || !isValidAmount || isLoading}
-          >
-            {isSubmitting ? 'Adding...' : `Add ${formatAmount(amount)}`}
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleSubmit}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting || !isValidAmount || isLoading}
+            >
+              {isSubmitting ? 'Adding...' : `Add ${formatAmount(amount)}`}
+            </button>
+          )}
         </div>
       </div>
 

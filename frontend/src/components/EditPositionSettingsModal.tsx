@@ -7,12 +7,14 @@ interface EditPositionSettingsModalProps {
   position: Position
   onClose: () => void
   onSuccess: () => void
+  readOnly?: boolean
 }
 
 export function EditPositionSettingsModal({
   position,
   onClose,
-  onSuccess
+  onSuccess,
+  readOnly = false
 }: EditPositionSettingsModalProps) {
   const config = position.strategy_config_snapshot || {}
 
@@ -295,13 +297,15 @@ export function EditPositionSettingsModal({
           >
             Cancel
           </button>
-          <button
-            onClick={handleSubmit}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors disabled:opacity-50"
-            disabled={isSubmitting || !hasChanges()}
-          >
-            {isSubmitting ? 'Saving...' : 'Save Changes'}
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleSubmit}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors disabled:opacity-50"
+              disabled={isSubmitting || !hasChanges()}
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
         </div>
       </div>
     </div>

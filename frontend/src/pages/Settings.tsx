@@ -9,7 +9,7 @@ import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { useIsAdmin } from '../hooks/usePermission'
+import { useIsAdmin, usePermission } from '../hooks/usePermission'
 import { settingsApi } from '../services/api'
 
 export default function Settings() {
@@ -22,8 +22,7 @@ export default function Settings() {
   // Check if paper trading is currently active
   const isPaperTradingActive = Boolean(selectedAccount?.is_paper_trading)
 
-  // Demo accounts have non-email usernames (no "@") — hide password/MFA controls
-  const isDemoAccount = !user?.email?.includes('@')
+  const canWriteSettings = usePermission('settings', 'write')
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -430,7 +429,7 @@ export default function Settings() {
         </div>
 
         {/* Password Change Form — hidden for demo accounts */}
-        {!isDemoAccount && (
+        {canWriteSettings && (
         <div className="border-t border-slate-700 pt-6">
           <div className="flex items-center space-x-2 mb-4">
             <Lock className="w-5 h-5 text-slate-400" />
@@ -525,7 +524,7 @@ export default function Settings() {
         )}
 
         {/* Multi-Factor Authentication Section — hidden for demo accounts */}
-        {!isDemoAccount && (
+        {canWriteSettings && (
         <div className="border-t border-slate-700 pt-6">
           <div className="flex items-center space-x-2 mb-4">
             <Shield className="w-5 h-5 text-slate-400" />

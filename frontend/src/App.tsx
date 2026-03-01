@@ -765,6 +765,8 @@ function App() {
   const [mfaDismissed, setMfaDismissed] = useState(
     () => localStorage.getItem(MFA_DISMISSED_KEY) === 'true'
   )
+  // RBAC: check settings:write for MFA encouragement gate (can't use usePermission hook due to early returns)
+  const canWriteSettings = user?.is_superuser || user?.permissions?.includes('settings:write')
 
   // Handle special routes that work regardless of auth state
   if (location.pathname === '/verify-email') {
@@ -833,8 +835,6 @@ function App() {
   }
 
   // Gate: MFA encouragement (one time, after email verified + terms accepted)
-  // Skip for users without settings:write (e.g. demo/observer accounts)
-  const canWriteSettings = user?.is_superuser || user?.permissions?.includes('settings:write')
   if (user && canWriteSettings && !user.mfa_enabled && !user.mfa_email_enabled && !mfaDismissed) {
     return (
       <MFAEncouragement

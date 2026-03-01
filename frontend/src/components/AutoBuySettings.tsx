@@ -232,11 +232,12 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
 
                     {/* USD */}
                     <div className="flex items-center gap-4 bg-slate-800/50 p-3 rounded">
-                      <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                      <label className={`flex items-center gap-2 flex-shrink-0 ${!canWriteAccounts ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
                           checked={accountSettings.usd_enabled}
                           onChange={(e) => updateAccountSettings(account.id, { usd_enabled: e.target.checked })}
+                          disabled={!canWriteAccounts}
                           className="w-4 h-4"
                         />
                         <span className="text-white font-medium">USD</span>
@@ -247,13 +248,13 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
                           type="number"
                           min="1"
                           step="1"
-                          disabled={!accountSettings.usd_enabled}
+                          disabled={!canWriteAccounts || !accountSettings.usd_enabled}
                           value={accountSettings.usd_min}
                           onChange={(e) => updateAccountSettings(account.id, {
                             usd_min: parseFloat(e.target.value) || 10
                           })}
                           className={`w-24 px-2 py-1 rounded border text-sm ${
-                            accountSettings.usd_enabled
+                            canWriteAccounts && accountSettings.usd_enabled
                               ? 'bg-slate-700 text-white border-slate-600'
                               : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
                           }`}
@@ -264,11 +265,12 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
 
                     {/* USDC */}
                     <div className="flex items-center gap-4 bg-slate-800/50 p-3 rounded">
-                      <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                      <label className={`flex items-center gap-2 flex-shrink-0 ${!canWriteAccounts ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
                           checked={accountSettings.usdc_enabled}
                           onChange={(e) => updateAccountSettings(account.id, { usdc_enabled: e.target.checked })}
+                          disabled={!canWriteAccounts}
                           className="w-4 h-4"
                         />
                         <span className="text-white font-medium">USDC</span>
@@ -279,13 +281,13 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
                           type="number"
                           min="1"
                           step="1"
-                          disabled={!accountSettings.usdc_enabled}
+                          disabled={!canWriteAccounts || !accountSettings.usdc_enabled}
                           value={accountSettings.usdc_min}
                           onChange={(e) => updateAccountSettings(account.id, {
                             usdc_min: parseFloat(e.target.value) || 10
                           })}
                           className={`w-24 px-2 py-1 rounded border text-sm ${
-                            accountSettings.usdc_enabled
+                            canWriteAccounts && accountSettings.usdc_enabled
                               ? 'bg-slate-700 text-white border-slate-600'
                               : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
                           }`}
@@ -296,11 +298,12 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
 
                     {/* USDT */}
                     <div className="flex items-center gap-4 bg-slate-800/50 p-3 rounded">
-                      <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                      <label className={`flex items-center gap-2 flex-shrink-0 ${!canWriteAccounts ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
                           checked={accountSettings.usdt_enabled}
                           onChange={(e) => updateAccountSettings(account.id, { usdt_enabled: e.target.checked })}
+                          disabled={!canWriteAccounts}
                           className="w-4 h-4"
                         />
                         <span className="text-white font-medium">USDT</span>
@@ -311,13 +314,13 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
                           type="number"
                           min="1"
                           step="1"
-                          disabled={!accountSettings.usdt_enabled}
+                          disabled={!canWriteAccounts || !accountSettings.usdt_enabled}
                           value={accountSettings.usdt_min}
                           onChange={(e) => updateAccountSettings(account.id, {
                             usdt_min: parseFloat(e.target.value) || 10
                           })}
                           className={`w-24 px-2 py-1 rounded border text-sm ${
-                            accountSettings.usdt_enabled
+                            canWriteAccounts && accountSettings.usdt_enabled
                               ? 'bg-slate-700 text-white border-slate-600'
                               : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
                           }`}

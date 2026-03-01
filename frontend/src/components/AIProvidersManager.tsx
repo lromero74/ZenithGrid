@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { aiCredentialsApi, AIProviderStatus } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { usePermission } from '../hooks/usePermission'
 import { useConfirm } from '../contexts/ConfirmContext'
 
 // Provider color configuration
@@ -35,7 +36,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 export function AIProvidersManager() {
   const { user } = useAuth()
-  const isDemoAccount = !user?.email?.includes('@')
+  const canWriteSettings = usePermission('settings', 'write')
   const confirm = useConfirm()
   const [providerStatus, setProviderStatus] = useState<AIProviderStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -235,7 +236,7 @@ export function AIProvidersManager() {
                   )}
 
                   {/* Action buttons */}
-                  {!isEditing && !isDemoAccount && (
+                  {!isEditing && canWriteSettings && (
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
