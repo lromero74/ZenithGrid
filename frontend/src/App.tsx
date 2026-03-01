@@ -833,7 +833,9 @@ function App() {
   }
 
   // Gate: MFA encouragement (one time, after email verified + terms accepted)
-  if (user && !user.mfa_enabled && !user.mfa_email_enabled && !mfaDismissed) {
+  // Skip for users without settings:write (e.g. demo/observer accounts)
+  const canWriteSettings = user?.is_superuser || user?.permissions?.includes('settings:write')
+  if (user && canWriteSettings && !user.mfa_enabled && !user.mfa_email_enabled && !mfaDismissed) {
     return (
       <MFAEncouragement
         onSetupMFA={() => {

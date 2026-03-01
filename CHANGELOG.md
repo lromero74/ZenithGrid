@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.9] - 2026-03-01
+
+### Fixed
+- **MFA setup prompt skipped for demo accounts**: Demo and observer users are no longer shown the MFA encouragement screen on login, since they lack security settings permissions and don't need MFA.
+
 ## [v2.75.8] - 2026-03-01
 
 ### Added
