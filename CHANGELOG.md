@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.6] - 2026-03-01
+
+### Fixed
+- **PnL breakdown color mismatch**: USD-like currencies in the PnL breakdown now correctly show green for gains and red for losses. Previously, `Math.abs()` stripped the minus sign while the color still reflected the negative value, making losses appear as positive numbers in red. Also fixed dollar-sign placement to show `-$0.92` instead of `$-0.92`.
+
 ## [v2.76.5] - 2026-03-01
 
 ### Changed
