@@ -135,14 +135,15 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
         {entries.map(([currency, amount], i) => (
           <span key={currency} className={amount >= 0 ? 'text-green-400' : 'text-red-400'}>
             {i > 0 && <span className="text-slate-500">, </span>}
-            {amount >= 0 ? '+' : ''}
-            {isUsdLike(currency) ? `$${Math.abs(amount).toFixed(2)}` : amount.toFixed(8)}
+            {isUsdLike(currency)
+              ? `${amount >= 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}`
+              : `${amount >= 0 ? '+' : ''}${amount.toFixed(8)}`}
             {' '}{currency}
           </span>
         ))}
         {entries.length > 0 && <span className="text-slate-500"> | </span>}
         <span className={data.usd >= 0 ? 'text-green-400' : 'text-red-400'}>
-          {data.usd >= 0 ? '+' : ''}${data.usd.toFixed(2)}
+          {data.usd >= 0 ? '+' : '-'}${Math.abs(data.usd).toFixed(2)}
         </span>
       </span>
     )
