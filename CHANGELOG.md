@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.73.1] - 2026-03-01
+
+### Added
+- **Expense-covering goals for demo users**: Each demo account now has a realistic household expense goal with 25% tax withholding — renter lifestyle (demo_usd, 18 items), urban minimalist (demo_btc, 15 items), family household (demo_both, 23 items).
+- **Semi-monthly expense schedule**: Each demo user gets a semi-monthly schedule (1st & 15th, MTD) linked to all goals, matching Louis's scheduling pattern.
+
 ## [v2.73.0] - 2026-03-01
 
 ### Added
