@@ -138,7 +138,7 @@
 
 ## Completion Tracking
 
-- [ ] 1.1 Decompose `process_bot_pair()`
+- [x] 1.1 Decompose `process_bot_pair()` — 489→104 lines (main fn), split into 11 focused helpers
 - [x] 1.2 Extract `get_article_content()` to service — moved to `services/article_content_service.py`, news_router 1228→815 lines
 - [x] 1.3 Remove duplicate `get_coinbase_from_db()` — bot_crud_router now imports from portfolio_service
 - [x] 1.4 Fix session_service HTTPException — uses `RateLimitError`/`SessionLimitError` domain exceptions
