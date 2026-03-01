@@ -540,6 +540,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Logout function
   const logout = useCallback(() => {
+    // Grab token BEFORE clearing storage — needed for server-side session cleanup
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+
     // Clear localStorage
     localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
     localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
@@ -562,8 +565,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionPolicy(null)
     setSessionExpiresAt(null)
 
-    // Call logout endpoint (fire and forget)
-    fetch(`${API_BASE}/logout`, { method: 'POST' }).catch(() => {})
+    // Call logout endpoint to end server-side session (fire and forget)
+    if (token) {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      }).catch(() => {})
+    }
   }, [])
 
   // Listen for auth-logout events from API interceptor (avoids full page reload)
