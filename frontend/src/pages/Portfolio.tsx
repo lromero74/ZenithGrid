@@ -196,7 +196,7 @@ function Portfolio() {
       : <ArrowDown size={14} className="text-blue-400" />
   }
 
-  const sortedHoldings = portfolio?.holdings.slice().sort((a, b) => {
+  const sortedHoldings = (portfolio?.holdings ?? []).slice().sort((a: Holding, b: Holding) => {
     let compareValue = 0
 
     switch (sortColumn) {

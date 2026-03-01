@@ -769,6 +769,14 @@ export const transfersApi = {
 };
 
 // Admin RBAC Management
+export interface SessionPolicyConfig {
+  session_timeout_minutes?: number | null
+  auto_logout?: boolean | null
+  max_simultaneous_sessions?: number | null
+  max_sessions_per_ip?: number | null
+  relogin_cooldown_minutes?: number | null
+}
+
 export interface AdminUser {
   id: number
   email: string
@@ -780,6 +788,7 @@ export interface AdminUser {
   groups: { id: number; name: string }[]
   last_login_at: string | null
   created_at: string | null
+  session_policy_override?: SessionPolicyConfig | null
 }
 
 export interface AdminGroup {
@@ -789,6 +798,7 @@ export interface AdminGroup {
   is_system: boolean
   member_count: number
   roles: { id: number; name: string }[]
+  session_policy?: SessionPolicyConfig | null
 }
 
 export interface AdminRole {
@@ -838,4 +848,30 @@ export const adminApi = {
   // Permissions
   getPermissions: () =>
     api.get<AdminPermission[]>('/admin/permissions').then(r => r.data),
+
+  // Session Policy
+  updateGroupSessionPolicy: (
+    groupId: number,
+    policy: SessionPolicyConfig
+  ) =>
+    api.put(`/admin/groups/${groupId}/session-policy`, policy)
+      .then(r => r.data),
+  updateUserSessionPolicy: (
+    userId: number,
+    policy: SessionPolicyConfig
+  ) =>
+    api.put(`/admin/users/${userId}/session-policy`, policy)
+      .then(r => r.data),
+  getEffectiveSessionPolicy: (userId: number) =>
+    api.get(`/admin/users/${userId}/effective-session-policy`)
+      .then(r => r.data),
+  getUserSessions: (userId: number) =>
+    api.get(`/admin/users/${userId}/sessions`)
+      .then(r => r.data),
+  forceEndSession: (
+    userId: number,
+    sessionId: string
+  ) =>
+    api.delete(`/admin/users/${userId}/sessions/${sessionId}`)
+      .then(r => r.data),
 };

@@ -8,6 +8,7 @@ import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useAccount } from '../contexts/AccountContext'
+import { useAuth } from '../contexts/AuthContext'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
@@ -32,6 +33,8 @@ export default function Reports() {
   const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
   const { selectedAccount } = useAccount()
+  const { user } = useAuth()
+  const isDemoAccount = !user?.email?.includes('@')
 
   const confirm = useConfirm()
 
@@ -241,12 +244,14 @@ export default function Reports() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-white">Financial Goals</h3>
-        <button
-          onClick={() => { setEditingGoal(null); setShowGoalForm(true) }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Goal
-        </button>
+        {!isDemoAccount && (
+          <button
+            onClick={() => { setEditingGoal(null); setShowGoalForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Goal
+          </button>
+        )}
       </div>
 
       {goalsLoading ? (
@@ -303,20 +308,24 @@ export default function Reports() {
                         <TrendingUp className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
-                      className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
-                      title="Edit"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={async () => { if (await confirm({ title: 'Delete Goal', message: 'Delete this goal?', variant: 'danger', confirmLabel: 'Delete' })) deleteGoal.mutate(goal.id) }}
-                      className="p-1 text-slate-400 hover:text-red-400 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!isDemoAccount && (
+                      <button
+                        onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
+                        className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {!isDemoAccount && (
+                      <button
+                        onClick={async () => { if (await confirm({ title: 'Delete Goal', message: 'Delete this goal?', variant: 'danger', confirmLabel: 'Delete' })) deleteGoal.mutate(goal.id) }}
+                        className="p-1 text-slate-400 hover:text-red-400 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -340,12 +349,14 @@ export default function Reports() {
                           {goal.tax_withholding_pct}% tax
                         </span>
                       )}
-                      <button
-                        onClick={() => setExpenseEditorGoal(goal)}
-                        className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
-                      >
-                        <Receipt className="w-3 h-3" /> Manage Expenses
-                      </button>
+                      {!isDemoAccount && (
+                        <button
+                          onClick={() => setExpenseEditorGoal(goal)}
+                          className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
+                        >
+                          <Receipt className="w-3 h-3" /> Manage Expenses
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <span className="text-lg font-semibold text-white">
@@ -399,12 +410,14 @@ export default function Reports() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-white">Report Schedules</h3>
-        <button
-          onClick={() => { setEditingSchedule(null); setShowScheduleForm(true) }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Schedule
-        </button>
+        {!isDemoAccount && (
+          <button
+            onClick={() => { setEditingSchedule(null); setShowScheduleForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Schedule
+          </button>
+        )}
       </div>
 
       {schedulesLoading ? (
@@ -444,32 +457,34 @@ export default function Reports() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 ml-3">
-                  <button
-                    onClick={async () => {
-                      if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
-                    }}
-                    disabled={generateReport.isPending}
-                    className="p-1.5 text-slate-400 hover:text-emerald-400 transition-colors"
-                    title="Generate Now"
-                  >
-                    <Play className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => { setEditingSchedule(schedule); setShowScheduleForm(true) }}
-                    className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={async () => { if (await confirm({ title: 'Delete Schedule', message: 'Delete this schedule?', variant: 'danger', confirmLabel: 'Delete' })) deleteSchedule.mutate(schedule.id) }}
-                    className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                {!isDemoAccount && (
+                  <div className="flex items-center gap-1 ml-3">
+                    <button
+                      onClick={async () => {
+                        if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
+                      }}
+                      disabled={generateReport.isPending}
+                      className="p-1.5 text-slate-400 hover:text-emerald-400 transition-colors"
+                      title="Generate Now"
+                    >
+                      <Play className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setEditingSchedule(schedule); setShowScheduleForm(true) }}
+                      className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={async () => { if (await confirm({ title: 'Delete Schedule', message: 'Delete this schedule?', variant: 'danger', confirmLabel: 'Delete' })) deleteSchedule.mutate(schedule.id) }}
+                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -502,7 +517,7 @@ export default function Reports() {
         ) : (
           <>
             {/* Bulk action bar */}
-            {selectedReportIds.size > 0 && (
+            {!isDemoAccount && selectedReportIds.size > 0 && (
               <div className="flex items-center gap-3 mb-3 p-2 bg-slate-800 rounded-lg border border-slate-700">
                 <span className="text-sm text-slate-300">
                   {selectedReportIds.size} selected
@@ -528,13 +543,15 @@ export default function Reports() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="py-2 px-2 w-8">
-                      <button onClick={toggleSelectAll} className="text-slate-400 hover:text-white transition-colors">
-                        {reports.length > 0 && reports.every(r => selectedReportIds.has(r.id))
-                          ? <CheckSquare className="w-4 h-4 text-blue-400" />
-                          : <Square className="w-4 h-4" />}
-                      </button>
-                    </th>
+                    {!isDemoAccount && (
+                      <th className="py-2 px-2 w-8">
+                        <button onClick={toggleSelectAll} className="text-slate-400 hover:text-white transition-colors">
+                          {reports.length > 0 && reports.every(r => selectedReportIds.has(r.id))
+                            ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                            : <Square className="w-4 h-4" />}
+                        </button>
+                      </th>
+                    )}
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Report</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Period</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Status</th>
@@ -545,13 +562,15 @@ export default function Reports() {
                 <tbody>
                   {reports.map(report => (
                     <tr key={report.id} className={`border-b border-slate-700/50 hover:bg-slate-800/50 ${selectedReportIds.has(report.id) ? 'bg-slate-800/70' : ''}`}>
-                      <td className="py-2.5 px-2">
-                        <button onClick={() => toggleReportSelection(report.id)} className="text-slate-400 hover:text-white transition-colors">
-                          {selectedReportIds.has(report.id)
-                            ? <CheckSquare className="w-4 h-4 text-blue-400" />
-                            : <Square className="w-4 h-4" />}
-                        </button>
-                      </td>
+                      {!isDemoAccount && (
+                        <td className="py-2.5 px-2">
+                          <button onClick={() => toggleReportSelection(report.id)} className="text-slate-400 hover:text-white transition-colors">
+                            {selectedReportIds.has(report.id)
+                              ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                              : <Square className="w-4 h-4" />}
+                          </button>
+                        </td>
+                      )}
                       <td className="py-2.5 px-3">
                         <div className="text-sm text-slate-200">{report.schedule_name || report.periodicity}</div>
                         <div className="text-xs text-slate-500">{report.periodicity}</div>
@@ -579,13 +598,15 @@ export default function Reports() {
                               <Download className="w-4 h-4" />
                             </button>
                           )}
-                          <button
-                            onClick={() => handleDeleteReport(report.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                            title="Delete Report"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!isDemoAccount && (
+                            <button
+                              onClick={() => handleDeleteReport(report.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                              title="Delete Report"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -597,14 +618,16 @@ export default function Reports() {
             {/* Mobile cards */}
             <div className="sm:hidden space-y-2">
               {reports.map(report => (
-                <div key={report.id} className={`bg-slate-800 border rounded-lg p-3 ${selectedReportIds.has(report.id) ? 'border-blue-500/50' : 'border-slate-700'}`}>
+                <div key={report.id} className={`bg-slate-800 border rounded-lg p-3 ${!isDemoAccount && selectedReportIds.has(report.id) ? 'border-blue-500/50' : 'border-slate-700'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-2">
-                      <button onClick={() => toggleReportSelection(report.id)} className="mt-0.5 text-slate-400 hover:text-white transition-colors">
-                        {selectedReportIds.has(report.id)
-                          ? <CheckSquare className="w-4 h-4 text-blue-400" />
-                          : <Square className="w-4 h-4" />}
-                      </button>
+                      {!isDemoAccount && (
+                        <button onClick={() => toggleReportSelection(report.id)} className="mt-0.5 text-slate-400 hover:text-white transition-colors">
+                          {selectedReportIds.has(report.id)
+                            ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                            : <Square className="w-4 h-4" />}
+                        </button>
+                      )}
                       <div>
                         <p className="text-sm text-white">
                           {formatDate(report.period_start)} — {formatDate(report.period_end)}
@@ -630,13 +653,15 @@ export default function Reports() {
                           <Download className="w-4 h-4" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDeleteReport(report.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-400"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {!isDemoAccount && (
+                        <button
+                          onClick={() => handleDeleteReport(report.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-400"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

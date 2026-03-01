@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.72.0",
+  "version": "v2.73.0",
   "updated": "2026-03-01",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
@@ -52,6 +52,11 @@
         "file": "routers/accounts_router.py",
         "prefix": "/api/accounts",
         "purpose": "CRUD for CEX and DEX trading accounts"
+      },
+      {
+        "file": "routers/admin_router.py",
+        "prefix": "/api/admin",
+        "purpose": "RBAC administration: user management, group CRUD with role assignments, role CRUD with permission assignments, permission listing, session policy management, user session management"
       },
       {
         "file": "routers/ai_credentials_router.py",
@@ -306,7 +311,8 @@
           "mfa_enabled",
           "totp_secret",
           "terms_accepted",
-          "email_verified"
+          "email_verified",
+          "session_policy_override"
         ]
       },
       {
@@ -343,6 +349,58 @@
           "expires_at"
         ],
         "purpose": "Revoked JWT tokens for server-side token invalidation on logout and password change"
+      },
+      {
+        "name": "Group",
+        "table": "groups",
+        "key_fields": [
+          "id",
+          "name",
+          "description",
+          "is_system",
+          "session_policy",
+          "created_at"
+        ],
+        "purpose": "Organizational group for RBAC; users belong to groups, groups are assigned roles; session_policy (JSON) defines session limits for the group"
+      },
+      {
+        "name": "Role",
+        "table": "roles",
+        "key_fields": [
+          "id",
+          "name",
+          "description",
+          "is_system",
+          "requires_mfa",
+          "created_at"
+        ],
+        "purpose": "Functional capability set with associated permissions for RBAC"
+      },
+      {
+        "name": "Permission",
+        "table": "permissions",
+        "key_fields": [
+          "id",
+          "name",
+          "description"
+        ],
+        "purpose": "Granular permission using resource:action naming (e.g. bots:read, admin:users)"
+      },
+      {
+        "name": "ActiveSession",
+        "table": "active_sessions",
+        "key_fields": [
+          "id",
+          "user_id",
+          "session_id",
+          "ip_address",
+          "user_agent",
+          "created_at",
+          "expires_at",
+          "ended_at",
+          "is_active"
+        ],
+        "purpose": "Tracks active user sessions for enforcement of session limits (max simultaneous, per-IP, timeout)"
       },
       {
         "name": "Account",
@@ -980,6 +1038,16 @@
         "type": "analysis"
       },
       {
+        "file": "services/session_policy_service.py",
+        "purpose": "Resolves effective session policy by merging group policies (most-restrictive) and applying per-user overrides",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/session_service.py",
+        "purpose": "Session lifecycle management: create, validate, end, enforce limits (max simultaneous, per-IP), expire stale sessions",
+        "type": "infrastructure"
+      },
+      {
         "file": "services/settings_service.py",
         "purpose": "User settings retrieval and persistence",
         "type": "infrastructure"
@@ -1513,7 +1581,7 @@
       }
     ],
     "migrations": {
-      "count": 53,
+      "count": 57,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -1554,8 +1622,10 @@
         "add_portion_columns_to_snapshots.py",
         "add_prop_firm_support.py",
         "add_reports_and_goals.py",
+        "add_rbac_tables.py",
         "add_revoked_tokens.py",
         "add_schedule_chart_settings.py",
+        "add_session_limits.py",
         "add_snapshot_unrealized_pnl.py",
         "add_subscription_category_retention.py",
         "add_transfer_original_type.py",
@@ -1569,9 +1639,11 @@
         "extract_bot_products.py",
         "migrate_take_profit_mode.py",
         "move_news_images_to_filesystem.py",
+        "reclassify_and_add_full_article_sources.py",
         "remove_medicalxpress_source.py",
         "repair_paper_balance_from_positions.py",
-        "replace_paywalled_sources.py"
+        "replace_paywalled_sources.py",
+        "seed_demo_goals_and_schedules.py"
       ]
     }
   },
@@ -1626,6 +1698,11 @@
         "file": "pages/Reports.tsx",
         "route": "/reports",
         "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history"
+      },
+      {
+        "file": "pages/Admin.tsx",
+        "route": "/admin",
+        "purpose": "Admin management page with tabs for users, groups, and roles (RBAC administration)"
       }
     ],
     "components": {
@@ -1961,6 +2038,14 @@
         {
           "file": "components/PasswordStrengthMeter.tsx",
           "purpose": "Visual password strength indicator"
+        },
+        {
+          "file": "components/SessionLimitsNotice.tsx",
+          "purpose": "Full-screen notice shown when session limits are active, requiring user acknowledgment"
+        },
+        {
+          "file": "components/DemoLogin.tsx",
+          "purpose": "Auto-login component for demo accounts via URL shortcut (/demo_usd, /demo_btc, /demo_both)"
         }
       ],
       "account_and_settings": [

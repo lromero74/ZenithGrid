@@ -155,11 +155,14 @@ function CustomTooltip({ active, payload, label, targetCurrency }: {
 }
 
 export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: GoalTrendChartProps) {
-  // Defer chart mount for ResponsiveContainer sizing
+  // Defer chart mount by two frames for ResponsiveContainer sizing
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true))
-    return () => cancelAnimationFrame(id)
+    let cancelled = false
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { if (!cancelled) setMounted(true) })
+    })
+    return () => { cancelled = true }
   }, [])
 
   const { data, isLoading, error } = useQuery<GoalTrendData>({

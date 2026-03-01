@@ -10,8 +10,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class LoginRequest(BaseModel):
-    """Login request with email and password"""
-    email: EmailStr
+    """Login request with email or username and password"""
+    email: str = Field(..., min_length=1)  # Accepts email or plain username
     password: str = Field(..., min_length=1)
     device_trust_token: Optional[str] = None  # Skip MFA if valid trusted device
 
@@ -23,6 +23,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int  # seconds until access token expires
     user: "UserResponse"
+    session_expires_at: Optional[str] = None
 
 
 class RefreshRequest(BaseModel):
@@ -123,6 +124,8 @@ class LoginResponse(BaseModel):
     mfa_token: Optional[str] = None
     mfa_methods: Optional[List[str]] = None  # e.g. ["totp", "email_code", "email_link"]
     device_trust_token: Optional[str] = None  # 30-day device trust token
+    session_policy: Optional[dict] = None
+    session_expires_at: Optional[str] = None
 
 
 class MFASetupResponse(BaseModel):

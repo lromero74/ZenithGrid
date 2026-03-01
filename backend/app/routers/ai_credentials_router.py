@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import AIProviderCredential, User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ async def get_ai_providers_status(
 async def create_or_update_ai_credential(
     credential_data: AICredentialCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE))
 ):
     """
     Create or update an AI credential for the current user.
@@ -324,7 +324,7 @@ async def update_ai_credential(
     provider: str,
     credential_data: AICredentialUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE))
 ):
     """Update an existing AI credential."""
     try:
@@ -384,7 +384,7 @@ async def update_ai_credential(
 async def delete_ai_credential(
     provider: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE))
 ):
     """Delete an AI credential."""
     try:

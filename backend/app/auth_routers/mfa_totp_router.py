@@ -51,7 +51,13 @@ async def mfa_setup(
 
     Does NOT enable MFA yet — user must verify with a TOTP code first
     via POST /api/auth/mfa/verify-setup.
+    Demo accounts are blocked from enabling MFA.
     """
+    if "@" not in (current_user.email or ""):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo accounts cannot enable MFA",
+        )
     if current_user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -36,6 +36,7 @@ interface PositionCardProps {
   onCheckSlippage: (positionId: number) => void
   onRefetch: () => void
   onEditBot?: (bot: Bot) => void
+  canWrite?: boolean
 }
 
 export const PositionCard = ({
@@ -57,6 +58,7 @@ export const PositionCard = ({
   onCheckSlippage,
   onRefetch,
   onEditBot,
+  canWrite = true,
 }: PositionCardProps) => {
   const confirm = useConfirm()
   const { addToast } = useNotifications()
@@ -136,7 +138,7 @@ export const PositionCard = ({
                 </button>
                 {showBotMenu && bot && (
                   <div className="absolute left-0 top-full mt-1 w-40 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 py-1">
-                    {bot.is_active ? (
+                    {canWrite && (bot.is_active ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleToggleBot() }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-slate-700 transition-colors"
@@ -150,8 +152,8 @@ export const PositionCard = ({
                       >
                         <Play size={12} /> Start Bot
                       </button>
-                    )}
-                    {onEditBot && (
+                    ))}
+                    {canWrite && onEditBot && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowBotMenu(false); onEditBot(bot) }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
@@ -441,6 +443,7 @@ export const PositionCard = ({
 
         {/* Action Buttons Row */}
         <div className="mt-3 px-4 flex flex-wrap items-center gap-2 sm:gap-3">
+          {canWrite && (
           <button
             className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
             onClick={(e) => {
@@ -450,9 +453,10 @@ export const PositionCard = ({
           >
             <span>🚫</span> Cancel
           </button>
+          )}
 
           {/* Show edit/cancel if there's a pending limit order */}
-          {position.closing_via_limit ? (
+          {canWrite && (position.closing_via_limit ? (
             <>
               <button
                 className="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"
@@ -491,7 +495,7 @@ export const PositionCard = ({
                 <span>📊</span> Close at limit
               </button>
             </>
-          )}
+          ))}
           <button
             className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-200 rounded flex items-center gap-1 transition-colors"
             onClick={(e) => {
@@ -501,6 +505,7 @@ export const PositionCard = ({
           >
             <Brain size={12} /> Decision History
           </button>
+          {canWrite && (
           <button
             className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
             onClick={(e) => {
@@ -510,6 +515,8 @@ export const PositionCard = ({
           >
             <span>💰</span> Add funds
           </button>
+          )}
+          {canWrite && (
           <button
             className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
             onClick={(e) => {
@@ -519,7 +526,8 @@ export const PositionCard = ({
           >
             <Settings size={12} /> Edit deal
           </button>
-          {position.computed_max_budget != null && position.computed_max_budget > (position.max_quote_allowed || 0) && (
+          )}
+          {canWrite && position.computed_max_budget != null && position.computed_max_budget > (position.max_quote_allowed || 0) && (
           <button
             className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
             title="Recalculate budget to base order + all safety orders with volume scaling"

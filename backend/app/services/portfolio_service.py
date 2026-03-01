@@ -802,7 +802,9 @@ async def get_account_portfolio_data(
                 except Exception:
                     altcoin_btc_prices[currency] = 0.0
 
-            assets = []
+            holdings = []
+            total_btc = 0.0
+            total_usd = 0.0
             for currency, balance in client.balances.items():
                 if balance > 0:
                     if currency == "BTC":
@@ -819,28 +821,34 @@ async def get_account_portfolio_data(
                         usd_value = btc_value * btc_usd_price
                         price_usd = btc_price * btc_usd_price
 
-                    assets.append({
+                    total_btc += btc_value
+                    total_usd += usd_value
+                    holdings.append({
                         "asset": currency,
                         "total_balance": balance,
-                        "available_balance": balance,
-                        "hold_balance": 0.0,
+                        "available": balance,
+                        "hold": 0.0,
+                        "current_price_usd": price_usd,
                         "usd_value": usd_value,
                         "btc_value": btc_value,
-                        "allocation_pct": 0.0,
-                        "price_usd": price_usd,
-                        "change_24h": 0.0,
+                        "percentage": 0.0,
                     })
+            # Calculate allocation percentages
+            for h in holdings:
+                if total_usd > 0:
+                    h["percentage"] = (h["usd_value"] / total_usd) * 100
             return {
-                "assets": assets,
-                "total_usd_value": sum(a["usd_value"] for a in assets),
-                "total_btc_value": sum(a["btc_value"] for a in assets),
+                "holdings": holdings,
+                "holdings_count": len(holdings),
+                "total_usd_value": total_usd,
+                "total_btc_value": total_btc,
                 "btc_usd_price": btc_usd_price,
                 "is_paper_trading": True,
             }
         return {
-            "assets": [], "total_usd_value": 0,
-            "total_btc_value": 0, "btc_usd_price": 0,
-            "is_paper_trading": True,
+            "holdings": [], "holdings_count": 0,
+            "total_usd_value": 0, "total_btc_value": 0,
+            "btc_usd_price": 0, "is_paper_trading": True,
         }
 
     cache_key = f"portfolio_response_{current_user.id}"

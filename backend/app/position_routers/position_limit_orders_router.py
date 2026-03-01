@@ -21,7 +21,7 @@ from app.database import get_db
 from app.models import Account, PendingOrder, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,7 +53,7 @@ async def limit_close_position(
     request: LimitCloseRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Close a position via limit order"""
     try:
@@ -255,7 +255,7 @@ async def check_market_close_slippage(
 async def cancel_limit_close(
     position_id: int, db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """Cancel a pending limit close order"""
     try:
@@ -296,7 +296,7 @@ async def update_limit_close(
     request: UpdateLimitCloseRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Update the limit price for a pending limit close order using Coinbase's native Edit Order API"""
     try:

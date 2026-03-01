@@ -5,6 +5,7 @@ import { SAMPLE_BOTS, type SampleBot } from '../data/sampleBots'
 interface SampleBotsSectionProps {
   onView: (sample: SampleBot) => void
   onCopy: (sample: SampleBot) => void
+  canWrite?: boolean
 }
 
 const STRATEGY_ICONS: Record<string, typeof Cpu> = {
@@ -19,7 +20,7 @@ function getStrategyIcon(sampleId: string) {
   return key ? STRATEGY_ICONS[key] : Cpu
 }
 
-export function SampleBotsSection({ onView, onCopy }: SampleBotsSectionProps) {
+export function SampleBotsSection({ onView, onCopy, canWrite = true }: SampleBotsSectionProps) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem('zenith-sample-bots-collapsed') === 'true'
@@ -61,7 +62,7 @@ export function SampleBotsSection({ onView, onCopy }: SampleBotsSectionProps) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {btcBots.map(bot => (
-                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} />
+                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} canWrite={canWrite} />
               ))}
             </div>
           </div>
@@ -74,7 +75,7 @@ export function SampleBotsSection({ onView, onCopy }: SampleBotsSectionProps) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {usdBots.map(bot => (
-                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} />
+                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} canWrite={canWrite} />
               ))}
             </div>
           </div>
@@ -88,10 +89,12 @@ function SampleBotCard({
   bot,
   onView,
   onCopy,
+  canWrite = true,
 }: {
   bot: SampleBot
   onView: (bot: SampleBot) => void
   onCopy: (bot: SampleBot) => void
+  canWrite?: boolean
 }) {
   const Icon = getStrategyIcon(bot.id)
   const isBtc = bot.market === 'BTC'
@@ -132,13 +135,15 @@ function SampleBotCard({
           <Eye className="w-3 h-3" />
           View
         </button>
-        <button
-          onClick={() => onCopy(bot)}
-          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium text-blue-400 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 rounded transition-colors"
-        >
-          <Copy className="w-3 h-3" />
-          Copy
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => onCopy(bot)}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium text-blue-400 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 rounded transition-colors"
+          >
+            <Copy className="w-3 h-3" />
+            Copy
+          </button>
+        )}
       </div>
     </div>
   )

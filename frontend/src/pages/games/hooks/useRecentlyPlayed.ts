@@ -5,15 +5,17 @@
  */
 
 import { useState, useCallback } from 'react'
-import { STORAGE_PREFIX } from '../constants'
+import { getStoragePrefix } from '../constants'
 
-const RECENT_KEY = `${STORAGE_PREFIX}recent`
+function getRecentKey(): string {
+  return `${getStoragePrefix()}recent`
+}
 
 type RecentMap = Record<string, number>
 
 function loadRecent(): RecentMap {
   try {
-    const raw = localStorage.getItem(RECENT_KEY)
+    const raw = localStorage.getItem(getRecentKey())
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -22,7 +24,7 @@ function loadRecent(): RecentMap {
 
 function persistRecent(recent: RecentMap): void {
   try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(recent))
+    localStorage.setItem(getRecentKey(), JSON.stringify(recent))
   } catch {
     // Safari private mode or quota exceeded — silently ignore
   }

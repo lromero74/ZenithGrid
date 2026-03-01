@@ -29,7 +29,8 @@ interface PaperAccount {
 }
 
 export function PaperTradingManager() {
-  const { getAccessToken } = useAuth()
+  const { getAccessToken, user } = useAuth()
+  const isDemoAccount = !user?.email?.includes('@')
   const [paperAccount, setPaperAccount] = useState<PaperAccount | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -256,7 +257,9 @@ export function PaperTradingManager() {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => setShowDepositModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+          disabled={isDemoAccount}
+          className={`flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
         >
           <Plus className="w-4 h-4" />
           <span>Deposit</span>
@@ -264,7 +267,9 @@ export function PaperTradingManager() {
 
         <button
           onClick={() => setShowWithdrawModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+          disabled={isDemoAccount}
+          className={`flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
         >
           <Minus className="w-4 h-4" />
           <span>Withdraw</span>
@@ -272,7 +277,9 @@ export function PaperTradingManager() {
 
         <button
           onClick={() => setShowResetConfirm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors"
+          disabled={isDemoAccount}
+          className={`flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={isDemoAccount ? 'Demo accounts cannot modify balances' : undefined}
         >
           <RotateCcw className="w-4 h-4" />
           <span>Reset to Defaults</span>

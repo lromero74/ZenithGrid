@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, DollarSign, Clock, TrendingUp, Save } from 'lucide-react'
 import { autoBuyApi, type AutoBuySettings as AutoBuySettingsType, botsApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { Bot } from '../types'
 
 interface Account {
@@ -22,6 +23,8 @@ interface AutoBuySettingsProps {
 }
 
 export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
+  const { user } = useAuth()
+  const isDemoAccount = !user?.email?.includes('@')
   const [settings, setSettings] = useState<Record<number, AutoBuySettingsType>>({})
   const [bots, setBots] = useState<Bot[]>([])
   const [saving, setSaving] = useState<number | null>(null)
@@ -155,15 +158,16 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
             <div key={account.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-white">{account.name}</h3>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${isDemoAccount ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                   <span className="text-sm text-slate-400">
                     {accountSettings.enabled ? 'Enabled' : 'Disabled'}
                   </span>
-                  <div className="relative">
+                  <div className={`relative ${isDemoAccount ? 'opacity-50' : ''}`}>
                     <input
                       type="checkbox"
                       checked={accountSettings.enabled}
                       onChange={(e) => handleToggleEnabled(account.id, e.target.checked)}
+                      disabled={isDemoAccount}
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -327,7 +331,7 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
                   {/* Save Button */}
                   <button
                     onClick={() => handleSave(account.id)}
-                    disabled={saving === account.id}
+                    disabled={saving === account.id || isDemoAccount}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded flex items-center justify-center gap-2"
                   >
                     <Save size={16} />

@@ -6,12 +6,10 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react'
-import { STORAGE_PREFIX } from '../constants'
-
-const STATE_KEY_PREFIX = `${STORAGE_PREFIX}state-`
+import { getStoragePrefix } from '../constants'
 
 function getKey(gameId: string): string {
-  return `${STATE_KEY_PREFIX}${gameId}`
+  return `${getStoragePrefix()}state-${gameId}`
 }
 
 /** Load saved game state from localStorage, or return null. */

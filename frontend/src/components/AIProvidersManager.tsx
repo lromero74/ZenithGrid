@@ -35,6 +35,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 export function AIProvidersManager() {
   const { user } = useAuth()
+  const isDemoAccount = !user?.email?.includes('@')
   const confirm = useConfirm()
   const [providerStatus, setProviderStatus] = useState<AIProviderStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -234,7 +235,7 @@ export function AIProvidersManager() {
                   )}
 
                   {/* Action buttons */}
-                  {!isEditing && (
+                  {!isEditing && !isDemoAccount && (
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {

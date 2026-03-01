@@ -5,6 +5,31 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.73.0] - 2026-03-01
+
+### Added
+- **Session limits system**: Per-group and per-user session policies with configurable timeout, max simultaneous sessions, max sessions per IP, re-login cooldown, and auto-logout. Policies resolve most-restrictive across all user groups with optional per-user overrides.
+- **Session limits admin UI**: Group and user session policy editors in the admin panel, with effective policy viewer and active session management (view/force-end).
+- **Session limits popup**: Full-screen notice shown after login when session limits are active, listing all applicable restrictions in plain language.
+- **Auto-logout timer**: Frontend automatically logs out users when their session expires (if auto_logout is enabled in their policy).
+- **Demo login shortcuts**: `/demo_usd`, `/demo_btc`, `/demo_both` URL paths auto-login to the corresponding demo account with full session limits enforcement.
+- **Demo user goals and reports**: Each demo account seeded with 2 balance goals, 1 expense goal with items, and 2 report schedules (weekly + monthly) linked to their paper trading accounts.
+- **Demo AI provider configuration**: Demo accounts pre-configured with Gemini AI credentials for report generation.
+- **Session cleanup job**: Daily background task expires stale sessions and purges old inactive sessions (>30 days).
+
+### Changed
+- **Deal/position RBAC**: All 12 position write endpoints (close, force-close, edit settings, resize budget, add funds, notes, limit orders, perps TP/SL) now require `positions:write` permission. Read endpoints unchanged.
+- **Account RBAC**: All 6 account write endpoints (create, update, delete, set-default, link-perps, auto-buy settings) and 3 paper trading endpoints (deposit, withdraw, reset) now require `accounts:write` permission.
+- **AI provider RBAC**: Create, update, and delete AI credentials now require `settings:write` permission. Demo users see providers read-only.
+- **Reports RBAC**: Goal/schedule/expense create/update require `reports:write`, delete operations require `reports:delete`. Demo users see reports read-only.
+- **Database maintenance**: Settings page DB maintenance section now restricted to admin-level users (was superuser-only).
+- **Demo account lockdown**: Demo users see all features but cannot modify accounts, paper trading balances, AI providers, goals, schedules, or reports. Controls are visible but disabled with appropriate styling.
+- **Login error messages**: Session limit errors (max sessions, cooldown) now show user-friendly messages with specific details instead of generic errors.
+
+### Security
+- **24 write endpoints gated**: Comprehensive RBAC enforcement across positions, accounts, paper trading, AI credentials, and reports — observers/demo users cannot modify data.
+- **Session tracking**: All sessions tracked in database with IP, user agent, and expiry. Stale sessions automatically reclaimed.
+
 ## [v2.72.0] - 2026-03-01
 
 ### Added

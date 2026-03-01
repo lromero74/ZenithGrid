@@ -76,6 +76,30 @@ export default function Login() {
     return () => clearTimeout(timer)
   }, [resendCooldown])
 
+  const formatLoginError = (
+    err: unknown, username: string
+  ): string => {
+    const status = (err as any)?.status as
+      number | undefined
+    const msg = err instanceof Error
+      ? err.message : 'Login failed'
+
+    if (status === 403
+        && msg.includes('simultaneous sessions')) {
+      return `${username} already has the maximum number of simultaneous sessions. Please try again later.`
+    }
+    if (status === 429) {
+      const secMatch = msg.match(/(\d+)\s*seconds?/)
+      if (secMatch) {
+        const mins = Math.ceil(
+          Number(secMatch[1]) / 60
+        )
+        return `${username} session cooldown active. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`
+      }
+    }
+    return msg
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -83,9 +107,8 @@ export default function Login() {
 
     try {
       await login(email, password)
-      // Login successful or MFA pending - AuthContext handles state
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(formatLoginError(err, email))
     } finally {
       setIsLoading(false)
     }
@@ -465,17 +488,17 @@ export default function Login() {
               {/* Email Field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                  Email Address
+                  Email or Username
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     id="email"
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    autoComplete="email"
+                    autoComplete="username"
                     autoFocus
                     placeholder="you@example.com"
                     className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

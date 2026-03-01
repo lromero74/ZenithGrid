@@ -27,6 +27,7 @@ interface BotListItemProps {
   setScannerLogsBotId: (id: number | null) => void
   portfolio?: any
   botsFetching?: boolean
+  canWrite?: boolean
 }
 
 export function BotListItem({
@@ -48,6 +49,7 @@ export function BotListItem({
   setAiLogsBotId,
   setIndicatorLogsBotId,
   setScannerLogsBotId,
+  canWrite = true,
 }: BotListItemProps) {
   const { addToast } = useNotifications()
   const confirm = useConfirm()
@@ -369,21 +371,29 @@ export function BotListItem({
       {/* Status Toggle */}
       <td className="px-1 sm:px-2 py-2 w-16">
         <div className="flex justify-center">
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={bot.is_active}
-              onChange={() => {
-                if (bot.is_active) {
-                  stopBot.mutate(bot.id)
-                } else {
-                  startBot.mutate(bot.id)
-                }
-              }}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-          </label>
+          {canWrite ? (
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bot.is_active}
+                onChange={() => {
+                  if (bot.is_active) {
+                    stopBot.mutate(bot.id)
+                  } else {
+                    startBot.mutate(bot.id)
+                  }
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+            </label>
+          ) : (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+              bot.is_active ? 'bg-green-600/20 text-green-400' : 'bg-slate-700/50 text-slate-400'
+            }`}>
+              {bot.is_active ? 'Active' : 'Stopped'}
+            </span>
+          )}
         </div>
       </td>
 
@@ -436,26 +446,30 @@ export function BotListItem({
                 className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 max-h-[80vh] overflow-y-auto"
                 style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: Math.min(window.innerHeight * 0.8, 600) }}
               >
-                <button
-                  onClick={() => {
-                    handleOpenEdit(bot)
-                    setOpenMenuId(null)
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span>Edit Bot</span>
-                </button>
-                <button
-                  onClick={() => {
-                    cloneBot.mutate(bot.id)
-                    setOpenMenuId(null)
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
-                >
-                  <Copy className="w-4 h-4 text-blue-400" />
-                  <span>Clone Bot</span>
-                </button>
+                {canWrite && (
+                  <button
+                    onClick={() => {
+                      handleOpenEdit(bot)
+                      setOpenMenuId(null)
+                    }}
+                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Bot</span>
+                  </button>
+                )}
+                {canWrite && (
+                  <button
+                    onClick={() => {
+                      cloneBot.mutate(bot.id)
+                      setOpenMenuId(null)
+                    }}
+                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                  >
+                    <Copy className="w-4 h-4 text-blue-400" />
+                    <span>Clone Bot</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     // Export bot configuration to JSON file
@@ -521,7 +535,7 @@ export function BotListItem({
                 </button>
 
                 {/* Copy to Account - show if there are other accounts to copy to */}
-                {(() => {
+                {canWrite && (() => {
                   // Get accounts other than the current one
                   const targetAccounts = accounts.filter(acc => acc.id !== currentAccountId && acc.is_active)
 
@@ -550,13 +564,13 @@ export function BotListItem({
                   )
                 })()}
 
-                {/* Separator if bot has open positions */}
-                {(bot.open_positions_count ?? 0) > 0 && (
+                {/* Separator if bot has open positions and user can write */}
+                {canWrite && (bot.open_positions_count ?? 0) > 0 && (
                   <div className="border-t border-slate-600 my-1"></div>
                 )}
 
                 {/* Cancel All Positions */}
-                {(bot.open_positions_count ?? 0) > 0 && (
+                {canWrite && (bot.open_positions_count ?? 0) > 0 && (
                   <button
                     onClick={async () => {
                       setOpenMenuId(null)
@@ -577,7 +591,7 @@ export function BotListItem({
                 )}
 
                 {/* Sell All Positions at Market Price */}
-                {(bot.open_positions_count ?? 0) > 0 && (
+                {canWrite && (bot.open_positions_count ?? 0) > 0 && (
                   <button
                     onClick={async () => {
                       setOpenMenuId(null)
@@ -597,17 +611,19 @@ export function BotListItem({
                   </button>
                 )}
 
-                <button
-                  onClick={() => {
-                    handleDelete(bot)
-                    setOpenMenuId(null)
-                  }}
-                  disabled={bot.is_active}
-                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 className="w-4 h-4 text-red-400" />
-                  <span>Delete Bot</span>
-                </button>
+                {canWrite && (
+                  <button
+                    onClick={() => {
+                      handleDelete(bot)
+                      setOpenMenuId(null)
+                    }}
+                    disabled={bot.is_active}
+                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                    <span>Delete Bot</span>
+                  </button>
+                )}
               </div>
             )}
           </div>

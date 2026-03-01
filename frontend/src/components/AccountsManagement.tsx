@@ -23,6 +23,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
+import { useAuth } from '../contexts/AuthContext'
 import { accountApi, api } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
@@ -41,6 +42,8 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     setDefaultAccount,
     refreshAccounts,
   } = useAccount()
+  const { user } = useAuth()
+  const isDemoAccount = !user?.email?.includes('@')
 
   const confirm = useConfirm()
   const { addToast } = useNotifications()
@@ -265,7 +268,9 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
           </button>
           <button
             onClick={onAddAccount}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+            disabled={isDemoAccount}
+            className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={isDemoAccount ? 'Demo accounts cannot manage accounts' : undefined}
           >
             Add Account
           </button>
@@ -322,6 +327,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 onConvertToUSD={() => handleSellPortfolioToBase(account, 'USD')}
                 isConverting={sellingToBTC || sellingToUSD}
                 onRefreshAccounts={refreshAccounts}
+                isDemoAccount={isDemoAccount}
               />
             ))}
           </div>
@@ -347,6 +353,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 onMenuToggle={() => setOpenMenuId(openMenuId === account.id ? null : account.id)}
                 onDelete={() => handleDelete(account)}
                 onSetDefault={() => handleSetDefault(account)}
+                isDemoAccount={isDemoAccount}
               />
             ))}
           </div>
@@ -369,6 +376,7 @@ interface AccountRowProps {
   onConvertToUSD?: () => void
   isConverting?: boolean
   onRefreshAccounts?: () => Promise<void>
+  isDemoAccount?: boolean
 }
 
 function AccountRow({
@@ -384,6 +392,7 @@ function AccountRow({
   onConvertToUSD,
   isConverting,
   onRefreshAccounts,
+  isDemoAccount,
 }: AccountRowProps) {
   const [linking, setLinking] = useState(false)
   const [perpsError, setPerpsError] = useState<string | null>(null)
@@ -479,7 +488,7 @@ function AccountRow({
               <div className="absolute right-0 bottom-full mb-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
                 <button
                   onClick={onSetDefault}
-                  disabled={account.is_default}
+                  disabled={account.is_default || isDemoAccount}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {account.is_default ? (
@@ -507,7 +516,7 @@ function AccountRow({
                         onMenuToggle()
                         onConvertToBTC()
                       }}
-                      disabled={isConverting}
+                      disabled={isConverting || isDemoAccount}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-orange-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
@@ -518,7 +527,7 @@ function AccountRow({
                         onMenuToggle()
                         onConvertToUSD()
                       }}
-                      disabled={isConverting}
+                      disabled={isConverting || isDemoAccount}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-green-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
@@ -530,7 +539,7 @@ function AccountRow({
                 <div className="border-t border-slate-700 my-1" />
                 <button
                   onClick={onDelete}
-                  disabled={account.bot_count > 0}
+                  disabled={account.bot_count > 0 || isDemoAccount}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -580,7 +589,7 @@ function AccountRow({
                   )}
                   <button
                     onClick={handleLinkPerps}
-                    disabled={linking}
+                    disabled={linking || isDemoAccount}
                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
                   >
                     {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}

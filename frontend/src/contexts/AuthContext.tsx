@@ -26,6 +26,14 @@ export interface User {
   permissions?: string[]
 }
 
+export interface SessionPolicy {
+  session_timeout_minutes?: number | null
+  auto_logout?: boolean | null
+  max_simultaneous_sessions?: number | null
+  max_sessions_per_ip?: number | null
+  relogin_cooldown_minutes?: number | null
+}
+
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
@@ -52,6 +60,10 @@ interface AuthContextType {
   resendVerification: () => Promise<void>
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (token: string, newPassword: string) => Promise<void>
+  sessionPolicy: SessionPolicy | null
+  sessionExpiresAt: string | null
+  showSessionLimitsPopup: boolean
+  acknowledgeSessionLimits: () => void
 }
 
 interface LoginResponse {
@@ -64,6 +76,8 @@ interface LoginResponse {
   mfa_token: string | null
   mfa_methods: string[] | null
   device_trust_token: string | null
+  session_policy?: SessionPolicy | null
+  session_expires_at?: string | null
 }
 
 interface TokenRefreshResponse {
@@ -119,6 +133,10 @@ const AuthContext = createContext<AuthContextType>({
   resendVerification: async () => {},
   forgotPassword: async () => {},
   resetPassword: async () => {},
+  sessionPolicy: null,
+  sessionExpiresAt: null,
+  showSessionLimitsPopup: false,
+  acknowledgeSessionLimits: () => {},
 })
 
 // Helper to check if token is expired
@@ -136,6 +154,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mfaPending, setMfaPending] = useState(false)
   const [mfaToken, setMfaToken] = useState<string | null>(null)
   const [mfaMethods, setMfaMethods] = useState<string[]>([])
+  const [sessionPolicy, setSessionPolicy] = useState<SessionPolicy | null>(() => {
+    try {
+      const saved = localStorage.getItem('auth_session_policy')
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(
+    () => localStorage.getItem('auth_session_expires_at') || null
+  )
+  const [showSessionLimitsPopup, setShowSessionLimitsPopup] = useState(false)
+
+  const acknowledgeSessionLimits = useCallback(() => {
+    setShowSessionLimitsPopup(false)
+  }, [])
 
   // Get access token (returns null if not available or expired)
   const getAccessToken = useCallback((): string | null => {
@@ -272,7 +304,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || 'Login failed')
+      const err = new Error(
+        error.detail || 'Login failed'
+      ) as Error & { status?: number }
+      err.status = response.status
+      throw err
     }
 
     const data: LoginResponse = await response.json()
@@ -302,6 +338,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setTokenExpiry(expiryTime)
       setUser(data.user)
+
+      // Handle session policy
+      if (data.session_policy) {
+        setSessionPolicy(data.session_policy)
+        setSessionExpiresAt(data.session_expires_at || null)
+        localStorage.setItem('auth_session_policy', JSON.stringify(data.session_policy))
+        localStorage.setItem('auth_session_expires_at', data.session_expires_at || '')
+        setShowSessionLimitsPopup(true)
+      }
     }
   }
 
@@ -346,6 +391,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setTokenExpiry(expiryTime)
       setUser(data.user)
+
+      // Handle session policy
+      if (data.session_policy) {
+        setSessionPolicy(data.session_policy)
+        setSessionExpiresAt(data.session_expires_at || null)
+        localStorage.setItem('auth_session_policy', JSON.stringify(data.session_policy))
+        localStorage.setItem('auth_session_expires_at', data.session_expires_at || '')
+        setShowSessionLimitsPopup(true)
+      }
     }
 
     // Clear MFA state from both React and sessionStorage
@@ -470,11 +524,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(SESSION_KEYS.MFA_TOKEN)
     sessionStorage.removeItem(SESSION_KEYS.MFA_METHODS)
 
+    // Clear session policy
+    localStorage.removeItem('auth_session_policy')
+    localStorage.removeItem('auth_session_expires_at')
+
     // Clear state
     setUser(null)
     setTokenExpiry(null)
     setMfaPending(false)
     setMfaToken(null)
+    setSessionPolicy(null)
+    setSessionExpiresAt(null)
 
     // Call logout endpoint (fire and forget)
     fetch(`${API_BASE}/logout`, { method: 'POST' }).catch(() => {})
@@ -486,6 +546,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('auth-logout', handleLogout)
     return () => window.removeEventListener('auth-logout', handleLogout)
   }, [logout])
+
+  // Session auto-logout timer
+  useEffect(() => {
+    if (!sessionExpiresAt) return
+
+    const expiresMs =
+      new Date(sessionExpiresAt).getTime() - Date.now()
+    if (expiresMs <= 0) {
+      if (sessionPolicy?.auto_logout) logout()
+      return
+    }
+
+    const timer = setTimeout(() => {
+      if (sessionPolicy?.auto_logout) {
+        logout()
+      }
+    }, expiresMs)
+
+    return () => clearTimeout(timer)
+  }, [sessionExpiresAt, sessionPolicy, logout])
 
   // Change password function
   const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
@@ -707,6 +787,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendVerification,
     forgotPassword,
     resetPassword,
+    sessionPolicy,
+    sessionExpiresAt,
+    showSessionLimitsPopup,
+    acknowledgeSessionLimits,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

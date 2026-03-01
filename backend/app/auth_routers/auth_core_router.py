@@ -75,7 +75,7 @@ async def login(
     _check_rate_limit(client_ip, username=email_lower)
     _record_attempt(client_ip, username=email_lower)
 
-    # Find user by email
+    # Find user by email (also matches plain usernames stored as email)
     user = await get_user_by_email(db, email_lower)
 
     if not user:
@@ -174,17 +174,48 @@ async def login(
     await db.commit()
     await db.refresh(user)
 
-    access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id)
+    # Resolve session policy
+    from app.services.session_policy_service import resolve_session_policy, has_any_limits
+    from app.services.session_service import check_session_limits, create_session
+
+    policy = resolve_session_policy(user)
+    session_id_str = None
+    session_expires_at = None
+
+    if has_any_limits(policy):
+        await check_session_limits(user.id, client_ip, policy, db)
+        session_id_str = str(uuid.uuid4())
+        timeout = policy.get("session_timeout_minutes")
+        if timeout:
+            session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
+        await create_session(
+            user_id=user.id,
+            session_id=session_id_str,
+            ip_address=client_ip,
+            user_agent=http_request.headers.get("user-agent", ""),
+            expires_at=session_expires_at,
+            db=db,
+        )
+        await db.commit()
+
+    access_token = create_access_token(user.id, user.email, session_id=session_id_str)
+    refresh_token = create_refresh_token(user.id, session_id=session_id_str)
 
     logger.info(f"User logged in: {user.email}")
 
-    return LoginResponse(
+    response = LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=_build_user_response(user),
     )
+    if has_any_limits(policy):
+        response.session_policy = policy
+        response.session_expires_at = (
+            session_expires_at.isoformat() if session_expires_at else None
+        )
+
+    return response
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -233,18 +264,40 @@ async def refresh_token(
                 detail="Session expired — please log in again",
             )
 
-    # Generate new tokens
-    access_token = create_access_token(user.id, user.email)
-    new_refresh_token = create_refresh_token(user.id)
+    # Check session validity if sid present
+    sid = payload.get("sid")
+    if sid:
+        from app.services.session_service import check_session_valid
+        if not await check_session_valid(sid, db):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired — please log in again",
+            )
+
+    # Generate new tokens (pass sid through)
+    access_token = create_access_token(user.id, user.email, session_id=sid)
+    new_refresh_token = create_refresh_token(user.id, session_id=sid)
 
     logger.debug(f"Token refreshed for user: {user.email}")
 
-    return TokenResponse(
+    response = TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=_build_user_response(user),
     )
+
+    if sid:
+        from app.models import ActiveSession
+        from sqlalchemy import select as sa_select
+        sess_result = await db.execute(
+            sa_select(ActiveSession.expires_at).where(ActiveSession.session_id == sid)
+        )
+        sess_row = sess_result.first()
+        if sess_row and sess_row[0]:
+            response.session_expires_at = sess_row[0].isoformat()
+
+    return response
 
 
 @router.post("/change-password")
@@ -257,7 +310,15 @@ async def change_password(
     Change the current user's password.
 
     Requires authentication and the current password for verification.
+    Demo accounts (no valid email) are blocked from changing passwords.
     """
+    # Block demo accounts from changing password
+    if "@" not in (current_user.email or ""):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo accounts cannot change passwords",
+        )
+
     # Verify current password
     if not verify_password(request.current_password, current_user.hashed_password):
         raise HTTPException(
@@ -385,8 +446,15 @@ async def logout(
                     expires_at=datetime.utcfromtimestamp(exp),
                 )
                 db.add(revoked)
-                await db.commit()
-                logger.info(f"Token revoked for user: {current_user.email}")
+
+            # End active session if sid present
+            sid = payload.get("sid")
+            if sid:
+                from app.services.session_service import end_session
+                await end_session(sid, db)
+
+            await db.commit()
+            logger.info(f"Token revoked for user: {current_user.email}")
         except JWTError:
             pass  # Token already invalid — nothing to revoke
 

@@ -38,7 +38,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
-def create_access_token(user_id: int, email: str) -> str:
+def create_access_token(user_id: int, email: str, session_id: str = None) -> str:
     """Create a JWT access token with unique JTI for revocation support"""
     expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
     expire = datetime.utcnow() + expires_delta
@@ -51,11 +51,13 @@ def create_access_token(user_id: int, email: str) -> str:
         "exp": expire,
         "iat": datetime.utcnow(),
     }
+    if session_id:
+        payload["sid"] = session_id
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(user_id: int) -> str:
+def create_refresh_token(user_id: int, session_id: str = None) -> str:
     """Create a JWT refresh token (longer-lived) with unique JTI for revocation support"""
     expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
     expire = datetime.utcnow() + expires_delta
@@ -67,6 +69,8 @@ def create_refresh_token(user_id: int) -> str:
         "exp": expire,
         "iat": datetime.utcnow(),
     }
+    if session_id:
+        payload["sid"] = session_id
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
@@ -257,21 +261,54 @@ async def _complete_mfa_login(
     user: User, remember_device: bool, http_request: Request, db: AsyncSession
 ) -> LoginResponse:
     """Common logic to complete MFA login after any verification method succeeds."""
+    from app.services.session_policy_service import resolve_session_policy, has_any_limits
+    from app.services.session_service import check_session_limits, create_session
+
     user.last_login_at = datetime.utcnow()
     await db.commit()
     await db.refresh(user)
 
-    access_token = create_access_token(user.id, user.email)
-    refresh_token = create_refresh_token(user.id)
+    # Resolve session policy
+    policy = resolve_session_policy(user)
+    session_id = None
+    session_expires_at = None
+
+    if has_any_limits(policy):
+        client_ip = http_request.client.host if http_request.client else "unknown"
+        await check_session_limits(user.id, client_ip, policy, db)
+
+        session_id = str(uuid.uuid4())
+        timeout = policy.get("session_timeout_minutes")
+        if timeout:
+            session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
+
+        await create_session(
+            user_id=user.id,
+            session_id=session_id,
+            ip_address=client_ip,
+            user_agent=http_request.headers.get("user-agent", ""),
+            expires_at=session_expires_at,
+            db=db,
+        )
+        await db.commit()
+
+    access_token = create_access_token(user.id, user.email, session_id=session_id)
+    refresh_token = create_refresh_token(user.id, session_id=session_id)
 
     device_trust = None
     if remember_device:
         device_trust = await _create_device_trust(user, http_request, db)
 
-    return LoginResponse(
+    response = LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=_build_user_response(user),
         device_trust_token=device_trust,
     )
+
+    if has_any_limits(policy):
+        response.session_policy = policy
+        response.session_expires_at = session_expires_at.isoformat() if session_expires_at else None
+
+    return response

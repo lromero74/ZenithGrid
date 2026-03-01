@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Account
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ async def get_paper_balance(
 async def deposit_to_paper_account(
     currency: str,
     amount: float,
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission(Perm.ACCOUNTS_WRITE)),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -142,7 +142,7 @@ async def deposit_to_paper_account(
 
 @router.post("/reset")
 async def reset_paper_account(
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission(Perm.ACCOUNTS_WRITE)),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -235,7 +235,7 @@ async def reset_paper_account(
 async def withdraw_from_paper_account(
     currency: str,
     amount: float,
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission(Perm.ACCOUNTS_WRITE)),
     db: AsyncSession = Depends(get_db)
 ):
     """

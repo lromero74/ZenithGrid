@@ -95,6 +95,7 @@ async def list_users(
             "mfa_enabled": bool(u.mfa_enabled),
             "mfa_email_enabled": bool(u.mfa_email_enabled),
             "groups": [{"id": g.id, "name": g.name} for g in u.groups],
+            "session_policy_override": u.session_policy_override,
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
             "created_at": u.created_at.isoformat() if u.created_at else None,
         }
@@ -210,6 +211,7 @@ async def list_groups(
             "name": g.name,
             "description": g.description,
             "is_system": g.is_system,
+            "session_policy": g.session_policy,
             "member_count": member_counts.get(g.id, 0),
             "roles": [{"id": r.id, "name": r.name} for r in g.roles],
         }
@@ -472,3 +474,107 @@ async def list_permissions(
         {"id": p.id, "name": p.name, "description": p.description}
         for p in permissions
     ]
+
+
+# ---------------------------------------------------------------------------
+# Session Policy Management
+# ---------------------------------------------------------------------------
+
+
+@router.put("/groups/{group_id}/session-policy")
+async def update_group_session_policy(
+    group_id: int,
+    policy: Optional[dict] = None,
+    current_user: User = Depends(require_permission(Perm.ADMIN_GROUPS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or clear session policy for a group."""
+    result = await db.execute(select(Group).where(Group.id == group_id))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    group.session_policy = policy
+    await db.commit()
+
+    return {"message": f"Session policy updated for group '{group.name}'", "policy": policy}
+
+
+@router.put("/users/{user_id}/session-policy")
+async def update_user_session_policy(
+    user_id: int,
+    policy: Optional[dict] = None,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or clear session policy override for a user."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.session_policy_override = policy
+    await db.commit()
+
+    return {"message": f"Session policy override updated for user '{user.email}'", "policy": policy}
+
+
+@router.get("/users/{user_id}/effective-session-policy")
+async def get_effective_session_policy(
+    user_id: int,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the resolved effective session policy for a user."""
+    from app.services.session_policy_service import resolve_session_policy
+    from app.auth.dependencies import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    policy = resolve_session_policy(user)
+    return {"user_id": user_id, "email": user.email, "effective_policy": policy}
+
+
+@router.get("/users/{user_id}/sessions")
+async def list_user_sessions(
+    user_id: int,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """List active sessions for a user."""
+    from app.services.session_service import get_user_sessions
+
+    sessions = await get_user_sessions(user_id, db)
+    return {
+        "user_id": user_id,
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "ip_address": s.ip_address,
+                "user_agent": s.user_agent,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "expires_at": s.expires_at.isoformat() if s.expires_at else None,
+            }
+            for s in sessions
+        ],
+    }
+
+
+@router.delete("/users/{user_id}/sessions/{session_id}")
+async def force_end_session(
+    user_id: int,
+    session_id: str,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Force-end a specific user session."""
+    from app.services.session_service import end_session
+
+    ended = await end_session(session_id, db)
+    if not ended:
+        raise HTTPException(status_code=404, detail="Active session not found")
+
+    await db.commit()
+    return {"message": f"Session {session_id} ended"}

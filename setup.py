@@ -878,7 +878,8 @@ def initialize_database(project_root):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login_at DATETIME,
-                tokens_valid_after DATETIME DEFAULT NULL
+                tokens_valid_after DATETIME DEFAULT NULL,
+                session_policy_override JSON
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)")
@@ -934,6 +935,30 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_jti ON revoked_tokens(jti)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_user_id ON revoked_tokens(user_id)")
 
+        # Active sessions table (session limit enforcement)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                session_id VARCHAR(36) NOT NULL UNIQUE,
+                ip_address VARCHAR(45),
+                user_agent VARCHAR(512),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME,
+                ended_at DATETIME,
+                is_active BOOLEAN DEFAULT 1
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_active_sessions_user_id ON active_sessions(user_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_active_sessions_session_id ON active_sessions(session_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_active_sessions_is_active ON active_sessions(is_active)"
+        )
+
         # RBAC: Groups table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS groups (
@@ -941,6 +966,7 @@ def initialize_database(project_root):
                 name VARCHAR(100) UNIQUE NOT NULL,
                 description VARCHAR(255),
                 is_system BOOLEAN DEFAULT 0,
+                session_policy JSON,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)

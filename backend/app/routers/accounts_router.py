@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import Account, Bot, User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.account_service import (
     VALID_PROP_FIRMS,
     create_exchange_account,
@@ -334,7 +334,7 @@ async def get_account(
 async def create_account(
     account_data: AccountCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE))
 ):
     """
     Create a new account for the current user.
@@ -386,7 +386,7 @@ async def update_account(
     account_id: int,
     account_data: AccountUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE))
 ):
     """Update an existing account."""
     try:
@@ -492,7 +492,7 @@ async def update_account(
 async def delete_account(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE))
 ):
     """
     Delete an account.
@@ -544,7 +544,7 @@ async def delete_account(
 async def set_default_account(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE))
 ):
     """Set an account as the default."""
     try:
@@ -746,7 +746,7 @@ async def update_auto_buy_settings(
     account_id: int,
     settings: AutoBuySettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE))
 ):
     """Update auto-buy BTC settings for an account"""
     query = select(Account).where(Account.id == account_id)
@@ -808,7 +808,7 @@ async def update_auto_buy_settings(
 async def link_perps_portfolio(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
 ):
     """
     Discover and link the INTX perpetuals portfolio for a CEX account.

@@ -22,7 +22,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ async def modify_tp_sl(
     request: ModifyTpSlRequest,
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Update TP/SL prices on an existing perps position"""
     client = _get_coinbase_client(exchange)
@@ -279,7 +279,7 @@ async def close_perps_position(
     request: ClosePositionRequest,
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Manually close a perps position"""
     client = _get_coinbase_client(exchange)
