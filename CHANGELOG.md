@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.6] - 2026-03-01
+
+### Fixed
+- **Session cooldown false positives**: Expired sessions were recording `ended_at = now` (cleanup time) instead of `ended_at = expires_at` (actual expiry time). This caused relogin cooldowns to trigger incorrectly — even hours after a session expired, logging in would hit the cooldown because the system thought the session just ended.
+
 ## [v2.75.5] - 2026-03-01
 
 ### Changed
