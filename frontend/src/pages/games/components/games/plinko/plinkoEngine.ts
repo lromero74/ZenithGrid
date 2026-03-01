@@ -192,8 +192,9 @@ export function checkPegCollision(ball: Ball, peg: Peg): boolean {
  * 2. Reflect velocity along collision normal (real bounce)
  * 3. Apply restitution + damping for energy loss
  * 4. Rotate reflected velocity by 50/50 random angle (9°–30°) for Galton spread
- * 5. Enforce minimum lateral speed (0.72) so the ball stays lively;
- *    gravity alone handles all downward acceleration
+ * 5. Energy-conserving lateral redistribution: if lateral speed is below 40%
+ *    of total speed, redirect vertical energy into horizontal (never inject
+ *    new energy); gravity alone handles all downward acceleration
  */
 export function resolveCollision(ball: Ball, peg: Peg): Ball {
   const dx = ball.x - peg.x
@@ -224,10 +225,14 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
   let vx = rvx * cos - rvy * sin
   let vy = rvx * sin + rvy * cos
 
-  // Lateral speed floor: prevent the ball from losing all horizontal motion
-  // due to cumulative energy loss across 10 rows.
-  if (Math.abs(vx) < 0.72) {
-    vx = direction * (0.72 + Math.random() * 0.36)
+  // Energy-conserving lateral redistribution: if lateral component is too small,
+  // redirect energy from vertical to horizontal (never inject new energy).
+  const speed = Math.sqrt(vx * vx + vy * vy)
+  if (speed > 0 && Math.abs(vx) / speed < 0.4) {
+    const lateralSpeed = speed * 0.4
+    const verticalSpeed = Math.sqrt(Math.max(0, speed * speed - lateralSpeed * lateralSpeed))
+    vx = direction * lateralSpeed
+    vy = (vy <= 0 ? -1 : 1) * verticalSpeed
   }
 
   // If ball is above the peg, clamp any residual downward vy to zero.

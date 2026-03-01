@@ -256,26 +256,51 @@ describe('resolveCollision', () => {
     expect(sawUpward).toBe(true) // should bounce upward at least some of the time
   })
 
-  test('bounce physics: speed floor prevents ball death', () => {
-    // Simulate a very slow ball (as if after many bounces)
-    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0.1, vy: 0.2 }
+  test('energy-conserving: post-collision speed never exceeds pre-collision speed', () => {
+    // Test with various impact speeds
+    const testCases = [
+      { vx: 0, vy: 3 },     // fast vertical
+      { vx: 2, vy: 3 },     // diagonal
+      { vx: 0.1, vy: 0.2 }, // very slow (after many bounces)
+      { vx: 0, vy: 0.5 },   // slow vertical
+      { vx: 5, vy: 0 },     // fast horizontal
+    ]
     const peg: Peg = { x: 100, y: 105, row: 0 }
-    for (let i = 0; i < 20; i++) {
-      const resolved = resolveCollision(ball, peg)
-      // Speed floor ensures lateral speed stays alive
-      expect(Math.abs(resolved.vx)).toBeGreaterThanOrEqual(0.7)
+    for (const { vx, vy } of testCases) {
+      const ball: Ball = { id: 1, x: 100, y: 100, vx, vy }
+      const impactSpeed = Math.sqrt(vx * vx + vy * vy)
+      for (let i = 0; i < 20; i++) {
+        const resolved = resolveCollision(ball, peg)
+        const postSpeed = Math.sqrt(resolved.vx ** 2 + resolved.vy ** 2)
+        expect(postSpeed).toBeLessThanOrEqual(impactSpeed + 0.001)
+      }
     }
   })
 
-  test('Galton deflection: lateral speed within expected range', () => {
+  test('lateral redistribution: slow ball still gets lateral spread without energy gain', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0.1, vy: 0.2 }
+    const peg: Peg = { x: 100, y: 105, row: 0 }
+    const impactSpeed = Math.sqrt(0.1 ** 2 + 0.2 ** 2)
+    for (let i = 0; i < 20; i++) {
+      const resolved = resolveCollision(ball, peg)
+      // Should have some lateral spread
+      expect(Math.abs(resolved.vx)).toBeGreaterThan(0)
+      // But never more energy than it arrived with
+      const postSpeed = Math.sqrt(resolved.vx ** 2 + resolved.vy ** 2)
+      expect(postSpeed).toBeLessThanOrEqual(impactSpeed + 0.001)
+    }
+  })
+
+  test('Galton deflection: lateral speed proportional to impact speed', () => {
     const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 2 }
     const peg: Peg = { x: 100, y: 105, row: 0 }
+    const impactSpeed = 2
     for (let i = 0; i < 50; i++) {
       const resolved = resolveCollision(ball, peg)
       const absVx = Math.abs(resolved.vx)
-      // Rotation-based: reflected velocity rotated by 9°–30°, with 0.72 floor
-      expect(absVx).toBeGreaterThanOrEqual(0.7)
-      expect(absVx).toBeLessThanOrEqual(2.5) // rotation of fast ball can produce higher speeds
+      // Lateral speed should be meaningful but bounded by impact energy
+      expect(absVx).toBeGreaterThan(0)
+      expect(absVx).toBeLessThanOrEqual(impactSpeed)
     }
   })
 })
