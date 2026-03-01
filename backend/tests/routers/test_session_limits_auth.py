@@ -199,7 +199,7 @@ class TestSessionLimitsEnforcement:
     async def test_max_sessions_exceeded_blocks_login(self, db_session, limited_user):
         """When max_simultaneous_sessions is reached, new login is denied."""
         from app.services.session_service import check_session_limits
-        from fastapi import HTTPException
+        from app.exceptions import SessionLimitError
 
         # Create 2 sessions (the limit)
         await create_session(
@@ -212,7 +212,7 @@ class TestSessionLimitsEnforcement:
         )
 
         policy = {"max_simultaneous_sessions": 2}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(limited_user.id, "9.10.11.12", policy, db_session)
         assert exc_info.value.status_code == 403
 
@@ -220,7 +220,7 @@ class TestSessionLimitsEnforcement:
     async def test_cooldown_blocks_relogin(self, db_session, limited_user):
         """Relogin cooldown blocks login from same IP after recent logout."""
         from app.services.session_service import check_session_limits
-        from fastapi import HTTPException
+        from app.exceptions import RateLimitError
 
         await create_session(
             user_id=limited_user.id, session_id="cd-1",
@@ -229,7 +229,7 @@ class TestSessionLimitsEnforcement:
         await end_session("cd-1", db_session)
 
         policy = {"relogin_cooldown_minutes": 10}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RateLimitError) as exc_info:
             await check_session_limits(limited_user.id, "1.2.3.4", policy, db_session)
         assert exc_info.value.status_code == 429
 
@@ -237,7 +237,7 @@ class TestSessionLimitsEnforcement:
     async def test_ip_limit_blocks_same_ip(self, db_session, limited_user):
         """Max sessions per IP blocks additional logins from same IP."""
         from app.services.session_service import check_session_limits
-        from fastapi import HTTPException
+        from app.exceptions import SessionLimitError
 
         await create_session(
             user_id=limited_user.id, session_id="ip-limit-1",
@@ -245,6 +245,6 @@ class TestSessionLimitsEnforcement:
         )
 
         policy = {"max_sessions_per_ip": 1}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(limited_user.id, "1.2.3.4", policy, db_session)
         assert exc_info.value.status_code == 403

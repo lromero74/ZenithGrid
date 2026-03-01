@@ -12,7 +12,7 @@ Covers:
 import pytest
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException
+from app.exceptions import RateLimitError, SessionLimitError
 
 from app.models import ActiveSession, User
 from app.services.session_service import (
@@ -190,10 +190,10 @@ class TestCheckSessionLimits:
         )
 
         policy = {"max_simultaneous_sessions": 2}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(test_user.id, "9.10.11.12", policy, db_session)
         assert exc_info.value.status_code == 403
-        assert "Maximum 2 simultaneous sessions" in exc_info.value.detail
+        assert "Maximum 2 simultaneous sessions" in exc_info.value.message
 
     @pytest.mark.asyncio
     async def test_max_simultaneous_not_exceeded(self, db_session, test_user):
@@ -217,10 +217,10 @@ class TestCheckSessionLimits:
         )
 
         policy = {"max_sessions_per_ip": 2}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(test_user.id, "1.2.3.4", policy, db_session)
         assert exc_info.value.status_code == 403
-        assert "Maximum 2 sessions from this IP" in exc_info.value.detail
+        assert "Maximum 2 sessions from this IP" in exc_info.value.message
 
     @pytest.mark.asyncio
     async def test_max_per_ip_different_ip_ok(self, db_session, test_user):
@@ -243,10 +243,10 @@ class TestCheckSessionLimits:
         await end_session("cool-1", db_session)
 
         policy = {"relogin_cooldown_minutes": 10}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RateLimitError) as exc_info:
             await check_session_limits(test_user.id, "1.2.3.4", policy, db_session)
         assert exc_info.value.status_code == 429
-        assert "wait" in exc_info.value.detail.lower()
+        assert "wait" in exc_info.value.message.lower()
 
     @pytest.mark.asyncio
     async def test_relogin_cooldown_expired_ok(self, db_session, test_user):
@@ -273,10 +273,10 @@ class TestCheckSessionLimits:
         )
 
         policy = {"max_sessions_per_ip": 1}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(test_user.id, "1.2.3.4", policy, db_session)
         assert exc_info.value.status_code == 403
-        assert "session slot will free up" in exc_info.value.detail
+        assert "session slot will free up" in exc_info.value.message
 
     @pytest.mark.asyncio
     async def test_max_simultaneous_includes_expiry_hint(self, db_session, test_user):
@@ -289,10 +289,10 @@ class TestCheckSessionLimits:
         )
 
         policy = {"max_simultaneous_sessions": 1}
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(SessionLimitError) as exc_info:
             await check_session_limits(test_user.id, "5.6.7.8", policy, db_session)
         assert exc_info.value.status_code == 403
-        assert "session slot will free up" in exc_info.value.detail
+        assert "session slot will free up" in exc_info.value.message
 
     @pytest.mark.asyncio
     async def test_empty_policy_allows_all(self, db_session, test_user):

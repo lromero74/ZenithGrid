@@ -7,10 +7,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import RateLimitError, SessionLimitError
 from app.models import ActiveSession
 
 logger = logging.getLogger(__name__)
@@ -71,10 +71,9 @@ async def check_session_limits(
             cooldown_until = last_ended + timedelta(minutes=cooldown_minutes)
             if datetime.utcnow() < cooldown_until:
                 retry_after = int((cooldown_until - datetime.utcnow()).total_seconds())
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Please wait {retry_after} seconds before logging in again",
-                    headers={"Retry-After": str(retry_after)},
+                raise RateLimitError(
+                    f"Please wait {retry_after} seconds before logging in again",
+                    retry_after=retry_after,
                 )
 
     # Step 3: max simultaneous sessions
@@ -94,10 +93,7 @@ async def check_session_limits(
             expiry_hint = await _earliest_expiry_hint(user_id, None, db)
             if expiry_hint:
                 msg += f". {expiry_hint}"
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=msg,
-            )
+            raise SessionLimitError(msg)
 
     # Step 4: max sessions per IP
     max_per_ip = policy.get("max_sessions_per_ip")
@@ -117,10 +113,7 @@ async def check_session_limits(
             expiry_hint = await _earliest_expiry_hint(user_id, ip_address, db)
             if expiry_hint:
                 msg += f". {expiry_hint}"
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=msg,
-            )
+            raise SessionLimitError(msg)
 
 
 async def _earliest_expiry_hint(
