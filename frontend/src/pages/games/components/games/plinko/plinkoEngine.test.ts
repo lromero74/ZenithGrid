@@ -400,7 +400,7 @@ describe('getDropPositions', () => {
 })
 
 describe('constants', () => {
-  test('GRAVITY is 0.15', () => expect(GRAVITY).toBe(0.15))
+  test('GRAVITY is 0.075', () => expect(GRAVITY).toBe(0.075))
   test('RESTITUTION is 0.75', () => expect(RESTITUTION).toBe(0.75))
   test('DAMPING is 0.85', () => expect(DAMPING).toBe(0.85))
   test('PEG_RADIUS is 5', () => expect(PEG_RADIUS).toBe(5))
