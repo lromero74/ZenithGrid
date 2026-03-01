@@ -767,3 +767,75 @@ export const transfersApi = {
   getRecentSummary: () =>
     api.get<TransferRecentSummary>('/transfers/recent-summary').then(r => r.data),
 };
+
+// Admin RBAC Management
+export interface AdminUser {
+  id: number
+  email: string
+  display_name: string | null
+  is_active: boolean
+  is_superuser: boolean
+  mfa_enabled: boolean
+  mfa_email_enabled: boolean
+  groups: { id: number; name: string }[]
+  last_login_at: string | null
+  created_at: string | null
+}
+
+export interface AdminGroup {
+  id: number
+  name: string
+  description: string | null
+  is_system: boolean
+  member_count: number
+  roles: { id: number; name: string }[]
+}
+
+export interface AdminRole {
+  id: number
+  name: string
+  description: string | null
+  is_system: boolean
+  requires_mfa: boolean
+  permissions: { id: number; name: string }[]
+}
+
+export interface AdminPermission {
+  id: number
+  name: string
+  description: string | null
+}
+
+export const adminApi = {
+  // Users
+  getUsers: () =>
+    api.get<AdminUser[]>('/admin/users').then(r => r.data),
+  updateUserStatus: (userId: number, isActive: boolean) =>
+    api.put<{ id: number; email: string; is_active: boolean }>(`/admin/users/${userId}/status`, { is_active: isActive }).then(r => r.data),
+  updateUserGroups: (userId: number, groupIds: number[]) =>
+    api.put<{ id: number; email: string; groups: { id: number; name: string }[] }>(`/admin/users/${userId}/groups`, { group_ids: groupIds }).then(r => r.data),
+
+  // Groups
+  getGroups: () =>
+    api.get<AdminGroup[]>('/admin/groups').then(r => r.data),
+  createGroup: (data: { name: string; description?: string; role_ids?: number[] }) =>
+    api.post<AdminGroup>('/admin/groups', data).then(r => r.data),
+  updateGroup: (groupId: number, data: { name?: string; description?: string; role_ids?: number[] }) =>
+    api.put<AdminGroup>(`/admin/groups/${groupId}`, data).then(r => r.data),
+  deleteGroup: (groupId: number) =>
+    api.delete<{ message: string }>(`/admin/groups/${groupId}`).then(r => r.data),
+
+  // Roles
+  getRoles: () =>
+    api.get<AdminRole[]>('/admin/roles').then(r => r.data),
+  createRole: (data: { name: string; description?: string; requires_mfa?: boolean; permission_ids?: number[] }) =>
+    api.post<AdminRole>('/admin/roles', data).then(r => r.data),
+  updateRole: (roleId: number, data: { name?: string; description?: string; requires_mfa?: boolean; permission_ids?: number[] }) =>
+    api.put<AdminRole>(`/admin/roles/${roleId}`, data).then(r => r.data),
+  deleteRole: (roleId: number) =>
+    api.delete<{ message: string }>(`/admin/roles/${roleId}`).then(r => r.data),
+
+  // Permissions
+  getPermissions: () =>
+    api.get<AdminPermission[]>('/admin/permissions').then(r => r.data),
+};

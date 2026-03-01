@@ -130,7 +130,7 @@ async def create_bot(
         reserved_usd_balance=bot_data.reserved_usd_balance,
         budget_percentage=bot_data.budget_percentage,
         is_active=False,
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     # Validate bidirectional budget if enabled
@@ -511,7 +511,7 @@ async def clone_bot(
         is_active=False,  # Start stopped
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     db.add(cloned_bot)
@@ -620,7 +620,7 @@ async def copy_bot_to_account(
         check_interval_seconds=original_bot.check_interval_seconds,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     db.add(copied_bot)

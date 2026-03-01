@@ -9,7 +9,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
 // Types
-interface User {
+export interface User {
   id: number
   email: string
   display_name: string | null
@@ -22,6 +22,8 @@ interface User {
   created_at: string
   last_login_at: string | null
   terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
+  groups?: { id: number; name: string; description: string | null }[]
+  permissions?: string[]
 }
 
 interface AuthContextType {

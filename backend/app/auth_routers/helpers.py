@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import TrustedDevice, User
 
-from app.auth_routers.schemas import LoginResponse, UserResponse
+from app.auth_routers.schemas import GroupResponse, LoginResponse, UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,15 @@ async def _geolocate_ip(ip: str) -> Optional[str]:
 
 def _build_user_response(user: User) -> UserResponse:
     """Build a UserResponse from a User model instance."""
+    # Flatten permissions from groups -> roles -> permissions chain
+    groups = getattr(user, 'groups', None) or []
+    permissions = list({
+        p.name
+        for g in groups
+        for r in g.roles
+        for p in r.permissions
+    })
+
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -183,6 +192,8 @@ def _build_user_response(user: User) -> UserResponse:
         created_at=user.created_at,
         last_login_at=user.last_login_at,
         terms_accepted_at=user.terms_accepted_at,
+        groups=[GroupResponse.model_validate(g) for g in groups],
+        permissions=permissions,
     )
 
 

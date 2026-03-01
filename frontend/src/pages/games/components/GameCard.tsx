@@ -26,15 +26,16 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface GameCardProps {
   game: GameInfo
   highScore?: number | null
+  onPlay?: () => void
 }
 
-export function GameCard({ game, highScore }: GameCardProps) {
+export function GameCard({ game, highScore, onPlay }: GameCardProps) {
   const navigate = useNavigate()
   const IconComponent = GAME_ICONS[game.icon]
 
   return (
     <button
-      onClick={() => navigate(game.path)}
+      onClick={() => { onPlay?.(); navigate(game.path) }}
       className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-slate-500 hover:bg-slate-750 transition-all text-left w-full group"
     >
       {/* Top row: icon + name */}

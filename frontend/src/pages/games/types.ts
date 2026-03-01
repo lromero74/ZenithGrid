@@ -26,3 +26,5 @@ export interface GameScore {
 }
 
 export type GameStatus = 'idle' | 'playing' | 'won' | 'lost' | 'draw'
+
+export type GameSortOption = 'default' | 'a-z' | 'z-a' | 'difficulty' | 'category' | 'recent'

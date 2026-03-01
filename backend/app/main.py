@@ -43,6 +43,7 @@ from app.routers import (
 )
 from app.routers.order_history import router as order_history_router
 from app.routers.templates import router as templates_router
+from app.routers import admin_router  # RBAC admin management
 from app.routers import prop_guard_router
 from app.routers import reports_router  # Reporting & goals
 from app.routers import transfers_router  # Deposit/withdrawal tracking
@@ -154,6 +155,7 @@ app.include_router(trading_router.router)  # Manual trading operations
 app.include_router(seasonality_router.router)  # Seasonality-based bot management
 app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
+app.include_router(admin_router.router)  # RBAC admin management
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
 app.include_router(reports_router.router)  # Reporting & goals
 app.include_router(transfers_router.router)  # Deposit/withdrawal tracking
@@ -470,6 +472,12 @@ async def startup_event():
         logger.critical("SECURITY: JWT_SECRET_KEY is not set or still has default value!")
         logger.critical("SECURITY: Run setup.py to generate a secure JWT secret, or set JWT_SECRET_KEY in .env")
         raise RuntimeError("JWT_SECRET_KEY must be set to a secure value before starting the application")
+
+    # Warn if email/URL config is empty (non-fatal — only needed for email features)
+    if not settings.ses_sender_email:
+        logger.warning("SES_SENDER_EMAIL is not set — email features (verification, MFA) will not work")
+    if not settings.frontend_url:
+        logger.warning("FRONTEND_URL is not set — email links will be broken")
 
     # VACUUM before init_db() — needs exclusive access (no engine yet)
     try:

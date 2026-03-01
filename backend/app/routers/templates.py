@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import BotTemplate, BotTemplateProduct, User
 from app.strategies import StrategyRegistry
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_superuser
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
@@ -89,7 +89,7 @@ async def create_template(
         product_ids=template_data.product_ids or [],
         split_budget_across_pairs=template_data.split_budget_across_pairs,
         is_default=False,  # User-created templates are not defaults
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     db.add(template)
@@ -238,7 +238,7 @@ async def delete_template(
 
 
 @router.post("/seed-defaults")
-async def seed_default_templates(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def seed_default_templates(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_superuser)):
     """Seed the database with default bot templates (one-time setup)"""
 
     # Check if defaults already exist

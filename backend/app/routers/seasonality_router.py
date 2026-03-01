@@ -14,7 +14,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -173,7 +173,8 @@ async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus, user_id:
 async def toggle_seasonality(
     request: SeasonalityToggleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_superuser),
+    scope: str = Query("all", description="Scope: 'all' (all users' bots) or 'own' (current user only)"),
 ):
     """
     Toggle seasonality tracking on or off.
@@ -183,6 +184,7 @@ async def toggle_seasonality(
     - Risk-Off (Summer 80% through Winter 80%): USD bots allowed, BTC bots blocked
 
     Enabling will immediately disable restricted bot types based on current mode.
+    Use scope='own' to only affect the current user's bots instead of all users.
     """
     # Update the enabled setting
     await set_setting(
@@ -211,8 +213,9 @@ async def toggle_seasonality(
             "Timestamp of last mode transition"
         )
 
-        # Auto-disable restricted bots (admin action affects all users' bots)
-        counts = await auto_manage_bots(db, status)
+        # Auto-disable restricted bots (scoped by admin choice)
+        user_id = current_user.id if scope == "own" else None
+        counts = await auto_manage_bots(db, status, user_id=user_id)
 
         logger.info(
             f"Seasonality enabled - mode: {status.mode}, "
