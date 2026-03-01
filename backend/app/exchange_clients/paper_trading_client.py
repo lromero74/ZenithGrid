@@ -509,7 +509,7 @@ class PaperTradingClient(ExchangeClient):
         from app.models import Position
         result = await self.db.execute(
             select(Position).where(
-                Position.account_id == self.account_id,
+                Position.account_id == self.account.id,
                 Position.status == "open",
                 Position.product_id.like(f"%-{quote_currency}"),
             )
