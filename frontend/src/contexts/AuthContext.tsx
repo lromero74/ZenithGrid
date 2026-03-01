@@ -305,10 +305,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      const err = new Error(
-        error.detail || 'Login failed'
-      ) as Error & { status?: number }
+      let detail = 'Login failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch {
+        // Response was not JSON (e.g. nginx HTML error page)
+      }
+      const err = new Error(detail) as Error & { status?: number }
       err.status = response.status
       throw err
     }
@@ -369,8 +373,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'MFA verification failed')
+      let detail = 'MFA verification failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const data: LoginResponse = await response.json()
@@ -429,8 +437,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Email code verification failed')
+      let detail = 'Email code verification failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const data: LoginResponse = await response.json()
@@ -449,8 +461,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Email link verification failed')
+      let detail = 'Email link verification failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const data: LoginResponse = await response.json()
@@ -470,8 +486,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to resend MFA email')
+      let detail = 'Failed to resend MFA email'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
   }
 
@@ -495,8 +515,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Signup failed')
+      let detail = 'Signup failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const data: TokenRefreshResponse = await response.json()
@@ -616,8 +640,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to change password')
+      let detail = 'Failed to change password'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
   }
 
@@ -637,8 +665,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to accept terms')
+      let detail = 'Failed to accept terms'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     // Update user state with the new terms_accepted_at timestamp
@@ -668,8 +700,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to enable email MFA')
+      let detail = 'Failed to enable email MFA'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const updatedUser: User = await response.json()
@@ -692,8 +728,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to disable email MFA')
+      let detail = 'Failed to disable email MFA'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const updatedUser: User = await response.json()
@@ -710,8 +750,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Email verification failed')
+      let detail = 'Email verification failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const updatedUser: User = await response.json()
@@ -734,8 +778,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Code verification failed')
+      let detail = 'Code verification failed'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
 
     const updatedUser: User = await response.json()
@@ -757,8 +805,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to resend verification email')
+      let detail = 'Failed to resend verification email'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
   }, [])
 
@@ -771,8 +823,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to send reset email')
+      let detail = 'Failed to send reset email'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
   }, [])
 
@@ -785,8 +841,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Failed to reset password')
+      let detail = 'Failed to reset password'
+      try {
+        const error = await response.json()
+        detail = error.detail || detail
+      } catch { /* non-JSON response */ }
+      throw new Error(detail)
     }
   }, [])
 
