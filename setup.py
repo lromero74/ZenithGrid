@@ -934,6 +934,61 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_jti ON revoked_tokens(jti)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_user_id ON revoked_tokens(user_id)")
 
+        # RBAC: Groups table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(100) UNIQUE NOT NULL,
+                description VARCHAR(255),
+                is_system BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # RBAC: Roles table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(50) UNIQUE NOT NULL,
+                description VARCHAR(255),
+                is_system BOOLEAN DEFAULT 0,
+                requires_mfa BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # RBAC: Permissions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(100) UNIQUE NOT NULL,
+                description VARCHAR(255)
+            )
+        """)
+
+        # RBAC: Junction tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_groups (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, group_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_roles (
+                group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+                PRIMARY KEY (group_id, role_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+                permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+                PRIMARY KEY (role_id, permission_id)
+            )
+        """)
+
         # Accounts table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS accounts (
@@ -2841,6 +2896,101 @@ print(hashed.decode('utf-8'))
         conn.close()
 
 
+def seed_rbac_defaults(project_root, admin_user_id):
+    """Seed default RBAC groups, roles, permissions and assign admin user."""
+    db_path = project_root / 'backend' / 'trading.db'
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Built-in groups
+        groups = [
+            ("System Owners", "System owner(s). Full access to everything.", 1),
+            ("Administrators", "System administrators. Manage users, groups, RBAC, settings.", 1),
+            ("Traders", "Active traders. Full trading access, manage own bots/positions.", 1),
+            ("Observers", "Read-only observers. Can view but not modify.", 1),
+        ]
+        for name, desc, is_sys in groups:
+            cursor.execute("INSERT OR IGNORE INTO groups (name, description, is_system) VALUES (?, ?, ?)",
+                           (name, desc, is_sys))
+
+        # Built-in roles
+        roles = [
+            ("super_admin", "Full system access.", 1, 1),
+            ("admin", "System administration.", 1, 1),
+            ("trader", "Full trading access.", 1, 0),
+            ("viewer", "Read-only access.", 1, 0),
+        ]
+        for name, desc, is_sys, req_mfa in roles:
+            cursor.execute(
+                "INSERT OR IGNORE INTO roles (name, description, is_system, requires_mfa) VALUES (?, ?, ?, ?)",
+                (name, desc, is_sys, req_mfa))
+
+        # Permissions
+        perms = [
+            "bots:read", "bots:write", "bots:delete",
+            "positions:read", "positions:write",
+            "orders:read", "orders:write",
+            "accounts:read", "accounts:write",
+            "reports:read", "reports:write", "reports:delete",
+            "templates:read", "templates:write", "templates:delete",
+            "settings:read", "settings:write",
+            "blacklist:read", "blacklist:write",
+            "news:read", "news:write",
+            "system:monitor", "system:restart", "system:shutdown",
+            "admin:users", "admin:groups", "admin:roles", "admin:permissions",
+            "games:play",
+        ]
+        for p in perms:
+            cursor.execute("INSERT OR IGNORE INTO permissions (name) VALUES (?)", (p,))
+
+        conn.commit()
+
+        # Assign super_admin role -> all permissions
+        cursor.execute("SELECT id FROM roles WHERE name = 'super_admin'")
+        sa_role = cursor.fetchone()
+        if sa_role:
+            for p in perms:
+                cursor.execute("SELECT id FROM permissions WHERE name = ?", (p,))
+                pid = cursor.fetchone()
+                if pid:
+                    cursor.execute("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                                   (sa_role[0], pid[0]))
+
+        # Assign roles to groups
+        group_role_map = {
+            "System Owners": "super_admin",
+            "Administrators": "admin",
+            "Traders": "trader",
+            "Observers": "viewer",
+        }
+        for gname, rname in group_role_map.items():
+            cursor.execute("SELECT id FROM groups WHERE name = ?", (gname,))
+            gid = cursor.fetchone()
+            cursor.execute("SELECT id FROM roles WHERE name = ?", (rname,))
+            rid = cursor.fetchone()
+            if gid and rid:
+                cursor.execute("INSERT OR IGNORE INTO group_roles (group_id, role_id) VALUES (?, ?)",
+                               (gid[0], rid[0]))
+
+        # Assign admin user to System Owners group
+        if admin_user_id:
+            cursor.execute("SELECT id FROM groups WHERE name = 'System Owners'")
+            so_id = cursor.fetchone()
+            if so_id:
+                cursor.execute("INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
+                               (admin_user_id, so_id[0]))
+
+        conn.commit()
+        print_success("RBAC defaults seeded (groups, roles, permissions)")
+
+    except Exception as e:
+        conn.rollback()
+        print_error(f"Failed to seed RBAC defaults: {e}")
+    finally:
+        conn.close()
+
+
 def seed_coin_categorizations(project_root, user_id):
     """Seed initial coin categorizations with AI-reviewed safety assessments"""
     db_path = project_root / 'backend' / 'trading.db'
@@ -4138,6 +4288,10 @@ def run_setup():
         # Need to ensure bcrypt is available
         sys.path.insert(0, str(project_root / 'backend'))
         user_id = create_admin_user(project_root, email, password, display_name or None)
+
+        # Seed RBAC defaults and assign admin to System Owners
+        if user_id:
+            seed_rbac_defaults(project_root, user_id)
 
         # Seed initial coin categorizations
         if user_id:

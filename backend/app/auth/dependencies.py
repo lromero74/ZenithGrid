@@ -9,6 +9,7 @@ creating circular dependencies.
 
 import logging
 from datetime import datetime
+from enum import StrEnum
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -16,10 +17,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models import RevokedToken, User
+from app.models import Group, RevokedToken, Role, User
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +69,16 @@ async def check_token_revocation(payload: dict, db: AsyncSession) -> None:
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
-    """Get a user by ID."""
-    query = select(User).where(User.id == user_id)
+    """Get a user by ID with RBAC relationships eagerly loaded."""
+    query = (
+        select(User)
+        .where(User.id == user_id)
+        .options(
+            selectinload(User.groups)
+            .selectinload(Group.roles)
+            .selectinload(Role.permissions)
+        )
+    )
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
@@ -152,3 +162,94 @@ async def require_superuser(
             detail="Superuser privileges required",
         )
     return current_user
+
+
+# ---------------------------------------------------------------------------
+# RBAC: Permission-based access control
+# ---------------------------------------------------------------------------
+
+
+class Perm(StrEnum):
+    """Permission constants — prevents typos in route declarations."""
+    BOTS_READ = "bots:read"
+    BOTS_WRITE = "bots:write"
+    BOTS_DELETE = "bots:delete"
+    POSITIONS_READ = "positions:read"
+    POSITIONS_WRITE = "positions:write"
+    ORDERS_READ = "orders:read"
+    ORDERS_WRITE = "orders:write"
+    ACCOUNTS_READ = "accounts:read"
+    ACCOUNTS_WRITE = "accounts:write"
+    REPORTS_READ = "reports:read"
+    REPORTS_WRITE = "reports:write"
+    REPORTS_DELETE = "reports:delete"
+    TEMPLATES_READ = "templates:read"
+    TEMPLATES_WRITE = "templates:write"
+    TEMPLATES_DELETE = "templates:delete"
+    SETTINGS_READ = "settings:read"
+    SETTINGS_WRITE = "settings:write"
+    BLACKLIST_READ = "blacklist:read"
+    BLACKLIST_WRITE = "blacklist:write"
+    NEWS_READ = "news:read"
+    NEWS_WRITE = "news:write"
+    SYSTEM_MONITOR = "system:monitor"
+    SYSTEM_RESTART = "system:restart"
+    SYSTEM_SHUTDOWN = "system:shutdown"
+    ADMIN_USERS = "admin:users"
+    ADMIN_GROUPS = "admin:groups"
+    ADMIN_ROLES = "admin:roles"
+    ADMIN_PERMISSIONS = "admin:permissions"
+    GAMES_PLAY = "games:play"
+
+
+def _get_user_permissions(user: User) -> set[str]:
+    """Resolve permissions via User -> Groups -> Roles -> Permissions chain."""
+    perms = set()
+    for group in user.groups:
+        for role in group.roles:
+            for perm in role.permissions:
+                perms.add(perm.name)
+    return perms
+
+
+def require_permission(*permissions: Perm):
+    """
+    Dependency factory: requires the user to have ALL specified permissions.
+
+    Superusers bypass all permission checks (backward compat).
+
+    Usage:
+        @router.post("/bots")
+        async def create_bot(user: User = Depends(require_permission(Perm.BOTS_WRITE))):
+    """
+    async def _check(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_superuser:
+            return current_user
+        user_perms = _get_user_permissions(current_user)
+        for perm in permissions:
+            if perm not in user_perms:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Permission required: {perm}",
+                )
+        return current_user
+    return _check
+
+
+def require_role(role_name: str):
+    """
+    Dependency factory: requires the user to have a specific role (via any group).
+
+    Superusers bypass all role checks (backward compat).
+    """
+    async def _check(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_superuser:
+            return current_user
+        user_roles = {role.name for group in current_user.groups for role in group.roles}
+        if role_name not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role required: {role_name}",
+            )
+        return current_user
+    return _check

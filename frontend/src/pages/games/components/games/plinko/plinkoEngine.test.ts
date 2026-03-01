@@ -15,13 +15,13 @@ describe('generatePegLayout', () => {
     expect(rows.size).toBe(10)
   })
 
-  test('classic layout has alternating 12/13 pegs per row (slot-aligned)', () => {
+  test('classic layout has alternating 13/14 pegs per row (slot-aligned)', () => {
     const pegs = generatePegLayout('classic')
     for (let row = 0; row < 10; row++) {
       const rowPegs = pegs.filter(p => p.row === row)
-      // Even rows: SLOT_COUNT-1 pegs at slot boundaries
-      // Odd rows: SLOT_COUNT pegs at slot centers
-      expect(rowPegs.length).toBe(row % 2 === 0 ? SLOT_COUNT - 1 : SLOT_COUNT)
+      // Even rows: SLOT_COUNT pegs at slot centers
+      // Odd rows: SLOT_COUNT + 1 pegs at slot boundaries (including edges)
+      expect(rowPegs.length).toBe(row % 2 === 0 ? SLOT_COUNT : SLOT_COUNT + 1)
     }
   })
 
@@ -49,11 +49,11 @@ describe('generatePegLayout', () => {
     expect(row4.length).toBeGreaterThan(row0.length) // wider in middle
   })
 
-  test('all layouts have positive coordinates', () => {
+  test('all layouts have non-negative coordinates', () => {
     for (const layout of ['classic', 'pyramid', 'diamond'] as const) {
       const pegs = generatePegLayout(layout)
       for (const peg of pegs) {
-        expect(peg.x).toBeGreaterThan(0)
+        expect(peg.x).toBeGreaterThanOrEqual(0)
         expect(peg.y).toBeGreaterThan(0)
       }
     }
@@ -233,6 +233,36 @@ describe('resolveCollision', () => {
     const peg: Peg = { x: 105, y: 100, row: 0 }
     const resolved = resolveCollision(ball, peg)
     expect(resolved).not.toBe(ball)
+  })
+
+  test('Galton deflection: lateral speed is always non-zero', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 2 }
+    const peg: Peg = { x: 100, y: 105, row: 0 }
+    for (let i = 0; i < 20; i++) {
+      const resolved = resolveCollision(ball, peg)
+      expect(Math.abs(resolved.vx)).toBeGreaterThan(0)
+    }
+  })
+
+  test('Galton deflection: downward velocity is always positive', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 2 }
+    const peg: Peg = { x: 100, y: 105, row: 0 }
+    for (let i = 0; i < 20; i++) {
+      const resolved = resolveCollision(ball, peg)
+      expect(resolved.vy).toBeGreaterThan(0)
+    }
+  })
+
+  test('Galton deflection: lateral speed within expected range', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 2 }
+    const peg: Peg = { x: 100, y: 105, row: 0 }
+    for (let i = 0; i < 50; i++) {
+      const resolved = resolveCollision(ball, peg)
+      const absVx = Math.abs(resolved.vx)
+      // baseLateralSpeed=0.9, variance 0.8–1.2 → range 0.72–1.08
+      expect(absVx).toBeGreaterThanOrEqual(0.7)
+      expect(absVx).toBeLessThanOrEqual(1.1)
+    }
   })
 })
 

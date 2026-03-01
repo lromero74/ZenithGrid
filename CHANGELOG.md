@@ -5,6 +5,28 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.72.0] - 2026-03-01
+
+### Added
+- **Role-based access control (RBAC)**: Full Users → Groups → Roles → Permissions hierarchy replaces the single `is_superuser` flag. Includes 4 built-in groups (System Owners, Administrators, Traders, Observers), 4 roles (super_admin, admin, trader, viewer), and 29 granular permissions.
+- **Admin management page**: New `/admin` page with Users, Groups, and Roles tabs for managing RBAC assignments. Admins can enable/disable users, assign group memberships, create custom groups and roles, and configure permission sets.
+- **Permission-gated dependencies**: New `require_permission()` and `require_role()` FastAPI dependency factories for endpoint-level access control. Superusers bypass all checks for backward compatibility.
+- **Frontend permission hooks**: `usePermission`, `useHasPermission`, and `useIsAdmin` hooks for conditional UI rendering based on RBAC permissions.
+- **Admin nav link**: Yellow shield icon in the navigation bar, visible only to users with admin-level permissions.
+
+### Changed
+- **Admin endpoint protection**: All 6 blacklist admin endpoints, the user registration endpoint, and template seeding now use `require_superuser` dependency instead of inline checks.
+- **Seasonality toggle scope**: Added `scope` parameter (`all` or `own`) to the seasonality toggle endpoint.
+- **User login response**: Now includes `groups` and `permissions` arrays resolved from the RBAC chain.
+- **Config defaults**: `ses_sender_email` and `frontend_url` default to empty strings instead of hardcoded operator-specific values.
+
+### Fixed
+- **Dead code branches**: Removed 4 instances of `current_user.id if current_user else None` (user is always present when authenticated).
+
+### Security
+- **MFA enforcement on admin groups**: Users cannot be assigned to groups containing MFA-requiring roles unless they have MFA enabled.
+- **System entity protection**: Built-in groups and roles cannot be deleted through the admin interface.
+
 ## [v2.71.0] - 2026-02-28
 
 ### Added

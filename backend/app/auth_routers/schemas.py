@@ -64,6 +64,27 @@ class RegisterRequest(BaseModel):
         return _validate_password_strength(v)
 
 
+class GroupResponse(BaseModel):
+    """Group summary for user responses."""
+    id: int
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RoleResponse(BaseModel):
+    """Role summary for admin responses."""
+    id: int
+    name: str
+    description: Optional[str] = None
+    requires_mfa: bool = False
+
+    class Config:
+        from_attributes = True
+
+
 class UserResponse(BaseModel):
     """User information (without sensitive data)"""
     id: int
@@ -78,6 +99,8 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login_at: Optional[datetime]
     terms_accepted_at: Optional[datetime] = None  # NULL = must accept terms
+    groups: List[GroupResponse] = []
+    permissions: List[str] = []
 
     class Config:
         from_attributes = True

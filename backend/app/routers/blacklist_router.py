@@ -236,7 +236,7 @@ async def get_ai_provider_setting(db: AsyncSession = Depends(get_db), current_us
 async def update_ai_provider_setting(
     request: AIProviderSettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Update which AI provider to use for coin review.
@@ -244,10 +244,6 @@ async def update_ai_provider_setting(
     Only providers with configured API keys are available.
     Admin only.
     """
-    # Admin check
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     configured_providers = get_configured_ai_providers()
 
     # Validate provider is configured
@@ -446,20 +442,13 @@ async def list_blacklisted_coins(
 async def add_to_blacklist(
     request: BlacklistAddRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Add one or more coins to the global categorization list.
 
     Admin only - regular users cannot modify coin categories.
     """
-    # Only admins can add/modify coin categories
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can modify coin categories"
-        )
-
     added_entries = []
 
     for symbol in request.symbols:
@@ -508,20 +497,13 @@ async def add_to_blacklist(
 async def add_single_to_blacklist(
     request: BlacklistAddSingleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Add a single coin to the global categorization with its own reason.
 
     Admin only - regular users cannot modify coin categories.
     """
-    # Only admins can add/modify coin categories
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can modify coin categories"
-        )
-
     # Normalize symbol to uppercase
     normalized_symbol = request.symbol.upper().strip()
 
@@ -562,20 +544,13 @@ async def add_single_to_blacklist(
 async def remove_from_blacklist(
     symbol: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Remove a coin from the global categorization list.
 
     Admin only - regular users cannot modify coin categories.
     """
-    # Only admins can remove coin categories
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can modify coin categories"
-        )
-
     normalized_symbol = symbol.upper().strip()
 
     # Only look at global entries (user_id IS NULL)
@@ -602,20 +577,13 @@ async def update_blacklist_reason(
     symbol: str,
     request: BlacklistUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Update the category/reason for a coin.
 
     Admin only - regular users cannot modify coin categories.
     """
-    # Only admins can update coin categories
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can modify coin categories"
-        )
-
     normalized_symbol = symbol.upper().strip()
 
     # Only look at global entries (user_id IS NULL)
@@ -686,7 +654,7 @@ async def check_if_blacklisted(
 
 @router.post("/ai-review")
 async def trigger_ai_review(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Trigger an AI-powered review of all tracked coins.
@@ -694,13 +662,6 @@ async def trigger_ai_review(
     Admin only - uses configured AI provider to analyze each coin
     and update global categorizations.
     """
-    # Only admins can trigger AI review
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can trigger AI coin review"
-        )
-
     from app.services.coin_review_service import run_weekly_review
 
     logger.info(f"Manual AI coin review triggered by admin user {current_user.email}")

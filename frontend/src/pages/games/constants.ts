@@ -227,5 +227,15 @@ export const GAME_CATEGORIES = [
   { value: 'arcade', label: 'Arcade' },
 ] as const
 
+/** Sort options for the hub page */
+export const SORT_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'a-z', label: 'A \u2192 Z' },
+  { value: 'z-a', label: 'Z \u2192 A' },
+  { value: 'difficulty', label: 'Difficulty' },
+  { value: 'category', label: 'Category' },
+  { value: 'recent', label: 'Recently Played' },
+] as const
+
 /** localStorage key prefix for all game data */
 export const STORAGE_PREFIX = 'zenith-games-'

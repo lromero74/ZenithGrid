@@ -26,12 +26,39 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    Table,
     Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+# ---------------------------------------------------------------------------
+# RBAC junction tables (must be defined before ORM classes that reference them)
+# ---------------------------------------------------------------------------
+
+user_groups = Table(
+    "user_groups",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+)
+
+group_roles = Table(
+    "group_roles",
+    Base.metadata,
+    Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class User(Base):
@@ -95,6 +122,49 @@ class User(Base):
     report_schedules = relationship("ReportSchedule", back_populates="user", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
     account_transfers = relationship("AccountTransfer", back_populates="user", cascade="all, delete-orphan")
+
+    # RBAC
+    groups = relationship("Group", secondary=user_groups, back_populates="users", lazy="selectin")
+
+
+class Group(Base):
+    """Organizational group. Users belong to groups; groups are assigned roles."""
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    roles = relationship("Role", secondary=group_roles, back_populates="groups", lazy="selectin")
+    users = relationship("User", secondary=user_groups, back_populates="groups", lazy="selectin")
+
+
+class Role(Base):
+    """Functional capability set with associated permissions."""
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    is_system = Column(Boolean, default=False)
+    requires_mfa = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    permissions = relationship("Permission", secondary=role_permissions, back_populates="roles", lazy="selectin")
+    groups = relationship("Group", secondary=group_roles, back_populates="roles", lazy="selectin")
+
+
+class Permission(Base):
+    """Granular permission using resource:action naming (e.g. bots:read, admin:users)."""
+    __tablename__ = "permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+
+    roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
 
 class TrustedDevice(Base):

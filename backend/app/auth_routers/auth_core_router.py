@@ -19,6 +19,7 @@ from app.auth.dependencies import (
     decode_token,
     get_current_user,
     get_user_by_id,
+    require_superuser,
 )
 from app.config import settings
 from app.database import get_db
@@ -282,7 +283,7 @@ async def change_password(
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     request: RegisterRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_superuser),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -290,13 +291,6 @@ async def register(
 
     Only superusers can create new accounts (for security in a trading application).
     """
-    # Only superusers can register new users
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can create new users",
-        )
-
     # Check if email already exists
     existing_user = await get_user_by_email(db, request.email.lower())
     if existing_user:

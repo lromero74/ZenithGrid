@@ -68,9 +68,9 @@ class Settings(BaseSettings):
 
     # Email / SES Configuration
     ses_region: str = "us-east-1"
-    ses_sender_email: str = "noreply@romerotechsolutions.com"
+    ses_sender_email: str = ""  # Must be set in .env (e.g. noreply@yourdomain.com)
     ses_enabled: bool = True
-    frontend_url: str = "https://tradebot.romerotechsolutions.com"
+    frontend_url: str = ""  # Must be set in .env (e.g. https://yourdomain.com)
     public_signup_enabled: bool = True
     mfa_email_code_lifetime_minutes: int = 5
 
