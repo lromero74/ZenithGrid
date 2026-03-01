@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.7] - 2026-03-01
+
+### Fixed
+- **Logout now properly ends server-side sessions**: The logout request was missing the Authorization header, so the server never received the token needed to end the session. This caused session slots to remain occupied after logout, blocking re-login for demo users with per-IP session limits.
+
 ## [v2.76.6] - 2026-03-01
 
 ### Fixed
