@@ -23,10 +23,10 @@ import {
   Shield,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
-import { useAuth } from '../contexts/AuthContext'
 import { accountApi, api } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
+import { usePermission } from '../hooks/usePermission'
 import { PropGuardStatus } from './PropGuardStatus'
 
 interface AccountsManagementProps {
@@ -42,8 +42,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     setDefaultAccount,
     refreshAccounts,
   } = useAccount()
-  const { user } = useAuth()
-  const isDemoAccount = !user?.email?.includes('@')
+  const canWriteAccounts = usePermission('accounts', 'write')
 
   const confirm = useConfirm()
   const { addToast } = useNotifications()
@@ -268,9 +267,9 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
           </button>
           <button
             onClick={onAddAccount}
-            disabled={isDemoAccount}
-            className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors ${isDemoAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={isDemoAccount ? 'Demo accounts cannot manage accounts' : undefined}
+            disabled={!canWriteAccounts}
+            className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!canWriteAccounts ? 'Only admins can manage accounts' : undefined}
           >
             Add Account
           </button>
@@ -327,7 +326,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 onConvertToUSD={() => handleSellPortfolioToBase(account, 'USD')}
                 isConverting={sellingToBTC || sellingToUSD}
                 onRefreshAccounts={refreshAccounts}
-                isDemoAccount={isDemoAccount}
+                readOnly={!canWriteAccounts}
               />
             ))}
           </div>
@@ -353,7 +352,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 onMenuToggle={() => setOpenMenuId(openMenuId === account.id ? null : account.id)}
                 onDelete={() => handleDelete(account)}
                 onSetDefault={() => handleSetDefault(account)}
-                isDemoAccount={isDemoAccount}
+                readOnly={!canWriteAccounts}
               />
             ))}
           </div>
@@ -376,7 +375,7 @@ interface AccountRowProps {
   onConvertToUSD?: () => void
   isConverting?: boolean
   onRefreshAccounts?: () => Promise<void>
-  isDemoAccount?: boolean
+  readOnly?: boolean
 }
 
 function AccountRow({
@@ -392,7 +391,7 @@ function AccountRow({
   onConvertToUSD,
   isConverting,
   onRefreshAccounts,
-  isDemoAccount,
+  readOnly,
 }: AccountRowProps) {
   const [linking, setLinking] = useState(false)
   const [perpsError, setPerpsError] = useState<string | null>(null)
@@ -488,7 +487,7 @@ function AccountRow({
               <div className="absolute right-0 bottom-full mb-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
                 <button
                   onClick={onSetDefault}
-                  disabled={account.is_default || isDemoAccount}
+                  disabled={account.is_default || readOnly}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {account.is_default ? (
@@ -516,7 +515,7 @@ function AccountRow({
                         onMenuToggle()
                         onConvertToBTC()
                       }}
-                      disabled={isConverting || isDemoAccount}
+                      disabled={isConverting || readOnly}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-orange-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
@@ -527,7 +526,7 @@ function AccountRow({
                         onMenuToggle()
                         onConvertToUSD()
                       }}
-                      disabled={isConverting || isDemoAccount}
+                      disabled={isConverting || readOnly}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-green-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
@@ -539,7 +538,7 @@ function AccountRow({
                 <div className="border-t border-slate-700 my-1" />
                 <button
                   onClick={onDelete}
-                  disabled={account.bot_count > 0 || isDemoAccount}
+                  disabled={account.bot_count > 0 || readOnly}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -589,7 +588,7 @@ function AccountRow({
                   )}
                   <button
                     onClick={handleLinkPerps}
-                    disabled={linking || isDemoAccount}
+                    disabled={linking || readOnly}
                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
                   >
                     {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}

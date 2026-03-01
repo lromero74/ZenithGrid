@@ -23,7 +23,7 @@ from app.auth.dependencies import (
 )
 from app.config import settings
 from app.database import get_db
-from app.models import EmailVerificationToken, RevokedToken, TrustedDevice, User
+from app.models import EmailVerificationToken, Group, RevokedToken, TrustedDevice, User
 
 from app.auth_routers.helpers import (
     _DUMMY_HASH,
@@ -400,6 +400,17 @@ async def register(
     await db.refresh(default_paper_account)
 
     logger.info(f"Created default paper trading account for new user: {new_user.email}")
+
+    # Assign to Paper Traders group by default
+    paper_traders = (await db.execute(
+        select(Group).where(Group.name == "Paper Traders")
+    )).scalar_one_or_none()
+    if paper_traders:
+        new_user.groups.append(paper_traders)
+        await db.commit()
+        await db.refresh(new_user)
+        logger.info(f"Assigned {new_user.email} to Paper Traders group")
+
     logger.info(f"New user registered: {new_user.email} (by {current_user.email})")
 
     return _build_user_response(new_user)
@@ -533,6 +544,16 @@ async def signup(
     await db.refresh(default_paper_account)
 
     logger.info(f"Created default paper trading account for new user: {new_user.email}")
+
+    # Assign to Paper Traders group by default
+    paper_traders = (await db.execute(
+        select(Group).where(Group.name == "Paper Traders")
+    )).scalar_one_or_none()
+    if paper_traders:
+        new_user.groups.append(paper_traders)
+        await db.commit()
+        await db.refresh(new_user)
+        logger.info(f"Assigned {new_user.email} to Paper Traders group")
 
     # Generate verification token + 6-digit code and send email
     token_str = uuid.uuid4().hex

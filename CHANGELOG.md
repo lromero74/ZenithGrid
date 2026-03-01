@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.74.0] - 2026-03-01
+
+### Added
+- **Paper Traders role**: New default role for registered users — full trading access but cannot add or manage exchange accounts. Platform is paper-trading entertainment only; only admins and traders can manage real accounts.
+- **Auto-assign group on registration**: New users (both admin-created and self-signup) are automatically assigned to the Paper Traders group.
+- **Limit close modal view-only mode**: Observers can open the limit close interface to explore pricing, depth charts, and order details, but cannot submit orders. Submit button shows "View Only" when read-only.
+
+### Changed
+- **Account management gated by RBAC**: Add Account, Delete, Convert Portfolio, Link Perps, paper trading deposit/withdraw/reset, and auto-buy settings now check `accounts:write` permission instead of just demo account detection. Controls remain visible but disabled for users without permission.
+- **Position card read-only for observers**: Notes show as plain text (no edit prompt), market close/cancel/add funds/edit deal/resize budget buttons hidden, while "Close at limit" remains accessible in view-only mode.
+
+### Fixed
+- **Bot menu dropdown positioning**: Action menu no longer pins to top of screen when space is tight — now stays near the button and scrolls within available viewport space.
+
 ## [v2.73.2] - 2026-03-01
 
 ### Fixed
