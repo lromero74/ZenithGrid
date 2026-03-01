@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.75.5] - 2026-03-01
+
+### Changed
+- **Reports page uses RBAC permissions**: Replaced hardcoded `isDemoAccount` email check with proper `reports:write` and `reports:delete` RBAC permission checks for all create/edit/delete controls.
+- **Dashboard bot controls respect RBAC**: Start/Stop buttons on dashboard bot cards are disabled for users without `bots:write` permission.
+- **Read-only icons**: Goal and schedule edit buttons show an Eye icon (instead of Pencil) for read-only users.
+- **Demo bot max deals**: USD-based demo bots now allow 10 concurrent deals (was 5), matching BTC-based demo bots.
+
+### Fixed
+- **History shows only completed trades**: Reverted inclusion of failed positions (which never traded) in the closed positions list — only fully executed trades appear in History now.
+
 ## [v2.75.4] - 2026-03-01
 
 ### Fixed
