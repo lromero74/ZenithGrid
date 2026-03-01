@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.5] - 2026-03-01
+
+### Changed
+- **Session limit errors show when to retry**: When login is denied due to max sessions (total or per-IP), the error message now tells the user when the earliest session slot will free up (e.g., "A session slot will free up in about 10 minutes").
+
 ## [v2.76.4] - 2026-03-01
 
 ### Fixed

@@ -263,6 +263,38 @@ class TestCheckSessionLimits:
         await check_session_limits(test_user.id, "1.2.3.4", policy, db_session)
 
     @pytest.mark.asyncio
+    async def test_max_per_ip_includes_expiry_hint(self, db_session, test_user):
+        """When sessions have expiry times, the error should tell the user when a slot frees up."""
+        await create_session(
+            user_id=test_user.id, session_id="ip-hint-1",
+            ip_address="1.2.3.4", user_agent=None,
+            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            db=db_session,
+        )
+
+        policy = {"max_sessions_per_ip": 1}
+        with pytest.raises(HTTPException) as exc_info:
+            await check_session_limits(test_user.id, "1.2.3.4", policy, db_session)
+        assert exc_info.value.status_code == 403
+        assert "session slot will free up" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_max_simultaneous_includes_expiry_hint(self, db_session, test_user):
+        """When sessions have expiry times, the error should tell the user when a slot frees up."""
+        await create_session(
+            user_id=test_user.id, session_id="sim-hint-1",
+            ip_address="1.2.3.4", user_agent=None,
+            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            db=db_session,
+        )
+
+        policy = {"max_simultaneous_sessions": 1}
+        with pytest.raises(HTTPException) as exc_info:
+            await check_session_limits(test_user.id, "5.6.7.8", policy, db_session)
+        assert exc_info.value.status_code == 403
+        assert "session slot will free up" in exc_info.value.detail
+
+    @pytest.mark.asyncio
     async def test_empty_policy_allows_all(self, db_session, test_user):
         # Empty policy = no limits
         await check_session_limits(test_user.id, "1.2.3.4", {}, db_session)

@@ -90,9 +90,13 @@ async def check_session_limits(
         )
         active_count = result.scalar() or 0
         if active_count >= max_simultaneous:
+            msg = f"Maximum {max_simultaneous} simultaneous sessions reached"
+            expiry_hint = await _earliest_expiry_hint(user_id, None, db)
+            if expiry_hint:
+                msg += f". {expiry_hint}"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Maximum {max_simultaneous} simultaneous sessions reached",
+                detail=msg,
             )
 
     # Step 4: max sessions per IP
@@ -109,10 +113,46 @@ async def check_session_limits(
         )
         ip_count = result.scalar() or 0
         if ip_count >= max_per_ip:
+            msg = f"Maximum {max_per_ip} sessions from this IP address"
+            expiry_hint = await _earliest_expiry_hint(user_id, ip_address, db)
+            if expiry_hint:
+                msg += f". {expiry_hint}"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Maximum {max_per_ip} sessions from this IP address",
+                detail=msg,
             )
+
+
+async def _earliest_expiry_hint(
+    user_id: int,
+    ip_address: Optional[str],
+    db: AsyncSession,
+) -> Optional[str]:
+    """Return a human-readable hint about when the earliest session expires."""
+    conditions = [
+        ActiveSession.user_id == user_id,
+        ActiveSession.is_active.is_(True),
+        ActiveSession.expires_at.isnot(None),
+    ]
+    if ip_address:
+        conditions.append(ActiveSession.ip_address == ip_address)
+
+    result = await db.execute(
+        select(func.min(ActiveSession.expires_at)).where(and_(*conditions))
+    )
+    earliest = result.scalar()
+    if not earliest:
+        return None
+
+    remaining = int((earliest - datetime.utcnow()).total_seconds())
+    if remaining <= 0:
+        return None
+    if remaining < 60:
+        return f"A session slot will free up in {remaining} seconds"
+    minutes = remaining // 60
+    if minutes == 1:
+        return "A session slot will free up in about 1 minute"
+    return f"A session slot will free up in about {minutes} minutes"
 
 
 async def end_session(session_id: str, db: AsyncSession) -> bool:
