@@ -84,9 +84,17 @@ export default function Login() {
     const msg = err instanceof Error
       ? err.message : 'Login failed'
 
-    if (status === 403
-        && msg.includes('simultaneous sessions')) {
-      return `${username} already has the maximum number of simultaneous sessions. Please try again later.`
+    if (status === 403) {
+      // Extract expiry hint from server message (after ". ")
+      const hintMatch = msg.match(/\. (A session slot will free up .+)/)
+      const hint = hintMatch ? ` ${hintMatch[1]}.` : ''
+
+      if (msg.includes('simultaneous sessions')) {
+        return `${username} has the maximum number of simultaneous sessions.${hint || ' Please try again later.'}`
+      }
+      if (msg.includes('sessions from this IP')) {
+        return `${username} has the maximum number of sessions from this IP address.${hint || ' Please try again later.'}`
+      }
     }
     if (status === 429) {
       const secMatch = msg.match(/(\d+)\s*seconds?/)
