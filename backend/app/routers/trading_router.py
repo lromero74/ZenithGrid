@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Account, User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class MarketSellRequest(BaseModel):
 @router.post("/market-sell")
 async def market_sell(
     request: MarketSellRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """

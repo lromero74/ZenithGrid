@@ -5,6 +5,7 @@ import { useNotifications } from '../contexts/NotificationContext'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch, api } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { CandleData } from '../utils/indicators/types'
@@ -62,6 +63,7 @@ function Portfolio() {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const { addToast } = useNotifications()
+  const canWriteAccounts = usePermission('accounts', 'write')
 
   // Fetch portfolio with optional cache bypass
   const fetchPortfolio = async (forceFresh = false): Promise<PortfolioData> => {
@@ -767,11 +769,13 @@ function Portfolio() {
                       <div className="flex items-center justify-center gap-1">
                         {canSellToUSD(holding.asset) && (
                           <button
-                            onClick={() => handleSell(holding.asset, 'USD', holding.available)}
-                            disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
+                            onClick={canWriteAccounts ? () => handleSell(holding.asset, 'USD', holding.available) : undefined}
+                            disabled={!canWriteAccounts || holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="p-1.5 rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
-                              holding.hold > 0
+                              !canWriteAccounts
+                                ? 'Read-only account'
+                                : holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
                                 : holding.available <= 0
                                 ? `No ${holding.asset} available to sell`
@@ -783,11 +787,13 @@ function Portfolio() {
                         )}
                         {canSellToBTC(holding.asset) && (
                           <button
-                            onClick={() => handleSell(holding.asset, 'BTC', holding.available)}
-                            disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
+                            onClick={canWriteAccounts ? () => handleSell(holding.asset, 'BTC', holding.available) : undefined}
+                            disabled={!canWriteAccounts || holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="p-1.5 rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
-                              holding.hold > 0
+                              !canWriteAccounts
+                                ? 'Read-only account'
+                                : holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
                                 : holding.available <= 0
                                 ? `No ${holding.asset} available to sell`

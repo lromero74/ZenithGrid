@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sun, Snowflake, Leaf, Sprout, ToggleLeft, ToggleRight, AlertTriangle, TrendingUp, DollarSign, Info } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import { authFetch } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 
 interface SeasonalityStatus {
   enabled: boolean
@@ -60,6 +61,7 @@ function InfoTooltip({ text }: { text: string }) {
 }
 
 export function SeasonalityToggle() {
+  const canWriteSettings = usePermission('settings', 'write')
   const queryClient = useQueryClient()
   const [showConfirmDisable, setShowConfirmDisable] = useState(false)
 
@@ -195,10 +197,12 @@ export function SeasonalityToggle() {
           <div className="flex flex-col items-end gap-2">
             {/* Toggle */}
             <button
-              onClick={handleToggle}
-              disabled={toggleMutation.isPending}
+              onClick={canWriteSettings ? handleToggle : undefined}
+              disabled={!canWriteSettings || toggleMutation.isPending}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                status.enabled
+                !canWriteSettings
+                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : status.enabled
                   ? 'bg-green-600 hover:bg-green-700 text-white'
                   : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
               }`}

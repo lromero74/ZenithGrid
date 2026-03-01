@@ -448,6 +448,7 @@ export default function Positions() {
             setAddFundsPosition(null)
           }}
           onSuccess={handleAddFundsSuccess}
+          readOnly={!canWritePositions}
         />
       )}
 
@@ -557,6 +558,7 @@ export default function Positions() {
           onSuccess={() => {
             refetchPositions()
           }}
+          readOnly={!canWritePositions}
         />
       )}
 

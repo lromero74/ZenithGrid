@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Settings, User
-from app.auth.dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
 
 logger = logging.getLogger(__name__)
@@ -173,7 +173,7 @@ async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus, user_id:
 async def toggle_seasonality(
     request: SeasonalityToggleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
     scope: str = Query("all", description="Scope: 'all' (all users' bots) or 'own' (current user only)"),
 ):
     """
