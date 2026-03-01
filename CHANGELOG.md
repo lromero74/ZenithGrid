@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.8] - 2026-03-01
+
+### Fixed
+- **Auto-calculate bots with percentage-of-base safety orders used 3x the base order**: When `split_budget_across_pairs` was enabled, the pair processor divided `safety_order_percentage` by `max_concurrent_deals`, double-counting the budget split already done per-position. This corrupted the order sizing multiplier (4.0 became 1.3), causing base orders to consume 77% of budget instead of 25%. Only affected bots using `percentage_of_base` safety order type with auto-calculate enabled (e.g., RSI Runner). Fixed 7 open positions with inflated budgets.
+
 ## [v2.76.7] - 2026-03-01
 
 ### Fixed

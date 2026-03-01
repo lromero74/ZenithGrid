@@ -861,3 +861,126 @@ class TestPairProcessorAILogging:
             await process_bot_pair(monitor, db_session, bot, "ETH-BTC")
 
         monitor.log_ai_decision.assert_not_called()
+
+
+# ===========================================================================
+# Class: TestBudgetSplitPercentageAdjustment
+# ===========================================================================
+
+
+class TestBudgetSplitPercentageAdjustment:
+    """Tests for the budget split percentage adjustment logic in pair_processor.
+
+    When split_budget_across_pairs is True, pair_processor adjusts percentage-based
+    parameters. With auto_calculate_order_sizes enabled, these adjustments must be
+    skipped to avoid double-counting the budget split.
+    """
+
+    @pytest.mark.asyncio
+    async def test_auto_calculate_skips_percentage_adjustment(self, db_session):
+        """When auto_calculate is on, safety_order_percentage must NOT be divided.
+
+        This was the root cause of RSI Runner 3x base order bug: pair_processor
+        divided safety_order_percentage by max_concurrent_deals (100/10=10), which
+        corrupted the multiplier in calculate_base_order_size() from 4.0 to 1.3.
+        """
+        monitor = _make_monitor()
+        bot = _make_bot(
+            split_budget_across_pairs=True,
+            strategy_config={
+                "max_concurrent_deals": 10,
+                "max_safety_orders": 2,
+                "safety_order_type": "percentage_of_base",
+                "safety_order_percentage": 100,
+                "safety_order_volume_scale": 2,
+                "auto_calculate_order_sizes": True,
+                "base_order_type": "fixed",
+                "base_order_percentage": 30,
+                "timeframe": "FIVE_MINUTE",
+            },
+        )
+
+        captured_config = {}
+
+        def capture_strategy_config(strategy_type, config):
+            captured_config.update(config)
+            return _make_strategy()
+
+        with patch(
+            "app.trading_engine.position_manager.get_active_positions_for_pair",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "app.monitor.pair_processor.StrategyRegistry.get_strategy",
+            side_effect=capture_strategy_config,
+        ), patch(
+            "app.monitor.pair_processor.StrategyTradingEngine",
+        ) as MockEngine:
+            mock_engine_inst = MagicMock()
+            mock_engine_inst.process_signal = AsyncMock(return_value=_make_engine_result())
+            MockEngine.return_value = mock_engine_inst
+
+            db_session.execute = AsyncMock(return_value=MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            ))
+            db_session.commit = AsyncMock()
+
+            await process_bot_pair(monitor, db_session, bot, "ETH-BTC")
+
+        # With auto_calculate, percentages must NOT be divided
+        assert captured_config["safety_order_percentage"] == 100, \
+            "safety_order_percentage should NOT be divided when auto_calculate is on"
+        assert captured_config["base_order_percentage"] == 30, \
+            "base_order_percentage should NOT be divided when auto_calculate is on"
+
+    @pytest.mark.asyncio
+    async def test_manual_sizing_applies_percentage_adjustment(self, db_session):
+        """When auto_calculate is off, percentage params ARE divided by max_concurrent_deals."""
+        monitor = _make_monitor()
+        bot = _make_bot(
+            split_budget_across_pairs=True,
+            strategy_config={
+                "max_concurrent_deals": 10,
+                "max_safety_orders": 2,
+                "safety_order_type": "percentage_of_base",
+                "safety_order_percentage": 100,
+                "safety_order_volume_scale": 2,
+                "auto_calculate_order_sizes": False,
+                "base_order_type": "percentage",
+                "base_order_percentage": 30,
+                "timeframe": "FIVE_MINUTE",
+            },
+        )
+
+        captured_config = {}
+
+        def capture_strategy_config(strategy_type, config):
+            captured_config.update(config)
+            return _make_strategy()
+
+        with patch(
+            "app.trading_engine.position_manager.get_active_positions_for_pair",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "app.monitor.pair_processor.StrategyRegistry.get_strategy",
+            side_effect=capture_strategy_config,
+        ), patch(
+            "app.monitor.pair_processor.StrategyTradingEngine",
+        ) as MockEngine:
+            mock_engine_inst = MagicMock()
+            mock_engine_inst.process_signal = AsyncMock(return_value=_make_engine_result())
+            MockEngine.return_value = mock_engine_inst
+
+            db_session.execute = AsyncMock(return_value=MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            ))
+            db_session.commit = AsyncMock()
+
+            await process_bot_pair(monitor, db_session, bot, "ETH-BTC")
+
+        # Without auto_calculate, percentages ARE divided
+        assert captured_config["safety_order_percentage"] == 10.0, \
+            "safety_order_percentage should be divided by 10 when auto_calculate is off"
+        assert captured_config["base_order_percentage"] == 3.0, \
+            "base_order_percentage should be divided by 10 when auto_calculate is off"
