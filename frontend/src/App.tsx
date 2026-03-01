@@ -77,7 +77,7 @@ function AppContent() {
       .catch(() => setAppVersion('dev'))
   }, [])
 
-  // Track last seen count for history items (closed + failed combined) - fetched from server
+  // Track last seen count for closed positions - fetched from server
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
 
   // Fetch last seen history count from server on mount
@@ -161,16 +161,15 @@ function AppContent() {
   const ethUsdPrice = ethPriceData?.price || 0
   const usdEthPrice = ethUsdPrice > 0 ? 1 / ethUsdPrice : 0
 
-  // Fetch closed + failed positions to count total history items (deferred)
-  // The 'closed' status filter now includes both closed and failed positions
+  // Fetch closed positions to count history items (deferred)
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
     queryFn: () => positionsApi.getAll('closed', 100),
-    refetchInterval: 60000, // Check every 60 seconds (reduced from 10s to save memory)
-    enabled: deferredQueriesEnabled, // Defer until 2s after initial render
+    refetchInterval: 60000,
+    enabled: deferredQueriesEnabled,
   })
 
-  // Badge: total unseen items (closed + failed combined in one query)
+  // Badge: unseen closed positions
   const currentClosedCount = closedPositions.length
   const newHistoryItemsCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
 

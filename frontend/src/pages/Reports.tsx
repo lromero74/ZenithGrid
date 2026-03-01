@@ -8,7 +8,7 @@ import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useAccount } from '../contexts/AccountContext'
-import { useAuth } from '../contexts/AuthContext'
+import { usePermission } from '../hooks/usePermission'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
@@ -33,8 +33,8 @@ export default function Reports() {
   const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
   const { selectedAccount } = useAccount()
-  const { user } = useAuth()
-  const isDemoAccount = !user?.email?.includes('@')
+  const canWriteReports = usePermission('reports', 'write')
+  const canDeleteReports = usePermission('reports', 'delete')
 
   const confirm = useConfirm()
 
@@ -244,7 +244,7 @@ export default function Reports() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-white">Financial Goals</h3>
-        {!isDemoAccount && (
+        {canWriteReports && (
           <button
             onClick={() => { setEditingGoal(null); setShowGoalForm(true) }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -311,11 +311,11 @@ export default function Reports() {
                     <button
                       onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
                       className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
-                      title={isDemoAccount ? 'View' : 'Edit'}
+                      title={canWriteReports ? 'Edit' : 'View'}
                     >
-                      <Pencil className="w-4 h-4" />
+                      {canWriteReports ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                    {!isDemoAccount && (
+                    {canWriteReports && (
                       <button
                         onClick={async () => { if (await confirm({ title: 'Delete Goal', message: 'Delete this goal?', variant: 'danger', confirmLabel: 'Delete' })) deleteGoal.mutate(goal.id) }}
                         className="p-1 text-slate-400 hover:text-red-400 transition-colors"
@@ -351,7 +351,7 @@ export default function Reports() {
                           onClick={() => setExpenseEditorGoal(goal)}
                           className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
                         >
-                          <Receipt className="w-3 h-3" /> {isDemoAccount ? 'View Expenses' : 'Manage Expenses'}
+                          <Receipt className="w-3 h-3" /> {canWriteReports ? 'Manage Expenses' : 'View Expenses'}
                         </button>
                     </div>
                   ) : (
@@ -406,7 +406,7 @@ export default function Reports() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-white">Report Schedules</h3>
-        {!isDemoAccount && (
+        {canWriteReports && (
           <button
             onClick={() => { setEditingSchedule(null); setShowScheduleForm(true) }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -454,7 +454,7 @@ export default function Reports() {
                 </div>
 
                 <div className="flex items-center gap-1 ml-3">
-                  {!isDemoAccount && (
+                  {canWriteReports && (
                     <button
                       onClick={async () => {
                         if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
@@ -469,11 +469,11 @@ export default function Reports() {
                   <button
                     onClick={() => { setEditingSchedule(schedule); setShowScheduleForm(true) }}
                     className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                    title={isDemoAccount ? 'View' : 'Edit'}
+                    title={canWriteReports ? 'Edit' : 'View'}
                   >
-                    <Pencil className="w-4 h-4" />
+                    {canWriteReports ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                  {!isDemoAccount && (
+                  {canWriteReports && (
                     <button
                       onClick={async () => { if (await confirm({ title: 'Delete Schedule', message: 'Delete this schedule?', variant: 'danger', confirmLabel: 'Delete' })) deleteSchedule.mutate(schedule.id) }}
                       className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
@@ -515,7 +515,7 @@ export default function Reports() {
         ) : (
           <>
             {/* Bulk action bar */}
-            {!isDemoAccount && selectedReportIds.size > 0 && (
+            {canDeleteReports && selectedReportIds.size > 0 && (
               <div className="flex items-center gap-3 mb-3 p-2 bg-slate-800 rounded-lg border border-slate-700">
                 <span className="text-sm text-slate-300">
                   {selectedReportIds.size} selected
@@ -541,7 +541,7 @@ export default function Reports() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    {!isDemoAccount && (
+                    {canWriteReports && (
                       <th className="py-2 px-2 w-8">
                         <button onClick={toggleSelectAll} className="text-slate-400 hover:text-white transition-colors">
                           {reports.length > 0 && reports.every(r => selectedReportIds.has(r.id))
@@ -560,7 +560,7 @@ export default function Reports() {
                 <tbody>
                   {reports.map(report => (
                     <tr key={report.id} className={`border-b border-slate-700/50 hover:bg-slate-800/50 ${selectedReportIds.has(report.id) ? 'bg-slate-800/70' : ''}`}>
-                      {!isDemoAccount && (
+                      {canWriteReports && (
                         <td className="py-2.5 px-2">
                           <button onClick={() => toggleReportSelection(report.id)} className="text-slate-400 hover:text-white transition-colors">
                             {selectedReportIds.has(report.id)
@@ -596,7 +596,7 @@ export default function Reports() {
                               <Download className="w-4 h-4" />
                             </button>
                           )}
-                          {!isDemoAccount && (
+                          {canWriteReports && (
                             <button
                               onClick={() => handleDeleteReport(report.id)}
                               className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
@@ -616,10 +616,10 @@ export default function Reports() {
             {/* Mobile cards */}
             <div className="sm:hidden space-y-2">
               {reports.map(report => (
-                <div key={report.id} className={`bg-slate-800 border rounded-lg p-3 ${!isDemoAccount && selectedReportIds.has(report.id) ? 'border-blue-500/50' : 'border-slate-700'}`}>
+                <div key={report.id} className={`bg-slate-800 border rounded-lg p-3 ${canDeleteReports && selectedReportIds.has(report.id) ? 'border-blue-500/50' : 'border-slate-700'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-2">
-                      {!isDemoAccount && (
+                      {canWriteReports && (
                         <button onClick={() => toggleReportSelection(report.id)} className="mt-0.5 text-slate-400 hover:text-white transition-colors">
                           {selectedReportIds.has(report.id)
                             ? <CheckSquare className="w-4 h-4 text-blue-400" />
@@ -651,7 +651,7 @@ export default function Reports() {
                           <Download className="w-4 h-4" />
                         </button>
                       )}
-                      {!isDemoAccount && (
+                      {canWriteReports && (
                         <button
                           onClick={() => handleDeleteReport(report.id)}
                           className="p-1.5 text-slate-400 hover:text-red-400"
@@ -740,7 +740,7 @@ export default function Reports() {
           }
         }}
         initialData={editingGoal}
-        readOnly={isDemoAccount}
+        readOnly={!canWriteReports}
       />
 
       <ScheduleForm
@@ -755,7 +755,7 @@ export default function Reports() {
         }}
         goals={goals}
         initialData={editingSchedule}
-        readOnly={isDemoAccount}
+        readOnly={!canWriteReports}
       />
 
       <ReportViewModal
@@ -775,7 +775,7 @@ export default function Reports() {
           expensePeriod={expenseEditorGoal.expense_period || 'monthly'}
           currency={expenseEditorGoal.target_currency}
           onClose={() => setExpenseEditorGoal(null)}
-          readOnly={isDemoAccount}
+          readOnly={!canWriteReports}
         />
       )}
     </div>

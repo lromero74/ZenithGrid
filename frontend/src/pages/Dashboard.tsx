@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useNotifications } from '../contexts/NotificationContext'
 import { AccountValueChart } from '../components/AccountValueChart'
+import { usePermission } from '../hooks/usePermission'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -587,6 +588,7 @@ function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useNotifications()
+  const canWriteBots = usePermission('bots', 'write')
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
@@ -678,11 +680,14 @@ function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page
       {/* Quick Actions */}
       <div className="flex gap-2">
         <button
-          onClick={handleToggleBot}
+          onClick={canWriteBots ? handleToggleBot : undefined}
+          disabled={!canWriteBots}
           className={`flex-1 px-3 py-2 rounded font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
-            bot.is_active
-              ? 'bg-red-600 hover:bg-red-700 text-white'
-              : 'bg-green-600 hover:bg-green-700 text-white'
+            !canWriteBots
+              ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              : bot.is_active
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : 'bg-green-600 hover:bg-green-700 text-white'
           }`}
         >
           {bot.is_active ? (
