@@ -5,7 +5,7 @@
  * multiplier configuration, and slot mapping.
  */
 
-export const GRAVITY = 0.15
+export const GRAVITY = 0.075
 export const RESTITUTION = 0.75
 export const DAMPING = 0.85
 export const PEG_RADIUS = 5
