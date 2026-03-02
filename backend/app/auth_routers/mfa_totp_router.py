@@ -243,9 +243,14 @@ async def mfa_verify(
         )
 
     # MFA verified — issue full tokens
-    user.last_login_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(user)
+    # Update last_login_at (non-critical — don't block login if DB is locked)
+    try:
+        user.last_login_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+    except Exception as e:
+        logger.warning(f"Non-critical: failed to update last_login_at for {user.email}: {e}")
+        await db.rollback()
 
     access_token = create_access_token(user.id, user.email)
     refresh_token = create_refresh_token(user.id)

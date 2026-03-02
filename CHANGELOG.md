@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.18] - 2026-03-02
+
+### Fixed
+- **Login no longer fails when bots are writing to the database**: The `last_login_at` update and session creation are now non-blocking — if SQLite is locked by bot activity, login still succeeds
+- **Demo account no longer gets rate-limited across multiple visitors**: Per-username rate limiting is now skipped for Observers group (shared demo accounts), using RBAC group membership instead of hardcoded username checks. Per-IP rate limiting still applies
+
+### Added
+- **Account value chart shows live current value**: The "Account Value Over Time" chart now appends a real-time data point for today using the current portfolio value, so the chart extends to "right now" instead of ending at the last midnight snapshot
+
 ## [v2.76.17] - 2026-03-02
 
 ### Fixed

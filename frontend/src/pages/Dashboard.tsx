@@ -451,7 +451,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Account Value Chart */}
-      <AccountValueChart />
+      <AccountValueChart
+        liveBtcValue={portfolio?.total_btc_value}
+        liveUsdValue={portfolio?.total_usd_value}
+      />
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

@@ -23,6 +23,8 @@ type MarkerCategory = ActivityItem['category']
 
 interface AccountValueChartProps {
   className?: string
+  liveBtcValue?: number | null
+  liveUsdValue?: number | null
 }
 
 // Marker config per activity category
@@ -64,7 +66,7 @@ function formatMarkerText(item: ActivityItem): string {
   return `${plural}: ${amt}`
 }
 
-export function AccountValueChart({ className = '' }: AccountValueChartProps) {
+export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [chartMode, setChartMode] = useState<ChartMode>('total')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
@@ -274,6 +276,16 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       value: isSplit ? (snapshot.usd_portion_usd ?? 0) : snapshot.total_value_usd,
     }))
 
+    // Append live "now" point (total mode only — split requires portion data we don't have live)
+    if (!isSplit && liveBtcValue != null && liveUsdValue != null) {
+      const today = new Date().toISOString().slice(0, 10) as Time
+      const lastDate = chartData.length > 0 ? chartData[chartData.length - 1].date : null
+      if (lastDate !== today) {
+        btcData.push({ time: today, value: liveBtcValue })
+        usdData.push({ time: today, value: liveUsdValue })
+      }
+    }
+
     btcSeries.setData(btcData)
     usdSeries.setData(usdData)
 
@@ -300,7 +312,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         usdSeriesRef.current = null
       }
     }
-  }, [history, chartMode])
+  }, [history, chartMode, liveBtcValue, liveUsdValue])
 
   // Calculate which time range buttons should be enabled based on data span
   const getEnabledTimeRanges = (): Set<TimeRange> => {
@@ -358,9 +370,14 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const latestValue = relevantHistory && relevantHistory.length > 0 ? relevantHistory[relevantHistory.length - 1] : null
   const earliestValue = relevantHistory && relevantHistory.length > 0 ? relevantHistory[0] : null
 
-  const latestBtc = isSplit ? (latestValue?.btc_portion_btc ?? 0) : (latestValue?.total_value_btc ?? 0)
+  // Use live values for "current" in total mode; fall back to last snapshot
+  const latestBtc = isSplit
+    ? (latestValue?.btc_portion_btc ?? 0)
+    : (liveBtcValue ?? latestValue?.total_value_btc ?? 0)
   const earliestBtc = isSplit ? (earliestValue?.btc_portion_btc ?? 0) : (earliestValue?.total_value_btc ?? 0)
-  const latestUsd = isSplit ? (latestValue?.usd_portion_usd ?? 0) : (latestValue?.total_value_usd ?? 0)
+  const latestUsd = isSplit
+    ? (latestValue?.usd_portion_usd ?? 0)
+    : (liveUsdValue ?? latestValue?.total_value_usd ?? 0)
   const earliestUsd = isSplit ? (earliestValue?.usd_portion_usd ?? 0) : (earliestValue?.total_value_usd ?? 0)
 
   const btcChange = earliestBtc ? ((latestBtc - earliestBtc) / earliestBtc) * 100 : 0
@@ -530,7 +547,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
       {/* Note */}
       <p className="text-xs text-slate-500 mt-4 text-center">
-        Account values are captured daily and aggregated across all your active accounts
+        Daily snapshots with live current value
       </p>
     </div>
   )
