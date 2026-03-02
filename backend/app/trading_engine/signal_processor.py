@@ -18,6 +18,7 @@ from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
+from app.trading_engine.trade_context import TradeContext
 from app.trading_engine.order_logger import log_order_to_history, save_ai_log, OrderLogEntry
 from app.trading_engine.perps_executor import execute_perps_close, execute_perps_open
 from app.trading_engine.position_manager import create_position, get_active_position, get_open_positions_count
@@ -168,20 +169,15 @@ _POSITION_NOT_SET = object()  # sentinel to distinguish None from not-provided
 
 
 async def _handle_ai_failsafe(
-    db: AsyncSession,
-    exchange: ExchangeClient,
-    trading_client: TradingClient,
-    bot: Bot,
-    position: Position,
-    product_id: str,
-    current_price: float,
-    strategy: TradingStrategy,
+    ctx: TradeContext, position: Position,
 ) -> Optional[Dict[str, Any]]:
     """Handle AI failsafe sell when signal analysis returned None.
 
     Only applies to ai_autonomous bots with an existing position.
     Returns a result dict if failsafe was triggered, None otherwise.
     """
+    db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
+    bot, product_id, current_price, strategy = ctx.bot, ctx.product_id, ctx.current_price, ctx.strategy
     if bot.strategy_type != "ai_autonomous" or position is None:
         return None
 
@@ -266,19 +262,15 @@ async def _handle_ai_failsafe(
 
 
 async def _calculate_budget(
-    db: AsyncSession,
-    exchange: ExchangeClient,
-    trading_client: TradingClient,
-    bot: Bot,
-    position: Optional[Position],
-    product_id: str,
-    quote_currency: str,
-    aggregate_value: Optional[float],
+    ctx: TradeContext, position: Optional[Position],
+    quote_currency: str, aggregate_value: Optional[float],
 ) -> tuple:
     """Calculate budget allocation for the bot.
 
     Returns (quote_balance, aggregate_value) tuple.
     """
+    db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
+    bot, product_id = ctx.bot, ctx.product_id
     print(f"🔍 Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
     if bot.budget_percentage > 0:
         # Bot uses percentage-based budgeting - calculate aggregate value
@@ -345,20 +337,16 @@ async def _calculate_budget(
 
 
 async def _decide_buy(
-    db: AsyncSession,
-    bot: Bot,
-    strategy: TradingStrategy,
-    signal_data: Dict[str, Any],
-    position: Optional[Position],
-    quote_balance: float,
+    ctx: TradeContext, signal_data: Dict[str, Any],
+    position: Optional[Position], quote_balance: float,
     aggregate_value: Optional[float],
-    product_id: str,
-    current_price: float,
 ) -> tuple:
     """Decide whether to buy, including all checks (max deals, cooldown, blacklist).
 
     Returns (should_buy, quote_amount, buy_reason) tuple.
     """
+    db, bot, strategy = ctx.db, ctx.bot, ctx.strategy
+    product_id, current_price = ctx.product_id, ctx.current_price
     should_buy = False
     quote_amount = 0
     buy_reason = ""
@@ -617,18 +605,9 @@ async def _decide_buy(
 
 
 async def _execute_buy_trade(
-    db: AsyncSession,
-    exchange: ExchangeClient,
-    trading_client: TradingClient,
-    bot: Bot,
-    strategy: TradingStrategy,
-    position: Optional[Position],
-    product_id: str,
-    quote_amount: float,
-    quote_balance: float,
-    current_price: float,
-    signal_data: Dict[str, Any],
-    aggregate_value: Optional[float],
+    ctx: TradeContext, position: Optional[Position],
+    quote_amount: float, quote_balance: float,
+    signal_data: Dict[str, Any], aggregate_value: Optional[float],
     buy_reason: str,
 ) -> Optional[Dict[str, Any]]:
     """Execute buy trade (initial or DCA), handling position creation and routing.
@@ -636,6 +615,8 @@ async def _execute_buy_trade(
     Returns a result dict if a buy was executed (or failed), None should not happen
     since this is only called when should_buy is True.
     """
+    db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
+    bot, product_id, current_price = ctx.bot, ctx.product_id, ctx.current_price
     # Get BTC/USD price for logging
     try:
         btc_usd_price = await exchange.get_btc_usd_price()
@@ -844,14 +825,7 @@ async def _execute_buy_trade(
 
 
 async def _decide_and_execute_sell(
-    db: AsyncSession,
-    exchange: ExchangeClient,
-    trading_client: TradingClient,
-    bot: Bot,
-    strategy: TradingStrategy,
-    position: Position,
-    product_id: str,
-    current_price: float,
+    ctx: TradeContext, position: Position,
     signal_data: Dict[str, Any],
     candles: List[Dict[str, Any]],
     candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]],
@@ -860,6 +834,9 @@ async def _decide_and_execute_sell(
 
     Returns a result dict if sell/hold action taken, None if no position.
     """
+    db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
+    bot, strategy = ctx.bot, ctx.strategy
+    product_id, current_price = ctx.product_id, ctx.current_price
     # Debug: Log timeframes available in candles_by_timeframe
     if candles_by_timeframe:
         for tf, tf_candles in candles_by_timeframe.items():
@@ -1165,6 +1142,13 @@ async def process_signal(
     """
     quote_currency = get_quote_currency(product_id)
 
+    # Build shared context for internal trading functions
+    ctx = TradeContext(
+        db=db, exchange=exchange, trading_client=trading_client,
+        bot=bot, product_id=product_id, current_price=current_price,
+        strategy=strategy,
+    )
+
     # 1. Get current state FIRST (needed for web search context)
     # If position_override is provided, use it (supports simultaneous same-pair deals)
     if position_override is not _POSITION_NOT_SET:
@@ -1176,14 +1160,12 @@ async def process_signal(
     action_context = "hold"  # Default for positions that exist
     if position is None:
         action_context = "open"  # Considering opening a new position
-    # (We'll update to "close" or "dca" later based on actual decision)
 
     # Use pre-analyzed signal if provided (from batch mode), otherwise analyze now
     if pre_analyzed_signal:
         signal_data = pre_analyzed_signal
         logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
     else:
-        # Analyze signal using strategy (with position, context, db, and user_id)
         signal_data = await strategy.analyze_signal(
             candles, current_price, position=position, action_context=action_context,
             db=db, user_id=bot.user_id
@@ -1191,9 +1173,7 @@ async def process_signal(
 
     # 2. AI failsafe — handle case where signal analysis returned None
     if not signal_data:
-        failsafe_result = await _handle_ai_failsafe(
-            db, exchange, trading_client, bot, position, product_id, current_price, strategy
-        )
+        failsafe_result = await _handle_ai_failsafe(ctx, position)
         if failsafe_result:
             return failsafe_result
         return {"action": "none", "reason": "No signal detected", "signal": None}
@@ -1201,20 +1181,17 @@ async def process_signal(
     # 3. Calculate budget
     aggregate_value = None
     quote_balance, aggregate_value = await _calculate_budget(
-        db, exchange, trading_client, bot, position, product_id, quote_currency, aggregate_value
+        ctx, position, quote_currency, aggregate_value,
     )
 
     # 4. Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
     if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
-        # DEBUG: This should NOT be called in batch mode!
         import traceback
-
         stack = "".join(traceback.format_stack()[-5:-1])
         logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
         logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
         logger.warning(f"  Call stack:\n{stack}")
 
-        # Log what the AI thinks, not what the bot will do
         ai_signal = signal_data.get("signal_type", "none")
         if ai_signal == "buy":
             decision = "buy"
@@ -1226,14 +1203,14 @@ async def process_signal(
 
     # 5. Decide buy
     should_buy, quote_amount, buy_reason = await _decide_buy(
-        db, bot, strategy, signal_data, position, quote_balance, aggregate_value, product_id, current_price
+        ctx, signal_data, position, quote_balance, aggregate_value,
     )
 
     # 6. Execute buy
     if should_buy:
         buy_result = await _execute_buy_trade(
-            db, exchange, trading_client, bot, strategy, position, product_id,
-            quote_amount, quote_balance, current_price, signal_data, aggregate_value, buy_reason
+            ctx, position, quote_amount, quote_balance,
+            signal_data, aggregate_value, buy_reason,
         )
         if buy_result:
             return buy_result
@@ -1241,8 +1218,7 @@ async def process_signal(
     # 7. Sell decision + execution
     if position is not None:
         sell_result = await _decide_and_execute_sell(
-            db, exchange, trading_client, bot, strategy, position, product_id,
-            current_price, signal_data, candles, candles_by_timeframe
+            ctx, position, signal_data, candles, candles_by_timeframe,
         )
         if sell_result:
             return sell_result
