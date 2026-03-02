@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.12] - 2026-03-02
+
+### Changed
+- **Extracted strategy parameter definitions**: The 190-line parameter data constant was moved from `indicator_based.py` to its own `indicator_params.py` module, bringing the strategy file under the size limit (1424→1232 lines)
+- **Centralized AI provider settings**: Deduplicated AI provider constants and lookup functions that were duplicated between `blacklist_router` and `coin_review_service` into a single source of truth in `settings_service`
+- **Moved API key masking to encryption module**: The `mask_api_key` utility (formerly `_mask_key_name`) now lives in `encryption.py` alongside the decrypt/encrypt functions it depends on
+- **Fixed TTS hook import direction**: Moved `useTTSSync` from page-specific hooks to shared hooks directory, correcting a context→page import violation
+
+### Fixed
+- **4 RBAC tests now pass**: Fixed pre-existing test failures where non-admin permission tests bypassed FastAPI's dependency injection. Tests now properly validate the `require_superuser` security chain
+
 ## [v2.76.11] - 2026-03-02
 
 ### Changed

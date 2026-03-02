@@ -23,7 +23,11 @@ from app.models import BlacklistedCoin, Settings, User
 from app.auth.dependencies import get_current_user, require_superuser
 from app.services.settings_service import (
     ALLOWED_CATEGORIES_KEY,
+    AI_REVIEW_PROVIDER_KEY,
+    VALID_AI_PROVIDERS,
     get_allowed_categories,
+    get_configured_ai_providers,
+    get_ai_review_provider,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,29 +36,6 @@ router = APIRouter(prefix="/api/blacklist", tags=["blacklist"])
 
 # Valid coin categories
 VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "BLACKLISTED"]
-# AI Provider settings
-VALID_AI_PROVIDERS = ["claude", "openai", "gemini", "grok"]
-DEFAULT_AI_PROVIDER = "claude"
-AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
-
-
-def get_configured_ai_providers() -> List[str]:
-    """Return only AI providers that have API keys configured."""
-    from app.config import settings as app_settings
-
-    configured = []
-    provider_keys = {
-        "claude": app_settings.anthropic_api_key,
-        "openai": app_settings.openai_api_key,
-        "gemini": app_settings.gemini_api_key,
-        "grok": app_settings.grok_api_key,
-    }
-
-    for provider, key in provider_keys.items():
-        if key:
-            configured.append(provider)
-
-    return configured
 
 
 # Pydantic schemas for blacklist operations
@@ -118,18 +99,6 @@ class CategorySettingsResponse(BaseModel):
     """Response model for category settings"""
     allowed_categories: List[str]
     all_categories: List[str] = VALID_CATEGORIES
-
-
-async def get_ai_review_provider(db: AsyncSession) -> str:
-    """Get configured AI provider for coin review from database."""
-    query = select(Settings).where(Settings.key == AI_REVIEW_PROVIDER_KEY)
-    result = await db.execute(query)
-    setting = result.scalars().first()
-
-    if setting and setting.value and setting.value.lower() in VALID_AI_PROVIDERS:
-        return setting.value.lower()
-
-    return DEFAULT_AI_PROVIDER
 
 
 @router.get("/categories", response_model=CategorySettingsResponse)

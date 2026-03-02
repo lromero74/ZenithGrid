@@ -1,45 +1,42 @@
-"""Tests for accounts_router helper functions (_mask_key_name, validate_prop_firm_config)"""
+"""Tests for accounts_router helper functions (mask_api_key, validate_prop_firm_config)"""
 
 import pytest
 
 from app.exceptions import ValidationError
-from app.routers.accounts_router import _mask_key_name
+from app.encryption import mask_api_key
 from app.services.account_service import validate_prop_firm_config
 
 
-class TestMaskKeyName:
+class TestMaskApiKey:
     def test_masks_long_key(self):
-        result = _mask_key_name("organizations/abc123/apiKeys/xyz789")
+        result = mask_api_key("organizations/abc123/apiKeys/xyz789")
         assert result.startswith("orga")
         assert result.endswith("z789")
         assert "****" in result
 
     def test_short_key_returns_asterisks(self):
-        result = _mask_key_name("short")
+        result = mask_api_key("short")
         assert result == "****"
 
     def test_none_returns_none(self):
-        assert _mask_key_name(None) is None
+        assert mask_api_key(None) is None
 
     def test_empty_string_returns_none(self):
-        assert _mask_key_name("") is None
+        assert mask_api_key("") is None
 
     def test_exactly_8_chars(self):
-        assert _mask_key_name("12345678") == "****"
+        assert mask_api_key("12345678") == "****"
 
     def test_9_chars_shows_partial(self):
-        result = _mask_key_name("123456789")
+        result = mask_api_key("123456789")
         assert result == "1234****6789"
 
     def test_handles_encrypted_value(self):
-        """Encrypted values (starting with FERNET:) should be decrypted before masking."""
-        # Just verify it doesn't crash on encrypted values
-        # Actual behavior depends on encryption key availability
+        """Encrypted values should be decrypted before masking."""
         from app.encryption import encrypt_value
         encrypted = encrypt_value("test_api_key_1234")
-        result = _mask_key_name(encrypted)
+        result = mask_api_key(encrypted)
         assert result is not None
-        # Should contain mask pattern
         assert "****" in result
 
 

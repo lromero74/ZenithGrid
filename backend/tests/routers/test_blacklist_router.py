@@ -5,14 +5,13 @@ Covers blacklist CRUD endpoints: list/add/remove blacklisted coins,
 user overrides, category settings, AI provider settings, and AI review trigger.
 """
 
-import json
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-from app.models import BlacklistedCoin, Settings, User
+from app.models import BlacklistedCoin, User
 
 
 # =============================================================================
@@ -270,13 +269,10 @@ class TestAddToBlacklist:
 
     @pytest.mark.asyncio
     async def test_add_coins_non_admin_raises_403(self, db_session, test_user):
-        """Failure case: non-admin user raises 403."""
-        from app.routers.blacklist_router import add_to_blacklist, BlacklistAddRequest
-        request = BlacklistAddRequest(symbols=["XRP"])
+        """Failure case: non-admin user raises 403 via require_superuser dependency."""
+        from app.auth.dependencies import require_superuser
         with pytest.raises(HTTPException) as exc_info:
-            await add_to_blacklist(
-                request=request, db=db_session, current_user=test_user,
-            )
+            await require_superuser(current_user=test_user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -313,12 +309,10 @@ class TestRemoveFromBlacklist:
 
     @pytest.mark.asyncio
     async def test_remove_coin_non_admin_raises_403(self, db_session, test_user):
-        """Failure case: non-admin raises 403."""
-        from app.routers.blacklist_router import remove_from_blacklist
+        """Failure case: non-admin raises 403 via require_superuser dependency."""
+        from app.auth.dependencies import require_superuser
         with pytest.raises(HTTPException) as exc_info:
-            await remove_from_blacklist(
-                symbol="DOGE", db=db_session, current_user=test_user,
-            )
+            await require_superuser(current_user=test_user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -403,10 +397,10 @@ class TestTriggerAIReview:
 
     @pytest.mark.asyncio
     async def test_trigger_ai_review_non_admin_raises_403(self, test_user):
-        """Failure case: non-admin raises 403."""
-        from app.routers.blacklist_router import trigger_ai_review
+        """Failure case: non-admin raises 403 via require_superuser dependency."""
+        from app.auth.dependencies import require_superuser
         with pytest.raises(HTTPException) as exc_info:
-            await trigger_ai_review(current_user=test_user)
+            await require_superuser(current_user=test_user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio

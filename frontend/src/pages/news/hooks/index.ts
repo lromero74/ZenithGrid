@@ -11,8 +11,8 @@ export type { UseArticleContentReturn } from './useArticleContent'
 export { useNewsFilters } from './useNewsFilters'
 export type { UseNewsFiltersReturn } from './useNewsFilters'
 
-export { useTTSSync } from './useTTSSync'
-export type { WordTiming, UseTTSSyncReturn } from './useTTSSync'
+export { useTTSSync } from '../../../hooks/useTTSSync'
+export type { WordTiming, UseTTSSyncReturn } from '../../../hooks/useTTSSync'
 
 export { useSeenStatus } from './useSeenStatus'
 export type { UseSeenStatusReturn } from './useSeenStatus'

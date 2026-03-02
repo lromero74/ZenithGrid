@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useMemo } from 'react'
-import { WordTiming } from '../hooks/useTTSSync'
+import { WordTiming } from '../../../hooks/useTTSSync'
 import { markdownToPlainText } from '../helpers'
 
 interface ArticleContentProps {

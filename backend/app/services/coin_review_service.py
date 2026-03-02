@@ -20,12 +20,13 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 
-logger = logging.getLogger(__name__)
+from app.services.settings_service import (
+    VALID_AI_PROVIDERS,
+    DEFAULT_AI_PROVIDER,
+    AI_REVIEW_PROVIDER_KEY,
+)
 
-# AI Provider constants
-VALID_AI_PROVIDERS = ["claude", "openai", "gemini", "grok"]
-DEFAULT_AI_PROVIDER = "claude"
-AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
+logger = logging.getLogger(__name__)
 
 
 async def get_ai_review_provider_from_db() -> str:

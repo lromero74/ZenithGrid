@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { authFetch } from '../../../services/api'
+import { authFetch } from '../services/api'
 
 export interface WordTiming {
   text: string

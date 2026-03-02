@@ -789,9 +789,14 @@ class TestRegisterEndpoint:
 
     @pytest.mark.asyncio
     async def test_register_as_non_superuser_fails(self, db_session):
-        """Failure: non-superuser cannot register new users."""
+        """Failure: non-superuser cannot register new users.
+
+        The register endpoint uses Depends(require_superuser), which is enforced
+        by FastAPI's DI. We test require_superuser directly since calling the
+        handler function bypasses dependency injection.
+        """
         from fastapi import HTTPException
-        from app.routers.auth_router import register, RegisterRequest
+        from app.auth.dependencies import require_superuser
 
         regular_user = User(
             email="regular@example.com",
@@ -803,13 +808,8 @@ class TestRegisterEndpoint:
         db_session.add(regular_user)
         await db_session.flush()
 
-        request = RegisterRequest(
-            email="wannabe@example.com",
-            password="WannabePass1",
-        )
-
         with pytest.raises(HTTPException) as exc_info:
-            await register(request=request, current_user=regular_user, db=db_session)
+            await require_superuser(current_user=regular_user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio

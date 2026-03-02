@@ -10,7 +10,7 @@ import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTTSSync } from './useTTSSync'
 
-vi.mock('../../../services/api', () => ({
+vi.mock('../services/api', () => ({
   authFetch: vi.fn(),
 }))
 

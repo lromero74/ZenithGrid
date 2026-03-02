@@ -18,10 +18,9 @@ from app.services.coin_review_service import (
     call_ai_for_review,
     update_coin_statuses,
     run_weekly_review,
-    VALID_AI_PROVIDERS,
-    DEFAULT_AI_PROVIDER,
     COIN_REVIEW_PROMPT,
 )
+from app.services.settings_service import VALID_AI_PROVIDERS, DEFAULT_AI_PROVIDER
 
 
 # ---------------------------------------------------------------------------
