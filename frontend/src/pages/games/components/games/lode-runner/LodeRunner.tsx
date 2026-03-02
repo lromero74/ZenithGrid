@@ -225,6 +225,10 @@ function drawTiles(ctx: CanvasRenderingContext2D, gs: GameState): void {
           ctx.arc(x + CELL / 2, y + 2, 2, 0, Math.PI * 2)
           ctx.fill()
           break
+        case Tile.Trap:
+          // Looks identical to brick — player/guards fall through
+          drawBrickPattern(ctx, x, y)
+          break
         case Tile.Hidden:
           if (gs.escapeRevealed) {
             // Flashing green ladder
@@ -624,6 +628,8 @@ function getAnimFrame(frames: Frame[], animTime: number, moving: boolean = true)
 
 function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, animTime: number): void {
   if (!p.alive) return
+  // Blink during invincibility (visible 75% of the time)
+  if (p.invincible > 0 && Math.floor(animTime * 8) % 4 === 0) return
   const frames = PLAYER_SPRITES[p.animState] || P_STAND
   const frame = getAnimFrame(frames, animTime, p.moving)
   drawSprite(ctx, frame, p.x, p.y, PLAYER_COLORS, p.facingLeft)
@@ -822,8 +828,8 @@ export default function LodeRunner() {
       setLevel(next.level)
     }
 
-    // Auto-save game state
-    saveState(gs)
+    // Auto-save game state (skip if player is dead — next frame handles respawn)
+    if (gs.player.alive) saveState(gs)
 
     draw()
     animFrameRef.current = requestAnimationFrame(tick)

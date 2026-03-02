@@ -63,6 +63,7 @@ export enum Tile {
   Player = 'P',
   Enemy = 'E',
   Hidden = 'T',
+  Trap = 'X',   // Looks like solid brick but is passable (entities fall through)
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +95,7 @@ export interface Entity {
 export interface Player extends Entity {
   alive: boolean
   digCooldown: number
+  invincible: number   // seconds of post-respawn invincibility remaining
 }
 
 export type GuardState = 'chasing' | 'trapped' | 'climbing_out' | 'dead'
@@ -289,6 +291,7 @@ export function loadLevel(levelNum: number): GameState {
     moving: false,
     alive: true,
     digCooldown: 0,
+    invincible: 0,
   }
 
   const guards: Guard[] = enemies.map(e => {
@@ -336,6 +339,9 @@ export function loadLevel(levelNum: number): GameState {
 function movePlayer(state: GameState, input: Input, dt: number): GameState {
   let p = { ...state.player }
   if (!p.alive) return state
+
+  // Tick invincibility
+  p.invincible = Math.max(0, p.invincible - dt)
 
   // Reduce dig cooldown
   p.digCooldown = Math.max(0, p.digCooldown - dt)
@@ -553,6 +559,14 @@ function getNeighbors(
     }
   }
 
+  // Drop from bar — let go and fall straight down
+  if (onBar && !onLadder) {
+    if (inBounds(col, row + 1) && isPassable(state, col, row + 1)) {
+      const lr = landingRow(state, col, row + 1)
+      if (lr < ROWS) moves.push({ col, row: lr })
+    }
+  }
+
   return moves
 }
 
@@ -738,8 +752,15 @@ function updateGuards(state: GameState, dt: number): GameState {
     // BFS pathfinding — find shortest path to player
     const target = bfsNextStep(state, guard.col, guard.row, p.col, p.row)
     if (target) {
-      bestCol = target.col
-      bestRow = target.row
+      if (target.col !== guard.col) {
+        // Horizontal step — only change column; gravity handles vertical fall
+        bestCol = target.col
+        bestRow = guard.row
+      } else {
+        // Vertical move (ladder climb/descend or drop from bar)
+        bestCol = target.col
+        bestRow = target.row
+      }
       if (bestCol < guard.col) guard.facingLeft = true
       else if (bestCol > guard.col) guard.facingLeft = false
     }
@@ -882,8 +903,8 @@ function checkCollisions(state: GameState): GameState {
     }
   }
 
-  // Guard collision
-  for (const g of state.guards) {
+  // Guard collision (skip during post-respawn invincibility)
+  if (p.invincible <= 0) for (const g of state.guards) {
     if (g.state === 'dead' || g.state === 'trapped') continue
     const dx = Math.abs(p.x - g.x)
     const dy = Math.abs(p.y - g.y)
@@ -941,12 +962,13 @@ export function updateGame(state: GameState, dt: number, input: Input): GameStat
     if (s.lives <= 0) {
       return { ...s, gameOver: true }
     }
-    // Respawn: reload level but keep score/lives
+    // Respawn: reload level but keep score/lives, grant brief invincibility
     const reloaded = loadLevel(s.level)
     return {
       ...reloaded,
       lives: s.lives,
       score: s.score,
+      player: { ...reloaded.player, invincible: 2.0 },
     }
   }
 
