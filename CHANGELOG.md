@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.77.0] - 2026-03-02
+
+### Added
+- **7 new card games**: Blackjack, Video Poker, Hearts, Spades, Crazy Eights, Gin Rummy, and Freecell join the Games Hub with full AI opponents, game state persistence, and undo support
+- **Cards category filter**: New "Cards" category in the Games Hub groups all 8 card games (including Solitaire) for easy discovery
+- **Shared card infrastructure**: Reusable card rendering components and deck utilities power all card games with consistent visuals
+- **24 new Nonogram puzzles**: Expanded from 11 to 35 total puzzles across all difficulty sizes (5x5, 10x10, 15x15)
+
+### Fixed
+- **Portfolio balances update faster**: Reduced backend cache TTL from 60s to 25s so portfolio data refreshes reliably on each 30-second poll cycle
+- **"In Grids" column header alignment**: The header in the Positions balances table is now right-aligned to match the other column headers
+
 ## [v2.76.19] - 2026-03-02
 
 ### Fixed

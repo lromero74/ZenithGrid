@@ -352,7 +352,7 @@ async def get_cex_portfolio(
     cache_key = f"portfolio_response_{account.id}"
 
     if not force_fresh:
-        # Check in-memory cache first (60s TTL)
+        # Check in-memory cache first (25s TTL — expires before 30s frontend poll)
         cached = await api_cache.get(cache_key)
         if cached is not None:
             logger.debug(f"Using cached portfolio response for account {account.id}")
@@ -361,7 +361,7 @@ async def get_cex_portfolio(
         # Check persistent cache (survives restarts)
         persistent = await portfolio_cache.get(account.user_id)
         if persistent is not None:
-            await api_cache.set(cache_key, persistent, 60)
+            await api_cache.set(cache_key, persistent, 25)
             logger.info(f"Serving persistent portfolio cache for account {account.id}")
             return persistent
 
@@ -446,8 +446,8 @@ async def get_cex_portfolio(
         "is_dex": False,
     }
 
-    # Cache in-memory (60s) and persist to disk (survives restarts)
-    await api_cache.set(cache_key, result, 60)
+    # Cache in-memory (25s — expires before 30s frontend poll) and persist to disk
+    await api_cache.set(cache_key, result, 25)
     await portfolio_cache.save(account.user_id, result)
     return result
 

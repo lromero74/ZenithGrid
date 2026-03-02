@@ -4,16 +4,12 @@
  * All functions are pure and return new objects (never mutate).
  */
 
-// ── Types ────────────────────────────────────────────────────────────
+// Re-export shared card types and utilities
+export { createDeck, shuffleDeck, getCardColor, getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
+export type { Suit, Color, Card } from '../../../utils/cardUtils'
 
-export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades'
-export type Color = 'red' | 'black'
-
-export interface Card {
-  suit: Suit
-  rank: number  // 1=Ace, 2-10, 11=Jack, 12=Queen, 13=King
-  faceUp: boolean
-}
+import { getCardColor } from '../../../utils/cardUtils'
+import type { Card } from '../../../utils/cardUtils'
 
 export interface SolitaireState {
   tableau: Card[][]     // 7 piles
@@ -21,38 +17,6 @@ export interface SolitaireState {
   stock: Card[]         // draw pile
   waste: Card[]         // flipped from stock
   moves: number
-}
-
-// ── Constants ────────────────────────────────────────────────────────
-
-const SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades']
-
-const SUIT_SYMBOLS: Record<Suit, string> = {
-  hearts: '♥',
-  diamonds: '♦',
-  clubs: '♣',
-  spades: '♠',
-}
-
-// ── Deck creation & shuffling ────────────────────────────────────────
-
-export function createDeck(): Card[] {
-  const deck: Card[] = []
-  for (const suit of SUITS) {
-    for (let rank = 1; rank <= 13; rank++) {
-      deck.push({ suit, rank, faceUp: false })
-    }
-  }
-  return deck
-}
-
-export function shuffleDeck(deck: Card[]): Card[] {
-  const shuffled = deck.map(c => ({ ...c }))
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-  return shuffled
 }
 
 // ── Dealing ──────────────────────────────────────────────────────────
@@ -79,24 +43,6 @@ export function deal(deck: Card[]): SolitaireState {
     waste: [],
     moves: 0,
   }
-}
-
-// ── Card helpers ─────────────────────────────────────────────────────
-
-export function getCardColor(card: Card): Color {
-  return card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'
-}
-
-export function getRankDisplay(rank: number): string {
-  if (rank === 1) return 'A'
-  if (rank === 11) return 'J'
-  if (rank === 12) return 'Q'
-  if (rank === 13) return 'K'
-  return String(rank)
-}
-
-export function getSuitSymbol(suit: Suit): string {
-  return SUIT_SYMBOLS[suit]
 }
 
 // ── Move validation ──────────────────────────────────────────────────
