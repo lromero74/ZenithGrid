@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.79.0] - 2026-03-02
+
+### Added
+- **Lode Runner**: Classic puzzle-platformer with 10 hand-crafted levels — collect all gold, dig holes to trap guards, then escape via hidden ladders at the top
+- **Centipede engine improvements**: Smoother grid-stepping movement for centipede chains
+
 ## [v2.78.0] - 2026-03-02
 
 ### Added
