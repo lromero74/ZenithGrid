@@ -264,9 +264,14 @@ async def _complete_mfa_login(
     from app.services.session_policy_service import resolve_session_policy, has_any_limits
     from app.services.session_service import check_session_limits, create_session
 
-    user.last_login_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(user)
+    # Update last_login_at (non-critical — don't block login if DB is locked)
+    try:
+        user.last_login_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+    except Exception as e:
+        logger.warning(f"Non-critical: failed to update last_login_at for {user.email}: {e}")
+        await db.rollback()
 
     # Resolve session policy
     policy = resolve_session_policy(user)
@@ -275,22 +280,28 @@ async def _complete_mfa_login(
 
     if has_any_limits(policy):
         client_ip = http_request.client.host if http_request.client else "unknown"
-        await check_session_limits(user.id, client_ip, policy, db)
+        try:
+            await check_session_limits(user.id, client_ip, policy, db)
 
-        session_id = str(uuid.uuid4())
-        timeout = policy.get("session_timeout_minutes")
-        if timeout:
-            session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
+            session_id = str(uuid.uuid4())
+            timeout = policy.get("session_timeout_minutes")
+            if timeout:
+                session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
 
-        await create_session(
-            user_id=user.id,
-            session_id=session_id,
-            ip_address=client_ip,
-            user_agent=http_request.headers.get("user-agent", ""),
-            expires_at=session_expires_at,
-            db=db,
-        )
-        await db.commit()
+            await create_session(
+                user_id=user.id,
+                session_id=session_id,
+                ip_address=client_ip,
+                user_agent=http_request.headers.get("user-agent", ""),
+                expires_at=session_expires_at,
+                db=db,
+            )
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Non-critical: failed to create session for {user.email}: {e}")
+            await db.rollback()
+            session_id = None
+            session_expires_at = None
 
     access_token = create_access_token(user.id, user.email, session_id=session_id)
     refresh_token = create_refresh_token(user.id, session_id=session_id)
