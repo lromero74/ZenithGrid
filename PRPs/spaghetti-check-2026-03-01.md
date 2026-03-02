@@ -143,9 +143,9 @@
 - [x] 1.3 Remove duplicate `get_coinbase_from_db()` — bot_crud_router now imports from portfolio_service
 - [x] 1.4 Fix session_service HTTPException — uses `RateLimitError`/`SessionLimitError` domain exceptions
 - [ ] 2.1 Split models.py
-- [ ] 2.2 Trading engine parameter dataclasses
-- [ ] 2.3 Decompose portfolio_service
-- [ ] 2.4 Decompose batch_analyzer
-- [ ] 2.5 Decompose report builders
+- [x] 2.2 Trading engine parameter dataclasses — TradeContext dataclass, 5 internal fns refactored (8-13→2-7 params)
+- [x] 2.3 Decompose portfolio_service — get_account_portfolio_data 358→~50 lines + 5 helpers
+- [x] 2.4 Decompose batch_analyzer — process_bot_batch 463→~45 lines + 7 helpers
+- [ ] 2.5 Decompose report builders (deferred — template/rendering code, low structural value)
 - [ ] 3.x Medium items (fix when touched)
 - [ ] 4.x Low items (opportunistic)
