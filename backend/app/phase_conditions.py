@@ -282,158 +282,20 @@ class PhaseConditionEvaluator:
 
         print(f"[DEBUG] Evaluating: {condition_type} on {timeframe}: {current_val} {operator} {value}")
 
-        # Handle crossing operators
+        # Dispatch to operator-specific evaluators
         if operator in ["crossing_above", "crossing_below"]:
-            # Use TWO sources for crossing detection and fire if EITHER detects a crossing:
-            #
-            # 1. Candle-based prev_ values: compare the two most recent CLOSED candles.
-            #    Catches crossings that happen on a single candle close.
-            #
-            # 2. Check-cycle cache (previous_indicators from last bot check):
-            #    Catches crossings that span multiple candles. Without this, a rapid
-            #    drop through a threshold (e.g., BB% from 95→80 in two candles) is
-            #    missed because the candle-based prev already shows both values on
-            #    the same side of the threshold by the time the bot checks.
-            candle_prev_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
-
-            cycle_prev_val = None
-            if previous_indicators is not None:
-                cycle_prev_val = self._get_indicator_value(condition_type, condition, previous_indicators)
-
-            # Use candle-based as primary for logging; fall back to cycle if candle-based unavailable
-            previous_val = candle_prev_val if candle_prev_val is not None else cycle_prev_val
-
-            if previous_val is None:
-                print(
-                    "[DEBUG] Crossing check: no previous indicator value available "
-                    "(need prev_ values or previous_indicators)"
-                )
-                if capture_details:
-                    detail["error"] = "no previous indicator for crossing"
-                    return False, detail
-                return False
-
-            if capture_details:
-                # Preserve precision for small values (like MACD histogram)
-                detail["previous_value"] = round(previous_val, 8) if isinstance(previous_val, float) else previous_val
-
-            print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
-
-            # Minimum crossing magnitude to filter floating-point noise.
-            # For BTC pairs, MACD histogram values like 1e-8 are numerical artifacts,
-            # not real momentum shifts. Require at least one side of the crossing to
-            # be meaningfully away from the threshold to count as a real crossing.
-            crossing_epsilon = 1e-7
-
-            def _check_crossing(prev, curr, thresh, op):
-                """Check if a crossing occurred between prev and curr values."""
-                prev_meaningful = abs(prev - thresh) > crossing_epsilon
-                curr_meaningful = abs(curr - thresh) > crossing_epsilon
-                if not prev_meaningful and not curr_meaningful:
-                    return False
-                if op == "crossing_above":
-                    return prev <= thresh and curr > thresh
-                else:  # crossing_below
-                    return prev >= thresh and curr < thresh
-
-            # Check candle-based crossing
-            candle_crossed = False
-            if candle_prev_val is not None:
-                candle_crossed = _check_crossing(candle_prev_val, current_val, value, operator)
-
-            # Check cycle-based crossing (from last bot check to current)
-            cycle_crossed = False
-            if cycle_prev_val is not None:
-                cycle_crossed = _check_crossing(cycle_prev_val, current_val, value, operator)
-
-            result = candle_crossed or cycle_crossed
-
-            crossing_source = ""
-            if candle_crossed and cycle_crossed:
-                crossing_source = "both candle+cycle"
-            elif cycle_crossed:
-                crossing_source = "cycle-based"
-            elif candle_crossed:
-                crossing_source = "candle-based"
-
-            if operator == "crossing_above":
-                print(
-                    f"[DEBUG] Crossing above result: {result} "
-                    f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
-                    f"current={current_val}, threshold={value}"
-                    f"{f', source={crossing_source}' if result else ''})"
-                )
-            else:  # crossing_below
-                print(
-                    f"[DEBUG] Crossing below result: {result} "
-                    f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
-                    f"current={current_val}, threshold={value}"
-                    f"{f', source={crossing_source}' if result else ''})"
-                )
-
-            if capture_details:
-                detail["result"] = result
-                if cycle_crossed and not candle_crossed:
-                    detail["crossing_source"] = "cycle"
-                return result, detail
-            return result
-
-        # Handle increasing/decreasing operators (compare current vs previous candle)
-        if operator in ["increasing", "decreasing"]:
-            # Try check-cycle previous first, then candle-based prev_
-            previous_val = None
-            if previous_indicators is not None:
-                previous_val = self._get_indicator_value(
-                    condition_type, condition, previous_indicators
-                )
-            if previous_val is None:
-                previous_val = self._get_previous_indicator_value(
-                    condition_type, condition, current_indicators
-                )
-
-            if previous_val is None:
-                print(
-                    f"[DEBUG] {operator} check: no previous value available"
-                )
-                if capture_details:
-                    detail["error"] = "no previous indicator for direction check"
-                    return False, detail
-                return False
-
-            if capture_details:
-                detail["previous_value"] = (
-                    round(previous_val, 8) if isinstance(previous_val, float) else previous_val
-                )
-
-            # value field stores optional minimum % change threshold (0 = any change)
-            min_pct_change = value or 0
-
-            if previous_val == 0:
-                if operator == "increasing":
-                    result = current_val > 0
-                else:
-                    result = current_val < 0
-            elif min_pct_change > 0:
-                pct_change = ((current_val - previous_val) / abs(previous_val)) * 100
-                if operator == "increasing":
-                    result = pct_change >= min_pct_change
-                else:
-                    result = pct_change <= -min_pct_change
-            else:
-                if operator == "increasing":
-                    result = current_val > previous_val
-                else:
-                    result = current_val < previous_val
-
-            print(
-                f"[DEBUG] {operator} result: {result} "
-                f"(prev={previous_val}, curr={current_val}, min_pct={min_pct_change})"
+            return self._evaluate_crossing(
+                condition_type, operator, value, current_val,
+                condition, current_indicators, previous_indicators,
+                capture_details, detail,
             )
 
-            if capture_details:
-                detail["result"] = result
-                return result, detail
-            return result
+        if operator in ["increasing", "decreasing"]:
+            return self._evaluate_direction_change(
+                condition_type, operator, value, current_val,
+                condition, current_indicators, previous_indicators,
+                capture_details, detail,
+            )
 
         # Handle simple comparisons
         result = False
@@ -451,6 +313,159 @@ class PhaseConditionEvaluator:
             result = current_val != value
 
         print(f"[DEBUG] Result: {result}")
+
+        if capture_details:
+            detail["result"] = result
+            return result, detail
+        return result
+
+    def _evaluate_crossing(
+        self,
+        condition_type: str,
+        operator: str,
+        value: float,
+        current_val: float,
+        condition: Dict[str, Any],
+        current_indicators: Dict[str, Any],
+        previous_indicators: Optional[Dict[str, Any]],
+        capture_details: bool,
+        detail: Optional[Dict],
+    ) -> Union[bool, tuple]:
+        """Evaluate crossing_above / crossing_below operators.
+
+        Uses TWO sources for crossing detection and fires if EITHER detects a crossing:
+        1. Candle-based prev_ values: compare the two most recent CLOSED candles.
+        2. Check-cycle cache (previous_indicators from last bot check):
+           Catches crossings that span multiple candles.
+        """
+        candle_prev_val = self._get_previous_indicator_value(
+            condition_type, condition, current_indicators,
+        )
+        cycle_prev_val = None
+        if previous_indicators is not None:
+            cycle_prev_val = self._get_indicator_value(
+                condition_type, condition, previous_indicators,
+            )
+
+        previous_val = candle_prev_val if candle_prev_val is not None else cycle_prev_val
+        if previous_val is None:
+            print(
+                "[DEBUG] Crossing check: no previous indicator value available "
+                "(need prev_ values or previous_indicators)"
+            )
+            if capture_details:
+                detail["error"] = "no previous indicator for crossing"
+                return False, detail
+            return False
+
+        if capture_details:
+            detail["previous_value"] = (
+                round(previous_val, 8) if isinstance(previous_val, float) else previous_val
+            )
+
+        print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
+
+        # Minimum crossing magnitude to filter floating-point noise.
+        crossing_epsilon = 1e-7
+
+        def _check_crossing(prev, curr, thresh, op):
+            prev_meaningful = abs(prev - thresh) > crossing_epsilon
+            curr_meaningful = abs(curr - thresh) > crossing_epsilon
+            if not prev_meaningful and not curr_meaningful:
+                return False
+            if op == "crossing_above":
+                return prev <= thresh and curr > thresh
+            return prev >= thresh and curr < thresh
+
+        candle_crossed = (
+            _check_crossing(candle_prev_val, current_val, value, operator)
+            if candle_prev_val is not None else False
+        )
+        cycle_crossed = (
+            _check_crossing(cycle_prev_val, current_val, value, operator)
+            if cycle_prev_val is not None else False
+        )
+        result = candle_crossed or cycle_crossed
+
+        crossing_source = ""
+        if candle_crossed and cycle_crossed:
+            crossing_source = "both candle+cycle"
+        elif cycle_crossed:
+            crossing_source = "cycle-based"
+        elif candle_crossed:
+            crossing_source = "candle-based"
+
+        print(
+            f"[DEBUG] Crossing {operator.split('_')[1]} result: {result} "
+            f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
+            f"current={current_val}, threshold={value}"
+            f"{f', source={crossing_source}' if result else ''})"
+        )
+
+        if capture_details:
+            detail["result"] = result
+            if cycle_crossed and not candle_crossed:
+                detail["crossing_source"] = "cycle"
+            return result, detail
+        return result
+
+    def _evaluate_direction_change(
+        self,
+        condition_type: str,
+        operator: str,
+        value: float,
+        current_val: float,
+        condition: Dict[str, Any],
+        current_indicators: Dict[str, Any],
+        previous_indicators: Optional[Dict[str, Any]],
+        capture_details: bool,
+        detail: Optional[Dict],
+    ) -> Union[bool, tuple]:
+        """Evaluate increasing / decreasing operators."""
+        # Try check-cycle previous first, then candle-based prev_
+        previous_val = None
+        if previous_indicators is not None:
+            previous_val = self._get_indicator_value(
+                condition_type, condition, previous_indicators,
+            )
+        if previous_val is None:
+            previous_val = self._get_previous_indicator_value(
+                condition_type, condition, current_indicators,
+            )
+
+        if previous_val is None:
+            print(f"[DEBUG] {operator} check: no previous value available")
+            if capture_details:
+                detail["error"] = "no previous indicator for direction check"
+                return False, detail
+            return False
+
+        if capture_details:
+            detail["previous_value"] = (
+                round(previous_val, 8) if isinstance(previous_val, float) else previous_val
+            )
+
+        # value field stores optional minimum % change threshold (0 = any change)
+        min_pct_change = value or 0
+
+        if previous_val == 0:
+            result = current_val > 0 if operator == "increasing" else current_val < 0
+        elif min_pct_change > 0:
+            pct_change = ((current_val - previous_val) / abs(previous_val)) * 100
+            if operator == "increasing":
+                result = pct_change >= min_pct_change
+            else:
+                result = pct_change <= -min_pct_change
+        else:
+            result = (
+                current_val > previous_val if operator == "increasing"
+                else current_val < previous_val
+            )
+
+        print(
+            f"[DEBUG] {operator} result: {result} "
+            f"(prev={previous_val}, curr={current_val}, min_pct={min_pct_change})"
+        )
 
         if capture_details:
             detail["result"] = result

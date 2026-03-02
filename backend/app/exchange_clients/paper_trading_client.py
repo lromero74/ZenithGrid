@@ -79,7 +79,13 @@ class PaperTradingClient(ExchangeClient):
 
         Must be called inside the per-account lock so we never operate on a
         stale in-memory snapshot.
+
+        Expires cached ORM state to force a fresh DB read, bypassing any
+        stale transaction snapshot from SQLite WAL mode.  Without this, a
+        session that began its implicit transaction before another session
+        committed would keep returning the old paper_balances value.
         """
+        self.db.expire_all()  # sync method — forces next attribute access to hit DB
         result = await self.db.execute(
             select(Account).where(Account.id == self.account.id)
         )
@@ -365,6 +371,10 @@ class PaperTradingClient(ExchangeClient):
 
     async def get_accounts(self, force_fresh: bool = False) -> List[Dict[str, Any]]:
         """Get virtual accounts (returns single paper trading account)."""
+        if force_fresh:
+            lock = _get_account_lock(self.account.id)
+            async with lock:
+                await self._reload_balances()
         accounts = []
         for currency, balance in self.balances.items():
             if balance > 0:
@@ -408,7 +418,10 @@ class PaperTradingClient(ExchangeClient):
         return self.balances.get("USDT", 0.0)
 
     async def get_balance(self, currency: str) -> Dict[str, Any]:
-        """Get balance for specific currency."""
+        """Get balance for specific currency (reloads from DB for freshness)."""
+        lock = _get_account_lock(self.account.id)
+        async with lock:
+            await self._reload_balances()
         balance = self.balances.get(currency.upper(), 0.0)
         return {
             "currency": currency.upper(),

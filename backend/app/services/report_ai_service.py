@@ -190,78 +190,82 @@ def _parse_tiered_summary(text: str) -> dict:
     }
 
 
-def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
-    """Build the prompt for the AI summary."""
-    goals_section = ""
-    if data.get("goals"):
-        goals_lines = []
-        for g in data["goals"]:
-            status = "on track" if g.get("on_track") else "behind target"
-            if g.get("target_type") == "income":
-                period = g.get("income_period", "monthly")
-                goals_lines.append(
-                    f"  - {g['name']} (Income Goal): "
-                    f"Target {g['target_value']} {g['target_currency']}/{period}, "
-                    f"Linear projection: {g.get('projected_income_linear', 0)}, "
-                    f"Compound projection: {g.get('projected_income_compound', 0)}, "
-                    f"Daily avg income: {g.get('current_daily_income', 0)}, "
-                    f"Based on {g.get('sample_trades', 0)} trades over "
-                    f"{g.get('lookback_days_used', 0)} days, "
-                    f"{status}"
-                )
-                dep_lin = g.get("deposit_needed_linear")
-                dep_cmp = g.get("deposit_needed_compound")
-                if dep_lin is not None or dep_cmp is not None:
-                    goals_lines.append(
-                        f"    Deposit needed: "
-                        f"~{dep_lin} (linear) / ~{dep_cmp} (compound) "
-                        f"{g['target_currency']} to reach target"
-                    )
-            elif g.get("target_type") == "expenses":
-                coverage = g.get("expense_coverage", {})
-                exp_period = g.get("expense_period", "monthly")
-                cov_pct = coverage.get("coverage_pct", 0)
-                total_exp = coverage.get("total_expenses", 0)
-                income_at = coverage.get("income_after_tax", 0)
-                covered_n = coverage.get("covered_count", 0)
-                total_n = coverage.get("total_count", 0)
-                goals_lines.append(
-                    f"  - {g['name']} (Expenses Goal): "
-                    f"Total expenses: {total_exp} {g['target_currency']}/{exp_period}, "
-                    f"Income after tax: {income_at}, "
-                    f"Coverage: {_fmt_ai_coverage_pct(cov_pct)} ({covered_n}/{total_n} items covered), "
-                    f"Based on {g.get('sample_trades', 0)} trades over "
-                    f"{g.get('lookback_days_used', 0)} days"
-                )
-                partial_name = coverage.get("partial_item_name")
-                partial_short = coverage.get("partial_item_shortfall")
-                next_name = coverage.get("next_uncovered_name")
-                next_amt = coverage.get("next_uncovered_amount")
-                if partial_name and partial_short:
-                    goals_lines.append(
-                        f"    Partially covered: {partial_name} "
-                        f"(needs ~{partial_short} more {g['target_currency']})"
-                    )
-                if next_name and next_amt:
-                    goals_lines.append(
-                        f"    Next uncovered: {next_name} "
-                        f"(~{next_amt} {g['target_currency']})"
-                    )
-                dep = g.get("deposit_needed")
-                if dep is not None:
-                    goals_lines.append(
-                        f"    Total deposit needed: "
-                        f"~{dep} {g['target_currency']}"
-                    )
-            else:
-                goals_lines.append(
-                    f"  - {g['name']}: {g['progress_pct']}% complete "
-                    f"({g['current_value']} / {g['target_value']} "
-                    f"{g['target_currency']}), "
-                    f"{status}, time elapsed: {g['time_elapsed_pct']}%"
-                )
-        goals_section = "\nGoal Progress:\n" + "\n".join(goals_lines)
+def _build_goals_prompt_section(data: Dict[str, Any]) -> str:
+    """Build the goals progress section of the AI summary prompt."""
+    if not data.get("goals"):
+        return ""
 
+    goals_lines = []
+    for g in data["goals"]:
+        status = "on track" if g.get("on_track") else "behind target"
+        if g.get("target_type") == "income":
+            period = g.get("income_period", "monthly")
+            goals_lines.append(
+                f"  - {g['name']} (Income Goal): "
+                f"Target {g['target_value']} {g['target_currency']}/{period}, "
+                f"Linear projection: {g.get('projected_income_linear', 0)}, "
+                f"Compound projection: {g.get('projected_income_compound', 0)}, "
+                f"Daily avg income: {g.get('current_daily_income', 0)}, "
+                f"Based on {g.get('sample_trades', 0)} trades over "
+                f"{g.get('lookback_days_used', 0)} days, "
+                f"{status}"
+            )
+            dep_lin = g.get("deposit_needed_linear")
+            dep_cmp = g.get("deposit_needed_compound")
+            if dep_lin is not None or dep_cmp is not None:
+                goals_lines.append(
+                    f"    Deposit needed: "
+                    f"~{dep_lin} (linear) / ~{dep_cmp} (compound) "
+                    f"{g['target_currency']} to reach target"
+                )
+        elif g.get("target_type") == "expenses":
+            coverage = g.get("expense_coverage", {})
+            exp_period = g.get("expense_period", "monthly")
+            cov_pct = coverage.get("coverage_pct", 0)
+            total_exp = coverage.get("total_expenses", 0)
+            income_at = coverage.get("income_after_tax", 0)
+            covered_n = coverage.get("covered_count", 0)
+            total_n = coverage.get("total_count", 0)
+            goals_lines.append(
+                f"  - {g['name']} (Expenses Goal): "
+                f"Total expenses: {total_exp} {g['target_currency']}/{exp_period}, "
+                f"Income after tax: {income_at}, "
+                f"Coverage: {_fmt_ai_coverage_pct(cov_pct)} ({covered_n}/{total_n} items covered), "
+                f"Based on {g.get('sample_trades', 0)} trades over "
+                f"{g.get('lookback_days_used', 0)} days"
+            )
+            partial_name = coverage.get("partial_item_name")
+            partial_short = coverage.get("partial_item_shortfall")
+            next_name = coverage.get("next_uncovered_name")
+            next_amt = coverage.get("next_uncovered_amount")
+            if partial_name and partial_short:
+                goals_lines.append(
+                    f"    Partially covered: {partial_name} "
+                    f"(needs ~{partial_short} more {g['target_currency']})"
+                )
+            if next_name and next_amt:
+                goals_lines.append(
+                    f"    Next uncovered: {next_name} "
+                    f"(~{next_amt} {g['target_currency']})"
+                )
+            dep = g.get("deposit_needed")
+            if dep is not None:
+                goals_lines.append(
+                    f"    Total deposit needed: "
+                    f"~{dep} {g['target_currency']}"
+                )
+        else:
+            goals_lines.append(
+                f"  - {g['name']}: {g['progress_pct']}% complete "
+                f"({g['current_value']} / {g['target_value']} "
+                f"{g['target_currency']}), "
+                f"{status}, time elapsed: {g['time_elapsed_pct']}%"
+            )
+    return "\nGoal Progress:\n" + "\n".join(goals_lines)
+
+
+def _build_capital_prompt_section(data: Dict[str, Any]) -> str:
+    """Build the capital movements / account reconciliation section of the AI summary prompt."""
     # Always compute the account value change vs profit discrepancy
     start_val = data.get("period_start_value_usd", 0)
     end_val = data.get("account_value_usd", 0)
@@ -383,6 +387,105 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                 )
         capital_section += "\n".join(lines)
 
+    return capital_section
+
+
+def _build_strategy_prompt_section(data: Dict[str, Any]) -> str:
+    """Build the bot strategy context section of the AI summary prompt."""
+    bot_strategies = data.get("bot_strategies", [])
+    if not bot_strategies:
+        return ""
+
+    strat_lines = ["\nTrading Strategy Context:"]
+    for bs in bot_strategies:
+        cfg = bs.get("config", {})
+        st = bs.get("strategy_type", "unknown")
+        pairs = ", ".join(bs.get("pairs", []))
+        trades = bs.get("trades_in_period", 0)
+        wins = bs.get("wins_in_period", 0)
+        strat_lines.append(
+            f"  Bot: {bs['name']} ({st}, {pairs}) — "
+            f"{trades} trades ({wins}W/{trades - wins}L)"
+        )
+        # Core DCA parameters
+        params = []
+        tp = cfg.get("take_profit_percentage")
+        if tp is not None:
+            params.append(f"take_profit={tp}%")
+        mso = cfg.get("max_safety_orders")
+        if mso is not None:
+            params.append(f"max_safety_orders={mso}")
+        so_pct = cfg.get("safety_order_percentage")
+        if so_pct is not None:
+            params.append(f"safety_order_size={so_pct}%")
+        pd = cfg.get("price_deviation")
+        if pd is not None:
+            params.append(f"price_deviation={pd}%")
+        mcd = cfg.get("max_concurrent_deals")
+        if mcd is not None:
+            params.append(f"max_concurrent_deals={mcd}")
+        soss = cfg.get("safety_order_step_scale")
+        if soss is not None:
+            params.append(f"safety_order_step_scale={soss}")
+        sovs = cfg.get("safety_order_volume_scale")
+        if sovs is not None:
+            params.append(f"safety_order_volume_scale={sovs}")
+        if cfg.get("trailing_take_profit"):
+            params.append(f"trailing_tp={cfg.get('trailing_deviation', 0)}%")
+        if cfg.get("stop_loss_enabled"):
+            params.append("stop_loss=enabled")
+        if params:
+            strat_lines.append(f"    Config: {', '.join(params)}")
+        # Summarize indicator conditions
+        for phase, label in [
+            ("base_order_conditions", "Entry signals"),
+            ("take_profit_conditions", "Take profit signals"),
+            ("safety_order_conditions", "Safety order signals"),
+        ]:
+            conds = _summarize_conditions(cfg.get(phase))
+            if conds:
+                strat_lines.append(f"    {label}: {conds}")
+    strat_lines.append(
+        "  STRATEGY NOTES (use these to inform your analysis):"
+    )
+    strat_lines.append(
+        "  - DCA Mechanics: These bots enter on momentum/indicator signals "
+        "and take small profits. Safety orders require BOTH a minimum price "
+        "drop from entry (price_deviation, multiplied by "
+        "safety_order_step_scale for each subsequent order — e.g. 2% for "
+        "SO1, 4% for SO2, 8% for SO3) AND the momentum indicator "
+        "conditions to be met. This prevents premature averaging down. "
+        "High win rates are expected — positions close only when profitable."
+    )
+    # Detect BTC-pair bots and add crypto-maximalist context
+    has_btc_pairs = any(
+        any(p.endswith("-BTC") for p in bs.get("pairs", []))
+        for bs in bot_strategies
+    )
+    if has_btc_pairs:
+        strat_lines.append(
+            "  - BTC Accumulation Strategy: Bots trading alt/BTC pairs "
+            "are denominated in BTC — profits and losses are in BTC, not "
+            "USD. The goal is to accumulate more BTC by trading more "
+            "volatile altcoins against it. Since crypto assets tend to "
+            "move together as a risk class, alt volatility relative to "
+            "BTC creates opportunities to 'mine' BTC through trading. "
+            "Open positions holding top-tier altcoins are not considered "
+            "dead capital — the user is a crypto maximalist who accepts "
+            "alt exposure, knowing that quality crypto assets tend to "
+            "appreciate against fiat long-term even if BTC outpaces them. "
+            "Do NOT frame BTC-pair positions as 'capital lockup' or "
+            "'opportunity cost' — the user is intentionally holding crypto."
+        )
+    return "\n".join(strat_lines)
+
+
+def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
+    """Build the prompt for the AI summary."""
+    goals_section = _build_goals_prompt_section(data)
+    capital_section = _build_capital_prompt_section(data)
+    strategy_section = _build_strategy_prompt_section(data)
+
     prior_section = ""
     prior = data.get("prior_period")
     if prior:
@@ -397,93 +500,6 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             f"\n  - Change: ${abs(change):,.2f} ({direction})"
             f"\n  - Prior account value: ${prior.get('account_value_usd', 0):,.2f}"
         )
-
-    # Bot strategy context — helps the AI interpret win rates and trade patterns
-    strategy_section = ""
-    bot_strategies = data.get("bot_strategies", [])
-    if bot_strategies:
-        strat_lines = ["\nTrading Strategy Context:"]
-        for bs in bot_strategies:
-            cfg = bs.get("config", {})
-            st = bs.get("strategy_type", "unknown")
-            pairs = ", ".join(bs.get("pairs", []))
-            trades = bs.get("trades_in_period", 0)
-            wins = bs.get("wins_in_period", 0)
-            strat_lines.append(
-                f"  Bot: {bs['name']} ({st}, {pairs}) — "
-                f"{trades} trades ({wins}W/{trades - wins}L)"
-            )
-            # Core DCA parameters
-            params = []
-            tp = cfg.get("take_profit_percentage")
-            if tp is not None:
-                params.append(f"take_profit={tp}%")
-            mso = cfg.get("max_safety_orders")
-            if mso is not None:
-                params.append(f"max_safety_orders={mso}")
-            so_pct = cfg.get("safety_order_percentage")
-            if so_pct is not None:
-                params.append(f"safety_order_size={so_pct}%")
-            pd = cfg.get("price_deviation")
-            if pd is not None:
-                params.append(f"price_deviation={pd}%")
-            mcd = cfg.get("max_concurrent_deals")
-            if mcd is not None:
-                params.append(f"max_concurrent_deals={mcd}")
-            soss = cfg.get("safety_order_step_scale")
-            if soss is not None:
-                params.append(f"safety_order_step_scale={soss}")
-            sovs = cfg.get("safety_order_volume_scale")
-            if sovs is not None:
-                params.append(f"safety_order_volume_scale={sovs}")
-            if cfg.get("trailing_take_profit"):
-                params.append(f"trailing_tp={cfg.get('trailing_deviation', 0)}%")
-            if cfg.get("stop_loss_enabled"):
-                params.append("stop_loss=enabled")
-            if params:
-                strat_lines.append(f"    Config: {', '.join(params)}")
-            # Summarize indicator conditions
-            for phase, label in [
-                ("base_order_conditions", "Entry signals"),
-                ("take_profit_conditions", "Take profit signals"),
-                ("safety_order_conditions", "Safety order signals"),
-            ]:
-                conds = _summarize_conditions(cfg.get(phase))
-                if conds:
-                    strat_lines.append(f"    {label}: {conds}")
-        strat_lines.append(
-            "  STRATEGY NOTES (use these to inform your analysis):"
-        )
-        strat_lines.append(
-            "  - DCA Mechanics: These bots enter on momentum/indicator signals "
-            "and take small profits. Safety orders require BOTH a minimum price "
-            "drop from entry (price_deviation, multiplied by "
-            "safety_order_step_scale for each subsequent order — e.g. 2% for "
-            "SO1, 4% for SO2, 8% for SO3) AND the momentum indicator "
-            "conditions to be met. This prevents premature averaging down. "
-            "High win rates are expected — positions close only when profitable."
-        )
-        # Detect BTC-pair bots and add crypto-maximalist context
-        has_btc_pairs = any(
-            any(p.endswith("-BTC") for p in bs.get("pairs", []))
-            for bs in bot_strategies
-        )
-        if has_btc_pairs:
-            strat_lines.append(
-                "  - BTC Accumulation Strategy: Bots trading alt/BTC pairs "
-                "are denominated in BTC — profits and losses are in BTC, not "
-                "USD. The goal is to accumulate more BTC by trading more "
-                "volatile altcoins against it. Since crypto assets tend to "
-                "move together as a risk class, alt volatility relative to "
-                "BTC creates opportunities to 'mine' BTC through trading. "
-                "Open positions holding top-tier altcoins are not considered "
-                "dead capital — the user is a crypto maximalist who accepts "
-                "alt exposure, knowing that quality crypto assets tend to "
-                "appreciate against fiat long-term even if BTC outpaces them. "
-                "Do NOT frame BTC-pair positions as 'capital lockup' or "
-                "'opportunity cost' — the user is intentionally holding crypto."
-            )
-        strategy_section = "\n".join(strat_lines)
 
     total_trades = data.get('total_trades', 0)
     if total_trades > 0:
