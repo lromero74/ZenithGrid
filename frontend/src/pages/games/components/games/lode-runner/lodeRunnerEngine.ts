@@ -328,16 +328,19 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
   // Reduce dig cooldown
   p.digCooldown = Math.max(0, p.digCooldown - dt)
 
-  // Check gravity first
+  // Check gravity — but only when aligned to cell center.
+  // This lets the player finish a horizontal step before falling,
+  // so they can run off edges like in classic Lode Runner.
   const supported = isSupported(state, p.col, p.row)
-  if (!supported && !p.falling) {
+  if (!supported && !p.falling && isAligned(p as Entity, 2)) {
     p.falling = true
   }
 
   if (p.falling) {
+    // Snap x to column center — falls are strictly vertical
+    p.x = cellCenter(p.col, 0).x
     p.y += FALL_SPEED * dt
-    const { col, row } = posToCell(p.x, p.y)
-    p.col = col
+    const { row } = posToCell(p.x, p.y)
     p.row = row
     if (isSupported(state, p.col, p.row)) {
       p.falling = false
@@ -529,16 +532,18 @@ function updateGuards(state: GameState, dt: number): GameState {
       return guard
     }
 
-    // Chasing — gravity first
+    // Chasing — gravity first (only when aligned, so guards finish
+    // horizontal steps before falling — matches classic Lode Runner)
     const supported = isSupported(state, guard.col, guard.row)
-    if (!supported && !guard.falling) {
+    if (!supported && !guard.falling && isAligned(guard as Entity, 2)) {
       guard.falling = true
     }
 
     if (guard.falling) {
+      // Snap x to column center — falls are strictly vertical
+      guard.x = cellCenter(guard.col, 0).x
       guard.y += FALL_SPEED * dt
-      const { col, row } = posToCell(guard.x, guard.y)
-      guard.col = col
+      const { row } = posToCell(guard.x, guard.y)
       guard.row = row
 
       // Check if fallen into a dug hole
