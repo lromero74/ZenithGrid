@@ -14,6 +14,7 @@ interface StrategyConfigSectionProps {
   handleParamChange: (paramName: string, value: any) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   aggregateData: any
+  isPaperTrading?: boolean
 }
 
 /**
@@ -237,6 +238,7 @@ export function StrategyConfigSection({
   selectedStrategy,
   handleParamChange,
   aggregateData,
+  isPaperTrading,
 }: StrategyConfigSectionProps) {
   if (
     !selectedStrategy ||
@@ -305,6 +307,7 @@ export function StrategyConfigSection({
           selectedStrategy={selectedStrategy}
           handleParamChange={handleParamChange}
           renderParameterInput={renderParameterInput}
+          isPaperTrading={isPaperTrading}
         />
       ) : null}
     </div>
@@ -321,6 +324,7 @@ function StrategyParameterGroups({
   selectedStrategy,
   handleParamChange,
   renderParameterInput,
+  isPaperTrading,
 }: {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
@@ -331,6 +335,7 @@ function StrategyParameterGroups({
   renderParameterInput: (
     param: StrategyParameter
   ) => React.ReactNode
+  isPaperTrading?: boolean
 }) {
   const useManualSizing =
     formData.strategy_config.use_manual_sizing === true
@@ -352,7 +357,8 @@ function StrategyParameterGroups({
         if (
           !isParameterVisible(
             param,
-            formData.strategy_config
+            formData.strategy_config,
+            isPaperTrading,
           )
         )
           return acc

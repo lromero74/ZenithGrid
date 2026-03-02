@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.exchange_clients.paper_trading_client import (
     PaperTradingClient,
     _account_balance_locks,
+    simulate_slippage_ctx,
 )
 
 
@@ -543,7 +544,10 @@ class TestAggregateValues:
         account = _make_mock_account(paper_balances=balances)
         db = _make_mock_db()
         real_client = AsyncMock()
-        real_client.get_current_price = AsyncMock(return_value=0.05)  # ETH-BTC price
+
+        async def fake_price(product_id):
+            return {"ETH-BTC": 0.05}.get(product_id, 0.0)
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
         real_client.get_btc_usd_price = AsyncMock(return_value=50000.0)
         client = PaperTradingClient(account, db, real_client=real_client)
 
@@ -560,7 +564,10 @@ class TestAggregateValues:
         db = _make_mock_db()
         real_client = AsyncMock()
         real_client.get_btc_usd_price = AsyncMock(return_value=50000.0)
-        real_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
+
+        async def fake_price(product_id):
+            return {"BTC-USD": 50000.0, "ETH-USD": 3000.0}.get(product_id, 0.0)
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
         client = PaperTradingClient(account, db, real_client=real_client)
 
         result = await client.calculate_aggregate_usd_value()
@@ -569,9 +576,147 @@ class TestAggregateValues:
         assert result == pytest.approx(90000.0)
 
     @pytest.mark.asyncio
+    async def test_calculate_aggregate_usd_value_includes_altcoins(self):
+        """Happy path: altcoin balances are included in USD aggregate value."""
+        balances = {
+            "USD": 800.0, "USDC": 0.0, "USDT": 0.0,
+            "BTC": 0.0, "ETH": 0.0,
+            "HBAR": 500.0, "DOT": 10.0, "AMP": 3000.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+        real_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
+
+        # get_current_price returns different prices per pair
+        async def fake_price(product_id):
+            prices = {"HBAR-USD": 0.10, "DOT-USD": 5.0, "AMP-USD": 0.005}
+            return prices.get(product_id, 0.0)
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_usd_value()
+        # 800 USD + 500*0.10 HBAR + 10*5.0 DOT + 3000*0.005 AMP
+        # = 800 + 50 + 50 + 15 = 915
+        assert result == pytest.approx(915.0)
+
+    @pytest.mark.asyncio
+    async def test_calculate_aggregate_btc_value_includes_altcoins(self):
+        """Happy path: altcoin balances are included in BTC aggregate value."""
+        balances = {
+            "BTC": 1.0, "ETH": 0.0,
+            "USD": 0.0, "USDC": 0.0, "USDT": 0.0,
+            "SOL": 5.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+
+        async def fake_price(product_id):
+            prices = {"SOL-BTC": 0.002}
+            return prices.get(product_id, 0.0)
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_btc_value()
+        # 1.0 BTC + 5*0.002 SOL-BTC = 1.0 + 0.01 = 1.01
+        assert result == pytest.approx(1.01)
+
+    @pytest.mark.asyncio
+    async def test_aggregate_usd_value_uses_btc_fallback(self):
+        """Happy path: coin with no USD pair falls back via BTC → USD."""
+        balances = {
+            "USD": 1000.0, "USDC": 0.0, "USDT": 0.0,
+            "BTC": 0.0, "ETH": 0.0,
+            "OBSCURE": 10.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+
+        # OBSCURE-USD fails, OBSCURE-BTC works
+        async def fake_price(product_id):
+            if product_id == "OBSCURE-USD":
+                return None  # no direct USD pair
+            if product_id == "OBSCURE-BTC":
+                return 0.001  # 0.001 BTC per OBSCURE
+            return 0.0
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_usd_value()
+        # 1000 USD + 10 * 0.001 BTC * 80000 USD/BTC = 1000 + 800 = 1800
+        assert result == pytest.approx(1800.0)
+
+    @pytest.mark.asyncio
+    async def test_aggregate_btc_value_uses_usd_fallback(self):
+        """Happy path: coin with no BTC pair falls back via USD → BTC."""
+        balances = {
+            "BTC": 1.0, "ETH": 0.0,
+            "USD": 0.0, "USDC": 0.0, "USDT": 0.0,
+            "HBAR": 1000.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+
+        # HBAR-BTC fails, HBAR-USD works
+        async def fake_price(product_id):
+            if product_id == "HBAR-BTC":
+                return None
+            if product_id == "HBAR-USD":
+                return 0.10
+            return 0.0
+        real_client.get_current_price = AsyncMock(side_effect=fake_price)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_btc_value()
+        # 1.0 BTC + 1000 * 0.10 USD / 80000 USD/BTC = 1.0 + 0.00125 = 1.00125
+        assert result == pytest.approx(1.00125)
+
+    @pytest.mark.asyncio
+    async def test_aggregate_usd_value_altcoin_price_failure_skipped(self):
+        """Edge case: failing altcoin price doesn't break aggregate calculation."""
+        balances = {
+            "USD": 1000.0, "USDC": 0.0, "USDT": 0.0,
+            "BTC": 0.0, "ETH": 0.0,
+            "HBAR": 500.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+        real_client.get_current_price = AsyncMock(side_effect=Exception("No price"))
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_usd_value()
+        # HBAR price fails on both paths, but USD balance is still counted
+        assert result == pytest.approx(1000.0)
+
+    @pytest.mark.asyncio
+    async def test_aggregate_usd_value_skips_dust(self):
+        """Edge case: tiny dust balances are skipped (not worth pricing)."""
+        balances = {
+            "USD": 1000.0, "USDC": 0.0, "USDT": 0.0,
+            "BTC": 1e-9, "ETH": 0.0,
+            "DASH": 1e-8, "UNI": 1e-6,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+        real_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
+        # Should NOT be called for dust amounts
+        real_client.get_current_price = AsyncMock(return_value=100.0)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_usd_value()
+        assert result == pytest.approx(1000.0, abs=0.01)
+        # get_current_price should not be called for dust
+        real_client.get_current_price.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_aggregate_btc_value_price_failure_graceful(self):
         """Edge case: price fetch failure is handled gracefully."""
-        balances = {"BTC": 1.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
+        balances = {"BTC": 1.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
         account = _make_mock_account(paper_balances=balances)
         db = _make_mock_db()
         real_client = AsyncMock()
@@ -1029,3 +1174,274 @@ class TestConcurrentBalanceSafety:
         # Should see the refreshed ETH balance
         eth_acc = next(a for a in accounts if a["currency"] == "ETH")
         assert float(eth_acc["available_balance"]["value"]) == pytest.approx(7.5)
+
+
+# =========================================================
+# Slippage simulation (VWAP fills)
+# =========================================================
+
+
+class TestSlippageSimulation:
+    """Tests for paper trade slippage simulation via order book VWAP.
+
+    When simulate_slippage_ctx is True and a real_client is available,
+    place_order should walk the order book and fill at VWAP instead of
+    mid-price.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_slippage_ctx(self):
+        """Reset the context var to False before each test."""
+        token = simulate_slippage_ctx.set(False)
+        yield
+        simulate_slippage_ctx.reset(token)
+
+    def _mock_order_book(self, bids=None, asks=None):
+        """Build a mock product_book response in Coinbase format."""
+        return {
+            "pricebook": {
+                "bids": bids or [],
+                "asks": asks or [],
+            }
+        }
+
+    @pytest.mark.asyncio
+    async def test_buy_with_funds_uses_vwap_from_asks(self):
+        """Happy path: buy with funds fills at ask VWAP, not mid-price."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)  # mid-price
+        # Order book: 10 ETH at 0.051, 10 ETH at 0.052
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book(
+            asks=[
+                {"price": "0.051", "size": "10"},
+                {"price": "0.052", "size": "10"},
+            ]
+        ))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            funds=0.1,
+        )
+
+        assert result["success"] is True
+        # VWAP for 0.1 BTC across asks:
+        # Level 1: 10 ETH * 0.051 = 0.51 BTC available → spend 0.1 BTC → get ~1.9608 ETH
+        # All filled at 0.051 (first level has enough)
+        # VWAP = 0.051
+        vwap = 0.051
+        expected_size = 0.1 / vwap
+        assert float(result["filled_size"]) == pytest.approx(expected_size, rel=1e-6)
+        # Balance should reflect VWAP, not mid-price
+        assert client.balances["BTC"] == pytest.approx(0.9, rel=1e-6)
+        assert client.balances["ETH"] == pytest.approx(expected_size, rel=1e-6)
+
+    @pytest.mark.asyncio
+    async def test_sell_uses_vwap_from_bids(self):
+        """Happy path: sell fills at bid VWAP, not mid-price."""
+        balances = {"BTC": 0.0, "ETH": 10.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)  # mid-price
+        # Order book: 3 ETH at 0.049, 10 ETH at 0.048
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book(
+            bids=[
+                {"price": "0.049", "size": "3"},
+                {"price": "0.048", "size": "10"},
+            ]
+        ))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="sell",
+            order_type="market",
+            size=5.0,
+        )
+
+        assert result["success"] is True
+        # VWAP: 3 ETH * 0.049 + 2 ETH * 0.048 = 0.147 + 0.096 = 0.243
+        # VWAP = 0.243 / 5 = 0.0486
+        expected_funds = 3 * 0.049 + 2 * 0.048
+        assert client.balances["ETH"] == pytest.approx(5.0)
+        assert client.balances["BTC"] == pytest.approx(expected_funds, rel=1e-6)
+
+    @pytest.mark.asyncio
+    async def test_buy_with_size_uses_vwap(self):
+        """Happy path: buy with size calculates cost at ask VWAP."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        # 5 ETH at 0.051, 5 ETH at 0.053
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book(
+            asks=[
+                {"price": "0.051", "size": "5"},
+                {"price": "0.053", "size": "5"},
+            ]
+        ))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            size=8.0,
+        )
+
+        assert result["success"] is True
+        # Walk asks to buy 8 ETH:
+        # 5 * 0.051 = 0.255, 3 * 0.053 = 0.159
+        # total cost = 0.414, VWAP = 0.414 / 8 = 0.05175
+        expected_cost = 5 * 0.051 + 3 * 0.053
+        assert client.balances["BTC"] == pytest.approx(1.0 - expected_cost, rel=1e-6)
+        assert client.balances["ETH"] == pytest.approx(8.0, rel=1e-6)
+
+    @pytest.mark.asyncio
+    async def test_slippage_disabled_uses_mid_price(self):
+        """Edge case: when simulate_slippage_ctx is False, uses mid-price."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        real_client.get_product_book = AsyncMock()  # Should not be called
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(False)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            funds=0.1,
+        )
+
+        assert result["success"] is True
+        # Mid-price = 0.050, so 0.1 / 0.050 = 2.0 ETH
+        assert float(result["filled_size"]) == pytest.approx(2.0)
+        real_client.get_product_book.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_book_falls_back_to_mid_price(self):
+        """Edge case: empty order book falls back to mid-price."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book())
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            funds=0.1,
+        )
+
+        assert result["success"] is True
+        # Falls back to mid-price: 0.1 / 0.05 = 2.0
+        assert float(result["filled_size"]) == pytest.approx(2.0)
+
+    @pytest.mark.asyncio
+    async def test_book_fetch_error_falls_back_to_mid_price(self):
+        """Failure case: order book fetch error falls back to mid-price."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        real_client.get_product_book = AsyncMock(side_effect=Exception("Network timeout"))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            funds=0.1,
+        )
+
+        assert result["success"] is True
+        assert float(result["filled_size"]) == pytest.approx(2.0)
+
+    @pytest.mark.asyncio
+    async def test_no_real_client_falls_back_to_mid_price(self):
+        """Edge case: no real_client skips slippage simulation."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        # Use public API mock for price
+        client = PaperTradingClient(account, real_client=None)
+
+        simulate_slippage_ctx.set(True)
+
+        mock_module = MagicMock()
+        mock_module.get_current_price = AsyncMock(return_value=0.050)
+        with patch.dict(
+            "sys.modules",
+            {"app.coinbase_api": MagicMock(public_market_data=mock_module)},
+        ):
+            result = await client.place_order(
+                product_id="ETH-BTC",
+                side="buy",
+                order_type="market",
+                funds=0.1,
+            )
+
+        assert result["success"] is True
+        # No real_client → can't fetch book → mid-price fallback
+        assert float(result["filled_size"]) == pytest.approx(2.0)
+
+    @pytest.mark.asyncio
+    async def test_slippage_logged(self):
+        """Happy path: slippage percentage is logged."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book(
+            asks=[{"price": "0.052", "size": "100"}]
+        ))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        with patch("app.exchange_clients.paper_trading_client.logger") as mock_logger:
+            await client.place_order(
+                product_id="ETH-BTC",
+                side="buy",
+                order_type="market",
+                funds=0.1,
+            )
+            # Should log slippage info
+            log_calls = [str(c) for c in mock_logger.info.call_args_list]
+            slippage_logged = any("Paper slippage" in c for c in log_calls)
+            assert slippage_logged, f"Expected slippage log, got: {log_calls}"
+
+    @pytest.mark.asyncio
+    async def test_order_response_contains_vwap_price(self):
+        """Happy path: order response price field reflects VWAP, not mid-price."""
+        balances = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=balances)
+        real_client = _make_mock_real_client(price=0.050)
+        real_client.get_product_book = AsyncMock(return_value=self._mock_order_book(
+            asks=[{"price": "0.055", "size": "100"}]
+        ))
+        client = PaperTradingClient(account, real_client=real_client)
+
+        simulate_slippage_ctx.set(True)
+
+        result = await client.place_order(
+            product_id="ETH-BTC",
+            side="buy",
+            order_type="market",
+            funds=0.1,
+        )
+
+        # Response price and average_filled_price should be VWAP (0.055)
+        assert float(result["price"]) == pytest.approx(0.055, rel=1e-6)
+        assert float(result["average_filled_price"]) == pytest.approx(0.055, rel=1e-6)

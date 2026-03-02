@@ -218,15 +218,24 @@ async def _build_paper_portfolio(account: Account) -> dict:
 
     btc_usd_price = await get_public_btc_price()
 
-    # Fetch BTC prices for all non-stablecoin currencies
-    altcoin_btc_prices = {}
+    # Fetch USD prices for all non-stablecoin currencies (USD-first, BTC fallback)
+    altcoin_usd_prices = {}
+    fiat_and_stables = {"BTC", "USD", "USDC", "USDT"}
     for currency in balances:
-        if currency in ("BTC", "USD", "USDC", "USDT"):
+        if currency in fiat_and_stables:
             continue
+        # Try direct USD pair first (most coins have this)
         try:
-            altcoin_btc_prices[currency] = await get_public_price(f"{currency}-BTC")
+            altcoin_usd_prices[currency] = await get_public_price(f"{currency}-USD")
+            continue
         except Exception:
-            altcoin_btc_prices[currency] = 0.0
+            pass
+        # Fall back to BTC pair → convert via BTC/USD
+        try:
+            btc_price = await get_public_price(f"{currency}-BTC")
+            altcoin_usd_prices[currency] = btc_price * btc_usd_price
+        except Exception:
+            altcoin_usd_prices[currency] = 0.0
 
     # Build holdings array (compatible with frontend Portfolio page)
     holdings = []
@@ -243,10 +252,9 @@ async def _build_paper_portfolio(account: Account) -> dict:
                 btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0
                 current_price_usd = 1.0
             else:
-                btc_price = altcoin_btc_prices.get(currency, 0.0)
-                btc_value = amount * btc_price
-                usd_value = btc_value * btc_usd_price
-                current_price_usd = btc_price * btc_usd_price
+                current_price_usd = altcoin_usd_prices.get(currency, 0.0)
+                usd_value = amount * current_price_usd
+                btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
 
             total_btc += btc_value
             total_usd += usd_value

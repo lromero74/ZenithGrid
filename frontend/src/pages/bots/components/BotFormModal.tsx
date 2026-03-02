@@ -34,6 +34,7 @@ interface BotFormModalProps {
     name: string
     type?: string
     chain_id?: number
+    is_paper_trading?: boolean
   } | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createBot: any
@@ -383,6 +384,7 @@ export function BotFormModal({
               selectedStrategy={selectedStrategy}
               handleParamChange={handleParamChange}
               aggregateData={aggregateData}
+              isPaperTrading={selectedAccount?.is_paper_trading}
             />
           </fieldset>
 

@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import uuid
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,10 @@ from sqlalchemy import select
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import Account
+from app.trading_engine.book_depth_guard import (
+    calculate_vwap_from_asks,
+    calculate_vwap_from_bids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +28,11 @@ logger = logging.getLogger(__name__)
 # Without this, concurrent PaperTradingClient instances for the same account
 # read stale snapshots of paper_balances and the last writer silently wins.
 _account_balance_locks: Dict[int, asyncio.Lock] = {}
+
+# Per-task toggle for VWAP-based fill simulation.
+# Each asyncio.Task in multi_bot_monitor gets its own copy via ContextVar,
+# so concurrent bots on the same paper account don't race.
+simulate_slippage_ctx: ContextVar[bool] = ContextVar('simulate_slippage', default=False)
 
 
 def _get_account_lock(account_id: int) -> asyncio.Lock:
@@ -124,6 +134,71 @@ class PaperTradingClient(ExchangeClient):
                 else:
                     raise
 
+    async def _calculate_vwap_fill_price(
+        self,
+        product_id: str,
+        side: str,
+        mid_price: float,
+        size: Optional[float] = None,
+        funds: Optional[float] = None,
+    ) -> float:
+        """Walk the order book to compute a VWAP fill price.
+
+        Returns mid_price as fallback if the book is empty or fetch fails.
+        """
+        try:
+            book = await self.real_client.get_product_book(product_id)
+            pricebook = book.get("pricebook", {})
+
+            if side == "buy":
+                asks = pricebook.get("asks", [])
+                if not asks:
+                    return mid_price
+                if funds:
+                    vwap, _, filled = calculate_vwap_from_asks(asks, funds)
+                elif size:
+                    # Estimate funds needed then walk asks
+                    estimated_funds = size * mid_price * 1.1  # 10% headroom
+                    vwap, _, filled = calculate_vwap_from_asks(asks, estimated_funds)
+                    if not filled or vwap <= 0:
+                        return mid_price
+                    # For size-based buys, we need a VWAP for a specific base amount.
+                    # Walk asks by base amount using bids logic on reversed perspective:
+                    # treat ask levels as "available base" and compute cost.
+                    remaining = size
+                    total_quote = 0.0
+                    total_base = 0.0
+                    for level in asks:
+                        price = float(level["price"])
+                        level_size = float(level["size"])
+                        if price <= 0 or level_size <= 0:
+                            continue
+                        fill = min(remaining, level_size)
+                        total_quote += fill * price
+                        total_base += fill
+                        remaining -= fill
+                        if remaining <= 1e-12:
+                            break
+                    if total_base > 0:
+                        vwap = total_quote / total_base
+                    else:
+                        return mid_price
+                else:
+                    return mid_price
+            else:  # sell
+                bids = pricebook.get("bids", [])
+                if not bids or not size:
+                    return mid_price
+                vwap, _, filled = calculate_vwap_from_bids(bids, size)
+
+            if vwap <= 0:
+                return mid_price
+            return vwap
+
+        except Exception as e:
+            logger.warning(f"Slippage simulation book fetch failed for {product_id}: {e}")
+            return mid_price
+
     async def get_price(self, product_id: str) -> Optional[float]:
         """
         Get current market price from real exchange.
@@ -181,6 +256,14 @@ class PaperTradingClient(ExchangeClient):
         if not current_price:
             raise Exception(f"Could not get price for {product_id}")
 
+        # Determine fill price: VWAP from order book if slippage simulation
+        # is enabled, otherwise use mid-price (current_price).
+        fill_price = current_price
+        if simulate_slippage_ctx.get(False) and self.real_client:
+            fill_price = await self._calculate_vwap_fill_price(
+                product_id, side, current_price, size=size, funds=funds,
+            )
+
         # Serialize all balance mutations for this account.
         # Inside the lock: re-read fresh balances → check → modify → save.
         lock = _get_account_lock(self.account.id)
@@ -191,12 +274,12 @@ class PaperTradingClient(ExchangeClient):
             if side == "buy":
                 if funds:
                     # Market buy with funds
-                    actual_size = funds / current_price
+                    actual_size = funds / fill_price
                     actual_funds = funds
                 elif size:
                     # Buy specific size
                     actual_size = size
-                    actual_funds = size * current_price
+                    actual_funds = size * fill_price
                 else:
                     raise ValueError("Must specify either size or funds for buy order")
 
@@ -217,7 +300,7 @@ class PaperTradingClient(ExchangeClient):
                     raise ValueError("Must specify size for sell order")
 
                 actual_size = size
-                actual_funds = size * current_price
+                actual_funds = size * fill_price
 
                 # Check sufficient base currency
                 available_base = self.balances.get(base_currency, 0.0)
@@ -238,9 +321,15 @@ class PaperTradingClient(ExchangeClient):
         order_id = f"paper-{uuid.uuid4()}"
 
         # Log the simulated trade
+        if fill_price != current_price:
+            slip_pct = ((fill_price - current_price) / current_price) * 100
+            logger.info(
+                f"Paper slippage: mid={current_price:.8f}, VWAP={fill_price:.8f}, "
+                f"slip={slip_pct:+.4f}% | {side.upper()} {actual_size:.8f} {base_currency}"
+            )
         logger.info(
             f"Paper trade executed: {side.upper()} {actual_size:.8f} {base_currency} "
-            f"at {current_price:.8f} {quote_currency} (order_id: {order_id})"
+            f"at {fill_price:.8f} {quote_currency} (order_id: {order_id})"
         )
 
         # Build order response (matches Coinbase format)
@@ -251,12 +340,12 @@ class PaperTradingClient(ExchangeClient):
             "side": side,
             "type": "market",  # Paper trading always treats as market
             "size": str(actual_size),
-            "price": str(current_price),
+            "price": str(fill_price),
             "funds": str(actual_funds),
             "status": "filled",
             "filled_size": str(actual_size),
             "filled_value": str(actual_funds),
-            "average_filled_price": str(current_price),
+            "average_filled_price": str(fill_price),
             "total_fees": "0",
             "created_time": datetime.utcnow().isoformat(),
             "done_time": datetime.utcnow().isoformat(),
@@ -452,28 +541,66 @@ class PaperTradingClient(ExchangeClient):
         """No-op for paper trading (balances always up-to-date in memory)."""
         pass
 
+    # Currencies that are already denominated in the quote (no conversion needed)
+    _FIAT_AND_STABLES = {"USD", "USDC", "USDT"}
+    # Minimum balance to bother pricing (skip dust from partial fills)
+    _DUST_THRESHOLD = 1e-4
+
+    async def _price_in_usd(self, currency: str, balance: float, btc_usd: float) -> float:
+        """Convert a crypto balance to USD.  Try direct pair first, fall back via BTC."""
+        # Try direct USD pair
+        try:
+            price = await self.get_price(f"{currency}-USD")
+            if price and price > 0:
+                return balance * price
+        except Exception:
+            pass
+        # Fallback: convert via BTC (for coins with only a BTC pair)
+        if btc_usd and btc_usd > 0:
+            try:
+                btc_price = await self.get_price(f"{currency}-BTC")
+                if btc_price and btc_price > 0:
+                    return balance * btc_price * btc_usd
+            except Exception:
+                pass
+        logger.warning(f"Could not price {currency} in USD (no USD or BTC pair)")
+        return 0.0
+
+    async def _price_in_btc(self, currency: str, balance: float, btc_usd: float) -> float:
+        """Convert a crypto balance to BTC.  Try direct pair first, fall back via USD."""
+        # Try direct BTC pair
+        try:
+            price = await self.get_price(f"{currency}-BTC")
+            if price and price > 0:
+                return balance * price
+        except Exception:
+            pass
+        # Fallback: convert via USD (for coins with only a USD pair)
+        if btc_usd and btc_usd > 0:
+            try:
+                usd_price = await self.get_price(f"{currency}-USD")
+                if usd_price and usd_price > 0:
+                    return balance * usd_price / btc_usd
+            except Exception:
+                pass
+        logger.warning(f"Could not price {currency} in BTC (no BTC or USD pair)")
+        return 0.0
+
     async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """
         Calculate total portfolio value in BTC.
 
-        Args:
-            bypass_cache: Not used for paper trading (uses simulated balances, no API caching)
-
-        Includes:
-        - BTC balance
-        - BTC value of altcoins (ETH, etc.)
+        Iterates all balances in paper_balances and converts each to BTC.
+        Uses two-hop fallback (coin → USD → BTC) for coins without a direct BTC pair.
         """
         total_btc = self.balances.get("BTC", 0.0)
 
-        # Convert ETH to BTC
-        eth_balance = self.balances.get("ETH", 0.0)
-        if eth_balance > 0:
-            try:
-                eth_btc_price = await self.get_price("ETH-BTC")
-                if eth_btc_price:
-                    total_btc += eth_balance * eth_btc_price
-            except Exception as e:
-                logger.warning(f"Failed to get ETH-BTC price for aggregate calculation: {e}")
+        # Get BTC-USD price once for stablecoin conversion and fallback pricing
+        btc_usd = 0.0
+        try:
+            btc_usd = await self.get_btc_usd_price()
+        except Exception as e:
+            logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
 
         # Convert USD/stablecoins to BTC
         usd_balance = (
@@ -481,13 +608,16 @@ class PaperTradingClient(ExchangeClient):
             + await self.get_usdc_balance()
             + await self.get_usdt_balance()
         )
-        if usd_balance > 0:
-            try:
-                btc_usd_price = await self.get_btc_usd_price()
-                if btc_usd_price and btc_usd_price > 0:
-                    total_btc += usd_balance / btc_usd_price
-            except Exception as e:
-                logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
+        if usd_balance > 0 and btc_usd and btc_usd > 0:
+            total_btc += usd_balance / btc_usd
+
+        # Convert all other crypto holdings to BTC
+        for currency, balance in self.balances.items():
+            if currency == "BTC" or currency in self._FIAT_AND_STABLES:
+                continue
+            if balance < self._DUST_THRESHOLD:
+                continue
+            total_btc += await self._price_in_btc(currency, balance, btc_usd)
 
         return total_btc
 
@@ -495,9 +625,8 @@ class PaperTradingClient(ExchangeClient):
         """
         Calculate total portfolio value in USD.
 
-        Includes:
-        - USD balance (including stablecoins)
-        - USD value of crypto holdings
+        Iterates all balances in paper_balances and converts each to USD.
+        Uses two-hop fallback (coin → BTC → USD) for coins without a direct USD pair.
         """
         total_usd = (
             await self.get_usd_balance()
@@ -505,25 +634,20 @@ class PaperTradingClient(ExchangeClient):
             + await self.get_usdt_balance()
         )
 
-        # Convert BTC to USD
-        btc_balance = self.balances.get("BTC", 0.0)
-        if btc_balance > 0:
-            try:
-                btc_usd_price = await self.get_btc_usd_price()
-                if btc_usd_price:
-                    total_usd += btc_balance * btc_usd_price
-            except Exception as e:
-                logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
+        # Get BTC-USD price once for fallback pricing
+        btc_usd = 0.0
+        try:
+            btc_usd = await self.get_btc_usd_price()
+        except Exception as e:
+            logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
 
-        # Convert ETH to USD
-        eth_balance = self.balances.get("ETH", 0.0)
-        if eth_balance > 0:
-            try:
-                eth_usd_price = await self.get_eth_usd_price()
-                if eth_usd_price:
-                    total_usd += eth_balance * eth_usd_price
-            except Exception as e:
-                logger.warning(f"Failed to get ETH-USD price for aggregate calculation: {e}")
+        # Convert all crypto holdings to USD
+        for currency, balance in self.balances.items():
+            if currency in self._FIAT_AND_STABLES:
+                continue
+            if balance < self._DUST_THRESHOLD:
+                continue
+            total_usd += await self._price_in_usd(currency, balance, btc_usd)
 
         return total_usd
 

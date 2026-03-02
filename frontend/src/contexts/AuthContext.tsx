@@ -23,6 +23,8 @@ export interface User {
   created_at: string
   last_login_at: string | null
   terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
+  last_seen_history_count: number
+  last_seen_failed_count: number
   groups?: { id: number; name: string; description: string | null }[]
   permissions?: string[]
 }

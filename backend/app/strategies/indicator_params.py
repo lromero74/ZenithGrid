@@ -117,6 +117,11 @@ INDICATOR_PARAMS = [
      "type": "float", "default": 0.5, "min_value": 0.01, "max_value": 5.0,
      "group": "Slippage Guard",
      "visible_when": {"slippage_guard": True}},
+    {"name": "simulate_slippage", "display_name": "Simulate Slippage (Paper Trading)",
+     "description": "Paper trade fills use order book VWAP instead of mid-price for realistic results",
+     "type": "bool", "default": True,
+     "group": "Slippage Guard",
+     "paper_trading_only": True},
     # ── Stop Loss ─────────────────────────────────────────────────────────
     {"name": "stop_loss_enabled", "display_name": "Enable Stop Loss",
      "description": "Enable stop loss protection",

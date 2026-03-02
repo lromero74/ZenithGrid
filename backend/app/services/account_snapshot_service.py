@@ -58,16 +58,13 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
             except Exception:
                 pass
 
-            # Compute portions from paper balances + open positions
+            # Compute portions: everything non-BTC is USD portion
             balances = await client.get_all_balances()
-            usd_portion_usd = (
-                balances.get("USD", 0.0)
-                + balances.get("USDC", 0.0)
-                + balances.get("USDT", 0.0)
-            )
             btc_portion_btc = balances.get("BTC", 0.0)
+            btc_usd_value = btc_portion_btc * btc_usd_price if btc_usd_price else 0.0
+            usd_portion_usd = total_usd - btc_usd_value
 
-            # Add open position values by quote currency + compute unrealized PnL
+            # Compute unrealized PnL from open positions
             pos_result = await db.execute(
                 select(Position).where(
                     Position.account_id == account.id,
@@ -82,10 +79,8 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
                         current_value = pos.total_base_acquired * price
                         pos_unrealized = current_value - (pos.total_quote_spent or 0)
                         if quote in ("USD", "USDC", "USDT"):
-                            usd_portion_usd += current_value
                             unrealized_pnl_usd += pos_unrealized
                         elif quote == "BTC":
-                            btc_portion_btc += current_value
                             unrealized_pnl_btc += pos_unrealized
 
             portfolio = {
