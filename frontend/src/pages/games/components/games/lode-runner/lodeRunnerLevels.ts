@@ -4,9 +4,10 @@
  * Grid: 28 cols x 16 rows. Each character is a tile:
  *   . = empty       B = brick (diggable)     S = solid (indestructible)
  *   H = ladder      - = bar (monkey bar)     G = gold
- *   P = player      E = enemy start          T = hidden ladder (row 0 escape)
+ *   P = player      E = enemy start          T = hidden ladder (escape)
  *
  * Row 0 is always T (hidden escape ladders, revealed when all gold collected).
+ * T tiles also extend down column 2 to connect escape to the topmost platform.
  * Row 15 (bottom) is always solid.
  * Every gold piece must be reachable. Every level must be completable.
  */
@@ -18,10 +19,10 @@ export type LevelDef = string[]
 const LEVEL_1: LevelDef = [
   // "First Steps" — 0 enemies, teaches movement + ladders + gold
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT', // 0: hidden escape
-  '............................', // 1
-  '............................', // 2
-  '............................', // 3
-  '...G........................', // 4
+  '..T.........................', // 1: escape ladder col 2
+  '..T.........................', // 2
+  '..T.........................', // 3
+  '..TG........................', // 4
   '..HBBB-----------G..........', // 5
   '..H..........BBBBBBB........', // 6
   '..H.........................', // 7
@@ -38,12 +39,12 @@ const LEVEL_1: LevelDef = [
 const LEVEL_2: LevelDef = [
   // "Dig It" — 0 enemies, teaches brick digging to reach gold below
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
-  '............................',
-  '.......H..G.......G..H......',
-  '.......HBBBBB...BBBBBH......',
-  '.......H.............H......',
-  '.......H.............H......',
+  '..T.........................',
+  '..T.........................',
+  '..T....H..G.......G..H......',
+  '..T....HBBBBB...BBBBBH......',
+  '..T....H.............H......',
+  '..T....H.............H......',
   '..G....H.............H......',
   'BBHBB..H.............H......',
   '..H....H.............H......',
@@ -58,10 +59,10 @@ const LEVEL_2: LevelDef = [
 const LEVEL_3: LevelDef = [
   // "The Guard" — 1 enemy, teaches enemy avoidance + timing
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
-  '............................',
-  '............................',
-  '....G.............E.........',
+  '..T.........................',
+  '..T.........................',
+  '..T.........................',
+  '..T.G.............E.........',
   '..HBBBBB.......BBBBBB.......',
   '..H..................H......',
   '..H..................H......',
@@ -78,9 +79,9 @@ const LEVEL_3: LevelDef = [
 const LEVEL_4: LevelDef = [
   // "Trap and Escape" — 1 enemy, dig-to-trap core mechanic
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
-  '............................',
-  '............................',
+  '..T.........................',
+  '..T.........................',
+  '..T.........................',
   '..P...........E.............',
   '..HBBBBBBBBBBBBBBBBH........',
   '..H................H........',
@@ -98,10 +99,10 @@ const LEVEL_4: LevelDef = [
 const LEVEL_5: LevelDef = [
   // "Monkey Bars" — 1 enemy, bar traversal over gaps
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
-  '............................',
-  '............................',
-  '....G...........G...........',
+  '..T.........................',
+  '..T.........................',
+  '..T.........................',
+  '..T.G...........G...........',
   '..HBBBB.......BBBBH.........',
   '..H...............H.........',
   '..H...-----------.H.........',
@@ -118,8 +119,8 @@ const LEVEL_5: LevelDef = [
 const LEVEL_6: LevelDef = [
   // "The Pit" — 2 enemies, multi-level with strategic descent
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
-  '....G..........G............',
+  '..T.........................',
+  '..T.G..........G............',
   '..HBBBB....BBBBBBH..........',
   '..H..............H..........',
   '..H....E.........H..........',
@@ -138,11 +139,11 @@ const LEVEL_6: LevelDef = [
 const LEVEL_7: LevelDef = [
   // "Tower Climb" — 2 enemies, vertical level, scattered gold
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '...........G................',
-  '.........HBBBB..............',
-  '.........H....G.............',
-  '.....HBBBBBBBBBBH...........',
-  '.....H..........H...........',
+  '..T........G................',
+  '..T......HBBBB..............',
+  '..T......H....G.............',
+  '..T..HBBBBBBBBBBH...........',
+  '..T..H..........H...........',
   '..G..H...E......H...........',
   'BBHBBBBBBBBB....H...........',
   '..H.........BBBBH...........',
@@ -158,7 +159,7 @@ const LEVEL_7: LevelDef = [
 const LEVEL_8: LevelDef = [
   // "Bridge Run" — 2 enemies, brick bridges, dig to drop enemies
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
+  '..T.........................',
   '..G.......G.........G.......',
   'BBHBB...BBHBB.....BBHBB.....',
   '..H.......H.........H.......',
@@ -178,7 +179,7 @@ const LEVEL_8: LevelDef = [
 const LEVEL_9: LevelDef = [
   // "The Maze" — 3 enemies, complex paths, dead ends
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '............................',
+  '..T.........................',
   '..G....G.......G....G.......',
   'BBHBBBBBBBH.HBBBBBBBHBB.....',
   '..H.......H.H.......H.......',
@@ -198,7 +199,7 @@ const LEVEL_9: LevelDef = [
 const LEVEL_10: LevelDef = [
   // "Gauntlet" — 3 enemies, all mechanics combined
   'TTTTTTTTTTTTTTTTTTTTTTTTTTTT',
-  '..G..........G..........G...',
+  '..TG.........G..........G...',
   'BBHBB..----..BBBBH..HBBBH...',
   '..H..............H..H...H...',
   '..H.....E........H..H.G.H...',

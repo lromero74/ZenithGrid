@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.82.2] - 2026-03-02
+
+### Fixed
+- **Lode Runner bar position**: Raised monkey bar line to top of cell so player hands align correctly when hanging
+- **Lode Runner escape ladder**: Hidden escape ladders now extend down from row 0 through column 2 to connect with the topmost reachable platform — previously unreachable from any level
+
 ## [v2.82.1] - 2026-03-02
 
 ### Fixed
