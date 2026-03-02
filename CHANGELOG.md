@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.10] - 2026-03-02
+
+### Changed
+- **Decomposed 4 oversized functions**: Broke down the largest functions in the trading engine and monitoring system into focused, single-responsibility helpers while preserving exact behavior
+  - `process_bot_pair()`: 489→104 lines orchestrator + 11 helpers
+  - `get_account_portfolio_data()`: 358→~50 lines orchestrator + 5 helpers
+  - `process_bot_batch()`: 463→~45 lines orchestrator + 7 helpers
+- **Trading engine TradeContext dataclass**: Internal signal processor functions now use a shared `TradeContext` instead of threading 8-13 individual parameters through every call
+
 ## [v2.76.9] - 2026-03-01
 
 ### Changed
