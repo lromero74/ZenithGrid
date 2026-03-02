@@ -8,7 +8,7 @@ link_perps_portfolio, and the _mask_key_name helper.
 
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
