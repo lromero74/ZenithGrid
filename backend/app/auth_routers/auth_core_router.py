@@ -175,8 +175,13 @@ async def login(
             )
 
     # No MFA (or trusted device) - issue full tokens
+    # Eagerly load all user attributes before any DB write — after rollback, lazy loads fail
+    user_id = user.id
+    user_email = user.email
+    user_groups = list(user.groups or [])
+    user_policy_override = user.session_policy_override
+
     # Update last_login_at (non-critical — don't block login if DB is locked)
-    user_email = user.email  # Capture before try — session may be unusable after failure
     try:
         user.last_login_at = datetime.utcnow()
         await db.commit()
@@ -184,24 +189,35 @@ async def login(
     except Exception as e:
         await db.rollback()
         logger.warning(f"Non-critical: failed to update last_login_at for {user_email}: {e}")
+        # Re-load user so lazy-loaded attributes (groups, etc.) work after rollback
+        try:
+            await db.refresh(user, attribute_names=["groups"])
+        except Exception:
+            pass  # If refresh also fails, cached values above will be used
 
-    # Resolve session policy
+    # Resolve session policy using pre-loaded data (avoids lazy load on expired session)
     from app.services.session_policy_service import resolve_session_policy, has_any_limits
     from app.services.session_service import check_session_limits, create_session
 
-    policy = resolve_session_policy(user)
+    # Build a lightweight object with pre-loaded attributes so resolve_session_policy
+    # doesn't need to touch the DB session (which may be unusable after rollback)
+    class _PolicyUser:
+        def __init__(self, groups, override):
+            self.groups = groups
+            self.session_policy_override = override
+    policy = resolve_session_policy(_PolicyUser(user_groups, user_policy_override))
     session_id_str = None
     session_expires_at = None
 
     if has_any_limits(policy):
         try:
-            await check_session_limits(user.id, client_ip, policy, db)
+            await check_session_limits(user_id, client_ip, policy, db)
             session_id_str = str(uuid.uuid4())
             timeout = policy.get("session_timeout_minutes")
             if timeout:
                 session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
             await create_session(
-                user_id=user.id,
+                user_id=user_id,
                 session_id=session_id_str,
                 ip_address=client_ip,
                 user_agent=http_request.headers.get("user-agent", ""),
@@ -210,15 +226,15 @@ async def login(
             )
             await db.commit()
         except Exception as e:
-            logger.warning(f"Non-critical: failed to create session for {user.email}: {e}")
+            logger.warning(f"Non-critical: failed to create session for {user_email}: {e}")
             await db.rollback()
             session_id_str = None
             session_expires_at = None
 
-    access_token = create_access_token(user.id, user.email, session_id=session_id_str)
-    refresh_token = create_refresh_token(user.id, session_id=session_id_str)
+    access_token = create_access_token(user_id, user_email, session_id=session_id_str)
+    refresh_token = create_refresh_token(user_id, session_id=session_id_str)
 
-    logger.info(f"User logged in: {user.email}")
+    logger.info(f"User logged in: {user_email}")
 
     response = LoginResponse(
         access_token=access_token,
