@@ -176,13 +176,14 @@ async def login(
 
     # No MFA (or trusted device) - issue full tokens
     # Update last_login_at (non-critical — don't block login if DB is locked)
+    user_email = user.email  # Capture before try — session may be unusable after failure
     try:
         user.last_login_at = datetime.utcnow()
         await db.commit()
         await db.refresh(user)
     except Exception as e:
-        logger.warning(f"Non-critical: failed to update last_login_at for {user.email}: {e}")
         await db.rollback()
+        logger.warning(f"Non-critical: failed to update last_login_at for {user_email}: {e}")
 
     # Resolve session policy
     from app.services.session_policy_service import resolve_session_policy, has_any_limits
