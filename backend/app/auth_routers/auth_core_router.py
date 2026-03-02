@@ -69,7 +69,7 @@ async def login(
     If MFA is enabled, returns mfa_required=True with a short-lived mfa_token.
     The client must then call POST /api/auth/mfa/verify with the mfa_token + TOTP code.
     """
-    # Rate limiting by IP + username (S11)
+    # Rate limiting by IP + username — only FAILED attempts count (S11)
     client_ip = http_request.client.host if http_request.client else "unknown"
     email_lower = request.email.lower()
     _check_rate_limit(client_ip, username=email_lower)
@@ -77,15 +77,15 @@ async def login(
     # Find user by email (also matches plain usernames stored as email)
     user = await get_user_by_email(db, email_lower)
 
-    # Record attempt AFTER lookup so we can skip per-username for shared accounts
-    # (Observers group = shared demo accounts accessed from many IPs)
+    # Skip per-username recording for shared accounts (Observers group)
     is_shared = user and any(g.name == "Observers" for g in (user.groups or []))
-    _record_attempt(client_ip, username=None if is_shared else email_lower)
+    record_username = None if is_shared else email_lower
 
     if not user:
         # S1: Timing equalization — run bcrypt on dummy hash so response
         # time is indistinguishable from a real password check.
         bcrypt.checkpw(request.password.encode('utf-8'), _DUMMY_HASH.encode())
+        _record_attempt(client_ip, username=record_username)
         logger.warning(f"Login attempt for unknown email: {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -94,6 +94,7 @@ async def login(
 
     # Verify password
     if not verify_password(request.password, user.hashed_password):
+        _record_attempt(client_ip, username=record_username)
         logger.warning(f"Invalid password for user: {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

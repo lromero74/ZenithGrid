@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.19] - 2026-03-02
+
+### Fixed
+- **Successful logins no longer count toward rate limit**: Only failed login attempts (wrong email/password) are recorded. Logging in and out of multiple accounts from the same IP no longer triggers a 429 lockout
+
 ## [v2.76.18] - 2026-03-02
 
 ### Fixed
