@@ -78,6 +78,8 @@ export interface Input {
   digRight: boolean
 }
 
+export type AnimState = 'standing' | 'running' | 'climbing' | 'hanging' | 'falling' | 'digging'
+
 export interface Entity {
   col: number
   row: number
@@ -85,6 +87,7 @@ export interface Entity {
   y: number
   falling: boolean
   facingLeft: boolean
+  animState: AnimState
 }
 
 export interface Player extends Entity {
@@ -182,6 +185,10 @@ function isSupported(state: GameState, col: number, row: number): boolean {
   if (t === Tile.Bar) return true
   // Standing on solid ground below
   if (isSolid(state, col, row + 1)) return true
+  // Standing on top of a ladder below
+  const below = tileAt(state, col, row + 1)
+  if (below === Tile.Ladder) return true
+  if (below === Tile.Hidden && state.escapeRevealed) return true
   // Standing on a trapped guard
   if (state.guards.some(g => g.state === 'trapped' && g.col === col && g.row === row + 1)) return true
   return false
@@ -269,6 +276,7 @@ export function loadLevel(levelNum: number): GameState {
     y: py,
     falling: false,
     facingLeft: false,
+    animState: 'standing' as AnimState,
     alive: true,
     digCooldown: 0,
   }
@@ -281,6 +289,7 @@ export function loadLevel(levelNum: number): GameState {
       x, y,
       falling: false,
       facingLeft: false,
+      animState: 'standing' as AnimState,
       state: 'chasing' as GuardState,
       trapTimer: 0,
       carriesGold: false,
@@ -335,6 +344,7 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
       const snapped = snapToCell(p as Entity) as Entity
       p = { ...p, x: snapped.x, y: snapped.y }
     }
+    p.animState = 'falling'
     return { ...state, player: p }
   }
 
@@ -353,6 +363,10 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
       p.x = cx
       p.y = cy
     }
+    const ct = tileAt(state, p.col, p.row)
+    if (ct === Tile.Ladder || (ct === Tile.Hidden && state.escapeRevealed)) p.animState = 'climbing'
+    else if (ct === Tile.Bar) p.animState = 'hanging'
+    else p.animState = 'running'
     return { ...state, player: p }
   }
 
@@ -416,6 +430,7 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
         phase: 'open',
       }
       p.digCooldown = DIG_COOLDOWN
+      p.animState = 'digging'
       return {
         ...state,
         player: p,
@@ -440,6 +455,14 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
       p.y = ty
     }
   }
+
+  // Determine animation state
+  const tile = tileAt(state, p.col, p.row)
+  const ladderHere = tile === Tile.Ladder || (tile === Tile.Hidden && state.escapeRevealed)
+  if (ladderHere) p.animState = 'climbing'
+  else if (tile === Tile.Bar) p.animState = 'hanging'
+  else if (input.left || input.right) p.animState = 'running'
+  else p.animState = 'standing'
 
   return { ...state, player: p }
 }
@@ -481,6 +504,7 @@ function updateGuards(state: GameState, dt: number): GameState {
         // Try to climb out (move up one cell)
         guard.state = 'climbing_out'
       }
+      guard.animState = 'standing'
       return guard
     }
 
@@ -501,6 +525,7 @@ function updateGuards(state: GameState, dt: number): GameState {
         guard.state = 'trapped'
         guard.trapTimer = 0.5
       }
+      guard.animState = 'climbing'
       return guard
     }
 
@@ -535,6 +560,7 @@ function updateGuards(state: GameState, dt: number): GameState {
         const snapped = snapToCell(guard as Entity)
         guard = { ...guard, x: snapped.x, y: snapped.y }
       }
+      guard.animState = 'falling'
       return guard
     }
 
@@ -552,6 +578,10 @@ function updateGuards(state: GameState, dt: number): GameState {
         guard.x = cx
         guard.y = cy
       }
+      const gt = tileAt(state, guard.col, guard.row)
+      if (gt === Tile.Ladder || (gt === Tile.Hidden && state.escapeRevealed)) guard.animState = 'climbing'
+      else if (gt === Tile.Bar) guard.animState = 'hanging'
+      else guard.animState = 'running'
       return guard
     }
 
@@ -621,6 +651,14 @@ function updateGuards(state: GameState, dt: number): GameState {
       guard.x = tx
       guard.y = ty
     }
+
+    // Determine guard animation state
+    const gt = tileAt(state, guard.col, guard.row)
+    const guardOnLadder = gt === Tile.Ladder || (gt === Tile.Hidden && state.escapeRevealed)
+    if (guardOnLadder) guard.animState = 'climbing'
+    else if (gt === Tile.Bar) guard.animState = 'hanging'
+    else if (bestCol !== g.col || bestRow !== g.row) guard.animState = 'running'
+    else guard.animState = 'standing'
 
     return guard
   })

@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.80.0] - 2026-03-02
+
+### Added
+- **Lode Runner C64 sprites**: Player and guard sprites replaced with classic C64-style pixel-art with animation sequences (running, climbing, hanging, falling, digging)
+
+### Fixed
+- **Lode Runner movement**: Player can now climb ladders and step onto platforms above — ladders extend through brick floors matching classic arcade behavior
+- **Positions page stale data**: Switching between demo users no longer shows the previous user's overall stats — React Query cache now clears on logout
+
 ## [v2.79.0] - 2026-03-02
 
 ### Added
