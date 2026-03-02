@@ -559,6 +559,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('auth_session_policy')
     localStorage.removeItem('auth_session_expires_at')
 
+    // Clear account selection (prevents stale ID when switching users)
+    localStorage.removeItem('selectedAccountId')
+
     // Clear React Query cache to prevent stale data when switching users
     queryClient.clear()
 
