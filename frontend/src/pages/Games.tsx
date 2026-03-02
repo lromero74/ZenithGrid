@@ -50,6 +50,7 @@ const Freecell = lazy(() => import('./games/components/games/freecell/Freecell')
 // Phase 7: Arcade Games
 const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
 const SpaceInvaders = lazy(() => import('./games/components/games/space-invaders/SpaceInvaders'))
+const LodeRunner = lazy(() => import('./games/components/games/lode-runner/LodeRunner'))
 
 export default function Games() {
   return (
@@ -93,6 +94,7 @@ export default function Games() {
         {/* Phase 7: Arcade Games */}
         <Route path="centipede" element={<Centipede />} />
         <Route path="space-invaders" element={<SpaceInvaders />} />
+        <Route path="lode-runner" element={<LodeRunner />} />
       </Routes>
     </Suspense>
   )

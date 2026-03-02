@@ -58,9 +58,11 @@ export interface Player {
 export interface CentipedeSegment {
   x: number
   y: number
-  dx: number   // -1 or 1 (horizontal direction)
+  dx: number       // -1 or 1 (horizontal direction)
+  dy: number       // 1 (dropping down) or -1 (climbing up)
   isHead: boolean
-  speed: number // pixels per second
+  speed: number    // pixels per second
+  stepAccum: number // time accumulator for grid stepping
 }
 
 export interface Mushroom {
@@ -191,17 +193,18 @@ function createCentipede(
   startRow: number = 0
 ): CentipedeSegment[] {
   const speed = BASE_SPEED + SPEED_PER_LEVEL * (level - 1)
-  const dx = 1 // start moving right
   const segments: CentipedeSegment[] = []
-  // Head starts at leftish area, body trails behind
-  const startCol = Math.max(0, Math.floor(COLS / 2) - Math.floor(length / 2))
+  // All segments start stacked at the same entry cell — they uncoil as the head moves
+  const startCol = 0
   for (let i = 0; i < length; i++) {
     segments.push({
-      x: cellCenter(startCol - i * dx),
+      x: cellCenter(startCol),
       y: cellCenterY(startRow),
-      dx,
+      dx: 1,
+      dy: 1,
       isHead: i === 0,
       speed,
+      stepAccum: 0,
     })
   }
   return segments
@@ -323,58 +326,69 @@ function moveCentipedeChain(
 ): CentipedeSegment[] {
   if (chain.length === 0) return chain
 
-  const moved: CentipedeSegment[] = []
-  for (let i = 0; i < chain.length; i++) {
-    const seg = { ...chain[i] }
-    const prevX = seg.x
-    seg.x += seg.dx * seg.speed * dt
+  const head = chain[0]
+  const stepInterval = CELL_SIZE / head.speed
+  const accum = head.stepAccum + dt
 
-    // Check if we've crossed into a new cell column
-    const col = toCol(seg.x)
-    const row = toRow(seg.y)
+  // How many full grid steps this frame?
+  const steps = Math.floor(accum / stepInterval)
+  const leftover = accum - steps * stepInterval
 
-    let shouldDrop = false
+  // Deep-copy so we can mutate
+  let segs = chain.map(s => ({ ...s }))
 
-    // Hit left/right boundary
-    if (seg.x < CELL_SIZE / 2) {
-      seg.x = CELL_SIZE / 2
-      shouldDrop = true
-    } else if (seg.x > GAME_WIDTH - CELL_SIZE / 2) {
-      seg.x = GAME_WIDTH - CELL_SIZE / 2
-      shouldDrop = true
-    }
+  for (let step = 0; step < steps; step++) {
+    // Save every segment's position/direction before the step
+    const prev = segs.map(s => ({ x: s.x, y: s.y, dx: s.dx, dy: s.dy }))
 
-    // Hit a mushroom (only check when entering a new column)
-    const prevCol = toCol(prevX)
-    if (col !== prevCol && !shouldDrop) {
-      const mush = mushroomAt(mushrooms, col, row)
-      if (mush) {
-        // Snap back to the previous cell center
-        seg.x = cellCenter(prevCol)
-        shouldDrop = true
+    // --- Move the head one grid cell ---
+    const h = segs[0]
+    const nextCol = toCol(h.x) + h.dx
+    const curRow = toRow(h.y)
+
+    // Check if next horizontal cell is blocked (wall or mushroom)
+    const blocked =
+      nextCol < 0 ||
+      nextCol >= COLS ||
+      !!mushroomAt(mushrooms, nextCol, curRow)
+
+    if (blocked) {
+      // Reverse horizontal direction
+      h.dx = -h.dx
+      // Try to move one row in the current vertical direction
+      const nextRow = curRow + h.dy
+      if (nextRow < 0 || nextRow >= ROWS) {
+        // Can't go further vertically — reverse dy
+        h.dy = -h.dy
+        const altRow = curRow + h.dy
+        h.y = cellCenterY(clamp(altRow, 0, ROWS - 1))
+      } else {
+        h.y = cellCenterY(nextRow)
       }
+      // x stays in the same column (just reversed dx)
+    } else {
+      h.x = cellCenter(nextCol)
     }
 
-    if (shouldDrop) {
-      seg.dx = -seg.dx
-      // Drop one row unless already at bottom
-      if (seg.y < GAME_HEIGHT - CELL_SIZE / 2) {
-        seg.y += CELL_SIZE
-      }
+    // --- Body segments follow: each adopts its predecessor's old position/direction ---
+    for (let i = 1; i < segs.length; i++) {
+      segs[i].x = prev[i - 1].x
+      segs[i].y = prev[i - 1].y
+      segs[i].dx = prev[i - 1].dx
+      segs[i].dy = prev[i - 1].dy
     }
-
-    moved.push(seg)
   }
 
-  // Mark the first segment as head
-  if (moved.length > 0) {
-    moved[0] = { ...moved[0], isHead: true }
-    for (let i = 1; i < moved.length; i++) {
-      moved[i] = { ...moved[i], isHead: false }
-    }
+  // Store leftover accumulator on the head
+  segs[0].stepAccum = leftover
+  // Ensure head/body flags
+  segs[0].isHead = true
+  for (let i = 1; i < segs.length; i++) {
+    segs[i].isHead = false
+    segs[i].stepAccum = 0
   }
 
-  return moved
+  return segs
 }
 
 // ---------------------------------------------------------------------------
@@ -464,11 +478,11 @@ function checkBulletCentipedeCollisions(
         const front = chain.slice(0, hitIdx)
         const back = chain.slice(hitIdx + 1)
         if (front.length > 0) {
-          front[0] = { ...front[0], isHead: true }
+          front[0] = { ...front[0], isHead: true, stepAccum: 0 }
           nextCentipedes.push(front)
         }
         if (back.length > 0) {
-          back[0] = { ...back[0], isHead: true }
+          back[0] = { ...back[0], isHead: true, stepAccum: 0, dy: killed.dy }
           nextCentipedes.push(back)
         }
       } else {

@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   Bug,
   Rocket,
+  Pickaxe,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -296,6 +297,16 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'arcade',
   },
+  {
+    id: 'lode-runner',
+    name: 'Lode Runner',
+    description: 'Collect gold, dig traps, escape!',
+    icon: 'Pickaxe',
+    path: '/games/lode-runner',
+    difficulty: 'hard',
+    sessionLength: '15-30 min',
+    category: 'arcade',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -326,6 +337,7 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   LayoutDashboard,
   Bug,
   Rocket,
+  Pickaxe,
 }
 
 /** Category filter options for the hub page */
