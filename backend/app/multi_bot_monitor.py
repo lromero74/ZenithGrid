@@ -687,6 +687,19 @@ class MultiBotMonitor:
                     else:
                         print(f"✅ Monitoring {len(bots)} active bot(s)")
 
+                        # On first iteration after restart, stagger bots to avoid
+                        # SQLite lock contention from all bots writing at once.
+                        if not self._bot_next_check and len(bots) > 5:
+                            current_ts = int(datetime.utcnow().timestamp())
+                            for i, bot in enumerate(bots):
+                                # Spread bots across the first 30 seconds (groups of 5 every 2s)
+                                delay = (i // 5) * 2
+                                self._bot_next_check[bot.id] = current_ts + delay
+                            logger.info(
+                                f"Staggered {len(bots)} bots across "
+                                f"{(len(bots) // 5) * 2}s to reduce startup DB contention"
+                            )
+
                         # Determine which bots are due for processing
                         bots_to_process: List[tuple] = []  # (bot, needs_ai_analysis)
                         for bot in bots:
