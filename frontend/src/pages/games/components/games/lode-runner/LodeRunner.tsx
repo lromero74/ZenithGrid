@@ -13,7 +13,7 @@ import {
   loadLevel, updateGame, nextLevel,
   GAME_WIDTH, GAME_HEIGHT, CELL, COLS, ROWS,
   Tile,
-  type GameState, type Input, type Player, type Guard,
+  type AnimState, type GameState, type Input, type Player, type Guard,
 } from './lodeRunnerEngine'
 import { LEVEL_NAMES } from './lodeRunnerLevels'
 import type { GameStatus } from '../../../types'
@@ -31,10 +31,7 @@ const C_LADDER = '#c89632'
 const C_BAR = '#9ca3af'
 const C_GOLD = '#fbbf24'
 const C_GOLD_SHINE = '#fde68a'
-const C_PLAYER = '#3b82f6'
-const C_PLAYER_LIGHT = '#60a5fa'
-const C_GUARD = '#ef4444'
-const C_GUARD_DARK = '#b91c1c'
+const C_PLAYER_HUD = '#d4a017'
 const C_HIDDEN = '#22c55e'
 const C_HUD = '#ffffff'
 
@@ -181,71 +178,372 @@ function drawGold(ctx: CanvasRenderingContext2D, gs: GameState): void {
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: Player): void {
+// ---------------------------------------------------------------------------
+// C64-style pixel-art sprite system
+// ---------------------------------------------------------------------------
+
+// Sprite frame: 8 cols x 12 rows, drawn at 2x = 16x24 within 24px cell
+// Values: 0=transparent, 1=primary, 2=secondary, 3=detail
+type Frame = number[][]
+
+// Player palette (gold C64 runner)
+const PLAYER_COLORS = ['#d4a017', '#f5d442', '#8b5e14']
+// Guard palette (red C64 guard)
+const GUARD_COLORS = ['#dc2626', '#fca5a5', '#fbbf24']
+
+// --- Player frames ---
+const P_STAND: Frame[] = [[
+  [0,0,1,1,1,1,0,0],
+  [0,0,1,2,2,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,3,3,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,1,1,0,0,1,1,0],
+  [0,0,0,0,0,0,0,0],
+]]
+
+const P_RUN: Frame[] = [
+  [ // stride right
+    [0,0,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,1,1,1,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,0,1,0,0],
+    [0,0,1,0,0,0,1,0],
+    [0,1,1,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [ // legs together
+    [0,0,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,1,1,1,1,1,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [ // stride left
+    [0,0,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,1,1,1,1,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,0,1,0],
+    [0,1,0,0,0,1,0,0],
+    [0,1,0,0,1,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const P_CLIMB: Frame[] = [
+  [ // right hand up
+    [0,0,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,1,0,0],
+    [0,0,1,1,1,0,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,1,0,0,0],
+    [0,0,0,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [ // left hand up
+    [0,0,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,1,1,0,0,0,0],
+    [0,1,0,1,1,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,0,1,0,0],
+    [0,0,1,0,0,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const P_HANG: Frame[] = [
+  [ // right hand forward
+    [0,0,1,1,1,1,1,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [ // left hand forward
+    [0,1,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const P_FALL: Frame[] = [[
+  [0,0,1,1,1,1,0,0],
+  [0,0,1,2,2,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,1,0,1,1,0,1,0],
+  [1,0,0,1,1,0,0,1],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,3,3,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,0,0,0,0,0],
+]]
+
+const P_DIG: Frame[] = [[
+  [0,0,1,1,1,1,0,0],
+  [0,0,1,2,2,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,1,1,1],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,3,3,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,1,1,0,0,1,1,0],
+  [0,0,0,0,0,0,0,0],
+]]
+
+// --- Guard frames (same structure, hat on top row) ---
+const G_STAND: Frame[] = [[
+  [0,3,3,3,3,3,3,0],
+  [0,0,1,2,2,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,3,3,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,0,1,0,0,1,0,0],
+  [0,1,1,0,0,1,1,0],
+  [0,0,0,0,0,0,0,0],
+]]
+
+const G_RUN: Frame[] = [
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,1,1,1,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,0,1,0,0],
+    [0,0,1,0,0,0,1,0],
+    [0,1,1,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,1,1,1,1,1,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,1,1,1,1,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,0,1,0],
+    [0,1,0,0,0,1,0,0],
+    [0,1,0,0,1,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const G_CLIMB: Frame[] = [
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,1,0,0],
+    [0,0,1,1,1,0,1,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,1,0,0,0],
+    [0,0,0,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,1,1,0,0,0,0],
+    [0,1,0,1,1,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,0,1,0,0],
+    [0,0,1,0,0,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const G_HANG: Frame[] = [
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,0,1,1,1,1,1,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+  [
+    [0,3,3,3,3,3,3,0],
+    [0,1,1,1,1,1,0,0],
+    [0,0,1,2,2,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,3,3,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,1,0,0,1,0,0],
+    [0,0,0,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+  ],
+]
+
+const G_FALL: Frame[] = [[
+  [0,3,3,3,3,3,3,0],
+  [0,0,1,2,2,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,1,0,1,1,0,1,0],
+  [1,0,0,1,1,0,0,1],
+  [0,0,0,1,1,0,0,0],
+  [0,0,1,3,3,1,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,1,1,0,0,0],
+  [0,0,0,0,0,0,0,0],
+]]
+
+const PLAYER_SPRITES: Record<AnimState, Frame[]> = {
+  standing: P_STAND, running: P_RUN, climbing: P_CLIMB,
+  hanging: P_HANG, falling: P_FALL, digging: P_DIG,
+}
+const GUARD_SPRITES: Record<AnimState, Frame[]> = {
+  standing: G_STAND, running: G_RUN, climbing: G_CLIMB,
+  hanging: G_HANG, falling: G_FALL, digging: G_STAND,
+}
+
+/** Render a pixel-art sprite frame centered at (x, y) */
+function drawSprite(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame, x: number, y: number,
+  colors: string[], facingLeft: boolean,
+): void {
+  const rows = frame.length
+  const cols = frame[0].length
+  const px = 2 // pixel scale
+  const w = cols * px
+  const h = rows * px
+  const sx = Math.floor(x - w / 2)
+  const sy = Math.floor(y - h / 2)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const val = frame[r][facingLeft ? (cols - 1 - c) : c]
+      if (val === 0) continue
+      ctx.fillStyle = colors[val - 1]
+      ctx.fillRect(sx + c * px, sy + r * px, px, px)
+    }
+  }
+}
+
+/** Get the current animation frame cycling at ~0.18s intervals */
+function getAnimFrame(frames: Frame[], animTime: number): Frame {
+  const idx = Math.floor(animTime / 0.18) % frames.length
+  return frames[idx]
+}
+
+function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, animTime: number): void {
   if (!p.alive) return
-  const half = CELL / 2 - 2
-  ctx.save()
-
-  // Body
-  ctx.fillStyle = C_PLAYER
-  ctx.fillRect(p.x - half, p.y - half, half * 2, half * 2)
-
-  // Head
-  ctx.fillStyle = C_PLAYER_LIGHT
-  ctx.beginPath()
-  ctx.arc(p.x, p.y - half - 3, 4, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Direction indicator (small arm)
-  const armDir = p.facingLeft ? -1 : 1
-  ctx.strokeStyle = C_PLAYER_LIGHT
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.moveTo(p.x, p.y)
-  ctx.lineTo(p.x + armDir * (half + 2), p.y - 2)
-  ctx.stroke()
-
-  ctx.restore()
+  const frames = PLAYER_SPRITES[p.animState] || P_STAND
+  const frame = getAnimFrame(frames, animTime)
+  drawSprite(ctx, frame, p.x, p.y, PLAYER_COLORS, p.facingLeft)
 }
 
 function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, animTime: number): void {
   if (g.state === 'dead') return
-  const half = CELL / 2 - 2
-
   ctx.save()
-
   if (g.state === 'trapped') {
-    // Flash when trapped
     ctx.globalAlpha = 0.5 + 0.3 * Math.sin(animTime * 8)
   }
-
-  // Body
-  ctx.fillStyle = C_GUARD
-  ctx.fillRect(g.x - half, g.y - half, half * 2, half * 2)
-
-  // Head
-  ctx.fillStyle = C_GUARD_DARK
-  ctx.beginPath()
-  ctx.arc(g.x, g.y - half - 3, 4, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Eyes
-  ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.arc(g.x - 2, g.y - half - 3, 1.5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(g.x + 2, g.y - half - 3, 1.5, 0, Math.PI * 2)
-  ctx.fill()
-
+  const frames = GUARD_SPRITES[g.animState] || G_STAND
+  const frame = getAnimFrame(frames, animTime)
+  drawSprite(ctx, frame, g.x, g.y, GUARD_COLORS, g.facingLeft)
   // Gold indicator
   if (g.carriesGold) {
+    ctx.globalAlpha = 1
     ctx.fillStyle = C_GOLD
     ctx.beginPath()
-    ctx.arc(g.x, g.y + half + 2, 3, 0, Math.PI * 2)
+    ctx.arc(g.x, g.y + CELL / 2, 3, 0, Math.PI * 2)
     ctx.fill()
   }
-
   ctx.restore()
 }
 
@@ -268,7 +566,7 @@ function drawHUD(ctx: CanvasRenderingContext2D, gs: GameState): void {
   ctx.fillText(`${'*'.repeat(Math.min(gs.goldRemaining, 10))}`, GAME_WIDTH - 40, 2)
 
   // Lives
-  ctx.fillStyle = C_PLAYER
+  ctx.fillStyle = C_PLAYER_HUD
   ctx.fillText(`${'@'.repeat(gs.lives)}`, GAME_WIDTH - 4, 2)
 }
 
@@ -336,7 +634,7 @@ export default function LodeRunner() {
     }
 
     // Draw player
-    drawPlayer(ctx, gs.player)
+    drawPlayer(ctx, gs.player, gs.animTime)
 
     // HUD
     drawHUD(ctx, gs)
@@ -518,7 +816,7 @@ export default function LodeRunner() {
         <span className="text-xs text-slate-400">Lives:</span>
         <div className="flex space-x-1">
           {Array.from({ length: lives }).map((_, i) => (
-            <span key={i} className="text-blue-400 text-sm font-bold">@</span>
+            <span key={i} className="text-yellow-500 text-sm font-bold">@</span>
           ))}
         </div>
       </div>

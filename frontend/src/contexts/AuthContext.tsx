@@ -7,6 +7,7 @@
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 // Types
 export interface User {
@@ -150,6 +151,7 @@ function isTokenExpired(expiryTime: number | null): boolean {
 
 // Provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [tokenExpiry, setTokenExpiry] = useState<number | null>(null)
@@ -557,6 +559,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('auth_session_policy')
     localStorage.removeItem('auth_session_expires_at')
 
+    // Clear React Query cache to prevent stale data when switching users
+    queryClient.clear()
+
     // Clear state
     setUser(null)
     setTokenExpiry(null)
@@ -572,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Authorization': `Bearer ${token}` },
       }).catch(() => {})
     }
-  }, [])
+  }, [queryClient])
 
   // Listen for auth-logout events from API interceptor (avoids full page reload)
   useEffect(() => {

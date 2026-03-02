@@ -109,14 +109,18 @@ export default function Positions() {
   const { data: completedStats } = useQuery({
     queryKey: ['completed-trades-stats', selectedAccount?.id],
     queryFn: () => positionsApi.getCompletedStats(selectedAccount?.id),
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
+    staleTime: 0,
+    refetchOnMount: 'always' as const,
   })
 
   // Fetch realized PnL (daily and weekly)
   const { data: realizedPnL } = useQuery({
     queryKey: ['realized-pnl', selectedAccount?.id],
     queryFn: () => positionsApi.getRealizedPnL(selectedAccount?.id),
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
+    staleTime: 0,
+    refetchOnMount: 'always' as const,
   })
 
   // Fetch account balances
@@ -126,7 +130,9 @@ export default function Positions() {
       const { accountApi } = await import('../services/api')
       return accountApi.getBalances(selectedAccount?.id)
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
+    staleTime: 0,
+    refetchOnMount: 'always' as const,
   })
 
   // Handler functions
