@@ -216,13 +216,13 @@ function drawTiles(ctx: CanvasRenderingContext2D, gs: GameState): void {
           ctx.strokeStyle = C_BAR
           ctx.lineWidth = 2
           ctx.beginPath()
-          ctx.moveTo(x, y + CELL / 3)
-          ctx.lineTo(x + CELL, y + CELL / 3)
+          ctx.moveTo(x, y + 2)
+          ctx.lineTo(x + CELL, y + 2)
           ctx.stroke()
           // Grip dots
           ctx.fillStyle = C_BAR
           ctx.beginPath()
-          ctx.arc(x + CELL / 2, y + CELL / 3, 2, 0, Math.PI * 2)
+          ctx.arc(x + CELL / 2, y + 2, 2, 0, Math.PI * 2)
           ctx.fill()
           break
         case Tile.Hidden:
@@ -626,8 +626,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, animTime: number):
   if (!p.alive) return
   const frames = PLAYER_SPRITES[p.animState] || P_STAND
   const frame = getAnimFrame(frames, animTime, p.moving)
-  const drawY = p.animState === 'hanging' ? p.y + 8 : p.y
-  drawSprite(ctx, frame, p.x, drawY, PLAYER_COLORS, p.facingLeft)
+  drawSprite(ctx, frame, p.x, p.y, PLAYER_COLORS, p.facingLeft)
 }
 
 function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, animTime: number): void {
@@ -638,8 +637,7 @@ function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, animTime: number): v
   }
   const frames = GUARD_SPRITES[g.animState] || G_STAND
   const frame = getAnimFrame(frames, animTime, g.moving)
-  const drawY = g.animState === 'hanging' ? g.y + 8 : g.y
-  drawSprite(ctx, frame, g.x, drawY, GUARD_COLORS, g.facingLeft)
+  drawSprite(ctx, frame, g.x, g.y, GUARD_COLORS, g.facingLeft)
   // Gold indicator
   if (g.carriesGold) {
     ctx.globalAlpha = 1
