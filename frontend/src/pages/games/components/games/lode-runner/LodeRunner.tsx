@@ -1,7 +1,7 @@
 /**
  * Lode Runner — canvas-based puzzle-platformer.
  *
- * Features: keyboard + mobile d-pad controls, 10 progressive levels,
+ * Features: keyboard + mobile d-pad controls, 150 classic levels,
  * gold collection, brick digging, guard AI, responsive scaling.
  */
 
@@ -11,12 +11,11 @@ import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
 import {
   loadLevel, updateGame, nextLevel,
-  GAME_WIDTH, GAME_HEIGHT, CELL, COLS, ROWS,
+  GAME_WIDTH, GAME_HEIGHT, CELL, COLS, ROWS, TOTAL_LEVELS,
   Tile, BRICK_FILL_TIME,
   type AnimState, type GameState, type Input, type Player, type Guard,
 } from './lodeRunnerEngine'
 import { useGameState } from '../../../hooks/useGameState'
-import { LEVEL_NAMES } from './lodeRunnerLevels'
 import type { GameStatus } from '../../../types'
 
 // ---------------------------------------------------------------------------
@@ -791,9 +790,16 @@ export default function LodeRunner() {
       digLeft: digLeftPressedRef.current || mobile.digLeft,
       digRight: digRightPressedRef.current || mobile.digRight,
     }
-    // Consume dig presses (keyboard only — mobile is held)
-    digLeftPressedRef.current = false
-    digRightPressedRef.current = false
+    // Consume dig presses only when player is aligned and grounded —
+    // otherwise the press is lost before the engine can process it
+    const pl = gsRef.current.player
+    const cx = pl.col * CELL + CELL / 2
+    const cy = pl.row * CELL + CELL / 2
+    const aligned = Math.abs(pl.x - cx) <= 2 && Math.abs(pl.y - cy) <= 2
+    if (aligned && !pl.falling) {
+      digLeftPressedRef.current = false
+      digRightPressedRef.current = false
+    }
 
     const gs = updateGame(gsRef.current, dt, input)
     gsRef.current = gs
@@ -976,7 +982,7 @@ export default function LodeRunner() {
         </div>
       </div>
       <span className="text-xs text-slate-400">
-        Lvl {level}: {LEVEL_NAMES[level - 1] ?? ''}
+        Lvl {level}/{TOTAL_LEVELS}
       </span>
       <button
         onClick={startGame}
@@ -1057,7 +1063,7 @@ export default function LodeRunner() {
             status="lost"
             score={score}
             bestScore={bestScore}
-            message={`Reached level ${level}: ${LEVEL_NAMES[level - 1] ?? ''}`}
+            message={`Reached level ${level} of ${TOTAL_LEVELS}`}
             onPlayAgain={startGame}
           />
         )}
