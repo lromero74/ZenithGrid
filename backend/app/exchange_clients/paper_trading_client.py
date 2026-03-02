@@ -96,9 +96,12 @@ class PaperTradingClient(ExchangeClient):
         """Save current balances to database with retry for SQLite lock contention.
 
         Uses a fresh session each time to avoid greenlet_spawn errors.
+        Retries with exponential backoff + jitter to avoid thundering herd.
         """
+        import random
         from app.database import async_session_maker
-        for attempt in range(3):
+        max_attempts = 5
+        for attempt in range(max_attempts):
             try:
                 async with async_session_maker() as db:
                     result = await db.execute(
@@ -111,9 +114,13 @@ class PaperTradingClient(ExchangeClient):
                 return
             except Exception as e:
                 err_str = str(e).lower()
-                if ("database is locked" in err_str or "not persistent" in err_str) and attempt < 2:
-                    logger.warning(f"Paper balance save failed (attempt {attempt + 1}/3): {e}")
-                    await asyncio.sleep(0.1 * (attempt + 1))
+                if ("database is locked" in err_str or "not persistent" in err_str) and attempt < max_attempts - 1:
+                    delay = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+                    logger.warning(
+                        f"Paper balance save failed (attempt {attempt + 1}/{max_attempts},"
+                        f" retry in {delay:.2f}s): {e}"
+                    )
+                    await asyncio.sleep(delay)
                 else:
                     raise
 

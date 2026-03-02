@@ -5,6 +5,25 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.82.0] - 2026-03-02
+
+### Added
+- **Skip stable/pegged pairs**: New bot setting to automatically skip stablecoin pairs (USDC-USD, DAI-USD) and wrapped token pairs (WBTC-BTC, CBETH-ETH) that rarely move in price — enabled by default
+- **Dynamic stable pair detection**: Daily background job analyzes trading pair prices to automatically detect new stablecoins and pegged assets, logging discoveries for review
+- **Lode Runner dig projectile**: Visible yellow beam from player's hand to target brick during digging, with gradual brick dissolution effect
+- **Lode Runner game state persistence**: Game progress auto-saves and restores when navigating away and back
+- **Lode Runner drop from bar**: Press down while hanging on a bar to drop to the cell below
+- **Lode Runner escape ladder**: Player can now reach hidden escape ladders from the row below (grab from underneath)
+
+### Changed
+- **Lode Runner sprite polish**: Running sprites now lean into their direction (C64 style), idle hanging sprites hold still, feet touch ground, brick refill time increased from 0.6s to 1.5s
+
+### Fixed
+- **Trading category filter**: Bot buy decisions now use the bot's own allowed categories instead of global settings, preventing questionable coins from slipping through
+- **Missing MEME category**: Coins tagged as [MEME] are now properly categorized instead of defaulting to BLACKLISTED
+- **Auto-add pairs ignoring categories**: New pairs added by the daily sync now respect the bot's allowed category and stable pair filters
+- **SQLite lock retries**: Paper trading balance saves now use exponential backoff with jitter (5 attempts) to better handle write contention
+
 ## [v2.81.0] - 2026-03-02
 
 ### Added

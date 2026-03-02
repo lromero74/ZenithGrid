@@ -12,9 +12,10 @@ import { useGameScores } from '../../../hooks/useGameScores'
 import {
   loadLevel, updateGame, nextLevel,
   GAME_WIDTH, GAME_HEIGHT, CELL, COLS, ROWS,
-  Tile,
+  Tile, BRICK_FILL_TIME,
   type AnimState, type GameState, type Input, type Player, type Guard,
 } from './lodeRunnerEngine'
+import { useGameState } from '../../../hooks/useGameState'
 import { LEVEL_NAMES } from './lodeRunnerLevels'
 import type { GameStatus } from '../../../types'
 
@@ -41,9 +42,7 @@ const C_BRICK_HI = '#b07848'
 const C_BRICK_FILL_A = '#8b5e3c'
 const C_BRICK_FILL_B = '#9b6840'
 
-/** Must match engine's BRICK_OPEN_TIME */
-const BRICK_OPEN_SECS = 5.0
-const DIG_BLAST_DURATION = 0.3
+const DIG_BLAST_DURATION = 0.25
 
 // ---------------------------------------------------------------------------
 // C64-style brick rendering
@@ -153,15 +152,26 @@ function drawTiles(ctx: CanvasRenderingContext2D, gs: GameState): void {
         case Tile.Brick: {
           const dug = gs.dugBricks.find(db => db.col === c && db.row === r)
           if (dug) {
-            if (dug.phase === 'open') {
-              // Dig blast effect for recently dug bricks
-              const elapsed = BRICK_OPEN_SECS - dug.timer
-              if (elapsed < DIG_BLAST_DURATION) {
-                drawDigBlast(ctx, x, y, elapsed / DIG_BLAST_DURATION)
+            if (dug.phase === 'digging') {
+              // A12: Brick partially dissolving from top to bottom
+              const progress = 1 - dug.timer / DIG_BLAST_DURATION
+              // Draw remaining brick (top portion erases as progress increases)
+              const eraseRows = Math.floor(progress * CELL)
+              if (eraseRows < CELL) {
+                ctx.save()
+                ctx.beginPath()
+                ctx.rect(x, y + eraseRows, CELL, CELL - eraseRows)
+                ctx.clip()
+                drawBrickPattern(ctx, x, y)
+                ctx.restore()
               }
+              // Dig blast effect overlay
+              drawDigBlast(ctx, x, y, progress)
+            } else if (dug.phase === 'open') {
+              // Empty — brick is open, nothing to draw
             } else if (dug.phase === 'filling') {
               // C64 V-shaped stepped refill
-              drawBrickRefill(ctx, x, y, 1 - dug.timer / 0.6)
+              drawBrickRefill(ctx, x, y, 1 - dug.timer / BRICK_FILL_TIME)
             }
           } else {
             // C64-style brick pattern
@@ -298,10 +308,10 @@ const P_STAND: Frame[] = [[
 ]]
 
 const P_RUN: Frame[] = [
-  [ // stride right
-    [0,0,1,1,1,1,0,0],
-    [0,0,1,2,2,1,0,0],
-    [0,0,0,1,1,0,0,0],
+  [ // stride right — head/torso lean right
+    [0,0,0,1,1,1,1,0],
+    [0,0,0,1,2,2,1,0],
+    [0,0,0,0,1,1,0,0],
     [0,0,1,1,1,1,1,0],
     [0,0,0,1,1,0,0,0],
     [0,0,0,1,1,0,0,0],
@@ -312,7 +322,7 @@ const P_RUN: Frame[] = [
     [0,1,1,0,0,0,1,0],
     [0,0,0,0,0,0,0,0],
   ],
-  [ // legs together
+  [ // legs together — centered head
     [0,0,1,1,1,1,0,0],
     [0,0,1,2,2,1,0,0],
     [0,0,0,1,1,0,0,0],
@@ -326,10 +336,10 @@ const P_RUN: Frame[] = [
     [0,0,1,0,0,1,0,0],
     [0,0,0,0,0,0,0,0],
   ],
-  [ // stride left
-    [0,0,1,1,1,1,0,0],
-    [0,0,1,2,2,1,0,0],
-    [0,0,0,1,1,0,0,0],
+  [ // stride left — head/torso lean left
+    [0,1,1,1,1,0,0,0],
+    [0,1,2,2,1,0,0,0],
+    [0,0,1,1,0,0,0,0],
     [0,1,1,1,1,1,0,0],
     [0,0,0,1,1,0,0,0],
     [0,0,0,1,1,0,0,0],
@@ -451,10 +461,10 @@ const G_STAND: Frame[] = [[
 ]]
 
 const G_RUN: Frame[] = [
-  [
-    [0,3,3,3,3,3,3,0],
-    [0,0,1,2,2,1,0,0],
-    [0,0,0,1,1,0,0,0],
+  [ // stride right — hat/head/neck lean right
+    [0,0,3,3,3,3,3,0],
+    [0,0,0,1,2,2,1,0],
+    [0,0,0,0,1,1,0,0],
     [0,0,1,1,1,1,1,0],
     [0,0,0,1,1,0,0,0],
     [0,0,0,1,1,0,0,0],
@@ -465,7 +475,7 @@ const G_RUN: Frame[] = [
     [0,1,1,0,0,0,1,0],
     [0,0,0,0,0,0,0,0],
   ],
-  [
+  [ // legs together — centered
     [0,3,3,3,3,3,3,0],
     [0,0,1,2,2,1,0,0],
     [0,0,0,1,1,0,0,0],
@@ -479,10 +489,10 @@ const G_RUN: Frame[] = [
     [0,0,1,0,0,1,0,0],
     [0,0,0,0,0,0,0,0],
   ],
-  [
-    [0,3,3,3,3,3,3,0],
-    [0,0,1,2,2,1,0,0],
-    [0,0,0,1,1,0,0,0],
+  [ // stride left — hat/head/neck lean left
+    [0,3,3,3,3,3,0,0],
+    [0,1,2,2,1,0,0,0],
+    [0,0,1,1,0,0,0,0],
     [0,1,1,1,1,1,0,0],
     [0,0,0,1,1,0,0,0],
     [0,0,0,1,1,0,0,0],
@@ -593,7 +603,8 @@ function drawSprite(
   const w = cols * px
   const h = rows * px
   const sx = Math.floor(x - w / 2)
-  const sy = Math.floor(y - h / 2)
+  let sy = Math.floor(y - h / 2)
+  sy += 1 // A9: shift all sprites down 1px so feet touch ground
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const val = frame[r][facingLeft ? (cols - 1 - c) : c]
@@ -605,7 +616,8 @@ function drawSprite(
 }
 
 /** Get the current animation frame cycling at ~0.18s intervals */
-function getAnimFrame(frames: Frame[], animTime: number): Frame {
+function getAnimFrame(frames: Frame[], animTime: number, moving: boolean = true): Frame {
+  if (!moving) return frames[0]
   const idx = Math.floor(animTime / 0.18) % frames.length
   return frames[idx]
 }
@@ -613,8 +625,9 @@ function getAnimFrame(frames: Frame[], animTime: number): Frame {
 function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, animTime: number): void {
   if (!p.alive) return
   const frames = PLAYER_SPRITES[p.animState] || P_STAND
-  const frame = getAnimFrame(frames, animTime)
-  drawSprite(ctx, frame, p.x, p.y, PLAYER_COLORS, p.facingLeft)
+  const frame = getAnimFrame(frames, animTime, p.moving)
+  const drawY = p.animState === 'hanging' ? p.y + 8 : p.y
+  drawSprite(ctx, frame, p.x, drawY, PLAYER_COLORS, p.facingLeft)
 }
 
 function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, animTime: number): void {
@@ -624,8 +637,9 @@ function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, animTime: number): v
     ctx.globalAlpha = 0.5 + 0.3 * Math.sin(animTime * 8)
   }
   const frames = GUARD_SPRITES[g.animState] || G_STAND
-  const frame = getAnimFrame(frames, animTime)
-  drawSprite(ctx, frame, g.x, g.y, GUARD_COLORS, g.facingLeft)
+  const frame = getAnimFrame(frames, animTime, g.moving)
+  const drawY = g.animState === 'hanging' ? g.y + 8 : g.y
+  drawSprite(ctx, frame, g.x, drawY, GUARD_COLORS, g.facingLeft)
   // Gold indicator
   if (g.carriesGold) {
     ctx.globalAlpha = 1
@@ -672,6 +686,7 @@ const emptyInput: Input = {
 export default function LodeRunner() {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('lode-runner') ?? 0
+  const { load: loadSaved, save: saveState, clear: clearSaved } = useGameState<GameState>('lode-runner')
 
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
@@ -726,6 +741,25 @@ export default function LodeRunner() {
     // Draw player
     drawPlayer(ctx, gs.player, gs.animTime)
 
+    // Draw dig projectiles (A11)
+    for (const dp of gs.digProjectiles) {
+      const alpha = dp.timer / 0.25
+      ctx.save()
+      ctx.globalAlpha = alpha
+      ctx.strokeStyle = '#fbbf24'
+      ctx.lineWidth = 2
+      // Line from player hand down to target brick
+      const px = gs.player.x + (dp.fromLeft ? -6 : 6)
+      const py = gs.player.y + 4
+      const tx = dp.col * CELL + CELL / 2
+      const ty = dp.row * CELL
+      ctx.beginPath()
+      ctx.moveTo(px, py)
+      ctx.lineTo(tx, ty)
+      ctx.stroke()
+      ctx.restore()
+    }
+
     // HUD
     drawHUD(ctx, gs)
 
@@ -757,7 +791,7 @@ export default function LodeRunner() {
     digLeftPressedRef.current = false
     digRightPressedRef.current = false
 
-    let gs = updateGame(gsRef.current, dt, input)
+    const gs = updateGame(gsRef.current, dt, input)
     gsRef.current = gs
 
     // Sync React state
@@ -770,6 +804,7 @@ export default function LodeRunner() {
       gameStatusRef.current = 'lost'
       setGameStatus('lost')
       saveScore('lode-runner', gs.score)
+      clearSaved()
       draw()
       return
     }
@@ -782,21 +817,26 @@ export default function LodeRunner() {
         gameStatusRef.current = 'won'
         setGameStatus('won')
         saveScore('lode-runner', next.score)
+        clearSaved()
         draw()
         return
       }
       setLevel(next.level)
     }
 
+    // Auto-save game state
+    saveState(gs)
+
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore])
+  }, [draw, saveScore, saveState, clearSaved])
 
   // -------------------------------------------------------------------------
   // Start / restart
   // -------------------------------------------------------------------------
 
   const startGame = useCallback(() => {
+    clearSaved()
     gsRef.current = loadLevel(1)
     setScore(0)
     setLevel(1)
@@ -811,7 +851,7 @@ export default function LodeRunner() {
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick])
+  }, [draw, tick, clearSaved])
 
   // -------------------------------------------------------------------------
   // Keyboard controls
@@ -867,13 +907,34 @@ export default function LodeRunner() {
     return () => observer.disconnect()
   }, [draw])
 
+  // Load saved state on mount
+  useEffect(() => {
+    const saved = loadSaved()
+    if (saved && !saved.gameOver && !saved.won) {
+      gsRef.current = saved
+      setScore(saved.score)
+      setLevel(saved.level)
+      setLives(saved.lives)
+      gameStatusRef.current = 'playing'
+      setGameStatus('playing')
+      lastTimeRef.current = performance.now()
+      draw()
+      animFrameRef.current = requestAnimationFrame(tick)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initial draw
   useEffect(() => { draw() }, [draw])
 
-  // Cleanup
+  // Cleanup — save state and cancel animation
   useEffect(() => {
-    return () => { cancelAnimationFrame(animFrameRef.current) }
-  }, [])
+    return () => {
+      cancelAnimationFrame(animFrameRef.current)
+      if (gameStatusRef.current === 'playing') {
+        saveState(gsRef.current)
+      }
+    }
+  }, [saveState])
 
   // -------------------------------------------------------------------------
   // Mobile d-pad helpers

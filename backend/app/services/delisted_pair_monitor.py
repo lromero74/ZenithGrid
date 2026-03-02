@@ -9,7 +9,7 @@ Daily background job that:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Set, List
+from typing import Dict, List, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,17 +17,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
 from app.models import Bot, Account
 from app.services.exchange_service import get_exchange_client_for_account
+from app.multi_bot_monitor import filter_pairs_by_allowed_categories
 
 logger = logging.getLogger(__name__)
 
-# Pairs to exclude from auto-addition (stablecoins, wrapped tokens, etc.)
-EXCLUDED_PAIRS = {
-    # Stablecoins (not interesting for trading bots)
+# Stable/pegged pairs — stablecoins vs USD and wrapped/pegged same-asset pairs.
+# These rarely move in price and are not interesting for trading bots.
+STABLE_PAIRS = {
+    # Stablecoins vs USD
     "USDC-USD", "USDT-USD", "DAI-USD", "GUSD-USD", "PAX-USD", "BUSD-USD",
-    "USDP-USD", "PYUSD-USD", "EURC-USD", "EURT-USD",
-    # Wrapped tokens that just track other assets
-    "WBTC-BTC", "CBBTC-BTC", "WETH-ETH",
+    "USDP-USD", "PYUSD-USD", "EURC-USD", "EURT-USD", "USDS-USD", "USD1-USD",
+    # Wrapped/pegged same-asset pairs
+    "WBTC-BTC", "CBBTC-BTC", "WETH-ETH", "CBETH-ETH", "LSETH-ETH",
+    "MSOL-SOL", "JITOSOL-SOL",
 }
+
+# Backwards-compatible alias
+EXCLUDED_PAIRS = STABLE_PAIRS
+
+
+def is_stable_pair(product_id: str) -> bool:
+    """Check if a trading pair is a stablecoin or wrapped/pegged same-asset pair."""
+    return product_id in STABLE_PAIRS
 
 
 class TradingPairMonitor:
@@ -41,6 +52,10 @@ class TradingPairMonitor:
     4. Logs all changes for audit trail
     """
 
+    # Known wrapped/pegged prefixes for non-USD quote currencies.
+    # If BASE starts with one of these, it's likely pegged to the quote asset.
+    WRAPPED_PREFIXES = ("W", "CB", "ST", "LS", "JITO", "M")
+
     def __init__(self, check_interval_seconds: int = 86400):  # 24 hours default
         self.check_interval_seconds = check_interval_seconds
         self.running = False
@@ -49,6 +64,8 @@ class TradingPairMonitor:
         self._available_products: Set[str] = set()
         self._btc_pairs: Set[str] = set()
         self._usd_pairs: Set[str] = set()
+        self._exchange_client = None
+        self._raw_products: List[Dict] = []
 
     async def get_available_products(self, db: AsyncSession) -> Set[str]:
         """
@@ -76,8 +93,12 @@ class TradingPairMonitor:
                 logger.warning("Could not get exchange client for pair check")
                 return set()
 
+            # Store exchange client for use by detect_stable_pairs
+            self._exchange_client = exchange
+
             # Fetch all products from Coinbase
             products = await exchange.list_products()
+            self._raw_products = products
 
             # Extract product IDs and categorize by quote currency
             available = set()
@@ -135,6 +156,166 @@ class TradingPairMonitor:
             return "USD"
         return None
 
+    def _is_stable_candidate_by_price(self, product: Dict) -> bool:
+        """
+        Quick heuristic: check if a product's current price suggests it's a stable/pegged pair.
+
+        For -USD pairs: price should be ~1.0 (stablecoin).
+        For -BTC/-ETH/-SOL pairs: base symbol should start with a wrapped prefix
+            AND price should be ~1.0 (pegged to the quote asset).
+        """
+        product_id = product.get("product_id", "")
+        price_str = product.get("price", "0")
+        try:
+            price = float(price_str)
+        except (ValueError, TypeError):
+            return False
+
+        if price <= 0:
+            return False
+
+        # Already known — skip
+        if product_id in STABLE_PAIRS:
+            return False
+
+        tolerance = 0.005  # 0.5%
+
+        if product_id.endswith("-USD"):
+            # Stablecoin check: price ~$1.00
+            return abs(price - 1.0) <= tolerance
+
+        # For non-USD pairs, check wrapped prefix + price proximity
+        quote_currencies = ("BTC", "ETH", "SOL")
+        for quote in quote_currencies:
+            suffix = f"-{quote}"
+            if product_id.endswith(suffix):
+                base = product_id[: -len(suffix)]
+                if any(base.upper().startswith(p) for p in self.WRAPPED_PREFIXES):
+                    return abs(price - 1.0) <= tolerance
+                break
+
+        return False
+
+    async def _verify_stable_with_candles(self, product_id: str) -> bool:
+        """
+        Verify a candidate stable pair by checking 24h candle data.
+
+        Returns True if the high/low of every candle stayed within 0.5% of 1.0.
+        """
+        if not self._exchange_client:
+            return False
+
+        try:
+            now = int(datetime.utcnow().timestamp())
+            one_day_ago = now - 86400
+
+            candles = await self._exchange_client.get_candles(
+                product_id=product_id,
+                start=one_day_ago,
+                end=now,
+                granularity="ONE_HOUR",  # Hourly candles for 24h = ~24 data points
+            )
+
+            if not candles:
+                logger.debug(f"No candle data for {product_id}, skipping stable verification")
+                return False
+
+            tolerance = 0.005  # 0.5%
+            for candle in candles:
+                try:
+                    low = float(candle.get("low", 0))
+                    high = float(candle.get("high", 0))
+                except (ValueError, TypeError):
+                    return False
+
+                if low <= 0 or high <= 0:
+                    return False
+
+                # Both high and low must be within tolerance of 1.0
+                if abs(low - 1.0) > tolerance or abs(high - 1.0) > tolerance:
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(f"Error fetching candles for {product_id}: {e}")
+            return False
+
+    async def detect_stable_pairs(self) -> List[str]:
+        """
+        Dynamically detect stable/pegged trading pairs by analyzing price data.
+
+        Heuristic:
+        1. Filter products whose current price is ~1.0 (within 0.5% tolerance)
+        2. For candidates, verify with 24h hourly candle data that price stayed stable
+        3. Add confirmed pairs to the module-level STABLE_PAIRS set (runtime only)
+
+        Returns:
+            List of newly detected stable pair product IDs
+        """
+        detected = []
+
+        try:
+            if not self._raw_products:
+                return detected
+
+            # Step 1: Find candidates by current price
+            candidates = []
+            for product in self._raw_products:
+                product_id = product.get("product_id", "")
+                if not product_id:
+                    continue
+                # Skip disabled/offline products
+                if product.get("trading_disabled", False):
+                    continue
+                status = product.get("status", "").lower()
+                if status and status != "online":
+                    continue
+
+                if self._is_stable_candidate_by_price(product):
+                    candidates.append(product_id)
+
+            if not candidates:
+                logger.info("Stable pair detection: no new candidates found")
+                return detected
+
+            logger.info(
+                f"Stable pair detection: {len(candidates)} candidate(s) to verify: "
+                f"{candidates}"
+            )
+
+            # Step 2: Verify each candidate with candle data
+            for product_id in candidates:
+                is_stable = await self._verify_stable_with_candles(product_id)
+
+                if is_stable:
+                    STABLE_PAIRS.add(product_id)
+                    detected.append(product_id)
+                    logger.warning(
+                        f"NEW STABLE PAIR DETECTED: {product_id} — "
+                        f"added to runtime STABLE_PAIRS. "
+                        f"Consider adding to hardcoded list."
+                    )
+
+                # Be courteous to the API — small delay between candle fetches
+                await asyncio.sleep(0.2)
+
+            if detected:
+                logger.warning(
+                    f"Stable pair detection complete: {len(detected)} new pair(s) detected: "
+                    f"{detected}"
+                )
+            else:
+                logger.info(
+                    f"Stable pair detection complete: "
+                    f"{len(candidates)} candidate(s) checked, none confirmed stable"
+                )
+
+        except Exception as e:
+            logger.error(f"Error in stable pair detection: {e}", exc_info=True)
+
+        return detected
+
     async def check_and_sync_pairs(self) -> dict:
         """
         Check all bots for delisted pairs and newly available pairs.
@@ -149,6 +330,7 @@ class TradingPairMonitor:
             "pairs_added": 0,
             "affected_bots": [],
             "new_pairs_available": [],
+            "detected_stable_pairs": [],
             "errors": []
         }
 
@@ -195,7 +377,27 @@ class TradingPairMonitor:
 
                     new_pairs = set()
                     if auto_add_enabled:
-                        new_pairs = valid_pairs - current_pairs
+                        candidate_pairs = valid_pairs - current_pairs
+                        # Filter stable/pegged pairs (unless bot explicitly allows them)
+                        skip_stable = (
+                            bot.strategy_config.get("skip_stable_pairs", True)
+                            if bot.strategy_config else True
+                        )
+                        if skip_stable:
+                            candidate_pairs = {p for p in candidate_pairs if not is_stable_pair(p)}
+                        # Filter by bot's allowed categories
+                        allowed_categories = (
+                            bot.strategy_config.get("allowed_categories")
+                            if bot.strategy_config else None
+                        )
+                        if candidate_pairs and allowed_categories:
+                            filtered = await filter_pairs_by_allowed_categories(
+                                db, list(candidate_pairs), allowed_categories,
+                                user_id=bot.user_id,
+                            )
+                            new_pairs = set(filtered)
+                        else:
+                            new_pairs = candidate_pairs
 
                     changes_made = False
                     bot_change = {
@@ -263,6 +465,11 @@ class TradingPairMonitor:
         except Exception as e:
             logger.error(f"Error in pair sync: {e}", exc_info=True)
             results["errors"].append(str(e))
+
+        # Run stable pair detection after the main sync logic
+        detected = await self.detect_stable_pairs()
+        if detected:
+            results["detected_stable_pairs"] = detected
 
         self._last_check = datetime.utcnow()
         return results

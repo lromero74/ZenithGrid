@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.indicator_calculator import IndicatorCalculator
-from app.models import BlacklistedCoin, Bot, OrderHistory, Position, Settings, Signal
+from app.models import BlacklistedCoin, Bot, OrderHistory, Position, Signal
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
@@ -374,6 +374,14 @@ async def _decide_buy(
     logger.info(f"  🤖 Bot active: {bot.is_active}, Position exists: {position is not None}")
 
     if bot.is_active:
+        # Skip stable/pegged pairs (layer-2 safety check)
+        if position is None:
+            skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
+            if skip_stable:
+                from app.services.delisted_pair_monitor import is_stable_pair
+                if is_stable_pair(product_id):
+                    return False, 0, f"{product_id} is a stable/pegged pair (skipped)"
+
         # Check max concurrent deals limit
         if position is None:  # Only check when considering opening a NEW position
             open_positions_count = await get_open_positions_count(db, bot)
@@ -436,20 +444,15 @@ async def _decide_buy(
                             coin_category = 'BORDERLINE'
                         elif reason.startswith('[QUESTIONABLE]'):
                             coin_category = 'QUESTIONABLE'
+                        elif reason.startswith('[MEME]'):
+                            coin_category = 'MEME'
                         else:
                             coin_category = 'BLACKLISTED'
 
-                        # Get allowed categories from settings
-                        import json
-                        allowed_query = select(Settings).where(Settings.key == "allowed_coin_categories")
-                        allowed_result = await db.execute(allowed_query)
-                        allowed_setting = allowed_result.scalars().first()
+                        # Get allowed categories from bot's strategy_config (not global settings)
                         allowed_categories = ['APPROVED']  # Default
-                        if allowed_setting and allowed_setting.value:
-                            try:
-                                allowed_categories = json.loads(allowed_setting.value)
-                            except json.JSONDecodeError:
-                                pass
+                        if bot.strategy_config and bot.strategy_config.get('allowed_categories'):
+                            allowed_categories = bot.strategy_config['allowed_categories']
 
                         if coin_category in allowed_categories:
                             # Category is allowed to trade
