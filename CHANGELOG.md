@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.16] - 2026-03-02
+
+### Fixed
+- **Paper trading growth goals now show actual values**: Goals linked to paper/demo accounts were always showing $0 current value and "behind target" because the snapshot system excluded paper trading accounts. Goals now use per-account snapshot values so demo accounts see their real balances and profits
+- **Goal backfill includes paper account data**: When viewing a goal's trend chart for the first time, the backfill now correctly includes paper account snapshots instead of returning empty data
+
 ## [v2.76.15] - 2026-03-02
 
 ### Fixed

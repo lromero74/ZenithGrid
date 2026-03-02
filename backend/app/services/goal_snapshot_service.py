@@ -28,13 +28,15 @@ logger = logging.getLogger(__name__)
 async def capture_goal_snapshots(
     db: AsyncSession,
     user_id: int,
-    current_usd: float,
-    current_btc: float,
+    current_usd: float = 0.0,
+    current_btc: float = 0.0,
 ) -> int:
     """
     Capture daily progress snapshots for all active goals of a user.
 
     Called during the daily account snapshot cycle.
+    Looks up per-account snapshot values from the DB so that goals linked
+    to paper trading accounts get the correct values.
     Returns the number of snapshots created/updated.
     """
     snapshot_date = datetime.utcnow().replace(
@@ -53,6 +55,30 @@ async def capture_goal_snapshots(
 
     if not goals:
         return 0
+
+    # Build per-account snapshot values from today's AccountValueSnapshots
+    # (includes ALL accounts — real and paper)
+    acct_val_result = await db.execute(
+        select(
+            AccountValueSnapshot.account_id,
+            func.sum(AccountValueSnapshot.total_value_usd),
+            func.sum(AccountValueSnapshot.total_value_btc),
+        )
+        .where(
+            AccountValueSnapshot.user_id == user_id,
+            AccountValueSnapshot.snapshot_date == snapshot_date,
+        )
+        .group_by(AccountValueSnapshot.account_id)
+    )
+    acct_values: dict = {}
+    total_usd = 0.0
+    total_btc = 0.0
+    for row in acct_val_result:
+        usd_val = row[1] or 0.0
+        btc_val = row[2] or 0.0
+        acct_values[row[0]] = {"usd": usd_val, "btc": btc_val}
+        total_usd += usd_val
+        total_btc += btc_val
 
     # Group goals by account_id for efficient profit queries
     account_ids = {g.account_id for g in goals}
@@ -93,13 +119,21 @@ async def capture_goal_snapshots(
         profit_usd = profits["usd"]
         profit_btc = profits["btc"]
 
+        # Use per-account values for account-specific goals, totals for global goals
+        if goal.account_id is not None and goal.account_id in acct_values:
+            goal_usd = acct_values[goal.account_id]["usd"]
+            goal_btc = acct_values[goal.account_id]["btc"]
+        else:
+            goal_usd = total_usd
+            goal_btc = total_btc
+
         if goal.target_type == "expenses":
             current_value, target = await _get_expense_snapshot_values(
                 db, goal,
             )
         else:
             current_value = _get_current_value_for_goal(
-                goal, current_usd, current_btc, profit_usd, profit_btc
+                goal, goal_usd, goal_btc, profit_usd, profit_btc
             )
             target = _get_target_for_goal(goal)
 
@@ -251,17 +285,20 @@ async def backfill_goal_snapshots(
     if start > today:
         return 0
 
-    # Get all account value snapshots for this user from start to today
+    # Get account value snapshots for this user from start to today.
+    # When goal is linked to a specific account, only use that account's snapshots.
+    # Otherwise, include all accounts (real and paper).
+    snap_filters = [
+        AccountValueSnapshot.user_id == goal.user_id,
+        AccountValueSnapshot.snapshot_date >= start,
+        AccountValueSnapshot.snapshot_date <= today,
+    ]
+    if goal.account_id is not None:
+        snap_filters.append(AccountValueSnapshot.account_id == goal.account_id)
     snap_result = await db.execute(
         select(AccountValueSnapshot)
         .join(Account, AccountValueSnapshot.account_id == Account.id)
-        .where(
-            AccountValueSnapshot.user_id == goal.user_id,
-            AccountValueSnapshot.snapshot_date >= start,
-            AccountValueSnapshot.snapshot_date <= today,
-            Account.is_paper_trading.is_(False),
-            Account.is_active.is_(True),
-        )
+        .where(*snap_filters, Account.is_active.is_(True))
         .order_by(AccountValueSnapshot.snapshot_date)
     )
     all_snapshots = snap_result.scalars().all()
