@@ -32,7 +32,7 @@ const FALL_SPEED = 160
 const BRICK_OPEN_TIME = 5.0
 
 /** How long a brick takes to fill back in (seconds) */
-const BRICK_FILL_TIME = 0.6
+export const BRICK_FILL_TIME = 1.5
 
 /** Cooldown between digs (seconds) */
 const DIG_COOLDOWN = 0.4
@@ -88,6 +88,7 @@ export interface Entity {
   falling: boolean
   facingLeft: boolean
   animState: AnimState
+  moving: boolean
 }
 
 export interface Player extends Entity {
@@ -110,7 +111,14 @@ export interface DugBrick {
   col: number
   row: number
   timer: number
-  phase: 'open' | 'filling'
+  phase: 'digging' | 'open' | 'filling'
+}
+
+export interface DigProjectile {
+  col: number
+  row: number
+  timer: number
+  fromLeft: boolean
 }
 
 export interface GameState {
@@ -119,6 +127,7 @@ export interface GameState {
   player: Player
   guards: Guard[]
   dugBricks: DugBrick[]
+  digProjectiles: DigProjectile[]
   goldRemaining: number
   level: number
   lives: number
@@ -277,6 +286,7 @@ export function loadLevel(levelNum: number): GameState {
     falling: false,
     facingLeft: false,
     animState: 'standing' as AnimState,
+    moving: false,
     alive: true,
     digCooldown: 0,
   }
@@ -290,6 +300,7 @@ export function loadLevel(levelNum: number): GameState {
       falling: false,
       facingLeft: false,
       animState: 'standing' as AnimState,
+      moving: false,
       state: 'chasing' as GuardState,
       trapTimer: 0,
       carriesGold: false,
@@ -305,6 +316,7 @@ export function loadLevel(levelNum: number): GameState {
     player,
     guards,
     dugBricks: [],
+    digProjectiles: [],
     goldRemaining: goldCount,
     level: levelNum,
     lives: 3,
@@ -389,11 +401,18 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
     p.facingLeft = false
     targetCol = p.col + 1
   } else if (input.up) {
-    if (isLadder(state, p.col, p.row)) {
+    if (isLadder(state, p.col, p.row) || isLadder(state, p.col, p.row - 1)) {
       targetRow = p.row - 1
     }
   } else if (input.down) {
     if (isLadder(state, p.col, p.row) || isLadder(state, p.col, p.row + 1)) {
+      targetRow = p.row + 1
+    }
+  }
+
+  // A3: Drop from bar (down input while on bar, not on ladder)
+  if (input.down && isBar(state, p.col, p.row) && !isLadder(state, p.col, p.row)) {
+    if (inBounds(p.col, p.row + 1) && isPassable(state, p.col, p.row + 1)) {
       targetRow = p.row + 1
     }
   }
@@ -420,17 +439,26 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
   if ((input.digLeft || input.digRight) && p.digCooldown <= 0) {
     const digCol = input.digLeft ? p.col - 1 : p.col + 1
     const digRow = p.row + 1
+    const isDiggingAlready = state.dugBricks.some(
+      db => db.col === digCol && db.row === digRow
+    )
     if (
       inBounds(digCol, digRow) &&
       tileAt(state, digCol, digRow) === Tile.Brick &&
-      !isDugOpen(state, digCol, digRow) &&
+      !isDiggingAlready &&
       isPassable(state, digCol, p.row) // can't dig through solid above
     ) {
       const newDug: DugBrick = {
         col: digCol,
         row: digRow,
-        timer: BRICK_OPEN_TIME,
-        phase: 'open',
+        timer: 0.25,
+        phase: 'digging',
+      }
+      const newProjectile: DigProjectile = {
+        col: digCol,
+        row: digRow,
+        timer: 0.25,
+        fromLeft: !!input.digLeft,
       }
       p.digCooldown = DIG_COOLDOWN
       p.animState = 'digging'
@@ -438,6 +466,7 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
         ...state,
         player: p,
         dugBricks: [...state.dugBricks, newDug],
+        digProjectiles: [...state.digProjectiles, newProjectile],
       }
     }
   }
@@ -458,6 +487,9 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
       p.y = ty
     }
   }
+
+  // Set moving flag based on directional input
+  p.moving = !!(input.left || input.right || input.up || input.down)
 
   // Determine animation state
   const tile = tileAt(state, p.col, p.row)
@@ -638,7 +670,8 @@ function updateGuards(state: GameState, dt: number): GameState {
       }
     }
 
-    if (bestCol !== guard.col || bestRow !== guard.row) {
+    guard.moving = bestCol !== guard.col || bestRow !== guard.row
+    if (guard.moving) {
       guard.col = bestCol
       guard.row = bestRow
     }
@@ -679,10 +712,17 @@ function updateBricks(state: GameState, dt: number): GameState {
   let score = state.score
   const updatedBricks: DugBrick[] = []
   let guards = [...state.guards]
+  let player = state.player
 
   for (const db of state.dugBricks) {
     const brick = { ...db }
     brick.timer -= dt
+
+    // A12: Digging phase -> open transition
+    if (brick.phase === 'digging' && brick.timer <= 0) {
+      brick.phase = 'open'
+      brick.timer = BRICK_OPEN_TIME
+    }
 
     if (brick.phase === 'open' && brick.timer <= 0) {
       brick.phase = 'filling'
@@ -711,6 +751,10 @@ function updateBricks(state: GameState, dt: number): GameState {
         }
         return g
       })
+      // A7: Kill player if caught in refilling brick
+      if (player.alive && player.col === brick.col && player.row === brick.row) {
+        player = { ...player, alive: false }
+      }
       // Brick fully regenerated — remove from list
       continue
     }
@@ -718,7 +762,7 @@ function updateBricks(state: GameState, dt: number): GameState {
     updatedBricks.push(brick)
   }
 
-  return { ...state, dugBricks: updatedBricks, guards, score }
+  return { ...state, dugBricks: updatedBricks, guards, score, player }
 }
 
 // ---------------------------------------------------------------------------
@@ -820,6 +864,14 @@ export function updateGame(state: GameState, dt: number, input: Input): GameStat
 
   // Update brick regen
   s = updateBricks(s, dt)
+
+  // Tick dig projectile timers
+  s = {
+    ...s,
+    digProjectiles: s.digProjectiles
+      .map(dp => ({ ...dp, timer: dp.timer - dt }))
+      .filter(dp => dp.timer > 0),
+  }
 
   // Collisions
   s = checkCollisions(s)

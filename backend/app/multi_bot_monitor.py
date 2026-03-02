@@ -429,6 +429,19 @@ class MultiBotMonitor:
             open_positions = list(open_pos_result.scalars().all())
             pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
 
+            # Filter out stable/pegged pairs if bot config says to skip them
+            skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
+            if skip_stable:
+                from app.services.delisted_pair_monitor import is_stable_pair
+                before_count = len(trading_pairs)
+                trading_pairs = [
+                    p for p in trading_pairs
+                    if not is_stable_pair(p) or p in pairs_with_positions
+                ]
+                skipped = before_count - len(trading_pairs)
+                if skipped:
+                    logger.info(f"  Skipped {skipped} stable/pegged pairs")
+
             # Filter pairs by allowed categories (bot-level control)
             # BUT always include pairs with existing positions
             allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None

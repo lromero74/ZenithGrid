@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.delisted_pair_monitor import (
     TradingPairMonitor,
+    STABLE_PAIRS,
     EXCLUDED_PAIRS,
 )
 
@@ -353,3 +354,364 @@ class TestExcludedPairs:
         assert "ETH-BTC" not in EXCLUDED_PAIRS
         assert "SOL-USD" not in EXCLUDED_PAIRS
         assert "BTC-USD" not in EXCLUDED_PAIRS
+
+
+# ---------------------------------------------------------------------------
+# _is_stable_candidate_by_price tests
+# ---------------------------------------------------------------------------
+
+class TestIsStableCandidateByPrice:
+    """Tests for TradingPairMonitor._is_stable_candidate_by_price()."""
+
+    def test_usd_stablecoin_at_one_dollar(self):
+        """Happy path: USD pair priced at exactly $1.00 is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "NEWSTABLE-USD", "price": "1.000"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+    def test_usd_stablecoin_within_tolerance(self):
+        """Happy path: USD pair priced at $1.004 (within 0.5%) is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "NEWSTABLE-USD", "price": "1.004"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+    def test_usd_pair_outside_tolerance(self):
+        """Edge case: USD pair at $1.01 (outside 0.5%) is NOT a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "SOMECOIN-USD", "price": "1.01"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_normal_usd_pair_not_candidate(self):
+        """Happy path: normal coin like ETH-USD at $3000 is NOT a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "ETH-USD", "price": "3000.50"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_wrapped_btc_pair_at_parity(self):
+        """Happy path: wrapped BTC pair (WNEW-BTC) at price ~1.0 is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "WNEW-BTC", "price": "1.001"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+    def test_wrapped_eth_pair_at_parity(self):
+        """Happy path: wrapped ETH pair (CBNEW-ETH) at price ~1.0 is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "CBNEW-ETH", "price": "0.999"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+    def test_wrapped_sol_pair_at_parity(self):
+        """Happy path: wrapped SOL pair (MNEWSOL-SOL) at price ~1.0 is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "MNEWSOL-SOL", "price": "1.002"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+    def test_non_wrapped_btc_pair_not_candidate(self):
+        """Edge case: non-wrapped BTC pair at price ~1.0 is NOT a candidate (no prefix match)."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "ETH-BTC", "price": "1.000"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_already_known_stable_pair_skipped(self):
+        """Edge case: pair already in STABLE_PAIRS is skipped (not double-counted)."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "USDC-USD", "price": "1.000"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_zero_price_not_candidate(self):
+        """Failure: pair with 0 price is not a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "BROKEN-USD", "price": "0"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_invalid_price_string_not_candidate(self):
+        """Failure: pair with invalid price string is not a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "BROKEN-USD", "price": "not_a_number"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_missing_price_not_candidate(self):
+        """Failure: pair with missing price key defaults to 0, not a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "NOPRICE-USD"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_usd_pair_below_tolerance(self):
+        """Edge case: USD pair at $0.994 (just outside lower bound) is NOT a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "LOWSTABLE-USD", "price": "0.994"}
+        assert monitor._is_stable_candidate_by_price(product) is False
+
+    def test_usd_pair_at_lower_boundary(self):
+        """Edge case: USD pair at $0.9951 (just inside lower bound) is a candidate."""
+        monitor = TradingPairMonitor()
+        product = {"product_id": "EDGESTABLE-USD", "price": "0.9951"}
+        assert monitor._is_stable_candidate_by_price(product) is True
+
+
+# ---------------------------------------------------------------------------
+# _verify_stable_with_candles tests
+# ---------------------------------------------------------------------------
+
+class TestVerifyStableWithCandles:
+    """Tests for TradingPairMonitor._verify_stable_with_candles()."""
+
+    @pytest.mark.asyncio
+    async def test_stable_candles_confirms_pair(self):
+        """Happy path: all candles within 0.5% of 1.0 confirms stability."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0.997", "high": "1.003", "open": "1.000", "close": "1.001"},
+            {"low": "0.996", "high": "1.004", "open": "0.999", "close": "1.002"},
+            {"low": "0.998", "high": "1.002", "open": "1.001", "close": "0.999"},
+        ])
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("NEWSTABLE-USD")
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_unstable_candle_rejects_pair(self):
+        """Happy path: one candle outside tolerance rejects the pair."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0.997", "high": "1.003", "open": "1.000", "close": "1.001"},
+            {"low": "0.990", "high": "1.010", "open": "0.995", "close": "1.005"},  # Too wide
+        ])
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("FAKESTABLE-USD")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_no_candle_data_returns_false(self):
+        """Edge case: no candle data available, returns False."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[])
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("NOCANDLEDATA-USD")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_no_exchange_client_returns_false(self):
+        """Failure: no exchange client set, returns False."""
+        monitor = TradingPairMonitor()
+        monitor._exchange_client = None
+
+        result = await monitor._verify_stable_with_candles("ANYTHING-USD")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_candle_fetch_exception_returns_false(self):
+        """Failure: exception during candle fetch, returns False gracefully."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(side_effect=Exception("API error"))
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("ERROR-USD")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_candle_with_zero_price_returns_false(self):
+        """Failure: candle with zero low price rejects the pair."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0", "high": "1.001", "open": "1.000", "close": "1.001"},
+        ])
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("ZEROLO-USD")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_candle_with_invalid_value_returns_false(self):
+        """Failure: candle with non-numeric value rejects the pair."""
+        monitor = TradingPairMonitor()
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "bad", "high": "1.001", "open": "1.000", "close": "1.001"},
+        ])
+        monitor._exchange_client = mock_exchange
+
+        result = await monitor._verify_stable_with_candles("BADVAL-USD")
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# detect_stable_pairs tests
+# ---------------------------------------------------------------------------
+
+class TestDetectStablePairs:
+    """Tests for TradingPairMonitor.detect_stable_pairs()."""
+
+    @pytest.mark.asyncio
+    async def test_detects_new_stable_usd_pair(self):
+        """Happy path: detects a new stablecoin-USD pair and adds to STABLE_PAIRS."""
+        monitor = TradingPairMonitor()
+        test_pair = "TESTSTABLE-USD"
+        # Clean up in case a previous test added it
+        STABLE_PAIRS.discard(test_pair)
+
+        monitor._raw_products = [
+            {"product_id": test_pair, "price": "1.001",
+             "trading_disabled": False, "status": "online"},
+        ]
+
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0.998", "high": "1.003", "open": "1.000", "close": "1.001"},
+            {"low": "0.997", "high": "1.004", "open": "0.999", "close": "1.002"},
+        ])
+        monitor._exchange_client = mock_exchange
+
+        detected = await monitor.detect_stable_pairs()
+
+        assert test_pair in detected
+        assert test_pair in STABLE_PAIRS
+
+        # Clean up
+        STABLE_PAIRS.discard(test_pair)
+
+    @pytest.mark.asyncio
+    async def test_detects_new_wrapped_btc_pair(self):
+        """Happy path: detects a new wrapped-BTC pair and adds to STABLE_PAIRS."""
+        monitor = TradingPairMonitor()
+        test_pair = "WNEWBTC-BTC"
+        STABLE_PAIRS.discard(test_pair)
+
+        monitor._raw_products = [
+            {"product_id": test_pair, "price": "1.002",
+             "trading_disabled": False, "status": "online"},
+        ]
+
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0.998", "high": "1.004", "open": "1.001", "close": "1.002"},
+        ])
+        monitor._exchange_client = mock_exchange
+
+        detected = await monitor.detect_stable_pairs()
+
+        assert test_pair in detected
+        assert test_pair in STABLE_PAIRS
+
+        # Clean up
+        STABLE_PAIRS.discard(test_pair)
+
+    @pytest.mark.asyncio
+    async def test_no_candidates_returns_empty(self):
+        """Edge case: no products match the candidate criteria."""
+        monitor = TradingPairMonitor()
+        monitor._raw_products = [
+            {"product_id": "ETH-USD", "price": "3000.00",
+             "trading_disabled": False, "status": "online"},
+            {"product_id": "BTC-USD", "price": "90000.00",
+             "trading_disabled": False, "status": "online"},
+        ]
+        monitor._exchange_client = AsyncMock()
+
+        detected = await monitor.detect_stable_pairs()
+        assert detected == []
+
+    @pytest.mark.asyncio
+    async def test_empty_raw_products_returns_empty(self):
+        """Edge case: no raw products available."""
+        monitor = TradingPairMonitor()
+        monitor._raw_products = []
+
+        detected = await monitor.detect_stable_pairs()
+        assert detected == []
+
+    @pytest.mark.asyncio
+    async def test_candidate_fails_candle_verification(self):
+        """Edge case: candidate has right price but candles show instability."""
+        monitor = TradingPairMonitor()
+        test_pair = "FAKESTABLE-USD"
+        STABLE_PAIRS.discard(test_pair)
+
+        monitor._raw_products = [
+            {"product_id": test_pair, "price": "1.000",
+             "trading_disabled": False, "status": "online"},
+        ]
+
+        mock_exchange = AsyncMock()
+        mock_exchange.get_candles = AsyncMock(return_value=[
+            {"low": "0.98", "high": "1.02", "open": "1.000", "close": "0.99"},  # Too wide
+        ])
+        monitor._exchange_client = mock_exchange
+
+        detected = await monitor.detect_stable_pairs()
+
+        assert test_pair not in detected
+        assert test_pair not in STABLE_PAIRS
+
+    @pytest.mark.asyncio
+    async def test_skips_disabled_products(self):
+        """Edge case: disabled products are skipped."""
+        monitor = TradingPairMonitor()
+        monitor._raw_products = [
+            {"product_id": "DISABLED-USD", "price": "1.000",
+             "trading_disabled": True, "status": "online"},
+        ]
+        monitor._exchange_client = AsyncMock()
+
+        detected = await monitor.detect_stable_pairs()
+        assert detected == []
+
+    @pytest.mark.asyncio
+    async def test_skips_offline_products(self):
+        """Edge case: offline products are skipped."""
+        monitor = TradingPairMonitor()
+        monitor._raw_products = [
+            {"product_id": "OFFLINE-USD", "price": "1.000",
+             "trading_disabled": False, "status": "delisted"},
+        ]
+        monitor._exchange_client = AsyncMock()
+
+        detected = await monitor.detect_stable_pairs()
+        assert detected == []
+
+    @pytest.mark.asyncio
+    async def test_exception_during_detection_returns_empty(self):
+        """Failure: exception during detection is caught, returns empty list."""
+        monitor = TradingPairMonitor()
+        # Force an exception by making _raw_products not iterable
+        monitor._raw_products = None  # Will cause TypeError in the for loop
+
+        detected = await monitor.detect_stable_pairs()
+        assert detected == []
+
+    @pytest.mark.asyncio
+    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    async def test_check_and_sync_includes_detected_stable_pairs(self, mock_session_maker):
+        """Integration: check_and_sync_pairs includes detected_stable_pairs in results."""
+        mock_db = AsyncMock()
+        mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_bot = MagicMock()
+        mock_bot.id = 1
+        mock_bot.name = "TestBot"
+        mock_bot.product_ids = ["ETH-BTC"]
+        mock_bot.strategy_config = {"auto_add_new_pairs": False}
+        bot_result = MagicMock()
+        bot_result.scalars.return_value.all.return_value = [mock_bot]
+        mock_db.execute = AsyncMock(return_value=bot_result)
+
+        monitor = TradingPairMonitor()
+        available = {"ETH-BTC"}
+        monitor._btc_pairs = {"ETH-BTC"}
+        monitor._usd_pairs = set()
+
+        with patch.object(monitor, 'get_available_products',
+                          new_callable=AsyncMock, return_value=available):
+            with patch.object(monitor, 'detect_stable_pairs',
+                              new_callable=AsyncMock, return_value=["NEWSTABLE-USD"]):
+                results = await monitor.check_and_sync_pairs()
+
+        assert results["detected_stable_pairs"] == ["NEWSTABLE-USD"]

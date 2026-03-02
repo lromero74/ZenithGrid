@@ -317,6 +317,41 @@ export function BotFormModal({
                   </div>
                 )}
 
+                {/* Skip stable/pegged pairs checkbox */}
+                <div className="mt-4 pt-4 border-t border-slate-600">
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={
+                        formData.strategy_config
+                          ?.skip_stable_pairs ?? true
+                      }
+                      onChange={(e) => {
+                        setFormData({
+                          ...formData,
+                          strategy_config: {
+                            ...formData.strategy_config,
+                            skip_stable_pairs:
+                              e.target.checked,
+                          },
+                        })
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                        Skip stable/pegged pairs
+                      </span>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Exclude stablecoin pairs (USDC-USD,
+                        DAI-USD) and wrapped token pairs
+                        (WBTC-BTC, CBETH-ETH) that rarely
+                        move in price.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 {/* Coin Category Selector */}
                 <CoinCategorySelector
                   formData={formData}
