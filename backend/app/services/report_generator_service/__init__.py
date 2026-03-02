@@ -21,8 +21,10 @@ from app.services.report_generator_service.html_builder import (  # noqa: F401
     _format_chart_value,
     _md_to_styled_html,
     _normalize_ai_summary,
-    _render_trend_chart_png,
     _transfer_label,
+)
+from app.services.report_generator_service.chart_renderer import (  # noqa: F401
+    _render_trend_chart_png,
 )
 from app.services.report_generator_service.expense_builder import (  # noqa: F401
     LOOKAHEAD_DAYS,

@@ -165,15 +165,26 @@ async def limit_close_position(
 @router.get("/{position_id}/ticker")
 async def get_position_ticker(
     position_id: int, db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user)
 ):
     """Get current bid/ask/mark prices for a position"""
     try:
         position = await _get_user_position(db, position_id, current_user.id)
 
+        # Look up the account for this position's bot to get the right exchange client
+        from app.models import Bot
+        from app.services.exchange_service import get_exchange_client_for_account
+        bot_result = await db.execute(select(Bot).where(Bot.id == position.bot_id))
+        bot = bot_result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found for position")
+
+        exchange = await get_exchange_client_for_account(db, bot.account_id)
+        if not exchange:
+            raise HTTPException(status_code=503, detail="Could not create exchange client")
+
         # Get ticker data including bid/ask
-        ticker = await coinbase.get_ticker(position.product_id)
+        ticker = await exchange.get_ticker(position.product_id)
 
         best_bid = float(ticker.get("best_bid", 0))
         best_ask = float(ticker.get("best_ask", 0))

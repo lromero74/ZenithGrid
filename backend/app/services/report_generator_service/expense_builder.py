@@ -792,6 +792,8 @@ def _build_expense_card_header(
     if trend_data:
         from app.services.report_generator_service.html_builder import (
             _build_trend_chart_svg,
+        )
+        from app.services.report_generator_service.chart_renderer import (
             _render_trend_chart_png,
         )
         if email_mode and inline_images is not None:

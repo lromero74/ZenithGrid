@@ -173,32 +173,6 @@ function AppContent() {
   const currentClosedCount = closedPositions.length
   const newHistoryItemsCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
 
-  // Refetch last seen counts when navigating to History page
-  // This ensures App.tsx stays in sync after ClosedPositions.tsx clears individual counts
-  useEffect(() => {
-    if (location.pathname === '/history') {
-      const refetchCounts = async () => {
-        const token = getAccessToken()
-        if (!token) return
-
-        try {
-          const response = await authFetch('/api/auth/preferences/last-seen-history')
-          if (response.ok) {
-            const data = await response.json()
-            setLastSeenClosedCount(data.last_seen_history_count || 0)
-          }
-        } catch (error) {
-          console.error('Failed to refetch last seen history counts:', error)
-        }
-      }
-
-      // Refetch periodically while on History page to catch updates from ClosedPositions
-      refetchCounts()
-      const interval = setInterval(refetchCounts, 30000)
-      return () => clearInterval(interval)
-    }
-  }, [location.pathname, getAccessToken])
-
   return (
     <NotificationProvider>
     <ConfirmProvider>

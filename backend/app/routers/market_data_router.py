@@ -464,6 +464,7 @@ async def get_orderbook(
             limit = 100
 
         # Order book requires authenticated API access (public API doesn't support it)
+        # Try user's real CEX account first, then paper account's real_client, then any system account
         result = await db.execute(
             select(Account).where(
                 Account.user_id == current_user.id,
@@ -473,6 +474,34 @@ async def get_orderbook(
             ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
         )
         account = result.scalar_one_or_none()
+
+        if not account:
+            # User has no real CEX account — try their paper account (delegates to real_client)
+            paper_result = await db.execute(
+                select(Account).where(
+                    Account.user_id == current_user.id,
+                    Account.type == "cex",
+                    Account.is_active.is_(True),
+                    Account.is_paper_trading.is_(True),
+                ).limit(1)
+            )
+            paper_account = paper_result.scalar_one_or_none()
+            if paper_account:
+                paper_client = await get_exchange_client_for_account(db, paper_account.id)
+                if paper_client and hasattr(paper_client, 'real_client') and paper_client.real_client:
+                    account = paper_account  # Use paper account — its real_client has API creds
+
+            # Last resort: any active real CEX account in the system (order book is public data)
+            if not account:
+                system_result = await db.execute(
+                    select(Account).where(
+                        Account.type == "cex",
+                        Account.is_active.is_(True),
+                        Account.is_paper_trading.is_not(True),
+                    ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
+                )
+                account = system_result.scalar_one_or_none()
+
         if not account:
             raise HTTPException(status_code=503, detail="No exchange account configured")
 

@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.15] - 2026-03-02
+
+### Fixed
+- **No more 429 errors on History page**: Moved preferences endpoint out of strict auth rate-limit zone (5r/min → 30r/s) and removed redundant 30-second refetch loop
+- **Paper trading accounts can now view depth charts and ticker data**: Orderbook and ticker endpoints now fall back gracefully for paper-only accounts instead of returning 503 errors
+
+### Changed
+- **Reduced 4 oversized backend files below 1200-line limit**:
+  - `signal_processor.py`: Extracted `_record_signal()` helper, moved inline imports to top-level
+  - `html_builder.py`: Extracted chart rendering to `chart_renderer.py`
+  - `pdf_generator.py`: Extracted PDF chart rendering to `chart_pdf_renderer.py`
+  - `indicator_based.py`: Extracted order sizing math to `safety_order_calculator.py`
+
 ## [v2.76.14] - 2026-03-02
 
 ### Fixed
