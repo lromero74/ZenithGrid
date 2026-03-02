@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.82.10] - 2026-03-02
+
+### Fixed
+- **Dashboard chart blank after switching users**: Stale account ID in localStorage caused chart to show "No historical data" when logging in as a different user — now validates stored account belongs to current user and re-selects default if not
+- **Logout clears account selection**: Prevents stale account ID from carrying over between user sessions
+
 ## [v2.82.9] - 2026-03-02
 
 ### Fixed

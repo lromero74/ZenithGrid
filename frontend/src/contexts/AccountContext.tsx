@@ -226,13 +226,16 @@ export function AccountProvider({ children }: AccountProviderProps) {
   // Find selected account from the list
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) || null
 
-  // Auto-select default account if none selected
+  // Auto-select default account if none selected or stale ID from another user
   useEffect(() => {
-    if (!selectedAccountId && accounts.length > 0) {
-      const defaultAccount = accounts.find((a) => a.is_default) || accounts[0]
-      if (defaultAccount) {
-        setSelectedAccountId(defaultAccount.id)
-        localStorage.setItem('selectedAccountId', defaultAccount.id.toString())
+    if (accounts.length > 0) {
+      const isValid = selectedAccountId != null && accounts.some((a) => a.id === selectedAccountId)
+      if (!isValid) {
+        const defaultAccount = accounts.find((a) => a.is_default) || accounts[0]
+        if (defaultAccount) {
+          setSelectedAccountId(defaultAccount.id)
+          localStorage.setItem('selectedAccountId', defaultAccount.id.toString())
+        }
       }
     }
   }, [accounts, selectedAccountId])
