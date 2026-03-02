@@ -62,6 +62,8 @@ class TestLogIndicatorEvaluation:
             indicators_snapshot={"rsi_1h": 25.0},
             current_price=0.05,
         )
+        # log_indicator_evaluation adds without committing (caller batches commits)
+        await db_session.flush()
 
         assert result is not None
         assert result.bot_id == bot.id
@@ -103,6 +105,7 @@ class TestLogIndicatorEvaluation:
             indicators_snapshot=None,
             current_price=None,
         )
+        await db_session.flush()
 
         assert result is not None
         assert result.indicators_snapshot is None

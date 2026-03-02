@@ -59,8 +59,10 @@ async def log_indicator_evaluation(
         )
 
         db.add(log_entry)
-        await db.commit()
-        await db.refresh(log_entry)
+        # Don't commit here — let the caller batch-commit.
+        # Each individual commit acquires SQLite's write lock,
+        # causing "database is locked" storms when many pairs
+        # are processed concurrently.
 
         logger.debug(
             f"Logged indicator evaluation: bot={bot_id}, pair={product_id}, "

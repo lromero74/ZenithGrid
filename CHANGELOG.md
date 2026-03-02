@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.80.1] - 2026-03-02
+
+### Fixed
+- **Lode Runner edge running**: Player and guards can now run off platform edges and fall, matching classic Lode Runner behavior — entities finish their horizontal step before gravity kicks in
+- **SQLite lock storms**: Indicator log writes now batch into a single commit instead of committing individually, dramatically reducing "database is locked" errors during bot scan cycles
+- **SQLite busy timeout**: Increased from 15s to 30s and enabled synchronous=NORMAL for WAL mode to further reduce write contention
+
 ## [v2.80.0] - 2026-03-02
 
 ### Added
