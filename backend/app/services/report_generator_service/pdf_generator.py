@@ -264,140 +264,96 @@ def _build_pdf_goals_section(pdf, report_data: Dict, brand_rgb: tuple):
             _build_pdf_expense_goal(pdf, g, report_data, brand_rgb)
 
 
-def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
-    """Render a single expense coverage goal with tables and projections."""
-    br, bg, bb = brand_rgb
-    curr = g.get("target_currency", "USD")
-    pfx = "$" if curr == "USD" else ""
-    pdf.set_text_color(30, 30, 30)
-    coverage = g.get("expense_coverage", {})
-    exp_period = g.get("expense_period", "monthly")
-    cov_pct = coverage.get("coverage_pct", 0)
-    total_exp = coverage.get("total_expenses", 0)
-    income_at = coverage.get("income_after_tax", 0)
-    pdf.set_font("Helvetica", "B", 10)
-    goal_name = _sanitize_for_pdf(g.get("name", ""))
-    pdf.cell(
-        0, 7,
-        f"{goal_name} - Returns Cover "
-        f"{_fmt_coverage_pct(cov_pct)} of "
-        f"{exp_period.capitalize()} Expenses",
-        new_x="LMARGIN", new_y="NEXT",
-    )
+def _build_pdf_coverage_table(pdf, cov_items: list, pfx: str, exp_period: str):
+    """Render the coverage items table (category / name / amount / status)."""
+    if not cov_items:
+        return
+    _tbl_inset = 8
+    _tbl_x = pdf.l_margin + _tbl_inset
+    _tbl_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _tbl_inset
+    _buf = 4
+    # Pre-compute display values
+    _cov_rows = []
+    for ei in cov_items:
+        s = ei.get("status", "uncovered")
+        badge = "OK" if s == "covered" else (
+            _fmt_coverage_pct(ei.get('coverage_pct', 0))
+            if s == "partial" else "X"
+        )
+        name = _sanitize_for_pdf(ei.get('name', ''))
+        cat = ei.get('category', '')
+        norm = ei.get("normalized_amount", 0)
+        if ei.get("amount_mode") == "percent_of_income":
+            pct_val = ei.get("percent_of_income", 0)
+            basis_label = ei.get("percent_basis", "pre_tax")
+            basis_str = "pre-tax" if basis_label == "pre_tax" else "post-tax"
+            amt = f"{pfx}{norm:,.2f} ({pct_val:g}% {basis_str})"
+        else:
+            amt = f"{pfx}{norm:,.2f}/{exp_period}"
+        _cov_rows.append((s, badge, name, cat, amt))
+    # Measure column widths from content
     pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(80, 80, 80)
-    pdf.cell(
-        0, 6,
-        f"Total Required: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
-        f"Income after tax: {pfx}{income_at:,.2f}",
-        new_x="LMARGIN", new_y="NEXT",
-    )
-    # Trend chart
-    trend_data = g.get("trend_data")
-    if trend_data:
-        _render_pdf_trend_chart(pdf, trend_data, (br, bg, bb))
-    # Minimap
-    chart_settings = g.get("chart_settings", {})
-    if chart_settings.get("show_minimap"):
-        try:
-            _render_pdf_minimap(
-                pdf,
-                chart_settings.get("full_data_points", []),
-                chart_settings.get("horizon_date", ""),
-                chart_settings["target_date"],
-                (br, bg, bb),
-            )
-        except (KeyError, ValueError):
-            pass
-    # Coverage items table header
-    cov_items = coverage.get("items", [])
-    if cov_items:
-        _tbl_inset = 8
-        _tbl_x = pdf.l_margin + _tbl_inset
-        _tbl_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _tbl_inset
-        _buf = 4
-        # Pre-compute display values
-        _cov_rows = []
-        for ei in cov_items:
-            s = ei.get("status", "uncovered")
-            badge = "OK" if s == "covered" else (
-                _fmt_coverage_pct(ei.get('coverage_pct', 0))
-                if s == "partial" else "X"
-            )
-            name = _sanitize_for_pdf(ei.get('name', ''))
-            cat = ei.get('category', '')
-            norm = ei.get("normalized_amount", 0)
-            if ei.get("amount_mode") == "percent_of_income":
-                pct_val = ei.get("percent_of_income", 0)
-                basis_label = ei.get("percent_basis", "pre_tax")
-                basis_str = "pre-tax" if basis_label == "pre_tax" else "post-tax"
-                amt = f"{pfx}{norm:,.2f} ({pct_val:g}% {basis_str})"
-            else:
-                amt = f"{pfx}{norm:,.2f}/{exp_period}"
-            _cov_rows.append((s, badge, name, cat, amt))
-        # Measure column widths from content
-        pdf.set_font("Helvetica", "", 9)
-        col_status = max(
-            pdf.get_string_width("Status"),
-            max((pdf.get_string_width(r[1]) for r in _cov_rows), default=0),
-        ) + _buf
-        col_cat = max(
-            pdf.get_string_width("Category"),
-            max((pdf.get_string_width(r[3]) for r in _cov_rows), default=0),
-        ) + _buf
-        col_amt = max(
-            pdf.get_string_width("Amount"),
-            max((pdf.get_string_width(r[4]) for r in _cov_rows), default=0),
-        ) + _buf
-        col_name = _tbl_w - col_status - col_cat - col_amt
-        # Ensure table fits on current page
-        _cov_total_h = 5 + len(_cov_rows) * 5
-        if pdf.will_page_break(_cov_total_h):
-            pdf.add_page()
-        # Draw header
-        _tbl_y_start = pdf.get_y()
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(120, 120, 120)
+    col_status = max(
+        pdf.get_string_width("Status"),
+        max((pdf.get_string_width(r[1]) for r in _cov_rows), default=0),
+    ) + _buf
+    col_cat = max(
+        pdf.get_string_width("Category"),
+        max((pdf.get_string_width(r[3]) for r in _cov_rows), default=0),
+    ) + _buf
+    col_amt = max(
+        pdf.get_string_width("Amount"),
+        max((pdf.get_string_width(r[4]) for r in _cov_rows), default=0),
+    ) + _buf
+    col_name = _tbl_w - col_status - col_cat - col_amt
+    # Ensure table fits on current page
+    _cov_total_h = 5 + len(_cov_rows) * 5
+    if pdf.will_page_break(_cov_total_h):
+        pdf.add_page()
+    # Draw header
+    _tbl_y_start = pdf.get_y()
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_x(_tbl_x)
+    pdf.cell(col_cat, 5, "Category", new_x="RIGHT")
+    pdf.cell(col_name, 5, "Name", new_x="RIGHT")
+    pdf.cell(col_amt, 5, "Amount", new_x="RIGHT", align="R")
+    pdf.cell(col_status, 5, "Status", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_draw_color(200, 200, 205)
+    pdf.line(_tbl_x, pdf.get_y(), _tbl_x + _tbl_w, pdf.get_y())
+    # Draw rows
+    pdf.set_font("Helvetica", "", 9)
+    for _ri, (s, badge, name, cat, amt) in enumerate(_cov_rows):
         pdf.set_x(_tbl_x)
-        pdf.cell(col_cat, 5, "Category", new_x="RIGHT")
-        pdf.cell(col_name, 5, "Name", new_x="RIGHT")
-        pdf.cell(col_amt, 5, "Amount", new_x="RIGHT", align="R")
-        pdf.cell(col_status, 5, "Status", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_draw_color(200, 200, 205)
-        pdf.line(_tbl_x, pdf.get_y(), _tbl_x + _tbl_w, pdf.get_y())
-        # Draw rows
-        pdf.set_font("Helvetica", "", 9)
-        for _ri, (s, badge, name, cat, amt) in enumerate(_cov_rows):
-            pdf.set_x(_tbl_x)
-            if _ri % 2 == 1:
-                pdf.set_fill_color(245, 245, 250)
-                pdf.rect(_tbl_x, pdf.get_y(), _tbl_w, 5, "F")
-            pdf.set_text_color(120, 120, 120)
-            _c_txt = _truncate_to_width(pdf, cat, col_cat)
-            pdf.cell(col_cat, 5, _c_txt, new_x="RIGHT")
-            pdf.set_text_color(80, 80, 80)
-            _n_txt = _truncate_to_width(pdf, name, col_name)
-            pdf.cell(col_name, 5, _n_txt, new_x="RIGHT")
-            pdf.set_text_color(80, 80, 80)
-            pdf.cell(col_amt, 5, amt, new_x="RIGHT", align="R")
-            if s == "covered":
-                pdf.set_text_color(34, 197, 94)
-            elif s == "partial":
-                pdf.set_text_color(234, 179, 8)
-            else:
-                pdf.set_text_color(239, 68, 68)
-            pdf.cell(
-                col_status, 5, badge,
-                new_x="LMARGIN", new_y="NEXT",
-            )
-        # Table outline
-        pdf.set_draw_color(200, 200, 205)
-        pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, _cov_total_h)
-        pdf.set_draw_color(0, 0, 0)
-    # Expense changes from prior report
-    _render_expense_changes_pdf(
-        pdf, g.get("expense_changes"), pfx, curr,
-    )
+        if _ri % 2 == 1:
+            pdf.set_fill_color(245, 245, 250)
+            pdf.rect(_tbl_x, pdf.get_y(), _tbl_w, 5, "F")
+        pdf.set_text_color(120, 120, 120)
+        _c_txt = _truncate_to_width(pdf, cat, col_cat)
+        pdf.cell(col_cat, 5, _c_txt, new_x="RIGHT")
+        pdf.set_text_color(80, 80, 80)
+        _n_txt = _truncate_to_width(pdf, name, col_name)
+        pdf.cell(col_name, 5, _n_txt, new_x="RIGHT")
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(col_amt, 5, amt, new_x="RIGHT", align="R")
+        if s == "covered":
+            pdf.set_text_color(34, 197, 94)
+        elif s == "partial":
+            pdf.set_text_color(234, 179, 8)
+        else:
+            pdf.set_text_color(239, 68, 68)
+        pdf.cell(
+            col_status, 5, badge,
+            new_x="LMARGIN", new_y="NEXT",
+        )
+    # Table outline
+    pdf.set_draw_color(200, 200, 205)
+    pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, _cov_total_h)
+    pdf.set_draw_color(0, 0, 0)
+
+
+def _build_pdf_deposit_hints(pdf, g: Dict, coverage: Dict, pfx: str, curr: str):
+    """Render deposit-needed hint lines below the coverage table."""
     partial_name = coverage.get("partial_item_name")
     next_name = coverage.get("next_uncovered_name")
     dep_partial = g.get("deposit_partial")
@@ -449,17 +405,19 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
         )
     if _has_dep_text:
         pdf.ln(4)
-    _now = datetime.utcnow()
+
+
+def _build_pdf_schedule_tables(pdf, coverage: Dict, pfx: str, now, schedule_meta: Dict):
+    """Render upcoming and lookahead schedule tables."""
     _upcoming = _get_upcoming_items(
-        coverage.get("items", []), _now,
+        coverage.get("items", []), now,
     )
-    _meta = report_data.get("_schedule_meta", {})
-    _pw = _meta.get("period_window", "full_prior")
-    _show_la = _meta.get("show_expense_lookahead", True)
+    _pw = schedule_meta.get("period_window", "full_prior")
+    _show_la = schedule_meta.get("show_expense_lookahead", True)
     _lookahead = []
     if _show_la and _pw in ("mtd", "wtd", "qtd", "ytd"):
         _lookahead = _get_lookahead_items(
-            coverage.get("items", []), _now, _pw,
+            coverage.get("items", []), now, _pw,
         )
     # Pre-compute display rows for both tables
     _uc_rows = []
@@ -470,7 +428,7 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
                       _ei.get('coverage_pct', 0))
                   if _s == "partial" else "X")
         _uc_rows.append((
-            _format_due_label(_ei, now=_now),
+            _format_due_label(_ei, now=now),
             _ei.get('category', ''),
             _sanitize_for_pdf(_ei.get('name', '')),
             f"{pfx}{_ei.get('amount', 0):,.2f}",
@@ -490,7 +448,7 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
                 f"{_ordinal_day(_la_due.day)}"
             )
         else:
-            _la_lbl = _format_due_label(_la_ei, now=_now)
+            _la_lbl = _format_due_label(_la_ei, now=now)
         _la_rows.append((
             _la_lbl,
             _la_ei.get('category', ''),
@@ -633,42 +591,109 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
         pdf.rect(_uc_x, _la_y_start, _uc_w, _la_total_h)
         pdf.set_draw_color(0, 0, 0)
         pdf.set_text_color(80, 80, 80)
+
+
+def _build_pdf_expense_projections(pdf, g: Dict, pfx: str, curr: str,
+                                   exp_period: str, total_exp: float):
+    """Render the projections section (daily income, linear/compound, deposits)."""
     _daily_inc = g.get("current_daily_income", 0)
     _proj_lin = g.get("projected_income")
     _proj_cmp = g.get("projected_income_compound")
-    if _daily_inc or _proj_lin or _proj_cmp:
-        pdf.ln(3)
-        _tax = g.get("tax_withholding_pct", 0)
-        _atf = (1 - _tax / 100) if _tax < 100 else 0
-        _lin_at = (_proj_lin or 0) * _atf
-        _cmp_at = (_proj_cmp or 0) * _atf
-        _dep_lin = g.get("deposit_needed")
-        _dep_cmp = g.get("deposit_needed_compound")
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_text_color(80, 80, 80)
-        pdf.cell(
-            0, 6, "Projections:",
-            new_x="LMARGIN", new_y="NEXT",
-        )
-        pdf.set_font("Helvetica", "", 9)
-        _proj_rows = [
-            ("Target", f"{pfx}{total_exp:,.2f} {curr}/{exp_period}"),
-            ("Daily Avg Income", f"{pfx}{_daily_inc:,.2f} {curr}"),
-            ("Linear (after tax)", f"{pfx}{_lin_at:,.2f} {curr}/{exp_period}"),
-            ("Compound (after tax)", f"{pfx}{_cmp_at:,.2f} {curr}/{exp_period}"),
-        ]
-        if _dep_lin is not None:
-            _proj_rows.append(("Deposit Needed (Linear)", f"{pfx}{_dep_lin:,.2f}"))
-        if _dep_cmp is not None:
-            _proj_rows.append(("Deposit Needed (Compound)", f"{pfx}{_dep_cmp:,.2f}"))
-        _smp = g.get("sample_trades", 0)
-        _lbk = g.get("lookback_days_used", 0)
-        _proj_rows.append(("Based on", f"{_smp} trades over {_lbk} days"))
-        for _lbl, _val in _proj_rows:
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(55, 5, f"  {_lbl}:", new_x="RIGHT")
-            pdf.set_text_color(30, 30, 30)
-            pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
+    if not (_daily_inc or _proj_lin or _proj_cmp):
+        return
+    pdf.ln(3)
+    _tax = g.get("tax_withholding_pct", 0)
+    _atf = (1 - _tax / 100) if _tax < 100 else 0
+    _lin_at = (_proj_lin or 0) * _atf
+    _cmp_at = (_proj_cmp or 0) * _atf
+    _dep_lin = g.get("deposit_needed")
+    _dep_cmp = g.get("deposit_needed_compound")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(
+        0, 6, "Projections:",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", "", 9)
+    _proj_rows = [
+        ("Target", f"{pfx}{total_exp:,.2f} {curr}/{exp_period}"),
+        ("Daily Avg Income", f"{pfx}{_daily_inc:,.2f} {curr}"),
+        ("Linear (after tax)", f"{pfx}{_lin_at:,.2f} {curr}/{exp_period}"),
+        ("Compound (after tax)", f"{pfx}{_cmp_at:,.2f} {curr}/{exp_period}"),
+    ]
+    if _dep_lin is not None:
+        _proj_rows.append(("Deposit Needed (Linear)", f"{pfx}{_dep_lin:,.2f}"))
+    if _dep_cmp is not None:
+        _proj_rows.append(("Deposit Needed (Compound)", f"{pfx}{_dep_cmp:,.2f}"))
+    _smp = g.get("sample_trades", 0)
+    _lbk = g.get("lookback_days_used", 0)
+    _proj_rows.append(("Based on", f"{_smp} trades over {_lbk} days"))
+    for _lbl, _val in _proj_rows:
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(55, 5, f"  {_lbl}:", new_x="RIGHT")
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
+
+
+def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
+    """Render a single expense coverage goal with tables and projections."""
+    br, bg, bb = brand_rgb
+    curr = g.get("target_currency", "USD")
+    pfx = "$" if curr == "USD" else ""
+    pdf.set_text_color(30, 30, 30)
+    coverage = g.get("expense_coverage", {})
+    exp_period = g.get("expense_period", "monthly")
+    cov_pct = coverage.get("coverage_pct", 0)
+    total_exp = coverage.get("total_expenses", 0)
+    income_at = coverage.get("income_after_tax", 0)
+    pdf.set_font("Helvetica", "B", 10)
+    goal_name = _sanitize_for_pdf(g.get("name", ""))
+    pdf.cell(
+        0, 7,
+        f"{goal_name} - Returns Cover "
+        f"{_fmt_coverage_pct(cov_pct)} of "
+        f"{exp_period.capitalize()} Expenses",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(
+        0, 6,
+        f"Total Required: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
+        f"Income after tax: {pfx}{income_at:,.2f}",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    # Trend chart
+    trend_data = g.get("trend_data")
+    if trend_data:
+        _render_pdf_trend_chart(pdf, trend_data, (br, bg, bb))
+    # Minimap
+    chart_settings = g.get("chart_settings", {})
+    if chart_settings.get("show_minimap"):
+        try:
+            _render_pdf_minimap(
+                pdf,
+                chart_settings.get("full_data_points", []),
+                chart_settings.get("horizon_date", ""),
+                chart_settings["target_date"],
+                (br, bg, bb),
+            )
+        except (KeyError, ValueError):
+            pass
+    # Coverage items table
+    _build_pdf_coverage_table(pdf, coverage.get("items", []), pfx, exp_period)
+    # Expense changes from prior report
+    _render_expense_changes_pdf(
+        pdf, g.get("expense_changes"), pfx, curr,
+    )
+    # Deposit hints
+    _build_pdf_deposit_hints(pdf, g, coverage, pfx, curr)
+    # Schedule tables (upcoming + lookahead)
+    _now = datetime.utcnow()
+    _meta = report_data.get("_schedule_meta", {})
+    _build_pdf_schedule_tables(pdf, coverage, pfx, _now, _meta)
+    # Projections
+    _build_pdf_expense_projections(pdf, g, pfx, curr, exp_period, total_exp)
     pdf.set_font("Helvetica", "", 10)
 
 

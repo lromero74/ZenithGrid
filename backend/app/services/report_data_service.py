@@ -34,23 +34,14 @@ async def gather_report_data(
     """
     Gather all metrics for a report period.
 
-    Args:
-        db: Database session
-        user_id: User ID
-        account_id: Specific account ID, or None for all accounts
-        period_start: Start of the report period
-        period_end: End of the report period
-        goals: Goals to include in the report
-
-    Returns:
-        Dictionary of all report metrics
+    Orchestrates helpers that each gather one category of data:
+    trade stats, bot strategies, transfers, and native-currency accounting.
     """
-    # Get account value at period end (latest snapshot <= period_end)
+    # Account value snapshots at period boundaries
     end_value = await _get_account_value_at(db, user_id, account_id, period_end)
-    # Get account value at period start (latest snapshot <= period_start)
     start_value = await _get_account_value_at(db, user_id, account_id, period_start)
 
-    # Get closed positions in this period
+    # Closed positions in this period
     pos_filters = [
         Position.user_id == user_id,
         Position.status == "closed",
@@ -59,69 +50,137 @@ async def gather_report_data(
     ]
     if account_id:
         pos_filters.append(Position.account_id == account_id)
-
     result = await db.execute(select(Position).where(and_(*pos_filters)))
     closed_positions = result.scalars().all()
 
-    # Calculate trade stats
-    total_trades = len(closed_positions)
-    winning_trades = sum(1 for p in closed_positions if (p.profit_usd or 0) > 0)
-    losing_trades = sum(1 for p in closed_positions if (p.profit_usd or 0) < 0)
-    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
-
-    # Calculate period profit
-    period_profit_usd = sum(p.profit_usd or 0 for p in closed_positions)
-    period_profit_btc = sum(
-        p.profit_quote or 0 for p in closed_positions
-        if p.get_quote_currency() == "BTC"
+    # Gather sub-sections
+    trade_stats = _gather_trade_stats(closed_positions)
+    bot_strategies = await _gather_bot_strategies(db, closed_positions)
+    transfer_data = await _gather_transfer_data(db, user_id, account_id, period_start, period_end)
+    accounting = _compute_native_accounting(
+        start_value, end_value,
+        trade_stats["period_profit_usd"], trade_stats["period_profit_btc"],
+        closed_positions, transfer_data["all_transfers"], transfer_data["net_deposits_usd"],
     )
 
-    # Collect bot strategy context for AI analysis
-    bot_ids = list({p.bot_id for p in closed_positions if p.bot_id})
-    bot_strategies = []
-    if bot_ids:
-        bot_result = await db.execute(
-            select(Bot).where(Bot.id.in_(bot_ids))
-        )
-        bots = {b.id: b for b in bot_result.scalars().all()}
-        for bid in bot_ids:
-            bot = bots.get(bid)
-            if not bot:
-                continue
-            cfg = bot.strategy_config or {}
-            pairs = bot.product_ids or ([bot.product_id] if bot.product_id else [])
-            # Count trades per bot in this period
-            bot_trades = sum(1 for p in closed_positions if p.bot_id == bid)
-            bot_wins = sum(
-                1 for p in closed_positions
-                if p.bot_id == bid and (p.profit_usd or 0) > 0
-            )
-            bot_strategies.append({
-                "name": bot.name,
-                "strategy_type": bot.strategy_type,
-                "pairs": pairs,
-                "config": cfg,
-                "trades_in_period": bot_trades,
-                "wins_in_period": bot_wins,
-            })
-
-    # Compute goal progress — use the report's period bounds for lookback
+    # Compute goal progress
     goal_data = []
     for goal in goals:
         goal_progress = await compute_goal_progress(
-            db,
-            goal,
+            db, goal,
             current_usd=end_value["usd"],
             current_btc=end_value["btc"],
-            period_profit_usd=period_profit_usd,
-            period_profit_btc=period_profit_btc,
+            period_profit_usd=trade_stats["period_profit_usd"],
+            period_profit_btc=trade_stats["period_profit_btc"],
             period_start=period_start,
             period_end=period_end,
             account_id=account_id,
         )
         goal_data.append(goal_progress)
 
-    # Query deposits/withdrawals in this period
+    return {
+        "account_value_usd": end_value["usd"],
+        "account_value_btc": end_value["btc"],
+        "period_start_value_usd": start_value["usd"],
+        "period_start_value_btc": start_value["btc"],
+        "period_profit_usd": round(trade_stats["period_profit_usd"], 2),
+        "period_profit_btc": round(trade_stats["period_profit_btc"], 8),
+        "total_trades": trade_stats["total_trades"],
+        "winning_trades": trade_stats["winning_trades"],
+        "losing_trades": trade_stats["losing_trades"],
+        "win_rate": round(trade_stats["win_rate"], 1),
+        "goals": goal_data,
+        "prior_period": None,  # Filled in by caller if prior report exists
+        # Deposit/withdrawal data
+        "net_deposits_usd": accounting["net_deposits_usd"],
+        "total_deposits_usd": round(transfer_data["total_deposits_usd"], 2),
+        "total_withdrawals_usd": round(transfer_data["total_withdrawals_usd"], 2),
+        "adjusted_account_growth_usd": accounting["adjusted_growth_usd"],
+        "transfer_count": len(transfer_data["all_transfers"]),
+        "deposits_source": accounting["deposits_source"],
+        "transfer_records": transfer_data["transfer_records"],
+        "trade_summary": {
+            "total_trades": trade_stats["total_trades"],
+            "winning_trades": trade_stats["winning_trades"],
+            "losing_trades": trade_stats["losing_trades"],
+            "net_profit_usd": round(trade_stats["period_profit_usd"], 2),
+        },
+        "bot_strategies": bot_strategies,
+        "market_value_effect_usd": accounting["market_value_effect_usd"],
+        "unrealized_pnl_change_usd": accounting["unrealized_pnl_change_usd"],
+        "start_btc_usd_price": start_value.get("btc_usd_price"),
+        "end_btc_usd_price": end_value.get("btc_usd_price"),
+    }
+
+
+def _gather_trade_stats(closed_positions: list) -> Dict[str, Any]:
+    """Calculate trade statistics from closed positions."""
+    total_trades = len(closed_positions)
+    winning_trades = sum(1 for p in closed_positions if (p.profit_usd or 0) > 0)
+    losing_trades = sum(1 for p in closed_positions if (p.profit_usd or 0) < 0)
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+
+    period_profit_usd = sum(p.profit_usd or 0 for p in closed_positions)
+    period_profit_btc = sum(
+        p.profit_quote or 0 for p in closed_positions
+        if p.get_quote_currency() == "BTC"
+    )
+
+    return {
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "win_rate": win_rate,
+        "period_profit_usd": period_profit_usd,
+        "period_profit_btc": period_profit_btc,
+    }
+
+
+async def _gather_bot_strategies(
+    db: AsyncSession,
+    closed_positions: list,
+) -> List[Dict[str, Any]]:
+    """Query bots referenced by closed positions and build strategy context."""
+    bot_ids = list({p.bot_id for p in closed_positions if p.bot_id})
+    if not bot_ids:
+        return []
+
+    bot_result = await db.execute(
+        select(Bot).where(Bot.id.in_(bot_ids))
+    )
+    bots = {b.id: b for b in bot_result.scalars().all()}
+
+    bot_strategies = []
+    for bid in bot_ids:
+        bot = bots.get(bid)
+        if not bot:
+            continue
+        cfg = bot.strategy_config or {}
+        pairs = bot.product_ids or ([bot.product_id] if bot.product_id else [])
+        bot_trades = sum(1 for p in closed_positions if p.bot_id == bid)
+        bot_wins = sum(
+            1 for p in closed_positions
+            if p.bot_id == bid and (p.profit_usd or 0) > 0
+        )
+        bot_strategies.append({
+            "name": bot.name,
+            "strategy_type": bot.strategy_type,
+            "pairs": pairs,
+            "config": cfg,
+            "trades_in_period": bot_trades,
+            "wins_in_period": bot_wins,
+        })
+    return bot_strategies
+
+
+async def _gather_transfer_data(
+    db: AsyncSession,
+    user_id: int,
+    account_id: Optional[int],
+    period_start: datetime,
+    period_end: datetime,
+) -> Dict[str, Any]:
+    """Query deposits/withdrawals in the period and compute totals."""
     transfer_filters = [
         AccountTransfer.user_id == user_id,
         AccountTransfer.occurred_at >= period_start,
@@ -163,10 +222,32 @@ async def gather_report_data(
     )
     net_deposits_usd = round(total_deposits_usd - total_withdrawals_usd, 2)
 
-    # Native-currency accounting: compute implied net deposits per currency
-    # in native units, then combine. BTC price movements cancel out in
-    # BTC terms, preventing phantom deposits/withdrawals.
+    return {
+        "transfer_records": transfer_records,
+        "total_deposits_usd": total_deposits_usd,
+        "total_withdrawals_usd": total_withdrawals_usd,
+        "net_deposits_usd": net_deposits_usd,
+        "all_transfers": all_transfers,
+    }
+
+
+def _compute_native_accounting(
+    start_value: Dict[str, Any],
+    end_value: Dict[str, Any],
+    period_profit_usd: float,
+    period_profit_btc: float,
+    closed_positions: list,
+    all_transfers: list,
+    net_deposits_from_transfers: float,
+) -> Dict[str, Any]:
+    """Compute implied deposits, market value effect, unrealized PnL change, and adjusted growth.
+
+    Uses native-currency accounting: compute implied net deposits per currency
+    in native units, then combine. BTC price movements cancel out in
+    BTC terms, preventing phantom deposits/withdrawals.
+    """
     account_growth_usd = end_value["usd"] - start_value["usd"]
+    net_deposits_usd = net_deposits_from_transfers
 
     # Realized profit from USD-pair positions only
     realized_profit_usd_pairs = sum(
@@ -239,41 +320,12 @@ async def gather_report_data(
     # True trading-driven account growth = (end - start) - net deposits
     adjusted_growth_usd = round(account_growth_usd - net_deposits_usd, 2)
 
-    # Trading summary for Capital Movements section
-    trade_summary = {
-        "total_trades": total_trades,
-        "winning_trades": winning_trades,
-        "losing_trades": losing_trades,
-        "net_profit_usd": round(period_profit_usd, 2),
-    }
-
     return {
-        "account_value_usd": end_value["usd"],
-        "account_value_btc": end_value["btc"],
-        "period_start_value_usd": start_value["usd"],
-        "period_start_value_btc": start_value["btc"],
-        "period_profit_usd": round(period_profit_usd, 2),
-        "period_profit_btc": round(period_profit_btc, 8),
-        "total_trades": total_trades,
-        "winning_trades": winning_trades,
-        "losing_trades": losing_trades,
-        "win_rate": round(win_rate, 1),
-        "goals": goal_data,
-        "prior_period": None,  # Filled in by caller if prior report exists
-        # Deposit/withdrawal data
         "net_deposits_usd": net_deposits_usd,
-        "total_deposits_usd": round(total_deposits_usd, 2),
-        "total_withdrawals_usd": round(total_withdrawals_usd, 2),
-        "adjusted_account_growth_usd": adjusted_growth_usd,
-        "transfer_count": len(all_transfers),
+        "adjusted_growth_usd": adjusted_growth_usd,
         "deposits_source": deposits_source,
-        "transfer_records": transfer_records,
-        "trade_summary": trade_summary,
-        "bot_strategies": bot_strategies,
         "market_value_effect_usd": market_value_effect_usd,
         "unrealized_pnl_change_usd": unrealized_pnl_change_usd,
-        "start_btc_usd_price": start_btc_price,
-        "end_btc_usd_price": end_btc_price,
     }
 
 

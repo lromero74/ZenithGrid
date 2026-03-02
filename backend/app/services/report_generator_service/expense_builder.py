@@ -422,31 +422,16 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
     return name
 
 
-def _build_expenses_goal_card(
-    g: Dict[str, Any], email_mode: bool = False,
-    schedule_meta: Optional[Dict[str, Any]] = None,
-    brand_color: str = "#3b82f6",
-    inline_images: Optional[List[Tuple[str, bytes]]] = None,
+def _build_expense_coverage_html(
+    g: Dict[str, Any], coverage: Dict[str, Any], items: list,
+    prefix: str, fmt: str, currency: str, period: str, tax_pct: float,
 ) -> str:
-    """Expenses goal card with Coverage + Upcoming tabs."""
-    coverage = g.get("expense_coverage", {})
-    pct = coverage.get("coverage_pct", 0)
-    bar_color = "#10b981" if pct >= 100 else "#f59e0b" if pct >= 50 else "#ef4444"
-    bar_width = min(pct, 100)
-    currency = g.get("target_currency", "USD")
-    fmt = ".8f" if currency == "BTC" else ",.2f"
-    prefix = "" if currency == "BTC" else "$"
-    period = g.get("expense_period", "monthly")
-    tax_pct = g.get("tax_withholding_pct", 0)
-    goal_id = g.get("id", 0)
-
+    """Build the Coverage tab: summary stats, item table, deposit hints, changes."""
     total_exp = coverage.get("total_expenses", 0)
     income_at = coverage.get("income_after_tax", 0)
     covered = coverage.get("covered_count", 0)
     total = coverage.get("total_count", 0)
-    items = coverage.get("items", [])
 
-    # ---- Coverage tab content (existing) ----
     item_rows = ""
     for item in items:
         norm = item.get("normalized_amount", 0)
@@ -473,49 +458,7 @@ def _build_expenses_goal_card(
                     {_build_expense_status_badge(item)}</td>
             </tr>"""
 
-    dep = g.get("deposit_needed")
-    dep_partial = g.get("deposit_partial")
-    dep_next = g.get("deposit_next")
-    dep_line = ""
-    if dep is not None or coverage.get("partial_item_name") or coverage.get("next_uncovered_name"):
-        dep_parts = []
-        partial_name = coverage.get("partial_item_name")
-        next_name = coverage.get("next_uncovered_name")
-
-        if partial_name and dep_partial is not None:
-            dep_parts.append(
-                f"Finish covering <strong>{partial_name}</strong>: "
-                f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
-            )
-            if next_name and dep_next is not None:
-                dep_parts.append(
-                    f"Then cover <strong>{next_name}</strong>: "
-                    f"deposit ~{prefix}{dep_next:{fmt}} {currency} more"
-                )
-        elif next_name and dep_next is not None:
-            dep_parts.append(
-                f"Cover <strong>{next_name}</strong>: "
-                f"deposit ~{prefix}{dep_next:{fmt}} {currency}"
-            )
-
-        if dep is not None:
-            already_mentioned = (dep_partial or 0) + (dep_next or 0)
-            additional = dep - already_mentioned
-            if additional > 0 and already_mentioned > 0:
-                dep_parts.append(
-                    f"Cover all listed expenses: ~{prefix}{dep:{fmt}} {currency} total"
-                    f" (+{prefix}{additional:{fmt}} {currency})"
-                )
-            else:
-                dep_parts.append(
-                    f"Cover all listed expenses: deposit ~{prefix}{dep:{fmt}} {currency} total"
-                )
-
-        dep_line = "".join(
-            f'<p style="color: #94a3b8; font-size: 11px; margin: {4 if i else 8}px 0 0 0;">'
-            f'{part}</p>'
-            for i, part in enumerate(dep_parts)
-        )
+    dep_line = _build_deposit_hints_html(g, coverage, prefix, fmt, currency)
 
     tax_line = ""
     if tax_pct > 0:
@@ -530,7 +473,7 @@ def _build_expenses_goal_card(
         g.get("expense_changes"), prefix, fmt,
     )
 
-    coverage_content = f"""
+    return f"""
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;
                           margin-bottom: 10px;">
                 <tr>
@@ -566,10 +509,66 @@ def _build_expenses_goal_card(
             {changes_html}
             {dep_line}"""
 
-    # ---- Upcoming tab content ----
+
+def _build_deposit_hints_html(
+    g: Dict[str, Any], coverage: Dict[str, Any],
+    prefix: str, fmt: str, currency: str,
+) -> str:
+    """Build deposit-needed hint lines for the coverage tab."""
+    dep = g.get("deposit_needed")
+    dep_partial = g.get("deposit_partial")
+    dep_next = g.get("deposit_next")
+
+    if dep is None and not coverage.get("partial_item_name") and not coverage.get("next_uncovered_name"):
+        return ""
+
+    dep_parts = []
+    partial_name = coverage.get("partial_item_name")
+    next_name = coverage.get("next_uncovered_name")
+
+    if partial_name and dep_partial is not None:
+        dep_parts.append(
+            f"Finish covering <strong>{partial_name}</strong>: "
+            f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
+        )
+        if next_name and dep_next is not None:
+            dep_parts.append(
+                f"Then cover <strong>{next_name}</strong>: "
+                f"deposit ~{prefix}{dep_next:{fmt}} {currency} more"
+            )
+    elif next_name and dep_next is not None:
+        dep_parts.append(
+            f"Cover <strong>{next_name}</strong>: "
+            f"deposit ~{prefix}{dep_next:{fmt}} {currency}"
+        )
+
+    if dep is not None:
+        already_mentioned = (dep_partial or 0) + (dep_next or 0)
+        additional = dep - already_mentioned
+        if additional > 0 and already_mentioned > 0:
+            dep_parts.append(
+                f"Cover all listed expenses: ~{prefix}{dep:{fmt}} {currency} total"
+                f" (+{prefix}{additional:{fmt}} {currency})"
+            )
+        else:
+            dep_parts.append(
+                f"Cover all listed expenses: deposit ~{prefix}{dep:{fmt}} {currency} total"
+            )
+
+    return "".join(
+        f'<p style="color: #94a3b8; font-size: 11px; margin: {4 if i else 8}px 0 0 0;">'
+        f'{part}</p>'
+        for i, part in enumerate(dep_parts)
+    )
+
+
+def _build_expense_upcoming_html(
+    items: list, prefix: str, fmt: str,
+    schedule_meta: Optional[Dict[str, Any]],
+) -> str:
+    """Build the Upcoming tab: upcoming items table + lookahead preview."""
     now = datetime.utcnow()
     upcoming_raw = _get_upcoming_items(items, now)
-    # Re-wrap tuples to include dd for template compatibility
     upcoming_items = [(sort_key, item.get("due_day"), item) for sort_key, item in upcoming_raw]
 
     has_any_due_day = any(
@@ -578,12 +577,12 @@ def _build_expenses_goal_card(
         for item in items
     )
     if not upcoming_items and not has_any_due_day:
-        upcoming_content = (
+        content = (
             '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
             'Set due dates on your expenses to see upcoming bills</p>'
         )
     elif not upcoming_items:
-        upcoming_content = (
+        content = (
             '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
             'No upcoming expenses due this month</p>'
         )
@@ -605,7 +604,7 @@ def _build_expenses_goal_card(
                     <td style="padding: 4px 6px; text-align: center;">
                         {_build_expense_status_badge(item)}</td>
                 </tr>"""
-        upcoming_content = f"""
+        content = f"""
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
@@ -622,35 +621,45 @@ def _build_expenses_goal_card(
                 {upcoming_rows}
             </table>"""
 
-    # ---- Lookahead section (next period preview) ----
+    # Append lookahead preview if applicable
+    content += _build_expense_lookahead_html(items, now, prefix, fmt, schedule_meta)
+    return content
+
+
+def _build_expense_lookahead_html(
+    items: list, now: datetime, prefix: str, fmt: str,
+    schedule_meta: Optional[Dict[str, Any]],
+) -> str:
+    """Build the lookahead (next period preview) section appended to upcoming."""
     meta = schedule_meta or {}
     pw = meta.get("period_window", "full_prior")
     show_lookahead = meta.get("show_expense_lookahead", True)
 
-    is_xtd = pw in ("mtd", "wtd", "qtd", "ytd")
-    if show_lookahead and is_xtd and items:
-        lookahead_raw = _get_lookahead_items(items, now, pw)
-        if lookahead_raw:
-            _period_labels = {
-                "mtd": "Next Month",
-                "wtd": "Next Week",
-                "qtd": "Next Quarter",
-                "ytd": "Next Year",
-            }
-            la_label = _period_labels.get(pw, "Next Period")
+    if not (show_lookahead and pw in ("mtd", "wtd", "qtd", "ytd") and items):
+        return ""
 
-            lookahead_rows = ""
-            for _, la_item in lookahead_raw:
-                bill_amount = la_item.get("amount", 0)
-                due_date = la_item.get("_lookahead_due_date")
-                if due_date:
-                    due_label = (
-                        f"{_MONTH_ABBREVS[due_date.month - 1]} "
-                        f"{_ordinal_day(due_date.day)}"
-                    )
-                else:
-                    due_label = _format_due_label(la_item, now=now)
-                lookahead_rows += f"""
+    lookahead_raw = _get_lookahead_items(items, now, pw)
+    if not lookahead_raw:
+        return ""
+
+    _period_labels = {
+        "mtd": "Next Month", "wtd": "Next Week",
+        "qtd": "Next Quarter", "ytd": "Next Year",
+    }
+    la_label = _period_labels.get(pw, "Next Period")
+
+    lookahead_rows = ""
+    for _, la_item in lookahead_raw:
+        bill_amount = la_item.get("amount", 0)
+        due_date = la_item.get("_lookahead_due_date")
+        if due_date:
+            due_label = (
+                f"{_MONTH_ABBREVS[due_date.month - 1]} "
+                f"{_ordinal_day(due_date.day)}"
+            )
+        else:
+            due_label = _format_due_label(la_item, now=now)
+        lookahead_rows += f"""
                     <tr style="opacity: 0.5;">
                         <td style="padding: 4px 0; color: #94a3b8; font-size: 12px;
                                    font-weight: 600;">{due_label}</td>
@@ -664,7 +673,8 @@ def _build_expenses_goal_card(
                         <td style="padding: 4px 6px; text-align: center;">
                             {_build_expense_status_badge(la_item)}</td>
                     </tr>"""
-            upcoming_content += f"""
+
+    return f"""
                 <div style="margin-top: 12px; padding-top: 8px;
                             border-top: 1px dashed #334155;">
                     <p style="color: #475569; font-size: 10px; font-weight: 600;
@@ -676,24 +686,33 @@ def _build_expenses_goal_card(
                     </table>
                 </div>"""
 
-    # ---- Projection section (parallels income goal projections) ----
-    projection_content = ""
+
+def _build_expense_projection_html(
+    g: Dict[str, Any],
+    prefix: str, fmt: str, currency: str, period: str,
+    total_exp: float, tax_pct: float,
+) -> str:
+    """Build the Projections section: income projections + deposit needed."""
     daily_inc = g.get("current_daily_income", 0)
     proj_linear = g.get("projected_income")
     proj_compound = g.get("projected_income_compound")
+
+    if not (daily_inc or proj_linear or proj_compound):
+        return ""
+
     sample = g.get("sample_trades", 0)
     lookback = g.get("lookback_days_used", 0)
+    dep = g.get("deposit_needed")
     dep_compound = g.get("deposit_needed_compound")
 
-    if daily_inc or proj_linear or proj_compound:
-        after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
-        linear_at = (proj_linear or 0) * after_tax_factor
-        compound_at = (proj_compound or 0) * after_tax_factor
+    after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
+    linear_at = (proj_linear or 0) * after_tax_factor
+    compound_at = (proj_compound or 0) * after_tax_factor
 
-        dep_lin_str = f"{prefix}{dep:{fmt}}" if dep is not None else "N/A"
-        dep_cmp_str = f"{prefix}{dep_compound:{fmt}}" if dep_compound is not None else "N/A"
+    dep_lin_str = f"{prefix}{dep:{fmt}}" if dep is not None else "N/A"
+    dep_cmp_str = f"{prefix}{dep_compound:{fmt}}" if dep_compound is not None else "N/A"
 
-        projection_content = f"""
+    return f"""
             <div style="border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                     <tr>
@@ -734,7 +753,14 @@ def _build_expenses_goal_card(
                     estimates based on historical data and actual results may vary.</p>
             </div>"""
 
-    # ---- Card header (shared) ----
+
+def _build_expense_card_header(
+    g: Dict[str, Any], pct: float, bar_color: str, period: str,
+    goal_id: int, email_mode: bool, brand_color: str, currency: str,
+    inline_images: Optional[List[Tuple[str, bytes]]],
+) -> str:
+    """Build card header: name, progress bar, trend chart, minimap."""
+    bar_width = min(pct, 100)
     track_label = "On Track" if g.get("on_track") else "Behind"
     track_color = "#10b981" if g.get("on_track") else "#f59e0b"
 
@@ -762,8 +788,6 @@ def _build_expenses_goal_card(
                 </div>
             </div>"""
 
-    # ---- Trend chart (SVG for web, PNG for email) ----
-    trend_html = ""
     trend_data = g.get("trend_data")
     if trend_data:
         from app.services.report_generator_service.html_builder import (
@@ -771,13 +795,11 @@ def _build_expenses_goal_card(
             _render_trend_chart_png,
         )
         if email_mode and inline_images is not None:
-            png_bytes = _render_trend_chart_png(
-                trend_data, brand_color, currency,
-            )
+            png_bytes = _render_trend_chart_png(trend_data, brand_color, currency)
             if png_bytes:
                 cid = f"goal-chart-{goal_id}"
                 inline_images.append((cid, png_bytes))
-                trend_html = (
+                header_html += (
                     '<div style="padding: 0 12px 10px 12px;">'
                     f'<img src="cid:{cid}" width="660"'
                     ' style="width:100%;height:auto;display:block;'
@@ -785,18 +807,14 @@ def _build_expenses_goal_card(
                     '</div>'
                 )
         else:
-            svg_html = _build_trend_chart_svg(
-                trend_data, brand_color, currency,
-            )
-            trend_html = (
+            svg_html = _build_trend_chart_svg(trend_data, brand_color, currency)
+            header_html += (
                 f'<div style="padding: 0 12px 10px 12px;">'
                 f'{svg_html}</div>'
             )
 
-    # Minimap: show full timeline overview when chart doesn't reach target
-    minimap_html = ""
     chart_settings = g.get("chart_settings", {})
-    if chart_settings.get("show_minimap") and trend_html:
+    if chart_settings.get("show_minimap") and trend_data:
         try:
             from app.services.report_generator_service.html_builder import (
                 _build_minimap_svg,
@@ -807,17 +825,48 @@ def _build_expenses_goal_card(
                 target_date=chart_settings["target_date"],
                 brand_color=brand_color,
                 currency=currency,
-                )
+            )
+            header_html += minimap_html
         except (KeyError, ValueError):
             pass
 
-    if trend_html:
-        header_html += trend_html
-    if minimap_html:
-        header_html += minimap_html
+    return header_html
+
+
+def _build_expenses_goal_card(
+    g: Dict[str, Any], email_mode: bool = False,
+    schedule_meta: Optional[Dict[str, Any]] = None,
+    brand_color: str = "#3b82f6",
+    inline_images: Optional[List[Tuple[str, bytes]]] = None,
+) -> str:
+    """Expenses goal card with Coverage + Upcoming tabs."""
+    coverage = g.get("expense_coverage", {})
+    pct = coverage.get("coverage_pct", 0)
+    bar_color = "#10b981" if pct >= 100 else "#f59e0b" if pct >= 50 else "#ef4444"
+    currency = g.get("target_currency", "USD")
+    fmt = ".8f" if currency == "BTC" else ",.2f"
+    prefix = "" if currency == "BTC" else "$"
+    period = g.get("expense_period", "monthly")
+    tax_pct = g.get("tax_withholding_pct", 0)
+    goal_id = g.get("id", 0)
+    items = coverage.get("items", [])
+    total_exp = coverage.get("total_expenses", 0)
+
+    coverage_content = _build_expense_coverage_html(
+        g, coverage, items, prefix, fmt, currency, period, tax_pct,
+    )
+    upcoming_content = _build_expense_upcoming_html(
+        items, prefix, fmt, schedule_meta,
+    )
+    projection_content = _build_expense_projection_html(
+        g, prefix, fmt, currency, period, total_exp, tax_pct,
+    )
+    header_html = _build_expense_card_header(
+        g, pct, bar_color, period, goal_id, email_mode,
+        brand_color, currency, inline_images,
+    )
 
     if email_mode:
-        # ---- Email: stacked sections (no CSS tabs) ----
         section_hdr = (
             'style="color: #3b82f6; font-size: 12px; font-weight: 600;'
             ' padding: 8px 12px; margin: 0; border-bottom: 1px solid #334155;'
@@ -839,7 +888,17 @@ def _build_expenses_goal_card(
             f'</div>'
         )
 
-    # ---- In-app: CSS-only tabs ----
+    return _build_expense_card_css_tabs(
+        header_html, coverage_content, upcoming_content,
+        projection_content, goal_id,
+    )
+
+
+def _build_expense_card_css_tabs(
+    header_html: str, coverage_content: str, upcoming_content: str,
+    projection_content: str, goal_id: int,
+) -> str:
+    """Assemble the in-app CSS-only tabbed card layout."""
     tab_name = f"exp-tab-{goal_id}"
     cov_id = f"exp-tab-coverage-{goal_id}"
     upc_id = f"exp-tab-upcoming-{goal_id}"

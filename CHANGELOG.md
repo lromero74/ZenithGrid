@@ -5,6 +5,25 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.13] - 2026-03-02
+
+### Changed
+- **Decomposed report builder god functions**: Broke down 4 oversized report-building functions into focused orchestrators with helpers
+  - `_build_expenses_goal_card()`: 484→~40 line orchestrator + 7 helpers
+  - `_build_pdf_expense_goal()`: 408→~60 line orchestrator + 4 helpers
+  - `_build_summary_prompt()`: 307→~100 line orchestrator + 3 helpers
+  - `gather_report_data()`: 254→~88 line orchestrator + 4 helpers
+- **Decomposed complex control flow functions**: Extracted focused methods from high-complexity functions
+  - `shutdown_event()`: Replaced 10 cancel blocks + 6 monitor stops with loop + `_cancel_task()` helper
+  - `_evaluate_single_condition()`: Extracted `_evaluate_crossing()` and `_evaluate_direction_change()` dispatch methods
+  - `get_cex_portfolio()`: Extracted 4 helpers for holdings, PnL, balance breakdown, and closed PnL
+  - `run_portfolio_conversion()`: Extracted `_sell_currency_with_fallback()` and `_convert_intermediate_currency()`
+- **Extracted BudgetSection component**: Split out the 247-line budget configuration section from BotFormModal (1362→1115 lines)
+
+### Fixed
+- **Paper trading partial-sell bug**: Fixed stale balance reads in paper trading that caused positions to sell less than they bought, turning profitable trades into losses. The root cause was SQLite WAL transaction snapshot isolation — `get_balance()` now forces a fresh DB read with `expire_all()` before returning balances
+- **Retroactively corrected 4 affected paper deals**: Fixed historical P&L data for deals incorrectly recorded as losses due to the stale balance bug
+
 ## [v2.76.12] - 2026-03-02
 
 ### Changed

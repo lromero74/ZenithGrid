@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -594,6 +595,17 @@ async def startup_event():
     print("🚀 ========================================")
 
 
+async def _cancel_task(task: Optional[asyncio.Task]) -> None:
+    """Cancel a background task and await its completion."""
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
@@ -605,114 +617,31 @@ async def shutdown_event():
     else:
         logger.warning(f"⚠️ {shutdown_result['message']}")
 
+    # Stop monitors that have their own .stop() method
     logger.info("🛑 Stopping monitors...")
-    if price_monitor:
-        await price_monitor.stop()
-
-    if content_refresh_service:
-        await content_refresh_service.stop()
-
-    if domain_blacklist_service:
-        await domain_blacklist_service.stop()
-
-    if debt_ceiling_monitor:
-        await debt_ceiling_monitor.stop()
-
-    if auto_buy_monitor:
-        await auto_buy_monitor.stop()
-
-    if perps_monitor:
-        await perps_monitor.stop()
+    for monitor in [
+        price_monitor, content_refresh_service, domain_blacklist_service,
+        debt_ceiling_monitor, auto_buy_monitor, perps_monitor,
+    ]:
+        if monitor:
+            await monitor.stop()
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
 
-    if limit_order_monitor_task:
-        limit_order_monitor_task.cancel()
-        try:
-            await limit_order_monitor_task
-        except asyncio.CancelledError:
-            pass
-
-    if order_reconciliation_monitor_task:
-        order_reconciliation_monitor_task.cancel()
-        try:
-            await order_reconciliation_monitor_task
-        except asyncio.CancelledError:
-            pass
-
-    if missing_order_detector_task:
-        missing_order_detector_task.cancel()
-        try:
-            await missing_order_detector_task
-        except asyncio.CancelledError:
-            pass
+    # Cancel all background asyncio tasks
+    for task in [
+        limit_order_monitor_task, order_reconciliation_monitor_task,
+        missing_order_detector_task, decision_log_cleanup_task,
+        failed_condition_cleanup_task, failed_order_cleanup_task,
+        account_snapshot_task, revoked_token_cleanup_task,
+        report_scheduler_task, report_cleanup_task,
+        session_cleanup_task, transfer_sync_task,
+    ]:
+        await _cancel_task(task)
 
     if trading_pair_monitor:
         await trading_pair_monitor.stop()
-
-    if decision_log_cleanup_task:
-        decision_log_cleanup_task.cancel()
-        try:
-            await decision_log_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if failed_condition_cleanup_task:
-        failed_condition_cleanup_task.cancel()
-        try:
-            await failed_condition_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if failed_order_cleanup_task:
-        failed_order_cleanup_task.cancel()
-        try:
-            await failed_order_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if account_snapshot_task:
-        account_snapshot_task.cancel()
-        try:
-            await account_snapshot_task
-        except asyncio.CancelledError:
-            pass
-
-    if revoked_token_cleanup_task:
-        revoked_token_cleanup_task.cancel()
-        try:
-            await revoked_token_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if report_scheduler_task:
-        report_scheduler_task.cancel()
-        try:
-            await report_scheduler_task
-        except asyncio.CancelledError:
-            pass
-
-    if report_cleanup_task:
-        report_cleanup_task.cancel()
-        try:
-            await report_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if session_cleanup_task:
-        session_cleanup_task.cancel()
-        try:
-            await session_cleanup_task
-        except asyncio.CancelledError:
-            pass
-
-    if transfer_sync_task:
-        transfer_sync_task.cancel()
-        try:
-            await transfer_sync_task
-        except asyncio.CancelledError:
-            pass
 
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache

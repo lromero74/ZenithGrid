@@ -90,6 +90,77 @@ def cleanup_old_tasks():
         logger.info(f"Cleaned up old conversion task: {task_id}")
 
 
+async def _sell_currency_with_fallback(
+    exchange, currency: str, available: float,
+    target_currency: str,
+) -> str:
+    """Sell a currency to target, falling back to intermediate pair if direct fails.
+
+    Returns:
+        "direct" if sold directly, "intermediate" if sold via fallback pair.
+
+    Raises:
+        Exception if both direct and fallback fail.
+    """
+    if target_currency == "BTC":
+        primary_pair = f"{currency}-BTC"
+        fallback_pair = f"{currency}-USD"
+    else:
+        primary_pair = f"{currency}-USD"
+        fallback_pair = f"{currency}-BTC"
+
+    try:
+        await exchange.create_market_order(
+            product_id=primary_pair, side="SELL", size=str(available),
+        )
+        await asyncio.sleep(0.2)
+        return "direct"
+    except Exception as direct_error:
+        if "403" in str(direct_error) or "400" in str(direct_error):
+            await exchange.create_market_order(
+                product_id=fallback_pair, side="SELL", size=str(available),
+            )
+            await asyncio.sleep(0.2)
+            return "intermediate"
+        raise
+
+
+async def _convert_intermediate_currency(
+    exchange, from_currency: str, to_currency: str,
+    errors: List[str],
+) -> None:
+    """Convert accumulated intermediate currency to the final target."""
+    await asyncio.sleep(1.0)
+    try:
+        accounts = await exchange.get_accounts(force_fresh=True)
+        account = next(
+            (acc for acc in accounts if acc.get("currency") == from_currency),
+            None,
+        )
+        if not account:
+            return
+
+        available = float(
+            account.get("available_balance", {}).get("value", "0")
+        )
+        min_amounts = {"USD": 1.0, "BTC": 0.00001}
+        if available <= min_amounts.get(from_currency, 0):
+            return
+
+        if from_currency == "USD":
+            spend_amount = round(available * 0.99, 2)
+            await exchange.create_market_order(
+                product_id="BTC-USD", side="BUY", funds=str(spend_amount),
+            )
+        else:
+            await exchange.create_market_order(
+                product_id="BTC-USD", side="SELL", size=str(available),
+            )
+    except Exception as e:
+        logger.error(f"Failed to convert {from_currency} to {to_currency}: {e}")
+        errors.append(f"{from_currency}-to-{to_currency} conversion: {str(e)}")
+
+
 async def run_portfolio_conversion(
     task_id: str,
     account_id: int,
@@ -156,8 +227,7 @@ async def run_portfolio_conversion(
             sold_count = 0
             failed_count = 0
             errors = []
-            converted_via_usd = []
-            converted_via_btc = []
+            used_intermediate = {"USD": [], "BTC": []}
 
             logger.info(
                 f"Task {task_id}: Starting portfolio conversion: "
@@ -169,49 +239,16 @@ async def run_portfolio_conversion(
                 available = item["available"]
 
                 try:
-                    if target_currency == "BTC":
-                        product_id = f"{currency}-BTC"
-                        try:
-                            await exchange.create_market_order(
-                                product_id=product_id, side="SELL",
-                                size=str(available),
-                            )
-                            sold_count += 1
-                            await asyncio.sleep(0.2)
-                        except Exception as direct_error:
-                            if "403" in str(direct_error) or "400" in str(direct_error):
-                                usd_product_id = f"{currency}-USD"
-                                await exchange.create_market_order(
-                                    product_id=usd_product_id, side="SELL",
-                                    size=str(available),
-                                )
-                                converted_via_usd.append(currency)
-                                sold_count += 1
-                                await asyncio.sleep(0.2)
-                            else:
-                                raise direct_error
-                    else:
-                        product_id = f"{currency}-USD"
-                        try:
-                            await exchange.create_market_order(
-                                product_id=product_id, side="SELL",
-                                size=str(available),
-                            )
-                            sold_count += 1
-                            await asyncio.sleep(0.2)
-                        except Exception as direct_error:
-                            if "403" in str(direct_error) or "400" in str(direct_error):
-                                btc_product_id = f"{currency}-BTC"
-                                await exchange.create_market_order(
-                                    product_id=btc_product_id, side="SELL",
-                                    size=str(available),
-                                )
-                                converted_via_btc.append(currency)
-                                sold_count += 1
-                                await asyncio.sleep(0.2)
-                            else:
-                                raise direct_error
-
+                    result = await _sell_currency_with_fallback(
+                        exchange, currency, available, target_currency,
+                    )
+                    sold_count += 1
+                    if result == "intermediate":
+                        # Track which intermediate currency was used
+                        if target_currency == "BTC":
+                            used_intermediate["USD"].append(currency)
+                        else:
+                            used_intermediate["BTC"].append(currency)
                 except Exception as e:
                     failed_count += 1
                     errors.append(f"{currency} ({available:.8f}): {str(e)}")
@@ -223,49 +260,14 @@ async def run_portfolio_conversion(
                     message=f"Processing {idx}/{total_to_process} currencies..."
                 )
 
-            # Convert intermediate currency
-            if target_currency == "BTC" and converted_via_usd:
+            # Convert intermediate currency to final target
+            if target_currency == "BTC" and used_intermediate["USD"]:
                 update_task_progress(task_id, message="Converting USD to BTC...")
-                await asyncio.sleep(1.0)
-                try:
-                    accounts = await exchange.get_accounts(force_fresh=True)
-                    usd_account = next(
-                        (acc for acc in accounts if acc.get("currency") == "USD"), None
-                    )
-                    if usd_account:
-                        usd_available = float(
-                            usd_account.get("available_balance", {}).get("value", "0")
-                        )
-                        if usd_available > 1.0:
-                            spend_amount = round(usd_available * 0.99, 2)
-                            await exchange.create_market_order(
-                                product_id="BTC-USD", side="BUY",
-                                funds=str(spend_amount),
-                            )
-                except Exception as e:
-                    logger.error(f"Failed to convert USD to BTC: {e}")
-                    errors.append(f"USD-to-BTC conversion: {str(e)}")
+                await _convert_intermediate_currency(exchange, "USD", "BTC", errors)
 
-            if target_currency == "USD" and converted_via_btc:
+            if target_currency == "USD" and used_intermediate["BTC"]:
                 update_task_progress(task_id, message="Converting BTC to USD...")
-                await asyncio.sleep(1.0)
-                try:
-                    accounts = await exchange.get_accounts(force_fresh=True)
-                    btc_account = next(
-                        (acc for acc in accounts if acc.get("currency") == "BTC"), None
-                    )
-                    if btc_account:
-                        btc_available = float(
-                            btc_account.get("available_balance", {}).get("value", "0")
-                        )
-                        if btc_available > 0.00001:
-                            await exchange.create_market_order(
-                                product_id="BTC-USD", side="SELL",
-                                size=str(btc_available),
-                            )
-                except Exception as e:
-                    logger.error(f"Failed to convert BTC to USD: {e}")
-                    errors.append(f"BTC-to-USD conversion: {str(e)}")
+                await _convert_intermediate_currency(exchange, "BTC", "USD", errors)
 
             success_rate = (
                 f"{int((sold_count / total_to_process) * 100)}%"

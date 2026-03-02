@@ -975,3 +975,57 @@ class TestConcurrentBalanceSafety:
         assert client.balances["BTC"] == pytest.approx(0.5)
         assert client.balances["ETH"] == pytest.approx(5.0)
         assert client.balances["UNI"] == pytest.approx(100.0)
+
+    @pytest.mark.asyncio
+    async def test_get_balance_reloads_from_db(self):
+        """get_balance() must reload from DB to avoid stale snapshots.
+
+        Regression test for the partial-sell bug: when two bots share a
+        paper account, bot B's session could hold a stale transaction
+        snapshot from SQLite WAL mode.  get_balance() now acquires the
+        per-account lock and calls _reload_balances() to force a fresh
+        DB read, ensuring the sell executor sees the true available amount.
+        """
+        ACCOUNT_ID = 42
+        initial = {"BTC": 1.0, "USD": 500.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+
+        # Simulate another bot having modified the balance in the DB
+        modified = {"BTC": 0.3, "USD": 800.0}
+        db_account = MagicMock()
+        db_account.paper_balances = json.dumps(modified)
+
+        db = _make_mock_db(account=db_account)
+
+        client = PaperTradingClient(account, db, real_client=None)
+
+        # In-memory snapshot still shows stale value
+        assert client.balances["BTC"] == 1.0
+
+        # get_balance() should reload from DB and return the fresh value
+        result = await client.get_balance("BTC")
+        assert result["available"] == "0.3"
+        assert result["currency"] == "BTC"
+
+        # expire_all should have been called to bust the session cache
+        db.expire_all.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_get_accounts_force_fresh_reloads(self):
+        """get_accounts(force_fresh=True) must reload balances from DB."""
+        ACCOUNT_ID = 43
+        initial = {"ETH": 10.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+
+        modified = {"ETH": 7.5, "LINK": 50.0}
+        db_account = MagicMock()
+        db_account.paper_balances = json.dumps(modified)
+
+        db = _make_mock_db(account=db_account)
+        client = PaperTradingClient(account, db, real_client=None)
+
+        accounts = await client.get_accounts(force_fresh=True)
+        # Should see the refreshed ETH balance
+        eth_acc = next(a for a in accounts if a["currency"] == "ETH")
+        assert float(eth_acc["available_balance"]["value"]) == pytest.approx(7.5)
+        db.expire_all.assert_called()
