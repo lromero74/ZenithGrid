@@ -5,10 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.82.3] - 2026-03-02
+## [v2.82.4] - 2026-03-02
+
+### Changed
+- **Lode Runner guard AI**: Guards now use BFS pathfinding to navigate across platforms, ladders, and bars to reach the player — no more standing directly above without pursuing
+- **Lode Runner guard speed**: Guards are slower (55 px/s vs player's 100 px/s) for better gameplay balance
+- **Lode Runner escape ladder**: Only a single hidden ladder column at the escape route instead of the entire top row
 
 ### Fixed
-- **Lode Runner player brick trap**: Player now gets trapped and dies when caught in a refilling brick hole — matches classic Lode Runner behavior
+- **Lode Runner player in holes**: Player passes through open brick holes freely and only dies if caught when the brick fully regenerates — not trapped like enemies
+- **Lode Runner guard gold drop**: Guards now drop carried gold above the hole immediately when trapped, not only when killed by brick regeneration
 
 ## [v2.82.2] - 2026-03-02
 

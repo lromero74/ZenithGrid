@@ -23,7 +23,7 @@ export { TOTAL_LEVELS } from './lodeRunnerLevels'
 const PLAYER_SPEED = 100
 
 /** Guard movement speed in pixels/second */
-const GUARD_SPEED = 70
+const GUARD_SPEED = 55
 
 /** Gravity fall speed in pixels/second */
 const FALL_SPEED = 160
@@ -94,7 +94,6 @@ export interface Entity {
 export interface Player extends Entity {
   alive: boolean
   digCooldown: number
-  trapped: boolean
 }
 
 export type GuardState = 'chasing' | 'trapped' | 'climbing_out' | 'dead'
@@ -290,7 +289,6 @@ export function loadLevel(levelNum: number): GameState {
     moving: false,
     alive: true,
     digCooldown: 0,
-    trapped: false,
   }
 
   const guards: Guard[] = enemies.map(e => {
@@ -338,15 +336,6 @@ export function loadLevel(levelNum: number): GameState {
 function movePlayer(state: GameState, input: Input, dt: number): GameState {
   let p = { ...state.player }
   if (!p.alive) return state
-  if (p.trapped) return state
-
-  // Check if player walked/fell into a dug hole (horizontal entry)
-  if (!p.falling && isDugOpen(state, p.col, p.row) &&
-      isSolid({ ...state, dugBricks: [] }, p.col, p.row)) {
-    p.trapped = true
-    p.animState = 'standing'
-    return { ...state, player: p }
-  }
 
   // Reduce dig cooldown
   p.digCooldown = Math.max(0, p.digCooldown - dt)
@@ -365,14 +354,6 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
     p.y += FALL_SPEED * dt
     const { row } = posToCell(p.x, p.y)
     p.row = row
-    // Check if fallen into a dug hole — player gets trapped and dies when brick fills
-    if (isDugOpen(state, p.col, p.row) &&
-        isSolid({ ...state, dugBricks: [] }, p.col, p.row)) {
-      const snapped = snapToCell(p as Entity) as Entity
-      p = { ...p, x: snapped.x, y: snapped.y, falling: false, trapped: true }
-      p.animState = 'standing'
-      return { ...state, player: p }
-    }
     if (isSupported(state, p.col, p.row)) {
       p.falling = false
       const snapped = snapToCell(p as Entity) as Entity
@@ -522,8 +503,112 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
 }
 
 // ---------------------------------------------------------------------------
-// Guard AI
+// Guard AI — BFS pathfinding
 // ---------------------------------------------------------------------------
+
+/** Simulate gravity: where would an entity land if placed at (col, row)? */
+function landingRow(state: GameState, col: number, row: number): number {
+  let r = row
+  while (r < ROWS - 1 && !isSupported(state, col, r)) {
+    r++
+  }
+  return r
+}
+
+/** Get valid moves from a cell, respecting ladders, bars, gravity, and platforms. */
+function getNeighbors(
+  state: GameState, col: number, row: number,
+): Array<{ col: number; row: number }> {
+  const moves: Array<{ col: number; row: number }> = []
+  const sup = isSupported(state, col, row)
+  const onLadder = isLadder(state, col, row)
+  const onBar = isBar(state, col, row)
+
+  // Horizontal movement — requires support (on ground, ladder, or bar)
+  if (sup || onLadder || onBar) {
+    for (const dc of [-1, 1]) {
+      const nc = col + dc
+      if (inBounds(nc, row) && isPassable(state, nc, row)) {
+        // If target is supported, step there. Otherwise simulate fall.
+        if (isSupported(state, nc, row)) {
+          moves.push({ col: nc, row })
+        } else {
+          // Step off edge — land where gravity takes us
+          const lr = landingRow(state, nc, row)
+          if (lr < ROWS) moves.push({ col: nc, row: lr })
+        }
+      }
+    }
+  }
+
+  // Climb up — must be on a ladder (current tile)
+  if (onLadder && inBounds(col, row - 1) && isPassable(state, col, row - 1)) {
+    moves.push({ col, row: row - 1 })
+  }
+
+  // Climb down — target tile must be ladder, or current tile is ladder
+  if (inBounds(col, row + 1) && isPassable(state, col, row + 1)) {
+    if (onLadder || isLadder(state, col, row + 1)) {
+      moves.push({ col, row: row + 1 })
+    }
+  }
+
+  return moves
+}
+
+/** BFS from guard position to player position. Returns the first step, or null if no path. */
+function bfsNextStep(
+  state: GameState, fromCol: number, fromRow: number, toCol: number, toRow: number,
+): { col: number; row: number } | null {
+  if (fromCol === toCol && fromRow === toRow) return null
+
+  const key = (c: number, r: number) => r * COLS + c
+  const visited = new Set<number>()
+  // Each entry: [col, row, firstStepCol, firstStepRow]
+  const queue: Array<[number, number, number, number]> = []
+
+  visited.add(key(fromCol, fromRow))
+
+  // Seed BFS with all valid first moves
+  for (const n of getNeighbors(state, fromCol, fromRow)) {
+    const k = key(n.col, n.row)
+    if (!visited.has(k)) {
+      visited.add(k)
+      queue.push([n.col, n.row, n.col, n.row])
+    }
+  }
+
+  let head = 0
+  while (head < queue.length) {
+    const [col, row, firstCol, firstRow] = queue[head++]
+
+    if (col === toCol && row === toRow) {
+      return { col: firstCol, row: firstRow }
+    }
+
+    // Limit BFS depth to keep performance reasonable (28*16 = 448 cells max)
+    if (head > 500) break
+
+    for (const n of getNeighbors(state, col, row)) {
+      const k = key(n.col, n.row)
+      if (!visited.has(k)) {
+        visited.add(k)
+        queue.push([n.col, n.row, firstCol, firstRow])
+      }
+    }
+  }
+
+  // No path found — fall back to horizontal chase
+  if (toCol < fromCol && inBounds(fromCol - 1, fromRow) &&
+      isPassable(state, fromCol - 1, fromRow) && isSupported(state, fromCol, fromRow)) {
+    return { col: fromCol - 1, row: fromRow }
+  }
+  if (toCol > fromCol && inBounds(fromCol + 1, fromRow) &&
+      isPassable(state, fromCol + 1, fromRow) && isSupported(state, fromCol, fromRow)) {
+    return { col: fromCol + 1, row: fromRow }
+  }
+  return null
+}
 
 function updateGuards(state: GameState, dt: number): GameState {
   const guards = state.guards.map(g => {
@@ -650,43 +735,13 @@ function updateGuards(state: GameState, dt: number): GameState {
     let bestCol = guard.col
     let bestRow = guard.row
 
-    // Simple chase heuristic
-    const onLadder = isLadder(state, guard.col, guard.row)
-
-    if (onLadder && guard.row !== p.row) {
-      // On ladder, move toward player's row
-      if (p.row < guard.row && isPassable(state, guard.col, guard.row - 1)) {
-        bestRow = guard.row - 1
-      } else if (p.row > guard.row) {
-        if (isLadder(state, guard.col, guard.row + 1) || isPassable(state, guard.col, guard.row + 1)) {
-          bestRow = guard.row + 1
-        }
-      }
-    } else {
-      // Move horizontally toward player
-      if (p.col < guard.col) {
-        if (isPassable(state, guard.col - 1, guard.row) && supported) {
-          bestCol = guard.col - 1
-          guard.facingLeft = true
-        }
-      } else if (p.col > guard.col) {
-        if (isPassable(state, guard.col + 1, guard.row) && supported) {
-          bestCol = guard.col + 1
-          guard.facingLeft = false
-        }
-      }
-
-      // If can't move horizontally or already on same col, try ladders
-      if (bestCol === guard.col && bestRow === guard.row) {
-        if (p.row < guard.row && isLadder(state, guard.col, guard.row) &&
-            isPassable(state, guard.col, guard.row - 1)) {
-          bestRow = guard.row - 1
-        } else if (p.row > guard.row &&
-                   (isLadder(state, guard.col, guard.row) || isLadder(state, guard.col, guard.row + 1)) &&
-                   isPassable(state, guard.col, guard.row + 1)) {
-          bestRow = guard.row + 1
-        }
-      }
+    // BFS pathfinding — find shortest path to player
+    const target = bfsNextStep(state, guard.col, guard.row, p.col, p.row)
+    if (target) {
+      bestCol = target.col
+      bestRow = target.row
+      if (bestCol < guard.col) guard.facingLeft = true
+      else if (bestCol > guard.col) guard.facingLeft = false
     }
 
     guard.moving = bestCol !== guard.col || bestRow !== guard.row
@@ -720,7 +775,27 @@ function updateGuards(state: GameState, dt: number): GameState {
     return guard
   })
 
-  return { ...state, guards }
+  // Drop gold when a guard becomes newly trapped
+  let newState = { ...state, guards }
+  for (let i = 0; i < guards.length; i++) {
+    const prev = state.guards[i]
+    const curr = guards[i]
+    if (prev && curr && prev.state !== 'trapped' && curr.state === 'trapped' && curr.carriesGold) {
+      // Drop gold above the hole
+      const goldRow = Math.max(0, curr.row - 1)
+      const newGoldMap = newState.goldMap.map(r => [...r])
+      newGoldMap[goldRow][curr.col] = true
+      guards[i] = { ...curr, carriesGold: false }
+      newState = {
+        ...newState,
+        goldMap: newGoldMap,
+        goldRemaining: newState.goldRemaining + 1,
+        guards,
+      }
+    }
+  }
+
+  return newState
 }
 
 // ---------------------------------------------------------------------------
