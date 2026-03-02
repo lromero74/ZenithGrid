@@ -334,6 +334,92 @@ class TestListBots:
         result = await list_bots(db=db_session, current_user=user2)
         assert len(result) == 0
 
+    @pytest.mark.asyncio
+    async def test_list_bots_paper_only_user_gets_stats(self, db_session):
+        """Happy path: paper-only user (no real CEX) gets PnL/win rate stats."""
+        from app.bot_routers.bot_crud_router import list_bots
+        from app.exceptions import ExchangeUnavailableError
+
+        user = _make_user(db_session, email="demo_paper@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        # Create paper trading account
+        paper_account = Account(
+            user_id=user.id, name="Paper Account", type="cex",
+            is_active=True, is_paper_trading=True,
+        )
+        db_session.add(paper_account)
+        await db_session.flush()
+
+        bot = await _make_bot(db_session, user, name="PaperBot")
+        bot.account_id = paper_account.id
+        await db_session.flush()
+
+        # Add closed positions with profit data
+        pos1 = Position(
+            bot_id=bot.id, user_id=user.id, product_id="ETH-BTC",
+            account_id=paper_account.id, status="closed",
+            profit_quote=0.02, profit_usd=2000.0,
+            initial_quote_balance=1.0, max_quote_allowed=0.25,
+        )
+        pos2 = Position(
+            bot_id=bot.id, user_id=user.id, product_id="ETH-BTC",
+            account_id=paper_account.id, status="closed",
+            profit_quote=-0.005, profit_usd=-500.0,
+            initial_quote_balance=1.0, max_quote_allowed=0.25,
+        )
+        db_session.add_all([pos1, pos2])
+        await db_session.flush()
+
+        # Mock: get_coinbase_from_db raises (no real CEX account)
+        # Mock: get_exchange_client_for_account returns a mock paper client
+        mock_paper_client = AsyncMock()
+        mock_paper_client.calculate_aggregate_btc_value = AsyncMock(return_value=0.5)
+        mock_paper_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
+        mock_paper_client.get_current_price = AsyncMock(return_value=0.04)
+
+        with patch(
+            "app.bot_routers.bot_crud_router.get_coinbase_from_db",
+            new_callable=AsyncMock, side_effect=ExchangeUnavailableError("No CEX")
+        ), patch(
+            "app.bot_routers.bot_crud_router.get_exchange_client_for_account",
+            new_callable=AsyncMock, return_value=mock_paper_client
+        ):
+            result = await list_bots(db=db_session, current_user=user)
+
+        assert len(result) == 1
+        bot_resp = result[0]
+        # Stats should be populated, not zero
+        assert bot_resp.win_rate == pytest.approx(50.0)
+        assert bot_resp.total_pnl_btc == pytest.approx(0.015)
+        assert bot_resp.closed_positions_count == 2
+
+    @pytest.mark.asyncio
+    async def test_list_bots_no_accounts_at_all_returns_basic_response(self, db_session):
+        """Edge case: user with no accounts at all still gets position counts."""
+        from app.bot_routers.bot_crud_router import list_bots
+        from app.exceptions import ExchangeUnavailableError
+
+        user = _make_user(db_session, email="no_accounts@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        await _make_bot(db_session, user, name="OrphanBot")
+
+        with patch(
+            "app.bot_routers.bot_crud_router.get_coinbase_from_db",
+            new_callable=AsyncMock, side_effect=ExchangeUnavailableError("No CEX")
+        ), patch(
+            "app.bot_routers.bot_crud_router.get_exchange_client_for_account",
+            new_callable=AsyncMock, return_value=None
+        ):
+            result = await list_bots(db=db_session, current_user=user)
+
+        assert len(result) == 1
+        assert result[0].open_positions_count == 0
+        assert result[0].total_positions_count == 0
+
 
 # =============================================================================
 # PUT /bots/{bot_id}
