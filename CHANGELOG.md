@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.14] - 2026-03-02
+
+### Fixed
+- **Paper trading bot stats now display**: Bots list page now shows win rate, PnL, and projections for paper-only accounts (demo users). Previously these fields were blank because the stats calculation required a real CEX account
+- **Scheduled report emails now deliver**: Fixed missing SES sender email configuration that caused all scheduled report emails to fail silently since the last server migration
+- **Cleaned up stale recipient data**: Removed obsolete `level` field from report schedule recipients, replaced with correct `color_scheme` field
+
 ## [v2.76.13] - 2026-03-02
 
 ### Changed

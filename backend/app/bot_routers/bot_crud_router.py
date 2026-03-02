@@ -18,11 +18,23 @@ from app.database import get_db
 from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import get_coinbase_from_db
 from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _get_paper_account(db: AsyncSession, user_id: int):
+    """Get the user's first active paper trading account, if any."""
+    query = select(Account).where(
+        Account.user_id == user_id,
+        Account.is_active.is_(True),
+        Account.is_paper_trading.is_(True),
+    ).limit(1)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
 
 
 # Strategy Endpoints
@@ -162,13 +174,20 @@ async def list_bots(
     result = await db.execute(query)
     bots = result.scalars().all()
 
-    # Initialize coinbase client for budget calculations (from database)
+    # Initialize exchange client for budget calculations (from database)
     try:
         coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
     except ExchangeUnavailableError:
         coinbase = None
+
     if not coinbase:
-        # Return bots without budget calculations if no CEX account configured
+        # Fall back to paper trading account for price data + stats
+        paper_account = await _get_paper_account(db, current_user.id)
+        if paper_account:
+            coinbase = await get_exchange_client_for_account(db, paper_account.id)
+
+    if not coinbase:
+        # No accounts at all — return bots with position counts only
         bot_responses = []
         for bot in bots:
             open_count_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
