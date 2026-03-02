@@ -281,7 +281,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               <span className="w-10 sm:w-14 flex-shrink-0">Currency</span>
               <span className="flex-1 min-w-0 text-right" title="Total assigned budget (sum of max budget per deal)">Budget</span>
               <span className="flex-1 min-w-0 text-right" title="Locked in open positions">In Pos.</span>
-              <span className="hidden sm:flex sm:flex-1 sm:min-w-0 text-right" title="Locked in pending orders (grids)">In Grids</span>
+              <span className="hidden sm:flex sm:flex-1 sm:min-w-0 text-right justify-end" title="Locked in pending orders (grids)">In Grids</span>
               <span className="flex-1 min-w-0 text-right" title="Available for new bots">Available</span>
             </div>
             {/* BTC - Always show */}

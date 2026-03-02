@@ -38,6 +38,15 @@ const Solitaire = lazy(() => import('./games/components/games/solitaire/Solitair
 const Backgammon = lazy(() => import('./games/components/games/backgammon/Backgammon'))
 const Chess = lazy(() => import('./games/components/games/chess/Chess'))
 
+// Phase 6: Card Games
+const Blackjack = lazy(() => import('./games/components/games/blackjack/Blackjack'))
+const VideoPoker = lazy(() => import('./games/components/games/video-poker/VideoPoker'))
+const Hearts = lazy(() => import('./games/components/games/hearts/Hearts'))
+const Spades = lazy(() => import('./games/components/games/spades/Spades'))
+const CrazyEights = lazy(() => import('./games/components/games/crazy-eights/CrazyEights'))
+const GinRummy = lazy(() => import('./games/components/games/gin-rummy/GinRummy'))
+const Freecell = lazy(() => import('./games/components/games/freecell/Freecell'))
+
 export default function Games() {
   return (
     <Suspense fallback={
@@ -69,6 +78,14 @@ export default function Games() {
         <Route path="solitaire" element={<Solitaire />} />
         <Route path="backgammon" element={<Backgammon />} />
         <Route path="chess" element={<Chess />} />
+        {/* Phase 6: Card Games */}
+        <Route path="blackjack" element={<Blackjack />} />
+        <Route path="video-poker" element={<VideoPoker />} />
+        <Route path="hearts" element={<Hearts />} />
+        <Route path="spades" element={<Spades />} />
+        <Route path="crazy-eights" element={<CrazyEights />} />
+        <Route path="gin-rummy" element={<GinRummy />} />
+        <Route path="freecell" element={<Freecell />} />
       </Routes>
     </Suspense>
   )

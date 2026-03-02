@@ -4,7 +4,7 @@
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
 
-export type GameCategory = 'puzzle' | 'strategy' | 'arcade' | 'word'
+export type GameCategory = 'puzzle' | 'strategy' | 'arcade' | 'word' | 'cards'
 
 export interface GameInfo {
   id: string
