@@ -27,6 +27,8 @@ import {
   Infinity,
   Wine,
   LayoutDashboard,
+  Bug,
+  Rocket,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -273,6 +275,27 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
   },
+  // Phase 7: Arcade Games
+  {
+    id: 'centipede',
+    name: 'Centipede',
+    description: 'Shoot the centipede, dodge spiders',
+    icon: 'Bug',
+    path: '/games/centipede',
+    difficulty: 'medium',
+    sessionLength: '5-15 min',
+    category: 'arcade',
+  },
+  {
+    id: 'space-invaders',
+    name: 'Space Invaders',
+    description: 'Defend Earth from alien waves',
+    icon: 'Rocket',
+    path: '/games/space-invaders',
+    difficulty: 'medium',
+    sessionLength: '5-15 min',
+    category: 'arcade',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -301,6 +324,8 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Infinity,
   Wine,
   LayoutDashboard,
+  Bug,
+  Rocket,
 }
 
 /** Category filter options for the hub page */

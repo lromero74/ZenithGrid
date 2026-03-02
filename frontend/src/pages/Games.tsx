@@ -47,6 +47,10 @@ const CrazyEights = lazy(() => import('./games/components/games/crazy-eights/Cra
 const GinRummy = lazy(() => import('./games/components/games/gin-rummy/GinRummy'))
 const Freecell = lazy(() => import('./games/components/games/freecell/Freecell'))
 
+// Phase 7: Arcade Games
+const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
+const SpaceInvaders = lazy(() => import('./games/components/games/space-invaders/SpaceInvaders'))
+
 export default function Games() {
   return (
     <Suspense fallback={
@@ -86,6 +90,9 @@ export default function Games() {
         <Route path="crazy-eights" element={<CrazyEights />} />
         <Route path="gin-rummy" element={<GinRummy />} />
         <Route path="freecell" element={<Freecell />} />
+        {/* Phase 7: Arcade Games */}
+        <Route path="centipede" element={<Centipede />} />
+        <Route path="space-invaders" element={<SpaceInvaders />} />
       </Routes>
     </Suspense>
   )

@@ -355,11 +355,7 @@ export default function Plinko() {
     }
   }, [tick])
 
-  const handleCanvasClick = useCallback(() => {
-    dropBall()
-  }, [dropBall])
-
-  const handleCanvasTouch = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleDrop = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     dropBall()
   }, [dropBall])
@@ -516,8 +512,7 @@ export default function Plinko() {
           ref={canvasRef}
           className="rounded-lg border border-slate-700 cursor-pointer max-w-full"
           style={{ touchAction: 'none' }}
-          onClick={handleCanvasClick}
-          onTouchStart={handleCanvasTouch}
+          onPointerDown={handleDrop}
         />
 
         {/* Start overlay */}
@@ -526,7 +521,7 @@ export default function Plinko() {
             <div className="text-center space-y-3">
               <p className="text-white font-semibold">Click or tap to drop a ball</p>
               <button
-                onClick={() => {
+                onPointerDown={() => {
                   setGameStatus('playing')
                   dropBall()
                 }}

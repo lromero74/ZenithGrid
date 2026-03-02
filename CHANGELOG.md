@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.78.0] - 2026-03-02
+
+### Added
+- **Centipede**: Classic arcade shooter — blast a centipede winding through mushroom fields, dodge spiders, level up as speed increases
+- **Space Invaders**: Defend Earth from 5 rows of marching aliens with destructible bunkers, UFO fly-overs, and escalating waves
+
+### Fixed
+- **Plinko double-drop on mobile**: Tapping on a phone no longer drops 2 balls — replaced separate click/touch handlers with a single pointer event handler
+
 ## [v2.77.0] - 2026-03-02
 
 ### Added
