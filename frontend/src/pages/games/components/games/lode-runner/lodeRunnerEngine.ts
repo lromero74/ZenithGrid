@@ -94,6 +94,7 @@ export interface Entity {
 export interface Player extends Entity {
   alive: boolean
   digCooldown: number
+  trapped: boolean
 }
 
 export type GuardState = 'chasing' | 'trapped' | 'climbing_out' | 'dead'
@@ -289,6 +290,7 @@ export function loadLevel(levelNum: number): GameState {
     moving: false,
     alive: true,
     digCooldown: 0,
+    trapped: false,
   }
 
   const guards: Guard[] = enemies.map(e => {
@@ -336,6 +338,15 @@ export function loadLevel(levelNum: number): GameState {
 function movePlayer(state: GameState, input: Input, dt: number): GameState {
   let p = { ...state.player }
   if (!p.alive) return state
+  if (p.trapped) return state
+
+  // Check if player walked/fell into a dug hole (horizontal entry)
+  if (!p.falling && isDugOpen(state, p.col, p.row) &&
+      isSolid({ ...state, dugBricks: [] }, p.col, p.row)) {
+    p.trapped = true
+    p.animState = 'standing'
+    return { ...state, player: p }
+  }
 
   // Reduce dig cooldown
   p.digCooldown = Math.max(0, p.digCooldown - dt)
@@ -354,6 +365,14 @@ function movePlayer(state: GameState, input: Input, dt: number): GameState {
     p.y += FALL_SPEED * dt
     const { row } = posToCell(p.x, p.y)
     p.row = row
+    // Check if fallen into a dug hole — player gets trapped and dies when brick fills
+    if (isDugOpen(state, p.col, p.row) &&
+        isSolid({ ...state, dugBricks: [] }, p.col, p.row)) {
+      const snapped = snapToCell(p as Entity) as Entity
+      p = { ...p, x: snapped.x, y: snapped.y, falling: false, trapped: true }
+      p.animState = 'standing'
+      return { ...state, player: p }
+    }
     if (isSupported(state, p.col, p.row)) {
       p.falling = false
       const snapped = snapToCell(p as Entity) as Entity
