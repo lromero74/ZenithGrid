@@ -175,37 +175,25 @@ async def login(
             )
 
     # No MFA (or trusted device) - issue full tokens
-    # Eagerly load all user attributes before any DB write — after rollback, lazy loads fail
+    # Eagerly resolve ALL data from ORM objects BEFORE any DB writes.
+    # After commit/rollback, SQLAlchemy expires loaded attributes; any
+    # subsequent lazy-load in async context raises MissingGreenlet.
     user_id = user.id
     user_email = user.email
-    user_groups = list(user.groups or [])
-    user_policy_override = user.session_policy_override
+    user_response = _build_user_response(user)
+
+    from app.services.session_policy_service import resolve_session_policy, has_any_limits
+    from app.services.session_service import check_session_limits, create_session
+    policy = resolve_session_policy(user)
 
     # Update last_login_at (non-critical — don't block login if DB is locked)
     try:
         user.last_login_at = datetime.utcnow()
         await db.commit()
-        await db.refresh(user)
     except Exception as e:
         await db.rollback()
         logger.warning(f"Non-critical: failed to update last_login_at for {user_email}: {e}")
-        # Re-load user so lazy-loaded attributes (groups, etc.) work after rollback
-        try:
-            await db.refresh(user, attribute_names=["groups"])
-        except Exception:
-            pass  # If refresh also fails, cached values above will be used
 
-    # Resolve session policy using pre-loaded data (avoids lazy load on expired session)
-    from app.services.session_policy_service import resolve_session_policy, has_any_limits
-    from app.services.session_service import check_session_limits, create_session
-
-    # Build a lightweight object with pre-loaded attributes so resolve_session_policy
-    # doesn't need to touch the DB session (which may be unusable after rollback)
-    class _PolicyUser:
-        def __init__(self, groups, override):
-            self.groups = groups
-            self.session_policy_override = override
-    policy = resolve_session_policy(_PolicyUser(user_groups, user_policy_override))
     session_id_str = None
     session_expires_at = None
 
@@ -240,7 +228,7 @@ async def login(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=_build_user_response(user),
+        user=user_response,
     )
     if has_any_limits(policy):
         response.session_policy = policy
