@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.76.11] - 2026-03-02
+
+### Changed
+- **Split models.py into domain sub-modules**: The 1672-line monolithic models file was reorganized into 5 focused domain modules (auth, trading, content, reporting, system) — all existing imports continue to work unchanged
+- **Fixed bull_flag circular import**: Resolved a circular dependency chain (indicators → strategies → indicators) that caused 900+ test collection errors when running the full test suite. The `sys.modules` hack in the test file was removed in favor of a proper lazy import
+
 ## [v2.76.10] - 2026-03-02
 
 ### Changed
