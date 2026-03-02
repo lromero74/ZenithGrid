@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.82.7] - 2026-03-02
+
+### Added
+- **Classic Lode Runner levels**: Replaced custom levels with authentic Apple II (1983) levels 1-10 with original layouts, including trap bricks and escape ladders
+- **Trap brick tile**: New tile type that looks like a normal brick but entities fall through — faithful to the original game's false brick mechanic
+- **Post-respawn invincibility**: Player gets 2 seconds of invincibility after dying (with blink effect) instead of instant game over
+
+### Fixed
+- **Lode Runner guard bar pathing**: Guards can now drop from monkey bars instead of getting stuck when hanging
+- **Lode Runner diagonal guard fall**: Guards now fall vertically like the player instead of moving diagonally during pathfinding
+- **Dust position sell failure**: Positions where the sell amount rounds to zero (e.g., missing paper balance) are now closed gracefully as dust instead of sending a zero-amount order to the exchange
+
 ## [v2.82.6] - 2026-03-02
 
 ### Fixed

@@ -1,14 +1,14 @@
 /**
- * Lode Runner level definitions — 10 progressive levels.
+ * Lode Runner level definitions — Classic Apple II (1983) levels 1-10.
  *
  * Grid: 28 cols x 16 rows. Each character is a tile:
  *   . = empty       B = brick (diggable)     S = solid (indestructible)
  *   H = ladder      - = bar (monkey bar)     G = gold
  *   P = player      E = enemy start          T = hidden ladder (escape)
+ *   X = trap brick (looks like brick but entities fall through)
  *
- * Column 2 has T (hidden escape ladder) from row 0 down to the topmost platform.
- * Row 15 (bottom) is always solid.
- * Every gold piece must be reachable. Every level must be completable.
+ * Bottom of screen acts as floor (out-of-bounds = solid).
+ * Hidden ladders (T) appear when all gold is collected.
  */
 
 export type LevelDef = string[]
@@ -16,203 +16,203 @@ export type LevelDef = string[]
 // Each level is exactly 16 rows x 28 cols.
 
 const LEVEL_1: LevelDef = [
-  // "First Steps" — 0 enemies, teaches movement + ladders + gold
-  '..T.........................', // 0: hidden escape
-  '..T.........................', // 1: escape ladder col 2
-  '..T.........................', // 2
-  '..T.........................', // 3
-  '..TG........................', // 4
-  '..HBBB-----------G..........', // 5
-  '..H..........BBBBBBB........', // 6
-  '..H.........................', // 7
-  '..H......G..........G.......', // 8
-  '..H...HBBBBBB...BBBBHBB.....', // 9
-  '..H...H.............H.......', // 10
-  '..H...H.............H.......', // 11
-  '..H...H.....G......H........', // 12
-  '..H...H..HBBBBBBB..H........', // 13
-  '..H...H..H..........H.......', // 14
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS', // 15: solid floor
+  // Classic Level 1: "The Beginning"
+  '..................T.........',
+  '....G.............T.........',
+  'BBBBBBBHBBBBBBB...T.........',
+  '.......H----------T....G....',
+  '.......H....BBH...BBBBBBBHBB',
+  '.......H....BBH..........H..',
+  '.....E.H....BBH.......GE.H..',
+  'BBHBBBBB....BBBBBBBBHBBBBBBB',
+  '..H.................H.......',
+  '..H...........E.....H.......',
+  'BBBBBBBBBHBBBBBBBBBBH.......',
+  '.........H..........H.......',
+  '.......G.H----------H...G...',
+  '....HBBBBBB.........BBBBBBBH',
+  '....H.........P..G.........H',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_2: LevelDef = [
-  // "Dig It" — 0 enemies, teaches brick digging to reach gold below
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T....H..G.......G..H......',
-  '..T....HBBBBB...BBBBBH......',
-  '..T....H.............H......',
-  '..T....H.............H......',
-  '..G....H.............H......',
-  'BBHBB..H.............H......',
-  '..H....H.............H......',
-  '..H..BBHBBG...GBBBBBBH......',
-  '..H....H.............H......',
-  '..H....H.............H......',
-  '..H..BBBBBBBGBBBBBBBBB......',
-  '..H.........................',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 2: "Getaway"
+  '...G.......................H',
+  'HSSBSSH...........G........H',
+  'H.....H....HBBBBBBBBBH.G...H',
+  'H.G.E.H....H.........HBBBBXH',
+  'HBSBSBH....H.........H.....T',
+  'H.....H----H------..EH.....T',
+  'H.....H....H.....HBBBSSSSSSH',
+  'H.....H....H..G..H.........H',
+  'H...E.H.G..HBBBBBH.........H',
+  'SBBBSBBSBBSH.........HBBBHBB',
+  'SBBBS......H.........H...H..',
+  'SG..S......H...------H...H.G',
+  'BBBBBBBBHBBBSSSS.....H..BBBB',
+  '........H............H......',
+  '........H...P........H......',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_3: LevelDef = [
-  // "The Guard" — 1 enemy, teaches enemy avoidance + timing
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T.G.............E.........',
-  '..HBBBBB.......BBBBBB.......',
-  '..H..................H......',
-  '..H..................H......',
-  '..H.......G..........H......',
-  '..H....HBBBBBBBB.....H......',
-  '..H....H.........H...H......',
-  '..H....H.........H...H......',
-  '..H..G.H....G....H.G.H......',
-  '..HBBBBBBBBBBBBBBBBBBBB.....',
-  '..H.........................',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 3: "The Abyss"
+  '...........................T',
+  '----------....G............T',
+  'H.G......HBBBBBBBBBBH......T',
+  'BBBBBH...H..........HSSSSSSS',
+  '.....H.E.H.....G....H.......',
+  '.....HBBBBBBHBBBBBHBB.......',
+  '..G..H......H.....H..--.....',
+  'BBBBHB......H..E..H....--...',
+  '....H....HBBBBBBHBB......--G',
+  '....H----H......H..E.......B',
+  '....H.......HBBBBBBBBBH.....',
+  '....H.......HBBBBBBBBBH.....',
+  'BBBHBBBBBBBBBB...G...BBBBBHB',
+  'BBBHBBBBBBBBBB.HBBBH.BBBBBHB',
+  '...H......P....HBBBH...G..H.',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_4: LevelDef = [
-  // "Trap and Escape" — 1 enemy, dig-to-trap core mechanic
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..P...........E.............',
-  '..HBBBBBBBBBBBBBBBBH........',
-  '..H................H........',
-  '..H................H........',
-  '..H......G.........H........',
-  '..H....BBBBBBB.....H........',
-  '..H................H........',
-  '..H..G.............H........',
-  '..HBBBBBBBBBBBBBBBBHB.......',
-  '..H..............G.H........',
-  '..H................H........',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 4: "Pyramid"
+  'T...........................',
+  'T-----------................',
+  'H.....H.....B.G.B.....H.....',
+  'H.G..HHH..G.BBBBB.G..HHH..G.',
+  'H.HH..H..HH.......HH..H..HH.',
+  'H.H.HHHHH.H.......H.HHHHH.H.',
+  'H.H..GEG..H...H...H..GEG..H.',
+  'H..HBBBBBH...HHH...HBBBBBH..',
+  'H...HHHHH.HH..H..HH.HHHHH...',
+  'H.........H.HHHHH.H.........',
+  'H....G....H..GEG..H.....G...',
+  'HBBBBBBH...HBBBBBH..HBBBBBBB',
+  'H......H....HHHHH...H.......',
+  'H......H............H.......',
+  'H......H.......G..P.H.......',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_5: LevelDef = [
-  // "Monkey Bars" — 1 enemy, bar traversal over gaps
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T.........................',
-  '..T.G...........G...........',
-  '..HBBBB.......BBBBH.........',
-  '..H...............H.........',
-  '..H...-----------.H.........',
-  '..H...............H.........',
-  '..H..HBBBB...BBBBHH.........',
-  '..H..H...........HH.........',
-  '..H..H....E......HH.........',
-  '..H..H.G.........HH.........',
-  '..HBBBBBBB--BBBBBHB.........',
-  '..H............G.H..........',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 5: "Stairway"
+  '.........T..................',
+  '.........T.......G......E...',
+  'BBB......T......BBBBHBBBBBBB',
+  '..BB.....T.....BB...H.......',
+  '...BB....T....BB....H.......',
+  'GE.BBB...T..GBBB....H...G...',
+  'BBHBBBB..T..BBBBHBBBHBBBBBBB',
+  '..H...BB.T.BB...H...........',
+  '..HGE..BBHBB....H.....G.....',
+  'HBBBH....H.....BHBBHBBB.....',
+  'H...H..............H........',
+  'H...H....G.....E...H........',
+  'H...HBBBBBBBHBBBBBBHBBBBBHBB',
+  'H...........H............H..',
+  'H...........H..P.........H..',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_6: LevelDef = [
-  // "The Pit" — 2 enemies, multi-level with strategic descent
-  '..T.........................',
-  '..T.........................',
-  '..T.G..........G............',
-  '..HBBBB....BBBBBBH..........',
-  '..H..............H..........',
-  '..H....E.........H..........',
-  '..H..HBBBBBB.....H..........',
-  '..H..H.......G...H..........',
-  '..H..H..HBBBBBBBBH..........',
-  '..H..H..H........H..........',
-  '..H..H..H..E.....H..........',
-  '..H..HBBBBBBBBBB.H..........',
-  '..H..H........G..H..........',
-  '..H..H...........H..........',
-  '..HBBBBBBBBBBBBBBBBB........',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 6: "The Dungeon"
+  'BBBBBBBBBBBBBBBBBBTBBBBBBBBB',
+  'B.G...............TB.E.G...B',
+  'BXBBBHBBBBH...G...TBBBBBBBHB',
+  'BXBBBHBBBBBBBBBBBBBB.BBB..HB',
+  'B....H..G.E.....BBBB.BBB..HB',
+  'BHBBBBBBBBBHBBBBBBBB.BBB..HB',
+  'BH...BBBBBBHBBBBBGGB.BBBG.HB',
+  'BH...BBBBBBHBBBBBBBBBBBBBBHB',
+  'BH...B....GH....G..E...G.BHB',
+  'BH...BBBHBBBBBBBHBBBBBBBHBHB',
+  'BH..GBBBH.......HBBBBBBBHBHB',
+  'BHBBXB..H....P..H..BB...HBHB',
+  'BHBBXBHBBBBBHBBBBBBBBGG.HBHB',
+  'BHBBXBHBBBBBHBBBBBBGBBBBBBHB',
+  'BHE...HBBGBBH....G..E.....HB',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_7: LevelDef = [
-  // "Tower Climb" — 2 enemies, vertical level, scattered gold
+  // Classic Level 7: "Long Way Up"
   '..T.........................',
-  '..T........G................',
-  '..T......HBBBB..............',
-  '..T......H....G.............',
-  '..T..HBBBBBBBBBBH...........',
-  '..T..H..........H...........',
-  '..G..H...E......H...........',
-  'BBHBBBBBBBBB....H...........',
-  '..H.........BBBBH...........',
-  '..H.....G.......H...........',
-  '..HBBBBBBBBB....H...........',
-  '..H...........BHB...........',
-  '..H....G.......H............',
-  '..HBBBBBBBB..E.H............',
-  '..H......G.....H............',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  '..T.................--------',
+  '..T..........E......H......H',
+  'BBBBBHB....BHBBB...EH....G.H',
+  '.....H......H....BBBHBBBBBBB',
+  '..E..H...G..H.......H.......',
+  'BBBBBHBBBB..H.......H.......',
+  '.....H......H.......H.......',
+  '..G..H...G..H.......H.......',
+  'BBHBBBBBBBBBBBBH....H.BBBB.H',
+  '..H............H.G..H.BBBB.H',
+  '..H..G.........H----H.B.GB.H',
+  'BBBBBBBH............H.BBBBBH',
+  '.......H............H......H',
+  '.......H.P........G.H..E...H',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_8: LevelDef = [
-  // "Bridge Run" — 2 enemies, brick bridges, dig to drop enemies
-  '..T.........................',
-  '..T.........................',
-  '..G.......G.........G.......',
-  'BBHBB...BBHBB.....BBHBB.....',
-  '..H.......H.........H.......',
-  '..H.......H....E....H.......',
-  '..H..HBBBBBBBBBBBBBBBB......',
-  '..H..H.................H....',
-  '..H..H.................H....',
-  '..HBBBBBB....BBBBBBBBHBH....',
-  '..H......G.........E.H.H....',
-  '..H..................H.H....',
-  '..H..HBBBBBBBBBBBBBBB..H....',
-  '..H..H..........G.....H.....',
-  '..H..H................H.....',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 8: "The Towers"
+  '...........T....T...........',
+  '...........T....T...........',
+  '...G.E...HBT....TBH...E.G...',
+  'HBBBBBH--HBT....TBH--HBBBBBH',
+  'HB...BH...BT....TB...HB...BH',
+  'HB...BH...BT....TB...HB...BH',
+  'HB.G.BH...BT....TB...HB.G.BH',
+  'HBBBBBH...BT....TB...HBBBBBH',
+  'HB...BH...BT....TB...HB...BH',
+  'HB...BH---BHBBBBHB---HB...BH',
+  'HB...B...HBH....HBH...B...BH',
+  'HBEG.B...HBH..GEHBH...B.GEBH',
+  'HBBXBB...HBSSSSSSBH...BBXBBH',
+  'H.....X..H........H..X.....H',
+  'H......XEH....P...H.X......H',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 const LEVEL_9: LevelDef = [
-  // "The Maze" — 3 enemies, complex paths, dead ends
-  '..T.........................',
-  '..T.........................',
-  '..G....G.......G....G.......',
-  'BBHBBBBBBBH.HBBBBBBBHBB.....',
-  '..H.......H.H.......H.......',
-  '..H..E....H.H..E....H.......',
-  '..HBBBH...H.H..HBBBHH.......',
-  '..H...H...H.H..H...HH.......',
-  '..H...HBBBB.BBBB...HH.......',
-  '..H...H.........H..HH.......',
-  '..HBBBB....G....BBBHH.......',
-  '..H......HBBBH.....HH.......',
-  '..H......H...H.....HH.......',
-  '..H....G.H.E.H..G..HH.......',
-  '..HBBBBBBBBBBBBBBBBBBH......',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 9: "The Fortress"
+  'T...........................',
+  'T---------------------------',
+  'HB.E...B.............B.....B',
+  'H.BBBBB...............BBBBB.',
+  'H.B.BBB...............BGBBB.',
+  'H.BBBBB.E....E......E.BBBBB.',
+  'H.BBB.BXBBBBBBBBBBBBBBBBB.B.',
+  'H.BBBBBXBBB.GBB.GBBBBBBBBHB.',
+  'H.BBBBBXBBBBBBBBBBBBBBBBBHB.',
+  'H.BBBBBXBBBBBBBBBBBBBBBBBHB.',
+  'H.BBBBBXBBBB....BBBBBBBBBHB.',
+  'H.BBBBBXBBBB....BBBBBBBBBHB.',
+  'H.BBBBBXBBBB...GHBBBBBBBBHB.',
+  'H...........BBBBH--------H..',
+  'H..........SSSS.............',
+  'H......P..SSSS......E.......',
 ]
 
 const LEVEL_10: LevelDef = [
-  // "Gauntlet" — 3 enemies, all mechanics combined
-  '..T.........................',
-  '..TG.........G..........G...',
-  'BBHBB..----..BBBBH..HBBBH...',
-  '..H..............H..H...H...',
-  '..H.....E........H..H.G.H...',
-  '..HBBBBBBBBBB..BBBBBBBBHH...',
-  '..H..........H.........H....',
-  '..H..G.......H...E.....H....',
-  '..HBBBBBB----BBBBHBBBBBBH...',
-  '..H..............H..........',
-  '..H..HBBBH...G...H..........',
-  '..H..H...H.HBBBBBB..........',
-  '..H..H.G.H.H......E.........',
-  '..HBBBBBBBB.BBBBBBBBHBB.....',
-  '..H.....G...........H.......',
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  // Classic Level 10: "Mountain"
+  '..........G..............T..',
+  '........HBBBBBBB..G......T..',
+  '....G...H......BBBBBB....T..',
+  'BBBBBBBBBBH.........G....T..',
+  '..........HBBBBBBTBBBBBHBB..',
+  'E.........H......T.....H....',
+  'BBBBBBBBBBH......T.E...H...G',
+  'BBBBBBBBBBHBBBBBBBSS...HBBBB',
+  'BBBBBBBBBBH............H....',
+  'BBBBBBBBBBH.......G.---H....',
+  'BB......BBH.......BB...H....',
+  'BB..GG..BBH.....G......H....',
+  'BBBBBBBBBBBHBBBBBBBH...H....',
+  '...........H.......BBBBBBBBH',
+  '....G....P.H...............H',
+  'BBBBBBBBBBBBBBBBBBBBBBBBBBBB',
 ]
 
 export const LEVELS: LevelDef[] = [
@@ -223,14 +223,14 @@ export const LEVELS: LevelDef[] = [
 export const TOTAL_LEVELS = LEVELS.length
 
 export const LEVEL_NAMES: string[] = [
-  'First Steps',
-  'Dig It',
-  'The Guard',
-  'Trap and Escape',
-  'Monkey Bars',
-  'The Pit',
-  'Tower Climb',
-  'Bridge Run',
-  'The Maze',
-  'Gauntlet',
+  'The Beginning',
+  'Getaway',
+  'The Abyss',
+  'Pyramid',
+  'Stairway',
+  'The Dungeon',
+  'Long Way Up',
+  'The Towers',
+  'The Fortress',
+  'Mountain',
 ]

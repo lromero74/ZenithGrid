@@ -732,6 +732,20 @@ async def execute_sell(
         f"(raw: {position.total_base_acquired:.8f}, precision: {precision} decimals)"
     )
 
+    # Dust position: if base_amount rounds to 0, close as dust (no exchange order)
+    if base_amount <= 0:
+        logger.warning(
+            f"  Sell amount rounds to 0 for {product_id} "
+            f"(raw={raw_amount:.8f}, precision={precision}). Closing as dust."
+        )
+        position.status = "closed"
+        position.closed_at = datetime.utcnow()
+        position.close_price = current_price
+        position.profit_usd = -(position.total_quote_spent or 0)
+        position.profit_percentage = -100.0
+        await db.commit()
+        return None, -(position.total_quote_spent or 0), -100.0
+
     # Execute order via TradingClient (currency-agnostic)
     # Track this as an in-flight order for graceful shutdown
     order_id = None
