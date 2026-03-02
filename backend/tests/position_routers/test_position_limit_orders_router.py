@@ -258,21 +258,25 @@ class TestGetPositionTicker:
         from app.position_routers.position_limit_orders_router import get_position_ticker
 
         user, account = await _create_user_with_account(db_session, email="tick_ok@example.com")
-        pos = await _create_position(db_session, account, product_id="BTC-USD")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(db_session, account, bot=bot, product_id="BTC-USD")
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_ticker = AsyncMock(return_value={
+        mock_exchange = AsyncMock()
+        mock_exchange.get_ticker = AsyncMock(return_value={
             "best_bid": "50000.00",
             "best_ask": "50100.00",
             "price": "50050.00",
         })
 
-        result = await get_position_ticker(
-            position_id=pos.id,
-            db=db_session,
-            coinbase=mock_coinbase,
-            current_user=user,
-        )
+        with patch(
+            "app.services.exchange_service.get_exchange_client_for_account",
+            return_value=mock_exchange,
+        ):
+            result = await get_position_ticker(
+                position_id=pos.id,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["product_id"] == "BTC-USD"
         assert result["best_bid"] == 50000.00
@@ -287,13 +291,11 @@ class TestGetPositionTicker:
         from fastapi import HTTPException
 
         user, account = await _create_user_with_account(db_session, email="tick_404@example.com")
-        mock_coinbase = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:
             await get_position_ticker(
                 position_id=99999,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -304,21 +306,25 @@ class TestGetPositionTicker:
         from app.position_routers.position_limit_orders_router import get_position_ticker
 
         user, account = await _create_user_with_account(db_session, email="tick_zero@example.com")
-        pos = await _create_position(db_session, account, product_id="BTC-USD")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(db_session, account, bot=bot, product_id="BTC-USD")
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_ticker = AsyncMock(return_value={
+        mock_exchange = AsyncMock()
+        mock_exchange.get_ticker = AsyncMock(return_value={
             "best_bid": "0",
             "best_ask": "0",
             "price": "49000.00",
         })
 
-        result = await get_position_ticker(
-            position_id=pos.id,
-            db=db_session,
-            coinbase=mock_coinbase,
-            current_user=user,
-        )
+        with patch(
+            "app.services.exchange_service.get_exchange_client_for_account",
+            return_value=mock_exchange,
+        ):
+            result = await get_position_ticker(
+                position_id=pos.id,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["mark_price"] == 49000.00
 

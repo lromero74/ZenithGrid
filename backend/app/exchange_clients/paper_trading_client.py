@@ -319,6 +319,13 @@ class PaperTradingClient(ExchangeClient):
             logger.warning(f"Public API product list fetch failed: {e}")
             return []
 
+    async def get_product_book(self, product_id: str, limit: int = 25) -> Dict[str, Any]:
+        """Get product book (Level 2 depth) — delegates to real_client if available."""
+        if self.real_client:
+            return await self.real_client.get_product_book(product_id, limit=limit)
+
+        return {"pricebook": {"bids": [], "asks": []}}
+
     async def get_order_book(self, product_id: str, level: int = 2) -> Dict[str, Any]:
         """Get order book — no public endpoint available, return empty."""
         if self.real_client:

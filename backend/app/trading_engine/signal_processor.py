@@ -17,14 +17,45 @@ from app.models import BlacklistedCoin, Bot, OrderHistory, Position, Settings, S
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
-from app.trading_engine.buy_executor import execute_buy
+from app.trading_engine.book_depth_guard import check_buy_slippage, check_sell_slippage
+from app.trading_engine.buy_executor import execute_buy, execute_buy_close_short
 from app.trading_engine.trade_context import TradeContext
 from app.trading_engine.order_logger import log_order_to_history, save_ai_log, OrderLogEntry
 from app.trading_engine.perps_executor import execute_perps_close, execute_perps_open
 from app.trading_engine.position_manager import create_position, get_active_position, get_open_positions_count
-from app.trading_engine.sell_executor import execute_sell
+from app.trading_engine.sell_executor import execute_sell, execute_sell_short
 
 logger = logging.getLogger(__name__)
+
+
+async def _record_signal(
+    db: AsyncSession,
+    position: "Position",
+    signal_type: str,
+    action_taken: str,
+    reason: str,
+    current_price: float,
+    signal_data: Optional[Dict[str, Any]] = None,
+) -> Signal:
+    """Create and persist a Signal record.
+
+    Deduplicates the repeated Signal-creation pattern found throughout
+    the buy/sell decision functions.
+    """
+    signal = Signal(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        signal_type=signal_type,
+        macd_value=(signal_data or {}).get("macd_value", 0),
+        macd_signal=(signal_data or {}).get("macd_signal", 0),
+        macd_histogram=(signal_data or {}).get("macd_histogram", 0),
+        price=current_price,
+        action_taken=action_taken,
+        reason=reason,
+    )
+    db.add(signal)
+    await db.commit()
+    return signal
 
 
 async def _is_duplicate_failed_order(
@@ -234,19 +265,7 @@ async def _handle_ai_failsafe(
         }
 
     # Record signal for market sell
-    signal = Signal(
-        position_id=position.id,
-        timestamp=datetime.utcnow(),
-        signal_type="sell",
-        macd_value=0,
-        macd_signal=0,
-        macd_histogram=0,
-        price=current_price,
-        action_taken="sell",
-        reason=failsafe_reason,
-    )
-    db.add(signal)
-    await db.commit()
+    await _record_signal(db, position, "sell", "sell", failsafe_reason, current_price)
 
     logger.warning(f"  🛡️ FAILSAFE SELL COMPLETED: Profit protected at {profit_pct:.2f}%")
 
@@ -722,7 +741,6 @@ async def _execute_buy_trade(
             # Execute short order using existing sell infrastructure
             # For base orders (trade_type="initial"), we execute market sell
             # For safety orders, we check config for limit vs market
-            from app.trading_engine.sell_executor import execute_sell_short
 
             trade = await execute_sell_short(
                 db=db,
@@ -742,7 +760,6 @@ async def _execute_buy_trade(
             buy_config = bot.strategy_config or {}
             exec_key = "base_execution_type" if trade_type == "initial" else "dca_execution_type"
             if buy_config.get(exec_key, "market") == "market" and buy_config.get("slippage_guard", False):
-                from app.trading_engine.book_depth_guard import check_buy_slippage
                 proceed, guard_reason = await check_buy_slippage(
                     exchange, product_id, quote_amount, buy_config
                 )
@@ -807,19 +824,10 @@ async def _execute_buy_trade(
         return {"action": "none", "reason": f"DCA buy failed: {str(e)}", "signal": signal_data}
 
     # Record signal
-    signal = Signal(
-        position_id=position.id,
-        timestamp=datetime.utcnow(),
-        signal_type=signal_data.get("signal_type", "buy"),
-        macd_value=signal_data.get("macd_value", 0),
-        macd_signal=signal_data.get("macd_signal", 0),
-        macd_histogram=signal_data.get("macd_histogram", 0),
-        price=current_price,
-        action_taken="buy",
-        reason=buy_reason,
+    await _record_signal(
+        db, position, signal_data.get("signal_type", "buy"), "buy",
+        buy_reason, current_price, signal_data,
     )
-    db.add(signal)
-    await db.commit()
 
     return {"action": "buy", "reason": buy_reason, "signal": signal_data, "trade": trade, "position": position}
 
@@ -890,28 +898,14 @@ async def _decide_and_execute_sell(
                         f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
                         f"< take_profit ({tp_pct}%) - HOLDING"
                     )
-                    signal = Signal(
-                        position_id=position.id,
-                        timestamp=datetime.utcnow(),
-                        signal_type="hold",
-                        macd_value=signal_data.get("macd_value", 0),
-                        macd_signal=signal_data.get("macd_signal", 0),
-                        macd_histogram=signal_data.get("macd_histogram", 0),
-                        price=current_price,
-                        action_taken="hold",
-                        reason=(
-                            f"Conditions met but mark profit"
-                            f" {mark_profit_pct:.2f}% < {tp_pct}%"
-                        ),
+                    hold_reason = f"Conditions met but mark profit {mark_profit_pct:.2f}% < {tp_pct}%"
+                    await _record_signal(
+                        db, position, "hold", "hold", hold_reason,
+                        current_price, signal_data,
                     )
-                    db.add(signal)
-                    await db.commit()
                     return {
                         "action": "hold",
-                        "reason": (
-                            f"Sell blocked: mark profit"
-                            f" {mark_profit_pct:.2f}% < {tp_pct}%"
-                        ),
+                        "reason": f"Sell blocked: mark profit {mark_profit_pct:.2f}% < {tp_pct}%",
                         "signal": signal_data,
                         "position": position,
                     }
@@ -926,25 +920,15 @@ async def _decide_and_execute_sell(
 
         # Slippage guard for market sell orders
         if take_profit_order_type == "market" and config.get("slippage_guard", False):
-            from app.trading_engine.book_depth_guard import check_sell_slippage
             proceed, guard_reason = await check_sell_slippage(
                 exchange, product_id, position, config
             )
             if not proceed:
                 logger.info(f"  🛡️ Slippage guard blocked sell: {guard_reason}")
-                signal = Signal(
-                    position_id=position.id,
-                    timestamp=datetime.utcnow(),
-                    signal_type="hold",
-                    macd_value=signal_data.get("macd_value", 0),
-                    macd_signal=signal_data.get("macd_signal", 0),
-                    macd_histogram=signal_data.get("macd_histogram", 0),
-                    price=current_price,
-                    action_taken="hold",
-                    reason=f"Slippage guard: {guard_reason}",
+                await _record_signal(
+                    db, position, "hold", "hold",
+                    f"Slippage guard: {guard_reason}", current_price, signal_data,
                 )
-                db.add(signal)
-                await db.commit()
                 return {
                     "action": "hold",
                     "reason": f"Slippage guard: {guard_reason}",
@@ -961,19 +945,11 @@ async def _decide_and_execute_sell(
             logger.warning(
                 f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping sell signal"
             )
-            signal = Signal(
-                position_id=position.id,
-                timestamp=datetime.utcnow(),
-                signal_type="hold",
-                macd_value=signal_data.get("macd_value", 0),
-                macd_signal=signal_data.get("macd_signal", 0),
-                macd_histogram=signal_data.get("macd_histogram", 0),
-                price=current_price,
-                action_taken="hold",
-                reason=f"Limit close order already pending (order_id: {position.limit_close_order_id})",
+            await _record_signal(
+                db, position, "hold", "hold",
+                f"Limit close order already pending (order_id: {position.limit_close_order_id})",
+                current_price, signal_data,
             )
-            db.add(signal)
-            await db.commit()
             return {
                 "action": "hold",
                 "reason": "Limit close order already pending",
@@ -1004,7 +980,6 @@ async def _decide_and_execute_sell(
         # For short positions: buy back the BTC we sold
         elif position.direction == "short":
             # CLOSE SHORT: Buy back BTC (opposite of opening short)
-            from app.trading_engine.buy_executor import execute_buy_close_short
 
             trade, profit_quote, profit_pct = await execute_buy_close_short(
                 db=db,
@@ -1041,19 +1016,10 @@ async def _decide_and_execute_sell(
             }
 
         # Record signal for market sell
-        signal = Signal(
-            position_id=position.id,
-            timestamp=datetime.utcnow(),
-            signal_type=signal_data.get("signal_type", "sell"),
-            macd_value=signal_data.get("macd_value", 0),
-            macd_signal=signal_data.get("macd_signal", 0),
-            macd_histogram=signal_data.get("macd_histogram", 0),
-            price=current_price,
-            action_taken="sell",
-            reason=sell_reason,
+        await _record_signal(
+            db, position, signal_data.get("signal_type", "sell"), "sell",
+            sell_reason, current_price, signal_data,
         )
-        db.add(signal)
-        await db.commit()
 
         # Log the SELL decision to AI logs (even if AI recommended something else)
         # This captures what the trading engine actually did, not just what AI suggested
@@ -1083,19 +1049,10 @@ async def _decide_and_execute_sell(
         }
     else:
         # Hold - record signal with no action
-        signal = Signal(
-            position_id=position.id,
-            timestamp=datetime.utcnow(),
-            signal_type=signal_data.get("signal_type", "hold"),
-            macd_value=signal_data.get("macd_value", 0),
-            macd_signal=signal_data.get("macd_signal", 0),
-            macd_histogram=signal_data.get("macd_histogram", 0),
-            price=current_price,
-            action_taken="hold",
-            reason=sell_reason,
+        await _record_signal(
+            db, position, signal_data.get("signal_type", "hold"), "hold",
+            sell_reason, current_price, signal_data,
         )
-        db.add(signal)
-        await db.commit()
 
         return {"action": "hold", "reason": sell_reason, "signal": signal_data, "position": position}
 
