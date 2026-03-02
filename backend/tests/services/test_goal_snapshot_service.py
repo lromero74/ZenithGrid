@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from app.models import (
     Account,
+    AccountValueSnapshot,
     ExpenseItem,
     GoalProgressSnapshot,
     Position,
@@ -27,6 +28,7 @@ from app.models import (
 from app.services.goal_snapshot_service import (
     _backfill_expense_goal_snapshots,
     _get_expense_snapshot_values,
+    backfill_goal_snapshots,
     capture_goal_snapshots,
     get_goal_trend_data,
     _get_current_value_for_goal,
@@ -991,3 +993,264 @@ class TestCaptureSnapshotAccountFiltering:
             f"progress_pct={snap.progress_pct} is too high — "
             "paper account profits are leaking into profit goal snapshot"
         )
+
+
+class TestPaperAccountGoalSnapshots:
+    """Tests that paper trading account goals get proper snapshot values."""
+
+    @pytest.mark.asyncio
+    async def test_balance_goal_on_paper_account_uses_paper_values(self, db_session):
+        """Balance goal linked to a paper account should use that account's snapshot values."""
+        user = User(
+            email="test_paper_goal@example.com",
+            hashed_password="hashed",
+            display_name="Demo User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        paper_acct = Account(
+            user_id=user.id,
+            name="Paper Account",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=True,
+        )
+        db_session.add(paper_acct)
+        await db_session.flush()
+
+        # Create a balance goal linked to the paper account
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            name="Grow Paper to $2000",
+            target_type="balance",
+            target_currency="USD",
+            target_value=2000.0,
+            time_horizon_months=6,
+            start_date=datetime.utcnow() - timedelta(days=30),
+            target_date=datetime.utcnow() + timedelta(days=150),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        # Create a snapshot for the paper account with $1000 value
+        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snap = AccountValueSnapshot(
+            account_id=paper_acct.id,
+            user_id=user.id,
+            snapshot_date=snapshot_date,
+            total_value_usd=1000.0,
+            total_value_btc=0.012,
+        )
+        db_session.add(snap)
+        await db_session.flush()
+
+        count = await capture_goal_snapshots(db_session, user.id)
+        assert count == 1
+
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            )
+        )
+        goal_snap = result.scalar_one()
+        # Should use paper account's $1000, not $0
+        assert goal_snap.current_value == pytest.approx(1000.0, abs=1.0)
+        assert goal_snap.progress_pct == pytest.approx(50.0, abs=1.0)
+
+    @pytest.mark.asyncio
+    async def test_paper_only_user_global_goal_includes_paper_values(self, db_session):
+        """User with only paper accounts and a global goal (no account_id) should see paper values."""
+        user = User(
+            email="test_paper_global@example.com",
+            hashed_password="hashed",
+            display_name="Paper Only User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        paper_acct = Account(
+            user_id=user.id,
+            name="Demo Account",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=True,
+        )
+        db_session.add(paper_acct)
+        await db_session.flush()
+
+        # Global goal (no account_id)
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=None,
+            name="Reach $5000 total",
+            target_type="balance",
+            target_currency="USD",
+            target_value=5000.0,
+            time_horizon_months=12,
+            start_date=datetime.utcnow() - timedelta(days=30),
+            target_date=datetime.utcnow() + timedelta(days=335),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        # Paper account snapshot
+        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snap = AccountValueSnapshot(
+            account_id=paper_acct.id,
+            user_id=user.id,
+            snapshot_date=snapshot_date,
+            total_value_usd=2500.0,
+            total_value_btc=0.03,
+        )
+        db_session.add(snap)
+        await db_session.flush()
+
+        count = await capture_goal_snapshots(db_session, user.id)
+        assert count == 1
+
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            )
+        )
+        goal_snap = result.scalar_one()
+        # Should include paper account values for paper-only users
+        assert goal_snap.current_value == pytest.approx(2500.0, abs=1.0)
+
+    @pytest.mark.asyncio
+    async def test_profit_goal_on_paper_account_uses_paper_profits(self, db_session):
+        """Profit goal on paper account should count paper account closed positions."""
+        user = User(
+            email="test_paper_profit@example.com",
+            hashed_password="hashed",
+            display_name="Demo Profit User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        paper_acct = Account(
+            user_id=user.id,
+            name="Paper Account",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=True,
+        )
+        db_session.add(paper_acct)
+        await db_session.flush()
+
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            name="Paper Profit Goal",
+            target_type="profit",
+            target_currency="USD",
+            target_value=500.0,
+            time_horizon_months=6,
+            start_date=datetime.utcnow() - timedelta(days=30),
+            target_date=datetime.utcnow() + timedelta(days=150),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        # Paper account closed position with $150 profit
+        pos = Position(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=150.0,
+            closed_at=datetime.utcnow() - timedelta(days=5),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snap = AccountValueSnapshot(
+            account_id=paper_acct.id,
+            user_id=user.id,
+            snapshot_date=snapshot_date,
+            total_value_usd=1150.0,
+            total_value_btc=0.014,
+        )
+        db_session.add(snap)
+        await db_session.flush()
+
+        count = await capture_goal_snapshots(db_session, user.id)
+        assert count == 1
+
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            )
+        )
+        goal_snap = result.scalar_one()
+        assert goal_snap.current_value == pytest.approx(150.0, abs=1.0)
+
+    @pytest.mark.asyncio
+    async def test_backfill_includes_paper_account_when_goal_linked(self, db_session):
+        """Backfill should include paper account snapshots when goal is linked to paper account."""
+        user = User(
+            email="test_paper_backfill@example.com",
+            hashed_password="hashed",
+            display_name="Backfill User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        paper_acct = Account(
+            user_id=user.id,
+            name="Paper Account",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=True,
+        )
+        db_session.add(paper_acct)
+        await db_session.flush()
+
+        start = datetime.utcnow() - timedelta(days=10)
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            name="Backfill Paper Goal",
+            target_type="balance",
+            target_currency="USD",
+            target_value=2000.0,
+            time_horizon_months=6,
+            start_date=start,
+            target_date=start + timedelta(days=180),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        # Create snapshots for the paper account for the last 5 days
+        for i in range(5):
+            snap_date = (start + timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            snap = AccountValueSnapshot(
+                account_id=paper_acct.id,
+                user_id=user.id,
+                snapshot_date=snap_date,
+                total_value_usd=1000.0 + (i * 50),
+                total_value_btc=0.01 + (i * 0.001),
+            )
+            db_session.add(snap)
+        await db_session.flush()
+
+        count = await backfill_goal_snapshots(db_session, goal)
+        # Should have created snapshots (previously would have been 0 due to paper exclusion)
+        assert count > 0
+
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            ).order_by(GoalProgressSnapshot.snapshot_date)
+        )
+        snapshots = result.scalars().all()
+        # Should have multiple snapshots with non-zero values
+        assert len(snapshots) >= 5
+        assert all(s.current_value > 0 for s in snapshots)

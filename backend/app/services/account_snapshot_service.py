@@ -231,25 +231,7 @@ async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[
     if success_count > 0:
         try:
             from app.services.goal_snapshot_service import capture_goal_snapshots
-            snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            # Sum today's account values (non-paper-trading)
-            val_result = await db.execute(
-                select(
-                    func.sum(AccountValueSnapshot.total_value_usd),
-                    func.sum(AccountValueSnapshot.total_value_btc),
-                )
-                .join(Account, AccountValueSnapshot.account_id == Account.id)
-                .where(
-                    AccountValueSnapshot.user_id == user_id,
-                    AccountValueSnapshot.snapshot_date == snapshot_date,
-                    Account.is_paper_trading.is_(False),
-                )
-            )
-            val_row = val_result.one_or_none()
-            total_usd = (val_row[0] or 0.0) if val_row else 0.0
-            total_btc = (val_row[1] or 0.0) if val_row else 0.0
-
-            goal_count = await capture_goal_snapshots(db, user_id, total_usd, total_btc)
+            goal_count = await capture_goal_snapshots(db, user_id)
             if goal_count > 0:
                 await db.commit()
                 logger.info(f"Captured {goal_count} goal progress snapshots for user {user_id}")
