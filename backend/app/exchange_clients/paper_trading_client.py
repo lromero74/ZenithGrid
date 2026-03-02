@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import Account
@@ -41,20 +40,21 @@ class PaperTradingClient(ExchangeClient):
     to simulate execution without hitting real exchanges.
     """
 
-    def __init__(self, account: Account, db: AsyncSession, real_client: Optional[ExchangeClient] = None):
+    def __init__(self, account: Account, db=None, real_client: Optional[ExchangeClient] = None):
         """
         Initialize paper trading client.
 
         Args:
             account: Paper trading account
-            db: Database session for balance updates
+            db: Deprecated — ignored. Fresh sessions are created per-operation
+                to avoid greenlet_spawn errors across async contexts.
             real_client: Optional real exchange client for price data (uses Coinbase if not provided)
         """
         if not account.is_paper_trading:
             raise ValueError("PaperTradingClient requires a paper trading account")
 
         self.account = account
-        self.db = db
+        self.account_id = account.id
         self.real_client = real_client  # For fetching real prices
         self._order_cache: Dict[str, Dict[str, Any]] = {}
 
@@ -80,34 +80,39 @@ class PaperTradingClient(ExchangeClient):
         Must be called inside the per-account lock so we never operate on a
         stale in-memory snapshot.
 
-        Expires cached ORM state to force a fresh DB read, bypassing any
-        stale transaction snapshot from SQLite WAL mode.  Without this, a
-        session that began its implicit transaction before another session
-        committed would keep returning the old paper_balances value.
+        Uses a fresh session each time to avoid greenlet_spawn errors when
+        the original session is used across different async contexts.
         """
-        self.db.expire_all()  # sync method — forces next attribute access to hit DB
-        result = await self.db.execute(
-            select(Account).where(Account.id == self.account.id)
-        )
-        fresh = result.scalar_one_or_none()
-        if fresh and fresh.paper_balances:
-            self.balances = json.loads(fresh.paper_balances)
+        from app.database import async_session_maker
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(Account).where(Account.id == self.account_id)
+            )
+            fresh = result.scalar_one_or_none()
+            if fresh and fresh.paper_balances:
+                self.balances = json.loads(fresh.paper_balances)
 
     async def _save_balances(self):
-        """Save current balances to database with retry for SQLite lock contention."""
+        """Save current balances to database with retry for SQLite lock contention.
+
+        Uses a fresh session each time to avoid greenlet_spawn errors.
+        """
+        from app.database import async_session_maker
         for attempt in range(3):
             try:
-                # Merge to ensure account is persistent in the current session
-                self.account = await self.db.merge(self.account)
-                self.account.paper_balances = json.dumps(self.balances)
-                await self.db.commit()
-                await self.db.refresh(self.account)
+                async with async_session_maker() as db:
+                    result = await db.execute(
+                        select(Account).where(Account.id == self.account_id)
+                    )
+                    account = result.scalar_one_or_none()
+                    if account:
+                        account.paper_balances = json.dumps(self.balances)
+                        await db.commit()
                 return
             except Exception as e:
                 err_str = str(e).lower()
                 if ("database is locked" in err_str or "not persistent" in err_str) and attempt < 2:
                     logger.warning(f"Paper balance save failed (attempt {attempt + 1}/3): {e}")
-                    await self.db.rollback()
                     await asyncio.sleep(0.1 * (attempt + 1))
                 else:
                     raise
@@ -522,19 +527,24 @@ class PaperTradingClient(ExchangeClient):
 
         Returns the balance for that currency plus the current value of
         open positions in that currency's pairs (queried from the DB).
+        Uses a fresh session to avoid greenlet_spawn errors.
         """
         total = self.balances.get(quote_currency, 0.0)
 
         # Add value of open positions in this quote currency's pairs
+        from app.database import async_session_maker
         from app.models import Position
-        result = await self.db.execute(
-            select(Position).where(
-                Position.account_id == self.account.id,
-                Position.status == "open",
-                Position.product_id.like(f"%-{quote_currency}"),
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(Position).where(
+                    Position.account_id == self.account_id,
+                    Position.status == "open",
+                    Position.product_id.like(f"%-{quote_currency}"),
+                )
             )
-        )
-        for pos in result.scalars().all():
+            positions = result.scalars().all()
+
+        for pos in positions:
             amount = pos.total_base_acquired or 0.0
             if amount:
                 try:

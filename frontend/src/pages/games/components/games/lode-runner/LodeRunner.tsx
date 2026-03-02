@@ -23,8 +23,6 @@ import type { GameStatus } from '../../../types'
 // ---------------------------------------------------------------------------
 
 const C_BG = '#0a0a1a'
-const C_BRICK = '#8b5e3c'
-const C_BRICK_MORTAR = '#6b4226'
 const C_SOLID = '#4a4a5a'
 const C_SOLID_EDGE = '#3a3a4a'
 const C_LADDER = '#c89632'
@@ -34,6 +32,106 @@ const C_GOLD_SHINE = '#fde68a'
 const C_PLAYER_HUD = '#d4a017'
 const C_HIDDEN = '#22c55e'
 const C_HUD = '#ffffff'
+
+// C64-style brick palette
+const C_MORTAR = '#3d2517'
+const C_BRICK_A = '#9b6840'
+const C_BRICK_B = '#8b5830'
+const C_BRICK_HI = '#b07848'
+const C_BRICK_FILL_A = '#8b5e3c'
+const C_BRICK_FILL_B = '#9b6840'
+
+/** Must match engine's BRICK_OPEN_TIME */
+const BRICK_OPEN_SECS = 5.0
+const DIG_BLAST_DURATION = 0.3
+
+// ---------------------------------------------------------------------------
+// C64-style brick rendering
+// ---------------------------------------------------------------------------
+
+/** Draw a C64-style offset brick pattern (3 rows of alternating bricks) */
+function drawBrickPattern(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const bh = 8 // brick row height (3 × 8 = 24px cell)
+  // Fill mortar base
+  ctx.fillStyle = C_MORTAR
+  ctx.fillRect(x, y, CELL, CELL)
+  // Rows 0 and 2: two bricks side by side
+  for (const ri of [0, 2]) {
+    const by = y + ri * bh
+    ctx.fillStyle = C_BRICK_A
+    ctx.fillRect(x + 1, by + 1, CELL / 2 - 2, bh - 1)
+    ctx.fillStyle = C_BRICK_HI
+    ctx.fillRect(x + 1, by + 1, CELL / 2 - 2, 1)
+    ctx.fillStyle = C_BRICK_B
+    ctx.fillRect(x + CELL / 2 + 1, by + 1, CELL / 2 - 2, bh - 1)
+    ctx.fillStyle = C_BRICK_HI
+    ctx.fillRect(x + CELL / 2 + 1, by + 1, CELL / 2 - 2, 1)
+  }
+  // Row 1: offset — half brick, full brick, half brick
+  const by = y + bh
+  ctx.fillStyle = C_BRICK_B
+  ctx.fillRect(x + 1, by + 1, CELL / 4 - 1, bh - 1)
+  ctx.fillStyle = C_BRICK_HI
+  ctx.fillRect(x + 1, by + 1, CELL / 4 - 1, 1)
+  ctx.fillStyle = C_BRICK_A
+  ctx.fillRect(x + CELL / 4 + 1, by + 1, CELL / 2 - 2, bh - 1)
+  ctx.fillStyle = C_BRICK_HI
+  ctx.fillRect(x + CELL / 4 + 1, by + 1, CELL / 2 - 2, 1)
+  ctx.fillStyle = C_BRICK_B
+  ctx.fillRect(x + 3 * CELL / 4 + 1, by + 1, CELL / 4 - 2, bh - 1)
+  ctx.fillStyle = C_BRICK_HI
+  ctx.fillRect(x + 3 * CELL / 4 + 1, by + 1, CELL / 4 - 2, 1)
+}
+
+/** Render dig blast effect — C64-style zap/spark at the brick being dug */
+function drawDigBlast(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number): void {
+  const cx = x + CELL / 2
+  const cy = y + CELL / 2
+  const alpha = 1 - progress * progress
+  ctx.save()
+  ctx.globalAlpha = alpha
+  // Central flash
+  ctx.fillStyle = '#ffff66'
+  const r = 4 + progress * 6
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.fill()
+  // Pixel sparks
+  ctx.fillStyle = '#ffa500'
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2
+    const dist = 3 + progress * CELL * 0.5
+    ctx.fillRect(cx + Math.cos(angle) * dist - 1, cy + Math.sin(angle) * dist - 1, 2, 2)
+  }
+  // White-hot center
+  ctx.fillStyle = '#ffffff'
+  ctx.globalAlpha = alpha * 0.8
+  ctx.beginPath()
+  ctx.arc(cx, cy, 2 + progress * 2, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+/** Render C64-style V-shaped stepped brick refill animation */
+function drawBrickRefill(ctx: CanvasRenderingContext2D, x: number, y: number, frac: number): void {
+  if (frac <= 0) return
+  const px = 2
+  const gw = Math.floor(CELL / px)
+  const gh = Math.floor(CELL / px)
+  const mid = (gw - 1) / 2
+  for (let r = 0; r < gh; r++) {
+    const distFromBottom = 1 - r / (gh - 1) // 1 at top, 0 at bottom
+    for (let c = 0; c < gw; c++) {
+      const distFromEdge = 1 - Math.abs(c - mid) / mid // 1 at center, 0 at edges
+      // V-shape: bottom fills first, center-top fills last
+      const threshold = distFromBottom * 0.5 + distFromEdge * distFromBottom * 0.5
+      if (frac > threshold) {
+        ctx.fillStyle = ((r + c) & 1) ? C_BRICK_FILL_A : C_BRICK_FILL_B
+        ctx.fillRect(x + c * px, y + r * px, px, px)
+      }
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -53,29 +151,21 @@ function drawTiles(ctx: CanvasRenderingContext2D, gs: GameState): void {
 
       switch (tile) {
         case Tile.Brick: {
-          // Check if dug
           const dug = gs.dugBricks.find(db => db.col === c && db.row === r)
           if (dug) {
-            if (dug.phase === 'filling') {
-              // Partially filling in
-              const frac = 1 - dug.timer / 0.6
-              ctx.fillStyle = C_BRICK
-              ctx.fillRect(x, y + CELL * (1 - frac), CELL, CELL * frac)
+            if (dug.phase === 'open') {
+              // Dig blast effect for recently dug bricks
+              const elapsed = BRICK_OPEN_SECS - dug.timer
+              if (elapsed < DIG_BLAST_DURATION) {
+                drawDigBlast(ctx, x, y, elapsed / DIG_BLAST_DURATION)
+              }
+            } else if (dug.phase === 'filling') {
+              // C64 V-shaped stepped refill
+              drawBrickRefill(ctx, x, y, 1 - dug.timer / 0.6)
             }
-            // Open dug hole — draw nothing (empty)
           } else {
-            // Normal brick
-            ctx.fillStyle = C_BRICK
-            ctx.fillRect(x, y, CELL, CELL)
-            // Mortar lines
-            ctx.strokeStyle = C_BRICK_MORTAR
-            ctx.lineWidth = 1
-            ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1)
-            // Horizontal mortar
-            ctx.beginPath()
-            ctx.moveTo(x, y + CELL / 2)
-            ctx.lineTo(x + CELL, y + CELL / 2)
-            ctx.stroke()
+            // C64-style brick pattern
+            drawBrickPattern(ctx, x, y)
           }
           break
         }
@@ -315,11 +405,11 @@ const P_HANG: Frame[] = [
 ]
 
 const P_FALL: Frame[] = [[
+  [0,1,0,0,0,0,1,0],
+  [0,0,1,0,0,1,0,0],
   [0,0,1,1,1,1,0,0],
   [0,0,1,2,2,1,0,0],
   [0,0,0,1,1,0,0,0],
-  [0,1,0,1,1,0,1,0],
-  [1,0,0,1,1,0,0,1],
   [0,0,0,1,1,0,0,0],
   [0,0,1,3,3,1,0,0],
   [0,0,0,1,1,0,0,0],
@@ -468,11 +558,11 @@ const G_HANG: Frame[] = [
 ]
 
 const G_FALL: Frame[] = [[
-  [0,3,3,3,3,3,3,0],
+  [0,1,0,0,0,0,1,0],
+  [0,0,1,0,0,1,0,0],
+  [0,3,1,1,1,1,3,0],
   [0,0,1,2,2,1,0,0],
   [0,0,0,1,1,0,0,0],
-  [0,1,0,1,1,0,1,0],
-  [1,0,0,1,1,0,0,1],
   [0,0,0,1,1,0,0,0],
   [0,0,1,3,3,1,0,0],
   [0,0,0,1,1,0,0,0],

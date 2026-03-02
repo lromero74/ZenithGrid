@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.81.0] - 2026-03-02
+
+### Added
+- **Lode Runner C64 brick visuals**: Bricks now render with classic C64-style offset brick pattern with mortar lines and highlights
+- **Lode Runner dig blast effect**: Digging a brick shows a spark/zap animation at the dig site
+- **Lode Runner brick refill animation**: Bricks refill with a V-shaped stepped pixel-art pattern instead of a flat slide-up
+- **Lode Runner falling sprites**: Player and guard fall sprites now show arms raised above head, matching classic arcade pose
+
+### Fixed
+- **Paper trading bot can't sell**: Fixed greenlet_spawn error that prevented paper trading bots from executing sell orders — balance operations now use fresh database sessions instead of the shared session from initialization
+- **Lode Runner levels**: Fixed row-length inconsistencies across all 10 levels (padded/trimmed to exactly 28 columns), fixed unreachable gold in Levels 1 and 2
+
 ## [v2.80.1] - 2026-03-02
 
 ### Fixed
