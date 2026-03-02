@@ -14,7 +14,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from app.strategies.bull_flag_scanner import detect_bull_flag_pattern
+# Lazy-imported to break circular import chain:
+# indicators.__init__ → bull_flag_indicator → strategies.bull_flag_scanner
+# → strategies.__init__ → indicator_based → indicators.__init__
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +134,8 @@ class BullFlagIndicatorEvaluator:
         # Convert params to scanner config
         config = params.to_scanner_config()
 
-        # Run pattern detection
+        # Run pattern detection (lazy import to break circular import)
+        from app.strategies.bull_flag_scanner import detect_bull_flag_pattern
         pattern, rejection_reason = detect_bull_flag_pattern(candles, config)
 
         if pattern and pattern.get("pattern_valid"):
