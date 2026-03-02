@@ -10,7 +10,7 @@ import { formatRelativeTime } from '../../../components/news'
 import { NewsItem, CATEGORY_COLORS, ArticleContentResponse } from '../../../types/newsTypes'
 import { ArticleContent } from './ArticleContent'
 import { TTSControls } from './TTSControls'
-import type { UseTTSSyncReturn } from '../hooks/useTTSSync'
+import type { UseTTSSyncReturn } from '../../../hooks/useTTSSync'
 
 interface ArticlePreviewModalProps {
   previewArticle: NewsItem

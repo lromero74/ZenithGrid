@@ -21,7 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.encryption import encrypt_value, decrypt_value, is_encrypted
+from app.encryption import encrypt_value, mask_api_key
 from app.models import Account, Bot, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.account_service import (
@@ -36,18 +36,6 @@ from app.services.exchange_service import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _mask_key_name(val: Optional[str]) -> Optional[str]:
-    """Mask an encrypted or plaintext API key name for safe API responses."""
-    if not val:
-        return None
-    # Decrypt to get real value for masking
-    plain = decrypt_value(val) if is_encrypted(val) else val
-    if len(plain) <= 8:
-        return "****"
-    return plain[:4] + "****" + plain[-4:]
-
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -248,7 +236,7 @@ async def list_accounts(
                 is_active=account.is_active,
                 is_paper_trading=account.is_paper_trading or False,
                 exchange=account.exchange,
-                api_key_name=_mask_key_name(account.api_key_name),
+                api_key_name=mask_api_key(account.api_key_name),
                 chain_id=account.chain_id,
                 wallet_address=account.wallet_address,
                 rpc_url=account.rpc_url,
@@ -303,7 +291,7 @@ async def get_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=_mask_key_name(account.api_key_name),
+            api_key_name=mask_api_key(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -353,7 +341,7 @@ async def create_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=_mask_key_name(account.api_key_name),
+            api_key_name=mask_api_key(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -460,7 +448,7 @@ async def update_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=_mask_key_name(account.api_key_name),
+            api_key_name=mask_api_key(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -661,7 +649,7 @@ async def get_default_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=_mask_key_name(account.api_key_name),
+            api_key_name=mask_api_key(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,

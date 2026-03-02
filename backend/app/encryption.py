@@ -79,3 +79,13 @@ def is_encrypted(value: str) -> bool:
     if not value:
         return False
     return value.startswith("gAAAAA")
+
+
+def mask_api_key(val: str | None) -> str | None:
+    """Mask an encrypted or plaintext API key for safe API responses."""
+    if not val:
+        return None
+    plain = decrypt_value(val) if is_encrypted(val) else val
+    if len(plain) <= 8:
+        return "****"
+    return plain[:4] + "****" + plain[-4:]

@@ -70,36 +70,36 @@ async def test_bot(db_session, test_user, test_account):
 
 
 # =============================================================================
-# _mask_key_name helper
+# mask_api_key helper (moved to app.encryption)
 # =============================================================================
 
 
-class TestMaskKeyName:
-    """Tests for the _mask_key_name utility function."""
+class TestMaskApiKey:
+    """Tests for the mask_api_key utility function."""
 
-    def test_mask_key_name_normal_value(self):
+    def test_mask_api_key_normal_value(self):
         """Happy path: long key name is masked with first/last 4 chars."""
-        from app.routers.accounts_router import _mask_key_name
-        result = _mask_key_name("my-long-api-key-name")
+        from app.encryption import mask_api_key
+        result = mask_api_key("my-long-api-key-name")
         assert result.startswith("my-l")
         assert result.endswith("name")
         assert "****" in result
 
-    def test_mask_key_name_short_value(self):
+    def test_mask_api_key_short_value(self):
         """Edge case: short key (<= 8 chars) returns ****."""
-        from app.routers.accounts_router import _mask_key_name
-        result = _mask_key_name("short")
+        from app.encryption import mask_api_key
+        result = mask_api_key("short")
         assert result == "****"
 
-    def test_mask_key_name_none(self):
+    def test_mask_api_key_none(self):
         """Failure case: None input returns None."""
-        from app.routers.accounts_router import _mask_key_name
-        assert _mask_key_name(None) is None
+        from app.encryption import mask_api_key
+        assert mask_api_key(None) is None
 
-    def test_mask_key_name_empty_string(self):
+    def test_mask_api_key_empty_string(self):
         """Failure case: empty string returns None."""
-        from app.routers.accounts_router import _mask_key_name
-        assert _mask_key_name("") is None
+        from app.encryption import mask_api_key
+        assert mask_api_key("") is None
 
 
 # =============================================================================

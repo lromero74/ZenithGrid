@@ -13,10 +13,10 @@
 | Backend dependency direction | **A+** | Perfect layering — no upward imports |
 | Circular imports | **A+** | 83/83 modules import cleanly |
 | Frontend import hygiene | **A** | 2 minor context-layer violations |
-| File sizes | **C** | 7 backend + 1 frontend files over 1200 lines |
+| File sizes | **B-** | indicator_based.py reduced; html/pdf builders deferred (template code) |
 | Function sizes | **D** | 20+ CRITICAL functions (200+ lines), 30+ HIGH |
-| Coupling | **B** | `models.py` is a god module (86 importers), otherwise reasonable |
-| Separation of concerns | **B-** | Several routers contain business logic |
+| Coupling | **A** | models split, AI provider constants deduplicated, mask_api_key centralized |
+| Separation of concerns | **B+** | Router business logic extracted; remaining helpers are serialization, acceptable |
 | Cyclomatic complexity | **D** | 3 functions over 60 branches, 13 over 30 |
 
 ---
@@ -128,7 +128,7 @@
 ---
 
 ## What's Clean (No Action Needed)
-- Zero circular imports across 83 modules
+- Zero circular imports (fixed bull_flag_indicator ↔ strategies chain)
 - Zero backend dependency direction violations
 - Frontend pages/components/hooks — clean separation
 - God modules (models, database, auth) are expected central dependencies
@@ -142,10 +142,18 @@
 - [x] 1.2 Extract `get_article_content()` to service — moved to `services/article_content_service.py`, news_router 1228→815 lines
 - [x] 1.3 Remove duplicate `get_coinbase_from_db()` — bot_crud_router now imports from portfolio_service
 - [x] 1.4 Fix session_service HTTPException — uses `RateLimitError`/`SessionLimitError` domain exceptions
-- [ ] 2.1 Split models.py
+- [x] 2.1 Split models.py — 1672→5 domain modules (auth 239, trading 685, content 284, reporting 391, system 131) + circular import fix
 - [x] 2.2 Trading engine parameter dataclasses — TradeContext dataclass, 5 internal fns refactored (8-13→2-7 params)
 - [x] 2.3 Decompose portfolio_service — get_account_portfolio_data 358→~50 lines + 5 helpers
 - [x] 2.4 Decompose batch_analyzer — process_bot_batch 463→~45 lines + 7 helpers
 - [ ] 2.5 Decompose report builders (deferred — template/rendering code, low structural value)
-- [ ] 3.x Medium items (fix when touched)
+- [x] 3.1 Extract `_INDICATOR_PARAMS` from indicator_based.py — 1424→1232 lines (params → `indicator_params.py`)
+- [x] 3.2 Router business logic → services:
+  - Moved AI provider constants/functions from blacklist_router + coin_review_service → settings_service (deduplication)
+  - Moved `_mask_key_name` from accounts_router → `encryption.mask_api_key`
+  - reports_router helpers: reviewed, acceptable as serialization helpers (not business logic)
+- [x] 3.3 Bot.get_total_reserved — reviewed, acceptable on model (accesses self.positions ORM relationship)
+- [x] 3.4 Frontend import direction: moved `useTTSSync` from `pages/news/hooks/` → shared `hooks/`
+  - NotificationContext→Toast: reviewed, acceptable (provider renders component, standard React pattern)
+- [ ] 3.5 Frontend component bloat (deferred — large files, each needs its own PRP)
 - [ ] 4.x Low items (opportunistic)
