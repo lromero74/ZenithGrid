@@ -104,7 +104,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
     }
   }
 
-  // Fetch account value history
+  // Fetch account value history (wait for account selection to avoid wrong defaults)
   const { data: history, isLoading } = useQuery<AccountValueSnapshot[]>({
     queryKey: ['account-value-history', timeRange, includePaperTrading, accountId],
     queryFn: async () => {
@@ -112,6 +112,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
       return accountValueApi.getHistory(days, includePaperTrading, accountId)
     },
     refetchInterval: 300000, // Refresh every 5 minutes
+    enabled: !!selectedAccount,
   })
 
   // Fetch activity data for chart markers
@@ -122,6 +123,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
       return accountValueApi.getActivity(days, includePaperTrading, accountId)
     },
     refetchInterval: 300000,
+    enabled: !!selectedAccount,
   })
 
   const toggleCategory = useCallback((cat: MarkerCategory) => {
