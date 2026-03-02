@@ -100,6 +100,8 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login_at: Optional[datetime]
     terms_accepted_at: Optional[datetime] = None  # NULL = must accept terms
+    last_seen_history_count: int = 0
+    last_seen_failed_count: int = 0
     groups: List[GroupResponse] = []
     permissions: List[str] = []
 

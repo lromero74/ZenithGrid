@@ -26,6 +26,8 @@ const mockUser = {
   created_at: '2025-01-01T00:00:00Z',
   last_login_at: null,
   terms_accepted_at: '2025-01-01T00:00:00Z',
+  last_seen_history_count: 0,
+  last_seen_failed_count: 0,
 }
 
 // Helper to set up a valid authenticated session in localStorage

@@ -11,7 +11,7 @@ import { FilterPanel } from './positions/components/FilterPanel'
 
 function ClosedPositions() {
   const { selectedAccount } = useAccount()
-  const { getAccessToken } = useAuth()
+  const { user, getAccessToken, updateUser } = useAuth()
   const [activeTab, setActiveTab] = useState<'closed' | 'failed'>(() => {
     try { return (localStorage.getItem('zenith-history-tab') as 'closed' | 'failed') || 'closed' } catch { return 'closed' }
   })
@@ -42,31 +42,10 @@ function ClosedPositions() {
   const [closedPage, setClosedPage] = useState(1)
   const pageSize = 25
 
-  // Track last seen counts separately for closed and failed (server-synced)
-  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
-  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(0)
+  // Track last seen counts separately for closed and failed - seeded from user profile
+  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(user?.last_seen_history_count || 0)
+  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(user?.last_seen_failed_count || 0)
   const [currentBtcUsdPrice, setCurrentBtcUsdPrice] = useState<number>(0)
-
-  // Fetch initial counts from server on mount
-  useEffect(() => {
-    const fetchLastSeenCounts = async () => {
-      const token = getAccessToken()
-      if (!token) return
-
-      try {
-        const response = await authFetch('/api/auth/preferences/last-seen-history')
-        if (response.ok) {
-          const data = await response.json()
-          setLastSeenClosedCount(data.last_seen_history_count || 0)
-          setLastSeenFailedCount(data.last_seen_failed_count || 0)
-        }
-      } catch (error) {
-        console.error('Failed to fetch last seen counts:', error)
-      }
-    }
-
-    fetchLastSeenCounts()
-  }, [getAccessToken])
 
   // Fetch current BTC/USD price for "today's USD" calculation
   useEffect(() => {
@@ -256,13 +235,16 @@ function ClosedPositions() {
           const token = getAccessToken()
           if (token) {
             try {
-              await authFetch('/api/auth/preferences/last-seen-history', {
+              const resp = await authFetch('/api/auth/preferences/last-seen-history', {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ count: currentClosedCount })
               })
+              if (resp.ok && user) {
+                updateUser({ ...user, last_seen_history_count: currentClosedCount })
+              }
             } catch (error) {
               console.error('Failed to save last seen closed count:', error)
             }
@@ -281,13 +263,16 @@ function ClosedPositions() {
           const token = getAccessToken()
           if (token) {
             try {
-              await authFetch('/api/auth/preferences/last-seen-history', {
+              const resp = await authFetch('/api/auth/preferences/last-seen-history', {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ failed_count: currentFailedCount })
               })
+              if (resp.ok && user) {
+                updateUser({ ...user, last_seen_failed_count: currentFailedCount })
+              }
             } catch (error) {
               console.error('Failed to save last seen failed count:', error)
             }
@@ -296,7 +281,7 @@ function ClosedPositions() {
         return () => clearTimeout(timer)
       }
     }
-  }, [activeTab, currentClosedCount, currentFailedCount, lastSeenClosedCount, lastSeenFailedCount, getAccessToken])
+  }, [activeTab, currentClosedCount, currentFailedCount, lastSeenClosedCount, lastSeenFailedCount, getAccessToken, user, updateUser])
 
   const getQuoteCurrency = (productId: string) => {
     const quote = productId?.split('-')[1] || 'BTC'

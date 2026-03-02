@@ -196,6 +196,8 @@ def _build_user_response(user: User) -> UserResponse:
         created_at=user.created_at,
         last_login_at=user.last_login_at,
         terms_accepted_at=user.terms_accepted_at,
+        last_seen_history_count=user.last_seen_history_count or 0,
+        last_seen_failed_count=user.last_seen_failed_count or 0,
         groups=[GroupResponse.model_validate(g) for g in groups],
         permissions=permissions,
     )

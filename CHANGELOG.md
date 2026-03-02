@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.83.0] - 2026-03-02
+
+### Added
+- **Paper trading slippage simulation**: Paper trade fills now walk the real order book (VWAP) instead of using mid-price, producing realistic fill prices that account for spread and depth — toggle per bot in Slippage Guard settings
+- **"Simulate Slippage" parameter**: New paper-trading-only toggle in bot config; enabled by default for all paper bots via migration
+- **Last-seen badge counts in user profile**: Closed/failed position badge counts are now returned in the user profile response, eliminating a separate API call on every page load
+
+### Changed
+- **Paper portfolio valuation**: Altcoin prices now fetched as USD pairs first (with BTC fallback), improving accuracy for coins with direct USD markets
+- **Account snapshot service**: USD/BTC portion calculation simplified — everything non-BTC is now the USD portion, avoiding double-counting from open positions
+
+### Fixed
+- **SQLite "database is locked" errors**: Indicator log writes reduced ~80-85% by skipping non-actionable evaluations (no signal fired, no open position) — the common case that was generating thousands of unnecessary commits per cycle
+
 ## [v2.82.10] - 2026-03-02
 
 ### Fixed

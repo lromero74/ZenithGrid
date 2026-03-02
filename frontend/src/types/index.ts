@@ -207,6 +207,7 @@ export interface StrategyParameter {
   required?: boolean;
   group?: string;
   visible_when?: Record<string, any>;
+  paper_trading_only?: boolean;
 }
 
 export interface StrategyDefinition {

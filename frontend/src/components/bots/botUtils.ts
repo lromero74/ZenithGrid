@@ -123,11 +123,16 @@ export const convertProductsToTradingPairs = (products: any[]): TradingPair[] =>
 }
 
 // Check if parameter should be visible based on visible_when condition
+// and paper_trading_only flag
 export const isParameterVisible = (
   param: StrategyParameter,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategyConfig: Record<string, any>
+  strategyConfig: Record<string, any>,
+  isPaperTrading?: boolean,
 ): boolean => {
+  // Hide paper-trading-only params on live accounts
+  if (param.paper_trading_only && !isPaperTrading) return false
+
   if (!param.visible_when) return true
 
   // Check each condition in visible_when

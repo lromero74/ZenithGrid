@@ -51,7 +51,7 @@ function AppContent() {
   const location = useLocation()
   const navigate = useNavigate()
   const { selectedAccount } = useAccount()
-  const { user, logout, getAccessToken } = useAuth()
+  const { user, logout } = useAuth()
   const { brand } = useBrand()
   const isAdmin = useIsAdmin()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
@@ -77,28 +77,8 @@ function AppContent() {
       .catch(() => setAppVersion('dev'))
   }, [])
 
-  // Track last seen count for closed positions - fetched from server
-  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
-
-  // Fetch last seen history count from server on mount
-  useEffect(() => {
-    const fetchLastSeenCounts = async () => {
-      const token = getAccessToken()
-      if (!token) return
-
-      try {
-        const response = await authFetch('/api/auth/preferences/last-seen-history')
-        if (response.ok) {
-          const data = await response.json()
-          setLastSeenClosedCount(data.last_seen_history_count || 0)
-        }
-      } catch (error) {
-        console.error('Failed to fetch last seen history counts:', error)
-      }
-    }
-
-    fetchLastSeenCounts()
-  }, [getAccessToken])
+  // Track last seen count for closed positions - from user profile (no extra API call)
+  const lastSeenClosedCount = user?.last_seen_history_count || 0
 
   // Defer non-critical API calls until after initial render
   const [deferredQueriesEnabled, setDeferredQueriesEnabled] = useState(false)

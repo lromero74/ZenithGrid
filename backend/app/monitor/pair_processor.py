@@ -390,6 +390,17 @@ async def _log_indicator_evaluations(
     if not condition_details:
         return
 
+    # Skip logging when no conditions are met and no position exists.
+    # This is the common case (~88% of evaluations) and generates
+    # write noise that overwhelms SQLite with lock contention.
+    has_any_signal = (
+        signal_data.get("base_order_signal")
+        or signal_data.get("safety_order_signal")
+        or signal_data.get("take_profit_signal")
+    )
+    if not has_any_signal and existing_position is None:
+        return
+
     has_position = existing_position is not None
 
     # Check if position has DCA slots available

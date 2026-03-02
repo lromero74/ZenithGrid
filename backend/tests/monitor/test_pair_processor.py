@@ -5,11 +5,11 @@ Tests single pair processing: candle fetching, indicator calculation delegation,
 signal generation, strategy dispatch, position handling, and DB commit behavior.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.monitor.pair_processor import process_bot_pair
+from app.monitor.pair_processor import process_bot_pair, _log_indicator_evaluations
 
 
 # ---------------------------------------------------------------------------
@@ -984,3 +984,143 @@ class TestBudgetSplitPercentageAdjustment:
             "safety_order_percentage should be divided by 10 when auto_calculate is off"
         assert captured_config["base_order_percentage"] == 3.0, \
             "base_order_percentage should be divided by 10 when auto_calculate is off"
+
+
+# ===========================================================================
+# Class: TestLogIndicatorEvaluationsFiltering
+# ===========================================================================
+
+
+class TestLogIndicatorEvaluationsFiltering:
+    """Tests for _log_indicator_evaluations skip-logging optimization.
+
+    When no signal fires and no position exists, indicator logs are pure noise
+    that overwhelm SQLite with write lock contention. The function should skip
+    logging in that case.
+    """
+
+    @pytest.mark.asyncio
+    async def test_skips_logging_no_signal_no_position(self, db_session):
+        """No signal + no position = skip logging (the common 88% case)."""
+        bot = _make_bot()
+        signal_data = {
+            "base_order_signal": False,
+            "safety_order_signal": False,
+            "take_profit_signal": False,
+            "condition_details": {
+                "base_order": [{"indicator": "rsi", "met": False}],
+            },
+        }
+
+        with patch(
+            "app.monitor.pair_processor.log_indicator_evaluation",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await _log_indicator_evaluations(
+                db=db_session, bot=bot, product_id="ETH-USD",
+                signal_data=signal_data, current_price=3000.0,
+                existing_position=None, indicators={"rsi": 45.0},
+            )
+
+        mock_log.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_logs_when_base_order_signal_fires(self, db_session):
+        """Base order signal = always log, even without position."""
+        bot = _make_bot()
+        signal_data = {
+            "base_order_signal": True,
+            "safety_order_signal": False,
+            "take_profit_signal": False,
+            "condition_details": {
+                "base_order": [{"indicator": "rsi", "met": True}],
+            },
+        }
+
+        with patch(
+            "app.monitor.pair_processor.log_indicator_evaluation",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await _log_indicator_evaluations(
+                db=db_session, bot=bot, product_id="ETH-USD",
+                signal_data=signal_data, current_price=3000.0,
+                existing_position=None, indicators={"rsi": 28.0},
+            )
+
+        mock_log.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_logs_when_position_exists_no_signal(self, db_session):
+        """Open position + no signal = still log (DCA/TP eval matters)."""
+        bot = _make_bot()
+        pos = _make_position()
+        signal_data = {
+            "base_order_signal": False,
+            "safety_order_signal": False,
+            "take_profit_signal": False,
+            "condition_details": {
+                "safety_order": [{"indicator": "rsi", "met": False}],
+                "take_profit": [{"indicator": "price_above_avg", "met": False}],
+            },
+        }
+
+        with patch(
+            "app.monitor.pair_processor.log_indicator_evaluation",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await _log_indicator_evaluations(
+                db=db_session, bot=bot, product_id="ETH-USD",
+                signal_data=signal_data, current_price=3000.0,
+                existing_position=pos, indicators={"rsi": 55.0},
+            )
+
+        assert mock_log.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_logs_when_safety_order_signal_fires(self, db_session):
+        """Safety order signal + position = always log."""
+        bot = _make_bot()
+        pos = _make_position()
+        signal_data = {
+            "base_order_signal": False,
+            "safety_order_signal": True,
+            "take_profit_signal": False,
+            "condition_details": {
+                "safety_order": [{"indicator": "rsi", "met": True}],
+            },
+        }
+
+        with patch(
+            "app.monitor.pair_processor.log_indicator_evaluation",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await _log_indicator_evaluations(
+                db=db_session, bot=bot, product_id="ETH-USD",
+                signal_data=signal_data, current_price=3000.0,
+                existing_position=pos, indicators={"rsi": 22.0},
+            )
+
+        mock_log.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_no_condition_details(self, db_session):
+        """No condition_details at all = early return (pre-existing behavior)."""
+        bot = _make_bot()
+        signal_data = {
+            "base_order_signal": False,
+            "safety_order_signal": False,
+            "take_profit_signal": False,
+            # No condition_details key
+        }
+
+        with patch(
+            "app.monitor.pair_processor.log_indicator_evaluation",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await _log_indicator_evaluations(
+                db=db_session, bot=bot, product_id="ETH-USD",
+                signal_data=signal_data, current_price=3000.0,
+                existing_position=None, indicators={},
+            )
+
+        mock_log.assert_not_called()
