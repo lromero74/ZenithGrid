@@ -622,4 +622,11 @@ async def process_bot_pair(
 
     except Exception as e:
         logger.error(f"Error processing bot {bot.name}: {e}", exc_info=True)
+        # Recover the session so the next product in the batch can proceed.
+        # Without this, a single "database is locked" error poisons the
+        # session and cascades to ALL remaining products in the cycle.
+        try:
+            await db.rollback()
+        except Exception:
+            pass
         return {"error": str(e)}

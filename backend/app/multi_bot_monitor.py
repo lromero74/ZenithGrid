@@ -536,6 +536,11 @@ class MultiBotMonitor:
                         except Exception as e:
                             logger.error(f"  Error processing {product_id}: {e}")
                             batch_results.append({"error": str(e)})
+                            # Recover session so next product doesn't cascade
+                            try:
+                                await db.rollback()
+                            except Exception:
+                                pass
                         # Throttle between pairs to reduce CPU burst (t2.micro friendly)
                         await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
 
