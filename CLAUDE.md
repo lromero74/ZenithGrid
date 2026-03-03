@@ -146,6 +146,7 @@ git checkout -b feature/my-feature    # Branch from main
 ./bot.sh restart --dev --both         # Both services
 ./bot.sh restart --prod               # Rebuild frontend + restart all
 ./bot.sh restart --prod --force       # Switch modes (dev ↔ prod)
+./bot.sh build                        # Rebuild frontend only (no restart)
 ./bot.sh status                       # Check mode and service health
 ./bot.sh stop                         # Stop all services (for migrations)
 ```
@@ -155,6 +156,7 @@ git checkout -b feature/my-feature    # Branch from main
 - Frontend changes in dev mode do NOT need a restart (Vite HMR handles it)
 - Switching modes requires `--force`
 - In prod mode, use `./bot.sh restart --prod` — don't combine `--prod` with `--back-end`
+- **Frontend-only changes in prod mode**: use `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend serves static files from disk, so new bundles are live immediately.
 - **Never restart unnecessarily** — it disrupts the running trading bot
 
 ## Database & Migrations

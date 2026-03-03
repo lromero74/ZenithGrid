@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZenithGrid Trading Bot Manager
-# Usage: ./bot.sh [start|stop|restart --dev --back-end|--front-end|--both|restart --prod [--force]|status|logs]
+# Usage: ./bot.sh [start|stop|restart --dev --back-end|--front-end|--both|restart --prod [--force]|build|status|logs]
 
 set -e
 
@@ -804,6 +804,44 @@ case "${1:-}" in
         echo -e "${YELLOW}========================================${NC}"
         ;;
 
+    build)
+        # Rebuild frontend dist/ without restarting any services.
+        # In prod mode the backend serves dist/ from disk, so new
+        # files are picked up on the next browser request.
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}  Rebuilding Frontend${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo ""
+
+        CURRENT_MODE=$(get_current_mode)
+        if [ "$CURRENT_MODE" != "prod" ]; then
+            echo -e "${YELLOW}Note: Currently in DEV mode." \
+                "HMR picks up changes automatically.${NC}"
+            echo -e "${YELLOW}This command is intended for" \
+                "PROD mode.${NC}"
+            echo ""
+        fi
+
+        echo -e "${BLUE}Building frontend...${NC}"
+        (cd "$FRONTEND_DIR" && npm run build) || {
+            echo -e "${RED}Frontend build failed${NC}"
+            exit 1
+        }
+
+        if [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
+            echo -e "${RED}Build produced no dist/index.html${NC}"
+            exit 1
+        fi
+
+        echo ""
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${GREEN}Frontend rebuilt → dist/${NC}"
+        if [ "$CURRENT_MODE" = "prod" ]; then
+            echo -e "${GREEN}Live now — no restart needed${NC}"
+        fi
+        echo -e "${YELLOW}========================================${NC}"
+        ;;
+
     status)
         show_status
         ;;
@@ -830,6 +868,8 @@ case "${1:-}" in
             "services (dev mode)"
         echo "  restart --prod               Rebuild + restart" \
             "(prod mode)"
+        echo "  build                        Rebuild frontend" \
+            "only (no restart)"
         echo "  status                       Show mode," \
             "services, and nginx"
         echo "  logs                         Show recent logs"
