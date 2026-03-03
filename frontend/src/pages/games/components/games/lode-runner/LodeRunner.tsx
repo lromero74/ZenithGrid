@@ -622,7 +622,7 @@ function drawSprite(
 function getAnimFrame(frames: Frame[], animTime: number, moving: boolean = true): Frame {
   if (!moving) return frames[0]
   const idx = Math.floor(animTime / 0.18) % frames.length
-  return frames[idx]
+  return frames[idx] ?? frames[0]
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, animTime: number): void {
@@ -926,7 +926,9 @@ export default function LodeRunner() {
         && Array.isArray(saved.dugBricks)
         && Array.isArray(saved.digProjectiles)
         && Array.isArray(saved.goldMap)
-        && saved.player) {
+        && saved.player
+        && typeof saved.animTime === 'number'
+        && Number.isFinite(saved.animTime)) {
       gsRef.current = saved
       setScore(saved.score)
       setLevel(saved.level)
