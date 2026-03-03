@@ -167,6 +167,16 @@ http://127.0.0.1:[0-9]*;|proxy_pass \
 http://127.0.0.1:'"${BACKEND_PORT}"';|' "$conf"
 }
 
+# Ensure ALL /api/ location blocks always point to the backend port.
+# Only "location / {" should vary between dev (Vite) and prod (backend);
+# /api/ routes must always reach the backend directly.
+ensure_nginx_api_backend() {
+    local conf
+    conf=$(resolve_nginx_conf) || return 1
+    # Match any "location /api" block and fix its proxy_pass
+    sudo sed -i '/location \/api/,/}/ s|proxy_pass http://127.0.0.1:[0-9]*;|proxy_pass http://127.0.0.1:'"${BACKEND_PORT}"';|' "$conf"
+}
+
 # Validate nginx config and reload the service
 reload_nginx() {
     if sudo nginx -t 2>&1; then
@@ -195,6 +205,9 @@ switch_to_dev() {
     else
         echo -e "  Nginx: already pointing to ${FRONTEND_PORT}"
     fi
+
+    # Always ensure /api/ blocks point to backend (never Vite)
+    ensure_nginx_api_backend
 
     # 2. Frontend service: enable + start
     if ! is_service_running "$FRONTEND_SERVICE"; then
@@ -263,6 +276,9 @@ switch_to_prod() {
     else
         echo -e "  Nginx: already pointing to ${BACKEND_PORT}"
     fi
+
+    # Always ensure /api/ blocks point to backend
+    ensure_nginx_api_backend
 
     # 4. Reload nginx if config changed
     if [ "$changed" = true ]; then
