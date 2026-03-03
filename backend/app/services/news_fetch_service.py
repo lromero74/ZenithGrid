@@ -13,7 +13,7 @@ import html as html_module
 import logging
 import re
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -443,7 +443,7 @@ async def store_article_in_db(
         cached_thumbnail_path=cached_thumbnail_path,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.now(timezone.utc),
+        fetched_at=datetime.utcnow(),
     )
     db.add(article)
     return article
@@ -482,7 +482,7 @@ async def store_video_in_db(
         thumbnail_url=item.thumbnail,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.now(timezone.utc),
+        fetched_at=datetime.utcnow(),
     )
     db.add(video)
     return video
@@ -748,7 +748,7 @@ async def fetch_all_news() -> None:
     except Exception as e:
         logger.warning(f"Post-fetch article cleanup failed: {e}")
 
-    _last_news_refresh = datetime.now(timezone.utc)
+    _last_news_refresh = datetime.utcnow()
 
 
 async def fetch_all_videos() -> Dict[str, Any]:
@@ -803,7 +803,7 @@ async def fetch_all_videos() -> Dict[str, Any]:
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     cache_data = {
         "videos": merged_items,
         "sources": sources_list,
@@ -813,5 +813,5 @@ async def fetch_all_videos() -> Dict[str, Any]:
     }
     save_video_cache(cache_data)
 
-    _last_video_refresh = datetime.now(timezone.utc)
+    _last_video_refresh = datetime.utcnow()
     return cache_data

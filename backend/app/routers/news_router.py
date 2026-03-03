@@ -18,7 +18,7 @@ Sub-routers:
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -119,7 +119,7 @@ async def get_articles_for_user(
     - user_category override applied in response layer, not here
     """
 
-    default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     # Base query: articles with source_id JOIN through ContentSource
     # LEFT JOIN subscription for per-user overrides
@@ -163,7 +163,7 @@ async def get_articles_for_user(
     result = await db.execute(query)
     rows = result.all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     filtered = []
     for article, retention_days in rows:
         if retention_days is not None:
@@ -190,7 +190,7 @@ async def get_articles_from_db(
     """Legacy: get articles without user filtering (for internal use)."""
     from sqlalchemy import func
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     conditions = [NewsArticle.published_at >= cutoff]
     if category:
@@ -272,7 +272,7 @@ async def get_videos_for_user(
 ) -> List[VideoArticle]:
     """Get videos filtered by user's subscriptions and retention."""
 
-    default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     query = (
         select(VideoArticle, UserSourceSubscription.retention_days)
@@ -308,7 +308,7 @@ async def get_videos_for_user(
     result = await db.execute(query)
     rows = result.all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     filtered = []
     for video, retention_days in rows:
         if retention_days is not None:
@@ -324,7 +324,7 @@ async def get_videos_from_db_list(
     db: AsyncSession, category: Optional[str] = None
 ) -> List[VideoArticle]:
     """Legacy: get videos without user filtering (for internal use)."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
     conditions = [VideoArticle.published_at >= cutoff]
     if category:
         conditions.append(VideoArticle.category == category)
@@ -395,7 +395,7 @@ async def get_videos_from_db(
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     return {
         "videos": video_items,
         "sources": sources_list,
@@ -452,7 +452,7 @@ async def get_news_from_db(
         else 1
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     return {
         "news": news_items,
         "sources": sources_list,

@@ -10,6 +10,15 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_naive_utc(iso_str: str) -> datetime:
+    """Parse ISO datetime string, stripping timezone info to get naive UTC."""
+    dt = datetime.fromisoformat(iso_str)
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
+
 # Cache file paths
 CACHE_DIR = Path(__file__).parent.parent.parent.parent
 CACHE_FILE = CACHE_DIR / "news_cache.json"
@@ -108,8 +117,8 @@ def load_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
             cache = json.load(f)
 
         # Check if cache needs refresh (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.now() - cached_at
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        cache_age = datetime.utcnow() - cached_at
 
         if for_merge:
             # For merging, return cache regardless of age
@@ -137,7 +146,7 @@ def save_cache(data: Dict[str, Any]) -> None:
 
 def prune_old_items(items: List[Dict], max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> List[Dict]:
     """Remove items older than max_age_days based on published date."""
-    cutoff = datetime.now() - timedelta(days=max_age_days)
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
     pruned = []
     removed_count = 0
 
@@ -149,9 +158,9 @@ def prune_old_items(items: List[Dict], max_age_days: int = NEWS_ITEM_MAX_AGE_DAY
             continue
 
         try:
-            # Handle both with and without Z suffix
+            # Handle both with and without Z suffix, and tz-aware strings
             pub_str = published.rstrip("Z")
-            pub_date = datetime.fromisoformat(pub_str)
+            pub_date = _parse_naive_utc(pub_str)
 
             if pub_date >= cutoff:
                 pruned.append(item)
@@ -204,8 +213,8 @@ def load_video_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
             cache = json.load(f)
 
         # Check if cache needs refresh (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.now() - cached_at
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        cache_age = datetime.utcnow() - cached_at
 
         if for_merge:
             # For merging, return cache regardless of age
@@ -241,8 +250,8 @@ def load_fear_greed_cache() -> Optional[Dict[str, Any]]:
             cache = json.load(f)
 
         # Check if cache is expired (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        if datetime.utcnow() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
             logger.info("Fear/Greed cache expired")
             return None
 
@@ -272,8 +281,8 @@ def load_block_height_cache() -> Optional[Dict[str, Any]]:
             cache = json.load(f)
 
         # Check if cache is expired (10 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        if datetime.utcnow() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
             logger.info("Block height cache expired")
             return None
 
@@ -303,8 +312,8 @@ def load_us_debt_cache() -> Optional[Dict[str, Any]]:
             cache = json.load(f)
 
         # Check if cache is expired (24 hours)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        if datetime.utcnow() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
             logger.info("US debt cache expired")
             return None
 
@@ -334,8 +343,8 @@ def _load_market_metrics_cache(cache_file: Path, name: str) -> Optional[Dict[str
         with open(cache_file, "r") as f:
             cache = json.load(f)
 
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
+        cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
+        if datetime.utcnow() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
             logger.info(f"{name} cache expired")
             return None
 

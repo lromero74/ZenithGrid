@@ -227,7 +227,7 @@ async def get_btc_supply(current_user: User = Depends(get_current_user)):
 
     height = cache.get("height", 0)
     result = calculate_btc_supply(height)
-    result["cached_at"] = cache.get("timestamp", datetime.now().isoformat())
+    result["cached_at"] = cache.get("timestamp", datetime.utcnow().isoformat())
     return result
 
 

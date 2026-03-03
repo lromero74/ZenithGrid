@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.3] - 2026-03-03
+
+### Fixed
+- **News/video/metrics loading after PostgreSQL migration**: Fixed timezone-aware vs naive datetime mismatches that broke all cache expiry checks and content refresh after migrating to PostgreSQL. Standardized all datetime operations to naive UTC across 6 backend files
+- **Stale timezone-aware cache files**: Old JSON cache files (news, video, market metrics) contained timezone-aware timestamps from pre-migration code. Cache loaders now strip timezone info when parsing, preventing "can't subtract offset-naive and offset-aware datetimes" crashes
+- **Demo account snapshot accuracy**: Corrected March 1st and 2nd snapshots for all three demo paper trading accounts where price-fetch failures during snapshot capture caused account values to be underreported
+
 ## [v2.84.0] - 2026-03-03
 
 ### Added
