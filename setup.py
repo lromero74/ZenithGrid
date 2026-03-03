@@ -316,6 +316,69 @@ def prompt_yes_no(question, default='yes'):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').")
 
 
+def prompt_for_database_backend():
+    """Prompt user to select database backend (SQLite or PostgreSQL).
+
+    Returns:
+        dict: {'db_backend': 'sqlite'|'postgres', 'database_url': str}
+    """
+    print()
+    print_info("Database Backend Selection")
+    print_info("  [1] SQLite (default — single-file, no setup needed)")
+    print_info("  [2] PostgreSQL (recommended for production — concurrent writes)")
+    print()
+
+    while True:
+        choice = input("Select database backend [1]: ").strip()
+        if choice in ('', '1'):
+            return {
+                'db_backend': 'sqlite',
+                'database_url': 'sqlite+aiosqlite:///./trading.db',
+            }
+        elif choice == '2':
+            print()
+            print_info("PostgreSQL connection details:")
+            host = input("  Host [localhost]: ").strip() or "localhost"
+            port = input("  Port [5432]: ").strip() or "5432"
+            dbname = input("  Database name [zenithgrid]: ").strip() or "zenithgrid"
+            user = input("  Username [zenithgrid_app]: ").strip() or "zenithgrid_app"
+            password = getpass.getpass("  Password: ")
+            if not password:
+                print_error("Password cannot be empty.")
+                continue
+            url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{dbname}"
+            return {
+                'db_backend': 'postgres',
+                'database_url': url,
+            }
+        else:
+            print("Please enter 1 or 2.")
+
+
+def idempotent_insert(cursor, table, columns, values, unique_columns, is_postgres=False):
+    """Insert a row if it doesn't already exist (works for SQLite and PostgreSQL).
+
+    Args:
+        cursor: Database cursor
+        table: Table name
+        columns: List of column names
+        values: Tuple of values matching columns
+        unique_columns: List of column names forming the uniqueness constraint
+        is_postgres: True for PostgreSQL, False for SQLite
+    """
+    if is_postgres:
+        col_list = ", ".join(columns)
+        placeholders = ", ".join(["%s"] * len(values))
+        conflict_cols = ", ".join(unique_columns)
+        sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders}) ON CONFLICT ({conflict_cols}) DO NOTHING"
+        cursor.execute(sql, values)
+    else:
+        col_list = ", ".join(columns)
+        placeholders = ", ".join(["?"] * len(values))
+        sql = f"INSERT OR IGNORE INTO {table} ({col_list}) VALUES ({placeholders})"
+        cursor.execute(sql, values)
+
+
 def display_license_and_get_acceptance(project_root):
     """Display the license file and require user to accept it before proceeding"""
     license_path = project_root / 'LICENSE'
@@ -847,8 +910,44 @@ def install_frontend_dependencies(project_root, force_reinstall=False):
         return False
 
 
-def initialize_database(project_root):
-    """Initialize the SQLite database with all required tables"""
+def initialize_database(project_root, db_config=None):
+    """Initialize the database with all required tables.
+
+    For PostgreSQL, uses SQLAlchemy Base.metadata.create_all() for schema creation.
+    For SQLite, uses raw SQL (original behavior).
+
+    Args:
+        project_root: Project root Path
+        db_config: Optional dict with 'db_backend' and 'database_url' keys
+    """
+    is_pg = db_config and db_config.get('db_backend') == 'postgres'
+
+    if is_pg:
+        print_info("Initializing PostgreSQL database via SQLAlchemy...")
+        try:
+            venv_python = get_venv_python(project_root)
+            # Use a small inline script to create tables via SQLAlchemy
+            init_script = (
+                "import sys; sys.path.insert(0, 'backend'); "
+                "from app.database import Base, get_sync_engine; "
+                "from app.models import *; "  # noqa
+                "engine = get_sync_engine(); "
+                "Base.metadata.create_all(engine); "
+                "print('PostgreSQL schema created successfully')"
+            )
+            result = subprocess.run(
+                [str(venv_python), '-c', init_script],
+                capture_output=True, text=True, cwd=str(project_root)
+            )
+            if result.returncode != 0:
+                print_error(f"PostgreSQL init failed: {result.stderr}")
+                return False
+            print_success("PostgreSQL tables created via SQLAlchemy models")
+            return True
+        except Exception as e:
+            print_error(f"Failed to initialize PostgreSQL: {e}")
+            return False
+
     db_path = project_root / 'backend' / 'trading.db'
 
     print_info("Initializing database...")
@@ -2813,12 +2912,12 @@ def initialize_database(project_root):
             ),
         ]
         for source in default_sources:
-            cursor.execute(
-                "INSERT OR IGNORE INTO content_sources "
-                "(source_key, name, type, url, website, "
-                "description, channel_id, category) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                source
+            idempotent_insert(
+                cursor, "content_sources",
+                ["source_key", "name", "type", "url", "website",
+                 "description", "channel_id", "category"],
+                source,
+                unique_columns=["source_key"],
             )
 
         conn.commit()
@@ -2937,8 +3036,10 @@ def seed_rbac_defaults(project_root, admin_user_id):
             ("Observers", "Read-only observers. Can view but not modify.", 1),
         ]
         for name, desc, is_sys in groups:
-            cursor.execute("INSERT OR IGNORE INTO groups (name, description, is_system) VALUES (?, ?, ?)",
-                           (name, desc, is_sys))
+            idempotent_insert(
+                cursor, "groups", ["name", "description", "is_system"],
+                (name, desc, is_sys), unique_columns=["name"],
+            )
 
         # Built-in roles
         roles = [
@@ -2948,9 +3049,10 @@ def seed_rbac_defaults(project_root, admin_user_id):
             ("viewer", "Read-only access.", 1, 0),
         ]
         for name, desc, is_sys, req_mfa in roles:
-            cursor.execute(
-                "INSERT OR IGNORE INTO roles (name, description, is_system, requires_mfa) VALUES (?, ?, ?, ?)",
-                (name, desc, is_sys, req_mfa))
+            idempotent_insert(
+                cursor, "roles", ["name", "description", "is_system", "requires_mfa"],
+                (name, desc, is_sys, req_mfa), unique_columns=["name"],
+            )
 
         # Permissions
         perms = [
@@ -2968,7 +3070,9 @@ def seed_rbac_defaults(project_root, admin_user_id):
             "games:play",
         ]
         for p in perms:
-            cursor.execute("INSERT OR IGNORE INTO permissions (name) VALUES (?)", (p,))
+            idempotent_insert(
+                cursor, "permissions", ["name"], (p,), unique_columns=["name"],
+            )
 
         conn.commit()
 
@@ -2980,8 +3084,10 @@ def seed_rbac_defaults(project_root, admin_user_id):
                 cursor.execute("SELECT id FROM permissions WHERE name = ?", (p,))
                 pid = cursor.fetchone()
                 if pid:
-                    cursor.execute("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-                                   (sa_role[0], pid[0]))
+                    idempotent_insert(
+                        cursor, "role_permissions", ["role_id", "permission_id"],
+                        (sa_role[0], pid[0]), unique_columns=["role_id", "permission_id"],
+                    )
 
         # Assign roles to groups
         group_role_map = {
@@ -2996,16 +3102,20 @@ def seed_rbac_defaults(project_root, admin_user_id):
             cursor.execute("SELECT id FROM roles WHERE name = ?", (rname,))
             rid = cursor.fetchone()
             if gid and rid:
-                cursor.execute("INSERT OR IGNORE INTO group_roles (group_id, role_id) VALUES (?, ?)",
-                               (gid[0], rid[0]))
+                idempotent_insert(
+                    cursor, "group_roles", ["group_id", "role_id"],
+                    (gid[0], rid[0]), unique_columns=["group_id", "role_id"],
+                )
 
         # Assign admin user to System Owners group
         if admin_user_id:
             cursor.execute("SELECT id FROM groups WHERE name = 'System Owners'")
             so_id = cursor.fetchone()
             if so_id:
-                cursor.execute("INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
-                               (admin_user_id, so_id[0]))
+                idempotent_insert(
+                    cursor, "user_groups", ["user_id", "group_id"],
+                    (admin_user_id, so_id[0]), unique_columns=["user_id", "group_id"],
+                )
 
         conn.commit()
         print_success("RBAC defaults seeded (groups, roles, permissions)")
@@ -3392,10 +3502,12 @@ def seed_coin_categorizations(project_root, user_id):
         # Insert all categorizations as GLOBAL entries (user_id = NULL)
         # These are visible to all users and managed by admins only
         for symbol, reason in coin_categories:
-            cursor.execute("""
-                INSERT OR IGNORE INTO blacklisted_coins (user_id, symbol, reason, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (None, symbol, reason, datetime.utcnow()))
+            idempotent_insert(
+                cursor, "blacklisted_coins",
+                ["user_id", "symbol", "reason", "created_at"],
+                (None, symbol, reason, datetime.utcnow()),
+                unique_columns=["user_id", "symbol"],
+            )
 
         conn.commit()
         print_success(f"Seeded {len(coin_categories)} coin categorizations")
@@ -3631,7 +3743,7 @@ ENCRYPTION_KEY={encryption_key}
 # =============================================================================
 # Database Configuration
 # =============================================================================
-DATABASE_URL=sqlite+aiosqlite:///./trading.db
+DATABASE_URL={config.get('database_url', 'sqlite+aiosqlite:///./trading.db')}
 
 # =============================================================================
 # CORS Origins (comma-separated)
@@ -4059,7 +4171,7 @@ def run_setup():
     print("     - Skipped if Node.js not installed")
     print()
     print("  3. Database Initialization")
-    print("     - Create SQLite database (backend/trading.db)")
+    print("     - Choose database backend (SQLite or PostgreSQL)")
     print("     - Set up required tables")
     print()
     print("  4. Environment Configuration")
@@ -4171,17 +4283,24 @@ def run_setup():
             print_info("Please install Node.js to run the frontend.")
             print_info("Download from: https://nodejs.org/")
 
-    # Step 3: Database Initialization
+    # Step 3: Database Backend Selection & Initialization
     print_step(3, "Database Initialization")
+
+    db_config = prompt_for_database_backend()
+    is_pg = db_config.get('db_backend') == 'postgres'
     db_path = project_root / 'backend' / 'trading.db'
 
-    if db_path.exists():
+    if is_pg:
+        print_info("Using PostgreSQL backend...")
+        if not initialize_database(project_root, db_config):
+            return False
+    elif db_path.exists():
         print_warning(f"Database already exists at {db_path}")
         if prompt_yes_no("Reinitialize database? (This will NOT delete existing data)", default='no'):
-            initialize_database(project_root)
+            initialize_database(project_root, db_config)
     else:
         print_info("Creating new database...")
-        if not initialize_database(project_root):
+        if not initialize_database(project_root, db_config):
             return False
 
     # Step 4: Environment Configuration
@@ -4191,7 +4310,7 @@ def run_setup():
     # Parse existing .env values if file exists
     existing_env = parse_existing_env(env_path)
 
-    config = {}
+    config = dict(db_config)  # carry database_url into env generation
 
     if env_path.exists():
         print_warning(".env file already exists")

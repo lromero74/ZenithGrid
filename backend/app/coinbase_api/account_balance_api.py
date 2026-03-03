@@ -4,8 +4,9 @@ Handles accounts, portfolios, balances, and aggregate calculations
 """
 
 import logging
-import os
 from typing import Any, Callable, Dict, List, Optional
+
+from sqlalchemy import text
 
 from app.cache import api_cache
 from app.constants import BALANCE_CACHE_TTL, AGGREGATE_VALUE_CACHE_TTL, MIN_USD_BALANCE_FOR_AGGREGATE
@@ -347,35 +348,29 @@ async def calculate_aggregate_btc_value(
 
     # Get BTC value of open positions from database using CURRENT prices
     try:
-        import sqlite3
+        from app.database import get_sync_engine
 
-        # Use relative path from this file's location (backend/app/coinbase_api/ -> backend/)
-        _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        db_path = os.path.join(_backend_dir, "trading.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with get_sync_engine().connect() as conn:
+            # Query open BTC-pair positions, scoped to account via bots table
+            if account_id is not None:
+                result = conn.execute(
+                    text("""
+                        SELECT p.product_id, p.total_base_acquired, p.average_buy_price
+                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        WHERE p.status = 'open' AND p.product_id LIKE '%-BTC' AND b.account_id = :acct_id
+                    """),
+                    {"acct_id": account_id}
+                )
+            else:
+                result = conn.execute(
+                    text("""
+                        SELECT product_id, total_base_acquired, average_buy_price
+                        FROM positions
+                        WHERE status = 'open' AND product_id LIKE '%-BTC'
+                    """)
+                )
 
-        # Query open BTC-pair positions, scoped to account via bots table
-        if account_id is not None:
-            cursor.execute(
-                """
-                SELECT p.product_id, p.total_base_acquired, p.average_buy_price
-                FROM positions p JOIN bots b ON p.bot_id = b.id
-                WHERE p.status = 'open' AND p.product_id LIKE '%-BTC' AND b.account_id = ?
-                """,
-                (account_id,)
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT product_id, total_base_acquired, average_buy_price
-                FROM positions
-                WHERE status = 'open' AND product_id LIKE '%-BTC'
-                """
-            )
-
-        positions = cursor.fetchall()
-        conn.close()
+            positions = result.fetchall()
         btc_in_positions = 0.0
 
         if positions and get_current_price_func:
@@ -573,7 +568,6 @@ async def calculate_aggregate_quote_value(
         Total value in the specified quote currency
     """
     import asyncio
-    import sqlite3
 
     acct_suffix = str(account_id) if account_id is not None else "none"
     cache_key = f"aggregate_quote_{quote_currency.lower()}_{acct_suffix}"
@@ -594,38 +588,33 @@ async def calculate_aggregate_quote_value(
 
     # 2. Add current value of open positions in this quote currency's pairs
     try:
-        _backend_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        db_path = os.path.join(_backend_dir, "trading.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        from app.database import get_sync_engine
 
         like_pattern = f"%-{quote_currency}"
-        if account_id is not None:
-            cursor.execute(
-                """
-                SELECT p.product_id, p.total_base_acquired,
-                       p.average_buy_price
-                FROM positions p JOIN bots b ON p.bot_id = b.id
-                WHERE p.status = 'open'
-                  AND p.product_id LIKE ?
-                  AND b.account_id = ?
-                """,
-                (like_pattern, account_id)
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT product_id, total_base_acquired, average_buy_price
-                FROM positions
-                WHERE status = 'open' AND product_id LIKE ?
-                """,
-                (like_pattern,)
-            )
+        with get_sync_engine().connect() as conn:
+            if account_id is not None:
+                result = conn.execute(
+                    text("""
+                        SELECT p.product_id, p.total_base_acquired,
+                               p.average_buy_price
+                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        WHERE p.status = 'open'
+                          AND p.product_id LIKE :pattern
+                          AND b.account_id = :acct_id
+                    """),
+                    {"pattern": like_pattern, "acct_id": account_id}
+                )
+            else:
+                result = conn.execute(
+                    text("""
+                        SELECT product_id, total_base_acquired, average_buy_price
+                        FROM positions
+                        WHERE status = 'open' AND product_id LIKE :pattern
+                    """),
+                    {"pattern": like_pattern}
+                )
 
-        positions = cursor.fetchall()
-        conn.close()
+            positions = result.fetchall()
         positions_value = 0.0
 
         if positions and get_current_price_func:
