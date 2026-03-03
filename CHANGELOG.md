@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.83.1] - 2026-03-03
+
+### Fixed
+- **Paper trade execution failures from DB lock cascade**: Indicator log writes now use an isolated database session, so a "database is locked" error on diagnostic logging can no longer poison the trading session and kill subsequent trade execution
+- **Redundant mid-cycle DB commit removed**: Eliminated an unnecessary commit per open position per cycle that was competing for SQLite's write lock
+
 ## [v2.83.0] - 2026-03-02
 
 ### Added
