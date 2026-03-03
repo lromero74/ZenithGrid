@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.4] - 2026-03-03
+
+### Fixed
+- **502 errors on History page preferences endpoint**: The nginx `location /api/auth/preferences/` block was pointing to the Vite dev server (port 5173) instead of the backend (port 8100), causing persistent 502 Bad Gateway in prod mode. The `bot.sh` mode switch now normalizes all `/api/` location blocks to the backend port on every switch, preventing this class of bug
+
 ## [v2.84.3] - 2026-03-03
 
 ### Fixed
