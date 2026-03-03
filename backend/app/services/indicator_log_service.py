@@ -29,8 +29,12 @@ async def log_indicator_evaluation(
     """
     Log an indicator condition evaluation to the database.
 
+    Uses an isolated session so that a "database is locked" error on
+    this diagnostic write cannot poison the caller's trading session
+    and cause trade execution to fail.
+
     Args:
-        db: Database session
+        db: Database session (unused — kept for API compatibility)
         bot_id: Bot ID that ran the evaluation
         product_id: Trading pair (e.g., "ETH-BTC")
         phase: Phase being evaluated ("base_order", "safety_order", "take_profit")
@@ -42,33 +46,30 @@ async def log_indicator_evaluation(
     Returns:
         IndicatorLog record if created, None on error
     """
+    if not conditions_detail:
+        return None
+
     try:
-        # Only log if there are actual conditions to evaluate
-        if not conditions_detail:
-            return None
+        from app.database import async_session_maker
 
-        log_entry = IndicatorLog(
-            bot_id=bot_id,
-            timestamp=datetime.utcnow(),
-            product_id=product_id,
-            phase=phase,
-            conditions_met=conditions_met,
-            conditions_detail=conditions_detail,
-            indicators_snapshot=indicators_snapshot,
-            current_price=current_price,
-        )
-
-        db.add(log_entry)
-        # Don't commit here — let the caller batch-commit.
-        # Each individual commit acquires SQLite's write lock,
-        # causing "database is locked" storms when many pairs
-        # are processed concurrently.
+        async with async_session_maker() as log_db:
+            log_entry = IndicatorLog(
+                bot_id=bot_id,
+                timestamp=datetime.utcnow(),
+                product_id=product_id,
+                phase=phase,
+                conditions_met=conditions_met,
+                conditions_detail=conditions_detail,
+                indicators_snapshot=indicators_snapshot,
+                current_price=current_price,
+            )
+            log_db.add(log_entry)
+            await log_db.commit()
 
         logger.debug(
             f"Logged indicator evaluation: bot={bot_id}, pair={product_id}, "
             f"phase={phase}, met={conditions_met}, conditions={len(conditions_detail)}"
         )
-
         return log_entry
 
     except Exception as e:
