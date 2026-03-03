@@ -583,9 +583,10 @@ async def process_bot_pair(
         if skip_result:
             return skip_result
 
-        # Commit position changes (e.g., previous_indicators for crossing detection)
-        if existing_position is not None:
-            await db.commit()
+        # previous_indicators is now dirty in the session — the final
+        # commit (line ~618) will persist it along with any trade writes.
+        # No mid-processing commit needed; eliminating it avoids SQLite
+        # write lock contention from 51+ concurrent position updates.
 
         if not signal_data:
             logger.warning("  No signal from strategy (returned None)")

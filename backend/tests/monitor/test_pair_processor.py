@@ -491,6 +491,50 @@ class TestPairProcessorCommitBehavior:
 
         db_session.commit.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_existing_position_commits_once_not_twice(self, db_session):
+        """Position with previous_indicators should only trigger ONE commit (final).
+
+        Previously, pair_processor committed mid-processing to persist
+        previous_indicators, then again at the end. The mid-processing
+        commit is unnecessary (final commit handles it) and causes
+        SQLite write lock contention under concurrent bot tasks.
+        """
+        monitor = _make_monitor()
+        bot = _make_bot()
+        pos = _make_position(
+            strategy_config_snapshot={"max_safety_orders": 5, "timeframe": "FIVE_MINUTE"}
+        )
+        strategy = _make_strategy()
+
+        with patch(
+            "app.trading_engine.position_manager.get_active_positions_for_pair",
+            new_callable=AsyncMock,
+            return_value=[pos],
+        ), patch(
+            "app.trading_engine.position_manager.all_positions_exhausted_safety_orders",
+            return_value=False,
+        ), patch(
+            "app.monitor.pair_processor.StrategyRegistry.get_strategy",
+            return_value=strategy,
+        ), patch(
+            "app.monitor.pair_processor.StrategyTradingEngine",
+        ) as MockEngine:
+            mock_engine_inst = MagicMock()
+            mock_engine_inst.process_signal = AsyncMock(
+                return_value=_make_engine_result()
+            )
+            MockEngine.return_value = mock_engine_inst
+
+            db_session.commit = AsyncMock()
+
+            await process_bot_pair(
+                monitor, db_session, bot, "ETH-BTC", commit=True
+            )
+
+        # Exactly one commit: the final one. No mid-processing commit.
+        assert db_session.commit.call_count == 1
+
 
 # ===========================================================================
 # Class: TestPairProcessorIndicatorCache
