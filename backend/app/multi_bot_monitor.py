@@ -277,13 +277,14 @@ class MultiBotMonitor:
         active_bots = list(active_result.scalars().all())
 
         # Get inactive bots that have open positions
-        # Note: Use Bot.is_active == False (not "not Bot.is_active") for SQLAlchemy
-        inactive_with_positions_query = (
-            select(Bot)
+        # Use subquery to avoid DISTINCT on JSON columns (PG can't compare JSON for equality)
+        inactive_bot_ids = (
+            select(Bot.id)
             .join(Position, Position.bot_id == Bot.id)
             .where(Bot.is_active == False, Position.status == "open")  # noqa: E712
             .distinct()
         )
+        inactive_with_positions_query = select(Bot).where(Bot.id.in_(inactive_bot_ids))
         inactive_result = await db.execute(inactive_with_positions_query)
         inactive_bots_with_positions = list(inactive_result.scalars().all())
 

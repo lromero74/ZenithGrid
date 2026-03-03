@@ -5,6 +5,24 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.0] - 2026-03-03
+
+### Added
+- **PostgreSQL database backend**: Migrated production from SQLite to PostgreSQL, eliminating all "database is locked" errors from concurrent bot operations. SQLite's single-writer lock was causing ~18 lock errors/min with 23 active bots — PostgreSQL's MVCC handles concurrent writes natively
+- **Dual database support in setup wizard**: New installs can choose between SQLite (simple, default) or PostgreSQL (recommended for production) during setup
+- **SQLite-to-PostgreSQL migration script**: One-command data migration (`scripts/migrate_sqlite_to_postgres.py`) transfers all tables with row count verification
+- **Dual-mode migration helpers**: New `migrations/db_utils.py` provides `column_exists()` and `safe_add_column()` for both SQLite and PostgreSQL, enabling future migrations to work with either backend
+
+### Changed
+- **Database engine configuration**: PostgreSQL connections use pooling (`pool_size=5, max_overflow=3`) tuned for t2.micro; SQLite retains single-threaded mode
+- **Balance and coin review queries**: Replaced raw `sqlite3.connect()` calls with SQLAlchemy sync engine helper for database-agnostic operation
+- **News retention filtering**: Per-user retention days now computed in Python instead of SQLite-specific `datetime()` functions, making it portable across databases
+- **Content seen/unseen tracking**: Replaced SQLite-dialect `INSERT OR IGNORE` with check-then-insert pattern for cross-database compatibility
+
+### Fixed
+- **LodeRunner game crash from corrupted save state**: Game crashed with "Cannot read properties of undefined" when localStorage contained stale/incomplete saved state missing required array fields — now validates all required arrays exist before loading, and clears corrupted saves automatically
+- **PostgreSQL JSON DISTINCT error**: Fixed "could not identify an equality operator for type json" when querying inactive bots with open positions by using ID subquery instead of full-model DISTINCT
+
 ## [v2.83.1] - 2026-03-03
 
 ### Fixed

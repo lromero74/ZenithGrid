@@ -485,18 +485,19 @@ async def startup_event():
     if not settings.frontend_url:
         logger.warning("FRONTEND_URL is not set — email links will be broken")
 
-    # VACUUM before init_db() — needs exclusive access (no engine yet)
-    try:
-        import sqlite3
-        db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
-        conn = sqlite3.connect(db_path, isolation_level=None)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("VACUUM")
-        conn.close()
-        print("🚀 Database VACUUM completed successfully")
-    except Exception as e:
-        logger.warning(f"Database VACUUM failed (non-fatal): {e}")
-        print(f"⚠️ Database VACUUM failed (non-fatal): {e}")
+    # VACUUM before init_db() — needs exclusive access (SQLite only)
+    if not settings.is_postgres:
+        try:
+            import sqlite3
+            db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
+            conn = sqlite3.connect(db_path, isolation_level=None)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("VACUUM")
+            conn.close()
+            print("🚀 Database VACUUM completed successfully")
+        except Exception as e:
+            logger.warning(f"Database VACUUM failed (non-fatal): {e}")
+            print(f"⚠️ Database VACUUM failed (non-fatal): {e}")
 
     print("🚀 Initializing database...")
     await init_db()

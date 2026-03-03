@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     max_btc_usage_percentage: float = 25.0
     min_profit_percentage: float = 1.0
 
+    @property
+    def is_postgres(self) -> bool:
+        return "postgresql" in self.database_url
+
     # MACD Parameters
     macd_fast_period: int = 12
     macd_slow_period: int = 26

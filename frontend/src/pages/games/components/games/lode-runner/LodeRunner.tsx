@@ -920,7 +920,13 @@ export default function LodeRunner() {
   // Load saved state on mount
   useEffect(() => {
     const saved = loadSaved()
-    if (saved && !saved.gameOver && !saved.won) {
+    if (saved && !saved.gameOver && !saved.won
+        && Array.isArray(saved.grid)
+        && Array.isArray(saved.guards)
+        && Array.isArray(saved.dugBricks)
+        && Array.isArray(saved.digProjectiles)
+        && Array.isArray(saved.goldMap)
+        && saved.player) {
       gsRef.current = saved
       setScore(saved.score)
       setLevel(saved.level)
@@ -930,6 +936,8 @@ export default function LodeRunner() {
       lastTimeRef.current = performance.now()
       draw()
       animFrameRef.current = requestAnimationFrame(tick)
+    } else if (saved) {
+      clearSaved()  // discard corrupted/stale state
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

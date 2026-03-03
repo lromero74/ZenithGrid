@@ -115,26 +115,17 @@ async def get_articles_for_user(
 
     - System sources: shown unless user explicitly unsubscribed
     - Custom sources: shown only if user is subscribed
-    - Per-user retention_days: filters visibility (query-time only)
+    - Per-user retention_days: applied post-query in Python for DB portability
     - user_category override applied in response layer, not here
     """
-    from sqlalchemy import case, func
 
     default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
-    # Retention cutoff: use per-user retention_days if set, otherwise system default.
-    # NOTE: SQLite printf('-%d days', NULL) returns '-0 days' (not NULL),
-    # so coalesce won't reach the fallback. Use case() to handle NULL explicitly.
-    retention_cutoff = case(
-        (UserSourceSubscription.retention_days.is_not(None),
-         func.datetime('now', func.printf('-%d days', UserSourceSubscription.retention_days))),
-        else_=default_cutoff,
-    )
-
     # Base query: articles with source_id JOIN through ContentSource
     # LEFT JOIN subscription for per-user overrides
+    # Use system default cutoff in SQL; per-user retention applied post-query
     query = (
-        select(NewsArticle)
+        select(NewsArticle, UserSourceSubscription.retention_days)
         .outerjoin(
             ContentSource, NewsArticle.source_id == ContentSource.id
         )
@@ -161,27 +152,33 @@ async def get_articles_for_user(
                 & (UserSourceSubscription.is_subscribed.is_(True))
             )
         )
-        .where(NewsArticle.published_at >= retention_cutoff)
+        .where(NewsArticle.published_at >= default_cutoff)
     )
 
     if category:
         query = query.where(NewsArticle.category == category)
 
-    # Count
-    from sqlalchemy import literal_column
-    count_query = select(
-        func.count(literal_column('1'))
-    ).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
+    # Execute query and apply per-user retention in Python
+    query = query.order_by(desc(NewsArticle.published_at))
+    result = await db.execute(query)
+    rows = result.all()
+
+    now = datetime.now(timezone.utc)
+    filtered = []
+    for article, retention_days in rows:
+        if retention_days is not None:
+            cutoff = now - timedelta(days=retention_days)
+            if article.published_at and article.published_at < cutoff:
+                continue
+        filtered.append(article)
+
+    total_count = len(filtered)
 
     # Paginate (page_size=0 means return all)
-    query = query.order_by(desc(NewsArticle.published_at))
     if page_size > 0:
         offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size)
-    result = await db.execute(query)
-    return list(result.scalars().all()), total_count
+        filtered = filtered[offset:offset + page_size]
+    return filtered, total_count
 
 
 async def get_articles_from_db(
@@ -274,19 +271,11 @@ async def get_videos_for_user(
     category: Optional[str] = None,
 ) -> List[VideoArticle]:
     """Get videos filtered by user's subscriptions and retention."""
-    from sqlalchemy import case, func
 
     default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
-    # Same NULL-safe retention logic as get_articles_for_user
-    retention_cutoff = case(
-        (UserSourceSubscription.retention_days.is_not(None),
-         func.datetime('now', func.printf('-%d days', UserSourceSubscription.retention_days))),
-        else_=default_cutoff,
-    )
-
     query = (
-        select(VideoArticle)
+        select(VideoArticle, UserSourceSubscription.retention_days)
         .outerjoin(
             ContentSource, VideoArticle.source_id == ContentSource.id
         )
@@ -309,7 +298,7 @@ async def get_videos_for_user(
                 & (UserSourceSubscription.is_subscribed.is_(True))
             )
         )
-        .where(VideoArticle.published_at >= retention_cutoff)
+        .where(VideoArticle.published_at >= default_cutoff)
     )
 
     if category:
@@ -317,7 +306,18 @@ async def get_videos_for_user(
 
     query = query.order_by(desc(VideoArticle.published_at))
     result = await db.execute(query)
-    return list(result.scalars().all())
+    rows = result.all()
+
+    now = datetime.now(timezone.utc)
+    filtered = []
+    for video, retention_days in rows:
+        if retention_days is not None:
+            cutoff = now - timedelta(days=retention_days)
+            if video.published_at and video.published_at < cutoff:
+                continue
+        filtered.append(video)
+
+    return filtered
 
 
 async def get_videos_from_db_list(
@@ -567,15 +567,20 @@ async def mark_content_seen(
 
     async with async_session_maker() as db:
         if seen:
-            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-            stmt = sqlite_insert(UserContentSeenStatus).values(
-                user_id=current_user.id,
-                content_type=content_type,
-                content_id=content_id,
-            ).on_conflict_do_nothing(
-                index_elements=["user_id", "content_type", "content_id"],
+            # Check if already exists before inserting (DB-agnostic upsert)
+            existing = await db.execute(
+                select(UserContentSeenStatus.id).where(
+                    UserContentSeenStatus.user_id == current_user.id,
+                    UserContentSeenStatus.content_type == content_type,
+                    UserContentSeenStatus.content_id == content_id,
+                )
             )
-            await db.execute(stmt)
+            if not existing.scalar():
+                db.add(UserContentSeenStatus(
+                    user_id=current_user.id,
+                    content_type=content_type,
+                    content_id=content_id,
+                ))
         else:
             from sqlalchemy import delete
             await db.execute(
@@ -607,18 +612,22 @@ async def bulk_mark_content_seen(
 
     async with async_session_maker() as db:
         if seen:
-            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-            for cid in content_ids:
-                stmt = sqlite_insert(UserContentSeenStatus).values(
-                    user_id=current_user.id,
-                    content_type=content_type,
-                    content_id=cid,
-                ).on_conflict_do_nothing(
-                    index_elements=[
-                        "user_id", "content_type", "content_id",
-                    ],
+            # Find already-seen IDs to avoid duplicates (DB-agnostic)
+            existing_result = await db.execute(
+                select(UserContentSeenStatus.content_id).where(
+                    UserContentSeenStatus.user_id == current_user.id,
+                    UserContentSeenStatus.content_type == content_type,
+                    UserContentSeenStatus.content_id.in_(content_ids),
                 )
-                await db.execute(stmt)
+            )
+            existing_ids = {row[0] for row in existing_result.all()}
+            for cid in content_ids:
+                if cid not in existing_ids:
+                    db.add(UserContentSeenStatus(
+                        user_id=current_user.id,
+                        content_type=content_type,
+                        content_id=cid,
+                    ))
         else:
             from sqlalchemy import delete
             await db.execute(

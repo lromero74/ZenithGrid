@@ -32,23 +32,18 @@ logger = logging.getLogger(__name__)
 async def get_ai_review_provider_from_db() -> str:
     """Get configured AI provider for coin review from database.
 
-    Uses synchronous SQLite query to avoid async context conflicts.
+    Uses sync SQLAlchemy engine to avoid greenlet conflicts with FastAPI.
     """
-    import sqlite3
-    import os
-
-    # Use sync query to avoid greenlet conflicts with FastAPI
-    db_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        "trading.db"
-    )
+    from sqlalchemy import text
+    from app.database import get_sync_engine
 
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (AI_REVIEW_PROVIDER_KEY,))
-        row = cursor.fetchone()
-        conn.close()
+        with get_sync_engine().connect() as conn:
+            result = conn.execute(
+                text("SELECT value FROM settings WHERE key = :key"),
+                {"key": AI_REVIEW_PROVIDER_KEY}
+            )
+            row = result.fetchone()
 
         if row and row[0] and row[0].lower() in VALID_AI_PROVIDERS:
             return row[0].lower()

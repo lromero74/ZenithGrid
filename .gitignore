@@ -81,6 +81,7 @@ frontend/coverage/
 # One-off helper scripts and temporary test/debug scripts
 backend/scripts/*
 !backend/scripts/README.md
+!backend/scripts/migrate_sqlite_to_postgres.py
 
 # Claude Code user-specific settings (commands are tracked, local settings are not)
 .claude/settings.local.json
