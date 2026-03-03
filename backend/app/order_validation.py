@@ -85,8 +85,8 @@ async def get_product_minimums(exchange, product_id: str) -> Dict[str, str]:
         minimums = {
             "quote_min_size": product.get("quote_min_size", "0.0001"),
             "base_min_size": product.get("base_min_size", "0.00000001"),
-            "quote_currency": product.get("quote_currency", "BTC"),
-            "base_currency": product.get("base_currency", ""),
+            "quote_currency": product.get("quote_currency_id", product.get("quote_currency", "BTC")),
+            "base_currency": product.get("base_currency_id", product.get("base_currency", "")),
             # Use our precision table instead of exchange API (which may return None)
             "quote_increment": product_precision.get(
                 "quote_increment", product.get("quote_increment", "0.00000001")
@@ -112,7 +112,11 @@ async def get_product_minimums(exchange, product_id: str) -> Dict[str, str]:
 
         # Use defaults based on quote currency
         quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
-        return DEFAULT_MINIMUMS.get(quote_currency, DEFAULT_MINIMUMS["BTC"])
+        base_currency = product_id.split("-")[0] if "-" in product_id else ""
+        defaults = DEFAULT_MINIMUMS.get(quote_currency, DEFAULT_MINIMUMS["BTC"]).copy()
+        defaults["quote_currency"] = quote_currency
+        defaults["base_currency"] = base_currency
+        return defaults
 
 
 async def validate_order_size(

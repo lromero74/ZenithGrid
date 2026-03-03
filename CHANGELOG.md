@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.5] - 2026-03-03
+
+### Fixed
+- **Misleading order validation error messages**: Failed order errors showed "BTC" as the currency even for USD pairs (e.g., "0.038 BTC is below minimum 1 BTC for IOTX-USD"). Coinbase API returns `quote_currency_id`/`base_currency_id` but validation was reading the non-existent `quote_currency` key and defaulting to "BTC". Now reads the correct API field with proper fallback
+- **Missing currency labels in fallback validation**: When product API lookup fails entirely, the fallback defaults now include correct currency labels derived from the product ID instead of omitting them
+
 ## [v2.84.4] - 2026-03-03
 
 ### Fixed
