@@ -61,6 +61,7 @@ const Canasta = lazy(() => import('./games/components/games/canasta/Canasta'))
 const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
 const SpaceInvaders = lazy(() => import('./games/components/games/space-invaders/SpaceInvaders'))
 const LodeRunner = lazy(() => import('./games/components/games/lode-runner/LodeRunner'))
+const DinoRunner = lazy(() => import('./games/components/games/dino-runner/DinoRunner'))
 
 export default function Games() {
   return (
@@ -114,6 +115,7 @@ export default function Games() {
         <Route path="centipede" element={<Centipede />} />
         <Route path="space-invaders" element={<SpaceInvaders />} />
         <Route path="lode-runner" element={<LodeRunner />} />
+        <Route path="dino-runner" element={<DinoRunner />} />
       </Routes>
     </Suspense>
   )
