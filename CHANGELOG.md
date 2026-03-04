@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.86.0] - 2026-03-04
+
+### Added
+- **8 new card games**: War, Go Fish, Rummy 500, Cribbage, Euchre, Texas Hold'em, Bridge, and Canasta — each with full rule implementations, AI opponents, and test coverage
+- **Card game subcategories**: Card games are now organized into Trick-Taking, Rummy, Casino, Solitaire, and Classic subcategories with filter pills
+- **22 new regression tests**: Coverage for dust close profit calculation, NULL profit_quote fallback, signal processor dust close handling, login resilience under DB lock, currency label in order validation, and datetime timezone parsing
+
+### Fixed
+- **Dust close positions now calculate actual profit**: Positions too small to sell (dust) are now closed with accurate profit at current price instead of being written off at -100%
+- **Signal processor distinguishes dust closes from limit orders**: When a sell returns no trade, the system now checks if the position was dust-closed vs. a limit order pending
+- **NULL profit_quote fallback for USD pairs**: Realized PnL stats now fall back to profit_usd when profit_quote is NULL on USD-like pairs, fixing mismatches between per-quote and overall totals
+- **Win rate display shows breakevens**: Stats panel now shows breakeven count (e.g., "56W / 0L / 1B") so the math adds up with total trades
+- **Chart markers skip sub-penny trades**: Trades with less than $0.01 profit/loss no longer show misleading win/loss arrows on the account value chart
+- **Playing card bottom-right position**: The inverted rank/suit on playing cards now correctly appears on the right side
+
 ## [v2.85.0] - 2026-03-04
 
 ### Added

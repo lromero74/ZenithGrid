@@ -15,6 +15,7 @@ export interface GameInfo {
   difficulty: 'easy' | 'medium' | 'hard'
   sessionLength: string
   category: GameCategory
+  subcategory?: string
 }
 
 export interface GameScore {

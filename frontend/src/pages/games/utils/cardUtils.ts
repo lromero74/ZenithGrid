@@ -76,3 +76,34 @@ export function getRankDisplay(rank: number): string {
 export function getSuitSymbol(suit: Suit): string {
   return SUIT_SYMBOLS[suit]
 }
+
+// ── Specialized deck creators ────────────────────────────────────────
+
+/** Create a 24-card Euchre deck (9, 10, J, Q, K, A of each suit). */
+export function createEuchreDeck(): Card[] {
+  const deck: Card[] = []
+  for (const suit of SUITS) {
+    for (const rank of [9, 10, 11, 12, 13, 1]) {
+      deck.push({ suit, rank, faceUp: true })
+    }
+  }
+  return deck
+}
+
+/** Create a 108-card double deck with 4 jokers (for Canasta). Jokers use rank 0. */
+export function createDoubleDeck(): Card[] {
+  const cards: Card[] = []
+  for (let d = 0; d < 2; d++) {
+    for (const suit of SUITS) {
+      for (let rank = 1; rank <= 13; rank++) {
+        cards.push({ suit, rank, faceUp: true })
+      }
+    }
+  }
+  // 4 jokers (rank 0)
+  cards.push({ suit: 'spades', rank: 0, faceUp: true })
+  cards.push({ suit: 'spades', rank: 0, faceUp: true })
+  cards.push({ suit: 'hearts', rank: 0, faceUp: true })
+  cards.push({ suit: 'hearts', rank: 0, faceUp: true })
+  return cards
+}

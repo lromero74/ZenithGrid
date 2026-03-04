@@ -797,3 +797,79 @@ class TestGetRealizedPnl:
         )
         assert result["alltime_profit_btc"] == 0.001
         assert result["daily_profit_btc"] == 0.001
+
+    @pytest.mark.asyncio
+    async def test_null_profit_quote_falls_back_to_profit_usd_for_usd_pairs(self, db_session):
+        """Bug fix: NULL profit_quote on USD pairs falls back to profit_usd."""
+        from app.position_routers.position_query_router import get_realized_pnl
+
+        user, account = await _create_user_with_account(db_session)
+
+        # Position with profit_usd set but profit_quote=NULL (dust-closed/force-closed)
+        await _create_position(
+            db_session, account,
+            status="closed",
+            closed_at=datetime.utcnow(),
+            product_id="BAND-USD",
+            profit_usd=0.17,
+            profit_quote=None,  # NULL — this is the bug scenario
+        )
+
+        result = await get_realized_pnl(
+            account_id=None,
+            db=db_session,
+            current_user=user,
+        )
+        # Should use profit_usd as fallback for USD pair
+        assert result["alltime_profit_usd"] == pytest.approx(0.17, abs=0.01)
+        # by_quote should also reflect the fallback
+        assert result["alltime_profit_by_quote"].get("USD", 0) == pytest.approx(0.17, abs=0.01)
+
+    @pytest.mark.asyncio
+    async def test_null_profit_quote_usdc_pair_falls_back(self, db_session):
+        """Edge case: USDC pair with NULL profit_quote also falls back to profit_usd."""
+        from app.position_routers.position_query_router import get_realized_pnl
+
+        user, account = await _create_user_with_account(db_session)
+
+        await _create_position(
+            db_session, account,
+            status="closed",
+            closed_at=datetime.utcnow(),
+            product_id="ETH-USDC",
+            profit_usd=25.0,
+            profit_quote=None,
+        )
+
+        result = await get_realized_pnl(
+            account_id=None,
+            db=db_session,
+            current_user=user,
+        )
+        assert result["alltime_profit_by_quote"].get("USDC", 0) == pytest.approx(25.0, abs=0.01)
+
+    @pytest.mark.asyncio
+    async def test_null_profit_quote_btc_pair_defaults_to_zero(self, db_session):
+        """Edge case: BTC pair with NULL profit_quote defaults to 0 (no fallback)."""
+        from app.position_routers.position_query_router import get_realized_pnl
+
+        user, account = await _create_user_with_account(db_session)
+
+        await _create_position(
+            db_session, account,
+            status="closed",
+            closed_at=datetime.utcnow(),
+            product_id="ETH-BTC",
+            profit_usd=50.0,
+            profit_quote=None,  # NULL on non-USD pair
+        )
+
+        result = await get_realized_pnl(
+            account_id=None,
+            db=db_session,
+            current_user=user,
+        )
+        # BTC pair should NOT fall back — pq stays 0
+        assert result["alltime_profit_by_quote"].get("BTC", 0) == 0.0
+        # profit_usd is still counted
+        assert result["alltime_profit_usd"] == pytest.approx(50.0, abs=0.01)

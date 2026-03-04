@@ -786,3 +786,159 @@ class TestExecuteLimitSell:
         )
 
         assert pending.quote_amount == pytest.approx(6000.0)
+
+
+# ===========================================================================
+# Dust close (base_amount rounds to 0)
+# ===========================================================================
+
+
+class TestDustClose:
+    """Tests for dust close path in execute_sell — when base_amount rounds to 0."""
+
+    @pytest.mark.asyncio
+    async def test_dust_close_calculates_actual_profit(self):
+        """Happy path: dust close computes profit at current price, not -100%."""
+        db = _make_db()
+        exchange = _make_exchange()
+        # is_paper=False so we skip paper balance check
+        exchange.is_paper_trading = MagicMock(return_value=False)
+        tc = _make_trading_client()
+        bot = _make_bot()
+
+        # Position: bought 0.000001 ETH at $2000, spent $0.002
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=0.000001,  # tiny amount
+            total_quote_spent=0.002,
+            average_buy_price=2000.0,
+        )
+
+        # Precision=8 → floor(0.000001 * 10^8) / 10^8 = 0.000001
+        # But we override precision to 4 → floor(0.000001 * 10^4) / 10^4 = 0.0 → dust!
+        with patch("app.trading_engine.sell_executor.get_base_precision", return_value=4):
+            trade, profit, pct = await execute_sell(
+                db=db,
+                exchange=exchange,
+                trading_client=tc,
+                bot=bot,
+                product_id="ETH-USD",
+                position=position,
+                current_price=3000.0,  # price went up
+                signal_data={"signal_type": "sell"},
+            )
+
+        assert trade is None  # No exchange order placed
+        assert position.status == "closed"
+        assert position.close_price == 3000.0
+        # Actual profit: 0.000001 * 3000 - 0.002 = 0.003 - 0.002 = 0.001
+        assert profit == pytest.approx(0.001, abs=1e-9)
+        assert position.profit_quote == pytest.approx(0.001, abs=1e-9)
+        assert position.profit_usd == pytest.approx(0.001, abs=1e-9)
+        assert position.total_quote_received == pytest.approx(0.003, abs=1e-9)
+        # Profit %: (0.001 / 0.002) * 100 = 50%
+        assert pct == pytest.approx(50.0, abs=0.1)
+        assert position.profit_percentage == pytest.approx(50.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_dust_close_loss_not_negative_100(self):
+        """Edge case: dust close at a loss still computes actual loss, not -100%."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.is_paper_trading = MagicMock(return_value=False)
+        tc = _make_trading_client()
+        bot = _make_bot()
+
+        # Position: bought tiny ETH at $3000, price dropped to $2000
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=0.000001,
+            total_quote_spent=0.003,
+            average_buy_price=3000.0,
+        )
+
+        with patch("app.trading_engine.sell_executor.get_base_precision", return_value=4):
+            trade, profit, pct = await execute_sell(
+                db=db,
+                exchange=exchange,
+                trading_client=tc,
+                bot=bot,
+                product_id="ETH-USD",
+                position=position,
+                current_price=2000.0,
+                signal_data={"signal_type": "sell"},
+            )
+
+        assert trade is None
+        assert position.status == "closed"
+        # Actual loss: 0.000001 * 2000 - 0.003 = 0.002 - 0.003 = -0.001
+        assert profit == pytest.approx(-0.001, abs=1e-9)
+        assert pct == pytest.approx(-33.33, abs=0.1)  # -0.001/0.003 * 100
+
+    @pytest.mark.asyncio
+    async def test_dust_close_zero_spent_defaults_to_neg100(self):
+        """Failure case: zero total_quote_spent avoids division by zero."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.is_paper_trading = MagicMock(return_value=False)
+        tc = _make_trading_client()
+        bot = _make_bot()
+
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=0.000001,
+            total_quote_spent=0,  # edge: zero spent
+            average_buy_price=0.0,
+        )
+
+        with patch("app.trading_engine.sell_executor.get_base_precision", return_value=4):
+            trade, profit, pct = await execute_sell(
+                db=db,
+                exchange=exchange,
+                trading_client=tc,
+                bot=bot,
+                product_id="ETH-USD",
+                position=position,
+                current_price=2000.0,
+                signal_data={"signal_type": "sell"},
+            )
+
+        assert trade is None
+        assert position.status == "closed"
+        assert pct == -100.0  # Fallback for zero spent
+
+    @pytest.mark.asyncio
+    async def test_dust_close_paper_balance_reduces_to_zero(self):
+        """Edge case: paper balance cap reduces raw_amount to 0, triggering dust close."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.is_paper_trading = MagicMock(return_value=True)
+        exchange.get_balance = AsyncMock(return_value={"available": "0.0"})
+        tc = _make_trading_client()
+        bot = _make_bot()
+
+        # Position has real holdings but paper balance is 0
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=0.5,
+            total_quote_spent=1000.0,
+            average_buy_price=2000.0,
+        )
+
+        trade, profit, pct = await execute_sell(
+            db=db,
+            exchange=exchange,
+            trading_client=tc,
+            bot=bot,
+            product_id="ETH-USD",
+            position=position,
+            current_price=2100.0,
+            signal_data={"signal_type": "sell"},
+        )
+
+        assert trade is None
+        assert position.status == "closed"
+        # With 0 available, raw_amount=0, base_amount=0 → dust close
+        # quote_value = 0.5 * 2100 = 1050, profit = 1050 - 1000 = 50
+        assert profit == pytest.approx(50.0, abs=0.1)
+        assert pct == pytest.approx(5.0, abs=0.1)

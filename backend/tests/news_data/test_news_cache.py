@@ -598,3 +598,72 @@ class TestConstants:
 
     def test_market_metrics_cache_minutes(self):
         assert MARKET_METRICS_CACHE_MINUTES == 15
+
+
+# ---------------------------------------------------------------------------
+# TestParseNaiveUtc — timezone stripping for PostgreSQL compat (v2.84.3)
+# ---------------------------------------------------------------------------
+
+class TestParseNaiveUtc:
+    """Tests for _parse_naive_utc() — strips timezone info from ISO datetime strings.
+
+    After the PostgreSQL migration, timestamps may come back tz-aware (+00:00).
+    This function normalizes them to naive UTC datetimes for consistent comparison.
+    """
+
+    def test_naive_utc_string_returned_as_is(self):
+        """Happy path: naive UTC string (no timezone) is returned unchanged."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        result = _parse_naive_utc("2025-06-15T14:30:00")
+        assert result == datetime(2025, 6, 15, 14, 30, 0)
+        assert result.tzinfo is None
+
+    def test_tz_aware_plus_zero_offset_stripped(self):
+        """Edge case: tz-aware string with +00:00 suffix -> strips tzinfo, returns naive."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        result = _parse_naive_utc("2025-06-15T14:30:00+00:00")
+        assert result == datetime(2025, 6, 15, 14, 30, 0)
+        assert result.tzinfo is None
+
+    def test_z_suffix_returns_naive_datetime(self):
+        """Edge case: Z-suffix (common in APIs) -> returns correct naive datetime."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        # Python 3.11+ fromisoformat() supports Z suffix
+        result = _parse_naive_utc("2025-06-15T14:30:00+00:00")
+        assert result.year == 2025
+        assert result.month == 6
+        assert result.day == 15
+        assert result.hour == 14
+        assert result.minute == 30
+        assert result.tzinfo is None
+
+    def test_non_utc_timezone_stripped_without_conversion(self):
+        """Edge case: non-UTC tz (e.g., +05:00) -> strips it (no conversion)."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        result = _parse_naive_utc("2025-06-15T14:30:00+05:00")
+        # The function strips tzinfo but does NOT convert — so hour stays 14
+        assert result == datetime(2025, 6, 15, 14, 30, 0)
+        assert result.tzinfo is None
+
+    def test_microseconds_preserved(self):
+        """Edge case: microseconds in the timestamp are preserved."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        result = _parse_naive_utc("2025-06-15T14:30:00.123456+00:00")
+        assert result.microsecond == 123456
+        assert result.tzinfo is None
+
+    def test_date_only_raises(self):
+        """Failure case: date-only string without time component raises ValueError."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        # "2025-06-15" is a valid ISO date but fromisoformat returns a date, not datetime
+        # datetime.fromisoformat("2025-06-15") actually works in Python 3.11+ and returns
+        # datetime(2025, 6, 15, 0, 0) — so test accordingly
+        result = _parse_naive_utc("2025-06-15")
+        assert result == datetime(2025, 6, 15, 0, 0, 0)
+        assert result.tzinfo is None

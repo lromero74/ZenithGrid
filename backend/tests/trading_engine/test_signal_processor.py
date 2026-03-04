@@ -793,3 +793,95 @@ class TestProcessSignal:
 
         assert result["action"] == "hold"
         assert "Limit close order already pending" in result["reason"]
+
+    @pytest.mark.asyncio
+    async def test_dust_close_records_sell_signal(self):
+        """Bug fix: trade=None + position closed -> dust close sell signal, not limit_close_pending."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot(reserved_usd_balance=5000.0)
+        strategy = _make_strategy()
+        strategy.should_buy = AsyncMock(return_value=(False, 0, "No buy"))
+        strategy.should_sell = AsyncMock(return_value=(True, "TP reached"))
+
+        # Position that execute_sell will dust-close (status becomes "closed")
+        existing_position = _make_position(status="open")
+
+        async def mock_execute_sell(**kwargs):
+            """Simulate dust close: sets position.status to closed, returns (None, profit, pct)."""
+            existing_position.status = "closed"
+            return (None, 0.17, 1.67)
+
+        with (
+            patch(
+                "app.trading_engine.signal_processor.get_active_position",
+                new_callable=AsyncMock,
+                return_value=existing_position,
+            ),
+            patch(
+                "app.trading_engine.signal_processor.execute_sell",
+                new_callable=AsyncMock,
+                side_effect=mock_execute_sell,
+            ),
+            patch(
+                "app.trading_engine.signal_processor._record_signal",
+                new_callable=AsyncMock,
+            ) as mock_record,
+        ):
+            result = await process_signal(
+                db=db,
+                exchange=exchange,
+                trading_client=tc,
+                bot=bot,
+                strategy=strategy,
+                product_id="ETH-USD",
+                candles=_make_candles(),
+                current_price=3000.0,
+            )
+
+        assert result["action"] == "sell"
+        assert "Dust close" in result["reason"]
+        assert result["profit_pct"] == 1.67
+        # Verify _record_signal was called for the dust close
+        mock_record.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_limit_order_pending_when_position_still_open(self):
+        """Edge case: trade=None + position still open -> limit_close_pending (not dust close)."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot(reserved_usd_balance=5000.0)
+        strategy = _make_strategy()
+        strategy.should_buy = AsyncMock(return_value=(False, 0, "No buy"))
+        strategy.should_sell = AsyncMock(return_value=(True, "Conditions met"))
+
+        # Position stays "open" after execute_sell (limit order placed)
+        existing_position = _make_position(status="open")
+
+        with (
+            patch(
+                "app.trading_engine.signal_processor.get_active_position",
+                new_callable=AsyncMock,
+                return_value=existing_position,
+            ),
+            patch(
+                "app.trading_engine.signal_processor.execute_sell",
+                new_callable=AsyncMock,
+                return_value=(None, 0.0, 0.0),  # No trade, but position still open
+            ),
+        ):
+            result = await process_signal(
+                db=db,
+                exchange=exchange,
+                trading_client=tc,
+                bot=bot,
+                strategy=strategy,
+                product_id="ETH-USD",
+                candles=_make_candles(),
+                current_price=3000.0,
+            )
+
+        assert result["action"] == "limit_close_pending"
+        assert result.get("limit_order_placed") is True

@@ -30,6 +30,14 @@ import {
   Bug,
   Rocket,
   Pickaxe,
+  Shield,
+  Fish,
+  Banknote,
+  BarChart3,
+  Handshake,
+  Star,
+  Building2,
+  Boxes,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -184,6 +192,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'cards',
+    subcategory: 'Solitaire',
   },
   {
     id: 'backgammon',
@@ -215,6 +224,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '5-15 min',
     category: 'cards',
+    subcategory: 'Casino',
   },
   {
     id: 'video-poker',
@@ -225,6 +235,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-15 min',
     category: 'cards',
+    subcategory: 'Casino',
   },
   {
     id: 'hearts',
@@ -235,6 +246,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '15-30 min',
     category: 'cards',
+    subcategory: 'Trick-Taking',
   },
   {
     id: 'spades',
@@ -245,6 +257,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '15-30 min',
     category: 'cards',
+    subcategory: 'Trick-Taking',
   },
   {
     id: 'crazy-eights',
@@ -255,6 +268,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '5-10 min',
     category: 'cards',
+    subcategory: 'Classic',
   },
   {
     id: 'gin-rummy',
@@ -265,6 +279,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'cards',
+    subcategory: 'Rummy',
   },
   {
     id: 'freecell',
@@ -275,6 +290,96 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'cards',
+    subcategory: 'Solitaire',
+  },
+  // Phase 8: New Card Games
+  {
+    id: 'war',
+    name: 'War',
+    description: 'Flip cards — highest wins!',
+    icon: 'Shield',
+    path: '/games/war',
+    difficulty: 'easy',
+    sessionLength: '5-10 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
+  {
+    id: 'go-fish',
+    name: 'Go Fish',
+    description: 'Ask for ranks, collect books of four',
+    icon: 'Fish',
+    path: '/games/go-fish',
+    difficulty: 'easy',
+    sessionLength: '5-10 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
+  {
+    id: 'rummy-500',
+    name: 'Rummy 500',
+    description: 'Meld sets and runs to 500 points',
+    icon: 'Banknote',
+    path: '/games/rummy-500',
+    difficulty: 'medium',
+    sessionLength: '15-30 min',
+    category: 'cards',
+    subcategory: 'Rummy',
+  },
+  {
+    id: 'cribbage',
+    name: 'Cribbage',
+    description: 'Peg your way to 121 with 15s and runs',
+    icon: 'BarChart3',
+    path: '/games/cribbage',
+    difficulty: 'hard',
+    sessionLength: '15-30 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
+  {
+    id: 'euchre',
+    name: 'Euchre',
+    description: 'Trick-taking with bowers and trump',
+    icon: 'Handshake',
+    path: '/games/euchre',
+    difficulty: 'hard',
+    sessionLength: '15-30 min',
+    category: 'cards',
+    subcategory: 'Trick-Taking',
+  },
+  {
+    id: 'texas-holdem',
+    name: "Texas Hold'em",
+    description: 'No-limit poker with community cards',
+    icon: 'Star',
+    path: '/games/texas-holdem',
+    difficulty: 'hard',
+    sessionLength: '15-30 min',
+    category: 'cards',
+    subcategory: 'Casino',
+  },
+  {
+    id: 'bridge',
+    name: 'Bridge',
+    description: 'Bid, declare, and play with a partner',
+    icon: 'Building2',
+    path: '/games/bridge',
+    difficulty: 'hard',
+    sessionLength: '20-40 min',
+    category: 'cards',
+    subcategory: 'Trick-Taking',
+  },
+  {
+    id: 'canasta',
+    name: 'Canasta',
+    description: 'Build melds of seven with wild cards',
+    icon: 'Boxes',
+    path: '/games/canasta',
+    difficulty: 'hard',
+    sessionLength: '20-40 min',
+    category: 'cards',
+    subcategory: 'Rummy',
   },
   // Phase 7: Arcade Games
   {
@@ -338,6 +443,14 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Bug,
   Rocket,
   Pickaxe,
+  Shield,
+  Fish,
+  Banknote,
+  BarChart3,
+  Handshake,
+  Star,
+  Building2,
+  Boxes,
 }
 
 /** Category filter options for the hub page */
@@ -348,6 +461,16 @@ export const GAME_CATEGORIES = [
   { value: 'strategy', label: 'Strategy' },
   { value: 'word', label: 'Word' },
   { value: 'arcade', label: 'Arcade' },
+] as const
+
+/** Card game subcategory filter options */
+export const CARD_SUBCATEGORIES = [
+  { value: 'all', label: 'All Cards' },
+  { value: 'Trick-Taking', label: 'Trick-Taking' },
+  { value: 'Rummy', label: 'Rummy' },
+  { value: 'Casino', label: 'Casino' },
+  { value: 'Solitaire', label: 'Solitaire' },
+  { value: 'Classic', label: 'Classic' },
 ] as const
 
 /** Sort options for the hub page */

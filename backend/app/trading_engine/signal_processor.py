@@ -1035,8 +1035,21 @@ async def _decide_and_execute_sell(
                 force_market=is_stop_loss,
             )
 
-        # If trade is None, a limit order was placed - position stays open
+        # If trade is None, either a limit order was placed or dust close happened
         if trade is None:
+            if position.status == "closed":
+                # Dust close — position was closed without an exchange order
+                logger.warning(f"  ⚠️ Position #{position.id} dust-closed (profit: {profit_pct:.2f}%)")
+                await _record_signal(
+                    db, position, signal_data.get("signal_type", "sell"), "sell",
+                    f"Dust close: {sell_reason}", current_price, signal_data,
+                )
+                return {
+                    "action": "sell",
+                    "reason": f"Dust close: {sell_reason}",
+                    "profit_pct": profit_pct,
+                    "position_id": position.id,
+                }
             logger.info(f"  📊 Limit close order placed for position #{position.id}, waiting for fill")
             return {
                 "action": "limit_close_pending",

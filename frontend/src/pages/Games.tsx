@@ -47,6 +47,16 @@ const CrazyEights = lazy(() => import('./games/components/games/crazy-eights/Cra
 const GinRummy = lazy(() => import('./games/components/games/gin-rummy/GinRummy'))
 const Freecell = lazy(() => import('./games/components/games/freecell/Freecell'))
 
+// Phase 8: New Card Games
+const War = lazy(() => import('./games/components/games/war/War'))
+const GoFish = lazy(() => import('./games/components/games/go-fish/GoFish'))
+const Rummy500 = lazy(() => import('./games/components/games/rummy-500/Rummy500'))
+const Cribbage = lazy(() => import('./games/components/games/cribbage/Cribbage'))
+const Euchre = lazy(() => import('./games/components/games/euchre/Euchre'))
+const TexasHoldem = lazy(() => import('./games/components/games/texas-holdem/TexasHoldem'))
+const Bridge = lazy(() => import('./games/components/games/bridge/Bridge'))
+const Canasta = lazy(() => import('./games/components/games/canasta/Canasta'))
+
 // Phase 7: Arcade Games
 const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
 const SpaceInvaders = lazy(() => import('./games/components/games/space-invaders/SpaceInvaders'))
@@ -91,6 +101,15 @@ export default function Games() {
         <Route path="crazy-eights" element={<CrazyEights />} />
         <Route path="gin-rummy" element={<GinRummy />} />
         <Route path="freecell" element={<Freecell />} />
+        {/* Phase 8: New Card Games */}
+        <Route path="war" element={<War />} />
+        <Route path="go-fish" element={<GoFish />} />
+        <Route path="rummy-500" element={<Rummy500 />} />
+        <Route path="cribbage" element={<Cribbage />} />
+        <Route path="euchre" element={<Euchre />} />
+        <Route path="texas-holdem" element={<TexasHoldem />} />
+        <Route path="bridge" element={<Bridge />} />
+        <Route path="canasta" element={<Canasta />} />
         {/* Phase 7: Arcade Games */}
         <Route path="centipede" element={<Centipede />} />
         <Route path="space-invaders" element={<SpaceInvaders />} />
