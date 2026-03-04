@@ -164,6 +164,59 @@ export function getValidMoves(
   return moves
 }
 
+// ── Obligation-Filtered Moves ─────────────────────────────────────────
+//
+// Backgammon rules: must use both dice if possible. If only one can be
+// used, must use the larger. This function filters getValidMoves output
+// to enforce these obligations for 2-die (non-double) rolls.
+
+export function getFilteredMoves(
+  state: BackgammonState,
+): { from: number | 'bar'; to: number | 'off'; dieIndex: number }[] {
+  const unusedIndices = state.dice
+    .map((_, i) => i)
+    .filter(i => !state.usedDice[i])
+
+  // Collect raw valid moves for each unused die
+  const allMoves: { from: number | 'bar'; to: number | 'off'; dieIndex: number }[] = []
+  for (const i of unusedIndices) {
+    for (const m of getValidMoves(state, state.dice[i])) {
+      allMoves.push({ ...m, dieIndex: i })
+    }
+  }
+
+  // No filtering needed for 0-1 dice or doubles (same value)
+  if (unusedIndices.length !== 2 || state.dice[unusedIndices[0]] === state.dice[unusedIndices[1]]) {
+    return allMoves
+  }
+
+  const [idx0, idx1] = unusedIndices
+  const die0 = state.dice[idx0]
+  const die1 = state.dice[idx1]
+  const moves0 = allMoves.filter(m => m.dieIndex === idx0)
+  const moves1 = allMoves.filter(m => m.dieIndex === idx1)
+
+  if (moves0.length === 0) return moves1
+  if (moves1.length === 0) return moves0
+
+  // Check which first-moves allow the second die to also be used
+  const dualMoves0 = moves0.filter(m => {
+    const next = applyMove(state, m.from, m.to, m.dieIndex)
+    return getValidMoves(next, die1).length > 0
+  })
+  const dualMoves1 = moves1.filter(m => {
+    const next = applyMove(state, m.from, m.to, m.dieIndex)
+    return getValidMoves(next, die0).length > 0
+  })
+
+  if (dualMoves0.length > 0 || dualMoves1.length > 0) {
+    return [...dualMoves0, ...dualMoves1]
+  }
+
+  // Only one die can be used — must use the larger
+  return die0 > die1 ? moves0 : moves1
+}
+
 // ── Apply Move ─────────────────────────────────────────────────────────
 
 export function applyMove(

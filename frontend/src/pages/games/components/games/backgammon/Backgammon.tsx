@@ -3,7 +3,7 @@ import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
 import {
-  createBoard, rollDice, getValidMoves, applyMove,
+  createBoard, rollDice, getFilteredMoves, applyMove,
   hasValidMoves, checkWin, getAIMove,
   type BackgammonState,
 } from './backgammonEngine'
@@ -35,16 +35,9 @@ export default function Backgammon() {
     save({ gameState, gameStatus, difficulty, scores })
   }, [gameState, gameStatus, difficulty, scores, save])
 
-  // Compute all valid moves for current dice
+  // Compute obligation-filtered valid moves for current dice
   const getAllCurrentMoves = useCallback((state: BackgammonState) => {
-    const moves: { from: number | 'bar'; to: number | 'off'; dieIndex: number }[] = []
-    for (let i = 0; i < state.dice.length; i++) {
-      if (state.usedDice[i]) continue
-      for (const m of getValidMoves(state, state.dice[i])) {
-        moves.push({ ...m, dieIndex: i })
-      }
-    }
-    return moves
+    return getFilteredMoves(state)
   }, [])
 
   // After player or AI finishes their turn (all dice used or no moves), switch turns
@@ -103,19 +96,13 @@ export default function Backgammon() {
 
     const allMoves = getAllCurrentMoves(gameState)
 
-    // If clicking on a source point (has valid moves from here)
-    const movesFromPoint = allMoves.filter(m => m.from === point)
-    if (movesFromPoint.length > 0) {
-      setSelectedPoint(point)
-      setValidMoves(movesFromPoint)
-      return
-    }
-
-    // If a point is selected and clicking on a valid destination
+    // If a point is already selected, prioritize executing a move to the
+    // clicked destination. Without this, clicking a destination that also
+    // has your checkers would re-select it as a source instead of moving.
     if (selectedPoint !== null) {
       const move = allMoves.find(m => m.from === selectedPoint && m.to === point)
       if (move) {
-        const newState = applyMove(gameState, move.from, move.to as number, move.dieIndex)
+        const newState = applyMove(gameState, move.from, move.to, move.dieIndex)
         setGameState(newState)
         setSelectedPoint(null)
         setValidMoves([])
@@ -126,6 +113,14 @@ export default function Backgammon() {
         }
         return
       }
+    }
+
+    // Select as source if it has valid moves from here
+    const movesFromPoint = allMoves.filter(m => m.from === point)
+    if (movesFromPoint.length > 0) {
+      setSelectedPoint(point)
+      setValidMoves(movesFromPoint)
+      return
     }
 
     // Deselect
