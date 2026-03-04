@@ -383,16 +383,15 @@ async def handle_grid_order_fill(
             # Buy filled → place sell order above
             # Find next sell level from grid_state
             levels = grid_state.get("grid_levels", [])
-            sell_levels = [
+            sell_levels = (
                 level for level in levels
                 if level["order_type"] == "sell"
                 and level["price"] > filled_price
                 and level["status"] == "pending"
-            ]
+            )
+            target_level = min(sell_levels, key=lambda x: x["price"], default=None)
 
-            if sell_levels:
-                # Place sell at next available level
-                target_level = min(sell_levels, key=lambda x: x["price"])
+            if target_level:
                 sell_price = target_level["price"]
                 sell_size = pending_order.filled_base_amount  # Sell what we just bought
 
@@ -444,15 +443,15 @@ async def handle_grid_order_fill(
         elif filled_side == "SELL":
             # Sell filled → place buy order below
             levels = grid_state.get("grid_levels", [])
-            buy_levels = [
+            buy_levels = (
                 level for level in levels
                 if level["order_type"] == "buy"
                 and level["price"] < filled_price
                 and level["status"] == "pending"
-            ]
+            )
+            target_level = max(buy_levels, key=lambda x: x["price"], default=None)
 
-            if buy_levels:
-                target_level = max(buy_levels, key=lambda x: x["price"])
+            if target_level:
                 buy_price = target_level["price"]
                 buy_size = pending_order.filled_base_amount
 

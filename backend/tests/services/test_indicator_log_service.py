@@ -6,6 +6,7 @@ and cleaning up old logs.
 """
 
 import pytest
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -15,6 +16,15 @@ from app.services.indicator_log_service import (
     get_indicator_logs,
     cleanup_old_indicator_logs,
 )
+
+
+def _mock_session_maker(db_session):
+    """Return an async context manager that yields the test db_session
+    without committing (tests manage their own transaction)."""
+    @asynccontextmanager
+    async def _maker():
+        yield db_session
+    return _maker
 
 
 async def _create_bot(db_session, name="TestBot"):
@@ -52,17 +62,20 @@ class TestLogIndicatorEvaluation:
             {"type": "RSI", "timeframe": "1h", "operator": "<", "threshold": 30, "actual_value": 25, "result": True}
         ]
 
-        result = await log_indicator_evaluation(
-            db=db_session,
-            bot_id=bot.id,
-            product_id="ETH-BTC",
-            phase="base_order",
-            conditions_met=True,
-            conditions_detail=conditions,
-            indicators_snapshot={"rsi_1h": 25.0},
-            current_price=0.05,
-        )
-        # log_indicator_evaluation adds without committing (caller batches commits)
+        with patch(
+            "app.database.async_session_maker",
+            _mock_session_maker(db_session),
+        ):
+            result = await log_indicator_evaluation(
+                db=db_session,
+                bot_id=bot.id,
+                product_id="ETH-BTC",
+                phase="base_order",
+                conditions_met=True,
+                conditions_detail=conditions,
+                indicators_snapshot={"rsi_1h": 25.0},
+                current_price=0.05,
+            )
         await db_session.flush()
 
         assert result is not None
@@ -95,16 +108,20 @@ class TestLogIndicatorEvaluation:
 
         conditions = [{"type": "MACD", "result": True}]
 
-        result = await log_indicator_evaluation(
-            db=db_session,
-            bot_id=bot.id,
-            product_id="SOL-USD",
-            phase="take_profit",
-            conditions_met=True,
-            conditions_detail=conditions,
-            indicators_snapshot=None,
-            current_price=None,
-        )
+        with patch(
+            "app.database.async_session_maker",
+            _mock_session_maker(db_session),
+        ):
+            result = await log_indicator_evaluation(
+                db=db_session,
+                bot_id=bot.id,
+                product_id="SOL-USD",
+                phase="take_profit",
+                conditions_met=True,
+                conditions_detail=conditions,
+                indicators_snapshot=None,
+                current_price=None,
+            )
         await db_session.flush()
 
         assert result is not None

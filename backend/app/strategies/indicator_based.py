@@ -87,6 +87,9 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Track previous indicators for crossing detection
         self.previous_indicators = None
 
+        # E8: Cache _needs_aggregate_indicators result (config doesn't change per instance)
+        self._needs_cache = self._needs_aggregate_indicators()
+
     def _get_ai_params(self) -> AISpotOpinionParams:
         """Get AI Spot Opinion parameters from config."""
         return AISpotOpinionParams(
@@ -249,34 +252,31 @@ class IndicatorBasedStrategy(TradingStrategy):
             self.phase_evaluator.get_required_indicators_from_expression(self.take_profit_conditions)
         )
 
-        # Extract timeframes needed
-        timeframes_needed: set = set()
+        # E9: Single-pass to build timeframe→indicator mapping (O(I) instead of O(T×I))
+        _TF_PREFIXES = frozenset([
+            "ONE", "TWO", "THREE", "FOUR", "FIVE",
+            "SIX", "TEN", "FIFTEEN", "THIRTY",
+        ])
+        tf_to_indicators: dict = {}
         for indicator_key in required_indicators:
             parts = indicator_key.split("_", 2)
-            tf_prefixes = [
-                "ONE", "TWO", "THREE", "FOUR", "FIVE",
-                "SIX", "TEN", "FIFTEEN", "THIRTY",
-            ]
-            if len(parts) >= 2 and parts[0] in tf_prefixes:
+            if len(parts) >= 2 and parts[0] in _TF_PREFIXES:
                 timeframe = f"{parts[0]}_{parts[1]}"
-                timeframes_needed.add(timeframe)
+                indicator_name = indicator_key[len(timeframe) + 1:]
+                tf_to_indicators.setdefault(timeframe, set()).add(indicator_name)
 
         # Calculate traditional indicators for each timeframe
-        for timeframe in timeframes_needed:
+        for timeframe, tf_required in tf_to_indicators.items():
             tf_candles = candles_by_timeframe.get(timeframe, candles)
             if len(tf_candles) < min_candles_needed:
                 continue
 
-            tf_required: set = set()
-            for indicator_key in required_indicators:
-                if indicator_key.startswith(f"{timeframe}_"):
-                    indicator_name = indicator_key[len(timeframe) + 1:]
-                    tf_required.add(indicator_name)
-
             # calculate_previous=True enables crossing detection by calculating
             # indicators for both current candle and previous candle (prev_ prefix)
+            # E10: Pass previous_indicators as cache to skip recursive recalculation
             indicators_for_tf = self.indicator_calculator.calculate_all_indicators(
-                tf_candles, tf_required, calculate_previous=True
+                tf_candles, tf_required, calculate_previous=True,
+                previous_indicators_cache=self.previous_indicators,
             )
 
             for key, value in indicators_for_tf.items():
@@ -582,8 +582,8 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Load previous_indicators for crossing detection
         self._load_previous_indicators(position, **kwargs)
 
-        # Determine which aggregate indicators are needed
-        needs = self._needs_aggregate_indicators()
+        # Determine which aggregate indicators are needed (cached at init)
+        needs = self._needs_cache
 
         # Calculate traditional indicators for each required timeframe
         current_indicators = self._calculate_traditional_indicators(
@@ -648,13 +648,16 @@ class IndicatorBasedStrategy(TradingStrategy):
         deviation = self.config.get("price_deviation", 2.0)
         step_scale = self.config.get("safety_order_step_scale", 1.0)
 
-        # Calculate cumulative deviation
-        total_deviation = 0.0
-        for i in range(order_number):
-            if i == 0:
-                total_deviation += deviation
-            else:
-                total_deviation += deviation * (step_scale ** i)
+        # E7: Closed-form geometric series for cumulative deviation (O(1) instead of O(n))
+        if order_number <= 0:
+            total_deviation = 0.0
+        elif step_scale == 1.0:
+            # Linear: deviation * order_number
+            total_deviation = deviation * order_number
+        else:
+            # Geometric series: deviation * (1 + s + s^2 + ... + s^(n-1))
+            # = deviation * (step_scale^n - 1) / (step_scale - 1)
+            total_deviation = deviation * (step_scale ** order_number - 1) / (step_scale - 1)
 
         # Apply direction-specific calculation
         if direction == "long":

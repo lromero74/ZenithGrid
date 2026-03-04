@@ -245,6 +245,7 @@ class TestCaptureAccountSnapshot:
         mock_client = AsyncMock()
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=125000.0)
+        mock_client.get_current_price = AsyncMock(return_value=130000.0)
         mock_client.get_all_balances = AsyncMock(return_value={
             "USD": 50000.0, "USDC": 10000.0, "USDT": 0.0, "BTC": 0.5
         })
@@ -314,6 +315,7 @@ class TestCaptureAccountSnapshot:
         mock_client = AsyncMock()
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
+        mock_client.get_current_price = AsyncMock(return_value=100000.0)
         mock_client.get_all_balances = AsyncMock(return_value={
             "USD": 50000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.0
         })

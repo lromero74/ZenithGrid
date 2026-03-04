@@ -415,14 +415,14 @@ class MultiBotMonitor:
             Result dictionary with action/signal info for all pairs
         """
         try:
-            print(f"🔍 process_bot() ENTERED for {bot.name}")
+            logger.debug(f"process_bot() ENTERED for {bot.name}")
 
             # Bull flag strategy uses a different processing flow
             if bot.strategy_type == "bull_flag":
                 return await _process_bull_flag_bot(self, db, bot)
             # Get all trading pairs for this bot (supports multi-pair)
             trading_pairs = bot.get_trading_pairs()
-            print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
+            logger.debug(f"Got {len(trading_pairs)} trading pairs: {trading_pairs}")
 
             # Get pairs with open positions (always need to monitor these)
             from app.models import Position
@@ -453,7 +453,7 @@ class MultiBotMonitor:
                 )
                 # Add back any pairs with open positions (must monitor existing positions!)
                 trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
-                print(f"🔍 After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
+                logger.debug(f"After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
                 if pairs_with_positions - set(filtered_pairs):
                     extra = len(pairs_with_positions - set(filtered_pairs))
                     logger.info(
@@ -476,19 +476,19 @@ class MultiBotMonitor:
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
             # Individual positions will still use frozen config in process_bot_pair
-            print(f"🔍 Getting strategy instance for {bot.strategy_type}...")
+            logger.debug(f"Getting strategy instance for {bot.strategy_type}...")
             # Inject user_id into strategy config for per-user AI API key lookup
             strategy_config_with_user = {**bot.strategy_config, "user_id": bot.user_id}
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config_with_user)
-            print("🔍 Strategy instance created")
+            logger.debug("Strategy instance created")
             supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
-            print(f"🔍 Supports batch: {supports_batch}")
+            logger.debug(f"Supports batch: {supports_batch}")
 
             if supports_batch:
-                print("🔍 Calling process_bot_batch()...")
+                logger.debug("Calling process_bot_batch()...")
                 logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
                 result = await _process_bot_batch(self, db, bot, trading_pairs, strategy, skip_ai_analysis)
-                print("✅ process_bot_batch() returned")
+                logger.debug("process_bot_batch() returned")
                 return result
             else:
                 logger.info("Using sequential analysis mode")
@@ -527,7 +527,8 @@ class MultiBotMonitor:
                     for product_id in batch:
                         try:
                             result = await _process_bot_pair(
-                                self, db, bot, product_id, skip_ai_analysis=skip_ai_analysis
+                                self, db, bot, product_id, skip_ai_analysis=skip_ai_analysis,
+                                open_positions_count=open_count,
                             )
                             batch_results.append(result)
                         except Exception as e:
@@ -557,10 +558,7 @@ class MultiBotMonitor:
                 return results
 
         except Exception as e:
-            logger.error(f"Error processing bot {bot.name}: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"Error processing bot {bot.name}: {e}", exc_info=True)
             return {"error": str(e)}
 
     async def log_ai_decision(
@@ -570,18 +568,17 @@ class MultiBotMonitor:
     ):
         """Log AI decision to database and return the log entry"""
         try:
-            import traceback
-
             from app.models import AIBotLog
 
-            # DEBUG: Log stack trace to find duplicate calls
-            stack = "".join(traceback.format_stack()[-5:-1])
             logger.info(
                 f"  📝 Logging AI decision for Bot #{bot.id} {product_id}:"
                 f" {signal_data.get('signal_type')}"
                 f" ({signal_data.get('confidence')}%)"
             )
-            logger.debug(f"  Call stack:\n{stack}")
+            if logger.isEnabledFor(logging.DEBUG):
+                import traceback
+                stack = "".join(traceback.format_stack()[-5:-1])
+                logger.debug(f"  Call stack:\n{stack}")
 
             # Extract only additional context (avoid duplicating fields already in columns)
             additional_context = signal_data.get("context", {})  # Get nested context if exists
@@ -630,7 +627,7 @@ class MultiBotMonitor:
             self, db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data, commit=False
         )
 
-    async def _process_single_bot(self, bot: Bot, needs_ai_analysis: bool) -> None:
+    async def _process_single_bot(self, bot: Bot, needs_ai_analysis: bool, bot_check_interval: int = None) -> None:
         """
         Process a single bot with its own DB session and exchange context.
 
@@ -671,12 +668,13 @@ class MultiBotMonitor:
                         local_bot.last_ai_check = datetime.utcnow()
                     await db.commit()
 
-                    print(f"🔍 Calling process_bot for {local_bot.name} (AI: {needs_ai_analysis})...")
+                    logger.debug(f"Calling process_bot for {local_bot.name} (AI: {needs_ai_analysis})...")
                     await self.process_bot(db, local_bot, skip_ai_analysis=not needs_ai_analysis)
-                    print(f"✅ Finished processing {local_bot.name}")
+                    logger.debug(f"Finished processing {local_bot.name}")
 
                     # Calculate and store next check time (aligned to candle boundaries)
-                    bot_check_interval = calculate_bot_check_interval(local_bot.strategy_config or {})
+                    if bot_check_interval is None:
+                        bot_check_interval = calculate_bot_check_interval(local_bot.strategy_config or {})
                     current_timestamp = int(datetime.utcnow().timestamp())
                     next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
                     self._bot_next_check[bot.id] = next_check_timestamp
@@ -691,22 +689,22 @@ class MultiBotMonitor:
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
-        print("🔍 monitor_loop() ENTERED - starting multi-bot monitor loop")
+        logger.info("monitor_loop() ENTERED - starting multi-bot monitor loop")
         # Note: self.running is set to True in start() to prevent race conditions
 
         while self.running:
-            print(f"🔁 Monitor loop iteration, self.running={self.running}")
+            logger.debug(f"Monitor loop iteration, self.running={self.running}")
             try:
                 async with async_session_maker() as db:
                     # Get all active bots
-                    print("🔍 Calling get_active_bots()...")
+                    logger.debug("Calling get_active_bots()...")
                     bots = await self.get_active_bots(db)
-                    print(f"🔍 Got {len(bots)} bots from get_active_bots()")
+                    logger.debug(f"Got {len(bots)} bots from get_active_bots()")
 
                     if not bots:
-                        print("⚠️ No active bots to monitor")
+                        logger.warning("No active bots to monitor")
                     else:
-                        print(f"✅ Monitoring {len(bots)} active bot(s)")
+                        logger.debug(f"Monitoring {len(bots)} active bot(s)")
 
                         # On first iteration after restart, stagger bots to avoid
                         # SQLite lock contention from all bots writing at once.
@@ -725,7 +723,7 @@ class MultiBotMonitor:
                         bots_to_process: List[tuple] = []  # (bot, needs_ai_analysis)
                         for bot in bots:
                             try:
-                                print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
+                                logger.debug(f"Checking bot: {bot.name} (ID: {bot.id})")
 
                                 # Phase 2 Optimization: Smart check scheduling
                                 bot_check_interval = calculate_bot_check_interval(bot.strategy_config or {})
@@ -736,8 +734,8 @@ class MultiBotMonitor:
                                     next_check = self._bot_next_check[bot.id]
                                     if current_timestamp < next_check:
                                         seconds_until = next_check - current_timestamp
-                                        print(
-                                            f"⏭️  Skipping {bot.name} - not due yet "
+                                        logger.debug(
+                                            f"Skipping {bot.name} - not due yet "
                                             f"(next check in {seconds_until}s, interval: {bot_check_interval}s)"
                                         )
                                         continue
@@ -751,20 +749,20 @@ class MultiBotMonitor:
                                     time_since_last_ai_check = (now - bot.last_ai_check).total_seconds()
                                     if time_since_last_ai_check < ai_check_interval:
                                         needs_ai_analysis = False
-                                        print(
-                                            f"🔧 {bot.name}: Technical-only check "
+                                        logger.debug(
+                                            f"{bot.name}: Technical-only check "
                                             f"(last AI: {time_since_last_ai_check:.0f}s ago, "
                                             f"AI interval: {ai_check_interval}s, "
                                             f"candle interval: {bot_check_interval}s)"
                                         )
                                     else:
-                                        print(
-                                            f"🤖 {bot.name}: Full check with AI analysis "
+                                        logger.debug(
+                                            f"{bot.name}: Full check with AI analysis "
                                             f"(AI: {ai_check_interval}s, candle: {bot_check_interval}s)"
                                         )
                                 else:
-                                    print(
-                                        f"🤖 {bot.name}: First-time AI analysis "
+                                    logger.debug(
+                                        f"{bot.name}: First-time AI analysis "
                                         f"(candle interval: {bot_check_interval}s)"
                                     )
 
@@ -775,16 +773,19 @@ class MultiBotMonitor:
 
                         # Process bots concurrently (semaphore limits to 5 at a time)
                         if bots_to_process:
-                            print(f"🚀 Processing {len(bots_to_process)} bot(s) concurrently (max 5 parallel)")
+                            logger.debug(f"Processing {len(bots_to_process)} bot(s) concurrently (max 5 parallel)")
                             tasks = [
                                 asyncio.create_task(
-                                    self._process_single_bot(bot, needs_ai),
+                                    self._process_single_bot(
+                                        bot, needs_ai,
+                                        bot_check_interval=calculate_bot_check_interval(bot.strategy_config or {}),
+                                    ),
                                     name=f"bot-{bot.id}-{bot.name}"
                                 )
                                 for bot, needs_ai in bots_to_process
                             ]
                             await asyncio.gather(*tasks, return_exceptions=True)
-                            print(f"✅ Finished processing {len(bots_to_process)} bot(s)")
+                            logger.debug(f"Finished processing {len(bots_to_process)} bot(s)")
 
                         # Prune stale entries from unbounded caches
                         active_bot_ids = {b.id for b in bots}
@@ -815,17 +816,15 @@ class MultiBotMonitor:
                             del self._bot_next_check[bid]
 
                 # Wait for next interval - check frequently so bots with short intervals are responsive
-                print("🔍 Sleeping 10 seconds before next iteration...")
+                logger.debug("Sleeping 10 seconds before next iteration...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
-                print("🔍 Woke up from sleep, looping back...")
 
             except Exception as e:
-                print(f"❌ ERROR in monitor loop: {e}")
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)
                 # Wait a bit before retrying
                 await asyncio.sleep(10)
 
-        print("🛑 Multi-bot monitor loop EXITED - self.running is False")
+        logger.info("Multi-bot monitor loop EXITED")
         logger.info("Multi-bot monitor stopped")
 
     def start(self):
@@ -842,20 +841,20 @@ class MultiBotMonitor:
 
     async def start_async(self):
         """Start the monitoring task (async - preferred method)"""
-        print(f"🔍 start_async() called, self.running={self.running}")
+        logger.debug(f"start_async() called, self.running={self.running}")
         if not self.running:
-            print("🔍 Setting self.running=True and creating tasks")
+            logger.debug("Setting self.running=True and creating tasks")
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
             # Start order monitor alongside bot monitor (if available)
             if self.order_monitor:
                 asyncio.create_task(self.order_monitor.start())
-            print("✅ Multi-bot monitor task started")
+            logger.info("Multi-bot monitor task started")
             # Give the task a moment to actually start
             await asyncio.sleep(0.1)
-            print("✅ Multi-bot monitor loop should be running now")
+            logger.debug("Multi-bot monitor loop should be running now")
         else:
-            print("⚠️ Monitor already running, ignoring duplicate start() call")
+            logger.warning("Monitor already running, ignoring duplicate start() call")
 
     async def stop(self):
         """Stop the monitoring task"""
@@ -880,10 +879,8 @@ class MultiBotMonitor:
                         {
                             "id": bot.id,
                             "name": bot.name,
-                            "product_ids": bot.get_trading_pairs(),  # Multi-pair support
-                            "product_id": (
-                                bot.get_trading_pairs()[0] if bot.get_trading_pairs() else None
-                            ),  # Legacy compatibility
+                            "product_ids": (pairs := bot.get_trading_pairs()),  # Multi-pair support
+                            "product_id": pairs[0] if pairs else None,  # Legacy compatibility
                             "strategy": bot.strategy_type,
                             "last_check": bot.last_signal_check.isoformat() if bot.last_signal_check else None,
                         }

@@ -5,7 +5,7 @@
  * article grid, pagination, and empty state.
  */
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { Newspaper, ExternalLink, Filter, Volume2, AlertCircle, ChevronDown, Crosshair, Eye, EyeOff, Check } from 'lucide-react'
 import { useArticleReader, ArticleItem } from '../../../contexts/ArticleReaderContext'
 import {
@@ -90,6 +90,12 @@ export function ArticleSection({
 
   const availableSources = newsData?.sources || []
 
+  // Pre-compute category-filtered news once (F11)
+  const categoryFilteredNews = useMemo(
+    () => (newsData?.news || []).filter(n => selectedCategories.has(n.category)),
+    [newsData?.news, selectedCategories]
+  )
+
   /** Convert a NewsItem to ArticleItem for the reader context */
   const toArticleItem = (item: NewsItem): ArticleItem => ({
     id: item.id,
@@ -104,7 +110,7 @@ export function ArticleSection({
     has_issue: item.has_issue,
   })
 
-  const allArticleItems = filteredNews.map(toArticleItem)
+  const allArticleItems = useMemo(() => filteredNews.map(toArticleItem), [filteredNews])
 
   return (
     <>
@@ -274,13 +280,10 @@ export function ArticleSection({
         </button>
         {sortSourcesByCategory(
           availableSources.filter(source => {
-            // Only show sources that have articles in the selected categories
-            const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
-            return categoryNews.some(n => n.source === source.id)
+            return categoryFilteredNews.some(n => n.source === source.id)
           }),
         ).map((source) => {
-          const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
-          const count = countItemsBySource(categoryNews, source.id)
+          const count = countItemsBySource(categoryFilteredNews, source.id)
           return (
             <button
               key={source.id}

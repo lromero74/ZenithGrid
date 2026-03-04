@@ -5,6 +5,7 @@ Handles bot activation, deactivation, and force-run operations.
 Respects seasonality restrictions when enabled.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -255,7 +256,20 @@ async def sell_all_positions(
     if not positions:
         raise HTTPException(status_code=400, detail="No open positions to sell")
 
-    # Sell each position
+    # Prefetch all prices in parallel (deduplicated by product_id)
+    unique_products = list({p.product_id for p in positions})
+
+    async def _get_price(product_id: str):
+        try:
+            price = await exchange.get_current_price(product_id)
+            return (product_id, price)
+        except Exception:
+            return (product_id, None)
+
+    price_results = await asyncio.gather(*[_get_price(pid) for pid in unique_products])
+    price_map = {pid: price for pid, price in price_results if price is not None}
+
+    # Sell each position using prefetched prices
     sold_count = 0
     failed_count = 0
     total_profit_quote = 0.0
@@ -263,8 +277,9 @@ async def sell_all_positions(
 
     for position in positions:
         try:
-            # Get current price
-            current_price = await exchange.get_current_price(position.product_id)
+            current_price = price_map.get(position.product_id)
+            if current_price is None:
+                raise ValueError(f"Could not fetch price for {position.product_id}")
 
             # Execute sell using trading engine
             engine = StrategyTradingEngine(

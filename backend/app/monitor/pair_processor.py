@@ -15,7 +15,6 @@ Phases:
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Bot, Position
@@ -140,16 +139,16 @@ async def _fetch_indicator_candles(
         if (same_pair_count < max_same_pair
                 and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
             phases_to_check = ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]
-            print(f"  📊 {same_pair_count} position(s), all SOs exhausted - checking entry + DCA + exit phases")
+            logger.debug(f"  {same_pair_count} position(s), all SOs exhausted - checking entry + DCA + exit phases")
         else:
             phases_to_check = ["safety_order_conditions", "take_profit_conditions"]
-            print("  📊 Open position detected - checking DCA + exit phases only")
+            logger.debug("  Open position detected - checking DCA + exit phases only")
     else:
         phases_to_check = ["base_order_conditions"]
-        print("  📊 No position - checking entry phase only")
+        logger.debug("  No position - checking entry phase only")
 
     timeframes_needed = get_timeframes_for_phases(bot.strategy_config, phases_to_check)
-    print(f"  📊 Fetching candles for timeframes: {timeframes_needed} (phases: {phases_to_check})")
+    logger.debug(f"  Fetching candles for timeframes: {timeframes_needed} (phases: {phases_to_check})")
 
     lookback_map = {
         "ONE_MINUTE": 200, "THREE_MINUTE": 200, "FIVE_MINUTE": 200,
@@ -233,7 +232,7 @@ async def _analyze_signal(
 
     if skip_ai_analysis:
         if bot.strategy_type in ("conditional_dca", "indicator_based"):
-            print("  ⏭️  Technical check: Analyzing indicator-based signals")
+            logger.debug("  Technical check: Analyzing indicator-based signals")
             return await strategy.analyze_signal(
                 candles, current_price, candles_by_timeframe,
                 position=existing_position,
@@ -251,7 +250,7 @@ async def _analyze_signal(
             )
     else:
         if bot.strategy_type in ("conditional_dca", "indicator_based"):
-            print("  📊 Analyzing indicator-based signals...")
+            logger.debug("  Analyzing indicator-based signals...")
             return await strategy.analyze_signal(
                 candles, current_price, candles_by_timeframe,
                 position=existing_position,
@@ -330,9 +329,8 @@ async def _log_ai_decision(
 
     if should_log_ai:
         pair_info = {"current_price": current_price}
-        open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
-        open_pos_result = await db.execute(open_pos_query)
-        open_positions_list = list(open_pos_result.scalars().all())
+        # Reuse existing_position from the call chain instead of re-querying
+        open_positions_list = [existing_position] if existing_position else []
         await monitor.log_ai_decision(db, bot, product_id, log_signal_data, pair_info, open_positions_list)
         logger.info(f"  📝 Logged AI decision for {product_id}")
 
@@ -468,7 +466,11 @@ async def _execute_trades(
             else bot.strategy_config.copy()
         )
         pos_strategy_config["user_id"] = bot.user_id
-        pos_strategy = StrategyRegistry.get_strategy(bot.strategy_type, pos_strategy_config)
+        # E2: Reuse strategy if position's frozen config matches current bot config
+        if pos.strategy_config_snapshot == bot.strategy_config:
+            pos_strategy = strategy
+        else:
+            pos_strategy = StrategyRegistry.get_strategy(bot.strategy_type, pos_strategy_config)
 
         pos_engine = StrategyTradingEngine(
             db=db, exchange=monitor.exchange, bot=bot, strategy=pos_strategy, product_id=product_id,
@@ -518,7 +520,8 @@ async def _execute_trades(
 async def process_bot_pair(
     monitor, db: AsyncSession, bot: Bot, product_id: str,
     pre_analyzed_signal=None, pair_data=None, commit=True,
-    skip_ai_analysis: bool = False
+    skip_ai_analysis: bool = False,
+    open_positions_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Process signals for a single bot/pair combination.

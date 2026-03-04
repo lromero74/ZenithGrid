@@ -293,7 +293,7 @@ async def _calculate_budget(
     """
     db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
     bot, product_id = ctx.bot, ctx.product_id
-    print(f"🔍 Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
+    logger.debug(f"Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
     if bot.budget_percentage > 0:
         # Bot uses percentage-based budgeting - calculate aggregate value
         # CRITICAL: Only considers assets in this bot's quote currency market
@@ -301,11 +301,11 @@ async def _calculate_budget(
         aggregate_value = await exchange.calculate_aggregate_quote_value(
             quote_currency, bypass_cache=True
         )
-        print(f"🔍 Aggregate {quote_currency} value: {aggregate_value}")
+        logger.debug(f"Aggregate {quote_currency} value: {aggregate_value}")
         logger.info(f"  💰 Aggregate {quote_currency} value: {aggregate_value}")
 
     reserved_balance = bot.get_reserved_balance(aggregate_value)
-    print(f"🔍 Reserved balance (total bot budget): {reserved_balance:.8f}")
+    logger.debug(f"Reserved balance (total bot budget): {reserved_balance:.8f}")
     if reserved_balance > 0:
         # Check if budget should be split across concurrent deals
         max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
@@ -362,6 +362,7 @@ async def _decide_buy(
     ctx: TradeContext, signal_data: Dict[str, Any],
     position: Optional[Position], quote_balance: float,
     aggregate_value: Optional[float],
+    open_positions_count: Optional[int] = None,
 ) -> tuple:
     """Decide whether to buy, including all checks (max deals, cooldown, blacklist).
 
@@ -373,7 +374,7 @@ async def _decide_buy(
     quote_amount = 0
     buy_reason = ""
 
-    print(f"🔍 Bot active: {bot.is_active}, Position exists: {position is not None}")
+    logger.debug(f"Bot active: {bot.is_active}, Position exists: {position is not None}")
     logger.info(f"  🤖 Bot active: {bot.is_active}, Position exists: {position is not None}")
 
     if bot.is_active:
@@ -387,14 +388,15 @@ async def _decide_buy(
 
         # Check max concurrent deals limit
         if position is None:  # Only check when considering opening a NEW position
-            open_positions_count = await get_open_positions_count(db, bot)
+            if open_positions_count is None:
+                open_positions_count = await get_open_positions_count(db, bot)
             max_deals = strategy.config.get("max_concurrent_deals", 1)
-            print(f"🔍 Open positions: {open_positions_count}/{max_deals}")
+            logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
 
             if open_positions_count >= max_deals:
                 should_buy = False
                 buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
-                print(f"🔍 Should buy: FALSE - {buy_reason}")
+                logger.debug(f"Should buy: FALSE - {buy_reason}")
             else:
                 # Check deal cooldown for this pair
                 deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
@@ -413,30 +415,33 @@ async def _decide_buy(
                         remaining = deal_cooldown - elapsed
                         should_buy = False
                         buy_reason = f"Deal cooldown active for {product_id} ({int(remaining)}s remaining)"
-                        print(f"🔍 Should buy: FALSE - {buy_reason}")
+                        logger.debug(f"Should buy: FALSE - {buy_reason}")
                         logger.info(f"  ⏳ {buy_reason}")
 
                 # Check if coin is blacklisted before considering a buy (skip if cooldown blocked)
                 if not buy_reason:
+                    from sqlalchemy import or_
                     base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
 
-                    # Check for user-specific override first, then fall back to global
-                    user_override_query = select(BlacklistedCoin).where(
+                    # Single query for both user-specific and global blacklist entries
+                    blacklist_query = select(BlacklistedCoin).where(
                         BlacklistedCoin.symbol == base_symbol,
-                        BlacklistedCoin.user_id == bot.user_id,
-                    )
-                    user_override_result = await db.execute(user_override_query)
-                    user_override_entry = user_override_result.scalars().first()
-
-                    if user_override_entry:
-                        blacklisted_entry = user_override_entry
-                    else:
-                        global_query = select(BlacklistedCoin).where(
-                            BlacklistedCoin.symbol == base_symbol,
+                        or_(
+                            BlacklistedCoin.user_id == bot.user_id,
                             BlacklistedCoin.user_id.is_(None),
-                        )
-                        global_result = await db.execute(global_query)
-                        blacklisted_entry = global_result.scalars().first()
+                        ),
+                    )
+                    blacklist_result = await db.execute(blacklist_query)
+                    blacklist_entries = blacklist_result.scalars().all()
+
+                    # Prefer user-specific entry over global
+                    blacklisted_entry = None
+                    for entry in blacklist_entries:
+                        if entry.user_id is not None:
+                            blacklisted_entry = entry
+                            break
+                    if blacklisted_entry is None and blacklist_entries:
+                        blacklisted_entry = blacklist_entries[0]
 
                     if blacklisted_entry:
                         # Determine coin's category from reason prefix
@@ -459,23 +464,15 @@ async def _decide_buy(
 
                         if coin_category in allowed_categories:
                             # Category is allowed to trade
-                            print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
+                            logger.debug(f"{base_symbol} is {coin_category} (allowed): {reason}")
                             logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
-                            agg_str = (
-                                f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
-                            )
-                            print(
-                                f"🔍 Calling strategy.should_buy() with"
-                                f" quote_balance={quote_balance:.8f}, aggregate={agg_str}"
-                            )
                             should_buy, quote_amount, buy_reason = await strategy.should_buy(
                                 signal_data, position, quote_balance,
                                 aggregate_value=aggregate_value
                             )
-                            amt = quote_amount if quote_amount else 0
-                            print(
-                                f"🔍 Should buy result: {should_buy},"
-                                f" amount: {amt:.8f}, reason: {buy_reason}"
+                            logger.debug(
+                                f"Should buy result: {should_buy},"
+                                f" amount: {quote_amount or 0:.8f}, reason: {buy_reason}"
                             )
                         else:
                             should_buy = False
@@ -484,24 +481,16 @@ async def _decide_buy(
                                 f"{base_symbol} is {coin_category}:"
                                 f" {reason.replace(category_tag, '')}"
                             )
-                            print(f"🔍 Should buy: FALSE - {buy_reason}")
+                            logger.debug(f"Should buy: FALSE - {buy_reason}")
                             logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
                     else:
-                        agg_str = (
-                            f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
-                        )
-                        print(
-                            f"🔍 Calling strategy.should_buy() with"
-                            f" quote_balance={quote_balance:.8f}, aggregate={agg_str}"
-                        )
                         should_buy, quote_amount, buy_reason = await strategy.should_buy(
                             signal_data, position, quote_balance,
                             aggregate_value=aggregate_value
                         )
-                        amt = quote_amount if quote_amount else 0
-                        print(
-                            f"🔍 Should buy result: {should_buy},"
-                            f" amount: {amt:.8f}, reason: {buy_reason}"
+                        logger.debug(
+                            f"Should buy result: {should_buy},"
+                            f" amount: {quote_amount or 0:.8f}, reason: {buy_reason}"
                         )
 
                         # Log budget blockers to indicator_logs so they show in GUI
@@ -859,7 +848,42 @@ async def _decide_and_execute_sell(
         logger.debug("  📊 candles_by_timeframe is None or empty")
 
     # Calculate market context with indicators for custom sell conditions
-    market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
+    # E4: Reuse indicators from signal_data if already calculated (avoids duplicate work on sell check)
+    if signal_data and "indicators" in signal_data:
+        market_context = {
+            "price": current_price,
+            "rsi": 50.0, "rsi_14": 50.0,
+            "macd": 0.0, "macd_signal": 0.0, "macd_histogram": 0.0,
+            "macd_12_26_9": 0.0, "macd_signal_12_26_9": 0.0, "macd_histogram_12_26_9": 0.0,
+            "bb_percent": 50.0,
+        }
+        # Copy indicator values that overlap with market_context keys
+        ind = signal_data["indicators"]
+        for key in ("rsi_14", "macd_12_26_9", "macd_signal_12_26_9", "macd_histogram_12_26_9"):
+            if key in ind:
+                market_context[key] = ind[key]
+        if "rsi_14" in ind:
+            market_context["rsi"] = ind["rsi_14"]
+        for mk in ("macd", "macd_signal", "macd_histogram"):
+            k = f"{mk}_12_26_9" if mk != "macd" else "macd_12_26_9"
+            if k in ind:
+                market_context[mk] = ind[k]
+        # Copy timeframe-prefixed keys (bb_percent, bb_upper, etc.)
+        for key, val in ind.items():
+            if "_bb_" in key or key.endswith("_price"):
+                market_context[key] = val
+        # Set non-prefixed BB values from first available timeframe
+        for key, val in ind.items():
+            if key.endswith("_bb_percent") and market_context["bb_percent"] == 50.0:
+                market_context["bb_percent"] = val
+            if key.endswith("_bb_upper_20_2") and "bb_upper_20_2" not in market_context:
+                market_context["bb_upper_20_2"] = val
+            if key.endswith("_bb_lower_20_2") and "bb_lower_20_2" not in market_context:
+                market_context["bb_lower_20_2"] = val
+            if key.endswith("_bb_middle_20_2") and "bb_middle_20_2" not in market_context:
+                market_context["bb_middle_20_2"] = val
+    else:
+        market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
 
     # Add previous indicators for crossing detection
     cache_key = f"{bot.id}_{product_id}"
@@ -1075,6 +1099,7 @@ async def process_signal(
     pre_analyzed_signal: Optional[Dict[str, Any]] = None,
     candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     position_override: Any = _POSITION_NOT_SET,
+    open_positions_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Process market data with bot's strategy — orchestrator function.
@@ -1149,11 +1174,12 @@ async def process_signal(
 
     # 4. Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
     if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
-        import traceback
-        stack = "".join(traceback.format_stack()[-5:-1])
         logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
         logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
-        logger.warning(f"  Call stack:\n{stack}")
+        if logger.isEnabledFor(logging.DEBUG):
+            import traceback
+            stack = "".join(traceback.format_stack()[-5:-1])
+            logger.debug(f"  Call stack:\n{stack}")
 
         ai_signal = signal_data.get("signal_type", "none")
         if ai_signal == "buy":
@@ -1167,6 +1193,7 @@ async def process_signal(
     # 5. Decide buy
     should_buy, quote_amount, buy_reason = await _decide_buy(
         ctx, signal_data, position, quote_balance, aggregate_value,
+        open_positions_count=open_positions_count,
     )
 
     # 6. Execute buy

@@ -35,7 +35,8 @@ class IndicatorCalculator:
         pass
 
     def calculate_all_indicators(
-        self, candles: List[Dict[str, Any]], required_indicators: Set[str], calculate_previous: bool = False
+        self, candles: List[Dict[str, Any]], required_indicators: Set[str],
+        calculate_previous: bool = False, previous_indicators_cache: Dict[str, float] = None,
     ) -> Dict[str, float]:
         """
         Calculate all required indicators from candle data
@@ -168,13 +169,21 @@ class IndicatorCalculator:
         # We need at least 4 candles total: 3 closed + 1 incomplete
         # This gives us 2 closed candles to compare (current closed vs previous closed)
         if calculate_previous and len(candles) > 3:
-            # Recursively calculate indicators using candles[:-1]
-            # The recursive call will then use candles[:-1][:-1] = candles[:-2] for its closed_candles
-            # This gives us indicators from the SECOND-to-last closed candle
-            prev_indicators = self.calculate_all_indicators(candles[:-1], required_indicators, calculate_previous=False)
-            # Add prev_ prefix to all keys (including price for BB% crossing detection)
-            for key, value in prev_indicators.items():
-                indicators[f"prev_{key}"] = value
+            # E10: Use cached previous indicators if available (skip recursive calculation)
+            if previous_indicators_cache:
+                for key, value in previous_indicators_cache.items():
+                    if not key.startswith("prev_"):
+                        indicators[f"prev_{key}"] = value
+            else:
+                # Recursively calculate indicators using candles[:-1]
+                # The recursive call will then use candles[:-1][:-1] = candles[:-2] for its closed_candles
+                # This gives us indicators from the SECOND-to-last closed candle
+                prev_indicators = self.calculate_all_indicators(
+                    candles[:-1], required_indicators, calculate_previous=False
+                )
+                # Add prev_ prefix to all keys (including price for BB% crossing detection)
+                for key, value in prev_indicators.items():
+                    indicators[f"prev_{key}"] = value
 
         return indicators
 
@@ -334,8 +343,10 @@ class IndicatorCalculator:
 
         # Calculate %D (SMA of %K)
         # Need to calculate K for last d_period candles
+        # E13: Stop one iteration early and reuse the already-computed k_value for the last entry
         k_values = []
-        for i in range(max(k_period, len(closes) - d_period), len(closes)):
+        loop_end = len(closes) - 1  # Stop before last (we already have k_value for it)
+        for i in range(max(k_period, len(closes) - d_period), loop_end):
             if i < k_period:
                 continue
             period_highs = highs[i - k_period:i]
@@ -350,6 +361,9 @@ class IndicatorCalculator:
             else:
                 k_val = ((period_close - l_low) / (h_high - l_low)) * 100
                 k_values.append(k_val)
+
+        # Append the already-computed k_value for the current candle
+        k_values.append(k_value)
 
         if len(k_values) < d_period:
             return k_value, None

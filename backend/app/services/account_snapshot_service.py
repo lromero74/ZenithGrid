@@ -5,6 +5,7 @@ Captures daily snapshots of account values for historical charting.
 Runs once per day via scheduled task.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -18,6 +19,23 @@ from app.models import Account, AccountTransfer, AccountValueSnapshot, Position
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
+
+
+async def _fetch_position_prices(client, positions: List) -> Dict[str, float]:
+    """Fetch prices for unique product_ids in parallel using asyncio.gather."""
+    unique_products = list({p.product_id for p in positions})
+    if not unique_products:
+        return {}
+
+    async def _get_price(product_id: str):
+        try:
+            price = await client.get_current_price(product_id)
+            return (product_id, price)
+        except Exception:
+            return (product_id, None)
+
+    results = await asyncio.gather(*[_get_price(pid) for pid in unique_products])
+    return {pid: price for pid, price in results if price is not None}
 
 
 async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
@@ -71,13 +89,19 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
                     Position.status == "open"
                 )
             )
-            for pos in pos_result.scalars().all():
-                quote = pos.get_quote_currency()
+            open_positions = pos_result.scalars().all()
+
+            # Parallel price fetch: dedupe product_ids, gather all at once
+            price_map = await _fetch_position_prices(
+                client, [p for p in open_positions if p.total_base_acquired and p.total_base_acquired > 0]
+            )
+            for pos in open_positions:
                 if pos.total_base_acquired and pos.total_base_acquired > 0:
-                    price = await client.get_current_price(pos.product_id)
+                    price = price_map.get(pos.product_id)
                     if price:
                         current_value = pos.total_base_acquired * price
                         pos_unrealized = current_value - (pos.total_quote_spent or 0)
+                        quote = pos.get_quote_currency()
                         if quote in ("USD", "USDC", "USDT"):
                             unrealized_pnl_usd += pos_unrealized
                         elif quote == "BTC":
@@ -106,20 +130,25 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
                 )
             )
             cb_client = await get_exchange_client_for_account(db, account.id)
-            for pos in pos_result.scalars().all():
-                quote = pos.get_quote_currency()
+            open_positions = pos_result.scalars().all()
+
+            # Parallel price fetch: dedupe product_ids, gather all at once
+            if cb_client:
+                price_map = await _fetch_position_prices(
+                    cb_client, [p for p in open_positions if p.total_base_acquired and p.total_base_acquired > 0]
+                )
+            else:
+                price_map = {}
+
+            for pos in open_positions:
                 if pos.total_base_acquired and pos.total_base_acquired > 0:
-                    price = None
-                    if cb_client:
-                        try:
-                            price = await cb_client.get_current_price(pos.product_id)
-                        except Exception:
-                            pass
+                    price = price_map.get(pos.product_id)
                     if price:
                         pos_unrealized = (
                             pos.total_base_acquired * price
                             - (pos.total_quote_spent or 0)
                         )
+                        quote = pos.get_quote_currency()
                         if quote in ("USD", "USDC", "USDT"):
                             unrealized_pnl_usd += pos_unrealized
                         elif quote == "BTC":

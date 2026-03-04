@@ -16,7 +16,8 @@ export function AISentimentIcon({ botId, productId }: AISentimentIconProps) {
       const data = await response.json()
       return data[0] || null
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    staleTime: 60000,
+    refetchInterval: 120000, // Refresh every 2 minutes (reduced from 30s)
     enabled: !!botId && !!productId,
   })
 

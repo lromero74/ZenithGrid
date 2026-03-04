@@ -27,6 +27,51 @@ const TABS: { id: TabId; label: string; icon: typeof Target }[] = [
 
 const VALID_TABS = new Set<string>(['goals', 'schedules', 'history'])
 
+// Pure utility functions hoisted to module scope (F15)
+const formatDate = (iso: string | null) => {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric'
+  })
+}
+
+const formatDateTime = (iso: string | null) => {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric'
+  }) + ' ' + d.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit'
+  })
+}
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'sent':
+      return <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle className="w-3 h-3" /> Sent</span>
+    case 'pending':
+      return <span className="inline-flex items-center gap-1 text-xs text-amber-400"><Clock className="w-3 h-3" /> Pending</span>
+    case 'failed':
+      return <span className="inline-flex items-center gap-1 text-xs text-red-400"><AlertCircle className="w-3 h-3" /> Failed</span>
+    case 'manual':
+      return <span className="inline-flex items-center gap-1 text-xs text-blue-400"><FileText className="w-3 h-3" /> Manual</span>
+    default:
+      return <span className="text-xs text-slate-400">{status}</span>
+  }
+}
+
+const getTimeRemaining = (targetDate: string | null) => {
+  if (!targetDate) return ''
+  const now = new Date()
+  const target = new Date(targetDate)
+  const diffMs = target.getTime() - now.getTime()
+  if (diffMs <= 0) return 'Past due'
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (days > 365) return `${Math.floor(days / 365)}y ${Math.floor((days % 365) / 30)}m`
+  if (days > 30) return `${Math.floor(days / 30)}m ${days % 30}d`
+  return `${days}d`
+}
+
 export default function Reports() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
@@ -192,55 +237,11 @@ export default function Reports() {
   // Clear selection on page change
   useEffect(() => { setSelectedReportIds(new Set()) }, [historyPage])
 
-  // ---------- Render Helpers ----------
-
-  const formatDate = (iso: string | null) => {
-    if (!iso) return '-'
-    return new Date(iso).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric'
-    })
-  }
-
-  const formatDateTime = (iso: string | null) => {
-    if (!iso) return '-'
-    const d = new Date(iso)
-    return d.toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric'
-    }) + ' ' + d.toLocaleTimeString('en-US', {
-      hour: 'numeric', minute: '2-digit'
-    })
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle className="w-3 h-3" /> Sent</span>
-      case 'pending':
-        return <span className="inline-flex items-center gap-1 text-xs text-amber-400"><Clock className="w-3 h-3" /> Pending</span>
-      case 'failed':
-        return <span className="inline-flex items-center gap-1 text-xs text-red-400"><AlertCircle className="w-3 h-3" /> Failed</span>
-      case 'manual':
-        return <span className="inline-flex items-center gap-1 text-xs text-blue-400"><FileText className="w-3 h-3" /> Manual</span>
-      default:
-        return <span className="text-xs text-slate-400">{status}</span>
-    }
-  }
-
-  const getTimeRemaining = (targetDate: string | null) => {
-    if (!targetDate) return ''
-    const now = new Date()
-    const target = new Date(targetDate)
-    const diffMs = target.getTime() - now.getTime()
-    if (diffMs <= 0) return 'Past due'
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (days > 365) return `${Math.floor(days / 365)}y ${Math.floor((days % 365) / 30)}m`
-    if (days > 30) return `${Math.floor(days / 30)}m ${days % 30}d`
-    return `${days}d`
-  }
-
   // ---------- Tab Content ----------
 
-  const renderGoalsTab = () => (
+  const renderGoalsTab = () => {
+    const now = new Date()
+    return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-white">Financial Goals</h3>
@@ -264,8 +265,7 @@ export default function Reports() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {goals.map(goal => {
-            // Simple client-side progress calculation
-            const now = new Date()
+            // Simple client-side progress calculation (F14: now hoisted outside map)
             const start = new Date(goal.start_date || now)
             const target = new Date(goal.target_date || now)
             const totalMs = target.getTime() - start.getTime()
@@ -401,6 +401,7 @@ export default function Reports() {
       )}
     </div>
   )
+  }
 
   const renderSchedulesTab = () => (
     <div>

@@ -74,50 +74,58 @@ def calculate_bot_pnl(
     Returns dict with: total_pnl_usd, total_pnl_btc, total_pnl_percentage,
     avg_daily_pnl_usd, avg_daily_pnl_btc, trades_per_day, win_rate.
     """
-    # Total PnL (closed positions only)
-    total_pnl_usd = 0.0
-    total_pnl_btc = 0.0
-    for pos in closed_positions:
-        profit_usd = pos.profit_usd or 0.0
-        total_pnl_usd += profit_usd
-
-        if pos.product_id and "-BTC" in pos.product_id:
-            profit_btc = pos.profit_quote or 0.0
-        else:
-            btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
-            profit_btc = profit_usd / btc_price if btc_price > 0 else 0.0
-        total_pnl_btc += profit_btc
-
-    # Filter positions by projection timeframe
+    # Determine timeframe cutoff for recent PnL
     timeframe_days_map = {
         '7d': 7, '14d': 14, '30d': 30,
         '3m': 90, '6m': 180, '1y': 365,
         'all': None,
     }
     timeframe_days = timeframe_days_map.get(projection_timeframe, None)
+    cutoff_date = (
+        datetime.utcnow() - timedelta(days=timeframe_days) if timeframe_days else None
+    )
 
-    if timeframe_days is None:
-        recent_closed = closed_positions
-    else:
-        cutoff_date = datetime.utcnow() - timedelta(days=timeframe_days)
-        recent_closed = [
-            p for p in closed_positions
-            if p.closed_at and p.closed_at >= cutoff_date
-        ]
-
-    recent_pnl_usd = sum(p.profit_usd for p in recent_closed if p.profit_usd)
-
+    # Single pass over closed_positions: accumulate all metrics at once
+    total_pnl_usd = 0.0
+    total_pnl_btc = 0.0
+    recent_pnl_usd = 0.0
     recent_pnl_btc = 0.0
-    for pos in recent_closed:
+    winning_count = 0
+    total_capital_deployed_usd = 0.0
+
+    for pos in closed_positions:
         profit_usd = pos.profit_usd or 0.0
-        if pos.product_id and "-BTC" in pos.product_id:
+        is_btc_pair = pos.product_id and "-BTC" in pos.product_id
+
+        # BTC profit conversion
+        if is_btc_pair:
             profit_btc = pos.profit_quote or 0.0
         else:
             btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
             profit_btc = profit_usd / btc_price if btc_price > 0 else 0.0
-        recent_pnl_btc += profit_btc
 
-    # Calculate days in period
+        total_pnl_usd += profit_usd
+        total_pnl_btc += profit_btc
+
+        # Recent PnL (within timeframe)
+        is_recent = cutoff_date is None or (pos.closed_at and pos.closed_at >= cutoff_date)
+        if is_recent:
+            recent_pnl_usd += profit_usd
+            recent_pnl_btc += profit_btc
+
+        # Win count (S10: generator count replaced with single-pass accumulator)
+        if pos.profit_usd is not None and pos.profit_usd > 0:
+            winning_count += 1
+
+        # Capital deployed
+        quote_spent = pos.total_quote_spent or 0.0
+        if is_btc_pair:
+            deploy_btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+            total_capital_deployed_usd += quote_spent * deploy_btc_price
+        else:
+            total_capital_deployed_usd += quote_spent
+
+    # Calculate derived metrics
     if timeframe_days is None:
         days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
     else:
@@ -131,18 +139,9 @@ def calculate_bot_pnl(
     trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
 
     # Win rate
-    winning = [p for p in closed_positions if p.profit_usd is not None and p.profit_usd > 0]
-    win_rate = (len(winning) / len(closed_positions) * 100) if closed_positions else 0.0
+    win_rate = (winning_count / len(closed_positions) * 100) if closed_positions else 0.0
 
-    # PnL percentage (total_pnl_usd / total capital deployed)
-    total_capital_deployed_usd = 0.0
-    for pos in closed_positions:
-        quote_spent = pos.total_quote_spent or 0.0
-        if pos.product_id and "-BTC" in pos.product_id:
-            btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
-            total_capital_deployed_usd += quote_spent * btc_price
-        else:
-            total_capital_deployed_usd += quote_spent
+    # PnL percentage
     total_pnl_percentage = (
         (total_pnl_usd / total_capital_deployed_usd * 100)
         if total_capital_deployed_usd > 0 else 0.0

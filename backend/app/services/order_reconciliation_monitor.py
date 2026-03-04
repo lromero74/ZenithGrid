@@ -220,30 +220,50 @@ class MissingOrderDetector:
 
             # Group positions by product_id for efficient exchange queries
             positions_by_product = {}
+            all_position_ids = []
             for pos in positions:
                 if pos.product_id not in positions_by_product:
                     positions_by_product[pos.product_id] = []
                 positions_by_product[pos.product_id].append(pos)
+                all_position_ids.append(pos.id)
+
+            # Bulk queries: fetch all trades and pending orders at once
+            trade_query = select(Trade.order_id, Trade.position_id).where(
+                Trade.position_id.in_(all_position_ids)
+            )
+            trade_result = await self.db.execute(trade_query)
+            all_trade_rows = trade_result.fetchall()
+
+            # Build per-position recorded order_id sets
+            recorded_order_ids_by_position = {}
+            for order_id, pos_id in all_trade_rows:
+                if order_id:
+                    recorded_order_ids_by_position.setdefault(pos_id, set()).add(order_id)
+
+            pending_query = select(PendingOrder.order_id, PendingOrder.status, PendingOrder.position_id).where(
+                PendingOrder.position_id.in_(all_position_ids)
+            )
+            pending_result = await self.db.execute(pending_query)
+            all_pending_rows = pending_result.fetchall()
+
+            # Build per-position pending order maps
+            pending_orders_by_position = {}
+            for order_id, status, pos_id in all_pending_rows:
+                if order_id:
+                    pending_orders_by_position.setdefault(pos_id, {})[order_id] = status
 
             missing_buys = []
             missing_sells = []
             stuck_pending_orders = []
 
             for product_id, product_positions in positions_by_product.items():
-                # Get all recorded order_ids for these positions from trades table
+                # Merge recorded order_ids for this product group from bulk results
                 position_ids = [p.id for p in product_positions]
-                trade_query = select(Trade.order_id).where(
-                    Trade.position_id.in_(position_ids)
-                )
-                trade_result = await self.db.execute(trade_query)
-                recorded_order_ids = set(t[0] for t in trade_result.fetchall() if t[0])
-
-                # Also get order_ids from pending_orders table
-                pending_query = select(PendingOrder.order_id, PendingOrder.status).where(
-                    PendingOrder.position_id.in_(position_ids)
-                )
-                pending_result = await self.db.execute(pending_query)
-                pending_orders = {row[0]: row[1] for row in pending_result.fetchall() if row[0]}
+                recorded_order_ids = set()
+                pending_orders = {}
+                for pid in position_ids:
+                    recorded_order_ids.update(recorded_order_ids_by_position.get(pid, set()))
+                    pending_orders.update(pending_orders_by_position.get(pid, {}))
 
                 # Get filled orders from exchange for this product
                 try:

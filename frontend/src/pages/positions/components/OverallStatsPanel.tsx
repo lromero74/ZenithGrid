@@ -1,5 +1,5 @@
 import { Balances } from '../../../types'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 interface CompletedStats {
   total_profit_btc: number
@@ -149,9 +149,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     )
   }
 
-  const historicalData = getHistoricalData()
-  const toDateData = getToDateData()
-  const cumulativeData = getCumulativeData()
+  const historicalData = useMemo(() => getHistoricalData(), [realizedPnL, selectedHistorical])
+  const toDateData = useMemo(() => getToDateData(), [realizedPnL, selectedToDate])
+  const cumulativeData = useMemo(() => getCumulativeData(), [realizedPnL, selectedCumulative, stats.uPnLByQuote, stats.uPnLUSD])
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 sm:p-6 mb-4">
