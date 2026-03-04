@@ -9,6 +9,7 @@ Covers:
 
 import asyncio
 import os
+import time
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
@@ -137,6 +138,65 @@ class TestSimpleCache:
         await cache.cleanup_expired()
         assert await cache.get("fresh") == "value1"
         assert "stale" not in cache._cache
+
+
+class TestSimpleCacheNegativeCache:
+    """Tests for SimpleCache negative cache (not-found tracking)."""
+
+    @pytest.mark.asyncio
+    async def test_mark_and_check_not_found(self):
+        """Happy path: marking a key as not-found makes is_not_found return True."""
+        cache = SimpleCache()
+        await cache.mark_not_found("price_TON-BTC", ttl_seconds=300)
+        assert await cache.is_not_found("price_TON-BTC") is True
+
+    @pytest.mark.asyncio
+    async def test_unknown_key_not_found_returns_false(self):
+        """Happy path: unknown key returns False."""
+        cache = SimpleCache()
+        assert await cache.is_not_found("price_ETH-BTC") is False
+
+    @pytest.mark.asyncio
+    async def test_expired_not_found_returns_false(self):
+        """Edge case: expired not-found entry returns False and is cleaned up."""
+        cache = SimpleCache()
+        await cache.mark_not_found("price_OLD-BTC", ttl_seconds=300)
+        # Manually expire
+        cache._not_found["price_OLD-BTC"] = time.monotonic() - 1
+        assert await cache.is_not_found("price_OLD-BTC") is False
+        assert "price_OLD-BTC" not in cache._not_found
+
+    @pytest.mark.asyncio
+    async def test_clear_removes_not_found(self):
+        """Happy path: clear() removes not-found entries too."""
+        cache = SimpleCache()
+        await cache.mark_not_found("price_TON-BTC", ttl_seconds=300)
+        await cache.clear()
+        assert await cache.is_not_found("price_TON-BTC") is False
+
+    @pytest.mark.asyncio
+    async def test_cleanup_expired_removes_stale_not_found(self):
+        """Happy path: cleanup_expired removes expired not-found entries."""
+        cache = SimpleCache()
+        await cache.mark_not_found("price_STALE-BTC", ttl_seconds=300)
+        cache._not_found["price_STALE-BTC"] = time.monotonic() - 1
+        await cache.mark_not_found("price_FRESH-BTC", ttl_seconds=300)
+        await cache.cleanup_expired()
+        assert "price_STALE-BTC" not in cache._not_found
+        assert await cache.is_not_found("price_FRESH-BTC") is True
+
+    @pytest.mark.asyncio
+    async def test_not_found_independent_of_positive_cache(self):
+        """Edge case: not-found and positive cache are independent."""
+        cache = SimpleCache()
+        await cache.set("price_ETH-BTC", 0.05, ttl_seconds=60)
+        await cache.mark_not_found("price_TON-BTC", ttl_seconds=300)
+        # Positive cache unaffected
+        assert await cache.get("price_ETH-BTC") == 0.05
+        assert await cache.is_not_found("price_ETH-BTC") is False
+        # Negative cache unaffected
+        assert await cache.is_not_found("price_TON-BTC") is True
+        assert await cache.get("price_TON-BTC") is None
 
 
 class TestSimpleCacheGetOrFetch:

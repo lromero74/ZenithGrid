@@ -76,6 +76,7 @@ CANDLE_INTERVALS = [
 # Cache TTL (seconds)
 BALANCE_CACHE_TTL = 60  # Cache balances for 60 seconds
 PRICE_CACHE_TTL = 60  # Cache prices for 60 seconds (budget calc doesn't need real-time prices)
+NEGATIVE_CACHE_TTL = 300  # Cache 404 not-found responses for 5 minutes
 AGGREGATE_VALUE_CACHE_TTL = 300  # Cache aggregate portfolio values for 5 minutes (was 2 min)
 PRODUCT_STATS_CACHE_TTL = 600  # Cache product stats (24h volume, etc.) for 10 minutes
 MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations
