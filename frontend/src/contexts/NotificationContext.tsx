@@ -3,7 +3,7 @@
  * Manages WebSocket connection, audio playback, and visual toasts
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react'
 import { ToastContainer, ToastData, ToastType } from '../components/Toast'
 import { useAudio, OrderFillType } from '../hooks/useAudio'
 
@@ -298,13 +298,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [connect, checkForNewVersion])
 
-  const value: NotificationContextType = {
+  const value: NotificationContextType = useMemo(() => ({
     addToast,
     dismissToast,
     isConnected,
     audioEnabled,
     setAudioEnabled,
-  }
+  }), [addToast, dismissToast, isConnected, audioEnabled, setAudioEnabled])
 
   return (
     <NotificationContext.Provider value={value}>

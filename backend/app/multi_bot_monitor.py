@@ -494,11 +494,7 @@ class MultiBotMonitor:
                 logger.info("Using sequential analysis mode")
                 # Original sequential processing logic
 
-                # Check capacity: filter to only pairs with positions when at max capacity
-                from app.models import Position
-                open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
-                open_pos_result = await db.execute(open_pos_query)
-                open_positions = list(open_pos_result.scalars().all())
+                # Reuse open_positions from above (already fetched at line 429)
                 open_count = len(open_positions)
                 max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
 

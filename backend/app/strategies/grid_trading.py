@@ -18,6 +18,7 @@ Key Features:
 - Time-based profit rotation
 """
 
+import bisect
 import logging
 import statistics
 from datetime import datetime
@@ -238,18 +239,15 @@ async def calculate_volume_weighted_levels(
             running_sum += vol
             cumulative_volume.append(running_sum / total_weighted_volume)
 
-        # Place levels according to volume percentiles
+        # Place levels according to volume percentiles (binary search on sorted cumulative)
         levels = []
         for i in range(num_levels):
             # Target percentile for this level
             target_percentile = i / (num_levels - 1) if num_levels > 1 else 0.5
 
-            # Find bucket closest to this percentile
-            bucket_index = 0
-            for idx, cumul in enumerate(cumulative_volume):
-                if cumul >= target_percentile:
-                    bucket_index = idx
-                    break
+            # Binary search the sorted cumulative distribution
+            bucket_index = bisect.bisect_left(cumulative_volume, target_percentile)
+            bucket_index = min(bucket_index, len(cumulative_volume) - 1)
 
             # Calculate price at this bucket
             price = lower + (bucket_index * bucket_size) + (bucket_size / 2)

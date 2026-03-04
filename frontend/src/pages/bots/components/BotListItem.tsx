@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
 import { Edit, Eye, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
@@ -30,7 +30,7 @@ interface BotListItemProps {
   canWrite?: boolean
 }
 
-export function BotListItem({
+export const BotListItem = memo(function BotListItem({
   bot,
   strategies,
   handleOpenEdit,
@@ -633,4 +633,4 @@ export function BotListItem({
       </td>
     </tr>
   )
-}
+})

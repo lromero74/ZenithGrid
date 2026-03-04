@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.exceptions import AppError
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -221,12 +221,17 @@ async def list_accounts(
         result = await db.execute(query)
         accounts = result.scalars().all()
 
-        # Get bot counts for each account
+        # Get bot counts for all accounts in a single aggregate query
+        account_ids = [a.id for a in accounts]
+        count_q = select(
+            Bot.account_id, func.count(Bot.id).label("cnt")
+        ).where(Bot.account_id.in_(account_ids)).group_by(Bot.account_id)
+        count_result = await db.execute(count_q)
+        bot_counts = {row.account_id: row.cnt for row in count_result}
+
         response = []
         for account in accounts:
-            bot_count_query = select(Bot).where(Bot.account_id == account.id)
-            bot_result = await db.execute(bot_count_query)
-            bot_count = len(bot_result.scalars().all())
+            bot_count = bot_counts.get(account.id, 0)
 
             response.append(AccountResponse(
                 id=account.id,
@@ -278,10 +283,11 @@ async def get_account(
         if not account:
             raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
 
-        # Get bot count
-        bot_count_query = select(Bot).where(Bot.account_id == account.id)
-        bot_result = await db.execute(bot_count_query)
-        bot_count = len(bot_result.scalars().all())
+        # Get bot count with aggregate query
+        bot_count_result = await db.execute(
+            select(func.count(Bot.id)).where(Bot.account_id == account.id)
+        )
+        bot_count = bot_count_result.scalar() or 0
 
         return AccountResponse(
             id=account.id,
@@ -433,10 +439,11 @@ async def update_account(
         await db.commit()
         await db.refresh(account)
 
-        # Get bot count
-        bot_count_query = select(Bot).where(Bot.account_id == account.id)
-        bot_result = await db.execute(bot_count_query)
-        bot_count = len(bot_result.scalars().all())
+        # Get bot count with aggregate query
+        bot_count_result = await db.execute(
+            select(func.count(Bot.id)).where(Bot.account_id == account.id)
+        )
+        bot_count = bot_count_result.scalar() or 0
 
         logger.info(f"Updated account: {account.name} (id={account.id})")
 
@@ -636,10 +643,11 @@ async def get_default_account(
         if not account:
             raise HTTPException(status_code=404, detail="No accounts configured")
 
-        # Get bot count
-        bot_count_query = select(Bot).where(Bot.account_id == account.id)
-        bot_result = await db.execute(bot_count_query)
-        bot_count = len(bot_result.scalars().all())
+        # Get bot count with aggregate query
+        bot_count_result = await db.execute(
+            select(func.count(Bot.id)).where(Bot.account_id == account.id)
+        )
+        bot_count = bot_count_result.scalar() or 0
 
         return AccountResponse(
             id=account.id,

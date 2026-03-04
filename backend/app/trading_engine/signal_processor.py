@@ -27,6 +27,9 @@ from app.trading_engine.sell_executor import execute_sell, execute_sell_short
 
 logger = logging.getLogger(__name__)
 
+# Module-level singleton — IndicatorCalculator is stateless, no need to re-instantiate per call
+_indicator_calc = IndicatorCalculator()
+
 
 async def _record_signal(
     db: AsyncSession,
@@ -115,7 +118,7 @@ def _calculate_market_context_with_indicators(
         "bb_percent": 50.0,
     }
 
-    calc = IndicatorCalculator()
+    calc = _indicator_calc
 
     # Build candles_by_timeframe if not provided (backward compatibility)
     if candles_by_timeframe is None:
@@ -315,13 +318,13 @@ async def _calculate_budget(
             per_position_budget = reserved_balance
 
         # Calculate how much is available for THIS position (per-position budget - already spent in this position)
-        query = select(Position).where(
-            Position.bot_id == bot.id, Position.status == "open", Position.product_id == product_id
+        from sqlalchemy import func as sa_func
+        sum_result = await db.execute(
+            select(sa_func.coalesce(sa_func.sum(Position.total_quote_spent), 0.0)).where(
+                Position.bot_id == bot.id, Position.status == "open", Position.product_id == product_id
+            )
         )
-        result = await db.execute(query)
-        open_positions = result.scalars().all()
-
-        total_in_positions = sum(p.total_quote_spent for p in open_positions)
+        total_in_positions = sum_result.scalar()
         quote_balance = per_position_budget - total_in_positions
 
         # For safety orders (position already exists), use the position's own allocated budget

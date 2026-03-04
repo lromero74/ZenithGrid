@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.6] - 2026-03-04
+
+### Changed
+- **MACD indicator calculation 10x faster**: Replaced O(n²) nested EMA recomputation with incremental single-pass O(n) algorithm — identical results, dramatically less CPU work per bot cycle
+- **Database queries optimized**: Added 5 composite indexes on hot-path columns (positions, trades, bots) and replaced 6 N+1 query patterns with batch aggregation queries — fewer round-trips to PostgreSQL per API call
+- **Order statistics use SQL aggregation**: Stats endpoint now computes counts in the database instead of loading all rows into Python
+- **Signal processor budget check uses SUM query**: Open position budget calculation now runs a single SQL SUM instead of loading all position objects
+- **Duplicate database query eliminated**: Multi-bot monitor was running the same open-positions query twice per cycle — removed the redundant call
+- **Dashboard and Closed Positions pages render faster**: Memoized all derived values, wrapped list components in React.memo, and reduced closed-positions polling from 5s to 60s (data doesn't change that frequently)
+- **React context re-renders reduced**: Auth, Account, and Notification context values are now memoized, preventing unnecessary re-renders of the entire component tree on every state change
+- **TTS playback no longer triggers 4Hz re-renders**: Removed high-frequency currentTime/duration from ArticleReader context dependencies — playback progress updates no longer cascade through the whole app
+- **Grid percentile lookup uses binary search**: Replaced linear scan with bisect for O(log n) percentile bucket finding
+- **Report generation pre-groups data**: Win rate and transfer calculations now use single-pass dictionary grouping instead of nested loops
+
 ## [v2.84.5] - 2026-03-03
 
 ### Fixed

@@ -6,7 +6,7 @@
  * with all pages filtering data by the selected account.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '../services/api'
 
@@ -223,8 +223,11 @@ export function AccountProvider({ children }: AccountProviderProps) {
     refetchOnWindowFocus: false,
   })
 
-  // Find selected account from the list
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId) || null
+  // Find selected account from the list (memoized to avoid new reference on every render)
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === selectedAccountId) || null,
+    [accounts, selectedAccountId]
+  )
 
   // Auto-select default account if none selected or stale ID from another user
   useEffect(() => {
@@ -332,7 +335,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
     return accounts.filter((a) => a.type === 'dex')
   }, [accounts])
 
-  const value: AccountContextType = {
+  const value: AccountContextType = useMemo(() => ({
     accounts,
     selectedAccount,
     isLoading,
@@ -346,7 +349,11 @@ export function AccountProvider({ children }: AccountProviderProps) {
     getAccountById,
     getCexAccounts,
     getDexAccounts,
-  }
+  }), [
+    accounts, selectedAccount, isLoading, fetchError,
+    selectAccount, addAccount, updateAccount, deleteAccount,
+    setDefaultAccount, refreshAccounts, getAccountById, getCexAccounts, getDexAccounts,
+  ])
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>
 }

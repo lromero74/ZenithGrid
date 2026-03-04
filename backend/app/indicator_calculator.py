@@ -248,14 +248,24 @@ class IndicatorCalculator:
 
         macd_line = fast_ema - slow_ema
 
-        # Calculate MACD values for signal line calculation
-        macd_values = []
-        temp_prices = prices[:]
-        for i in range(slow_period, len(prices) + 1):
-            f_ema = self.calculate_ema(temp_prices[:i], fast_period)
-            s_ema = self.calculate_ema(temp_prices[:i], slow_period)
-            if f_ema is not None and s_ema is not None:
-                macd_values.append(f_ema - s_ema)
+        # Build MACD history incrementally in O(n) using EMA recurrence
+        fast_multiplier = 2 / (fast_period + 1)
+        slow_multiplier = 2 / (slow_period + 1)
+
+        # Seed EMAs from SMA of initial periods
+        inc_fast_ema = sum(prices[:fast_period]) / fast_period
+        inc_slow_ema = sum(prices[:slow_period]) / slow_period
+
+        # Walk fast EMA forward to slow_period start point
+        for price in prices[fast_period:slow_period]:
+            inc_fast_ema = (price - inc_fast_ema) * fast_multiplier + inc_fast_ema
+
+        # Now walk both EMAs forward together, collecting MACD values
+        macd_values = [inc_fast_ema - inc_slow_ema]
+        for price in prices[slow_period:]:
+            inc_fast_ema = (price - inc_fast_ema) * fast_multiplier + inc_fast_ema
+            inc_slow_ema = (price - inc_slow_ema) * slow_multiplier + inc_slow_ema
+            macd_values.append(inc_fast_ema - inc_slow_ema)
 
         # Signal line is EMA of MACD line
         if len(macd_values) < signal_period:

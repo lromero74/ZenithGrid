@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { botsApi, positionsApi, authFetch, transfersApi } from '../services/api'
 import {
@@ -79,8 +79,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   })
 
-  // Combine for recent deals display
-  const allPositions = [...openPositions, ...closedPositions]
+  // Combine for recent deals display (memoized to avoid spread on every render)
+  const allPositions = useMemo(() => [...openPositions, ...closedPositions], [openPositions, closedPositions])
 
   // Fetch portfolio for account value - account-specific for CEX/DEX switching
   // Falls back to singular endpoint if selectedAccount hasn't resolved yet
@@ -137,26 +137,69 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     refetchInterval: 30000,
   })
 
-  const activeBots = bots.filter(bot => bot.is_active)
+  const activeBots = useMemo(() => bots.filter(bot => bot.is_active), [bots])
+  const inactiveBots = useMemo(() => bots.filter(bot => !bot.is_active), [bots])
 
-  // Calculate total profit (USD is normalized across all bots)
-  const totalProfitUSD = closedPositions.reduce((sum, p) => sum + (p.profit_usd || 0), 0)
+  // Calculate profit metrics (memoized — closedPositions can be up to 1000 items)
+  const { totalProfitUSD, totalProfitBTC, winRate, profitableCount } = useMemo(() => {
+    let profitUSD = 0
+    let profitBTC = 0
+    let wins = 0
+    for (const p of closedPositions) {
+      profitUSD += p.profit_usd || 0
+      if (p.product_id && p.product_id.endsWith('-BTC')) {
+        profitBTC += p.profit_quote || 0
+      }
+      if ((p.profit_usd || 0) > 0) wins++
+    }
+    return {
+      totalProfitUSD: profitUSD,
+      totalProfitBTC: profitBTC,
+      winRate: closedPositions.length > 0 ? (wins / closedPositions.length) * 100 : 0,
+      profitableCount: wins,
+    }
+  }, [closedPositions])
 
-  // Calculate total BTC profit (only from BTC-based positions)
-  const totalProfitBTC = closedPositions
-    .filter(p => p.product_id && p.product_id.endsWith('-BTC'))
-    .reduce((sum, p) => sum + (p.profit_quote || 0), 0)
+  // Recent deals (last 5) — memoized to avoid O(n log n) sort on every render
+  const recentDeals = useMemo(
+    () => [...allPositions]
+      .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+      .slice(0, 5),
+    [allPositions]
+  )
 
-  // Calculate win rate (use profit_usd as normalized metric)
-  const profitablePositions = closedPositions.filter(p => (p.profit_usd || 0) > 0)
-  const winRate = closedPositions.length > 0
-    ? (profitablePositions.length / closedPositions.length) * 100
-    : 0
-
-  // Recent deals (last 5)
-  const recentDeals = [...allPositions]
-    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
-    .slice(0, 5)
+  // Pre-compute portfolio projection values (extracted from inline IIFE for memoization)
+  const projections = useMemo(() => {
+    if (bots.length === 0) return null
+    const filteredBots = bots.filter((b: Bot) => showStoppedBots || b.is_active)
+    const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
+    const portfolioUsd = portfolio?.total_usd_value || 0
+    const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
+    const projectPnl = (days: number) => totalDailyPnl * days
+    const isPositive = totalDailyPnl > 0
+    const isNegative = totalDailyPnl < 0
+    const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+    const prefix = isPositive ? '+' : ''
+    const pctPrefix = isPositive ? '+' : ''
+    const fmtPct = (pct: number) => portfolioUsd === 0 ? '--' : `${pctPrefix}${pct.toFixed(2)}`
+    const compoundReturn = (days: number) => portfolioUsd > 0 ? portfolioUsd * (Math.pow(1 + dailyRate, days) - 1) : 0
+    return {
+      totalDailyPnl, colorClass, prefix, fmtPct,
+      dailyPct: dailyRate * 100,
+      totalWeeklyPnl: projectPnl(7),
+      totalMonthlyPnl: projectPnl(30),
+      totalYearlyPnl: projectPnl(365),
+      weeklyPct: portfolioUsd > 0 ? (projectPnl(7) / portfolioUsd) * 100 : 0,
+      monthlyPct: portfolioUsd > 0 ? (projectPnl(30) / portfolioUsd) * 100 : 0,
+      yearlyPct: portfolioUsd > 0 ? (projectPnl(365) / portfolioUsd) * 100 : 0,
+      compWeekly: compoundReturn(7),
+      compMonthly: compoundReturn(30),
+      compYearly: compoundReturn(365),
+      compWeeklyPct: portfolioUsd > 0 ? (compoundReturn(7) / portfolioUsd) * 100 : 0,
+      compMonthlyPct: portfolioUsd > 0 ? (compoundReturn(30) / portfolioUsd) * 100 : 0,
+      compYearlyPct: portfolioUsd > 0 ? (compoundReturn(365) / portfolioUsd) * 100 : 0,
+    }
+  }, [bots, showStoppedBots, portfolio])
 
   const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
   const formatCurrency = (value: number) => {
@@ -226,7 +269,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             {winRate.toFixed(1)}%
           </p>
           <p className="text-sm text-slate-400 mt-1">
-            {profitablePositions.length} / {closedPositions.length} deals
+            {profitableCount} / {closedPositions.length} deals
           </p>
         </div>
 
@@ -337,34 +380,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Portfolio Totals - Projected PnL */}
-      {bots.length > 0 && (() => {
-        const filteredBots = bots.filter((b: Bot) => showStoppedBots || b.is_active)
-        const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
-        const portfolioUsd = portfolio?.total_usd_value || 0
-        const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
-        const projectPnl = (days: number) => totalDailyPnl * days
-        const totalWeeklyPnl = projectPnl(7)
-        const totalMonthlyPnl = projectPnl(30)
-        const totalYearlyPnl = projectPnl(365)
-        const isPositive = totalDailyPnl > 0
-        const isNegative = totalDailyPnl < 0
-        const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
-        const prefix = isPositive ? '+' : ''
-        const dailyPct = dailyRate * 100
-        const weeklyPct = portfolioUsd > 0 ? (totalWeeklyPnl / portfolioUsd) * 100 : 0
-        const monthlyPct = portfolioUsd > 0 ? (totalMonthlyPnl / portfolioUsd) * 100 : 0
-        const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
-        const pctPrefix = isPositive ? '+' : ''
-        const fmtPct = (pct: number) => portfolioUsd === 0 ? '--' : `${pctPrefix}${pct.toFixed(2)}`
-        const compoundReturn = (days: number) => portfolioUsd > 0 ? portfolioUsd * (Math.pow(1 + dailyRate, days) - 1) : 0
-        const compWeekly = compoundReturn(7)
-        const compMonthly = compoundReturn(30)
-        const compYearly = compoundReturn(365)
-        const compWeeklyPct = portfolioUsd > 0 ? (compWeekly / portfolioUsd) * 100 : 0
-        const compMonthlyPct = portfolioUsd > 0 ? (compMonthly / portfolioUsd) * 100 : 0
-        const compYearlyPct = portfolioUsd > 0 ? (compYearly / portfolioUsd) * 100 : 0
-
-        return (
+      {projections && (
           <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full">
@@ -398,45 +414,44 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <tbody>
                 <tr>
                   <td className="px-2 sm:px-4 py-2 text-sm font-semibold text-slate-300">Projected PnL</td>
-                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
-                    {prefix}${totalDailyPnl.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-400">({fmtPct(dailyPct)}%)</span>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${projections.colorClass}`}>
+                    {projections.prefix}${projections.totalDailyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({projections.fmtPct(projections.dailyPct)}%)</span>
                   </td>
-                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
-                    {prefix}${totalWeeklyPnl.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-400">({fmtPct(weeklyPct)}%)</span>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${projections.colorClass}`}>
+                    {projections.prefix}${projections.totalWeeklyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({projections.fmtPct(projections.weeklyPct)}%)</span>
                   </td>
-                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
-                    {prefix}${totalMonthlyPnl.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-400">({fmtPct(monthlyPct)}%)</span>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${projections.colorClass}`}>
+                    {projections.prefix}${projections.totalMonthlyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({projections.fmtPct(projections.monthlyPct)}%)</span>
                   </td>
-                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
-                    {prefix}${totalYearlyPnl.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-400">({fmtPct(yearlyPct)}%)</span>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${projections.colorClass}`}>
+                    {projections.prefix}${projections.totalYearlyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({projections.fmtPct(projections.yearlyPct)}%)</span>
                   </td>
                 </tr>
                 <tr>
                   <td className="px-2 sm:px-4 py-1 text-sm text-slate-400">Compounded</td>
-                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>—</td>
-                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
-                    {prefix}${compWeekly.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compWeeklyPct)}%)</span>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${projections.colorClass}`}>—</td>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${projections.colorClass}`}>
+                    {projections.prefix}${projections.compWeekly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({projections.fmtPct(projections.compWeeklyPct)}%)</span>
                   </td>
-                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
-                    {prefix}${compMonthly.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compMonthlyPct)}%)</span>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${projections.colorClass}`}>
+                    {projections.prefix}${projections.compMonthly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({projections.fmtPct(projections.compMonthlyPct)}%)</span>
                   </td>
-                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
-                    {prefix}${compYearly.toFixed(2)}
-                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compYearlyPct)}%)</span>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${projections.colorClass}`}>
+                    {projections.prefix}${projections.compYearly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({projections.fmtPct(projections.compYearlyPct)}%)</span>
                   </td>
                 </tr>
               </tbody>
             </table>
             </div>
           </div>
-        )
-      })()}
+      )}
 
       {/* Deposit/withdrawal note (hide for paper trading — no real deposits) */}
       {transferSummary && transferSummary.last_30d_net_deposits_usd !== 0 && !selectedAccount?.is_paper_trading && (
@@ -533,7 +548,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <Play className="w-5 h-5 text-green-500" />
               Active Bots ({activeBots.length})
             </h3>
-            {bots.filter(b => !b.is_active).length > 0 && (
+            {inactiveBots.length > 0 && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <span className="text-sm text-slate-400">Show stopped</span>
                 <div className="relative">
@@ -558,14 +573,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Inactive Bots */}
-      {showStoppedBots && bots.filter(b => !b.is_active).length > 0 && (
+      {showStoppedBots && inactiveBots.length > 0 && (
         <div>
           <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
             <Square className="w-5 h-5 text-slate-500" />
-            Stopped Bots ({bots.filter(b => !b.is_active).length})
+            Stopped Bots ({inactiveBots.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {bots.filter(b => !b.is_active).map((bot) => (
+            {inactiveBots.map((bot) => (
               <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
             ))}
           </div>
@@ -586,8 +601,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   )
 }
 
-// Enhanced Bot Card Component
-function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
+// Enhanced Bot Card Component (memoized to prevent re-renders from parent state changes)
+const BotCard = memo(function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useNotifications()
@@ -714,4 +729,4 @@ function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page
       </div>
     </div>
   )
-}
+})

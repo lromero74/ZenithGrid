@@ -113,7 +113,7 @@ class Bot(Base):
     description = Column(Text, nullable=True)  # Optional description
 
     # Account reference (links bot to CEX or DEX account)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Nullable for backwards compatibility
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)  # Nullable for backwards compat
 
     # Exchange configuration (CEX or DEX)
     exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
@@ -352,9 +352,9 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # Link to bot (nullable for backwards compatibility)
-    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True, index=True)
     # Link to account (for filtering)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
     # Owner (for user-specific deal numbers)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # Sequential attempt number (ALL positions: success + failed)
@@ -532,7 +532,7 @@ class Trade(Base):
     __tablename__ = "trades"
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("positions.id"))
+    position_id = Column(Integer, ForeignKey("positions.id"), index=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     side = Column(String)  # buy, sell
