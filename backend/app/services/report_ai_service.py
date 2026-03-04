@@ -364,11 +364,13 @@ def _build_capital_prompt_section(data: Dict[str, Any]) -> str:
     # Append transfer records — aggregate staking rewards, list others individually
     transfer_records = data.get("transfer_records", [])
     if transfer_records:
-        staking = [
-            tr for tr in transfer_records
-            if tr.get("original_type") == "send" and tr.get("type") == "deposit"
-        ]
-        other = [tr for tr in transfer_records if tr not in staking]
+        staking = []
+        other = []
+        for tr in transfer_records:
+            if tr.get("original_type") == "send" and tr.get("type") == "deposit":
+                staking.append(tr)
+            else:
+                other.append(tr)
         lines = []
         if staking:
             stk_total = sum(abs(tr.get("amount_usd", 0)) for tr in staking)

@@ -100,9 +100,17 @@ function ClosedPositions() {
     return quote === market
   }
 
-  // Pre-compute bot lookup map for O(1) access in rendered rows
+  // Pre-compute bot lookup maps for O(1) access in rendered rows and filters
   const botsById = useMemo(
     () => Object.fromEntries((bots || []).map((b: Bot) => [b.id, b])),
+    [bots]
+  )
+  const botNameById = useMemo(
+    () => new Map((bots || []).map((b: Bot) => [b.id, b.name])),
+    [bots]
+  )
+  const botIdByName = useMemo(
+    () => new Map((bots || []).map((b: Bot) => [b.name, b.id])),
     [bots]
   )
 
@@ -121,7 +129,7 @@ function ClosedPositions() {
       failedOrders.forEach((o: any) => {
         if (!o.product_id) return
         if (filterBot !== 'all') {
-          const botName = bots?.find(b => b.id === filterBot)?.name
+          const botName = botNameById.get(filterBot as number)
           if (!botName || o.bot_name !== botName) return
         }
         if (!matchesMarket(o.product_id, filterMarket)) return
@@ -129,7 +137,7 @@ function ClosedPositions() {
       })
     }
     return Array.from(pairSet).sort()
-  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterMarket, bots])
+  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterMarket, botNameById])
 
   // availableBots = bots that have data given current market + pair selection
   const availableBots = useMemo(() => {
@@ -147,12 +155,12 @@ function ClosedPositions() {
         if (!o.bot_name) return
         if (filterPair !== 'all' && o.product_id !== filterPair) return
         if (!matchesMarket(o.product_id || '', filterMarket)) return
-        const bot = bots.find(b => b.name === o.bot_name)
-        if (bot) botIdSet.add(bot.id)
+        const botId = botIdByName.get(o.bot_name)
+        if (botId !== undefined) botIdSet.add(botId)
       })
     }
     return bots.filter(b => botIdSet.has(b.id))
-  }, [bots, allClosedPositions, failedOrders, activeTab, filterPair, filterMarket])
+  }, [bots, allClosedPositions, failedOrders, activeTab, filterPair, filterMarket, botIdByName])
 
   // Filter closed positions (all three filters applied)
   const filteredClosedPositions = useMemo(() => {
@@ -168,14 +176,14 @@ function ClosedPositions() {
   const filteredFailedOrders = useMemo(() => {
     return failedOrders.filter((o: any) => {
       if (filterBot !== 'all') {
-        const botName = bots?.find(b => b.id === filterBot)?.name
+        const botName = botNameById.get(filterBot as number)
         if (!botName || o.bot_name !== botName) return false
       }
       if (!matchesMarket(o.product_id || '', filterMarket)) return false
       if (filterPair !== 'all' && o.product_id !== filterPair) return false
       return true
     })
-  }, [failedOrders, filterBot, filterMarket, filterPair, bots])
+  }, [failedOrders, filterBot, filterMarket, filterPair, botNameById])
 
   const clearFilters = () => {
     setFilterBot('all')

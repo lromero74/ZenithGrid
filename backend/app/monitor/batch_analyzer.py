@@ -308,14 +308,14 @@ async def _execute_batch_analysis(
 
     if bot.split_budget_across_pairs and max_concurrent_deals > 0:
         per_position_budget = total_bot_budget / max_concurrent_deals
-        print(
-            f"💰 Budget calculation (SPLIT): Total={total_bot_budget:.8f},"
+        logger.debug(
+            f"Budget calculation (SPLIT): Total={total_bot_budget:.8f},"
             f" MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}"
         )
     else:
         per_position_budget = total_bot_budget
-        print(
-            f"💰 Budget calculation (FULL): Total={total_bot_budget:.8f},"
+        logger.debug(
+            f"Budget calculation (FULL): Total={total_bot_budget:.8f},"
             f" MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}"
             " (each deal gets full budget)"
         )

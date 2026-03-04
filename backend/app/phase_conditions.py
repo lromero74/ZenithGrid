@@ -9,9 +9,12 @@ Supports advanced condition grouping with AND/OR/NOT logic:
 Example: (RSI < 30 AND MACD > 0) OR (BB% < 20) AND NOT (price_change > 5)
 """
 
+import logging
 from typing import Any, Dict, List, Optional, Union
 
 from app.indicator_calculator import IndicatorCalculator
+
+logger = logging.getLogger(__name__)
 
 
 class PhaseConditionEvaluator:
@@ -73,7 +76,7 @@ class PhaseConditionEvaluator:
             )
 
         # Unknown format
-        print(f"[WARNING] Unknown expression format: {type(expression)}")
+        logger.warning(f"Unknown expression format: {type(expression)}")
         return (False, []) if capture_details else False
 
     def _evaluate_grouped_expression(
@@ -107,7 +110,7 @@ class PhaseConditionEvaluator:
             else:
                 group_result = self._evaluate_group(group, current_indicators, previous_indicators)
             group_results.append(group_result)
-            print(f"[DEBUG] Group {group.get('id', '?')} result: {group_result}")
+            logger.debug(f"Group {group.get('id', '?')} result: {group_result}")
 
         # Combine groups
         if group_logic == "and":
@@ -115,7 +118,7 @@ class PhaseConditionEvaluator:
         else:  # 'or'
             final_result = any(group_results)
 
-        print(f"[DEBUG] Final expression result ({group_logic.upper()} of {len(groups)} groups): {final_result}")
+        logger.debug(f"Final expression result ({group_logic.upper()} of {len(groups)} groups): {final_result}")
         return (final_result, all_details) if capture_details else final_result
 
     def _evaluate_group(
@@ -152,7 +155,7 @@ class PhaseConditionEvaluator:
 
             # Handle NOT (negate) modifier
             if condition.get("negate", False):
-                print(f"[DEBUG] Negating condition result: {result} -> {not result}")
+                logger.debug(f"Negating condition result: {result} -> {not result}")
                 result = not result
                 if capture_details and details:
                     details[-1]["negated"] = True
@@ -235,8 +238,8 @@ class PhaseConditionEvaluator:
         if condition_direction and self.position_direction:
             if condition_direction != self.position_direction:
                 # Condition doesn't apply to this position direction
-                print(
-                    f"[DEBUG] Skipping condition (direction mismatch: "
+                logger.debug(
+                    f"Skipping condition (direction mismatch: "
                     f"condition={condition_direction}, position={self.position_direction})"
                 )
                 if capture_details:
@@ -269,7 +272,7 @@ class PhaseConditionEvaluator:
         # Get current indicator value
         current_val = self._get_indicator_value(condition_type, condition, current_indicators)
         if current_val is None:
-            print(f"[DEBUG] Condition {condition_type} on {timeframe}: indicator value is None")
+            logger.debug(f"Condition {condition_type} on {timeframe}: indicator value is None")
             if capture_details:
                 detail["error"] = "indicator value is None"
                 return False, detail
@@ -280,7 +283,7 @@ class PhaseConditionEvaluator:
             # Use 8 decimal places to capture tiny values that would round to 0 at 4 decimals
             detail["actual_value"] = round(current_val, 8) if isinstance(current_val, float) else current_val
 
-        print(f"[DEBUG] Evaluating: {condition_type} on {timeframe}: {current_val} {operator} {value}")
+        logger.debug(f"Evaluating: {condition_type} on {timeframe}: {current_val} {operator} {value}")
 
         # Dispatch to operator-specific evaluators
         if operator in ["crossing_above", "crossing_below"]:
@@ -312,7 +315,7 @@ class PhaseConditionEvaluator:
         elif operator == "not_equal":
             result = current_val != value
 
-        print(f"[DEBUG] Result: {result}")
+        logger.debug(f"Result: {result}")
 
         if capture_details:
             detail["result"] = result
@@ -349,8 +352,8 @@ class PhaseConditionEvaluator:
 
         previous_val = candle_prev_val if candle_prev_val is not None else cycle_prev_val
         if previous_val is None:
-            print(
-                "[DEBUG] Crossing check: no previous indicator value available "
+            logger.debug(
+                "Crossing check: no previous indicator value available "
                 "(need prev_ values or previous_indicators)"
             )
             if capture_details:
@@ -363,7 +366,7 @@ class PhaseConditionEvaluator:
                 round(previous_val, 8) if isinstance(previous_val, float) else previous_val
             )
 
-        print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
+        logger.debug(f"Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
 
         # Minimum crossing magnitude to filter floating-point noise.
         crossing_epsilon = 1e-7
@@ -395,8 +398,8 @@ class PhaseConditionEvaluator:
         elif candle_crossed:
             crossing_source = "candle-based"
 
-        print(
-            f"[DEBUG] Crossing {operator.split('_')[1]} result: {result} "
+        logger.debug(
+            f"Crossing {operator.split('_')[1]} result: {result} "
             f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
             f"current={current_val}, threshold={value}"
             f"{f', source={crossing_source}' if result else ''})"
@@ -434,7 +437,7 @@ class PhaseConditionEvaluator:
             )
 
         if previous_val is None:
-            print(f"[DEBUG] {operator} check: no previous value available")
+            logger.debug(f"{operator} check: no previous value available")
             if capture_details:
                 detail["error"] = "no previous indicator for direction check"
                 return False, detail
@@ -462,8 +465,8 @@ class PhaseConditionEvaluator:
                 else current_val < previous_val
             )
 
-        print(
-            f"[DEBUG] {operator} result: {result} "
+        logger.debug(
+            f"{operator} result: {result} "
             f"(prev={previous_val}, curr={current_val}, min_pct={min_pct_change})"
         )
 

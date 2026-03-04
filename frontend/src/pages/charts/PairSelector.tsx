@@ -60,7 +60,10 @@ export function PairSelector({ pairs, selectedPair, onSelectPair }: PairSelector
     return a.label.localeCompare(b.label)
   }), [filteredPairs])
 
-  const selectedLabel = pairs.find(p => p.value === selectedPair)?.label || selectedPair
+  const selectedLabel = useMemo(
+    () => pairs.find(p => p.value === selectedPair)?.label || selectedPair,
+    [pairs, selectedPair]
+  )
 
   return (
     <div ref={containerRef} className="relative">

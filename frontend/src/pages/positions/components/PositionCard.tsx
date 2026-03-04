@@ -21,6 +21,7 @@ interface PositionCardProps {
   position: Position & { _cachedPnL?: any }
   currentPrice: number | undefined
   bots: Bot[] | undefined
+  bot?: Bot
   btcUsdPrice: number
   trades: any[] | undefined
   selectedPosition: number | null
@@ -43,6 +44,7 @@ export const PositionCard = memo(function PositionCard({
   position,
   currentPrice,
   bots,
+  bot: propBot,
   btcUsdPrice,
   trades,
   selectedPosition,
@@ -68,7 +70,7 @@ export const PositionCard = memo(function PositionCard({
   const pnl = position._cachedPnL
   const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
-  const bot = bots?.find(b => b.id === position.bot_id)
+  const bot = propBot || bots?.find(b => b.id === position.bot_id)
   const strategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
 
   // Close bot menu on outside click

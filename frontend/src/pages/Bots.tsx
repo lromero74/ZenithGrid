@@ -173,6 +173,16 @@ function Bots() {
   const strategyIdSet = useMemo(() => new Set(strategies.map(s => s.id)), [strategies])
   const tradingPairSet = useMemo(() => new Set(TRADING_PAIRS.map(tp => tp.value)), [TRADING_PAIRS])
 
+  // Pre-compute Maps for O(1) lookups in BotListItem
+  const strategiesById = useMemo(
+    () => new Map(strategies.map(s => [s.id, s])),
+    [strategies]
+  )
+  const accountsById = useMemo(
+    () => new Map((accounts || []).map(a => [a.id, a])),
+    [accounts]
+  )
+
   // Memoize filtered bot lists (F9)
   const hasStoppedBots = useMemo(() => bots.some(b => !b.is_active), [bots])
   const visibleBots = useMemo(() => bots.filter(b => showStoppedBots || b.is_active), [bots, showStoppedBots])
@@ -583,6 +593,8 @@ function Bots() {
                     key={bot.id}
                     bot={bot}
                     strategies={strategies}
+                    strategyName={strategiesById.get(bot.strategy_type)?.name}
+                    botAccount={bot.account_id != null ? accountsById.get(bot.account_id) : undefined}
                     handleOpenEdit={handleOpenEdit}
                     handleDelete={handleDelete}
                     startBot={startBot}

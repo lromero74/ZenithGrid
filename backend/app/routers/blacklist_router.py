@@ -379,20 +379,16 @@ async def list_blacklisted_coins(
     Returns global AI-generated entries (visible to all users).
     Includes user_override_category if the current user has an override for that coin.
     """
-    # Show global entries (user_id IS NULL) to everyone
-    query = select(BlacklistedCoin).where(
-        BlacklistedCoin.user_id.is_(None)
-    ).order_by(BlacklistedCoin.symbol)
-
-    result = await db.execute(query)
-    coins = result.scalars().all()
-
-    # Fetch current user's overrides to annotate entries
-    override_query = select(BlacklistedCoin).where(
-        BlacklistedCoin.user_id == current_user.id
+    # Fetch global entries + current user's overrides in a single query
+    from sqlalchemy import or_
+    result = await db.execute(
+        select(BlacklistedCoin).where(
+            or_(BlacklistedCoin.user_id.is_(None), BlacklistedCoin.user_id == current_user.id)
+        ).order_by(BlacklistedCoin.symbol)
     )
-    override_result = await db.execute(override_query)
-    user_overrides = {o.symbol: _extract_category(o.reason) for o in override_result.scalars().all()}
+    all_coins = result.scalars().all()
+    coins = [c for c in all_coins if c.user_id is None]
+    user_overrides = {c.symbol: _extract_category(c.reason) for c in all_coins if c.user_id is not None}
 
     return [
         BlacklistEntry(

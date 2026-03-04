@@ -59,6 +59,12 @@ async def get_setting(db: AsyncSession, key: str) -> Optional[str]:
     return setting.value if setting else None
 
 
+async def get_settings_batch(db: AsyncSession, keys: list) -> dict:
+    """Get multiple setting values in a single query."""
+    result = await db.execute(select(Settings).where(Settings.key.in_(keys)))
+    return {s.key: s.value for s in result.scalars().all()}
+
+
 async def set_setting(db: AsyncSession, key: str, value: str, value_type: str = "string", description: str = None):
     """Set a setting value, creating if it doesn't exist."""
     result = await db.execute(select(Settings).where(Settings.key == key))
@@ -94,12 +100,11 @@ async def get_seasonality(
     # Get current season status from detector
     status: SeasonalityStatus = await get_seasonality_status()
 
-    # Get enabled state from database
-    enabled_str = await get_setting(db, "seasonality_enabled")
+    # Get enabled state and last transition from database (single query)
+    settings = await get_settings_batch(db, ["seasonality_enabled", "seasonality_last_transition"])
+    enabled_str = settings.get("seasonality_enabled")
     enabled = enabled_str == "true" if enabled_str else False
-
-    # Get last transition timestamp
-    last_transition = await get_setting(db, "seasonality_last_transition")
+    last_transition = settings.get("seasonality_last_transition")
 
     return SeasonalityResponse(
         enabled=enabled,
