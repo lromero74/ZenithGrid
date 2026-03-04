@@ -8,7 +8,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ArrowUpDown } from 'lucide-react'
-import { GAMES, GAME_CATEGORIES, SORT_OPTIONS } from '../constants'
+import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, SORT_OPTIONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
 import { sortGames } from '../sortGames'
@@ -16,6 +16,8 @@ import { GameCard } from './GameCard'
 import type { GameCategory, GameSortOption } from '../types'
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
+const CATEGORY_KEY = 'zenith-games-category'
+const SUBCATEGORY_KEY = 'zenith-games-subcategory'
 
 /** Store the current game path so we can resume it later. */
 export function setLastGamePath(path: string): void {
@@ -41,7 +43,32 @@ export function GameHub() {
   }, [navigate])
   const { getHighScore } = useGameScores()
   const { markPlayed, getRecentMap } = useRecentlyPlayed()
-  const [activeCategory, setActiveCategory] = useState<'all' | GameCategory>('all')
+  const [activeCategory, setActiveCategoryState] = useState<'all' | GameCategory>(() => {
+    try {
+      const saved = sessionStorage.getItem(CATEGORY_KEY)
+      if (saved) return saved as 'all' | GameCategory
+    } catch { /* ignore */ }
+    return 'all'
+  })
+  const [activeSubcategory, setActiveSubcategoryState] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem(SUBCATEGORY_KEY)
+      if (saved) return saved
+    } catch { /* ignore */ }
+    return 'all'
+  })
+  const setActiveCategory = (cat: 'all' | GameCategory) => {
+    setActiveCategoryState(cat)
+    try { sessionStorage.setItem(CATEGORY_KEY, cat) } catch { /* ignore */ }
+    if (cat !== 'cards') {
+      setActiveSubcategoryState('all')
+      try { sessionStorage.removeItem(SUBCATEGORY_KEY) } catch { /* ignore */ }
+    }
+  }
+  const setActiveSubcategory = (sub: string) => {
+    setActiveSubcategoryState(sub)
+    try { sessionStorage.setItem(SUBCATEGORY_KEY, sub) } catch { /* ignore */ }
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOption, setSortOption] = useState<GameSortOption>('default')
 
@@ -53,6 +80,11 @@ export function GameHub() {
       games = games.filter(g => g.category === activeCategory)
     }
 
+    // Filter by card subcategory
+    if (activeCategory === 'cards' && activeSubcategory !== 'all') {
+      games = games.filter(g => g.subcategory === activeSubcategory)
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
@@ -61,7 +93,7 @@ export function GameHub() {
 
     // Sort
     return sortGames(games, sortOption, getRecentMap())
-  }, [activeCategory, searchQuery, sortOption, getRecentMap])
+  }, [activeCategory, activeSubcategory, searchQuery, sortOption, getRecentMap])
 
   return (
     <div>
@@ -116,6 +148,25 @@ export function GameHub() {
           </select>
         </div>
       </div>
+
+      {/* Card subcategory pills */}
+      {activeCategory === 'cards' && (
+        <div className="flex space-x-2 overflow-x-auto pb-1 mb-4 -mt-3">
+          {CARD_SUBCATEGORIES.map(sub => (
+            <button
+              key={sub.value}
+              onClick={() => setActiveSubcategory(sub.value)}
+              className={`px-2.5 py-0.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+                activeSubcategory === sub.value
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-700/60 text-slate-400 hover:bg-slate-600 hover:text-slate-300'
+              }`}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Game cards grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

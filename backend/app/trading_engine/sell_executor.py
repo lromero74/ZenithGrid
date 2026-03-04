@@ -738,13 +738,20 @@ async def execute_sell(
             f"  Sell amount rounds to 0 for {product_id} "
             f"(raw={raw_amount:.8f}, precision={precision}). Closing as dust."
         )
+        # Calculate actual profit at current price using position's base holdings
+        quote_value = position.total_base_acquired * current_price
+        spent = position.total_quote_spent or 0
+        dust_profit = quote_value - spent
+        dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
         position.status = "closed"
         position.closed_at = datetime.utcnow()
         position.close_price = current_price
-        position.profit_usd = -(position.total_quote_spent or 0)
-        position.profit_percentage = -100.0
+        position.profit_quote = dust_profit
+        position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
+        position.profit_percentage = dust_pct
+        position.total_quote_received = quote_value
         await db.commit()
-        return None, -(position.total_quote_spent or 0), -100.0
+        return None, dust_profit, dust_pct
 
     # Execute order via TradingClient (currency-agnostic)
     # Track this as an in-flight order for graceful shutdown

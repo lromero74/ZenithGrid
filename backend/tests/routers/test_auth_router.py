@@ -1453,3 +1453,163 @@ class TestMfaEmailEndpoints:
             await mfa_email_disable(request=request, current_user=user, db=db_session)
         assert exc_info.value.status_code == 400
         assert "only MFA method" in exc_info.value.detail
+
+
+# =============================================================================
+# Login resilience — db.commit() failure for last_login_at (v2.82.5 / v2.82.9)
+# =============================================================================
+
+
+class TestLoginLastLoginAtResilience:
+    """Tests that login succeeds even when the last_login_at commit fails."""
+
+    @pytest.mark.asyncio
+    async def test_login_succeeds_when_last_login_commit_fails(self, db_session):
+        """Happy path resilience: OperationalError on commit does not block login."""
+        from unittest.mock import AsyncMock, patch
+        from sqlalchemy.exc import OperationalError
+        from app.routers.auth_router import login, LoginRequest
+
+        user = User(
+            email="resilient@example.com",
+            hashed_password=hash_password("TestPass1"),
+            is_active=True,
+            is_superuser=False,
+            mfa_enabled=False,
+            mfa_email_enabled=False,
+            email_verified=True,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        request = LoginRequest(email="resilient@example.com", password="TestPass1")
+        http_request = MagicMock()
+        http_request.client = MagicMock()
+        http_request.client.host = "127.0.0.50"
+        http_request.headers = MagicMock()
+        http_request.headers.get = MagicMock(return_value="test-agent")
+
+        # Track calls: first commit (last_login_at) raises, subsequent ones succeed
+        original_commit = db_session.commit
+        original_rollback = db_session.rollback
+        commit_call_count = 0
+        rollback_called = False
+
+        async def mock_commit():
+            nonlocal commit_call_count
+            commit_call_count += 1
+            if commit_call_count == 1:
+                # First commit is the last_login_at update — simulate DB lock
+                raise OperationalError("database is locked", params=None, orig=Exception("locked"))
+            # Subsequent commits (e.g., session creation) succeed normally
+            return await original_commit()
+
+        async def mock_rollback():
+            nonlocal rollback_called
+            rollback_called = True
+            return await original_rollback()
+
+        db_session.commit = mock_commit
+        db_session.rollback = mock_rollback
+
+        result = await login(request=request, http_request=http_request, db=db_session)
+
+        # Login should succeed with valid tokens and user data
+        assert result.access_token is not None
+        assert result.refresh_token is not None
+        assert result.mfa_required is False
+        assert result.user is not None
+        assert result.user.email == "resilient@example.com"
+        # Rollback should have been called after the failed commit
+        assert rollback_called is True
+
+    @pytest.mark.asyncio
+    async def test_login_returns_pre_resolved_user_data_after_commit_fail(self, db_session):
+        """Edge case: user data is resolved BEFORE commit, so it survives rollback."""
+        from unittest.mock import AsyncMock
+        from sqlalchemy.exc import OperationalError
+        from app.routers.auth_router import login, LoginRequest
+
+        user = User(
+            email="preresolve@example.com",
+            hashed_password=hash_password("TestPass1"),
+            is_active=True,
+            is_superuser=True,
+            mfa_enabled=False,
+            mfa_email_enabled=False,
+            email_verified=True,
+            display_name="Pre Resolve",
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        request = LoginRequest(email="preresolve@example.com", password="TestPass1")
+        http_request = MagicMock()
+        http_request.client = MagicMock()
+        http_request.client.host = "127.0.0.51"
+        http_request.headers = MagicMock()
+        http_request.headers.get = MagicMock(return_value="test-agent")
+
+        original_commit = db_session.commit
+        commit_call_count = 0
+
+        async def mock_commit():
+            nonlocal commit_call_count
+            commit_call_count += 1
+            if commit_call_count == 1:
+                raise OperationalError("database is locked", params=None, orig=Exception("locked"))
+            return await original_commit()
+
+        db_session.commit = mock_commit
+        db_session.rollback = AsyncMock()
+
+        result = await login(request=request, http_request=http_request, db=db_session)
+
+        # Verify the pre-resolved user data is intact despite the rollback
+        assert result.user.email == "preresolve@example.com"
+        assert result.user.display_name == "Pre Resolve"
+        assert result.user.is_superuser is True
+
+    @pytest.mark.asyncio
+    async def test_login_normal_commit_succeeds(self, db_session):
+        """Control test: when commit succeeds, login works normally (no rollback)."""
+        from app.routers.auth_router import login, LoginRequest
+
+        user = User(
+            email="normalcommit@example.com",
+            hashed_password=hash_password("TestPass1"),
+            is_active=True,
+            is_superuser=False,
+            mfa_enabled=False,
+            mfa_email_enabled=False,
+            email_verified=True,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        request = LoginRequest(email="normalcommit@example.com", password="TestPass1")
+        http_request = MagicMock()
+        http_request.client = MagicMock()
+        http_request.client.host = "127.0.0.52"
+        http_request.headers = MagicMock()
+        http_request.headers.get = MagicMock(return_value="test-agent")
+
+        rollback_called = False
+        original_rollback = db_session.rollback
+
+        async def track_rollback():
+            nonlocal rollback_called
+            rollback_called = True
+            return await original_rollback()
+
+        db_session.rollback = track_rollback
+
+        result = await login(request=request, http_request=http_request, db=db_session)
+
+        assert result.access_token is not None
+        assert result.user.email == "normalcommit@example.com"
+        # Rollback should NOT have been called when commit succeeds
+        assert rollback_called is False

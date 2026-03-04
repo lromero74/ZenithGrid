@@ -255,7 +255,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                 <div className="flex flex-wrap justify-between items-baseline gap-x-2">
                   <span className="text-slate-400 text-xs">Win rate:</span>
                   <span className={`font-medium text-xs ${completedStats.win_rate >= 50 ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {completedStats.win_rate.toFixed(1)}% ({completedStats.winning_trades}W / {completedStats.losing_trades}L)
+                    {completedStats.win_rate.toFixed(1)}% ({completedStats.winning_trades}W / {completedStats.losing_trades}L{(() => { const be = completedStats.total_trades - completedStats.winning_trades - completedStats.losing_trades; return be > 0 ? ` / ${be}B` : '' })()})
                   </span>
                 </div>
               </>

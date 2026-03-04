@@ -551,8 +551,15 @@ async def get_realized_pnl(
             continue
 
         quote_currency = pos.product_id.split('-')[1] if pos.product_id and '-' in pos.product_id else 'BTC'
-        pq = pos.profit_quote if pos.profit_quote is not None else 0.0
         pu = pos.profit_usd if pos.profit_usd is not None else 0.0
+        # Fall back to profit_usd for USD-like pairs when profit_quote is NULL
+        # (e.g. force-closed write-off positions that were never sold)
+        if pos.profit_quote is not None:
+            pq = pos.profit_quote
+        elif quote_currency in ('USD', 'USDC', 'USDT'):
+            pq = pu
+        else:
+            pq = 0.0
 
         def add_to(period):
             by_quote[period][quote_currency] = by_quote[period].get(quote_currency, 0.0) + pq

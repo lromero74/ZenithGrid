@@ -53,7 +53,7 @@ export function CardFace({ card, selected = false, validTarget = false, hinted =
         {symbol}
       </div>
       {/* Bottom-right rank + suit (inverted) */}
-      <div className={`leading-none text-right rotate-180 ${textColor}`}>
+      <div className={`leading-none text-right rotate-180 self-end ${textColor}`}>
         <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
         <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
       </div>

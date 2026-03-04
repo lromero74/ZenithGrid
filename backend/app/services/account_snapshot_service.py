@@ -458,7 +458,7 @@ async def get_daily_activity(
 
     for p in positions:
         profit = p.profit_usd or 0
-        if profit == 0:
+        if abs(profit) < 0.01:
             continue
         is_btc = p.get_quote_currency() == "BTC"
         line = "btc" if is_btc else "usd"
