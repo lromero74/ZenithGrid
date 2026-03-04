@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.85.0] - 2026-03-04
+
+### Added
+- **Chess threefold repetition draw**: Repeated positions are now tracked and the game correctly ends in a draw after three occurrences of the same position
+- **Sudoku unique solution enforcement**: Generated puzzles are now guaranteed to have exactly one solution across all difficulty levels
+- **Spades blind nil bidding**: Players can now bid blind nil for higher stakes (+/-200 instead of +/-100)
+
+### Fixed
+- **Gin Rummy knock skipping discard**: Knocking now correctly discards the worst deadwood card first (matching AI behavior) instead of resolving with 11 cards
+- **Gin Rummy knock button accuracy**: The "Knock" option now correctly evaluates whether discarding the worst card brings deadwood to 10 or below
+- **Card sizing in Spades, Hearts, Crazy Eights, and Gin Rummy**: Face-up cards now use consistent dimensions matching Solitaire, fixing suit/rank content overflow on smaller cards
+
 ## [v2.84.11] - 2026-03-04
 
 ### Fixed

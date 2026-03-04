@@ -33,6 +33,7 @@ export default function Spades() {
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [selectedBid, setSelectedBid] = useState(3)
+  const [blindNil, setBlindNil] = useState(false)
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
@@ -48,8 +49,9 @@ export default function Spades() {
   }, [gameState, clear])
 
   const handleBid = useCallback(() => {
-    setGameState(prev => placeBid(prev, selectedBid))
-  }, [selectedBid])
+    setGameState(prev => placeBid(prev, selectedBid, blindNil))
+    setBlindNil(false)
+  }, [selectedBid, blindNil])
 
   const handlePlay = useCallback((i: number) => {
     setGameState(prev => playCard(prev, i))
@@ -115,7 +117,7 @@ export default function Spades() {
           </div>
 
           {/* Trick area */}
-          <div className="flex-1 relative h-32 sm:h-40">
+          <div className="flex-1 relative h-36 sm:h-48">
             {gameState.currentTrick.map((play) => {
               const positions = [
                 'bottom-0 left-1/2 -translate-x-1/2',
@@ -125,7 +127,7 @@ export default function Spades() {
               ]
               return (
                 <div key={`${play.player}-${play.card.rank}-${play.card.suit}`}
-                  className={`absolute ${positions[play.player]} w-10 h-[3.5rem] sm:w-12 sm:h-[4.25rem]`}
+                  className={`absolute ${positions[play.player]} w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem]`}
                 >
                   <CardFace card={play.card} />
                 </div>
@@ -168,11 +170,22 @@ export default function Spades() {
                 </button>
               ))}
             </div>
+            {selectedBid === 0 && (
+              <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={blindNil}
+                  onChange={e => setBlindNil(e.target.checked)}
+                  className="rounded"
+                />
+                Blind Nil (+/-200 instead of +/-100)
+              </label>
+            )}
             <button
               onClick={handleBid}
               className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Bid {selectedBid === 0 ? 'Nil' : selectedBid}
+              Bid {selectedBid === 0 ? (blindNil ? 'Blind Nil' : 'Nil') : selectedBid}
             </button>
           </div>
         )}
@@ -184,7 +197,7 @@ export default function Spades() {
             return (
               <div
                 key={`${card.rank}-${card.suit}`}
-                className={`w-11 h-[4rem] sm:w-13 sm:h-[4.75rem] transition-transform ${
+                className={`w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
                   isPlaying && isValid ? 'cursor-pointer hover:-translate-y-1' : 'opacity-40'
                 }`}
                 onClick={() => isPlaying && isValid && handlePlay(i)}

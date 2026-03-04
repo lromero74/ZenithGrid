@@ -75,6 +75,37 @@ function solve(board: SudokuBoard): boolean {
   return true
 }
 
+/** Count solutions up to maxCount (for uniqueness checking). */
+export function countSolutions(board: SudokuBoard, maxCount: number): number {
+  const work = cloneBoard(board)
+  // Validate existing placements
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      if (work[r][c] !== 0 && !isValidPlacement(work, r, c, work[r][c]))
+        return 0
+  let count = 0
+  function search(b: SudokuBoard): boolean {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (b[r][c] === 0) {
+          for (let num = 1; num <= 9; num++) {
+            if (isValidPlacement(b, r, c, num)) {
+              b[r][c] = num
+              if (search(b)) return true
+              b[r][c] = 0
+            }
+          }
+          return false
+        }
+      }
+    }
+    count++
+    return count >= maxCount
+  }
+  search(work)
+  return count
+}
+
 /** Generate a complete solved board. */
 function generateSolvedBoard(): SudokuBoard {
   const board = createEmptyBoard()
@@ -125,12 +156,12 @@ export function generatePuzzle(difficulty: Difficulty): { puzzle: SudokuBoard; s
     if (removed >= toRemove) break
     const val = puzzle[r][c]
     puzzle[r][c] = 0
-    removed++
 
-    // For easy/medium, we don't enforce unique solution (too slow)
-    // For hard/expert, we could, but for game purposes this is sufficient
-    // If we wanted uniqueness check: try solving with different numbers
-    void val // We could check uniqueness but it's computationally expensive
+    if (countSolutions(puzzle, 2) !== 1) {
+      puzzle[r][c] = val // restore — removing this clue creates multiple solutions
+      continue
+    }
+    removed++
   }
 
   return { puzzle, solution }

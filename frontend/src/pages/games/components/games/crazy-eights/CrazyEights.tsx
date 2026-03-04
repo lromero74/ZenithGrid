@@ -160,7 +160,7 @@ export default function CrazyEights() {
             return (
               <div
                 key={i}
-                className={`w-12 h-[4.25rem] sm:w-14 sm:h-[5rem] transition-transform ${
+                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
                   isPlayable ? 'cursor-pointer hover:-translate-y-1' : 'opacity-50'
                 }`}
                 onClick={() => isPlayable && handlePlay(i)}
