@@ -3,6 +3,7 @@ import {
   createBoard,
   rollDice,
   getValidMoves,
+  getFilteredMoves,
   applyMove,
   canBearOff,
   hasValidMoves,
@@ -752,5 +753,123 @@ describe('edge cases', () => {
     // Use fourth die
     next = applyMove(next, 20, 17, 3)
     expect(next.usedDice).toEqual([true, true, true, true])
+  })
+})
+
+// ── getFilteredMoves (obligation rules) ───────────────────────────────
+
+describe('getFilteredMoves', () => {
+  test('returns all moves when only 1 die remains', () => {
+    const state = placeCheckers(emptyState('white'), [
+      { point: 10, count: 2, player: 'white' },
+    ])
+    state.dice = [3, 4]
+    state.usedDice = [true, false] // die 3 already used
+
+    const moves = getFilteredMoves(state)
+    expect(moves).toContainEqual({ from: 10, to: 6, dieIndex: 1 })
+  })
+
+  test('returns all moves for doubles (no filtering)', () => {
+    const state = placeCheckers(emptyState('white'), [
+      { point: 10, count: 4, player: 'white' },
+    ])
+    state.dice = [3, 3, 3, 3]
+    state.usedDice = [false, false, false, false]
+
+    const moves = getFilteredMoves(state)
+    // All 4 dice can move from 10→7
+    expect(moves.filter(m => m.from === 10 && m.to === 7)).toHaveLength(4)
+  })
+
+  test('shows all moves when both dice allow each other', () => {
+    // White at 10 (2 checkers), all destinations open
+    const state = placeCheckers(emptyState('white'), [
+      { point: 10, count: 2, player: 'white' },
+    ])
+    state.dice = [3, 2]
+    state.usedDice = [false, false]
+
+    const moves = getFilteredMoves(state)
+    // Die 3: 10→7, Die 2: 10→8 — both are dual moves
+    expect(moves).toContainEqual({ from: 10, to: 7, dieIndex: 0 })
+    expect(moves).toContainEqual({ from: 10, to: 8, dieIndex: 1 })
+  })
+
+  test('filters out moves that block the other die', () => {
+    // White: 1 checker at 8, 1 checker at 3. Brown blocks point 5 and 6.
+    // Dice [3, 1]:
+    //   Die 3 from 8→5: BLOCKED (brown). Die 3 from 3→0: valid.
+    //   Die 1 from 8→7: valid. Die 1 from 3→2: valid.
+    //
+    //   Die 3 from 3→0: After, die 1 from 8→7 ✓. DUAL.
+    //   Die 1 from 8→7: After, die 3 from 7→4 ✓ or 3→0 ✓. DUAL.
+    //   Die 1 from 3→2: After, die 3 from 8→5 blocked, 2→-1 (not bearing off). NO DUAL.
+    //
+    // Only die 1 from 3→2 is filtered out.
+    const state = placeCheckers(emptyState('white'), [
+      { point: 8, count: 1, player: 'white' },
+      { point: 3, count: 1, player: 'white' },
+      { point: 5, count: 2, player: 'brown' },
+      { point: 6, count: 2, player: 'brown' },
+    ])
+    state.dice = [3, 1]
+    state.usedDice = [false, false]
+
+    const moves = getFilteredMoves(state)
+
+    // Die 3 from 3→0: dual ✓
+    expect(moves).toContainEqual({ from: 3, to: 0, dieIndex: 0 })
+    // Die 1 from 8→7: dual ✓
+    expect(moves).toContainEqual({ from: 8, to: 7, dieIndex: 1 })
+    // Die 1 from 3→2: filtered out (blocks die 3)
+    expect(moves).not.toContainEqual({ from: 3, to: 2, dieIndex: 1 })
+  })
+
+  test('uses larger die when only one can be played', () => {
+    // White: 1 checker at 10. Brown blocks point 3.
+    // Dice [4, 3]:
+    //   Die 4: 10→6 ✓. After, die 3: 6→3 blocked. NOT dual.
+    //   Die 3: 10→7 ✓. After, die 4: 7→3 blocked. NOT dual.
+    // Neither is dual → must use larger die (4).
+    const state = placeCheckers(emptyState('white'), [
+      { point: 10, count: 1, player: 'white' },
+      { point: 3, count: 2, player: 'brown' },
+    ])
+    state.dice = [4, 3]
+    state.usedDice = [false, false]
+
+    const moves = getFilteredMoves(state)
+
+    // Only die 4 (larger) should be available
+    expect(moves).toContainEqual({ from: 10, to: 6, dieIndex: 0 })
+    expect(moves).not.toContainEqual({ from: 10, to: 7, dieIndex: 1 })
+  })
+
+  test('returns empty when no moves available', () => {
+    const state = placeCheckers(emptyState('white'), [
+      { point: 6, count: 1, player: 'white' },
+      { point: 5, count: 2, player: 'brown' },
+      { point: 4, count: 2, player: 'brown' },
+    ])
+    state.dice = [1, 2]
+    state.usedDice = [false, false]
+
+    const moves = getFilteredMoves(state)
+    expect(moves).toEqual([])
+  })
+
+  test('returns only die with moves when other has none', () => {
+    // White at 10. Die 3: 10→7 open. Die 2: 10→8, blocked by brown.
+    const state = placeCheckers(emptyState('white'), [
+      { point: 10, count: 1, player: 'white' },
+      { point: 8, count: 2, player: 'brown' },
+    ])
+    state.dice = [3, 2]
+    state.usedDice = [false, false]
+
+    const moves = getFilteredMoves(state)
+    expect(moves).toContainEqual({ from: 10, to: 7, dieIndex: 0 })
+    expect(moves).not.toContainEqual(expect.objectContaining({ dieIndex: 1 }))
   })
 })
