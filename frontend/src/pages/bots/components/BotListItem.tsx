@@ -9,6 +9,8 @@ import { useConfirm } from '../../../contexts/ConfirmContext'
 interface BotListItemProps {
   bot: Bot
   strategies: any[]
+  strategyName?: string
+  botAccount?: Account
   handleOpenEdit: (bot: Bot) => void
   handleDelete: (bot: Bot) => void
   startBot: any
@@ -33,6 +35,8 @@ interface BotListItemProps {
 export const BotListItem = memo(function BotListItem({
   bot,
   strategies,
+  strategyName: propStrategyName,
+  botAccount: propBotAccount,
   handleOpenEdit,
   handleDelete,
   startBot,
@@ -54,8 +58,8 @@ export const BotListItem = memo(function BotListItem({
   const { addToast } = useNotifications()
   const confirm = useConfirm()
   const botPairs = ((bot as any).product_ids || [bot.product_id])
-  const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
-  const botAccount = accounts.find(a => a.id === bot.account_id)
+  const strategyName = propStrategyName || strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
+  const botAccount = propBotAccount || accounts.find(a => a.id === bot.account_id)
   const exchangeName = botAccount?.exchange || 'coinbase'
   const aiProvider = bot.strategy_config?.ai_provider
 

@@ -621,13 +621,16 @@ async def bulk_mark_content_seen(
                 )
             )
             existing_ids = {row[0] for row in existing_result.all()}
-            for cid in content_ids:
-                if cid not in existing_ids:
-                    db.add(UserContentSeenStatus(
-                        user_id=current_user.id,
-                        content_type=content_type,
-                        content_id=cid,
-                    ))
+            new_records = [
+                UserContentSeenStatus(
+                    user_id=current_user.id,
+                    content_type=content_type,
+                    content_id=cid,
+                )
+                for cid in content_ids if cid not in existing_ids
+            ]
+            if new_records:
+                db.add_all(new_records)
         else:
             from sqlalchemy import delete
             await db.execute(

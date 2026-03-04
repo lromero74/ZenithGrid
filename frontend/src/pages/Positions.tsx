@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import type { Bot } from '../types'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BarChart3, Building2, Wallet, Scale } from 'lucide-react'
@@ -230,6 +231,12 @@ export default function Positions() {
     navigate('/bots', { state: { editBot: bot } })
   }, [navigate])
 
+  // Pre-compute bot lookup map for O(1) access in PositionCard
+  const botsById = useMemo(
+    () => new Map((bots || []).map((b: Bot) => [b.id, b])),
+    [bots]
+  )
+
   // Calculate overall statistics
   const stats = useMemo(() => calculateOverallStats(openPositions), [openPositions])
 
@@ -428,6 +435,7 @@ export default function Positions() {
                 position={position}
                 currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
                 bots={bots}
+                bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
                 btcUsdPrice={btcUsdPrice}
                 trades={trades}
                 selectedPosition={selectedPosition}

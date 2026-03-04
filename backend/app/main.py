@@ -185,7 +185,7 @@ async def run_limit_order_monitor():
     from app.services.limit_order_monitor import sweep_orphaned_pending_orders
 
     # Run startup reconciliation once
-    print("🔄 Running startup reconciliation for limit orders...")
+    logger.info("Running startup reconciliation for limit orders...")
     try:
         async with async_session_maker() as db:
             # Check ALL positions with limit_close_order_id (regardless of closing_via_limit flag)
@@ -199,13 +199,13 @@ async def run_limit_order_monitor():
             positions = result.scalars().all()
 
             if positions:
-                print(f"   Found {len(positions)} positions with limit order IDs - checking each...")
+                logger.info(f"Found {len(positions)} positions with limit order IDs - checking each...")
 
                 for position in positions:
                     # Ensure closing_via_limit flag is set (fix orphaned orders)
                     if not position.closing_via_limit:
-                        print(
-                            f"   ⚠️ Position {position.id} has order ID but closing_via_limit is False - fixing..."
+                        logger.warning(
+                            f"Position {position.id} has order ID but closing_via_limit is False - fixing..."
                         )
                         position.closing_via_limit = True
 
@@ -217,9 +217,9 @@ async def run_limit_order_monitor():
                             await monitor.check_single_position_limit_order(position)
 
                 await db.commit()
-                print(f"   ✅ Startup reconciliation complete: Checked {len(positions)} orders")
+                logger.info(f"Startup reconciliation complete: Checked {len(positions)} orders")
             else:
-                print("   ✅ No pending limit orders to check")
+                logger.info("No pending limit orders to check")
 
             # Fix orphaned positions: closing_via_limit=True but no order ID
             # This can happen if a cancel+replace failed midway before restart
@@ -232,16 +232,16 @@ async def run_limit_order_monitor():
             )
             orphaned_positions = orphaned.scalars().all()
             if orphaned_positions:
-                print(
-                    f"   ⚠️ Found {len(orphaned_positions)} orphaned positions "
+                logger.warning(
+                    f"Found {len(orphaned_positions)} orphaned positions "
                     f"(closing_via_limit=True but no order ID) - clearing flags..."
                 )
                 for pos in orphaned_positions:
                     pos.closing_via_limit = False
-                    print(f"   Fixed position {pos.id}: cleared closing_via_limit")
+                    logger.info(f"Fixed position {pos.id}: cleared closing_via_limit")
                 await db.commit()
     except Exception as e:
-        print(f"   ❌ Error in startup reconciliation: {e}")
+        logger.error(f"Error in startup reconciliation: {e}")
 
     # Main monitoring loop
     sweep_counter = 0
@@ -298,7 +298,7 @@ async def run_order_reconciliation_monitor():
     while True:
         try:
             if first_run:
-                print("🔄 Running startup reconciliation for orphaned orders...")
+                logger.info("Running startup reconciliation for orphaned orders...")
 
             async with async_session_maker() as db:
                 # Get positions that might need reconciliation (open positions)
@@ -323,13 +323,13 @@ async def run_order_reconciliation_monitor():
                             await monitor.check_and_fix_orphaned_positions()
 
             if first_run:
-                print("   ✅ Startup order reconciliation complete")
+                logger.info("Startup order reconciliation complete")
                 first_run = False
 
         except Exception as e:
             logger.error(f"Error in order reconciliation monitor loop: {e}")
             if first_run:
-                print(f"   ❌ Startup order reconciliation error: {e}")
+                logger.error(f"Startup order reconciliation error: {e}")
                 first_run = False
 
         # Check every 60 seconds (less frequent than limit orders)
@@ -470,8 +470,8 @@ async def startup_event():
     global report_scheduler_task, report_cleanup_task
     global session_cleanup_task, transfer_sync_task
 
-    print("🚀 ========================================")
-    print("🚀 FastAPI startup event triggered")
+    logger.info("========================================")
+    logger.info("FastAPI startup event triggered")
 
     # Security: Refuse to start with default JWT secret
     if settings.jwt_secret_key == "jwt-secret-key-change-in-production" or not settings.jwt_secret_key:
@@ -494,106 +494,105 @@ async def startup_event():
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("VACUUM")
             conn.close()
-            print("🚀 Database VACUUM completed successfully")
+            logger.info("Database VACUUM completed successfully")
         except Exception as e:
             logger.warning(f"Database VACUUM failed (non-fatal): {e}")
-            print(f"⚠️ Database VACUUM failed (non-fatal): {e}")
 
-    print("🚀 Initializing database...")
+    logger.info("Initializing database...")
     await init_db()
-    print("🚀 Database initialized successfully")
+    logger.info("Database initialized successfully")
 
     # Start multi-bot monitor (gets exchange clients per-bot from accounts)
-    print("🚀 Starting multi-bot monitor...")
+    logger.info("Starting multi-bot monitor...")
     await price_monitor.start_async()
-    print("🚀 Multi-bot monitor started - bot monitoring active")
+    logger.info("Multi-bot monitor started - bot monitoring active")
 
-    print("🚀 Starting limit order monitor...")
+    logger.info("Starting limit order monitor...")
     limit_order_monitor_task = asyncio.create_task(run_limit_order_monitor())
-    print("🚀 Limit order monitor started - checking every 10 seconds")
+    logger.info("Limit order monitor started - checking every 10 seconds")
 
-    print("🚀 Starting order reconciliation monitor...")
+    logger.info("Starting order reconciliation monitor...")
     order_reconciliation_monitor_task = asyncio.create_task(run_order_reconciliation_monitor())
-    print("🚀 Order reconciliation monitor started - auto-fixing orphaned positions every 60 seconds")
+    logger.info("Order reconciliation monitor started - auto-fixing orphaned positions every 60 seconds")
 
-    print("🚀 Starting missing order detector...")
+    logger.info("Starting missing order detector...")
     missing_order_detector_task = asyncio.create_task(run_missing_order_detector())
-    print("🚀 Missing order detector started - checking for unrecorded orders every 5 minutes")
+    logger.info("Missing order detector started - checking for unrecorded orders every 5 minutes")
 
-    print("🚀 Starting trading pair monitor...")
+    logger.info("Starting trading pair monitor...")
     await trading_pair_monitor.start()
-    print("🚀 Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
+    logger.info("Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
 
-    print("🚀 Starting content refresh service...")
+    logger.info("Starting content refresh service...")
     await content_refresh_service.start()
-    print("🚀 Content refresh service started - news every 30min, videos every 60min")
+    logger.info("Content refresh service started - news every 30min, videos every 60min")
 
-    print("🚀 Starting domain blacklist service...")
+    logger.info("Starting domain blacklist service...")
     await domain_blacklist_service.start()
-    print("🚀 Domain blacklist service started - refreshing weekly")
+    logger.info("Domain blacklist service started - refreshing weekly")
 
-    print("🚀 Starting debt ceiling monitor...")
+    logger.info("Starting debt ceiling monitor...")
     await debt_ceiling_monitor.start()
-    print("🚀 Debt ceiling monitor started - checking for new legislation weekly")
+    logger.info("Debt ceiling monitor started - checking for new legislation weekly")
 
-    print("🚀 Starting auto-buy BTC monitor...")
+    logger.info("Starting auto-buy BTC monitor...")
     await auto_buy_monitor.start()
-    print("🚀 Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
+    logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
 
-    print("🚀 Starting perps position monitor...")
+    logger.info("Starting perps position monitor...")
     await perps_monitor.start()
-    print("🚀 Perps monitor started - syncing futures positions every 60s")
+    logger.info("Perps monitor started - syncing futures positions every 60s")
 
-    print("🚀 Starting PropGuard safety monitor...")
+    logger.info("Starting PropGuard safety monitor...")
     await start_prop_guard_monitor()
-    print("🚀 PropGuard monitor started - checking prop firm drawdowns every 30s")
+    logger.info("PropGuard monitor started - checking prop firm drawdowns every 30s")
 
-    print("🚀 Building changelog cache...")
+    logger.info("Building changelog cache...")
     build_changelog_cache()
-    print("🚀 Changelog cache built")
+    logger.info("Changelog cache built")
 
-    print("🚀 Starting decision log cleanup job...")
+    logger.info("Starting decision log cleanup job...")
     decision_log_cleanup_task = asyncio.create_task(cleanup_old_decision_logs())
-    print("🚀 Decision log cleanup job started - cleaning old logs daily")
+    logger.info("Decision log cleanup job started - cleaning old logs daily")
 
-    print("🚀 Starting failed condition log cleanup job...")
+    logger.info("Starting failed condition log cleanup job...")
     failed_condition_cleanup_task = asyncio.create_task(cleanup_failed_condition_logs())
-    print("🚀 Failed condition log cleanup job started - removing noise logs every 6 hours")
+    logger.info("Failed condition log cleanup job started - removing noise logs every 6 hours")
 
-    print("🚀 Starting failed order cleanup job...")
+    logger.info("Starting failed order cleanup job...")
     failed_order_cleanup_task = asyncio.create_task(cleanup_old_failed_orders())
-    print("🚀 Failed order cleanup job started - removing old failed orders every 6 hours")
+    logger.info("Failed order cleanup job started - removing old failed orders every 6 hours")
 
-    print("🚀 Starting account snapshot capture job...")
+    logger.info("Starting account snapshot capture job...")
     account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
-    print("🚀 Account snapshot capture job started - capturing daily account values")
+    logger.info("Account snapshot capture job started - capturing daily account values")
 
-    print("🚀 Starting revoked token cleanup job...")
+    logger.info("Starting revoked token cleanup job...")
     revoked_token_cleanup_task = asyncio.create_task(cleanup_expired_revoked_tokens())
-    print("🚀 Revoked token cleanup job started - pruning expired entries daily")
+    logger.info("Revoked token cleanup job started - pruning expired entries daily")
 
-    print("🚀 Starting report scheduler...")
+    logger.info("Starting report scheduler...")
     report_scheduler_task = asyncio.create_task(run_report_scheduler())
-    print("🚀 Report scheduler started - checking for due reports every 15 minutes")
+    logger.info("Report scheduler started - checking for due reports every 15 minutes")
 
-    print("🚀 Starting report cleanup job...")
+    logger.info("Starting report cleanup job...")
     report_cleanup_task = asyncio.create_task(cleanup_old_reports())
-    print("🚀 Report cleanup job started - removing reports older than 2 years weekly")
+    logger.info("Report cleanup job started - removing reports older than 2 years weekly")
 
-    print("🚀 Starting coin review scheduler...")
+    logger.info("Starting coin review scheduler...")
     coin_review_task = asyncio.create_task(run_coin_review_scheduler())  # noqa: F841
-    print("🚀 Coin review scheduler started - full review every 7 days")
+    logger.info("Coin review scheduler started - full review every 7 days")
 
-    print("🚀 Starting session cleanup job...")
+    logger.info("Starting session cleanup job...")
     session_cleanup_task = asyncio.create_task(cleanup_expired_sessions())
-    print("🚀 Session cleanup job started - expiring stale sessions daily")
+    logger.info("Session cleanup job started - expiring stale sessions daily")
 
-    print("🚀 Starting transfer sync job...")
+    logger.info("Starting transfer sync job...")
     transfer_sync_task = asyncio.create_task(run_transfer_sync())
-    print("🚀 Transfer sync started - syncing deposits/withdrawals daily")
+    logger.info("Transfer sync started - syncing deposits/withdrawals daily")
 
-    print("🚀 Startup complete!")
-    print("🚀 ========================================")
+    logger.info("Startup complete!")
+    logger.info("========================================")
 
 
 async def _cancel_task(task: Optional[asyncio.Task]) -> None:

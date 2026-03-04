@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.8] - 2026-03-04
+
+### Changed
+- **Remaining 97 print() calls converted to structured logging**: Cleaned up phase_conditions (13), auto_buy_monitor (19), batch_analyzer (2), and main.py (63) — all hot-path and startup console output now routes through Python logging with proper severity levels
+- **Transfer categorization reduced from O(N²) to O(N)**: Replaced list membership check (`if tr not in staking`) with single-pass partition in report AI service
+- **Blacklist global+user query merged into single SELECT**: Combined two sequential blacklist queries into one using OR condition
+- **Seasonality settings fetched in single query**: Added batch settings helper to retrieve multiple config keys in one WHERE IN query instead of sequential lookups
+- **News content seen-status uses bulk insert**: Replaced serial db.add() loop with db.add_all() batch for marking content as seen
+- **Frontend .find() lookups replaced with O(1) Maps**: Pre-computed bot/strategy/account lookup Maps via useMemo in ClosedPositions, Positions, Bots, and PairSelector — eliminates O(N) linear scans per render/filter iteration
+
 ## [v2.84.7] - 2026-03-04
 
 ### Changed
