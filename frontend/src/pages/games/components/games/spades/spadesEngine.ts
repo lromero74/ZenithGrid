@@ -16,11 +16,14 @@ export interface Play {
   card: Card
 }
 
+export type BidType = 'regular' | 'blind'
+
 export interface SpadesState {
   hands: Card[][]
   currentTrick: Play[]
   completedTricks: Play[][]
   bids: (number | null)[]    // null = not yet bid
+  bidTypes: BidType[]        // regular or blind nil
   tricksTaken: number[]      // per player this round
   teamScores: [number, number]  // [team0(0+2), team1(1+3)]
   teamBags: [number, number]
@@ -40,6 +43,7 @@ export const LOSING_SCORE = -200
 export const BAG_PENALTY_THRESHOLD = 10
 export const BAG_PENALTY = -100
 export const NIL_BONUS = 100
+export const BLIND_NIL_BONUS = 200
 export const PLAYER_NAMES = ['You', 'East', 'North', 'West']
 export const TEAM_NAMES = ['You & North', 'East & West']
 
@@ -79,6 +83,7 @@ export function createSpadesGame(): SpadesState {
     currentTrick: [],
     completedTricks: [],
     bids: [null, null, null, null],
+    bidTypes: ['regular', 'regular', 'regular', 'regular'],
     tricksTaken: [0, 0, 0, 0],
     teamScores: [0, 0],
     teamBags: [0, 0],
@@ -108,6 +113,7 @@ function dealRound(state: SpadesState): SpadesState {
     currentTrick: [],
     completedTricks: [],
     bids: [null, null, null, null],
+    bidTypes: ['regular', 'regular', 'regular', 'regular'],
     tricksTaken: [0, 0, 0, 0],
     phase: 'bidding',
     spadesBroken: false,
@@ -121,13 +127,16 @@ function dealRound(state: SpadesState): SpadesState {
 
 // ── Bidding ──────────────────────────────────────────────────────────
 
-export function placeBid(state: SpadesState, bid: number): SpadesState {
+export function placeBid(state: SpadesState, bid: number, blindNil?: boolean): SpadesState {
   if (state.phase !== 'bidding') return state
   if (state.biddingPlayer !== 0) return state
   if (bid < 0 || bid > 13) return state
 
   const bids = [...state.bids] as (number | null)[]
   bids[0] = bid
+
+  const bidTypes: BidType[] = [...state.bidTypes]
+  bidTypes[0] = (bid === 0 && blindNil) ? 'blind' : 'regular'
 
   // AI bids
   for (let p = 1; p < 4; p++) {
@@ -137,13 +146,16 @@ export function placeBid(state: SpadesState, bid: number): SpadesState {
   // Start playing — player 0 leads first round (dealer's left)
   const leadPlayer = (state.roundNumber * 1) % 4 // rotate lead each round
 
+  const bidLabel = bid === 0 ? (bidTypes[0] === 'blind' ? 'Blind Nil' : 'Nil') : String(bid)
+
   let next: SpadesState = {
     ...state,
     bids: bids as number[],
+    bidTypes,
     phase: 'playing',
     currentPlayer: leadPlayer,
     leadPlayer,
-    message: `Bids: You=${bid}, East=${bids[1]}, North=${bids[2]}, West=${bids[3]}`,
+    message: `Bids: You=${bidLabel}, East=${bids[1]}, North=${bids[2]}, West=${bids[3]}`,
   }
 
   // If AI leads, play their turns
@@ -360,14 +372,15 @@ function resolveRound(state: SpadesState): SpadesState {
     const teamBid = bids[p1] + bids[p2]
     const teamTricks = state.tricksTaken[p1] + state.tricksTaken[p2]
 
-    // Handle nil bids
+    // Handle nil bids (blind nil = ±200, regular nil = ±100)
     let nilBonus = 0
     for (const p of [p1, p2]) {
       if (bids[p] === 0) {
+        const bonus = state.bidTypes?.[p] === 'blind' ? BLIND_NIL_BONUS : NIL_BONUS
         if (state.tricksTaken[p] === 0) {
-          nilBonus += NIL_BONUS
+          nilBonus += bonus
         } else {
-          nilBonus -= NIL_BONUS
+          nilBonus -= bonus
         }
       }
     }

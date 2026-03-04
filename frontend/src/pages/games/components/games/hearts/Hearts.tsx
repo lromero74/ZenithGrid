@@ -117,7 +117,7 @@ export default function Hearts() {
           </div>
 
           {/* Trick area */}
-          <div className="flex-1 relative h-32 sm:h-40">
+          <div className="flex-1 relative h-36 sm:h-48">
             {/* Center trick cards */}
             {gameState.currentTrick.map((play) => {
               const positions = [
@@ -128,7 +128,7 @@ export default function Hearts() {
               ]
               return (
                 <div key={`${play.player}-${play.card.rank}-${play.card.suit}`}
-                  className={`absolute ${positions[play.player]} w-10 h-[3.5rem] sm:w-12 sm:h-[4.25rem]`}
+                  className={`absolute ${positions[play.player]} w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem]`}
                 >
                   <CardFace card={play.card} />
                 </div>
@@ -169,7 +169,7 @@ export default function Hearts() {
             return (
               <div
                 key={`${card.rank}-${card.suit}`}
-                className={`w-11 h-[4rem] sm:w-13 sm:h-[4.75rem] transition-transform ${
+                className={`w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
                   isValid ? 'cursor-pointer hover:-translate-y-1' : 'opacity-40'
                 } ${isSelected ? '-translate-y-2' : ''}`}
                 onClick={() => {

@@ -33,6 +33,7 @@ export interface ChessState {
   enPassantTarget: [number, number] | null
   halfMoveClock: number
   moveHistory: Move[]
+  positionHistory: string[]
   capturedPieces: { white: PieceType[]; black: PieceType[] }
 }
 
@@ -90,6 +91,31 @@ const KING_TABLE = [
   [ 20, 30, 10,  0,  0, 10, 30, 20],
 ]
 
+/** Generate a deterministic key for a board position (for threefold repetition). */
+export function getPositionKey(state: ChessState): string {
+  const parts: string[] = []
+  for (let r = 0; r < 8; r++) {
+    let empty = 0
+    for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]
+      if (!p) { empty++; continue }
+      if (empty > 0) { parts.push(String(empty)); empty = 0 }
+      const ch = p.type[0] === 'k' && p.type[1] === 'n' ? 'n' : p.type[0]
+      parts.push(p.color === 'white' ? ch.toUpperCase() : ch)
+    }
+    if (empty > 0) parts.push(String(empty))
+    parts.push('/')
+  }
+  parts.push(state.currentPlayer === 'white' ? ' w ' : ' b ')
+  const cr = state.castlingRights
+  const castle = (cr.whiteKingside ? 'K' : '') + (cr.whiteQueenside ? 'Q' : '') +
+    (cr.blackKingside ? 'k' : '') + (cr.blackQueenside ? 'q' : '')
+  parts.push(castle || '-')
+  parts.push(' ')
+  parts.push(state.enPassantTarget ? `${state.enPassantTarget[0]},${state.enPassantTarget[1]}` : '-')
+  return parts.join('')
+}
+
 function getPositionBonus(piece: Piece, row: number, col: number): number {
   // For black, flip the row
   const r = piece.color === 'white' ? row : 7 - row
@@ -113,7 +139,7 @@ export function createBoard(): ChessState {
     board[7][c] = { type: order[c], color: 'white' }
   }
 
-  return {
+  const state: ChessState = {
     board,
     currentPlayer: 'white',
     castlingRights: {
@@ -123,8 +149,11 @@ export function createBoard(): ChessState {
     enPassantTarget: null,
     halfMoveClock: 0,
     moveHistory: [],
+    positionHistory: [],
     capturedPieces: { white: [], black: [] },
   }
+  state.positionHistory = [getPositionKey(state)]
+  return state
 }
 
 export function getPieceSymbol(piece: Piece): string {
@@ -458,15 +487,18 @@ function applyMoveUnchecked(state: ChessState, move: Move): ChessState {
   // Half-move clock
   const halfMoveClock = (piece.type === 'pawn' || captured) ? 0 : state.halfMoveClock + 1
 
-  return {
+  const nextState: ChessState = {
     board,
     currentPlayer: state.currentPlayer === 'white' ? 'black' : 'white',
     castlingRights: cr,
     enPassantTarget,
     halfMoveClock,
     moveHistory: [...state.moveHistory, move],
+    positionHistory: [...(state.positionHistory || [])],
     capturedPieces,
   }
+  nextState.positionHistory.push(getPositionKey(nextState))
+  return nextState
 }
 
 /** Apply a move, returning new state. Immutable. */
@@ -486,7 +518,20 @@ export function isStalemate(state: ChessState, player: PieceColor): boolean {
 
 export function isDraw(state: ChessState): boolean {
   if (state.halfMoveClock >= 100) return true
+  if (isThreefoldRepetition(state)) return true
   return isStalemate(state, state.currentPlayer)
+}
+
+function isThreefoldRepetition(state: ChessState): boolean {
+  const history = state.positionHistory
+  if (!history || history.length < 5) return false
+  const current = history[history.length - 1]
+  let count = 0
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i] === current) count++
+    if (count >= 3) return true
+  }
+  return false
 }
 
 function hasAnyLegalMove(state: ChessState, player: PieceColor): boolean {

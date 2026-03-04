@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   createBoard, getPieceSymbol, getValidMoves, isInCheck, isCheckmate,
-  isStalemate, applyMove, getAIMove,
+  isStalemate, isDraw, applyMove, getAIMove, getPositionKey,
   type ChessState, type PieceType, type Move,
 } from './chessEngine'
 
@@ -154,6 +154,7 @@ describe('knight moves', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'knight', color: 'white' }
@@ -179,6 +180,7 @@ describe('rook moves', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'rook', color: 'white' }
@@ -205,6 +207,7 @@ describe('bishop moves', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'bishop', color: 'white' }
@@ -238,6 +241,7 @@ describe('isInCheck', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'king', color: 'white' }
@@ -254,6 +258,7 @@ describe('isInCheck', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'king', color: 'white' }
@@ -270,6 +275,7 @@ describe('isInCheck', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'king', color: 'white' }
@@ -288,6 +294,7 @@ describe('isCheckmate', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     // White king on h1, white pawns on f2, g2, h2 block escape
@@ -309,6 +316,7 @@ describe('isCheckmate', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[7][7] = { type: 'king', color: 'white' }
@@ -332,6 +340,7 @@ describe('isStalemate', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     // White king in corner, black queen covers all escape squares
@@ -372,6 +381,7 @@ describe('applyMove', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'rook', color: 'white' }
@@ -408,6 +418,7 @@ describe('applyMove', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[1][0] = { type: 'pawn', color: 'white' }
@@ -429,6 +440,7 @@ describe('castling', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[7][4] = { type: 'king', color: 'white' }
@@ -454,6 +466,7 @@ describe('castling', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[7][4] = { type: 'king', color: 'white' }
@@ -477,6 +490,7 @@ describe('castling', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[7][4] = { type: 'king', color: 'white' }
@@ -497,6 +511,7 @@ describe('castling', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[7][4] = { type: 'king', color: 'white' }
@@ -520,6 +535,7 @@ describe('en passant', () => {
       enPassantTarget: [2, 3],  // black pawn just moved d7-d5, ep target is d6
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[3][4] = { type: 'pawn', color: 'white' }  // white pawn on e5
@@ -542,6 +558,7 @@ describe('en passant', () => {
       enPassantTarget: [2, 3],
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[3][4] = { type: 'pawn', color: 'white' }
@@ -566,6 +583,7 @@ describe('pin detection', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     // White king on e1, white bishop on e3, black rook on e8 — bishop pinned
@@ -599,6 +617,7 @@ describe('getAIMove', () => {
       enPassantTarget: null,
       halfMoveClock: 0,
       moveHistory: [],
+      positionHistory: [],
       capturedPieces: { white: [], black: [] },
     }
     state.board[4][4] = { type: 'queen', color: 'white' }  // free queen
@@ -611,5 +630,125 @@ describe('getAIMove', () => {
     // AI should capture the queen
     expect(move!.toRow).toBe(4)
     expect(move!.toCol).toBe(4)
+  })
+})
+
+describe('threefold repetition', () => {
+  test('createBoard initializes positionHistory with one entry', () => {
+    const state = createBoard()
+    expect(state.positionHistory).toHaveLength(1)
+  })
+
+  test('applyMove appends to positionHistory', () => {
+    const state = createBoard()
+    const move: Move = { fromRow: 6, fromCol: 4, toRow: 4, toCol: 4 }
+    const next = applyMove(state, move)
+    expect(next.positionHistory).toHaveLength(2)
+  })
+
+  test('getPositionKey is deterministic for same position', () => {
+    const state = createBoard()
+    const key1 = getPositionKey(state)
+    const key2 = getPositionKey(state)
+    expect(key1).toBe(key2)
+  })
+
+  test('getPositionKey differs after a move', () => {
+    const state = createBoard()
+    const move: Move = { fromRow: 6, fromCol: 4, toRow: 4, toCol: 4 }
+    const next = applyMove(state, move)
+    expect(getPositionKey(state)).not.toBe(getPositionKey(next))
+  })
+
+  test('isDraw detects threefold repetition', () => {
+    // Set up a position where both sides shuffle knights back and forth
+    const state: ChessState = {
+      board: Array.from({ length: 8 }, () => Array(8).fill(null)),
+      currentPlayer: 'white',
+      castlingRights: { whiteKingside: false, whiteQueenside: false, blackKingside: false, blackQueenside: false },
+      enPassantTarget: null,
+      halfMoveClock: 0,
+      moveHistory: [],
+      positionHistory: [],
+      capturedPieces: { white: [], black: [] },
+    }
+    state.board[7][4] = { type: 'king', color: 'white' }
+    state.board[0][4] = { type: 'king', color: 'black' }
+    state.board[7][1] = { type: 'knight', color: 'white' }
+    state.board[0][1] = { type: 'knight', color: 'black' }
+    state.positionHistory = [getPositionKey(state)]
+
+    // Move knight: b1→c3, b8→c6, c3→b1, c6→b8 (back to start = 2nd occurrence)
+    // Then repeat: b1→c3, b8→c6, c3→b1, c6→b8 (back to start = 3rd occurrence)
+    let s = state
+    const moves: Move[] = [
+      { fromRow: 7, fromCol: 1, toRow: 5, toCol: 2 }, // Nc3
+      { fromRow: 0, fromCol: 1, toRow: 2, toCol: 2 }, // Nc6
+      { fromRow: 5, fromCol: 2, toRow: 7, toCol: 1 }, // Nb1
+      { fromRow: 2, fromCol: 2, toRow: 0, toCol: 1 }, // Nb8  (2nd occurrence)
+      { fromRow: 7, fromCol: 1, toRow: 5, toCol: 2 }, // Nc3
+      { fromRow: 0, fromCol: 1, toRow: 2, toCol: 2 }, // Nc6
+      { fromRow: 5, fromCol: 2, toRow: 7, toCol: 1 }, // Nb1
+      { fromRow: 2, fromCol: 2, toRow: 0, toCol: 1 }, // Nb8  (3rd occurrence)
+    ]
+    for (const m of moves) {
+      s = applyMove(s, m)
+    }
+
+    expect(isDraw(s)).toBe(true)
+  })
+
+  test('isDraw returns false before threefold repetition', () => {
+    const state: ChessState = {
+      board: Array.from({ length: 8 }, () => Array(8).fill(null)),
+      currentPlayer: 'white',
+      castlingRights: { whiteKingside: false, whiteQueenside: false, blackKingside: false, blackQueenside: false },
+      enPassantTarget: null,
+      halfMoveClock: 0,
+      moveHistory: [],
+      positionHistory: [],
+      capturedPieces: { white: [], black: [] },
+    }
+    state.board[7][4] = { type: 'king', color: 'white' }
+    state.board[0][4] = { type: 'king', color: 'black' }
+    state.board[7][1] = { type: 'knight', color: 'white' }
+    state.board[0][1] = { type: 'knight', color: 'black' }
+    state.positionHistory = [getPositionKey(state)]
+
+    // Only one round trip — 2 occurrences, not 3
+    let s = state
+    const moves: Move[] = [
+      { fromRow: 7, fromCol: 1, toRow: 5, toCol: 2 },
+      { fromRow: 0, fromCol: 1, toRow: 2, toCol: 2 },
+      { fromRow: 5, fromCol: 2, toRow: 7, toCol: 1 },
+      { fromRow: 2, fromCol: 2, toRow: 0, toCol: 1 },
+    ]
+    for (const m of moves) {
+      s = applyMove(s, m)
+    }
+
+    expect(isDraw(s)).toBe(false)
+  })
+
+  test('different castling rights produce different position keys', () => {
+    const base: ChessState = {
+      board: Array.from({ length: 8 }, () => Array(8).fill(null)),
+      currentPlayer: 'white',
+      castlingRights: { whiteKingside: true, whiteQueenside: true, blackKingside: true, blackQueenside: true },
+      enPassantTarget: null,
+      halfMoveClock: 0,
+      moveHistory: [],
+      positionHistory: [],
+      capturedPieces: { white: [], black: [] },
+    }
+    base.board[7][4] = { type: 'king', color: 'white' }
+    base.board[0][4] = { type: 'king', color: 'black' }
+
+    const noCastle: ChessState = {
+      ...base,
+      castlingRights: { whiteKingside: false, whiteQueenside: false, blackKingside: false, blackQueenside: false },
+    }
+
+    expect(getPositionKey(base)).not.toBe(getPositionKey(noCastle))
   })
 })

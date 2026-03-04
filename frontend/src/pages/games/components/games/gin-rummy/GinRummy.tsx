@@ -87,7 +87,7 @@ export default function GinRummy() {
           <span className="text-xs text-slate-400 mb-1 block">AI ({gameState.aiHand.length} cards)</span>
           <div className="flex gap-1 justify-center flex-wrap">
             {gameState.aiHand.map((card, i) => (
-              <div key={i} className="w-10 h-[3.5rem] sm:w-12 sm:h-[4.25rem]">
+              <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
                 {showAiCards ? <CardFace card={{ ...card, faceUp: true }} /> : <CardBack />}
               </div>
             ))}
@@ -140,7 +140,7 @@ export default function GinRummy() {
             {gameState.playerHand.map((card, i) => (
               <div
                 key={i}
-                className={`w-12 h-[4.25rem] sm:w-14 sm:h-[5rem] transition-transform ${
+                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
                   isDiscarding ? 'cursor-pointer hover:-translate-y-1' : ''
                 }`}
                 onClick={() => isDiscarding && handleDiscard(i)}

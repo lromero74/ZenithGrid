@@ -213,10 +213,22 @@ export function discard(state: GinRummyState, cardIndex: number): GinRummyState 
 
 export function knock(state: GinRummyState): GinRummyState {
   if (state.phase !== 'discarding' || state.currentPlayer !== 0) return state
-  const { deadwoodTotal } = findBestMelds(state.playerHand)
-  if (deadwoodTotal > 10 && state.playerHand.length <= 10) return state
 
-  return resolveKnock({ ...state, knocker: 0 })
+  // Auto-discard worst deadwood card (matches AI behavior, lines 271-274)
+  const playerHand = [...state.playerHand]
+  const worstIdx = findWorstDeadwoodCard(playerHand)
+  const discarded = playerHand.splice(worstIdx, 1)[0]
+  const discardPile = [...state.discardPile, discarded]
+
+  const { deadwoodTotal } = findBestMelds(playerHand)
+  if (deadwoodTotal > 10) return state
+
+  return resolveKnock({
+    ...state,
+    playerHand: sortHand(playerHand),
+    discardPile,
+    knocker: 0,
+  })
 }
 
 export function getPlayerDeadwood(state: GinRummyState): number {
@@ -226,11 +238,13 @@ export function getPlayerDeadwood(state: GinRummyState): number {
 
 export function canKnock(state: GinRummyState): boolean {
   if (state.phase !== 'discarding' || state.currentPlayer !== 0) return false
-  if (state.playerHand.length > 11) return false
-  // Need to discard first to get to 10 cards, but check if any discard would allow knock
-  // Simplified: allow knock if current deadwood <= 10 (player still has 11 cards, will discard)
-  const { deadwoodTotal } = findBestMelds(state.playerHand)
-  return deadwoodTotal <= 10
+  if (state.playerHand.length !== 11) return false
+
+  // Check if discarding the worst deadwood card results in deadwood <= 10
+  const tempHand = [...state.playerHand]
+  const worstIdx = findWorstDeadwoodCard(tempHand)
+  tempHand.splice(worstIdx, 1)
+  return findBestMelds(tempHand).deadwoodTotal <= 10
 }
 
 // ── AI ───────────────────────────────────────────────────────────────

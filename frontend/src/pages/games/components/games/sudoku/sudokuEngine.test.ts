@@ -8,6 +8,7 @@ import {
   isValidPlacement,
   solveSudoku,
   generatePuzzle,
+  countSolutions,
   getConflicts,
   getPeers,
 } from './sudokuEngine'
@@ -122,6 +123,48 @@ describe('generatePuzzle', () => {
         }
       }
     }
+  })
+})
+
+describe('countSolutions', () => {
+  test('returns 1 for a well-formed puzzle', () => {
+    const board = createEmptyBoard()
+    board[0] = [5, 3, 0, 0, 7, 0, 0, 0, 0]
+    board[1] = [6, 0, 0, 1, 9, 5, 0, 0, 0]
+    board[2] = [0, 9, 8, 0, 0, 0, 0, 6, 0]
+    board[3] = [8, 0, 0, 0, 6, 0, 0, 0, 3]
+    board[4] = [4, 0, 0, 8, 0, 3, 0, 0, 1]
+    board[5] = [7, 0, 0, 0, 2, 0, 0, 0, 6]
+    board[6] = [0, 6, 0, 0, 0, 0, 2, 8, 0]
+    board[7] = [0, 0, 0, 4, 1, 9, 0, 0, 5]
+    board[8] = [0, 0, 0, 0, 8, 0, 0, 7, 9]
+    expect(countSolutions(board, 2)).toBe(1)
+  })
+
+  test('returns 0 for unsolvable board', () => {
+    const board = createEmptyBoard()
+    board[0][0] = 1
+    board[0][1] = 1 // duplicate → unsolvable
+    expect(countSolutions(board, 2)).toBe(0)
+  })
+
+  test('returns 2 for a board with multiple solutions', () => {
+    // Nearly empty board has many solutions; countSolutions caps at maxCount
+    const board = createEmptyBoard()
+    board[0][0] = 1
+    expect(countSolutions(board, 2)).toBe(2)
+  })
+})
+
+describe('generatePuzzle unique solutions', () => {
+  test('generated easy puzzle has exactly one solution', () => {
+    const { puzzle } = generatePuzzle('easy')
+    expect(countSolutions(puzzle, 2)).toBe(1)
+  })
+
+  test('generated hard puzzle has exactly one solution', () => {
+    const { puzzle } = generatePuzzle('hard')
+    expect(countSolutions(puzzle, 2)).toBe(1)
   })
 })
 
