@@ -6,8 +6,10 @@ Handles products, prices, candles, and market statistics
 import logging
 from typing import Any, Callable, Dict, List
 
+import httpx
+
 from app.cache import api_cache
-from app.constants import PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
+from app.constants import NEGATIVE_CACHE_TTL, PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +50,16 @@ async def get_current_price(request_func: Callable, auth_type: str, product_id: 
     """
     cache_key = f"price_{product_id}"
 
+    if await api_cache.is_not_found(cache_key):
+        raise ValueError(f"{product_id} not found (negative cached)")
+
     async def _fetch_price() -> float:
-        ticker = await get_ticker(request_func, product_id)
+        try:
+            ticker = await get_ticker(request_func, product_id)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                await api_cache.mark_not_found(cache_key, NEGATIVE_CACHE_TTL)
+            raise
 
         if auth_type == "cdp":
             # CDP returns best_bid and best_ask, calculate mid-price

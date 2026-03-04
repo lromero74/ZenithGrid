@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from app.cache import api_cache
-from app.constants import PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
+from app.constants import NEGATIVE_CACHE_TTL, PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -131,11 +131,20 @@ async def get_current_price(product_id: str) -> float:
     Falls back to most-recent trade price if bid/ask unavailable.
     """
     cache_key = f"price_{product_id}"
+
+    if await api_cache.is_not_found(cache_key):
+        raise ValueError(f"{product_id} not found (negative cached)")
+
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    ticker = await get_ticker(product_id)
+    try:
+        ticker = await get_ticker(product_id)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            await api_cache.mark_not_found(cache_key, NEGATIVE_CACHE_TTL)
+        raise
 
     best_bid = float(ticker.get("best_bid", 0))
     best_ask = float(ticker.get("best_ask", 0))

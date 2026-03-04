@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -39,6 +40,8 @@ class SimpleCache:
         self._lock = asyncio.Lock()
         # In-flight futures: key -> Future (prevents thundering herd)
         self._in_flight: Dict[str, asyncio.Future] = {}
+        # Negative cache: key -> monotonic expiry time
+        self._not_found: Dict[str, float] = {}
 
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
@@ -64,10 +67,27 @@ class SimpleCache:
             if key in self._cache:
                 del self._cache[key]
 
+    async def mark_not_found(self, key: str, ttl_seconds: int):
+        """Mark a key as not-found with a TTL (negative cache)."""
+        async with self._lock:
+            self._not_found[key] = time.monotonic() + ttl_seconds
+
+    async def is_not_found(self, key: str) -> bool:
+        """Check if a key is negative-cached. Lazily removes expired entries."""
+        async with self._lock:
+            expiry = self._not_found.get(key)
+            if expiry is None:
+                return False
+            if time.monotonic() >= expiry:
+                del self._not_found[key]
+                return False
+            return True
+
     async def clear(self):
         """Clear all cache entries"""
         async with self._lock:
             self._cache.clear()
+            self._not_found.clear()
 
     async def delete_prefix(self, prefix: str):
         """Delete all cache entries whose keys start with the given prefix"""
@@ -82,6 +102,10 @@ class SimpleCache:
             expired_keys = [key for key, entry in self._cache.items() if entry.is_expired()]
             for key in expired_keys:
                 del self._cache[key]
+            now = time.monotonic()
+            expired_nf = [key for key, expiry in self._not_found.items() if now >= expiry]
+            for key in expired_nf:
+                del self._not_found[key]
 
     async def get_or_fetch(
         self, key: str, fetch_fn: Callable[[], Awaitable[Any]], ttl_seconds: int

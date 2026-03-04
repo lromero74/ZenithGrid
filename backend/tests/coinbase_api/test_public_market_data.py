@@ -281,6 +281,35 @@ class TestGetCurrentPrice:
 # ---------------------------------------------------------------------------
 
 
+class TestGetCurrentPriceNegativeCache:
+    """Tests for 404 negative caching in get_current_price()"""
+
+    @pytest.mark.asyncio
+    async def test_404_triggers_negative_cache_and_blocks_retry(self):
+        """404 from ticker triggers negative cache; second call raises without API hit."""
+        error_response = MagicMock()
+        error_response.status_code = 404
+        error_response.text = "Not Found"
+        http_error = httpx.HTTPStatusError("404", request=MagicMock(), response=error_response)
+
+        mock_request = AsyncMock(side_effect=http_error)
+
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            # First call: hits API, gets 404, marks negative cache
+            with pytest.raises(httpx.HTTPStatusError):
+                await get_current_price("DELISTED-BTC")
+
+        assert mock_request.call_count == 1
+
+        # Second call: should raise ValueError (negative cached) WITHOUT hitting API
+        mock_request.reset_mock()
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            with pytest.raises(ValueError, match="not found.*negative cached"):
+                await get_current_price("DELISTED-BTC")
+
+        mock_request.assert_not_called()
+
+
 class TestConveniencePriceFunctions:
     """Tests for get_btc_usd_price() and get_eth_usd_price()"""
 
