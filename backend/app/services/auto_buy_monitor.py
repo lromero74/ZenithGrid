@@ -126,6 +126,9 @@ class AutoBuyMonitor:
             if account.auto_buy_usdt_enabled:
                 stablecoins.append(("USDT", account.auto_buy_usdt_min, "BTC-USDT"))
 
+            # Calculate reserved USD once for all stablecoins (avoids repeated DB queries)
+            reserved = await self._calculate_reserved_usd(db, account.id)
+
             for currency, min_amount, product_id in stablecoins:
                 await self._check_and_buy(
                     client,
@@ -133,7 +136,8 @@ class AutoBuyMonitor:
                     currency,
                     min_amount,
                     product_id,
-                    db
+                    db,
+                    reserved_usd=reserved,
                 )
 
             # Update timer for this account
@@ -186,7 +190,8 @@ class AutoBuyMonitor:
         currency: str,
         min_amount: float,
         product_id: str,
-        db: AsyncSession
+        db: AsyncSession,
+        reserved_usd: float = None,
     ):
         """Check balance and buy BTC if above minimum, respecting bot reservations"""
         try:
@@ -194,8 +199,10 @@ class AutoBuyMonitor:
             balance_data = await client.get_balance(currency)
             raw_available = float(balance_data.get('available', 0))
 
-            # Subtract bot reservations and open position values
-            reserved = await self._calculate_reserved_usd(db, account.id)
+            # Use pre-computed reserved amount, or calculate if not provided
+            reserved = reserved_usd if reserved_usd is not None else (
+                await self._calculate_reserved_usd(db, account.id)
+            )
             available = max(0.0, raw_available - reserved)
 
             if available < min_amount:

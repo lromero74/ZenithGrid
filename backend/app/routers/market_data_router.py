@@ -31,6 +31,9 @@ from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
+# Tradeable quote currencies for product filtering (frozenset for O(1) lookup)
+_TRADEABLE_QUOTES = frozenset({"USD", "USDC", "BTC"})
+
 # Cache for expensive market data (product listings don't change often)
 _market_data_cache = SimpleCache()
 
@@ -288,11 +291,8 @@ async def get_products(
                 continue
 
             # Only include USD, USDC, and BTC pairs
-            if (
-                product_id.endswith("-USD")
-                or product_id.endswith("-USDC")
-                or product_id.endswith("-BTC")
-            ):
+            parts = product_id.rsplit("-", 1)
+            if len(parts) == 2 and parts[1] in _TRADEABLE_QUOTES:
                 # Coinbase uses *_id suffix, ByBit uses plain names
                 base_currency = (
                     product.get("base_currency_id", "")
@@ -358,12 +358,8 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
                 continue
 
             # Only include USD, USDC, and BTC pairs
-            quote_currencies = ["USD", "USDC", "BTC"]
-            quote = None
-            for q in quote_currencies:
-                if product_id.endswith(f"-{q}"):
-                    quote = q
-                    break
+            parts = product_id.rsplit("-", 1)
+            quote = parts[1] if len(parts) == 2 and parts[1] in _TRADEABLE_QUOTES else None
 
             if not quote:
                 continue

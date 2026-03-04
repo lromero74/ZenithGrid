@@ -5,6 +5,30 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.7] - 2026-03-04
+
+### Changed
+- **Trading engine hot loop 50+ print() calls eliminated**: Converted all console print statements to structured logger.debug() calls across the monitor, signal processor, and pair processor — removes unnecessary I/O from every bot cycle
+- **Blacklist check uses single query**: Merged two sequential blacklist database queries (user-specific + global) into one combined OR query per trading pair
+- **Open position count threaded through call chain**: Position count computed once per bot cycle and passed through instead of re-querying the database for each trading pair
+- **Safety order prices computed in O(1)**: Replaced iterative loop with closed-form geometric series formula for safety order deviation calculation
+- **Indicator calculation avoids redundant recomputation**: Sell-side checks reuse indicators already computed during buy analysis; recursive previous-period calculation skipped when monitor cache is available
+- **Strategy instances cached per config snapshot**: Reuses strategy objects when position config matches bot config instead of reinstantiating per position
+- **Account snapshot prices fetched in parallel**: Serial per-position price API calls replaced with deduplicated asyncio.gather() batch fetch
+- **Bot statistics computed in single pass**: Merged 6 separate iterations over closed positions into one loop computing all PnL, win rate, and capital metrics
+- **Transfer duplicate check uses bulk query**: Replaced per-transfer SELECT with single WHERE IN batch lookup
+- **Order reconciliation uses bulk queries**: Replaced per-product-group trade/pending-order queries with two batch WHERE IN queries
+- **Balance lookup uses cache by default**: get_balance() no longer forces a fresh API call on every invocation — uses cached accounts with opt-in refresh
+- **Sell-all endpoint fetches prices in parallel**: Deduplicated product IDs and batch-fetched via asyncio.gather() before sell loop
+- **Frontend components memoized**: Added useMemo/useCallback across Positions, Portfolio, Bots, Charts, News, and Reports pages — prevents unnecessary recalculations on every render
+- **Polling intervals reduced**: AI sentiment polling increased from 30s to 120s; portfolio polling increased from 30s to 60s
+- **Stochastic %D avoids redundant window computation**: Reuses already-computed K value for the final iteration instead of recalculating max/min over the same window
+
+### Fixed
+- **Flaky indicator log test**: Fixed test isolation issue where async DB session leaked across event loops in test suite
+- **Account snapshot test missing mock**: Added explicit get_current_price mock to prevent MagicMock arithmetic contaminating snapshot values
+- **Trend chart PNG test wrong import path**: Updated import after function moved from html_builder to chart_renderer module
+
 ## [v2.84.6] - 2026-03-04
 
 ### Changed

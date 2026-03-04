@@ -70,17 +70,18 @@ class CoinbaseAdapter(ExchangeClient):
         """Get available USDT balance."""
         return await self._client.get_usdt_balance()
 
-    async def get_balance(self, currency: str) -> Dict[str, Any]:
+    async def get_balance(self, currency: str, force_fresh: bool = False) -> Dict[str, Any]:
         """
         Get balance for a specific currency.
 
         Args:
             currency: Currency code (e.g., "USD", "BTC", "USDC", "USDT")
+            force_fresh: If True, bypass cache and fetch fresh data from exchange
 
         Returns:
             Dictionary with balance information
         """
-        accounts = await self._client.get_accounts(force_fresh=True)
+        accounts = await self._client.get_accounts(force_fresh=force_fresh)
 
         # Find the account for the requested currency
         for account in accounts:

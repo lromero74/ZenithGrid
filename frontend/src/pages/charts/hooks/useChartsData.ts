@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authFetch, api } from '../../../services/api'
 import type { CandleData } from '../../../utils/indicators'
@@ -43,7 +43,7 @@ export function useChartsData(
   })
 
   // Generate trading pairs from all available products
-  const TRADING_PAIRS = (() => {
+  const TRADING_PAIRS = useMemo(() => {
     if (!productsData?.products) {
       // Fallback to default pairs while loading
       return [
@@ -73,7 +73,7 @@ export function useChartsData(
     })
 
     return pairs
-  })()
+  }, [productsData, portfolio])
 
   // Fetch and update chart data
   useEffect(() => {

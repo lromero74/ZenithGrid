@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BarChart3, Building2, Wallet, Scale } from 'lucide-react'
@@ -193,8 +193,45 @@ export default function Positions() {
     }
   }
 
+  // Memoized handlers for PositionCard (F1)
+  const handleOpenChart = useCallback((productId: string, pos: Position) => {
+    setChartModalSymbol(productId)
+    setChartModalPosition(pos)
+    setShowChartModal(true)
+  }, [])
+
+  const handleOpenLightweightChart = useCallback((productId: string, pos: Position) => {
+    setLightweightChartSymbol(productId)
+    setLightweightChartPosition(pos)
+    setShowLightweightChart(true)
+  }, [])
+
+  const handleOpenLimitClose = useCallback((pos: Position) => {
+    setLimitClosePosition(pos)
+    setShowLimitCloseModal(true)
+  }, [])
+
+  const handleOpenLogs = useCallback((pos: Position) => {
+    setShowLogsModal(true)
+    setLogsModalPosition(pos)
+  }, [])
+
+  const handleOpenEditSettings = useCallback((pos: Position) => {
+    setEditSettingsPosition(pos)
+    setShowEditSettingsModal(true)
+  }, [])
+
+  const handleOpenTradeHistory = useCallback((pos: Position) => {
+    setTradeHistoryPosition(pos)
+    setShowTradeHistoryModal(true)
+  }, [])
+
+  const handleEditBot = useCallback((bot: any) => {
+    navigate('/bots', { state: { editBot: bot } })
+  }, [navigate])
+
   // Calculate overall statistics
-  const stats = calculateOverallStats(openPositions)
+  const stats = useMemo(() => calculateOverallStats(openPositions), [openPositions])
 
   return (
     <div className="space-y-6">
@@ -395,37 +432,17 @@ export default function Positions() {
                 trades={trades}
                 selectedPosition={selectedPosition}
                 onTogglePosition={togglePosition}
-                onOpenChart={(productId, pos) => {
-                  setChartModalSymbol(productId)
-                  setChartModalPosition(pos)
-                  setShowChartModal(true)
-                }}
-                onOpenLightweightChart={(productId, pos) => {
-                  setLightweightChartSymbol(productId)
-                  setLightweightChartPosition(pos)
-                  setShowLightweightChart(true)
-                }}
-                onOpenLimitClose={(pos) => {
-                  setLimitClosePosition(pos)
-                  setShowLimitCloseModal(true)
-                }}
-                onOpenLogs={(pos) => {
-                  setShowLogsModal(true)
-                  setLogsModalPosition(pos)
-                }}
+                onOpenChart={handleOpenChart}
+                onOpenLightweightChart={handleOpenLightweightChart}
+                onOpenLimitClose={handleOpenLimitClose}
+                onOpenLogs={handleOpenLogs}
                 onOpenAddFunds={openAddFundsModal}
-                onOpenEditSettings={(pos) => {
-                  setEditSettingsPosition(pos)
-                  setShowEditSettingsModal(true)
-                }}
+                onOpenEditSettings={handleOpenEditSettings}
                 onOpenNotes={openNotesModal}
-                onOpenTradeHistory={(pos) => {
-                  setTradeHistoryPosition(pos)
-                  setShowTradeHistoryModal(true)
-                }}
+                onOpenTradeHistory={handleOpenTradeHistory}
                 onCheckSlippage={handleCheckSlippage}
                 onRefetch={refetchPositions}
-                onEditBot={(bot) => navigate('/bots', { state: { editBot: bot } })}
+                onEditBot={handleEditBot}
                 canWrite={canWritePositions}
               />
             ))}

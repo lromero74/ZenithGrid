@@ -167,7 +167,7 @@ class TestTrendChartPngNoneHandling:
 
     def test_target_endpoint_with_none_does_not_crash(self):
         """Edge case: PNG renderer handles None current_value."""
-        from app.services.report_generator_service.html_builder import (
+        from app.services.report_generator_service.chart_renderer import (
             _render_trend_chart_png,
         )
         points = [

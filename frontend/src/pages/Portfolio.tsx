@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
@@ -9,6 +9,13 @@ import { usePermission } from '../hooks/usePermission'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { CandleData } from '../utils/indicators/types'
+
+const CURRENCY_FMT = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
 
 interface Holding {
   asset: string
@@ -82,7 +89,7 @@ function Portfolio() {
   const { data: portfolio, isLoading: loading, error, isFetching } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: () => fetchPortfolio(false),
-    refetchInterval: 30000, // Update every 30 seconds
+    refetchInterval: 60000, // Update every 60 seconds
     staleTime: 15000, // Consider data fresh for 15 seconds
     refetchOnMount: true, // Refetch when navigating to portfolio page
     refetchOnWindowFocus: true, // Refetch when switching back to tab
@@ -165,14 +172,7 @@ function Portfolio() {
   const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value)
-  }
+  const formatCurrency = (value: number) => CURRENCY_FMT.format(value)
 
   const formatCrypto = (value: number, decimals: number = 8) => {
     return value.toFixed(decimals)
@@ -198,7 +198,7 @@ function Portfolio() {
       : <ArrowDown size={14} className="text-blue-400" />
   }
 
-  const sortedHoldings = (portfolio?.holdings ?? []).slice().sort((a: Holding, b: Holding) => {
+  const sortedHoldings = useMemo(() => (portfolio?.holdings ?? []).slice().sort((a: Holding, b: Holding) => {
     let compareValue = 0
 
     switch (sortColumn) {
@@ -223,7 +223,7 @@ function Portfolio() {
     }
 
     return sortDirection === 'asc' ? compareValue : -compareValue
-  }) || []
+  }), [portfolio?.holdings, sortColumn, sortDirection])
 
   const openChartModal = (asset: string) => {
     setChartModalAsset(asset)

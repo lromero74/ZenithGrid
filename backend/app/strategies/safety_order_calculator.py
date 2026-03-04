@@ -35,9 +35,12 @@ def calculate_base_order_size(config: Dict, balance: float) -> float:
 
             if safety_order_type == "percentage_of_base":
                 so_percentage = config.get("safety_order_percentage", 50.0) / 100.0
-                for order_num in range(1, max_safety_orders + 1):
-                    scaled_multiplier = so_percentage * (volume_scale ** (order_num - 1))
-                    total_multiplier += scaled_multiplier
+                # S12: Closed-form geometric series (O(1) instead of O(n))
+                n = max_safety_orders
+                if volume_scale == 1.0:
+                    total_multiplier += so_percentage * n
+                else:
+                    total_multiplier += so_percentage * (volume_scale ** n - 1) / (volume_scale - 1)
 
                 optimal_percentage = 100.0 / total_multiplier
                 return balance * (optimal_percentage / 100.0)
@@ -51,19 +54,26 @@ def calculate_base_order_size(config: Dict, balance: float) -> float:
 
             if safety_order_type in ["fixed", "fixed_btc"]:
                 volume_scale = config.get("safety_order_volume_scale", 1.0)
-                total_multiplier = 1.0  # Base order = X
-                total_multiplier += 1.0  # SO1 = X (same as base)
-                for order_num in range(2, max_safety_orders + 1):
-                    scaled_multiplier = volume_scale ** (order_num - 1)
-                    total_multiplier += scaled_multiplier
+                # S12: Closed-form geometric series (O(1) instead of O(n))
+                # Base order (1.0) + SO1 (1.0) + SO2..SOn (geometric)
+                total_multiplier = 2.0  # Base + SO1
+                n = max_safety_orders
+                if n > 1:
+                    if volume_scale == 1.0:
+                        total_multiplier += (n - 1)
+                    else:
+                        # Sum v^1 + v^2 + ... + v^(n-1) = v*(v^(n-1) - 1)/(v - 1)
+                        total_multiplier += volume_scale * (volume_scale ** (n - 1) - 1) / (volume_scale - 1)
                 return balance / total_multiplier
             else:
-                total_multiplier = 1.0
                 volume_scale = config.get("safety_order_volume_scale", 1.0)
-                for order_num in range(1, max_safety_orders + 1):
-                    so_multiplier = config.get("safety_order_percentage", 50.0) / 100.0
-                    scaled_multiplier = so_multiplier * (volume_scale ** (order_num - 1))
-                    total_multiplier += scaled_multiplier
+                so_multiplier = config.get("safety_order_percentage", 50.0) / 100.0
+                # S12: Closed-form geometric series (O(1) instead of O(n))
+                n = max_safety_orders
+                if volume_scale == 1.0:
+                    total_multiplier = 1.0 + so_multiplier * n
+                else:
+                    total_multiplier = 1.0 + so_multiplier * (volume_scale ** n - 1) / (volume_scale - 1)
                 return balance / total_multiplier
         else:
             base_order_btc = config.get("base_order_btc", 0.0001)

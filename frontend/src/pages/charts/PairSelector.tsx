@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 
 export interface TradingPair {
@@ -39,23 +39,26 @@ export function PairSelector({ pairs, selectedPair, onSelectPair }: PairSelector
     }
   }, [isOpen])
 
-  // Get unique market tabs from pairs
-  const markets = ['All', ...Array.from(new Set(pairs.map(p => p.group))).sort()]
+  // Get unique market tabs from pairs (F13)
+  const markets = useMemo(() => ['All', ...Array.from(new Set(pairs.map(p => p.group))).sort()], [pairs])
 
-  // Filter pairs by market tab and search
-  const filteredPairs = pairs.filter(p => {
-    const matchesMarket = activeMarket === 'All' || p.group === activeMarket
-    const matchesSearch = !search || p.label.toLowerCase().includes(search.toLowerCase())
-      || p.value.toLowerCase().includes(search.toLowerCase())
-    return matchesMarket && matchesSearch
-  })
+  // Filter pairs by market tab and search (F13)
+  const filteredPairs = useMemo(() => {
+    const searchLower = search.toLowerCase()
+    return pairs.filter(p => {
+      const matchesMarket = activeMarket === 'All' || p.group === activeMarket
+      const matchesSearch = !search || p.label.toLowerCase().includes(searchLower)
+        || p.value.toLowerCase().includes(searchLower)
+      return matchesMarket && matchesSearch
+    })
+  }, [pairs, activeMarket, search])
 
-  // Group filtered pairs: portfolio first, then alphabetical
-  const sortedPairs = [...filteredPairs].sort((a, b) => {
+  // Group filtered pairs: portfolio first, then alphabetical (F13)
+  const sortedPairs = useMemo(() => [...filteredPairs].sort((a, b) => {
     if (a.inPortfolio && !b.inPortfolio) return -1
     if (!a.inPortfolio && b.inPortfolio) return 1
     return a.label.localeCompare(b.label)
-  })
+  }), [filteredPairs])
 
   const selectedLabel = pairs.find(p => p.value === selectedPair)?.label || selectedPair
 

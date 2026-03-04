@@ -402,8 +402,8 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
 
   // S1: Timer state removed from parent - now managed inside HalvingCard and USDebtCard
 
-  // Build card list (cards handle their own timers internally)
-  const baseCards = [
+  // Build card list (cards handle their own timers internally) — memoized (F12)
+  const baseCards = useMemo(() => [
     { id: 'season', component: <SeasonCard seasonInfo={seasonInfo} /> },
     { id: 'fear-greed', component: <FearGreedCard data={fearGreedData} isError={fgError} spark={sparkData.fear_greed} sparkTimeLabel={sparkTimeLabels.fear_greed} /> },
     { id: 'halving', component: <HalvingCard blockHeight={blockHeight} isError={blockError} /> },
@@ -418,16 +418,22 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
     { id: 'lightning', component: <LightningCard data={lightningData} isError={lnError} spark={sparkData.lightning_capacity} sparkTimeLabel={sparkTimeLabels.lightning_capacity} /> },
     { id: 'ath', component: <ATHCard data={athData} isError={athError} /> },
     { id: 'btc-rsi', component: <BTCRSICard data={btcRsiData} isError={rsiError} spark={sparkData.btc_rsi} sparkTimeLabel={sparkTimeLabels.btc_rsi} /> },
-  ]
+  ], [
+    seasonInfo, fearGreedData, fgError, blockHeight, blockError, usDebtData, debtError,
+    btcDominanceData, domError, altseasonData, altError, stablecoinData, stableError,
+    totalMarketCapData, tmcError, btcSupplyData, supplyError, mempoolData, mempoolError,
+    hashRateData, hashError, lightningData, lnError, athData, athError, btcRsiData, rsiError,
+    sparkData, sparkTimeLabels,
+  ])
 
   const totalCards = baseCards.length
 
-  // For infinite scroll: create extended array with clones at both ends
-  const extendedCards = [
+  // For infinite scroll: create extended array with clones at both ends — memoized (F12)
+  const extendedCards = useMemo(() => [
     ...baseCards.slice(-cardsVisible).map((card, i) => ({ ...card, id: `clone-end-${i}` })),
     ...baseCards,
     ...baseCards.slice(0, cardsVisible).map((card, i) => ({ ...card, id: `clone-start-${i}` })),
-  ]
+  ], [baseCards, cardsVisible])
   const extendedTotal = extendedCards.length
 
   // Inject keyframes into document (only once)

@@ -74,22 +74,28 @@ async def sync_transfers(
             )
             continue
 
-        for t in transfers:
-            # Skip non-completed transactions
-            if t.get("status") not in ("completed", ""):
-                continue
+        # Pre-filter to completed transfers with external_ids
+        valid_transfers = [
+            t for t in transfers
+            if t.get("status") in ("completed", "") and t.get("external_id")
+        ]
 
-            external_id = t.get("external_id")
-            if not external_id:
-                continue
-
-            # Check for duplicate
-            existing = await db.execute(
-                select(AccountTransfer.id).where(
-                    AccountTransfer.external_id == external_id
+        # Bulk duplicate check: single WHERE IN query instead of per-transfer SELECT
+        if valid_transfers:
+            candidate_ids = [t["external_id"] for t in valid_transfers]
+            existing_result = await db.execute(
+                select(AccountTransfer.external_id).where(
+                    AccountTransfer.external_id.in_(candidate_ids)
                 )
             )
-            if existing.scalar_one_or_none() is not None:
+            existing_ids = {row[0] for row in existing_result.fetchall()}
+        else:
+            existing_ids = set()
+
+        for t in valid_transfers:
+            external_id = t["external_id"]
+
+            if external_id in existing_ids:
                 continue
 
             # Parse occurred_at

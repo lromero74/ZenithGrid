@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bot } from '../types'
 import { Plus, Activity, Building2, Wallet, Upload, ClipboardPaste, X, CheckCircle, AlertCircle } from 'lucide-react'
@@ -169,6 +169,14 @@ function Bots() {
     sellAllPositions
   } = useBotMutations({ selectedAccount, bots, setShowModal, resetForm, onCloneSuccess: handleCloneSuccess, projectionTimeframe: projectionBasis })
 
+  // Pre-compute Sets for O(1) lookups in validateImportedBot (F8)
+  const strategyIdSet = useMemo(() => new Set(strategies.map(s => s.id)), [strategies])
+  const tradingPairSet = useMemo(() => new Set(TRADING_PAIRS.map(tp => tp.value)), [TRADING_PAIRS])
+
+  // Memoize filtered bot lists (F9)
+  const hasStoppedBots = useMemo(() => bots.some(b => !b.is_active), [bots])
+  const visibleBots = useMemo(() => bots.filter(b => showStoppedBots || b.is_active), [bots, showStoppedBots])
+
   // Get selected strategy definition
   const selectedStrategy = strategies.find((s) => s.id === formData.strategy_type)
 
@@ -272,17 +280,16 @@ function Bots() {
     }
 
     // Step 3: Validate strategy_type exists in our strategies
-    if (parsedData.strategy_type && strategies.length > 0) {
-      const strategyExists = strategies.some(s => s.id === parsedData.strategy_type)
-      if (!strategyExists) {
+    if (parsedData.strategy_type && strategyIdSet.size > 0) {
+      if (!strategyIdSet.has(parsedData.strategy_type)) {
         errors.push(`Unknown strategy type: "${parsedData.strategy_type}"`)
       }
     }
 
     // Step 4: Validate trading pairs exist
     const pairs = parsedData.product_ids || (parsedData.product_id ? [parsedData.product_id] : [])
-    if (TRADING_PAIRS.length > 0) {
-      const invalidPairs = pairs.filter((p: string) => !TRADING_PAIRS.some(tp => tp.value === p))
+    if (tradingPairSet.size > 0) {
+      const invalidPairs = pairs.filter((p: string) => !tradingPairSet.has(p))
       if (invalidPairs.length > 0) {
         warnings.push(`Unknown trading pair(s): ${invalidPairs.join(', ')} - they may not be available`)
       }
@@ -535,7 +542,7 @@ function Bots() {
       ) : (
         <>
         {/* Toggle for stopped bots */}
-        {bots.some(b => !b.is_active) && (
+        {hasStoppedBots && (
           <div className="flex justify-end mb-2">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <span className="text-sm text-slate-400">Show stopped</span>
@@ -571,7 +578,7 @@ function Bots() {
                 </tr>
               </thead>
               <tbody>
-                {bots.filter(b => showStoppedBots || b.is_active).map((bot) => (
+                {visibleBots.map((bot) => (
                   <BotListItem
                     key={bot.id}
                     bot={bot}

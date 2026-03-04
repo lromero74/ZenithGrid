@@ -35,6 +35,9 @@ STABLE_PAIRS = {
 # Backwards-compatible alias
 EXCLUDED_PAIRS = STABLE_PAIRS
 
+# Non-USD quote currencies for stable pair detection (frozenset for O(1) lookup)
+_NON_USD_QUOTES = frozenset({"BTC", "ETH", "SOL"})
+
 
 def is_stable_pair(product_id: str) -> bool:
     """Check if a trading pair is a stablecoin or wrapped/pegged same-asset pair."""
@@ -185,14 +188,11 @@ class TradingPairMonitor:
             return abs(price - 1.0) <= tolerance
 
         # For non-USD pairs, check wrapped prefix + price proximity
-        quote_currencies = ("BTC", "ETH", "SOL")
-        for quote in quote_currencies:
-            suffix = f"-{quote}"
-            if product_id.endswith(suffix):
-                base = product_id[: -len(suffix)]
-                if any(base.upper().startswith(p) for p in self.WRAPPED_PREFIXES):
-                    return abs(price - 1.0) <= tolerance
-                break
+        parts = product_id.rsplit("-", 1)
+        if len(parts) == 2 and parts[1] in _NON_USD_QUOTES:
+            base = parts[0]
+            if any(base.upper().startswith(p) for p in self.WRAPPED_PREFIXES):
+                return abs(price - 1.0) <= tolerance
 
         return False
 
@@ -349,12 +349,14 @@ class TradingPairMonitor:
                 )
                 bots = bot_result.scalars().all()
 
+                all_bot_pairs = set()
                 for bot in bots:
                     results["bots_checked"] += 1
 
                     if not bot.product_ids:
                         continue
 
+                    all_bot_pairs.update(bot.product_ids)
                     current_pairs = set(bot.product_ids)
                     quote_currency = self._get_quote_currency(bot.product_ids)
 
@@ -439,11 +441,6 @@ class TradingPairMonitor:
                         results["affected_bots"].append(bot_change)
 
                 # Track newly available pairs for reporting
-                all_bot_pairs = set()
-                for bot in bots:
-                    if bot.product_ids:
-                        all_bot_pairs.update(bot.product_ids)
-
                 new_btc = self._btc_pairs - all_bot_pairs
                 new_usd = self._usd_pairs - all_bot_pairs
                 if new_btc or new_usd:
