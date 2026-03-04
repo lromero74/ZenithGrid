@@ -30,6 +30,7 @@ import {
   Bug,
   Rocket,
   Pickaxe,
+  Footprints,
   Shield,
   Fish,
   Banknote,
@@ -412,6 +413,16 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'arcade',
   },
+  {
+    id: 'dino-runner',
+    name: 'Dino Runner',
+    description: 'Run, jump, and duck in this pixel-art endless runner!',
+    icon: 'Footprints',
+    path: '/games/dino-runner',
+    difficulty: 'easy',
+    sessionLength: '5-15 min',
+    category: 'arcade',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -443,6 +454,7 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Bug,
   Rocket,
   Pickaxe,
+  Footprints,
   Shield,
   Fish,
   Banknote,
