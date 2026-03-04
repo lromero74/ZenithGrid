@@ -110,6 +110,9 @@ class SimpleCache:
         # We're the first — create a future and fetch
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
+        # Prevent "Future exception was never retrieved" when no concurrent
+        # waiters exist — the caller handles the error via re-raise below.
+        future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
         self._in_flight[key] = future
 
         try:
