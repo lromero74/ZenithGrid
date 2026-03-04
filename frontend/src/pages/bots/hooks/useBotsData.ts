@@ -32,7 +32,7 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
 
   // Fetch portfolio data for percentage calculations (account-specific)
   const { data: portfolio, isLoading: portfolioLoading } = useQuery({
-    queryKey: ['account-portfolio-bots', selectedAccount?.id],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
       if (selectedAccount) {
         const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)

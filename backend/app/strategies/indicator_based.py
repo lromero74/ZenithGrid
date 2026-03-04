@@ -168,10 +168,12 @@ class IndicatorBasedStrategy(TradingStrategy):
         }
 
         # Flatten all conditions from potentially grouped format
+        tp_conditions = self._flatten_conditions(self.take_profit_conditions)
+        tp_ids = {id(c) for c in tp_conditions}
         all_conditions = (
             self._flatten_conditions(self.base_order_conditions)
             + self._flatten_conditions(self.safety_order_conditions)
-            + self._flatten_conditions(self.take_profit_conditions)
+            + tp_conditions
         )
 
         for condition in all_conditions:
@@ -183,7 +185,7 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # Determine if this is used in entry or exit conditions
                 # If in base_order or safety_order -> buy signal needed
                 # If in take_profit -> sell signal needed
-                if condition in self._flatten_conditions(self.take_profit_conditions):
+                if id(condition) in tp_ids:
                     needs["ai_sell"] = True
                 else:
                     needs["ai_buy"] = True

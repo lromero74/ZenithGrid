@@ -95,9 +95,8 @@ async def get_positions(
         # Count pending orders (already loaded via selectinload)
         pending_count = len([o for o in pos.pending_orders if o.status == "pending"])
 
-        # Get buy trades for first/last buy prices (already loaded)
+        # Get first/last buy prices using min/max instead of sorting
         buy_trades = [t for t in pos.trades if t.side == "buy"]
-        buy_trades.sort(key=lambda t: t.timestamp)
 
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
@@ -105,8 +104,10 @@ async def get_positions(
 
         # Set first/last buy prices for DCA reference
         if buy_trades:
-            pos_response.first_buy_price = buy_trades[0].price
-            pos_response.last_buy_price = buy_trades[-1].price
+            earliest = min(buy_trades, key=lambda t: t.timestamp)
+            latest = max(buy_trades, key=lambda t: t.timestamp)
+            pos_response.first_buy_price = earliest.price
+            pos_response.last_buy_price = latest.price
 
         # Check if position's coin is blacklisted
         base_symbol = pos.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"

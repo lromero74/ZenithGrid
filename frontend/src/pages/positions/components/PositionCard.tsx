@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
@@ -39,7 +39,7 @@ interface PositionCardProps {
   canWrite?: boolean
 }
 
-export const PositionCard = ({
+export const PositionCard = memo(function PositionCard({
   position,
   currentPrice,
   bots,
@@ -59,7 +59,7 @@ export const PositionCard = ({
   onRefetch,
   onEditBot,
   canWrite = true,
-}: PositionCardProps) => {
+}: PositionCardProps) {
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const queryClient = useQueryClient()
@@ -614,4 +614,4 @@ export const PositionCard = ({
       )}
     </div>
   )
-}
+})

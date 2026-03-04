@@ -206,26 +206,28 @@ async def get_order_stats(
     """
     Get order statistics (success rate, failure rate, etc.)
     """
-    # Build base query - always filter by current user's bots
-    query = (
-        select(OrderHistory)
-        .join(Bot, OrderHistory.bot_id == Bot.id)
-        .where(Bot.user_id == current_user.id)
-    )
+    # Build aggregate query — push counting to the database instead of materializing all rows
+    from sqlalchemy import case
+    agg_query = select(
+        func.count(OrderHistory.id).label("total"),
+        func.count(case((OrderHistory.status == "success", OrderHistory.id))).label("successful"),
+        func.count(case((OrderHistory.status == "failed", OrderHistory.id))).label("failed"),
+        func.count(case((OrderHistory.status == "canceled", OrderHistory.id))).label("canceled"),
+    ).join(Bot, OrderHistory.bot_id == Bot.id).where(Bot.user_id == current_user.id)
 
     if account_id is not None:
-        query = query.where(Bot.account_id == account_id)
+        agg_query = agg_query.where(Bot.account_id == account_id)
 
     if bot_id is not None:
-        query = query.where(OrderHistory.bot_id == bot_id)
+        agg_query = agg_query.where(OrderHistory.bot_id == bot_id)
 
-    result = await db.execute(query)
-    all_orders = result.scalars().all()
+    result = await db.execute(agg_query)
+    row = result.one()
 
-    total_orders = len(all_orders)
-    successful_orders = len([o for o in all_orders if o.status == "success"])
-    failed_orders = len([o for o in all_orders if o.status == "failed"])
-    canceled_orders = len([o for o in all_orders if o.status == "canceled"])
+    total_orders = row.total
+    successful_orders = row.successful
+    failed_orders = row.failed
+    canceled_orders = row.canceled
 
     return {
         "total_orders": total_orders,

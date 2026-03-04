@@ -999,7 +999,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   }), [
     playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded, currentArticle,
     tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
-    tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate, tts.volume,
+    tts.currentWordIndex, tts.currentVoice, tts.playbackRate, tts.volume,
+    // Note: tts.currentTime and tts.duration intentionally excluded — they update at 4Hz during
+    // playback. Consumers needing real-time playback state should use tts.getPlaybackState() instead.
     articleContent, articleContentLoading, isSummaryOnly, voiceCycleEnabled, toggleVoiceCycle,
     continuousPlay, pendingResume, resumeSession, dismissResume,
     openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle, retryArticle,

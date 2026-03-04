@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_routers.schemas import BotCreate, BotResponse, BotStats, BotUpdate
@@ -187,17 +187,19 @@ async def list_bots(
             coinbase = await get_exchange_client_for_account(db, paper_account.id)
 
     if not coinbase:
-        # No accounts at all — return bots with position counts only
+        # No accounts at all — return bots with position counts only (single aggregate query)
+        bot_ids = [b.id for b in bots]
+        counts_q = select(
+            Position.bot_id,
+            func.count(Position.id).label("total"),
+            func.count(case((Position.status == "open", Position.id))).label("open_count"),
+        ).where(Position.bot_id.in_(bot_ids)).group_by(Position.bot_id)
+        counts_result = await db.execute(counts_q)
+        counts_map = {row.bot_id: (row.open_count, row.total) for row in counts_result}
+
         bot_responses = []
         for bot in bots:
-            open_count_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
-            open_result = await db.execute(open_count_query)
-            open_count = len(open_result.scalars().all())
-
-            total_count_query = select(Position).where(Position.bot_id == bot.id)
-            total_result = await db.execute(total_count_query)
-            total_count = len(total_result.scalars().all())
-
+            open_count, total_count = counts_map.get(bot.id, (0, 0))
             response = BotResponse.model_validate(bot)
             response.open_positions_count = open_count
             response.total_positions_count = total_count
@@ -209,12 +211,19 @@ async def list_bots(
     _, unique_products = await get_open_position_products(db, current_user.id)
     position_prices = await fetch_position_prices(coinbase, unique_products)
 
+    # Batch-load all positions for user's bots in a single query
+    from collections import defaultdict
+    bot_ids = [b.id for b in bots]
+    all_pos_query = select(Position).where(Position.bot_id.in_(bot_ids))
+    all_pos_result = await db.execute(all_pos_query)
+    positions_by_bot = defaultdict(list)
+    for p in all_pos_result.scalars().all():
+        positions_by_bot[p.bot_id].append(p)
+
     # Build responses for each bot
     bot_responses = []
     for bot in bots:
-        all_pos_query = select(Position).where(Position.bot_id == bot.id)
-        all_pos_result = await db.execute(all_pos_query)
-        all_positions = all_pos_result.scalars().all()
+        all_positions = positions_by_bot[bot.id]
 
         open_positions = [p for p in all_positions if p.status == "open"]
         closed_positions = [p for p in all_positions if p.status == "closed"]

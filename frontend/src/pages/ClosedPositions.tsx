@@ -45,27 +45,18 @@ function ClosedPositions() {
   // Track last seen counts separately for closed and failed - seeded from user profile
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(user?.last_seen_history_count || 0)
   const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(user?.last_seen_failed_count || 0)
-  const [currentBtcUsdPrice, setCurrentBtcUsdPrice] = useState<number>(0)
-
-  // Fetch current BTC/USD price for "today's USD" calculation
-  useEffect(() => {
-    const fetchBtcPrice = async () => {
-      try {
-        const response = await authFetch('/api/market/btc-usd-price')
-        if (response.ok) {
-          const data = await response.json()
-          setCurrentBtcUsdPrice(data.price || 0)
-        }
-      } catch (error) {
-        console.error('Failed to fetch BTC/USD price:', error)
-      }
-    }
-
-    fetchBtcPrice()
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchBtcPrice, 60000)
-    return () => clearInterval(interval)
-  }, [])
+  // Use React Query for BTC price to share cache with App.tsx header
+  const { data: btcPriceData } = useQuery({
+    queryKey: ['btc-usd-price'],
+    queryFn: async () => {
+      const response = await authFetch('/api/market/btc-usd-price')
+      if (!response.ok) throw new Error('Failed to fetch BTC price')
+      return response.json()
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+  })
+  const currentBtcUsdPrice = btcPriceData?.price || 0
 
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
@@ -80,7 +71,7 @@ function ClosedPositions() {
   const { data: allPositions, isLoading } = useQuery({
     queryKey: ['positions-closed', selectedAccount?.id],
     queryFn: () => positionsApi.getAll('closed', 500), // Get closed positions with higher limit
-    refetchInterval: 5000,
+    refetchInterval: 60000,
     select: (data) => {
       if (!selectedAccount) return data
       // Filter by account_id
@@ -100,7 +91,7 @@ function ClosedPositions() {
   const failedTotalPages = failedOrdersData?.total_pages || 1
 
   // API returns closed positions already sorted by closed_at DESC
-  const allClosedPositions = allPositions || []
+  const allClosedPositions = useMemo(() => allPositions || [], [allPositions])
 
   // Helper: check if a product_id matches the market filter
   const matchesMarket = (productId: string, market: 'all' | 'USD' | 'BTC') => {
@@ -108,6 +99,12 @@ function ClosedPositions() {
     const quote = productId?.split('-')[1] || ''
     return quote === market
   }
+
+  // Pre-compute bot lookup map for O(1) access in rendered rows
+  const botsById = useMemo(
+    () => Object.fromEntries((bots || []).map((b: Bot) => [b.id, b])),
+    [bots]
+  )
 
   // Cascading filters: each dropdown's options are filtered by the OTHER selections
   // uniquePairs = pairs available given current bot + market selection
@@ -473,7 +470,7 @@ function ClosedPositions() {
                         <p className="font-semibold text-white">#{position.user_deal_number ?? position.id}</p>
                         {bots && position.bot_id && (
                           <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
-                            {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
+                            {botsById[position.bot_id]?.name || `Bot #${position.bot_id}`}
                           </span>
                         )}
                         <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">

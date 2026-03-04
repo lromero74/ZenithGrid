@@ -213,8 +213,8 @@ def all_positions_exhausted_safety_orders(positions: List[Position], max_safety_
     if not positions:
         return True  # No positions = allowed to open first one
     for pos in positions:
-        buy_trades = [t for t in pos.trades if t.side == "buy"] if pos.trades else []
-        safety_count = max(0, len(buy_trades) - 1)
+        buy_count = sum(1 for t in pos.trades if t.side == "buy") if pos.trades else 0
+        safety_count = max(0, buy_count - 1)
         if safety_count < max_safety_orders:
             return False
     return True

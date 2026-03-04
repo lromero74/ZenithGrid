@@ -150,6 +150,15 @@ async def _gather_bot_strategies(
     )
     bots = {b.id: b for b in bot_result.scalars().all()}
 
+    # Pre-group position stats by bot_id in a single O(P) pass
+    trades_by_bot: Dict[int, int] = {}
+    wins_by_bot: Dict[int, int] = {}
+    for p in closed_positions:
+        if p.bot_id:
+            trades_by_bot[p.bot_id] = trades_by_bot.get(p.bot_id, 0) + 1
+            if (p.profit_usd or 0) > 0:
+                wins_by_bot[p.bot_id] = wins_by_bot.get(p.bot_id, 0) + 1
+
     bot_strategies = []
     for bid in bot_ids:
         bot = bots.get(bid)
@@ -157,11 +166,8 @@ async def _gather_bot_strategies(
             continue
         cfg = bot.strategy_config or {}
         pairs = bot.product_ids or ([bot.product_id] if bot.product_id else [])
-        bot_trades = sum(1 for p in closed_positions if p.bot_id == bid)
-        bot_wins = sum(
-            1 for p in closed_positions
-            if p.bot_id == bid and (p.profit_usd or 0) > 0
-        )
+        bot_trades = trades_by_bot.get(bid, 0)
+        bot_wins = wins_by_bot.get(bid, 0)
         bot_strategies.append({
             "name": bot.name,
             "strategy_type": bot.strategy_type,
@@ -200,26 +206,24 @@ async def _gather_transfer_data(
         key=lambda t: t.occurred_at or datetime.min,
         reverse=True,
     )
-    transfer_records = [
-        {
+    # Build transfer records and compute totals in a single pass
+    transfer_records = []
+    total_deposits_usd = 0.0
+    total_withdrawals_usd = 0.0
+    for t in sorted_transfers:
+        transfer_records.append({
             "date": t.occurred_at.strftime("%Y-%m-%d") if t.occurred_at else "",
             "type": t.transfer_type,
             "amount_usd": round(t.amount_usd or 0, 2),
             "currency": t.currency or "USD",
             "source": t.source or "unknown",
             "original_type": t.original_type,
-        }
-        for t in sorted_transfers
-    ]
-
-    total_deposits_usd = sum(
-        t.amount_usd or 0 for t in all_transfers
-        if t.transfer_type == "deposit"
-    )
-    total_withdrawals_usd = sum(
-        t.amount_usd or 0 for t in all_transfers
-        if t.transfer_type == "withdrawal"
-    )
+        })
+        amt = t.amount_usd or 0
+        if t.transfer_type == "deposit":
+            total_deposits_usd += amt
+        elif t.transfer_type == "withdrawal":
+            total_withdrawals_usd += amt
     net_deposits_usd = round(total_deposits_usd - total_withdrawals_usd, 2)
 
     return {

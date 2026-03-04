@@ -6,7 +6,7 @@
  * Supports TOTP MFA (two-factor authentication) challenge flow.
  */
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 // Types
@@ -868,7 +868,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value: AuthContextType = {
+  const value: AuthContextType = useMemo(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -899,7 +899,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionExpiryCountdown,
     showSessionLimitsPopup,
     acknowledgeSessionLimits,
-  }
+  }), [
+    user, isLoading, mfaPending, mfaToken, mfaMethods,
+    login, verifyMFA, verifyMFAEmailCode, verifyMFAEmailLink, resendMFAEmail, cancelMFA,
+    signup, logout, changePassword, getAccessToken, acceptTerms, updateUser,
+    enableEmailMFA, disableEmailMFA, verifyEmail, verifyEmailCode, resendVerification,
+    forgotPassword, resetPassword, sessionPolicy, sessionExpiresAt, sessionExpiryCountdown,
+    showSessionLimitsPopup, acknowledgeSessionLimits,
+  ])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
