@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.84.9] - 2026-03-04
+
+### Fixed
+- **Suppressed "Future exception was never retrieved" asyncio warnings**: Single-flight cache futures for failed price fetches (delisted coins returning 404) now properly mark exceptions as handled when no concurrent waiters exist
+
 ## [v2.84.8] - 2026-03-04
 
 ### Changed
