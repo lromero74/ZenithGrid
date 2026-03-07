@@ -5,7 +5,7 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.89.3] - 2026-03-07
+## [v2.89.4] - 2026-03-07
 
 ### Fixed
 - **Rebalance allocation scoping**: Current allocation now correctly shows only the selected account's positions — was previously summing positions from all accounts including paper trading, inflating the reported value

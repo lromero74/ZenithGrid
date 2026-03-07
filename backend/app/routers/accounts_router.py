@@ -1024,7 +1024,6 @@ async def get_rebalance_status(
 
     try:
         coinbase = await get_coinbase_for_account(account)
-        coinbase.account_id = account.id  # Scope position queries to this account
 
         # Use aggregate quote value (free balance + open positions in that
         # currency's pairs) — matches how bot budgets are calculated.
