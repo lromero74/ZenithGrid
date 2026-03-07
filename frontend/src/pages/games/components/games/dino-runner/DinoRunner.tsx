@@ -14,7 +14,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, PIXEL_SCALE, GROUND_Y, PALETTE,
   CLOUD_SPRITES, BIOMES, INITIAL_SPEED, MAX_SPEED, DINO_X,
   RAIN_CLOUD_SPRITES, STORM_CLOUD_SPRITES, WEATHER_CLOUD_SCALE,
-  getWeatherMultiplier,
+  getWeatherMultiplier, GROUND_LAYER_SPEEDS,
   type GameState, type InputState,
 } from './dinoRunnerEngine'
 import { Eye, EyeOff } from 'lucide-react'
@@ -366,6 +366,16 @@ export default function DinoRunner() {
     for (let x = -state.ground.offset; x < CANVAS_WIDTH; x += 12) {
       ctx.fillRect(x, GROUND_Y + PIXEL_SCALE, 4, 2)
       ctx.fillRect(x + 7, GROUND_Y + PIXEL_SCALE + 4, 2, 2)
+    }
+
+    // Dirt particles — 3 layers with depth-based coloring
+    const dirtColors = GROUND_LAYER_SPEEDS.map((_, i) =>
+      lerpColor(groundHighlight, '#000000', i * 0.2)
+    )
+    for (const p of state.ground.particles) {
+      if (p.x < 0 || p.x > CANVAS_WIDTH) continue
+      ctx.fillStyle = dirtColors[p.layer]
+      ctx.fillRect(Math.floor(p.x), GROUND_Y + PIXEL_SCALE + p.y, p.size, p.size)
     }
 
     // Ground line
