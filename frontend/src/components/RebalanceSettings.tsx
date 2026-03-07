@@ -252,7 +252,7 @@ export function RebalanceSettings({ accounts }: RebalanceSettingsProps) {
                   </div>
 
                   {/* Settings row */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">
                         <Clock size={14} className="inline mr-1" />
@@ -292,6 +292,29 @@ export function RebalanceSettings({ accounts }: RebalanceSettingsProps) {
                         />
                         <span className="text-sm text-white font-mono w-8 text-right">
                           {s.drift_threshold_pct}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
+                        Min Trade Size
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="1"
+                          max="25"
+                          value={s.min_trade_pct}
+                          onChange={(e) => setSettings(prev => ({
+                            ...prev,
+                            [account.id]: { ...prev[account.id], min_trade_pct: parseInt(e.target.value) }
+                          }))}
+                          disabled={!canWrite}
+                          className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
+                        />
+                        <span className="text-sm text-white font-mono w-8 text-right">
+                          {s.min_trade_pct}%
                         </span>
                       </div>
                     </div>

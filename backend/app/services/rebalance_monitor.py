@@ -23,7 +23,8 @@ from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
-MIN_TRADE_USD = 10.0  # Minimum trade size in USD
+EXCHANGE_MIN_USD = 10.0  # Coinbase minimum order size
+DEFAULT_MIN_TRADE_PCT = 5.0  # Default: only trade if shift is >= 5% of portfolio
 
 
 def calculate_current_allocations(
@@ -82,8 +83,13 @@ def plan_trades(
     free_balances: Dict[str, float],
     targets: Dict[str, float],
     prices: Dict[str, float],
+    min_trade_pct: float = DEFAULT_MIN_TRADE_PCT,
 ) -> List[dict]:
     """Plan trades to rebalance from current to target allocations.
+
+    All trade amounts are in USD-equivalent terms, even for BTC↔ETH trades.
+    Trades below min_trade_pct (% of total portfolio) are skipped to avoid
+    micro-trading. A hard floor of EXCHANGE_MIN_USD ($10) also applies.
 
     Returns a list of trade dicts:
         {"from_currency": str, "to_currency": str, "usd_amount": float,
@@ -95,6 +101,9 @@ def plan_trades(
     if total <= 0:
         return []
 
+    # Convert percentage minimum to USD, with exchange floor
+    min_trade_usd = max(total * min_trade_pct / 100.0, EXCHANGE_MIN_USD)
+
     # Calculate USD-denominated delta for each currency
     # Positive delta = underweight (need to buy), negative = overweight (need to sell)
     currencies = [
@@ -103,6 +112,13 @@ def plan_trades(
         ("ETH", targets["eth_pct"]),
     ]
 
+    # USD value of each currency's free balance
+    free_values = {
+        "USD": free_balances.get("USD", 0.0),
+        "BTC": free_balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0),
+        "ETH": free_balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0),
+    }
+
     deltas = {}
     for currency, target_pct in currencies:
         current_pct = current[f"{currency.lower()}_pct"]
@@ -110,8 +126,14 @@ def plan_trades(
         deltas[currency] = delta_usd
 
     # Identify overweight (sell) and underweight (buy) currencies
-    sells = [(c, -d) for c, d in deltas.items() if d < -MIN_TRADE_USD]
-    buys = [(c, d) for c, d in deltas.items() if d > MIN_TRADE_USD]
+    # Cap sells to available free balance — can't sell more than you have
+    sells = []
+    for c, d in deltas.items():
+        if d < -min_trade_usd:
+            sell_amount = min(-d, free_values.get(c, 0.0))
+            if sell_amount >= min_trade_usd:
+                sells.append((c, sell_amount))
+    buys = [(c, d) for c, d in deltas.items() if d > min_trade_usd]
 
     # Sort: largest sell first, largest buy first
     sells.sort(key=lambda x: x[1], reverse=True)
@@ -128,7 +150,7 @@ def plan_trades(
                 continue
 
             trade_usd = min(remaining_sell, buy_amount)
-            if trade_usd < MIN_TRADE_USD:
+            if trade_usd < min_trade_usd:
                 continue
 
             product_id, side = _get_trade_params(sell_currency, buy_currency)
@@ -290,7 +312,8 @@ class RebalanceMonitor:
                     free_balances[currency] = 0.0
 
             # Plan trades using free balances only
-            trades = plan_trades(free_balances, targets, prices)
+            min_pct = account.rebalance_min_trade_pct or DEFAULT_MIN_TRADE_PCT
+            trades = plan_trades(free_balances, targets, prices, min_trade_pct=min_pct)
 
             if not trades:
                 logger.debug(
@@ -327,7 +350,7 @@ class RebalanceMonitor:
             # Reserve 1% for fees (same as auto-buy)
             usd_amount = round(usd_amount * 0.99, 2)
 
-            if usd_amount < MIN_TRADE_USD:
+            if usd_amount < EXCHANGE_MIN_USD:
                 return
 
             if side == "BUY" and trade["from_currency"] == "USD":
@@ -378,8 +401,8 @@ class RebalanceMonitor:
                     or error.get("preview_failure_reason")
                     or f"Unknown failure — raw: {result}"
                 )
-                logger.error(
-                    f"Rebalance trade FAILED: {trade['from_currency']} → "
+                logger.warning(
+                    f"Rebalance trade skipped: {trade['from_currency']} → "
                     f"{trade['to_currency']} ~${trade['usd_amount']:.2f} "
                     f"(Account: {account.name}): {error_msg}"
                 )

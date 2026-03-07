@@ -203,6 +203,7 @@ class RebalanceSettingsResponse(BaseModel):
     target_eth_pct: float
     drift_threshold_pct: float
     check_interval_minutes: int
+    min_trade_pct: float
 
 
 class RebalanceSettingsUpdate(BaseModel):
@@ -213,6 +214,7 @@ class RebalanceSettingsUpdate(BaseModel):
     target_eth_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     drift_threshold_pct: Optional[float] = Field(None, ge=1.0, le=10.0)
     check_interval_minutes: Optional[int] = Field(None, ge=15, le=1440)
+    min_trade_pct: Optional[float] = Field(None, ge=1.0, le=25.0)
 
 
 # =============================================================================
@@ -938,6 +940,7 @@ async def get_rebalance_settings(
         target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
         drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
         check_interval_minutes=account.rebalance_check_interval_minutes or 60,
+        min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
     )
 
 
@@ -983,6 +986,8 @@ async def update_rebalance_settings(
         account.rebalance_drift_threshold_pct = settings.drift_threshold_pct
     if settings.check_interval_minutes is not None:
         account.rebalance_check_interval_minutes = settings.check_interval_minutes
+    if settings.min_trade_pct is not None:
+        account.rebalance_min_trade_pct = settings.min_trade_pct
 
     await db.commit()
     await db.refresh(account)
@@ -994,6 +999,7 @@ async def update_rebalance_settings(
         target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
         drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
         check_interval_minutes=account.rebalance_check_interval_minutes or 60,
+        min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
     )
 
 

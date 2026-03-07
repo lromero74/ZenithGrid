@@ -622,6 +622,7 @@ export interface RebalanceSettings {
   target_eth_pct: number;
   drift_threshold_pct: number;
   check_interval_minutes: number;
+  min_trade_pct: number;
 }
 
 export interface RebalanceStatus {

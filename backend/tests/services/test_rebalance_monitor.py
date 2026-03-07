@@ -139,23 +139,41 @@ class TestPlanTrades:
         assert eth_trade["from_currency"] == "USD"
         assert eth_trade["usd_amount"] == pytest.approx(2000.0)
 
-    def test_respects_min_trade_size(self):
-        """Edge case: trades below $10 minimum are skipped."""
+    def test_respects_min_trade_pct(self):
+        """Edge case: trades below min_trade_pct of portfolio are skipped."""
         from app.services.rebalance_monitor import plan_trades
 
-        # Small imbalance that would produce < $10 trades
+        # Small portfolio — 5% of $190 = $9.50, below exchange floor of $10
         free_balances = {"USD": 100.0, "BTC": 0.00045, "ETH": 0.018}
         targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         # USD: 100, BTC: 45, ETH: 45 => total=190
-        # Target: USD=64.6, BTC=62.7, ETH=62.7
-        # USD overweight by 35.4, BTC underweight by 17.7, ETH underweight by 17.7
-        trades = plan_trades(free_balances, targets, prices)
+        # 5% of 190 = $9.50, exchange floor = $10, so min = $10
+        # Deltas ~$35 each, so trades should be planned (above $10)
+        trades = plan_trades(free_balances, targets, prices, min_trade_pct=5.0)
 
-        # All trades >= $10
-        for trade in trades:
-            assert trade["usd_amount"] >= 10.0
+        # With 20% min: 20% of 190 = $38, deltas ~$35 are below that
+        trades_20 = plan_trades(free_balances, targets, prices, min_trade_pct=20.0)
+        assert len(trades_20) == 0  # All deltas below 20% threshold
+
+    def test_custom_min_trade_pct(self):
+        """Edge case: custom min trade pct scales with portfolio."""
+        from app.services.rebalance_monitor import plan_trades
+
+        free_balances = {"USD": 10000.0, "BTC": 0.0, "ETH": 0.0}
+        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
+
+        # Total = $10000. BTC trade = $3000 (30%), ETH trade = $2000 (20%)
+        # With 5% min ($500), both qualify
+        trades_5 = plan_trades(free_balances, targets, prices, min_trade_pct=5.0)
+        assert len(trades_5) == 2
+
+        # With 25% min ($2500), BTC ($3000) qualifies but ETH ($2000) doesn't
+        trades_25 = plan_trades(free_balances, targets, prices, min_trade_pct=25.0)
+        assert len(trades_25) == 1
+        assert trades_25[0]["to_currency"] == "BTC"
 
     def test_skips_when_no_free_balance(self):
         """Edge case: zero free balances produces no trades."""
@@ -188,6 +206,23 @@ class TestPlanTrades:
         assert len(trades) >= 1
         btc_sells = [t for t in trades if t["from_currency"] == "BTC"]
         assert len(btc_sells) > 0
+
+    def test_sell_capped_to_free_balance(self):
+        """Edge case: sell amount capped to available free balance."""
+        from app.services.rebalance_monitor import plan_trades
+
+        # Target says sell lots of USD, but only $200 free
+        free_balances = {"USD": 200.0, "BTC": 0.0, "ETH": 0.0}
+        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 50.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
+
+        # Total free = $200, all in USD
+        # Target: 0% USD, so sell all $200
+        trades = plan_trades(free_balances, targets, prices)
+
+        total_sold = sum(t["usd_amount"] for t in trades)
+        # Can never sell more than the $200 of free USD
+        assert total_sold <= 200.0
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +269,7 @@ class TestRebalanceMonitorProcess:
         account.rebalance_target_btc_pct = 30.0
         account.rebalance_target_eth_pct = 20.0
         account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 5.0
 
         db = AsyncMock()
 
