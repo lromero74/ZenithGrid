@@ -2,12 +2,16 @@
  * Spades — 4-player partnership trick-taking card game.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createSpadesGame,
   placeBid,
@@ -28,12 +32,24 @@ export default function Spades() {
   const { load, save, clear } = useGameState<SavedState>('spades')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('spades'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('spades')
+
   const [gameState, setGameState] = useState<SpadesState>(
     () => saved?.gameState ?? createSpadesGame()
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [selectedBid, setSelectedBid] = useState(3)
   const [blindNil, setBlindNil] = useState(false)
+
+  // SFX on trick completion
+  const prevTrickLen = useRef(0)
+  useEffect(() => {
+    if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
+    prevTrickLen.current = gameState.currentTrick.length
+  }, [gameState.currentTrick.length])
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
@@ -49,15 +65,20 @@ export default function Spades() {
   }, [gameState, clear])
 
   const handleBid = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
     setGameState(prev => placeBid(prev, selectedBid, blindNil))
     setBlindNil(false)
   }, [selectedBid, blindNil])
 
   const handlePlay = useCallback((i: number) => {
+    sfx.play('play')
     setGameState(prev => playCard(prev, i))
   }, [])
 
   const handleNextRound = useCallback(() => {
+    sfx.play('hand_won')
     setGameState(prev => nextRound(prev))
   }, [])
 
@@ -87,6 +108,7 @@ export default function Spades() {
           ))}
         </div>
       )}
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -224,6 +246,8 @@ export default function Spades() {
             score={gameState.teamScores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

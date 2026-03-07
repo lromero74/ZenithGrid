@@ -5,12 +5,16 @@
  * First to 500 cumulative points wins.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createRummy500Game,
   drawFromStock,
@@ -33,6 +37,11 @@ export default function Rummy500() {
   const { load, save, clear } = useGameState<SavedState>('rummy-500')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('rummy-500'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('rummy-500')
+
   const [gameState, setGameState] = useState<Rummy500State>(
     () => saved?.gameState ?? createRummy500Game()
   )
@@ -47,14 +56,15 @@ export default function Rummy500() {
 
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
+      if (gameState.scores[0] >= 500) sfx.play('gin')
       setGameStatus(gameState.scores[0] >= 500 ? 'won' : 'lost')
       clear()
     }
   }, [gameState, clear])
 
-  const handleDrawStock = useCallback(() => setGameState(prev => drawFromStock(prev)), [])
-  const handleDrawDiscard = useCallback(() => setGameState(prev => drawFromDiscard(prev)), [])
-  const handleMeld = useCallback(() => setGameState(prev => meldCards(prev)), [])
+  const handleDrawStock = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromStock(prev)) }, [])
+  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
+  const handleMeld = useCallback(() => { sfx.play('meld'); setGameState(prev => meldCards(prev)) }, [])
   const handleNewRound = useCallback(() => setGameState(prev => newRound(prev)), [])
 
   const handleCardClick = useCallback((index: number) => {
@@ -69,6 +79,7 @@ export default function Rummy500() {
 
   const handleDiscard = useCallback((index: number) => {
     setLayOffMode(null)
+    sfx.play('draw')
     setGameState(prev => discard(prev, index))
   }, [])
 
@@ -115,6 +126,7 @@ export default function Rummy500() {
       <span className="text-xs text-slate-400">
         Stock: {gameState.stock.length}
       </span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -313,6 +325,8 @@ export default function Rummy500() {
             score={gameState.scores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

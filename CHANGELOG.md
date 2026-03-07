@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.88.0] - 2026-03-07
+
+### Added
+- **Procedural music engine**: Every game now has unique synthesized background music with adaptive BPM, intensity layers, and ambient weather effects — all generated in real-time via Web Audio API
+- **Procedural SFX system**: 53 sound effect recipes across 8 categories (UI, cards, board pieces, tonal feedback, arcade, word games, ambient, and game-over jingles) with natural variation
+- **Music toggle control**: Per-game mute button with persistent preference for both music and SFX
+- **Smooth game-over transitions**: Music fades out over 800ms, game-over jingle plays (win/lose/draw), and the modal animates in with backdrop fade + card scale-in
+- **Game hub categories**: Games are now organized into categories (Card, Board, Puzzle, Arcade, Word) with filter pills for easier browsing
+
+### Changed
+- Game-over modal now orchestrates audio transitions centrally — individual games no longer manage music stop/start on game end
+
 ## [v2.87.0] - 2026-03-04
 
 ### Added

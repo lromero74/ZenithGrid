@@ -1,23 +1,24 @@
 /**
  * Games Hub — landing page that displays all available games in a card grid.
  *
- * Features search by name, category filtering, and sort by name/difficulty/
- * category/recently played.
+ * Features search by name, category filtering, and group-by with section headings
+ * (category, difficulty, A-Z, recently played).
  */
 
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ArrowUpDown } from 'lucide-react'
-import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, SORT_OPTIONS } from '../constants'
+import { Search, LayoutList } from 'lucide-react'
+import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
-import { sortGames } from '../sortGames'
+import { groupGames } from '../groupGames'
 import { GameCard } from './GameCard'
-import type { GameCategory, GameSortOption } from '../types'
+import type { GameCategory, GameGroupOption, GameInfo } from '../types'
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
 const CATEGORY_KEY = 'zenith-games-category'
 const SUBCATEGORY_KEY = 'zenith-games-subcategory'
+const GROUP_KEY = 'zenith-games-group'
 
 /** Store the current game path so we can resume it later. */
 export function setLastGamePath(path: string): void {
@@ -70,10 +71,20 @@ export function GameHub() {
     try { sessionStorage.setItem(SUBCATEGORY_KEY, sub) } catch { /* ignore */ }
   }
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortOption, setSortOption] = useState<GameSortOption>('default')
+  const [groupOption, setGroupOption] = useState<GameGroupOption>(() => {
+    try {
+      const saved = sessionStorage.getItem(GROUP_KEY)
+      if (saved) return saved as GameGroupOption
+    } catch { /* ignore */ }
+    return 'none'
+  })
+  const setGroupOptionPersisted = (opt: GameGroupOption) => {
+    setGroupOption(opt)
+    try { sessionStorage.setItem(GROUP_KEY, opt) } catch { /* ignore */ }
+  }
 
-  const displayedGames = useMemo(() => {
-    let games = GAMES
+  const displayedGroups = useMemo(() => {
+    let games = GAMES as GameInfo[]
 
     // Filter by category
     if (activeCategory !== 'all') {
@@ -91,9 +102,14 @@ export function GameHub() {
       games = games.filter(g => g.name.toLowerCase().includes(q))
     }
 
-    // Sort
-    return sortGames(games, sortOption, getRecentMap())
-  }, [activeCategory, activeSubcategory, searchQuery, sortOption, getRecentMap])
+    // Group
+    return groupGames(games, groupOption, {
+      recentlyPlayed: getRecentMap(),
+      isCardsView: activeCategory === 'cards',
+    })
+  }, [activeCategory, activeSubcategory, searchQuery, groupOption, getRecentMap])
+
+  const totalGames = displayedGroups.reduce((sum, g) => sum + g.games.length, 0)
 
   return (
     <div>
@@ -117,7 +133,7 @@ export function GameHub() {
         />
       </div>
 
-      {/* Category pills + Sort dropdown */}
+      {/* Category pills + Group By dropdown */}
       <div className="flex items-center justify-between mb-6 gap-3">
         <div className="flex space-x-2 overflow-x-auto pb-1">
           {GAME_CATEGORIES.map(cat => (
@@ -136,13 +152,13 @@ export function GameHub() {
         </div>
 
         <div className="flex items-center space-x-1.5 shrink-0">
-          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+          <LayoutList className="w-3.5 h-3.5 text-slate-400" />
           <select
-            value={sortOption}
-            onChange={e => setSortOption(e.target.value as GameSortOption)}
+            value={groupOption}
+            onChange={e => setGroupOptionPersisted(e.target.value as GameGroupOption)}
             className="bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 pl-1.5 pr-1 py-1 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
           >
-            {SORT_OPTIONS.map(opt => (
+            {GROUP_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -168,19 +184,30 @@ export function GameHub() {
         </div>
       )}
 
-      {/* Game cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {displayedGames.map(game => (
-          <GameCard
-            key={game.id}
-            game={game}
-            highScore={getHighScore(game.id)}
-            onPlay={() => markPlayed(game.id)}
-          />
-        ))}
-      </div>
+      {/* Grouped game cards */}
+      {displayedGroups.map(group => (
+        <div key={group.label || '__default'}>
+          {group.label && (
+            <div className="flex items-center gap-3 mb-3 mt-6 first:mt-0">
+              <h2 className="text-sm font-semibold text-slate-300">{group.label}</h2>
+              <span className="text-xs text-slate-500">({group.games.length})</span>
+              <div className="flex-1 border-t border-slate-700/50" />
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {group.games.map(game => (
+              <GameCard
+                key={game.id}
+                game={game}
+                highScore={getHighScore(game.id)}
+                onPlay={() => markPlayed(game.id)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
 
-      {displayedGames.length === 0 && (
+      {totalGames === 0 && (
         <p className="text-slate-500 text-center py-8">
           {searchQuery.trim() ? 'No games match your search.' : 'No games in this category yet.'}
         </p>

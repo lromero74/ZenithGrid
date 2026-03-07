@@ -5,7 +5,7 @@
  * flagging (right-click / long-press), timer, mine counter.
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo} from 'react'
 import { Bomb, SmilePlus } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
@@ -17,6 +17,10 @@ import {
 } from './minesweeperEngine'
 import { MinesweeperGrid } from './MinesweeperGrid'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface DifficultyConfig {
   rows: number
@@ -32,6 +36,11 @@ const DIFFICULTIES: Record<string, DifficultyConfig> = {
 }
 
 export default function Minesweeper() {
+  // Music
+  const song = useMemo(() => getSongForGame('minesweeper'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('minesweeper')
+
   const [diffKey, setDiffKey] = useState('beginner')
   const diff = DIFFICULTIES[diffKey]
   const [board, setBoard] = useState<MineBoard | null>(null)
@@ -47,6 +56,10 @@ export default function Minesweeper() {
   const handleReveal = useCallback((row: number, col: number) => {
     if (gameStatus === 'won' || gameStatus === 'lost') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     let currentBoard = board
     if (firstClick.current || !currentBoard) {
       // Generate board with first-click safety
@@ -59,6 +72,7 @@ export default function Minesweeper() {
     setBoard(result.board)
 
     if (result.hitMine) {
+      sfx.play('mine')
       // Reveal all mines
       const revealedBoard = result.board.map(r =>
         r.map(c => c.isMine ? { ...c, isRevealed: true } : c)
@@ -70,7 +84,9 @@ export default function Minesweeper() {
       return
     }
 
+    sfx.play('reveal')
     if (checkWin(result.board)) {
+      sfx.play('win')
       setGameStatus('won')
       timer.stop()
       const bestKey = `minesweeper-${diffKey}`
@@ -84,6 +100,7 @@ export default function Minesweeper() {
   const handleFlag = useCallback((row: number, col: number) => {
     if (!board || gameStatus !== 'playing' && gameStatus !== 'idle') return
     if (firstClick.current) return // Can't flag before first reveal
+    sfx.play('flag')
     setBoard(toggleFlag(board, row, col))
   }, [board, gameStatus])
 
@@ -144,6 +161,7 @@ export default function Minesweeper() {
         >
           <SmilePlus className="w-5 h-5 text-yellow-400" />
         </button>
+        <MusicToggle music={music} sfx={sfx} />
         <span className="text-slate-400 font-mono text-xs">{timer.formatted}</span>
       </div>
     </div>
@@ -171,6 +189,8 @@ export default function Minesweeper() {
             status={gameStatus}
             message={gameStatus === 'won' ? `Cleared in ${timer.formatted}` : undefined}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

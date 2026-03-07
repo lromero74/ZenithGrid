@@ -2,12 +2,16 @@
  * War — 2-player card game. Flip cards, higher rank wins.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createWarGame,
   flipCards,
@@ -24,6 +28,11 @@ interface SavedState {
 export default function War() {
   const { load, save, clear } = useGameState<SavedState>('war')
   const saved = useRef(load()).current
+
+  // Music
+  const song = useMemo(() => getSongForGame('war'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('war')
 
   const [gameState, setGameState] = useState<WarState>(
     () => saved?.gameState ?? createWarGame()
@@ -56,14 +65,24 @@ export default function War() {
   // Auto-advance: compare → resolve, war → resolve
   useEffect(() => {
     if (gameState.phase === 'compare') {
+      sfx.play('flip')
       const timer = setTimeout(() => {
-        setGameState(prev => resolveCompare(prev))
+        setGameState(prev => {
+          const next = resolveCompare(prev)
+          if (next.phase === 'ready') sfx.play('win_round')
+          if (next.phase === 'war') sfx.play('war')
+          return next
+        })
       }, 800)
       return () => clearTimeout(timer)
     }
     if (gameState.phase === 'war') {
       const timer = setTimeout(() => {
-        setGameState(prev => resolveWar(prev))
+        setGameState(prev => {
+          const next = resolveWar(prev)
+          sfx.play('win_round')
+          return next
+        })
       }, 1000)
       return () => clearTimeout(timer)
     }
@@ -82,6 +101,10 @@ export default function War() {
   }, [gameState.phase, gameState.round, gameStatus])
 
   const handleFlip = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('flip')
     setGameState(prev => flipCards(prev))
   }, [])
 
@@ -107,6 +130,7 @@ export default function War() {
       >
         {autoPlay ? 'Auto: ON' : 'Auto: OFF'}
       </button>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -217,6 +241,8 @@ export default function War() {
             score={gameState.playerDeck.length}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

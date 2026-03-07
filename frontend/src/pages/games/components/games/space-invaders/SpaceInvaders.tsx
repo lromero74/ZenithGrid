@@ -5,7 +5,7 @@
  * bunkers, UFO bonus, wave progression, high score tracking.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -16,6 +16,10 @@ import {
   type BunkerBlock, type UFO,
 } from './spaceInvadersEngine'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -241,6 +245,11 @@ function drawPlayerLifeIcon(
 // ---------------------------------------------------------------------------
 
 export default function SpaceInvaders() {
+  // Music
+  const song = useMemo(() => getSongForGame('space-invaders'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('space-invaders')
+
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [lives, setLives] = useState(3)
@@ -387,14 +396,21 @@ export default function SpaceInvaders() {
       invulnTimerRef.current -= dt
     }
 
-    // Store pre-update lives to detect death
+    // Store pre-update lives and score to detect events
     const prevLives = stateRef.current.lives
+    const prevScore = stateRef.current.score
 
     // Update game state
     let nextState = updateGame(stateRef.current, dt, playerDx)
 
+    // Detect alien hit (score increased)
+    if (nextState.score > prevScore) {
+      sfx.play('hit')
+    }
+
     // Detect if player just lost a life
     if (nextState.lives < prevLives && !nextState.gameOver) {
+      sfx.play('die')
       invulnTimerRef.current = 2.0 // 2 seconds invulnerability
     }
 
@@ -430,6 +446,7 @@ export default function SpaceInvaders() {
       gameStatusRef.current = 'lost'
       setGameStatus('lost')
       saveScore('space-invaders', nextState.score)
+      sfx.play('die')
       draw()
       return
     }
@@ -454,11 +471,14 @@ export default function SpaceInvaders() {
     setWave(1)
     gameStatusRef.current = 'playing'
     setGameStatus('playing')
+    music.init()
+    sfx.init()
+    music.start()
 
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick])
+  }, [draw, tick, music])
 
   // -----------------------------------------------------------------------
   // Keyboard controls
@@ -475,6 +495,7 @@ export default function SpaceInvaders() {
       keysRef.current.add(e.key)
 
       if (e.key === ' ' && gameStatusRef.current === 'playing') {
+        sfx.play('fire')
         stateRef.current = firePlayerBullet(stateRef.current)
       }
     }
@@ -508,12 +529,14 @@ export default function SpaceInvaders() {
     pointerXRef.current = Math.max(0, Math.min(GAME_WIDTH, gameX))
 
     // Fire immediately
+    sfx.play('fire')
     stateRef.current = firePlayerBullet(stateRef.current)
 
     // Start auto-fire interval
     if (autoFireIntervalRef.current) clearInterval(autoFireIntervalRef.current)
     autoFireIntervalRef.current = setInterval(() => {
       if (gameStatusRef.current === 'playing') {
+        sfx.play('fire')
         stateRef.current = firePlayerBullet(stateRef.current)
       }
     }, 250)
@@ -586,13 +609,16 @@ export default function SpaceInvaders() {
         </div>
       </div>
       <span className="text-xs text-slate-400">Wave {wave}</span>
-      <button
-        onClick={startGame}
-        className="px-3 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300
-                   hover:bg-slate-600 transition-colors"
-      >
-        New Game
-      </button>
+      <div className="flex items-center gap-2">
+        <MusicToggle music={music} sfx={sfx} />
+        <button
+          onClick={startGame}
+          className="px-3 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300
+                     hover:bg-slate-600 transition-colors"
+        >
+          New Game
+        </button>
+      </div>
     </div>
   )
 
@@ -631,6 +657,8 @@ export default function SpaceInvaders() {
             bestScore={bestScore}
             message={`You reached wave ${wave}`}
             onPlayAgain={startGame}
+            music={music}
+            sfx={sfx}
           />
         )}
 

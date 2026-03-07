@@ -5,7 +5,7 @@
  * move counter, timer, best score tracking, state persistence.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -16,6 +16,10 @@ import {
 } from './memoryEngine'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus, Difficulty } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface MemoryState {
   cards: Card[]
@@ -36,6 +40,11 @@ export default function Memory() {
   const difficulty = saved?.difficulty ?? 'easy'
   const gridSize = difficulty as GridSize
   const { pairs } = getGridDimensions(gridSize)
+
+  // Music
+  const song = useMemo(() => getSongForGame('memory'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('memory')
 
   const [cards, setCards] = useState<Card[]>(() => saved?.cards ?? createDeck(pairs))
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'idle')
@@ -72,6 +81,10 @@ export default function Memory() {
     if (lockRef.current) return
     if (gameStatus === 'won') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const card = cards[index]
     if (card.matched || card.flipped) return
 
@@ -80,6 +93,7 @@ export default function Memory() {
     if (newStatus !== gameStatus) setGameStatus(newStatus)
 
     // Flip the card
+    sfx.play('flip')
     const newCards = flipCard(cards, index)
     setCards(newCards)
     setTotalFlips(f => f + 1)
@@ -93,6 +107,7 @@ export default function Memory() {
       const card2 = newCards[second]
 
       if (checkMatch(card1, card2)) {
+        sfx.play('match')
         // Mark as matched
         const matched = newCards.map((c, i) =>
           i === first || i === second ? { ...c, matched: true } : c
@@ -103,6 +118,7 @@ export default function Memory() {
 
         // Check win
         if (checkGameComplete(matched)) {
+          sfx.play('win')
           setGameStatus('won')
           const finalMoves = countMoves(totalFlips + 1)
           setBestMoves(prev => {
@@ -115,6 +131,7 @@ export default function Memory() {
           })
         }
       } else {
+        sfx.play('mismatch')
         // No match — flip both back after delay
         setTimeout(() => {
           setCards(prev => prev.map((c, i) =>
@@ -165,6 +182,7 @@ export default function Memory() {
         {best !== undefined && (
           <span className="text-yellow-400">Best: {best}</span>
         )}
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -232,6 +250,8 @@ export default function Memory() {
             bestScore={best}
             message={`Completed in ${moves} moves (${timerStr})`}
             onPlayAgain={() => startNewGame()}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

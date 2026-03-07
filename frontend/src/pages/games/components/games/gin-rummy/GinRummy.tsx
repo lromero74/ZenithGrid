@@ -2,12 +2,16 @@
  * Gin Rummy — 2-player card game vs AI.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createGinRummyGame,
   drawFromPile,
@@ -30,6 +34,11 @@ export default function GinRummy() {
   const { load, save, clear } = useGameState<SavedState>('gin-rummy')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('gin-rummy'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('gin-rummy')
+
   const [gameState, setGameState] = useState<GinRummyState>(
     () => saved?.gameState ?? createGinRummyGame()
   )
@@ -43,15 +52,16 @@ export default function GinRummy() {
 
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
+      if (gameState.playerScore >= gameState.targetScore) sfx.play('gin')
       setGameStatus(gameState.playerScore >= gameState.targetScore ? 'won' : 'lost')
       clear()
     }
   }, [gameState, clear])
 
-  const handleDrawPile = useCallback(() => setGameState(prev => drawFromPile(prev)), [])
-  const handleDrawDiscard = useCallback(() => setGameState(prev => drawFromDiscard(prev)), [])
-  const handleDiscard = useCallback((i: number) => setGameState(prev => discard(prev, i)), [])
-  const handleKnock = useCallback(() => setGameState(prev => knock(prev)), [])
+  const handleDrawPile = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromPile(prev)) }, [])
+  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
+  const handleDiscard = useCallback((i: number) => { sfx.play('meld'); setGameState(prev => discard(prev, i)) }, [])
+  const handleKnock = useCallback(() => { sfx.play('knock'); setGameState(prev => knock(prev)) }, [])
   const handleNewRound = useCallback(() => setGameState(prev => newRound(prev)), [])
 
   const handleNewGame = useCallback(() => {
@@ -76,6 +86,7 @@ export default function GinRummy() {
         <span className="text-slate-400">AI: {gameState.aiScore}</span>
       </div>
       <span className="text-xs text-slate-400">Deadwood: {deadwood}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -170,6 +181,8 @@ export default function GinRummy() {
             score={gameState.playerScore}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

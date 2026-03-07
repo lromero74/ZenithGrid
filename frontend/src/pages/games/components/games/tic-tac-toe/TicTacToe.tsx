@@ -4,7 +4,7 @@
  * Features: minimax AI, difficulty toggle, score tracking, animated winning line.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { TicTacToeBoard } from './TicTacToeBoard'
@@ -18,6 +18,10 @@ import {
   type Difficulty,
 } from './ticTacToeEngine'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface Scores {
   x: number
@@ -26,6 +30,11 @@ interface Scores {
 }
 
 export default function TicTacToe() {
+  // Music
+  const song = useMemo(() => getSongForGame('tic-tac-toe'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('tic-tac-toe')
+
   const [board, setBoard] = useState<Board>(createBoard)
   const [isPlayerTurn, setIsPlayerTurn] = useState(true)
   const [winResult, setWinResult] = useState<WinResult | null>(null)
@@ -36,18 +45,25 @@ export default function TicTacToe() {
   const handleCellClick = useCallback((index: number) => {
     if (!isPlayerTurn || board[index] || gameStatus !== 'playing') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const newBoard = [...board]
     newBoard[index] = 'X'
+    sfx.play('place')
     setBoard(newBoard)
 
     const result = checkWinner(newBoard)
     if (result) {
       setWinResult(result)
+      sfx.play('win')
       setGameStatus('won')
       setScores(s => ({ ...s, x: s.x + 1 }))
       return
     }
     if (isBoardFull(newBoard)) {
+      sfx.play('draw')
       setGameStatus('draw')
       setScores(s => ({ ...s, draws: s.draws + 1 }))
       return
@@ -71,11 +87,13 @@ export default function TicTacToe() {
       const result = checkWinner(newBoard)
       if (result) {
         setWinResult(result)
+        sfx.play('lose')
         setGameStatus('lost')
         setScores(s => ({ ...s, o: s.o + 1 }))
         return
       }
       if (isBoardFull(newBoard)) {
+        sfx.play('draw')
         setGameStatus('draw')
         setScores(s => ({ ...s, draws: s.draws + 1 }))
         return
@@ -92,7 +110,8 @@ export default function TicTacToe() {
     setWinResult(null)
     setGameStatus('playing')
     setIsPlayerTurn(true)
-  }, [])
+    music.start()
+  }, [music])
 
   const controls = (
     <div className="flex items-center justify-between">
@@ -113,11 +132,12 @@ export default function TicTacToe() {
         ))}
       </div>
 
-      {/* Score display */}
+      {/* Score display & music */}
       <div className="flex items-center space-x-3 text-sm">
         <span className="text-blue-400">X: {scores.x}</span>
         <span className="text-slate-500">Draw: {scores.draws}</span>
         <span className="text-red-400">O: {scores.o}</span>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -151,6 +171,8 @@ export default function TicTacToe() {
                 : 'Nobody wins!'
             }
             onPlayAgain={handlePlayAgain}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

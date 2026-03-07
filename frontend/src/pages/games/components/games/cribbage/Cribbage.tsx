@@ -2,13 +2,17 @@
  * Cribbage — 2-player card game. First to 121 wins.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createCribbageGame,
   toggleCribSelection,
@@ -32,6 +36,11 @@ export default function Cribbage() {
   const { load, save, clear } = useGameState<SavedState>('cribbage')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('cribbage'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('cribbage')
+
   const [gameState, setGameState] = useState<CribbageState>(
     () => saved?.gameState ?? createCribbageGame()
   )
@@ -51,22 +60,29 @@ export default function Cribbage() {
   }, [gameState, clear])
 
   const handleToggleSelect = useCallback((idx: number) => {
+    music.init()
+    sfx.init()
+    music.start()
     setGameState(prev => toggleCribSelection(prev, idx))
   }, [])
 
   const handleSubmitCrib = useCallback(() => {
+    sfx.play('play')
     setGameState(prev => submitCrib(prev))
   }, [])
 
   const handlePlayCard = useCallback((idx: number) => {
+    sfx.play('play')
     setGameState(prev => playPegCard(prev, idx))
   }, [])
 
   const handleSayGo = useCallback(() => {
+    sfx.play('go')
     setGameState(prev => sayGo(prev))
   }, [])
 
   const handleContinueScoring = useCallback(() => {
+    sfx.play('peg')
     setGameState(prev => continueScoring(prev))
   }, [])
 
@@ -99,6 +115,7 @@ export default function Cribbage() {
       <span className="text-xs text-slate-400">
         Dealer: {gameState.dealer === 0 ? 'You' : 'AI'}
       </span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -346,6 +363,8 @@ export default function Cribbage() {
             score={gameState.scores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

@@ -5,7 +5,7 @@
  * keyboard coloring, share button, physical keyboard support.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo} from 'react'
 import { Share2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
@@ -18,6 +18,10 @@ import { WordleKeyboard } from './WordleKeyboard'
 import { ANSWER_LIST } from './answerList'
 import { VALID_GUESSES } from './validGuesses'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 const MAX_GUESSES = 6
 
@@ -26,6 +30,11 @@ function getRandomWord(): string {
 }
 
 export default function Wordle() {
+  // Music
+  const song = useMemo(() => getSongForGame('wordle'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('wordle')
+
   const [mode, setMode] = useState<'daily' | 'random'>('daily')
   const [answer, setAnswer] = useState(() =>
     getDailyWord(ANSWER_LIST, new Date())
@@ -52,6 +61,10 @@ export default function Wordle() {
   const handleKey = useCallback((key: string) => {
     if (gameStatus !== 'playing') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     if (key === 'BACK') {
       setCurrentGuess(g => g.slice(0, -1))
       return
@@ -65,6 +78,7 @@ export default function Wordle() {
       }
 
       if (!isValidWord(currentGuess, VALID_GUESSES)) {
+        sfx.play('invalid')
         showToast('Not a valid word')
         triggerShake()
         return
@@ -92,15 +106,20 @@ export default function Wordle() {
       setCurrentGuess('')
 
       if (evaluation.every(r => r === 'correct')) {
+        sfx.play('win')
         setGameStatus('won')
       } else if (newGuesses.length >= MAX_GUESSES) {
+        sfx.play('wrong')
         setGameStatus('lost')
+      } else {
+        sfx.play('wrong')
       }
       return
     }
 
     // Letter key
     if (currentGuess.length < 5 && /^[A-Z]$/.test(key)) {
+      sfx.play('key')
       setCurrentGuess(g => g + key)
     }
   }, [gameStatus, currentGuess, guesses, evaluations, answer, hardMode, showToast, triggerShake])
@@ -127,7 +146,8 @@ export default function Wordle() {
     setCurrentGuess('')
     setGameStatus('playing')
     setKeyboardState({})
-  }, [mode])
+    music.start()
+  }, [mode, music])
 
   const handleModeChange = useCallback((newMode: 'daily' | 'random') => {
     setMode(newMode)
@@ -172,6 +192,7 @@ export default function Wordle() {
         </button>
       </div>
       <div className="flex items-center space-x-3">
+        <MusicToggle music={music} sfx={sfx} />
         <label className="flex items-center space-x-1.5 cursor-pointer">
           <input
             type="checkbox"
@@ -234,6 +255,8 @@ export default function Wordle() {
                 : `The word was: ${answer}`
             }
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

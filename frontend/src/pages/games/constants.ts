@@ -485,15 +485,30 @@ export const CARD_SUBCATEGORIES = [
   { value: 'Classic', label: 'Classic' },
 ] as const
 
-/** Sort options for the hub page */
-export const SORT_OPTIONS = [
-  { value: 'default', label: 'Default' },
-  { value: 'a-z', label: 'A \u2192 Z' },
-  { value: 'z-a', label: 'Z \u2192 A' },
-  { value: 'difficulty', label: 'Difficulty' },
+/** Group-by options for the hub page */
+export const GROUP_OPTIONS = [
+  { value: 'none', label: 'Default' },
   { value: 'category', label: 'Category' },
+  { value: 'difficulty', label: 'Difficulty' },
+  { value: 'a-z', label: 'A – Z' },
   { value: 'recent', label: 'Recently Played' },
 ] as const
+
+/** Display labels for game categories */
+export const CATEGORY_LABELS: Record<string, string> = {
+  arcade: 'Arcade',
+  cards: 'Cards',
+  puzzle: 'Puzzle',
+  strategy: 'Strategy',
+  word: 'Word',
+}
+
+/** Display labels for difficulty levels */
+export const DIFFICULTY_LABELS: Record<string, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+}
 
 /** Get the current user's ID from stored auth data (returns 0 if not logged in). */
 function getStoredUserId(): number {

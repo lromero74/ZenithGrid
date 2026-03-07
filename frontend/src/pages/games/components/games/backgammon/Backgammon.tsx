@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -10,6 +10,10 @@ import {
 import { BackgammonBoard } from './BackgammonBoard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus, Difficulty } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface SavedState {
   gameState: BackgammonState
@@ -21,6 +25,11 @@ interface SavedState {
 export default function Backgammon() {
   const { load, save, clear } = useGameState<SavedState>('backgammon')
   const saved = useRef(load()).current
+
+  // Music
+  const song = useMemo(() => getSongForGame('backgammon'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('backgammon')
 
   const [gameState, setGameState] = useState<BackgammonState>(saved?.gameState ?? createBoard)
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
@@ -44,6 +53,7 @@ export default function Backgammon() {
   const finishTurn = useCallback((state: BackgammonState) => {
     const winner = checkWin(state)
     if (winner === 'white') {
+      sfx.play('win')
       setGameStatus('won')
       setScores(s => ({ ...s, white: s.white + 1 }))
       setGameState({ ...state, gamePhase: 'gameOver' })
@@ -71,7 +81,12 @@ export default function Backgammon() {
   const handleRoll = useCallback(() => {
     if (gameState.gamePhase !== 'rolling' || gameStatus !== 'playing') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const dice = rollDice()
+    sfx.play('roll')
     const newState: BackgammonState = {
       ...gameState,
       dice,
@@ -94,6 +109,10 @@ export default function Backgammon() {
   const handlePointClick = useCallback((point: number | 'bar') => {
     if (gameStatus !== 'playing' || gameState.currentPlayer !== 'white' || disabled) return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const allMoves = getAllCurrentMoves(gameState)
 
     // If a point is already selected, prioritize executing a move to the
@@ -103,6 +122,7 @@ export default function Backgammon() {
       const move = allMoves.find(m => m.from === selectedPoint && m.to === point)
       if (move) {
         const newState = applyMove(gameState, move.from, move.to, move.dieIndex)
+        sfx.play('move')
         setGameState(newState)
         setSelectedPoint(null)
         setValidMoves([])
@@ -209,7 +229,8 @@ export default function Backgammon() {
     setSelectedPoint(null)
     setValidMoves([])
     clear()
-  }, [clear])
+    music.start()
+  }, [clear, music])
 
   const disabled = gameStatus !== 'playing' ||
     gameState.currentPlayer !== 'white' ||
@@ -250,6 +271,7 @@ export default function Backgammon() {
             Roll Dice
           </button>
         )}
+        <MusicToggle music={music} sfx={sfx} />
         <span className="text-xs text-slate-400">W: {scores.white} B: {scores.brown}</span>
       </div>
     </div>
@@ -273,6 +295,8 @@ export default function Backgammon() {
           <GameOverModal
             status={gameStatus}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

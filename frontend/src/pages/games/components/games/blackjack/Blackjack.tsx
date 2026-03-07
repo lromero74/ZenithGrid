@@ -2,12 +2,16 @@
  * Blackjack — 6-deck shoe, standard rules with split & double down.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createBlackjackGame,
   placeBet,
@@ -34,6 +38,11 @@ export default function Blackjack() {
   const { load, save, clear } = useGameState<SavedState>('blackjack')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('blackjack'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('blackjack')
+
   const [gameState, setGameState] = useState<BlackjackState>(
     () => saved?.gameState ?? createBlackjackGame()
   )
@@ -46,6 +55,14 @@ export default function Blackjack() {
       save({ gameState, gameStatus })
     }
   }, [gameState, gameStatus, save])
+
+  // SFX on payout
+  useEffect(() => {
+    if (gameState.phase === 'payout') {
+      if (gameState.message.toLowerCase().includes('blackjack')) sfx.play('blackjack')
+      else if (gameState.message.toLowerCase().includes('bust')) sfx.play('bust')
+    }
+  }, [gameState.phase])
 
   // Check for game over (broke)
   useEffect(() => {
@@ -63,10 +80,18 @@ export default function Blackjack() {
   }, [clear])
 
   const handlePlaceBet = useCallback(() => {
-    setGameState(prev => placeBet(prev, selectedBet))
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('bet')
+    setGameState(prev => {
+      const next = placeBet(prev, selectedBet)
+      return next
+    })
+    sfx.play('deal')
   }, [selectedBet])
 
-  const handleHit = useCallback(() => setGameState(prev => hit(prev)), [])
+  const handleHit = useCallback(() => { sfx.play('hit'); setGameState(prev => hit(prev)) }, [])
   const handleStand = useCallback(() => setGameState(prev => stand(prev)), [])
   const handleDouble = useCallback(() => setGameState(prev => doubleDown(prev)), [])
   const handleSplit = useCallback(() => setGameState(prev => split(prev)), [])
@@ -103,6 +128,7 @@ export default function Blackjack() {
         </button>
       </div>
       <span className="text-xs text-yellow-400 font-mono">Chips: {gameState.chips}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -226,6 +252,8 @@ export default function Blackjack() {
             status="lost"
             message="You're out of chips!"
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

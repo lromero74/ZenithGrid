@@ -25,6 +25,8 @@ export default {
       },
       animation: {
         'pulse-ring': 'pulse-ring 0.5s ease-in-out 5',
+        'fade-in': 'fade-in 600ms ease-out',
+        'scale-in': 'scale-in 400ms ease-out 200ms both',
       },
       keyframes: {
         'pulse-ring': {
@@ -36,6 +38,14 @@ export default {
             outline: '3px solid rgba(239, 68, 68, 0.4)',
             outlineOffset: '5px',
           },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'scale-in': {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

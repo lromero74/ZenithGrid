@@ -5,7 +5,7 @@
  * Teams: You+North vs East+West. First to 10 points wins.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
@@ -13,6 +13,10 @@ import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { getSuitSymbol } from '../../../utils/cardUtils'
 import type { Suit } from '../../../utils/cardUtils'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createEuchreGame,
   orderUp,
@@ -43,11 +47,23 @@ export default function Euchre() {
   const { load, save, clear } = useGameState<SavedState>('euchre')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('euchre'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('euchre')
+
   const [gameState, setGameState] = useState<EuchreState>(
     () => saved?.gameState ?? createEuchreGame()
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // SFX on trick completion
+  const prevTrickLen = useRef(0)
+  useEffect(() => {
+    if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
+    prevTrickLen.current = gameState.currentTrick.length
+  }, [gameState.currentTrick.length])
 
   // Persist state
   useEffect(() => {
@@ -103,10 +119,16 @@ export default function Euchre() {
   }, [])
 
   const handleOrderUp = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
     setGameState(prev => orderUp(prev))
   }, [])
 
   const handlePass = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
     setGameState(prev => pass(prev))
   }, [])
 
@@ -119,10 +141,12 @@ export default function Euchre() {
   }, [])
 
   const handlePlay = useCallback((i: number) => {
+    sfx.play('play')
     setGameState(prev => playCard(prev, i))
   }, [])
 
   const handleNextHand = useCallback(() => {
+    sfx.play('hand_won')
     setGameState(prev => nextHand(prev))
   }, [])
 
@@ -159,6 +183,7 @@ export default function Euchre() {
         )}
         <span>Dealer: {PLAYER_NAMES[gameState.dealer]}</span>
       </div>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -346,6 +371,8 @@ export default function Euchre() {
             score={gameState.teamScores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

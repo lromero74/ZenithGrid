@@ -2,12 +2,16 @@
  * Texas Hold'em — poker with community cards.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createTexasHoldemGame,
   startHand,
@@ -32,6 +36,11 @@ export default function TexasHoldem() {
   const { load, save, clear } = useGameState<SavedState>('texas-holdem')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('texas-holdem'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('texas-holdem')
+
   const [gameState, setGameState] = useState<TexasHoldemState>(() => {
     if (saved?.gameState) return saved.gameState
     return startHand(createTexasHoldemGame(4))
@@ -48,6 +57,7 @@ export default function TexasHoldem() {
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
       const humanWon = gameState.chips[0] > 0
+      if (humanWon) sfx.play('win')
       setGameStatus(humanWon ? 'won' : 'lost')
       clear()
     }
@@ -63,20 +73,26 @@ export default function TexasHoldem() {
     }
   }, [gameState.currentPlayer, gameState.phase])
 
+  // SFX when community cards are revealed
+  useEffect(() => {
+    if (gameState.community.length > 0) sfx.play('reveal')
+  }, [gameState.community.length])
+
   // Update raise slider min
   useEffect(() => {
     const min = getMinRaise(gameState)
     setRaiseAmount(Math.min(min, gameState.chips[0] + gameState.bets[0]))
   }, [gameState.phase, gameState.currentBet])
 
-  const handleFold = useCallback(() => setGameState(prev => fold(prev)), [])
-  const handleCheck = useCallback(() => setGameState(prev => check(prev)), [])
-  const handleCall = useCallback(() => setGameState(prev => call(prev)), [])
+  const handleFold = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('fold'); setGameState(prev => fold(prev)) }, [])
+  const handleCheck = useCallback(() => { music.init(); sfx.init(); music.start(); setGameState(prev => check(prev)) }, [])
+  const handleCall = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('bet'); setGameState(prev => call(prev)) }, [])
   const handleRaise = useCallback(() => {
+    sfx.play('bet')
     setGameState(prev => raiseAction(prev, raiseAmount))
   }, [raiseAmount])
   const handleAllIn = useCallback(() => setGameState(prev => allIn(prev)), [])
-  const handleNextHand = useCallback(() => setGameState(prev => nextHand(prev)), [])
+  const handleNextHand = useCallback(() => { sfx.play('deal'); setGameState(prev => nextHand(prev)) }, [])
   const handleNewGame = useCallback(() => {
     setGameState(startHand(createTexasHoldemGame(4)))
     setGameStatus('playing')
@@ -91,6 +107,7 @@ export default function TexasHoldem() {
     <div className="flex items-center justify-between text-xs">
       <span className="text-slate-400">Pot: <span className="text-yellow-400 font-bold">{gameState.pot}</span></span>
       <span className="text-slate-400">Blinds: {gameState.smallBlind}/{gameState.bigBlind}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -222,6 +239,8 @@ export default function TexasHoldem() {
             score={gameState.chips[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

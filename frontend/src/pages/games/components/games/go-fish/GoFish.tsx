@@ -2,13 +2,17 @@
  * Go Fish — ask for ranks, collect books of four.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getRankDisplay } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createGoFishGame,
   askForRank,
@@ -27,6 +31,11 @@ export default function GoFish() {
   const { load, save, clear } = useGameState<SavedState>('go-fish')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('go-fish'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('go-fish')
+
   const [gameState, setGameState] = useState<GoFishState>(
     () => saved?.gameState ?? createGoFishGame()
   )
@@ -42,6 +51,7 @@ export default function GoFish() {
     if (gameState.phase === 'gameOver') {
       const humanWon = gameState.books[0].length > gameState.books[1].length
       const tied = gameState.books[0].length === gameState.books[1].length
+      if (humanWon) sfx.play('match')
       setGameStatus(tied ? 'draw' : humanWon ? 'won' : 'lost')
       clear()
     }
@@ -58,10 +68,15 @@ export default function GoFish() {
   }, [gameState.phase])
 
   const handleAsk = useCallback((rank: number) => {
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('play')
     setGameState(prev => askForRank(prev, rank))
   }, [])
 
   const handleGoFish = useCallback(() => {
+    sfx.play('draw')
     setGameState(prev => goFish(prev))
   }, [])
 
@@ -82,6 +97,7 @@ export default function GoFish() {
       <span className="text-xs text-slate-400">
         Pond: {gameState.pond.length} cards
       </span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -169,6 +185,8 @@ export default function GoFish() {
             score={gameState.books[0].length}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>
