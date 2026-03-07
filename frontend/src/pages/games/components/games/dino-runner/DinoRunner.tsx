@@ -361,20 +361,20 @@ export default function DinoRunner() {
     ctx.fillStyle = groundColor
     ctx.fillRect(0, GROUND_Y + PIXEL_SCALE, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y)
 
-    // Ground texture (repeating bumps)
+    // Ground texture — sparse static bumps (most texture now via parallax particles)
     ctx.fillStyle = groundHighlight
-    for (let x = -state.ground.offset; x < CANVAS_WIDTH; x += 12) {
-      ctx.fillRect(x, GROUND_Y + PIXEL_SCALE, 4, 2)
-      ctx.fillRect(x + 7, GROUND_Y + PIXEL_SCALE + 4, 2, 2)
+    for (let x = -state.ground.offset; x < CANVAS_WIDTH; x += 24) {
+      ctx.fillRect(x, GROUND_Y + PIXEL_SCALE, 3, 2)
     }
 
-    // Dirt particles — 3 layers with depth-based coloring
+    // Dirt particles — 3 parallax layers with bright specks
     const dirtColors = GROUND_LAYER_SPEEDS.map((_, i) =>
-      lerpColor(groundHighlight, '#000000', i * 0.2)
+      lerpColor(groundColor, groundHighlight, 0.4 - i * 0.12)
     )
+    const brightColor = lerpColor(groundHighlight, '#ffffff', 0.5)
     for (const p of state.ground.particles) {
       if (p.x < 0 || p.x > CANVAS_WIDTH) continue
-      ctx.fillStyle = dirtColors[p.layer]
+      ctx.fillStyle = p.bright ? brightColor : dirtColors[p.layer]
       ctx.fillRect(Math.floor(p.x), GROUND_Y + PIXEL_SCALE + p.y, p.size, p.size)
     }
 

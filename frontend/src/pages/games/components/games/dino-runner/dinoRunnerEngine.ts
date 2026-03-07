@@ -48,6 +48,7 @@ export interface GroundParticle {
   y: number      // offset below GROUND_Y (0 = surface, ~35 = bottom)
   size: number    // 1–3 px
   layer: number   // 0 = surface (1× speed), 1 = mid (1.3×), 2 = deep (1.6×)
+  bright: boolean // true = highlight/white speck, false = dirt-colored
 }
 
 export interface InputState {
@@ -223,7 +224,7 @@ export const NEAR_SPEED = 0.55
 
 // Ground dirt particle layer speeds (multipliers of base ground speed)
 export const GROUND_LAYER_SPEEDS = [1.0, 1.3, 1.6]
-const GROUND_PARTICLE_COUNT = 60
+const GROUND_PARTICLE_COUNT = 80
 
 function generateTerrain(
   length: number, base: number,
@@ -1291,11 +1292,14 @@ function generateGroundParticles(): GroundParticle[] {
     // Distribute particles across 3 layers based on depth
     const y = 4 + Math.random() * groundDepth
     const layer = y < groundDepth * 0.33 ? 0 : y < groundDepth * 0.66 ? 1 : 2
+    // Surface layer has more bright specks (~40%), deeper layers fewer (~15%)
+    const brightChance = layer === 0 ? 0.4 : layer === 1 ? 0.2 : 0.15
     particles.push({
       x: Math.random() * (CANVAS_WIDTH + 200), // spread beyond canvas for seamless wrap
       y,
       size: 1 + Math.floor(Math.random() * 3), // 1–3 px
       layer,
+      bright: Math.random() < brightChance,
     })
   }
   return particles
