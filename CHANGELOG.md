@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.90.3] - 2026-03-07
+
+### Fixed
+- **Dino Runner mobile duck**: Swiping down on mobile now correctly ducks instead of jumping — touch input waits briefly to detect swipe direction before committing to a jump
+
 ## [v2.90.2] - 2026-03-07
 
 ### Fixed

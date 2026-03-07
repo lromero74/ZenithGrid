@@ -705,6 +705,8 @@ export default function DinoRunner() {
     const canvas = canvasRef.current
     if (!canvas) return
 
+    let jumpTimer: ReturnType<typeof setTimeout> | null = null
+
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault()
       music.init() // safe to call repeatedly; only inits once
@@ -716,26 +718,36 @@ export default function DinoRunner() {
         restartGame()
         return
       }
-      // Don't jump immediately — wait to see if it's a swipe down
-      // Use a short delay; touchmove will cancel if swiping down
-      inputRef.current.jump = true
-      sfx.play('jump')
+      // Delay jump to give touchmove a chance to detect swipe-down (duck)
+      if (jumpTimer) clearTimeout(jumpTimer)
+      jumpTimer = setTimeout(() => {
+        if (!inputRef.current.duck) {
+          inputRef.current.jump = true
+          sfx.play('jump')
+        }
+        jumpTimer = null
+      }, 80)
     }
     const handleTouchMove = (e: TouchEvent) => {
       if (!touchStartRef.current || e.touches.length === 0) return
       const t = e.touches[0]
       const dy = t.clientY - touchStartRef.current.y
       if (dy > 20) {
-        // Swiping down — duck, cancel jump
+        // Swiping down — duck, cancel pending jump
+        if (jumpTimer) { clearTimeout(jumpTimer); jumpTimer = null }
         inputRef.current.jump = false
         inputRef.current.duck = true
       } else if (dy < -10) {
         // Swiping up — ensure jump
         inputRef.current.duck = false
-        inputRef.current.jump = true
+        if (!inputRef.current.jump) {
+          inputRef.current.jump = true
+          sfx.play('jump')
+        }
       }
     }
     const handleTouchEnd = () => {
+      if (jumpTimer) { clearTimeout(jumpTimer); jumpTimer = null }
       inputRef.current.jump = false
       inputRef.current.duck = false
       touchStartRef.current = null
