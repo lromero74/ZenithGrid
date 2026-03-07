@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.90.6] - 2026-03-07
+
+### Fixed
+- **Dino Runner seamless terrain**: Parallax scrolling landscape no longer has abrupt visual cuts — terrain layers now tile seamlessly using whole-cycle wave frequencies
+
 ## [v2.90.5] - 2026-03-07
 
 ### Added
