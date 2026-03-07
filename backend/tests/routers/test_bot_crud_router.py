@@ -379,6 +379,11 @@ class TestListBots:
         mock_paper_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
         mock_paper_client.get_current_price = AsyncMock(return_value=0.04)
 
+        async def _agg_quote(currency, **kwargs):
+            return 0.5 if currency == "BTC" else 50000.0
+
+        mock_paper_client.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+
         with patch(
             "app.bot_routers.bot_crud_router.get_coinbase_from_db",
             new_callable=AsyncMock, side_effect=ExchangeUnavailableError("No CEX")

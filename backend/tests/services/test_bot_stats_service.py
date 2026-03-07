@@ -24,12 +24,35 @@ class TestFetchAggregateValues:
         from app.services.bot_stats_service import fetch_aggregate_values
 
         coinbase = AsyncMock()
-        coinbase.calculate_aggregate_btc_value = AsyncMock(return_value=1.5)
-        coinbase.calculate_aggregate_usd_value = AsyncMock(return_value=75000.0)
+
+        async def _agg_quote(currency, **kwargs):
+            return 1.5 if currency == "BTC" else 75000.0
+
+        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val == 1.5
         assert usd_val == 75000.0
+
+    @pytest.mark.asyncio
+    async def test_uses_quote_value_not_portfolio_total(self):
+        """Budget uses per-quote aggregate (free USD + USD-pair positions),
+        NOT total portfolio value with all assets converted to USD."""
+        from app.services.bot_stats_service import fetch_aggregate_values
+
+        coinbase = AsyncMock()
+
+        async def _agg_quote(currency, **kwargs):
+            return 5000.0 if currency == "USD" else 0.5
+
+        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+
+        btc_val, usd_val = await fetch_aggregate_values(coinbase)
+        # Should use calculate_aggregate_quote_value, not calculate_aggregate_usd_value
+        coinbase.calculate_aggregate_quote_value.assert_any_call("BTC")
+        coinbase.calculate_aggregate_quote_value.assert_any_call("USD")
+        assert usd_val == 5000.0
+        assert btc_val == 0.5
 
     @pytest.mark.asyncio
     async def test_btc_fails_returns_none(self):
@@ -37,8 +60,13 @@ class TestFetchAggregateValues:
         from app.services.bot_stats_service import fetch_aggregate_values
 
         coinbase = AsyncMock()
-        coinbase.calculate_aggregate_btc_value = AsyncMock(side_effect=Exception("API error"))
-        coinbase.calculate_aggregate_usd_value = AsyncMock(return_value=75000.0)
+
+        async def _agg_quote(currency, **kwargs):
+            if currency == "BTC":
+                raise Exception("API error")
+            return 75000.0
+
+        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val is None
@@ -50,8 +78,7 @@ class TestFetchAggregateValues:
         from app.services.bot_stats_service import fetch_aggregate_values
 
         coinbase = AsyncMock()
-        coinbase.calculate_aggregate_btc_value = AsyncMock(side_effect=Exception("err"))
-        coinbase.calculate_aggregate_usd_value = AsyncMock(side_effect=Exception("err"))
+        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=Exception("err"))
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val is None

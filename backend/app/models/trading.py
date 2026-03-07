@@ -72,6 +72,14 @@ class Account(Base):
     auto_buy_usdt_enabled = Column(Boolean, default=False)
     auto_buy_usdt_min = Column(Float, default=10.0)
 
+    # Portfolio rebalancing (per-account allocation targets)
+    rebalance_enabled = Column(Boolean, default=False)
+    rebalance_target_usd_pct = Column(Float, default=34.0)
+    rebalance_target_btc_pct = Column(Float, default=33.0)
+    rebalance_target_eth_pct = Column(Float, default=33.0)
+    rebalance_drift_threshold_pct = Column(Float, default=5.0)
+    rebalance_check_interval_minutes = Column(Integer, default=60)
+
     # Paper Trading
     is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
     paper_balances = Column(String, nullable=True)  # JSON: {"BTC": 1.0, "ETH": 10.0, "USD": 100000.0, ...}
