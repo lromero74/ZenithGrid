@@ -5,10 +5,11 @@
  * keyboard coloring, share button, physical keyboard support.
  */
 
-import { useState, useCallback, useEffect, useMemo} from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
 import { Share2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   evaluateGuess, isValidWord, getDailyWord, updateKeyboardState, checkHardMode,
   type LetterResult, type KeyboardState,
@@ -29,24 +30,43 @@ function getRandomWord(): string {
   return ANSWER_LIST[Math.floor(Math.random() * ANSWER_LIST.length)]
 }
 
+interface WordleSaved {
+  mode: 'daily' | 'random'
+  answer: string
+  guesses: string[]
+  evaluations: LetterResult[][]
+  currentGuess: string
+  gameStatus: GameStatus
+  keyboardState: KeyboardState
+  hardMode: boolean
+}
+
 export default function Wordle() {
+  const { load, save, clear } = useGameState<WordleSaved>('wordle')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('wordle'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('wordle')
 
-  const [mode, setMode] = useState<'daily' | 'random'>('daily')
+  const [mode, setMode] = useState<'daily' | 'random'>(saved?.mode ?? 'daily')
   const [answer, setAnswer] = useState(() =>
-    getDailyWord(ANSWER_LIST, new Date())
+    saved?.answer ?? getDailyWord(ANSWER_LIST, new Date())
   )
-  const [guesses, setGuesses] = useState<string[]>([])
-  const [evaluations, setEvaluations] = useState<LetterResult[][]>([])
-  const [currentGuess, setCurrentGuess] = useState('')
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const [keyboardState, setKeyboardState] = useState<KeyboardState>({})
-  const [hardMode, setHardMode] = useState(false)
+  const [guesses, setGuesses] = useState<string[]>(saved?.guesses ?? [])
+  const [evaluations, setEvaluations] = useState<LetterResult[][]>(saved?.evaluations ?? [])
+  const [currentGuess, setCurrentGuess] = useState(saved?.currentGuess ?? '')
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [keyboardState, setKeyboardState] = useState<KeyboardState>(saved?.keyboardState ?? {})
+  const [hardMode, setHardMode] = useState(saved?.hardMode ?? false)
   const [shake, setShake] = useState(false)
   const [toast, setToast] = useState('')
+
+  // Persist state
+  useEffect(() => {
+    save({ mode, answer, guesses, evaluations, currentGuess, gameStatus, keyboardState, hardMode })
+  }, [mode, answer, guesses, evaluations, currentGuess, gameStatus, keyboardState, hardMode, save])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -147,6 +167,7 @@ export default function Wordle() {
     setGameStatus('playing')
     setKeyboardState({})
     music.start()
+    clear()
   }, [mode, music])
 
   const handleModeChange = useCallback((newMode: 'daily' | 'random') => {

@@ -10,6 +10,7 @@ import { Undo2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   createBoard, move, addRandomTile, hasValidMoves, isGameWon,
   type Board, type MoveDirection,
@@ -21,22 +22,37 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 
+interface TFESaved {
+  board: Board
+  score: number
+  gameStatus: GameStatus
+  hasWon: boolean
+}
+
 function initBoard(): Board {
   return addRandomTile(addRandomTile(createBoard()))
 }
 
 export default function TwentyFortyEight() {
+  const { load, save, clear } = useGameState<TFESaved>('2048')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('2048'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('2048')
 
-  const [board, setBoard] = useState<Board>(initBoard)
-  const [score, setScore] = useState(0)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const [hasWon, setHasWon] = useState(false)
+  const [board, setBoard] = useState<Board>(() => saved?.board ?? initBoard())
+  const [score, setScore] = useState(saved?.score ?? 0)
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [hasWon, setHasWon] = useState(saved?.hasWon ?? false)
   const [history, setHistory] = useState<{ board: Board; score: number }[]>([])
   const { getHighScore, saveScore } = useGameScores()
+
+  // Persist state
+  useEffect(() => {
+    save({ board, score, gameStatus, hasWon })
+  }, [board, score, gameStatus, hasWon, save])
   const bestScore = getHighScore('2048') ?? 0
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
@@ -92,7 +108,8 @@ export default function TwentyFortyEight() {
     setHasWon(false)
     setHistory([])
     music.start()
-  }, [music])
+    clear()
+  }, [music, clear])
 
   // Keyboard controls
   useEffect(() => {
