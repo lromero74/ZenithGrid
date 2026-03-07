@@ -747,8 +747,15 @@ export default function DinoRunner() {
       }
     }
     const handleTouchEnd = () => {
-      if (jumpTimer) { clearTimeout(jumpTimer); jumpTimer = null }
-      inputRef.current.jump = false
+      // If jump timer is still pending, it was a quick tap — jump immediately
+      if (jumpTimer) {
+        clearTimeout(jumpTimer)
+        jumpTimer = null
+        if (!inputRef.current.duck) {
+          inputRef.current.jump = true
+          sfx.play('jump')
+        }
+      }
       inputRef.current.duck = false
       touchStartRef.current = null
     }
