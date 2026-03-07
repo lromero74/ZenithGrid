@@ -63,7 +63,7 @@ async def get_coinbase_for_account(
 
     client = create_exchange_client(ExchangeClientConfig(
         exchange_type="cex",
-        coinbase=CoinbaseCredentials(key_name=key_name, private_key=private_key),
+        coinbase=CoinbaseCredentials(key_name=key_name, private_key=private_key, account_id=account.id),
     ))
 
     if not client:
