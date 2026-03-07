@@ -43,6 +43,13 @@ export interface Star {
   size: number  // 1–2 pixel size
 }
 
+export interface GroundParticle {
+  x: number
+  y: number      // offset below GROUND_Y (0 = surface, ~35 = bottom)
+  size: number    // 1–3 px
+  layer: number   // 0 = surface (1× speed), 1 = mid (1.3×), 2 = deep (1.6×)
+}
+
 export interface InputState {
   jump: boolean
   duck: boolean
@@ -141,7 +148,7 @@ export interface GameState {
   obstacles: Obstacle[]
   clouds: Cloud[]
   stars: Star[]
-  ground: { offset: number }
+  ground: { offset: number; particles: GroundParticle[] }
   score: number
   highScore: number
   speed: number
@@ -213,6 +220,10 @@ export function getWeatherMultiplier(weather: WeatherState): number {
 export const FAR_SPEED = 0.12
 export const MID_SPEED = 0.3
 export const NEAR_SPEED = 0.55
+
+// Ground dirt particle layer speeds (multipliers of base ground speed)
+export const GROUND_LAYER_SPEEDS = [1.0, 1.3, 1.6]
+const GROUND_PARTICLE_COUNT = 60
 
 function generateTerrain(
   length: number, base: number,
@@ -1224,7 +1235,7 @@ export function createGame(highScore: number): GameState {
     obstacles: [],
     clouds: [],
     stars: generateStars(),
-    ground: { offset: 0 },
+    ground: { offset: 0, particles: generateGroundParticles() },
     score: 0,
     highScore,
     speed: INITIAL_SPEED,
@@ -1265,6 +1276,23 @@ function generateStars(): Star[] {
     })
   }
   return stars
+}
+
+function generateGroundParticles(): GroundParticle[] {
+  const particles: GroundParticle[] = []
+  const groundDepth = CANVAS_HEIGHT - GROUND_Y - 4 // usable depth below ground line
+  for (let i = 0; i < GROUND_PARTICLE_COUNT; i++) {
+    // Distribute particles across 3 layers based on depth
+    const y = 4 + Math.random() * groundDepth
+    const layer = y < groundDepth * 0.33 ? 0 : y < groundDepth * 0.66 ? 1 : 2
+    particles.push({
+      x: Math.random() * (CANVAS_WIDTH + 200), // spread beyond canvas for seamless wrap
+      y,
+      size: 1 + Math.floor(Math.random() * 3), // 1–3 px
+      layer,
+    })
+  }
+  return particles
 }
 
 // ---------------------------------------------------------------------------
@@ -1399,7 +1427,7 @@ export function update(state: GameState, input: InputState): GameState {
         frameCount,
         nextObstacleDistance,
         milestoneFlash: 0,
-        ground: { offset: (state.ground.offset + effectiveSpeed) % 12 },
+        ground: { offset: (state.ground.offset + effectiveSpeed) % 12, particles: state.ground.particles },
         weather: { type: 'none', timer: 0, intensity: 0, particles: [], lightning: 0, stormClouds: [], impacts: [], windStrength: 0 },
       }
     }
@@ -1458,6 +1486,12 @@ export function update(state: GameState, input: InputState): GameState {
 
   // --- Ground scroll ---
   const groundOffset = (state.ground.offset + effectiveSpeed) % 12
+  const wrapWidth = CANVAS_WIDTH + 200
+  const groundParticles = state.ground.particles.map(p => {
+    let nx = p.x - effectiveSpeed * GROUND_LAYER_SPEEDS[p.layer]
+    if (nx < -10) nx += wrapWidth
+    return { ...p, x: nx }
+  })
 
   // --- Parallax ---
   const parallax = { ...state.parallax }
@@ -1503,7 +1537,7 @@ export function update(state: GameState, input: InputState): GameState {
     obstacles,
     clouds,
     stars,
-    ground: { offset: groundOffset },
+    ground: { offset: groundOffset, particles: groundParticles },
     score,
     highScore,
     speed,
