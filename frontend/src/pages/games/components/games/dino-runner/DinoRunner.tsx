@@ -747,14 +747,19 @@ export default function DinoRunner() {
       }
     }
     const handleTouchEnd = () => {
-      // If jump timer is still pending, it was a quick tap — jump immediately
+      // If jump timer is still pending, it was a quick tap — fire a short jump
       if (jumpTimer) {
         clearTimeout(jumpTimer)
         jumpTimer = null
         if (!inputRef.current.duck) {
           inputRef.current.jump = true
           sfx.play('jump')
+          // Release after one frame so the dino gets minimum jump height
+          requestAnimationFrame(() => { inputRef.current.jump = false })
         }
+      } else {
+        // Finger lifted — release jump (ends variable-height hold)
+        inputRef.current.jump = false
       }
       inputRef.current.duck = false
       touchStartRef.current = null
