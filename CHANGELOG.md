@@ -5,7 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.89.1] - 2026-03-07
+## [v2.89.2] - 2026-03-07
+
+### Added
+- **Min trade size setting**: Configurable minimum trade size (1-25% of portfolio) in rebalance settings — prevents micro-trades that barely move the allocation needle
+
+### Changed
+- **Trade sizing**: Sells are now capped to available free balance — never tries to sell more than you have, eliminating failed order errors
+- **Trade failure logging**: Downgraded from error to warning — expected when free capital is limited, not a system failure
 
 ### Fixed
 - **Rebalance allocation display**: Current allocation now correctly shows aggregate portfolio value (free balance + open position values per currency) instead of showing 0% for all currencies

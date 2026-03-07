@@ -79,6 +79,8 @@ class Account(Base):
     rebalance_target_eth_pct = Column(Float, default=33.0)
     rebalance_drift_threshold_pct = Column(Float, default=5.0)
     rebalance_check_interval_minutes = Column(Integer, default=60)
+    rebalance_min_trade_usd = Column(Float, default=50.0)  # deprecated, use pct
+    rebalance_min_trade_pct = Column(Float, default=5.0)
 
     # Paper Trading
     is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
