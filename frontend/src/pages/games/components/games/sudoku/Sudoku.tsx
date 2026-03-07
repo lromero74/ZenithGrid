@@ -5,11 +5,12 @@
  * peer highlighting, undo, hints, timer.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
 import { useGameTimer } from '../../../hooks/useGameTimer'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   generatePuzzle, cloneBoard, getConflicts,
   type SudokuBoard as Board,
@@ -29,6 +30,17 @@ interface PuzzleState {
   given: boolean[][]
 }
 
+interface SudokuSaved {
+  difficulty: Difficulty
+  puzzleState: PuzzleState
+  board: Board
+  notes: [string, number[]][]
+  hints: number
+  gameStatus: GameStatus
+  notesMode: boolean
+  elapsed: number
+}
+
 function createPuzzleState(difficulty: Difficulty): PuzzleState {
   const { puzzle, solution } = generatePuzzle(difficulty)
   const given = puzzle.map(row => row.map(cell => cell !== 0))
@@ -36,21 +48,37 @@ function createPuzzleState(difficulty: Difficulty): PuzzleState {
 }
 
 export default function Sudoku() {
+  const { load, save, clear } = useGameState<SudokuSaved>('sudoku')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('sudoku'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('sudoku')
 
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy')
-  const [puzzleState, setPuzzleState] = useState(() => createPuzzleState('easy'))
-  const [board, setBoard] = useState<Board>(() => cloneBoard(puzzleState.puzzle))
+  const initPuzzle = saved?.puzzleState ?? createPuzzleState('easy')
+  const [difficulty, setDifficulty] = useState<Difficulty>(saved?.difficulty ?? 'easy')
+  const [puzzleState, setPuzzleState] = useState<PuzzleState>(() => initPuzzle)
+  const [board, setBoard] = useState<Board>(() => saved?.board ?? cloneBoard(initPuzzle.puzzle))
   const [selected, setSelected] = useState<[number, number] | null>(null)
-  const [notesMode, setNotesMode] = useState(false)
-  const [notes, setNotes] = useState<Map<string, Set<number>>>(new Map())
+  const [notesMode, setNotesMode] = useState(saved?.notesMode ?? false)
+  const [notes, setNotes] = useState<Map<string, Set<number>>>(() => {
+    if (saved?.notes) return new Map(saved.notes.map(([k, v]) => [k, new Set(v)]))
+    return new Map()
+  })
   const [history, setHistory] = useState<Board[]>([])
-  const [hints, setHints] = useState(3)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const timer = useGameTimer()
+  const [hints, setHints] = useState(saved?.hints ?? 3)
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const timer = useGameTimer(saved?.elapsed)
+
+  // Persist state
+  useEffect(() => {
+    save({
+      difficulty, puzzleState, board, hints, gameStatus, notesMode,
+      notes: Array.from(notes.entries()).map(([k, v]) => [k, Array.from(v)]),
+      elapsed: timer.seconds,
+    })
+  }, [difficulty, puzzleState, board, hints, gameStatus, notesMode, notes, timer.seconds, save])
 
   // Compute conflicts for all cells
   const conflicts = useMemo(() => {
@@ -177,7 +205,8 @@ export default function Sudoku() {
     setDifficulty(d)
     timer.reset()
     music.start()
-  }, [difficulty, timer, music])
+    clear()
+  }, [difficulty, timer, music, clear])
 
   const controls = (
     <div className="flex items-center justify-between">

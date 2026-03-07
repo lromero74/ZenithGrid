@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   createBoard, dropDisc, checkWinner, getValidColumns,
   isBoardFull, getAIMove,
@@ -25,20 +26,36 @@ const DIFFICULTY_DEPTH: Record<string, number> = {
   easy: 2, medium: 4, hard: 6,
 }
 
+interface ConnectFourSaved {
+  board: Board
+  currentPlayer: Player
+  gameStatus: GameStatus
+  difficulty: Difficulty
+  scores: { red: number; yellow: number; draw: number }
+}
+
 export default function ConnectFour() {
+  const { load, save, clear } = useGameState<ConnectFourSaved>('connect-four')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('connect-four'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('connect-four')
 
-  const [board, setBoard] = useState<Board>(createBoard)
-  const [currentPlayer, setCurrentPlayer] = useState<Player>('red')
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
+  const [board, setBoard] = useState<Board>(() => saved?.board ?? createBoard())
+  const [currentPlayer, setCurrentPlayer] = useState<Player>(saved?.currentPlayer ?? 'red')
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [winResult, setWinResult] = useState<WinResult | null>(null)
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium')
-  const [scores, setScores] = useState({ red: 0, yellow: 0, draw: 0 })
+  const [difficulty, setDifficulty] = useState<Difficulty>(saved?.difficulty ?? 'medium')
+  const [scores, setScores] = useState(saved?.scores ?? { red: 0, yellow: 0, draw: 0 })
   const [hoverCol, setHoverCol] = useState<number | null>(null)
   const aiThinking = useRef(false)
+
+  // Persist state
+  useEffect(() => {
+    save({ board, currentPlayer, gameStatus, difficulty, scores })
+  }, [board, currentPlayer, gameStatus, difficulty, scores, save])
 
   const handleColumnClick = useCallback((col: number) => {
     if (gameStatus !== 'playing' || currentPlayer !== 'red' || aiThinking.current) return
@@ -106,7 +123,8 @@ export default function ConnectFour() {
     setWinResult(null)
     setHoverCol(null)
     music.start()
-  }, [music])
+    clear()
+  }, [music, clear])
 
   const controls = (
     <div className="flex items-center justify-between">

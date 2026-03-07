@@ -6,8 +6,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 
-export function useGameTimer() {
-  const [seconds, setSeconds] = useState(0)
+export function useGameTimer(initialSeconds: number = 0) {
+  const [seconds, setSeconds] = useState(initialSeconds)
   const [isRunning, setIsRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

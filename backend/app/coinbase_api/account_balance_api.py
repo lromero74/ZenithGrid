@@ -615,6 +615,40 @@ async def calculate_aggregate_quote_value(
                 )
 
             positions = result.fetchall()
+
+            # 2b. Deduct base assets held in positions for OTHER markets.
+            # e.g. ETH bought through ETH-BTC positions lives in the Coinbase
+            # ETH wallet, so get_currency_balance("ETH") includes it, but it's
+            # already counted in the BTC aggregate via %-BTC positions.
+            # Without this, the same asset is double-counted across markets.
+            base_pattern = f"{quote_currency}-%"
+            if account_id is not None:
+                base_result = conn.execute(
+                    text("""
+                        SELECT COALESCE(SUM(p.total_base_acquired), 0)
+                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        WHERE p.status = 'open'
+                          AND p.product_id LIKE :pattern
+                          AND b.account_id = :acct_id
+                    """),
+                    {"pattern": base_pattern, "acct_id": account_id}
+                )
+            else:
+                base_result = conn.execute(
+                    text("""
+                        SELECT COALESCE(SUM(total_base_acquired), 0)
+                        FROM positions
+                        WHERE status = 'open' AND product_id LIKE :pattern
+                    """),
+                    {"pattern": base_pattern}
+                )
+            base_held = float(base_result.scalar() or 0)
+            if base_held > 0:
+                total_value = max(0.0, total_value - base_held)
+                logger.debug(
+                    f"  Deducted {base_held} {quote_currency} held as base in "
+                    f"{base_pattern} positions"
+                )
         positions_value = 0.0
 
         if positions and get_current_price_func:

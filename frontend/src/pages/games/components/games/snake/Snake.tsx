@@ -10,6 +10,7 @@ import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Pause, Play } from 'lucide-r
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   getNextHead, moveSnake, checkWallCollision, checkSelfCollision,
   isOppositeDirection, wrapPosition, generateFood, getSpeed,
@@ -33,7 +34,12 @@ const INITIAL_SNAKE: Position[] = [
   { x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 },
 ]
 
+interface SnakeSaved { wallsMode: boolean }
+
 export default function Snake() {
+  const { load, save } = useGameState<SnakeSaved>('snake')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('snake'), [])
   const music = useGameMusic(song)
@@ -41,8 +47,11 @@ export default function Snake() {
 
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
-  const [wallsMode, setWallsMode] = useState(true) // true = walls kill
+  const [wallsMode, setWallsMode] = useState(saved?.wallsMode ?? true)
   const { getHighScore, saveScore } = useGameScores()
+
+  // Persist settings
+  useEffect(() => { save({ wallsMode }) }, [wallsMode, save])
   const bestScore = getHighScore('snake') ?? 0
 
   const canvasRef = useRef<HTMLCanvasElement>(null)

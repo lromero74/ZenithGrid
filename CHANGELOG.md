@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.90.0] - 2026-03-07
+
+### Added
+- **Game state persistence**: All puzzle and board games now preserve state when navigating away and back — Nonogram, Sudoku, Minesweeper, Connect Four, Tic-Tac-Toe, 2048, Ultimate Tic-Tac-Toe, Hangman, Mahjong, Wordle, and Snake settings
+
+### Fixed
+- **Portfolio allocation double-counting**: ETH (or BTC) held as base currency in positions for other markets was counted in both the position's quote aggregate and the free balance aggregate — now correctly deducted to prevent inflated allocation percentages
+
 ## [v2.89.5] - 2026-03-07
 
 ### Added

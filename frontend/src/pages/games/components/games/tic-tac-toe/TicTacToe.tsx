@@ -4,10 +4,11 @@
  * Features: minimax AI, difficulty toggle, score tracking, animated winning line.
  */
 
-import { useState, useCallback, useEffect, useMemo} from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { TicTacToeBoard } from './TicTacToeBoard'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   createBoard,
   checkWinner,
@@ -29,18 +30,33 @@ interface Scores {
   draws: number
 }
 
+interface TicTacToeSaved {
+  board: Board
+  gameStatus: GameStatus
+  difficulty: Difficulty
+  scores: Scores
+}
+
 export default function TicTacToe() {
+  const { load, save, clear } = useGameState<TicTacToeSaved>('tic-tac-toe')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('tic-tac-toe'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('tic-tac-toe')
 
-  const [board, setBoard] = useState<Board>(createBoard)
+  const [board, setBoard] = useState<Board>(() => saved?.board ?? createBoard())
   const [isPlayerTurn, setIsPlayerTurn] = useState(true)
   const [winResult, setWinResult] = useState<WinResult | null>(null)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const [difficulty, setDifficulty] = useState<Difficulty>('hard')
-  const [scores, setScores] = useState<Scores>({ x: 0, o: 0, draws: 0 })
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [difficulty, setDifficulty] = useState<Difficulty>(saved?.difficulty ?? 'hard')
+  const [scores, setScores] = useState<Scores>(saved?.scores ?? { x: 0, o: 0, draws: 0 })
+
+  // Persist state
+  useEffect(() => {
+    save({ board, gameStatus, difficulty, scores })
+  }, [board, gameStatus, difficulty, scores, save])
 
   const handleCellClick = useCallback((index: number) => {
     if (!isPlayerTurn || board[index] || gameStatus !== 'playing') return
@@ -111,7 +127,8 @@ export default function TicTacToe() {
     setGameStatus('playing')
     setIsPlayerTurn(true)
     music.start()
-  }, [music])
+    clear()
+  }, [music, clear])
 
   const controls = (
     <div className="flex items-center justify-between">

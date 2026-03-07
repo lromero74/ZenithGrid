@@ -5,11 +5,12 @@
  * row/column validation feedback, puzzle selection.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameTimer } from '../../../hooks/useGameTimer'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   generateClues, createGrid, setCell, validateRow, validateColumn,
   isPuzzleComplete,
@@ -25,16 +26,27 @@ import { MusicToggle } from '../../MusicToggle'
 
 type SizeFilter = '5x5' | '10x10' | '15x15'
 
+interface NonogramState {
+  sizeFilter: SizeFilter
+  puzzleIndex: number
+  gameStatus: GameStatus
+  grid: Grid
+  elapsed: number
+}
+
 export default function Nonogram() {
+  const { load, save, clear } = useGameState<NonogramState>('nonogram')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('nonogram'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('nonogram')
 
-  const [sizeFilter, setSizeFilter] = useState<SizeFilter>('5x5')
-  const [puzzleIndex, setPuzzleIndex] = useState(0)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const timer = useGameTimer()
+  const [sizeFilter, setSizeFilter] = useState<SizeFilter>(saved?.sizeFilter ?? '5x5')
+  const [puzzleIndex, setPuzzleIndex] = useState(saved?.puzzleIndex ?? 0)
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const timer = useGameTimer(saved?.elapsed)
 
   const filteredPuzzles = useMemo(() => {
     if (sizeFilter === '5x5') return PUZZLES_5X5
@@ -47,7 +59,12 @@ export default function Nonogram() {
   const rows = puzzle.solution.length
   const cols = puzzle.solution[0].length
 
-  const [grid, setGrid] = useState<Grid>(() => createGrid(rows, cols))
+  const [grid, setGrid] = useState<Grid>(() => saved?.grid ?? createGrid(rows, cols))
+
+  // Persist state
+  useEffect(() => {
+    save({ sizeFilter, puzzleIndex, gameStatus, grid, elapsed: timer.seconds })
+  }, [sizeFilter, puzzleIndex, gameStatus, grid, timer.seconds, save])
 
   const validatedRows = useMemo(
     () => grid.map((row, r) => validateRow(row, clues.rowClues[r])),
@@ -92,7 +109,8 @@ export default function Nonogram() {
     setGrid(createGrid(rows, cols))
     setGameStatus('playing')
     timer.reset()
-  }, [rows, cols, timer])
+    clear()
+  }, [rows, cols, timer, clear])
 
   const handleNextPuzzle = useCallback(() => {
     const nextIdx = (puzzleIndex + 1) % filteredPuzzles.length

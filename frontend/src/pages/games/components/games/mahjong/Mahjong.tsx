@@ -4,11 +4,12 @@
  * Features: tile matching, shuffle, hint, undo, multiple layouts.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Shuffle, Lightbulb, Undo2, RotateCcw } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameTimer } from '../../../hooks/useGameTimer'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   createGame, canMatch, isTileFree, findAllMatches,
   removePair, shuffleTiles, isGameWon, isGameOver,
@@ -25,21 +26,41 @@ import { MusicToggle } from '../../MusicToggle'
 type LayoutName = 'turtle' | 'pyramid'
 const LAYOUTS = { turtle: TURTLE_LAYOUT, pyramid: PYRAMID_LAYOUT }
 
+interface MahjongSaved {
+  layoutName: LayoutName
+  tileTheme: TileTheme
+  tiles: GameTile[]
+  gameStatus: GameStatus
+  shufflesLeft: number
+  elapsed: number
+}
+
 export default function Mahjong() {
+  const { load, save, clear } = useGameState<MahjongSaved>('mahjong')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('mahjong'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('mahjong')
 
-  const [layoutName, setLayoutName] = useState<LayoutName>('pyramid')
-  const [tileTheme, setTileTheme] = useState<TileTheme>('kanji')
-  const [game, setGame] = useState(() => createGame(LAYOUTS.pyramid))
+  const initLayout = saved?.layoutName ?? 'pyramid'
+  const [layoutName, setLayoutName] = useState<LayoutName>(initLayout)
+  const [tileTheme, setTileTheme] = useState<TileTheme>(saved?.tileTheme ?? 'kanji')
+  const [game, setGame] = useState(() =>
+    saved?.tiles ? { tiles: saved.tiles } : createGame(LAYOUTS[initLayout])
+  )
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [hintPair, setHintPair] = useState<[number, number] | null>(null)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [history, setHistory] = useState<GameTile[][]>([])
-  const [shufflesLeft, setShuffle] = useState(3)
-  const timer = useGameTimer()
+  const [shufflesLeft, setShuffle] = useState(saved?.shufflesLeft ?? 3)
+  const timer = useGameTimer(saved?.elapsed)
+
+  // Persist state
+  useEffect(() => {
+    save({ layoutName, tileTheme, tiles: game.tiles, gameStatus, shufflesLeft, elapsed: timer.seconds })
+  }, [layoutName, tileTheme, game.tiles, gameStatus, shufflesLeft, timer.seconds, save])
 
   const remaining = game.tiles.filter(t => !t.removed).length
   const matches = useMemo(() => findAllMatches(game.tiles), [game.tiles])
@@ -126,7 +147,8 @@ export default function Mahjong() {
     setShuffle(3)
     timer.reset()
     music.start()
-  }, [layoutName, timer, music])
+    clear()
+  }, [layoutName, timer, music, clear])
 
   const controls = (
     <div className="flex items-center justify-between">

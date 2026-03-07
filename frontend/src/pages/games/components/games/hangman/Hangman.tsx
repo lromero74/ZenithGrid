@@ -4,7 +4,7 @@
  * Features: categorized word lists, SVG hangman, QWERTY keyboard, streak tracking.
  */
 
-import { useState, useCallback, useEffect, useMemo} from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { HangmanDrawing } from './HangmanDrawing'
@@ -12,23 +12,42 @@ import { HangmanKeyboard } from './HangmanKeyboard'
 import { selectWord, getDisplayWord, processGuess, isGameWon, isGameLost, getWrongGuesses } from './hangmanEngine'
 import { CATEGORIES, MAX_WRONG_GUESSES } from './wordLists'
 import { useKeyboard } from '../../../hooks/useKeyboard'
+import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 
+interface HangmanSaved {
+  category: string
+  word: string
+  guessedLetters: string[]
+  gameStatus: GameStatus
+  streak: number
+}
+
 export default function Hangman() {
+  const { load, save, clear } = useGameState<HangmanSaved>('hangman')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('hangman'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('hangman')
 
-  const [category, setCategory] = useState(CATEGORIES[0])
-  const [word, setWord] = useState(() => selectWord(CATEGORIES[0]))
-  const [guessedLetters, setGuessedLetters] = useState<Set<string>>(new Set())
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const [streak, setStreak] = useState(0)
+  const [category, setCategory] = useState(saved?.category ?? CATEGORIES[0])
+  const [word, setWord] = useState(() => saved?.word ?? selectWord(CATEGORIES[0]))
+  const [guessedLetters, setGuessedLetters] = useState<Set<string>>(
+    () => saved?.guessedLetters ? new Set(saved.guessedLetters) : new Set()
+  )
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [streak, setStreak] = useState(saved?.streak ?? 0)
+
+  // Persist state
+  useEffect(() => {
+    save({ category, word, guessedLetters: Array.from(guessedLetters), gameStatus, streak })
+  }, [category, word, guessedLetters, gameStatus, streak, save])
 
   const wrongGuessCount = getWrongGuesses(word, guessedLetters)
   const correctLetters = new Set(
@@ -78,7 +97,8 @@ export default function Hangman() {
     setGuessedLetters(new Set())
     setGameStatus('playing')
     music.start()
-  }, [category, music])
+    clear()
+  }, [category, music, clear])
 
   // Reset when category changes via button
   useEffect(() => {

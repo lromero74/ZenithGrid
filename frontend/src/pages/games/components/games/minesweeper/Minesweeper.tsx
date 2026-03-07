@@ -5,12 +5,13 @@
  * flagging (right-click / long-press), timer, mine counter.
  */
 
-import { useState, useCallback, useRef, useMemo} from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect} from 'react'
 import { Bomb, SmilePlus } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameTimer } from '../../../hooks/useGameTimer'
 import { useGameScores } from '../../../hooks/useGameScores'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   generateBoard, revealCell, toggleFlag, checkWin,
   type MineBoard,
@@ -35,20 +36,37 @@ const DIFFICULTIES: Record<string, DifficultyConfig> = {
   expert: { rows: 16, cols: 30, mines: 99, label: 'Expert' },
 }
 
+interface MinesweeperSaved {
+  diffKey: string
+  board: MineBoard | null
+  gameStatus: GameStatus
+  explodedCell: [number, number] | null
+  elapsed: number
+  firstClick: boolean
+}
+
 export default function Minesweeper() {
+  const { load, save, clear } = useGameState<MinesweeperSaved>('minesweeper')
+  const saved = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('minesweeper'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('minesweeper')
 
-  const [diffKey, setDiffKey] = useState('beginner')
+  const [diffKey, setDiffKey] = useState(saved?.diffKey ?? 'beginner')
   const diff = DIFFICULTIES[diffKey]
-  const [board, setBoard] = useState<MineBoard | null>(null)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
-  const [explodedCell, setExplodedCell] = useState<[number, number] | null>(null)
-  const firstClick = useRef(true)
-  const timer = useGameTimer()
+  const [board, setBoard] = useState<MineBoard | null>(saved?.board ?? null)
+  const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'idle')
+  const [explodedCell, setExplodedCell] = useState<[number, number] | null>(saved?.explodedCell ?? null)
+  const firstClick = useRef(saved?.firstClick ?? true)
+  const timer = useGameTimer(saved?.elapsed)
   const { getHighScore, saveScore } = useGameScores()
+
+  // Persist state
+  useEffect(() => {
+    save({ diffKey, board, gameStatus, explodedCell, elapsed: timer.seconds, firstClick: firstClick.current })
+  }, [diffKey, board, gameStatus, explodedCell, timer.seconds, save])
 
   const flagCount = board?.flat().filter(c => c.isFlagged).length ?? 0
   const minesRemaining = diff.mines - flagCount
@@ -110,7 +128,8 @@ export default function Minesweeper() {
     setExplodedCell(null)
     firstClick.current = true
     timer.reset()
-  }, [timer])
+    clear()
+  }, [timer, clear])
 
   const handleDifficulty = useCallback((key: string) => {
     setDiffKey(key)
@@ -119,7 +138,8 @@ export default function Minesweeper() {
     setExplodedCell(null)
     firstClick.current = true
     timer.reset()
-  }, [timer])
+    clear()
+  }, [timer, clear])
 
   // Create placeholder board for initial render
   const displayBoard = board ?? Array.from({ length: diff.rows }, () =>

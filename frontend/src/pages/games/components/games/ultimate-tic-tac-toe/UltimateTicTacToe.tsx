@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { Undo2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
+import { useGameState } from '../../../hooks/useGameState'
 import {
   createBoards, createMetaBoard, makeMove, getValidMoves, getAIMove,
   type SubBoard as SubBoardType, type MetaCell, type Player,
@@ -20,14 +21,19 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 
-interface GameState {
+interface UTTTGameState {
   boards: SubBoardType[]
   meta: MetaCell[]
   activeBoard: number | null
   currentPlayer: Player
 }
 
-function initialState(): GameState {
+interface UTTTSaved {
+  state: UTTTGameState
+  gameStatus: GameStatus
+}
+
+function initialState(): UTTTGameState {
   return {
     boards: createBoards(),
     meta: createMetaBoard(),
@@ -37,15 +43,23 @@ function initialState(): GameState {
 }
 
 export default function UltimateTicTacToe() {
+  const { load, save, clear } = useGameState<UTTTSaved>('ultimate-tic-tac-toe')
+  const savedData = useRef(load()).current
+
   // Music
   const song = useMemo(() => getSongForGame('ultimate-tic-tac-toe'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('ultimate-tic-tac-toe')
 
-  const [state, setState] = useState<GameState>(initialState)
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
-  const [history, setHistory] = useState<GameState[]>([])
+  const [state, setState] = useState<UTTTGameState>(() => savedData?.state ?? initialState())
+  const [gameStatus, setGameStatus] = useState<GameStatus>(savedData?.gameStatus ?? 'playing')
+  const [history, setHistory] = useState<UTTTGameState[]>([])
   const aiThinking = useRef(false)
+
+  // Persist state
+  useEffect(() => {
+    save({ state, gameStatus })
+  }, [state, gameStatus, save])
 
   const handleCellClick = useCallback((boardIndex: number, cellIndex: number) => {
     if (gameStatus !== 'playing' || state.currentPlayer !== 'X' || aiThinking.current) return
@@ -132,7 +146,8 @@ export default function UltimateTicTacToe() {
     setGameStatus('playing')
     setHistory([])
     music.start()
-  }, [music])
+    clear()
+  }, [music, clear])
 
   const validMoves = getValidMoves(state.boards, state.meta, state.activeBoard)
   const activeBoardIndices = new Set(validMoves.map(([b]) => b))
