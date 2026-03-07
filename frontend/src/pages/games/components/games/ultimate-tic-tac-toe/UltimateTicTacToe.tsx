@@ -5,7 +5,7 @@
  * meta-board progress, undo support.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { Undo2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
@@ -15,6 +15,10 @@ import {
 } from './ultimateEngine'
 import { SubBoard } from './SubBoard'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface GameState {
   boards: SubBoardType[]
@@ -33,6 +37,11 @@ function initialState(): GameState {
 }
 
 export default function UltimateTicTacToe() {
+  // Music
+  const song = useMemo(() => getSongForGame('ultimate-tic-tac-toe'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('ultimate-tic-tac-toe')
+
   const [state, setState] = useState<GameState>(initialState)
   const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
   const [history, setHistory] = useState<GameState[]>([])
@@ -41,13 +50,24 @@ export default function UltimateTicTacToe() {
   const handleCellClick = useCallback((boardIndex: number, cellIndex: number) => {
     if (gameStatus !== 'playing' || state.currentPlayer !== 'X' || aiThinking.current) return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const validMoves = getValidMoves(state.boards, state.meta, state.activeBoard)
     if (!validMoves.some(([b, c]) => b === boardIndex && c === cellIndex)) return
 
     setHistory(prev => [...prev.slice(-20), state])
+    sfx.play('place')
     const result = makeMove(state.boards, state.meta, boardIndex, cellIndex, 'X')
 
+    // Check if a sub-board was just won
+    if (result.meta.some((m, i) => m !== null && state.meta[i] === null)) {
+      sfx.play('board_won')
+    }
+
     if (result.winner) {
+      sfx.play('win')
       setState({ boards: result.boards, meta: result.meta, activeBoard: null, currentPlayer: 'X' })
       setGameStatus('won')
       return
@@ -111,7 +131,8 @@ export default function UltimateTicTacToe() {
     setState(initialState())
     setGameStatus('playing')
     setHistory([])
-  }, [])
+    music.start()
+  }, [music])
 
   const validMoves = getValidMoves(state.boards, state.meta, state.activeBoard)
   const activeBoardIndices = new Set(validMoves.map(([b]) => b))
@@ -126,9 +147,12 @@ export default function UltimateTicTacToe() {
         <Undo2 className="w-3 h-3" />
         <span>Undo</span>
       </button>
-      <p className="text-xs text-slate-400">
-        {gameStatus === 'playing' && (state.currentPlayer === 'X' ? 'Your turn (X)' : 'AI thinking...')}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-slate-400">
+          {gameStatus === 'playing' && (state.currentPlayer === 'X' ? 'Your turn (X)' : 'AI thinking...')}
+        </p>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -154,6 +178,8 @@ export default function UltimateTicTacToe() {
           <GameOverModal
             status={gameStatus}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

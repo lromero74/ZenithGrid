@@ -6,7 +6,7 @@
  * captured pieces display, score tracking, state persistence.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -18,6 +18,10 @@ import {
 import { ChessBoard } from './ChessBoard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus, Difficulty } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 const DIFFICULTY_DEPTH: Record<string, number> = {
   easy: 2, medium: 3, hard: 4,
@@ -34,6 +38,11 @@ interface ChessSavedState {
 export default function Chess() {
   const { load, save, clear } = useGameState<ChessSavedState>('chess')
   const saved = useRef(load()).current
+
+  // Music
+  const song = useMemo(() => getSongForGame('chess'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('chess')
 
   const [chessState, setChessState] = useState<ChessState>(saved?.chessState ?? createBoard)
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
@@ -54,6 +63,7 @@ export default function Chess() {
   const checkGameEnd = useCallback((state: ChessState) => {
     const nextPlayer = state.currentPlayer
     if (isCheckmate(state, nextPlayer)) {
+      sfx.play('checkmate')
       if (nextPlayer === 'black') {
         setGameStatus('won')
         setScores(s => ({ ...s, white: s.white + 1 }))
@@ -73,6 +83,10 @@ export default function Chess() {
 
   const handleSquareClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing' || !isPlayerTurn || aiThinking.current) return
+
+    music.init()
+    sfx.init()
+    music.start()
 
     const piece = chessState.board[r][c]
 
@@ -99,12 +113,14 @@ export default function Chess() {
         }
 
         const newState = applyMove(chessState, move)
+        if (chessState.board[r][c]) { sfx.play('capture') } else { sfx.play('move') }
         setChessState(newState)
         setLastMove(move)
         setSelectedSquare(null)
         setValidMoves([])
 
         if (!checkGameEnd(newState)) {
+          if (isInCheck(newState, 'black')) { sfx.play('check') }
           setIsPlayerTurn(false)
         }
       } else {
@@ -118,6 +134,7 @@ export default function Chess() {
     if (!promotionMove) return
     const move: Move = { ...promotionMove, promotion: pieceType }
     const newState = applyMove(chessState, move)
+    sfx.play('move')
     setChessState(newState)
     setLastMove(move)
     setSelectedSquare(null)
@@ -151,10 +168,12 @@ export default function Chess() {
       }
 
       const newState = applyMove(chessState, aiMove)
+      if (chessState.board[aiMove.toRow][aiMove.toCol]) { sfx.play('capture') } else { sfx.play('move') }
       setChessState(newState)
       setLastMove(aiMove)
 
       if (!checkGameEnd(newState)) {
+        if (isInCheck(newState, 'white')) { sfx.play('check') }
         setIsPlayerTurn(true)
       }
       aiThinking.current = false
@@ -172,7 +191,8 @@ export default function Chess() {
     setIsPlayerTurn(true)
     setPromotionMove(null)
     clear()
-  }, [clear])
+    music.start()
+  }, [clear, music])
 
   const playerCheck = isPlayerTurn && isInCheck(chessState, 'white')
   const aiCheck = !isPlayerTurn && isInCheck(chessState, 'black')
@@ -192,10 +212,11 @@ export default function Chess() {
           New Game
         </button>
       </div>
-      <div className="flex space-x-3 text-xs">
+      <div className="flex items-center space-x-3 text-xs">
         <span className="text-white">You: {scores.white}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>
         <span className="text-slate-300">AI: {scores.black}</span>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -259,6 +280,8 @@ export default function Chess() {
           <GameOverModal
             status={gameStatus}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

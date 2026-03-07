@@ -5,7 +5,7 @@
  * win detection with continue option.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { Undo2 } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
@@ -16,12 +16,21 @@ import {
 } from './twenFoEiEngine'
 import { TileGrid } from './TileGrid'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 function initBoard(): Board {
   return addRandomTile(addRandomTile(createBoard()))
 }
 
 export default function TwentyFortyEight() {
+  // Music
+  const song = useMemo(() => getSongForGame('2048'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('2048')
+
   const [board, setBoard] = useState<Board>(initBoard)
   const [score, setScore] = useState(0)
   const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
@@ -34,9 +43,15 @@ export default function TwentyFortyEight() {
   const handleMove = useCallback((direction: MoveDirection) => {
     if (gameStatus !== 'playing') return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const result = move(board, direction)
     if (!result.moved) return
 
+    sfx.play('slide')
+    if (result.score > 0) { sfx.play('merge') }
     setHistory(prev => [...prev.slice(-20), { board, score }])
     const newScore = score + result.score
     const withTile = addRandomTile(result.board)
@@ -45,12 +60,14 @@ export default function TwentyFortyEight() {
 
     if (isGameWon(withTile) && !hasWon) {
       setHasWon(true)
+      sfx.play('win')
       setGameStatus('won')
       saveScore('2048', newScore)
       return
     }
 
     if (!hasValidMoves(withTile)) {
+      sfx.play('lose')
       setGameStatus('lost')
       saveScore('2048', newScore)
     }
@@ -74,7 +91,8 @@ export default function TwentyFortyEight() {
     setGameStatus('playing')
     setHasWon(false)
     setHistory([])
-  }, [])
+    music.start()
+  }, [music])
 
   // Keyboard controls
   useEffect(() => {
@@ -126,6 +144,7 @@ export default function TwentyFortyEight() {
         <Undo2 className="w-3 h-3" />
         <span>Undo</span>
       </button>
+      <MusicToggle music={music} sfx={sfx} />
       <button
         onClick={handleNewGame}
         className="px-3 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
@@ -154,6 +173,8 @@ export default function TwentyFortyEight() {
             message="You reached 2048!"
             onPlayAgain={handleContinue}
             playAgainText="Continue"
+            music={music}
+            sfx={sfx}
           />
         )}
 
@@ -163,6 +184,8 @@ export default function TwentyFortyEight() {
             score={score}
             bestScore={bestScore}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

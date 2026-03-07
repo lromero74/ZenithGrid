@@ -5,7 +5,7 @@
  * multiple simultaneous balls, balance/bet system, color-coded slots.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
@@ -16,6 +16,10 @@ import {
 } from './plinkoEngine'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 const MIN_BET = 10
 const INITIAL_BALANCE = 1000
@@ -63,6 +67,11 @@ function getScaleForContainer(containerWidth: number): number {
 export default function Plinko() {
   const { load, save, clear } = useGameState<PlinkoState>('plinko')
   const saved = useRef(load()).current
+
+  // Music
+  const song = useMemo(() => getSongForGame('plinko'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('plinko')
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved ? 'playing' : 'idle')
   const [balance, setBalance] = useState(saved?.balance ?? INITIAL_BALANCE)
@@ -250,6 +259,7 @@ export default function Plinko() {
           // Flash peg
           if (!flashesRef.current.some(f => f.pegIdx === pi)) {
             flashesRef.current.push({ pegIdx: pi, frame: 8 })
+            sfx.play('bounce')
           }
         }
       }
@@ -278,6 +288,7 @@ export default function Plinko() {
       // Check if reached bottom
       if (ball.y >= BOARD_HEIGHT - 10) {
         const slotIdx = getSlotIndex(ball.x, BOARD_WIDTH)
+        sfx.play('land')
         landed.push({ slotIdx })
       } else {
         activeBalls.push(ball)
@@ -320,6 +331,9 @@ export default function Plinko() {
       balanceRef.current += totalWin
       setBalance(balanceRef.current)
       setLastWin({ amount: totalWin, multiplier: lastMultiplier })
+      if (lastMultiplier >= 1) {
+        sfx.play('win')
+      }
     }
 
     drawBoard()
@@ -335,6 +349,10 @@ export default function Plinko() {
   const dropBall = useCallback(() => {
     if (betRef.current < MIN_BET || balanceRef.current < betRef.current) return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     // Ball drops from center with small random variance (±15px)
     // Pegs create the randomness, not the click position
     const variance = (Math.random() - 0.5) * 30
@@ -346,6 +364,7 @@ export default function Plinko() {
     setGameStatus('playing')
     setBallsActive(true)
 
+    sfx.play('drop')
     const ball = createBall(dropX)
     ballsRef.current.push(ball)
 
@@ -500,6 +519,7 @@ export default function Plinko() {
           >
             New Game
           </button>
+          <MusicToggle music={music} sfx={sfx} />
         </div>
       </div>
     </div>

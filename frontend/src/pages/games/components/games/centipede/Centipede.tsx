@@ -5,7 +5,7 @@
  * progressive difficulty, high score tracking.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -18,6 +18,10 @@ import {
   type Spider, type Player,
 } from './centipedeEngine'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -242,6 +246,11 @@ export default function Centipede() {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('centipede') ?? 0
 
+  // Music
+  const song = useMemo(() => getSongForGame('centipede'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('centipede')
+
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [level, setLevel] = useState(1)
@@ -371,13 +380,20 @@ export default function Centipede() {
     const shouldFire =
       keys.has(' ') || keys.has('Space') || pointerDownRef.current
     if (shouldFire && fireTimerRef.current <= 0) {
+      sfx.play('fire')
       gs = fireBullet(gs)
       fireTimerRef.current = FIRE_COOLDOWN
     }
 
     // Update game logic
+    const prevScore = gs.score
     gs = updateGame(gs, dt)
     gsRef.current = gs
+
+    // Detect enemy hit (score increased after update)
+    if (gs.score > prevScore) {
+      sfx.play('hit')
+    }
 
     // Sync React state for UI
     setScore(gs.score)
@@ -389,6 +405,7 @@ export default function Centipede() {
       gameStatusRef.current = 'lost'
       setGameStatus('lost')
       saveScore('centipede', gs.score)
+      sfx.play('die')
       draw()
       return
     }
@@ -414,11 +431,14 @@ export default function Centipede() {
     setLives(3)
     gameStatusRef.current = 'playing'
     setGameStatus('playing')
+    music.init()
+    sfx.init()
+    music.start()
     fireTimerRef.current = 0
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick])
+  }, [draw, tick, music])
 
   // -------------------------------------------------------------------------
   // Keyboard controls
@@ -538,14 +558,17 @@ export default function Centipede() {
         ))}
       </div>
       <span className="text-xs text-slate-400">Level {level}</span>
-      <button
-        onClick={startGame}
-        className="px-2 py-0.5 rounded text-xs font-medium
-          bg-slate-700 text-slate-300 hover:bg-slate-600
-          transition-colors"
-      >
-        New Game
-      </button>
+      <div className="flex items-center gap-2">
+        <MusicToggle music={music} sfx={sfx} />
+        <button
+          onClick={startGame}
+          className="px-2 py-0.5 rounded text-xs font-medium
+            bg-slate-700 text-slate-300 hover:bg-slate-600
+            transition-colors"
+        >
+          New Game
+        </button>
+      </div>
     </div>
   )
 
@@ -598,6 +621,8 @@ export default function Centipede() {
             bestScore={bestScore}
             message={`You reached level ${level}`}
             onPlayAgain={startGame}
+            music={music}
+            sfx={sfx}
           />
         )}
 

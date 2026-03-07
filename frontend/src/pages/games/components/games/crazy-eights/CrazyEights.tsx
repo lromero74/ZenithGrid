@@ -2,13 +2,17 @@
  * Crazy Eights — match rank or suit, 8s are wild.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { SUITS, getSuitSymbol, type Suit } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createCrazyEightsGame,
   playCard,
@@ -28,6 +32,11 @@ export default function CrazyEights() {
   const { load, save, clear } = useGameState<SavedState>('crazy-eights')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('crazy-eights'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('crazy-eights')
+
   const [gameState, setGameState] = useState<CrazyEightsState>(
     () => saved?.gameState ?? createCrazyEightsGame(2)
   )
@@ -42,16 +51,25 @@ export default function CrazyEights() {
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
       const humanWon = gameState.scores[0] >= gameState.targetScore
+      if (humanWon) sfx.play('match')
       setGameStatus(humanWon ? 'won' : 'lost')
       clear()
     }
   }, [gameState, clear])
 
   const handlePlay = useCallback((cardIdx: number) => {
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('play')
     setGameState(prev => playCard(prev, cardIdx))
   }, [])
 
   const handleDraw = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('draw')
     setGameState(prev => drawCard(prev))
   }, [])
 
@@ -86,6 +104,7 @@ export default function CrazyEights() {
           {getSuitSymbol(gameState.currentSuit)}
         </span>
       </span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -187,6 +206,8 @@ export default function CrazyEights() {
             score={gameState.scores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

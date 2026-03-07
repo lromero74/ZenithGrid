@@ -4,7 +4,7 @@
  * Features: categorized word lists, SVG hangman, QWERTY keyboard, streak tracking.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { HangmanDrawing } from './HangmanDrawing'
@@ -13,8 +13,17 @@ import { selectWord, getDisplayWord, processGuess, isGameWon, isGameLost, getWro
 import { CATEGORIES, MAX_WRONG_GUESSES } from './wordLists'
 import { useKeyboard } from '../../../hooks/useKeyboard'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 export default function Hangman() {
+  // Music
+  const song = useMemo(() => getSongForGame('hangman'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('hangman')
+
   const [category, setCategory] = useState(CATEGORIES[0])
   const [word, setWord] = useState(() => selectWord(CATEGORIES[0]))
   const [guessedLetters, setGuessedLetters] = useState<Set<string>>(new Set())
@@ -28,6 +37,9 @@ export default function Hangman() {
 
   const handleGuess = useCallback((letter: string) => {
     if (gameStatus !== 'playing' || guessedLetters.has(letter)) return
+    music.init()
+    sfx.init()
+    music.start()
     const upper = letter.toUpperCase()
     if (!/^[A-Z]$/.test(upper)) return
 
@@ -38,11 +50,17 @@ export default function Hangman() {
     const isCorrect = processGuess(word, upper)
 
     if (isGameWon(word, newGuessed)) {
+      sfx.play('win')
       setGameStatus('won')
       setStreak(s => s + 1)
     } else if (!isCorrect && isGameLost(getWrongGuesses(word, newGuessed))) {
+      sfx.play('lose')
       setGameStatus('lost')
       setStreak(0)
+    } else if (isCorrect) {
+      sfx.play('correct')
+    } else {
+      sfx.play('wrong')
     }
   }, [gameStatus, guessedLetters, word])
 
@@ -59,7 +77,8 @@ export default function Hangman() {
     setWord(selectWord(cat))
     setGuessedLetters(new Set())
     setGameStatus('playing')
-  }, [category])
+    music.start()
+  }, [category, music])
 
   // Reset when category changes via button
   useEffect(() => {
@@ -84,10 +103,13 @@ export default function Hangman() {
           </button>
         ))}
       </div>
-      {/* Streak */}
-      {streak > 0 && (
-        <p className="text-xs text-yellow-400">Streak: {streak}</p>
-      )}
+      {/* Streak & Music */}
+      <div className="flex items-center gap-2">
+        {streak > 0 && (
+          <p className="text-xs text-yellow-400">Streak: {streak}</p>
+        )}
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -126,6 +148,8 @@ export default function Hangman() {
                 : `The word was: ${word}`
             }
             onPlayAgain={() => handleNewGame()}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

@@ -11,6 +11,10 @@ import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createDeck,
   shuffleDeck,
@@ -56,6 +60,11 @@ export default function Solitaire() {
   const { load, save, clear } = useGameState<SavedSolitaireState>('solitaire')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('solitaire'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('solitaire')
+
   const [gameState, setGameState] = useState<SolitaireState>(
     () => saved?.gameState ?? deal(shuffleDeck(createDeck()))
   )
@@ -76,6 +85,7 @@ export default function Solitaire() {
   // Check for win after state changes
   useEffect(() => {
     if (checkWin(gameState)) {
+      sfx.play('win')
       setGameStatus('won')
       setSelection(null)
       clear()
@@ -100,6 +110,7 @@ export default function Solitaire() {
   useEffect(() => {
     if (autoCompleting || gameStatus !== 'playing') return
     if (canAutoComplete(gameState) && !checkWin(gameState)) {
+      sfx.play('autocomplete')
       setAutoCompleting(true)
       setSelection(null)
       // Animate auto-complete with slight delays
@@ -157,6 +168,7 @@ export default function Solitaire() {
     if (gameStatus !== 'playing' || autoCompleting) return
     setSelection(null)
     pushUndo(gameState)
+    sfx.play('flip')
     setGameState(drawFromStock(gameState))
   }, [gameState, gameStatus, autoCompleting, pushUndo])
 
@@ -164,6 +176,7 @@ export default function Solitaire() {
 
   const handleWasteClick = useCallback(() => {
     if (gameStatus !== 'playing' || gameState.waste.length === 0 || autoCompleting) return
+    sfx.play('pickup')
     setSelection({ type: 'waste', pileIndex: 0, cardIndex: 0 })
   }, [gameState, gameStatus, autoCompleting])
 
@@ -173,6 +186,7 @@ export default function Solitaire() {
     const result = tryAutoFoundation(gameState, 'waste', 0, card)
     if (result) {
       pushUndo(gameState)
+      sfx.play('place')
       setGameState(result)
       setSelection(null)
     }
@@ -198,6 +212,7 @@ export default function Solitaire() {
 
     if (card && canMoveToFoundation(card, gameState.foundations[foundationIndex])) {
       pushUndo(gameState)
+      sfx.play('place')
       setGameState(moveToFoundation(gameState, selection.type, selection.pileIndex, foundationIndex))
     }
     setSelection(null)
@@ -207,6 +222,9 @@ export default function Solitaire() {
 
   const handleTableauClick = useCallback((pileIndex: number, cardIndex: number) => {
     if (gameStatus !== 'playing' || autoCompleting) return
+    music.init()
+    sfx.init()
+    music.start()
     const pile = gameState.tableau[pileIndex]
 
     // Click on empty pile
@@ -219,6 +237,7 @@ export default function Solitaire() {
 
         if (sourceCard && canMoveToTableau(sourceCard, pile)) {
           pushUndo(gameState)
+          sfx.play('place')
           const count = selection.type === 'waste'
             ? 1
             : gameState.tableau[selection.pileIndex].length - selection.cardIndex
@@ -239,6 +258,7 @@ export default function Solitaire() {
 
     // If nothing selected, select this card
     if (!selection) {
+      sfx.play('pickup')
       setSelection({ type: 'tableau', pileIndex, cardIndex })
       return
     }
@@ -257,6 +277,7 @@ export default function Solitaire() {
     // Target is top card of destination pile
     if (sourceCard && canMoveToTableau(sourceCard, pile)) {
       pushUndo(gameState)
+      sfx.play('place')
       const count = selection.type === 'waste'
         ? 1
         : gameState.tableau[selection.pileIndex].length - selection.cardIndex
@@ -279,6 +300,7 @@ export default function Solitaire() {
     const result = tryAutoFoundation(gameState, 'tableau', pileIndex, card)
     if (result) {
       pushUndo(gameState)
+      sfx.play('place')
       setGameState(result)
       setSelection(null)
     }
@@ -365,6 +387,7 @@ export default function Solitaire() {
         </button>
       </div>
       <span className="text-xs text-slate-400">Moves: {gameState.moves}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -500,6 +523,8 @@ export default function Solitaire() {
             score={gameState.moves}
             message={`Completed in ${gameState.moves} moves`}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

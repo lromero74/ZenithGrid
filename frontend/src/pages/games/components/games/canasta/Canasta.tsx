@@ -5,7 +5,7 @@
  * Canasta = 7+ cards. First team to 5000 wins.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
@@ -13,6 +13,10 @@ import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import type { Card } from '../../../utils/cardUtils'
 import { getRankDisplay, getSuitSymbol, getCardColor } from '../../../utils/cardUtils'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createCanastaGame,
   drawFromStock,
@@ -118,6 +122,11 @@ export default function Canasta() {
   const { load, save, clear } = useGameState<SavedState>('canasta')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('canasta'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('canasta')
+
   const [gameState, setGameState] = useState<CanastaState>(
     () => saved?.gameState ?? createCanastaGame()
   )
@@ -135,6 +144,7 @@ export default function Canasta() {
   // Detect game over
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
+      if (gameState.teamScores[0] > gameState.teamScores[1]) sfx.play('gin')
       setGameStatus(gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost')
       clear()
     }
@@ -176,6 +186,9 @@ export default function Canasta() {
   // ── Handlers ─────────────────────────────────────────────────────
 
   const handleDraw = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
     setGameState(prev => drawFromStock(prev))
     setSelectedCards([])
   }, [])
@@ -187,6 +200,7 @@ export default function Canasta() {
 
   const handleMeld = useCallback(() => {
     if (selectedCards.length === 0) return
+    sfx.play('meld')
     // Check if any existing team meld matches the selected cards' rank
     const player = gameState.currentPlayer
     const team = player % 2
@@ -215,6 +229,7 @@ export default function Canasta() {
   }, [selectedCards])
 
   const handleGoOut = useCallback(() => {
+    sfx.play('knock')
     setGameState(prev => goOut(prev))
     setSelectedCards([])
   }, [])
@@ -264,6 +279,7 @@ export default function Canasta() {
         <span>Pile: {gameState.discardPile.length}</span>
         {gameState.pileFrozen && <span className="text-cyan-400">Frozen</span>}
       </div>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -496,6 +512,8 @@ export default function Canasta() {
             score={gameState.teamScores[0]}
             message={gameState.message}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

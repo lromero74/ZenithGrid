@@ -2,13 +2,17 @@
  * Freecell — all cards face-up solitaire variant.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getSuitSymbol, type Suit } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   dealFreecell,
   moveToFreecell,
@@ -38,6 +42,11 @@ export default function Freecell() {
   const { load, save, clear } = useGameState<SavedState>('freecell')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('freecell'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('freecell')
+
   const [gameState, setGameState] = useState<FreecellState>(
     () => saved?.gameState ?? dealFreecell()
   )
@@ -55,6 +64,7 @@ export default function Freecell() {
 
   useEffect(() => {
     if (checkWin(gameState)) {
+      sfx.play('win')
       setGameStatus('won')
       setSelection(null)
       clear()
@@ -103,6 +113,7 @@ export default function Freecell() {
         const result = moveToFreecell(gameState, selection.colOrCell)
         if (result) {
           pushUndo(gameState)
+          sfx.play('place')
           setGameState(result)
         }
       } else if (card && !selection) {
@@ -115,6 +126,7 @@ export default function Freecell() {
     }
 
     if (card) {
+      sfx.play('pickup')
       setSelection({ type: 'freecell', colOrCell: cellIdx })
     }
   }, [gameState, gameStatus, selection, pushUndo])
@@ -127,12 +139,14 @@ export default function Freecell() {
       const result = moveFromFreecell(gameState, selection.colOrCell, 'foundation', fIdx)
       if (result) {
         pushUndo(gameState)
+        sfx.play('place')
         setGameState(result)
       }
     } else if (selection.type === 'tableau') {
       const result = moveTableauToFoundation(gameState, selection.colOrCell)
       if (result) {
         pushUndo(gameState)
+        sfx.play('place')
         setGameState(result)
       }
     }
@@ -142,6 +156,9 @@ export default function Freecell() {
   // Click on tableau column/card
   const handleTableauClick = useCallback((colIdx: number, cardIdx?: number) => {
     if (gameStatus !== 'playing') return
+    music.init()
+    sfx.init()
+    music.start()
     const col = gameState.tableau[colIdx]
 
     if (selection) {
@@ -150,6 +167,7 @@ export default function Freecell() {
         const result = moveFromFreecell(gameState, selection.colOrCell, 'tableau', colIdx)
         if (result) {
           pushUndo(gameState)
+          sfx.play('place')
           setGameState(result)
           setSelection(null)
           return
@@ -159,6 +177,7 @@ export default function Freecell() {
         const result = moveTableauStack(gameState, selection.colOrCell, srcIdx, colIdx)
         if (result) {
           pushUndo(gameState)
+          sfx.play('place')
           setGameState(result)
           setSelection(null)
           return
@@ -176,6 +195,7 @@ export default function Freecell() {
 
     // Nothing selected — select this card
     if (cardIdx !== undefined && col[cardIdx]) {
+      sfx.play('pickup')
       setSelection({ type: 'tableau', colOrCell: colIdx, cardIndex: cardIdx })
     }
   }, [gameState, gameStatus, selection, pushUndo])
@@ -186,6 +206,7 @@ export default function Freecell() {
     const result = moveTableauToFoundation(gameState, colIdx)
     if (result) {
       pushUndo(gameState)
+      sfx.play('place')
       setGameState(result)
       setSelection(null)
     }
@@ -215,6 +236,7 @@ export default function Freecell() {
         </button>
       </div>
       <span className="text-xs text-slate-400">Moves: {gameState.moves}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -295,6 +317,8 @@ export default function Freecell() {
             score={gameState.moves}
             message={`Completed in ${gameState.moves} moves`}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

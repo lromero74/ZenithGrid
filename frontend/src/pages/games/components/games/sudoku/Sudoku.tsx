@@ -18,6 +18,10 @@ import {
 import { SudokuBoard } from './SudokuBoard'
 import { SudokuControls } from './SudokuControls'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 interface PuzzleState {
   puzzle: Board
@@ -32,6 +36,11 @@ function createPuzzleState(difficulty: Difficulty): PuzzleState {
 }
 
 export default function Sudoku() {
+  // Music
+  const song = useMemo(() => getSongForGame('sudoku'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('sudoku')
+
   const [difficulty, setDifficulty] = useState<Difficulty>('easy')
   const [puzzleState, setPuzzleState] = useState(() => createPuzzleState('easy'))
   const [board, setBoard] = useState<Board>(() => cloneBoard(puzzleState.puzzle))
@@ -71,9 +80,12 @@ export default function Sudoku() {
 
   const handleCellClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing') return
+    music.init()
+    sfx.init()
+    music.start()
     if (!timer.isRunning) timer.start()
     setSelected([r, c])
-  }, [gameStatus, timer])
+  }, [gameStatus, timer, music])
 
   const handleDigit = useCallback((num: number) => {
     if (!selected || gameStatus !== 'playing') return
@@ -96,6 +108,7 @@ export default function Sudoku() {
     setHistory(prev => [...prev.slice(-30), cloneBoard(board)])
     const newBoard = cloneBoard(board)
     newBoard[r][c] = num
+    sfx.play('enter')
     setBoard(newBoard)
 
     // Clear notes for this cell
@@ -106,6 +119,7 @@ export default function Sudoku() {
     })
 
     if (checkWin(newBoard)) {
+      sfx.play('win')
       setGameStatus('won')
       timer.stop()
     }
@@ -162,14 +176,18 @@ export default function Sudoku() {
     setGameStatus('playing')
     setDifficulty(d)
     timer.reset()
-  }, [difficulty, timer])
+    music.start()
+  }, [difficulty, timer, music])
 
   const controls = (
-    <DifficultySelector
-      value={difficulty}
-      onChange={(d) => handleNewGame(d as Difficulty)}
-      options={['easy', 'medium', 'hard', 'expert']}
-    />
+    <div className="flex items-center justify-between">
+      <DifficultySelector
+        value={difficulty}
+        onChange={(d) => handleNewGame(d as Difficulty)}
+        options={['easy', 'medium', 'hard', 'expert']}
+      />
+      <MusicToggle music={music} sfx={sfx} />
+    </div>
   )
 
   return (
@@ -202,6 +220,8 @@ export default function Sudoku() {
             status="won"
             message={`Completed in ${timer.formatted}`}
             onPlayAgain={() => handleNewGame()}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

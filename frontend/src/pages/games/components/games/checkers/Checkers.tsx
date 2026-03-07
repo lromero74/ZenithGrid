@@ -5,7 +5,7 @@
  * multi-jump chains, king promotion, score tracking.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -17,6 +17,10 @@ import {
 import { CheckersBoard } from './CheckersBoard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus, Difficulty } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 const DIFFICULTY_DEPTH: Record<string, number> = {
   easy: 2, medium: 4, hard: 6,
@@ -33,6 +37,11 @@ interface CheckersState {
 export default function Checkers() {
   const { load, save, clear } = useGameState<CheckersState>('checkers')
   const saved = useRef(load()).current
+
+  // Music
+  const song = useMemo(() => getSongForGame('checkers'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('checkers')
 
   const [board, setBoard] = useState<Board>(saved?.board ?? createBoard)
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
@@ -58,6 +67,10 @@ export default function Checkers() {
   const handleSquareClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing' || !isPlayerTurn || aiThinking.current) return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const piece = board[r][c]
 
     // If clicking on own piece, select it
@@ -75,7 +88,10 @@ export default function Checkers() {
       const move = validMoves.find(m => m.to[0] === r && m.to[1] === c)
       if (move) {
         let newBoard = applyMove(board, move)
+        const wasKing = board[move.from[0]][move.from[1]]?.isKing
         newBoard = promoteKings(newBoard)
+        if (move.captures.length > 0) { sfx.play('jump') } else { sfx.play('move') }
+        if (!wasKing && newBoard[move.to[0]][move.to[1]]?.isKing) { sfx.play('king') }
         setBoard(newBoard)
         setLastMove(move)
         setSelectedPiece(null)
@@ -94,6 +110,7 @@ export default function Checkers() {
 
         const winner = checkGameOver(newBoard)
         if (winner === 'red') {
+          sfx.play('win')
           setGameStatus('won')
           setScores(s => ({ ...s, red: s.red + 1 }))
         } else if (winner === 'black') {
@@ -154,7 +171,8 @@ export default function Checkers() {
     setLastMove(null)
     setIsPlayerTurn(true)
     clear()
-  }, [clear])
+    music.start()
+  }, [clear, music])
 
   const controls = (
     <div className="flex items-center justify-between">
@@ -171,10 +189,11 @@ export default function Checkers() {
           New Game
         </button>
       </div>
-      <div className="flex space-x-3 text-xs">
+      <div className="flex items-center space-x-3 text-xs">
         <span className="text-red-400">You: {scores.red}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>
         <span className="text-slate-300">AI: {scores.black}</span>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -199,6 +218,8 @@ export default function Checkers() {
           <GameOverModal
             status={gameStatus}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

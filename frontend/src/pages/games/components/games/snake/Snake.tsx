@@ -5,7 +5,7 @@
  * speed progression, high score tracking.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
@@ -16,6 +16,10 @@ import {
   type Position, type Direction,
 } from './snakeEngine'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 const GRID_SIZE = 20
 const CELL_SIZE_DESKTOP = 20
@@ -30,6 +34,11 @@ const INITIAL_SNAKE: Position[] = [
 ]
 
 export default function Snake() {
+  // Music
+  const song = useMemo(() => getSongForGame('snake'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('snake')
+
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [wallsMode, setWallsMode] = useState(true) // true = walls kill
@@ -90,6 +99,7 @@ export default function Snake() {
     setGameStatus('lost')
     if (gameLoopRef.current) clearTimeout(gameLoopRef.current)
     saveScore('snake', scoreRef.current)
+    sfx.play('die')
   }, [saveScore])
 
   const tick = useCallback(() => {
@@ -114,6 +124,7 @@ export default function Snake() {
     if (checkSelfCollision(snakeRef.current)) { gameOver(); return }
 
     if (ateFood) {
+      sfx.play('eat')
       scoreRef.current += 1
       setScore(scoreRef.current)
       foodRef.current = generateFood(snakeRef.current, GRID_SIZE)
@@ -132,9 +143,12 @@ export default function Snake() {
     setScore(0)
     gameStatusRef.current = 'playing'
     setGameStatus('playing')
+    music.init()
+    sfx.init()
+    music.start()
     draw()
     gameLoopRef.current = setTimeout(tick, getSpeed(0))
-  }, [draw, tick])
+  }, [draw, tick, music])
 
   const togglePause = useCallback(() => {
     if (gameStatusRef.current === 'playing') {
@@ -219,9 +233,12 @@ export default function Snake() {
           Walls: {wallsMode ? 'Kill' : 'Wrap'}
         </button>
       </div>
-      <span className="text-xs text-slate-500">
-        Level {Math.floor(score / 5) + 1}
-      </span>
+      <div className="flex items-center gap-2">
+        <MusicToggle music={music} sfx={sfx} />
+        <span className="text-xs text-slate-500">
+          Level {Math.floor(score / 5) + 1}
+        </span>
+      </div>
     </div>
   )
 
@@ -283,6 +300,8 @@ export default function Snake() {
             score={score}
             bestScore={bestScore}
             onPlayAgain={startGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

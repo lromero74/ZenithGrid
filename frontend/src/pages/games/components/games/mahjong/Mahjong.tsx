@@ -17,11 +17,20 @@ import {
 import { MahjongTile, type TileTheme } from './MahjongTile'
 import { TURTLE_LAYOUT, PYRAMID_LAYOUT } from './layouts'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 type LayoutName = 'turtle' | 'pyramid'
 const LAYOUTS = { turtle: TURTLE_LAYOUT, pyramid: PYRAMID_LAYOUT }
 
 export default function Mahjong() {
+  // Music
+  const song = useMemo(() => getSongForGame('mahjong'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('mahjong')
+
   const [layoutName, setLayoutName] = useState<LayoutName>('pyramid')
   const [tileTheme, setTileTheme] = useState<TileTheme>('kanji')
   const [game, setGame] = useState(() => createGame(LAYOUTS.pyramid))
@@ -37,6 +46,9 @@ export default function Mahjong() {
 
   const handleTileClick = useCallback((id: number) => {
     if (gameStatus !== 'playing') return
+    music.init()
+    sfx.init()
+    music.start()
     if (!timer.isRunning) timer.start()
     setHintPair(null)
 
@@ -44,6 +56,7 @@ export default function Mahjong() {
     if (!tile || tile.removed || !isTileFree(tile, game.tiles)) return
 
     if (selectedId === null) {
+      sfx.play('select')
       setSelectedId(id)
       return
     }
@@ -57,12 +70,14 @@ export default function Mahjong() {
     if (!selectedTile) { setSelectedId(null); return }
 
     if (canMatch(selectedTile, tile) && isTileFree(selectedTile, game.tiles)) {
+      sfx.play('match')
       setHistory(prev => [...prev.slice(-30), game.tiles])
       const newTiles = removePair(game.tiles, selectedId, id)
       setGame({ ...game, tiles: newTiles })
       setSelectedId(null)
 
       if (isGameWon(newTiles)) {
+        sfx.play('win')
         setGameStatus('won')
         timer.stop()
       } else if (isGameOver(newTiles)) {
@@ -110,7 +125,8 @@ export default function Mahjong() {
     setHistory([])
     setShuffle(3)
     timer.reset()
-  }, [layoutName, timer])
+    music.start()
+  }, [layoutName, timer, music])
 
   const controls = (
     <div className="flex items-center justify-between">
@@ -148,6 +164,7 @@ export default function Mahjong() {
         <button onClick={() => handleNewGame()} className="p-1 hover:bg-slate-700 rounded transition-colors" title="New Game">
           <RotateCcw className="w-4 h-4 text-slate-400" />
         </button>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -178,6 +195,8 @@ export default function Mahjong() {
             status={gameStatus}
             message={gameStatus === 'won' ? `Cleared in ${timer.formatted}` : 'No more moves available'}
             onPlayAgain={() => handleNewGame()}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

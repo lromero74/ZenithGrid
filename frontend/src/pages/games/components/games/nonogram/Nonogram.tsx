@@ -18,10 +18,19 @@ import {
 import { NonogramGrid } from './NonogramGrid'
 import { PUZZLES_5X5, PUZZLES_10X10, PUZZLES_15X15 } from './puzzles'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 type SizeFilter = '5x5' | '10x10' | '15x15'
 
 export default function Nonogram() {
+  // Music
+  const song = useMemo(() => getSongForGame('nonogram'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('nonogram')
+
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>('5x5')
   const [puzzleIndex, setPuzzleIndex] = useState(0)
   const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
@@ -51,14 +60,19 @@ export default function Nonogram() {
 
   const handleCellClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing') return
+    music.init()
+    sfx.init()
+    music.start()
     if (!timer.isRunning) timer.start()
 
     const current = grid[r][c]
     const next: CellState = current === 'unknown' ? 'filled' : current === 'filled' ? 'unknown' : 'unknown'
+    if (next === 'filled') { sfx.play('fill') }
     const newGrid = setCell(grid, r, c, next)
     setGrid(newGrid)
 
     if (isPuzzleComplete(newGrid, clues.rowClues, clues.colClues)) {
+      sfx.play('win')
       setGameStatus('won')
       timer.stop()
     }
@@ -70,6 +84,7 @@ export default function Nonogram() {
 
     const current = grid[r][c]
     const next: CellState = current === 'unknown' ? 'empty' : current === 'empty' ? 'unknown' : 'unknown'
+    if (next === 'empty') { sfx.play('mark') }
     setGrid(setCell(grid, r, c, next))
   }, [grid, gameStatus, timer])
 
@@ -86,7 +101,8 @@ export default function Nonogram() {
     setGrid(createGrid(nextPuzzle.solution.length, nextPuzzle.solution[0].length))
     setGameStatus('playing')
     timer.reset()
-  }, [puzzleIndex, filteredPuzzles, timer])
+    music.start()
+  }, [puzzleIndex, filteredPuzzles, timer, music])
 
   const handleSizeChange = useCallback((size: SizeFilter) => {
     setSizeFilter(size)
@@ -124,6 +140,7 @@ export default function Nonogram() {
         >
           <RotateCcw className="w-4 h-4 text-slate-400" />
         </button>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -160,6 +177,8 @@ export default function Nonogram() {
             message={`Completed "${puzzle.name}" in ${timer.formatted}`}
             onPlayAgain={handleNextPuzzle}
             playAgainText="Next Puzzle"
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

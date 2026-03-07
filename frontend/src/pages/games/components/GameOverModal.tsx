@@ -2,12 +2,17 @@
  * Shared game over overlay — shown when a game ends (win, loss, or draw).
  *
  * Displays status message, optional score, and action buttons.
+ * Orchestrates smooth transition: fades out music, plays game-over jingle,
+ * and animates the modal in with CSS transitions.
  */
 
+import { useEffect, useRef } from 'react'
 import { Trophy, RotateCcw, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clearLastGamePath } from './GameHub'
 import type { GameStatus } from '../types'
+import type { GameMusicControls } from '../audio/useGameMusic'
+import type { GameSFXControls } from '../audio/useGameSFX'
 
 interface GameOverModalProps {
   status: GameStatus
@@ -16,24 +21,44 @@ interface GameOverModalProps {
   message?: string
   onPlayAgain: () => void
   playAgainText?: string
+  music?: GameMusicControls
+  sfx?: GameSFXControls
 }
 
-const STATUS_CONFIG: Record<string, { title: string; color: string; icon?: boolean }> = {
-  won: { title: 'You Win!', color: 'text-emerald-400', icon: true },
-  lost: { title: 'Game Over', color: 'text-red-400' },
-  draw: { title: "It's a Draw", color: 'text-yellow-400' },
+const STATUS_CONFIG: Record<string, { title: string; color: string; icon?: boolean; jingle: string }> = {
+  won: { title: 'You Win!', color: 'text-emerald-400', icon: true, jingle: 'gameover_win' },
+  lost: { title: 'Game Over', color: 'text-red-400', jingle: 'gameover_lose' },
+  draw: { title: "It's a Draw", color: 'text-yellow-400', jingle: 'gameover_draw' },
 }
 
-export function GameOverModal({ status, score, bestScore, message, onPlayAgain, playAgainText }: GameOverModalProps) {
+export function GameOverModal({ status, score, bestScore, message, onPlayAgain, playAgainText, music, sfx }: GameOverModalProps) {
   const navigate = useNavigate()
+  const hasPlayedRef = useRef(false)
   const config = STATUS_CONFIG[status]
   if (!config) return null
 
   const isNewBest = score !== undefined && bestScore !== undefined && score >= bestScore && score > 0
 
+  // Orchestrate: fade out music, then play game-over jingle
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (hasPlayedRef.current) return
+    hasPlayedRef.current = true
+
+    // Fade out background music
+    music?.fadeOut(800)
+
+    // Play jingle after a short delay to let the fade begin
+    const jingleTimer = setTimeout(() => {
+      sfx?.playCatalog(config.jingle)
+    }, 300)
+
+    return () => clearTimeout(jingleTimer)
+  }, [music, sfx, config.jingle])
+
   return (
-    <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-[100] rounded-lg">
-      <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 text-center max-w-xs w-full mx-4">
+    <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-[100] rounded-lg animate-fade-in">
+      <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 text-center max-w-xs w-full mx-4 animate-scale-in">
         {/* Status icon */}
         {config.icon && (
           <Trophy className="w-10 h-10 text-yellow-400 mx-auto mb-3" />

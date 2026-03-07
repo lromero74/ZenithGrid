@@ -5,7 +5,7 @@
  * gold collection, brick digging, guard AI, responsive scaling.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -17,6 +17,10 @@ import {
 } from './lodeRunnerEngine'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
+import { useGameSFX } from '../../../audio/useGameSFX'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -691,6 +695,11 @@ export default function LodeRunner() {
   const bestScore = getHighScore('lode-runner') ?? 0
   const { load: loadSaved, save: saveState, clear: clearSaved } = useGameState<GameState>('lode-runner')
 
+  // Music
+  const song = useMemo(() => getSongForGame('lode-runner'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('lode-runner')
+
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [level, setLevel] = useState(1)
@@ -801,8 +810,25 @@ export default function LodeRunner() {
       digRightPressedRef.current = false
     }
 
+    const prevScore = gsRef.current.score
+    const prevPlayerAlive = gsRef.current.player.alive
     const gs = updateGame(gsRef.current, dt, input)
     gsRef.current = gs
+
+    // Detect gold collection (score increased)
+    if (gs.score > prevScore) {
+      sfx.play('collect')
+    }
+
+    // Detect dig action
+    if (input.digLeft || input.digRight) {
+      sfx.play('dig')
+    }
+
+    // Detect player death
+    if (prevPlayerAlive && !gs.player.alive) {
+      sfx.play('die')
+    }
 
     // Sync React state
     setScore(gs.score)
@@ -821,6 +847,7 @@ export default function LodeRunner() {
 
     // Check level complete
     if (gs.levelComplete) {
+      sfx.play('level')
       const next = nextLevel(gs)
       gsRef.current = next
       if (next.won) {
@@ -858,10 +885,13 @@ export default function LodeRunner() {
 
     gameStatusRef.current = 'playing'
     setGameStatus('playing')
+    music.init()
+    sfx.init()
+    music.start()
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick, clearSaved])
+  }, [draw, tick, clearSaved, music, sfx])
 
   // -------------------------------------------------------------------------
   // Keyboard controls
@@ -994,13 +1024,16 @@ export default function LodeRunner() {
       <span className="text-xs text-slate-400">
         Lvl {level}/{TOTAL_LEVELS}
       </span>
-      <button
-        onClick={startGame}
-        className="px-3 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300
-                   hover:bg-slate-600 transition-colors"
-      >
-        New Game
-      </button>
+      <div className="flex items-center gap-2">
+        <MusicToggle music={music} sfx={sfx} />
+        <button
+          onClick={startGame}
+          className="px-3 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300
+                     hover:bg-slate-600 transition-colors"
+        >
+          New Game
+        </button>
+      </div>
     </div>
   )
 
@@ -1075,6 +1108,8 @@ export default function LodeRunner() {
             bestScore={bestScore}
             message={`Reached level ${level} of ${TOTAL_LEVELS}`}
             onPlayAgain={startGame}
+            music={music}
+            sfx={sfx}
           />
         )}
 
@@ -1086,6 +1121,8 @@ export default function LodeRunner() {
             bestScore={bestScore}
             message="All 10 levels completed!"
             onPlayAgain={startGame}
+            music={music}
+            sfx={sfx}
           />
         )}
 

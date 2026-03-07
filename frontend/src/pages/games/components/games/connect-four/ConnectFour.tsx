@@ -5,7 +5,7 @@
  * win highlighting, score tracking.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -16,12 +16,21 @@ import {
 } from './connectFourEngine'
 import { ConnectFourBoard } from './ConnectFourBoard'
 import type { GameStatus, Difficulty } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 
 const DIFFICULTY_DEPTH: Record<string, number> = {
   easy: 2, medium: 4, hard: 6,
 }
 
 export default function ConnectFour() {
+  // Music
+  const song = useMemo(() => getSongForGame('connect-four'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('connect-four')
+
   const [board, setBoard] = useState<Board>(createBoard)
   const [currentPlayer, setCurrentPlayer] = useState<Player>('red')
   const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
@@ -35,18 +44,25 @@ export default function ConnectFour() {
     if (gameStatus !== 'playing' || currentPlayer !== 'red' || aiThinking.current) return
     if (!getValidColumns(board).includes(col)) return
 
+    music.init()
+    sfx.init()
+    music.start()
+
     const { board: newBoard, row } = dropDisc(board, col, 'red')
     if (row === -1) return
 
+    sfx.play('drop')
     setBoard(newBoard)
     const winner = checkWinner(newBoard)
     if (winner) {
       setWinResult(winner)
+      sfx.play('win')
       setGameStatus('won')
       setScores(s => ({ ...s, red: s.red + 1 }))
       return
     }
     if (isBoardFull(newBoard)) {
+      sfx.play('draw')
       setGameStatus('draw')
       setScores(s => ({ ...s, draw: s.draw + 1 }))
       return
@@ -63,6 +79,7 @@ export default function ConnectFour() {
       const depth = DIFFICULTY_DEPTH[difficulty] || 4
       const col = getAIMove(board, 'yellow', depth)
       const { board: newBoard } = dropDisc(board, col, 'yellow')
+      sfx.play('drop')
       setBoard(newBoard)
 
       const winner = checkWinner(newBoard)
@@ -88,7 +105,8 @@ export default function ConnectFour() {
     setGameStatus('playing')
     setWinResult(null)
     setHoverCol(null)
-  }, [])
+    music.start()
+  }, [music])
 
   const controls = (
     <div className="flex items-center justify-between">
@@ -97,10 +115,11 @@ export default function ConnectFour() {
         onChange={(d) => { setDifficulty(d); handleNewGame() }}
         options={['easy', 'medium', 'hard']}
       />
-      <div className="flex space-x-3 text-xs">
+      <div className="flex items-center space-x-3 text-xs">
         <span className="text-red-400">You: {scores.red}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>
         <span className="text-yellow-400">AI: {scores.yellow}</span>
+        <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
   )
@@ -135,6 +154,8 @@ export default function ConnectFour() {
           <GameOverModal
             status={gameStatus}
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>

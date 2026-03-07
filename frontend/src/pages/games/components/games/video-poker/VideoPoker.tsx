@@ -2,12 +2,16 @@
  * Video Poker (Jacks or Better) — hold/draw poker against the machine.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
+import { useGameMusic } from '../../../audio/useGameMusic'
+import { useGameSFX } from '../../../audio/useGameSFX'
+import { getSongForGame } from '../../../audio/songRegistry'
+import { MusicToggle } from '../../MusicToggle'
 import {
   createVideoPokerGame,
   deal,
@@ -31,6 +35,11 @@ export default function VideoPoker() {
   const { load, save, clear } = useGameState<SavedState>('video-poker')
   const saved = useRef(load()).current
 
+  // Music
+  const song = useMemo(() => getSongForGame('video-poker'), [])
+  const music = useGameMusic(song)
+  const sfx = useGameSFX('video-poker')
+
   const [gameState, setGameState] = useState<VideoPokerState>(
     () => saved?.gameState ?? createVideoPokerGame()
   )
@@ -49,13 +58,21 @@ export default function VideoPoker() {
     }
   }, [gameState, clear])
 
+  // SFX on result
+  useEffect(() => {
+    if (gameState.phase === 'result' && gameState.lastResult) {
+      if (gameState.lastResult.name === 'Royal Flush') sfx.play('jackpot')
+      else if (gameState.lastResult.multiplier > 0) sfx.play('win')
+    }
+  }, [gameState.phase])
+
   const handleBetChange = useCallback((delta: number) => {
     setGameState(prev => setBet(prev, prev.bet + delta))
   }, [])
 
-  const handleDeal = useCallback(() => setGameState(prev => deal(prev)), [])
-  const handleToggle = useCallback((i: number) => setGameState(prev => toggleHold(prev, i)), [])
-  const handleDraw = useCallback(() => setGameState(prev => draw(prev)), [])
+  const handleDeal = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('deal'); setGameState(prev => deal(prev)) }, [])
+  const handleToggle = useCallback((i: number) => { sfx.play('hold'); setGameState(prev => toggleHold(prev, i)) }, [])
+  const handleDraw = useCallback(() => { sfx.play('draw'); setGameState(prev => draw(prev)) }, [])
   const handleNewHand = useCallback(() => setGameState(prev => newHand(prev)), [])
 
   const handleNewGame = useCallback(() => {
@@ -70,6 +87,7 @@ export default function VideoPoker() {
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-400">Jacks or Better</span>
       <span className="text-xs text-yellow-400 font-mono">Credits: {gameState.credits}</span>
+      <MusicToggle music={music} sfx={sfx} />
     </div>
   )
 
@@ -190,6 +208,8 @@ export default function VideoPoker() {
             status="lost"
             message="You're out of credits!"
             onPlayAgain={handleNewGame}
+            music={music}
+            sfx={sfx}
           />
         )}
       </div>
