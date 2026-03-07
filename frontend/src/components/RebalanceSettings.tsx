@@ -325,7 +325,7 @@ export function RebalanceSettings({ accounts }: RebalanceSettingsProps) {
                           <div className="text-xs text-slate-500">ETH</div>
                         </div>
                         <div className="col-span-3 text-xs text-slate-500 mt-1">
-                          Free capital: ${status.total_free_value_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          Total value: ${status.total_value_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     ) : (
