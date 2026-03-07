@@ -194,6 +194,27 @@ class AutoBuySettingsUpdate(BaseModel):
     usdt_min: Optional[float] = None
 
 
+# Portfolio Rebalancing Schemas
+class RebalanceSettingsResponse(BaseModel):
+    """Portfolio rebalance settings for an account"""
+    enabled: bool
+    target_usd_pct: float
+    target_btc_pct: float
+    target_eth_pct: float
+    drift_threshold_pct: float
+    check_interval_minutes: int
+
+
+class RebalanceSettingsUpdate(BaseModel):
+    """Update model for rebalance settings (all fields optional)"""
+    enabled: Optional[bool] = None
+    target_usd_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+    target_btc_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+    target_eth_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+    drift_threshold_pct: Optional[float] = Field(None, ge=1.0, le=10.0)
+    check_interval_minutes: Optional[int] = Field(None, ge=15, le=1440)
+
+
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -887,3 +908,153 @@ async def get_perps_portfolio_status(
         "margin_type": account.margin_type,
         "linked": account.perps_portfolio_uuid is not None,
     }
+
+
+# =============================================================================
+# Portfolio Rebalancing Endpoints
+# =============================================================================
+
+
+@router.get("/{account_id}/rebalance-settings", response_model=RebalanceSettingsResponse)
+async def get_rebalance_settings(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get portfolio rebalance settings for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    return RebalanceSettingsResponse(
+        enabled=account.rebalance_enabled or False,
+        target_usd_pct=account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
+        target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
+        target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
+        drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
+        check_interval_minutes=account.rebalance_check_interval_minutes or 60,
+    )
+
+
+@router.put("/{account_id}/rebalance-settings", response_model=RebalanceSettingsResponse)
+async def update_rebalance_settings(
+    account_id: int,
+    settings: RebalanceSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
+):
+    """Update portfolio rebalance settings for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # If percentages are being updated, validate they sum to 100
+    usd = settings.target_usd_pct if settings.target_usd_pct is not None else account.rebalance_target_usd_pct or 34.0
+    btc = settings.target_btc_pct if settings.target_btc_pct is not None else account.rebalance_target_btc_pct or 33.0
+    eth = settings.target_eth_pct if settings.target_eth_pct is not None else account.rebalance_target_eth_pct or 33.0
+
+    pct_total = usd + btc + eth
+    if abs(pct_total - 100.0) > 0.1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target percentages must sum to 100% (got {pct_total:.1f}%)"
+        )
+
+    # Update fields
+    if settings.enabled is not None:
+        account.rebalance_enabled = settings.enabled
+    if settings.target_usd_pct is not None:
+        account.rebalance_target_usd_pct = settings.target_usd_pct
+    if settings.target_btc_pct is not None:
+        account.rebalance_target_btc_pct = settings.target_btc_pct
+    if settings.target_eth_pct is not None:
+        account.rebalance_target_eth_pct = settings.target_eth_pct
+    if settings.drift_threshold_pct is not None:
+        account.rebalance_drift_threshold_pct = settings.drift_threshold_pct
+    if settings.check_interval_minutes is not None:
+        account.rebalance_check_interval_minutes = settings.check_interval_minutes
+
+    await db.commit()
+    await db.refresh(account)
+
+    return RebalanceSettingsResponse(
+        enabled=account.rebalance_enabled or False,
+        target_usd_pct=account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
+        target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
+        target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
+        drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
+        check_interval_minutes=account.rebalance_check_interval_minutes or 60,
+    )
+
+
+@router.get("/{account_id}/rebalance-status")
+async def get_rebalance_status(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current portfolio allocation vs targets for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    if account.type != "cex":
+        raise HTTPException(status_code=400, detail="Rebalancing only available for CEX accounts")
+
+    try:
+        from app.services.rebalance_monitor import calculate_current_allocations
+
+        coinbase = await get_coinbase_for_account(account)
+
+        # Fetch free balances
+        free_balances = {}
+        for currency in ("USD", "BTC", "ETH"):
+            try:
+                balance = await coinbase.get_currency_balance(currency)
+                free_balances[currency] = float(balance)
+            except Exception:
+                free_balances[currency] = 0.0
+
+        # Fetch prices
+        prices = {}
+        for product_id in ("BTC-USD", "ETH-USD"):
+            try:
+                price = await coinbase.get_current_price(product_id)
+                prices[product_id] = float(price)
+            except Exception:
+                prices[product_id] = 0.0
+
+        current = calculate_current_allocations(free_balances, prices)
+
+        return {
+            "account_id": account_id,
+            "current_usd_pct": round(current["usd_pct"], 2),
+            "current_btc_pct": round(current["btc_pct"], 2),
+            "current_eth_pct": round(current["eth_pct"], 2),
+            "total_free_value_usd": round(current["total_value_usd"], 2),
+            "target_usd_pct": account.rebalance_target_usd_pct or 34.0,
+            "target_btc_pct": account.rebalance_target_btc_pct or 33.0,
+            "target_eth_pct": account.rebalance_target_eth_pct or 33.0,
+            "rebalance_enabled": account.rebalance_enabled or False,
+        }
+
+    except (HTTPException, AppError):
+        raise
+    except Exception as e:
+        logger.error(f"Error getting rebalance status for account {account_id}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")

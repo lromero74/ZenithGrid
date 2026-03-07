@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.89.0] - 2026-03-07
+
+### Added
+- **Portfolio rebalancing**: Set target allocation percentages for USD, BTC, and ETH per exchange account — system automatically rebalances free capital when drift exceeds configurable threshold
+- **Rebalance settings UI**: Per-account linked sliders (always sum to 100%), drift threshold control, check interval selection, and live allocation status display in Settings
+- **Rebalance status endpoint**: View current vs target allocation percentages and total free capital value
+
+### Fixed
+- **Bot budget calculation**: USD bots no longer see BTC/ETH balances as part of their budget — now correctly uses only free quote currency plus open position values in that currency's pairs
+
 ## [v2.88.0] - 2026-03-07
 
 ### Added

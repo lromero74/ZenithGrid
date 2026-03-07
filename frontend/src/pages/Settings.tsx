@@ -5,6 +5,7 @@ import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
 import { AutoBuySettings } from '../components/AutoBuySettings'
+import { RebalanceSettings } from '../components/RebalanceSettings'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -911,6 +912,11 @@ export default function Settings() {
       {/* Auto-Buy BTC Section - Hidden when paper trading is active */}
       {!isPaperTradingActive && (
         <AutoBuySettings accounts={accounts} />
+      )}
+
+      {/* Portfolio Rebalancing - Hidden when paper trading is active */}
+      {!isPaperTradingActive && (
+        <RebalanceSettings accounts={accounts} />
       )}
 
       {/* Coin Categorization Section - Always visible (informational) */}

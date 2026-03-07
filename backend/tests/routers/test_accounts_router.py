@@ -566,3 +566,107 @@ class TestLinkPerpsPortfolio:
         )
         assert result["success"] is True
         assert result["portfolio_uuid"] == "test-uuid-123"
+
+
+# =============================================================================
+# Rebalance Settings
+# =============================================================================
+
+
+class TestRebalanceSettings:
+    """Tests for get/update rebalance settings."""
+
+    @pytest.mark.asyncio
+    async def test_get_rebalance_settings_defaults(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: returns default rebalance settings."""
+        from app.routers.accounts_router import get_rebalance_settings
+        result = await get_rebalance_settings(
+            account_id=test_account.id, db=db_session, current_user=test_user,
+        )
+        assert result.enabled is False
+        assert result.target_usd_pct == pytest.approx(34.0)
+        assert result.target_btc_pct == pytest.approx(33.0)
+        assert result.target_eth_pct == pytest.approx(33.0)
+        assert result.drift_threshold_pct == pytest.approx(5.0)
+        assert result.check_interval_minutes == 60
+
+    @pytest.mark.asyncio
+    async def test_update_rebalance_settings_happy_path(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: updates and persists rebalance settings."""
+        from app.routers.accounts_router import (
+            update_rebalance_settings, RebalanceSettingsUpdate,
+        )
+        settings = RebalanceSettingsUpdate(
+            enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
+        )
+        result = await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result.enabled is True
+        assert result.target_usd_pct == pytest.approx(50.0)
+        assert result.target_btc_pct == pytest.approx(30.0)
+        assert result.target_eth_pct == pytest.approx(20.0)
+
+    @pytest.mark.asyncio
+    async def test_update_rebalance_invalid_total(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure: percentages not summing to 100 raises 400."""
+        from app.routers.accounts_router import (
+            update_rebalance_settings, RebalanceSettingsUpdate,
+        )
+        settings = RebalanceSettingsUpdate(
+            target_usd_pct=50.0, target_btc_pct=40.0, target_eth_pct=20.0,
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await update_rebalance_settings(
+                account_id=test_account.id, settings=settings,
+                db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 400
+        assert "100%" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_get_rebalance_settings_not_found(self, db_session, test_user):
+        """Failure: non-existent account raises 404."""
+        from app.routers.accounts_router import get_rebalance_settings
+        with pytest.raises(HTTPException) as exc_info:
+            await get_rebalance_settings(
+                account_id=999, db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_rebalance_negative_pct(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure: negative percentage is rejected by Pydantic validation."""
+        from app.routers.accounts_router import RebalanceSettingsUpdate
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            RebalanceSettingsUpdate(target_usd_pct=-10.0)
+
+    @pytest.mark.asyncio
+    async def test_update_partial_only_interval(
+        self, db_session, test_user, test_account,
+    ):
+        """Edge case: partial update with only interval changes."""
+        from app.routers.accounts_router import (
+            update_rebalance_settings, RebalanceSettingsUpdate,
+        )
+        settings = RebalanceSettingsUpdate(
+            check_interval_minutes=30, drift_threshold_pct=3.0,
+        )
+        result = await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result.check_interval_minutes == 30
+        assert result.drift_threshold_pct == pytest.approx(3.0)
+        # Percentages remain at defaults
+        assert result.target_usd_pct == pytest.approx(34.0)

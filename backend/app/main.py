@@ -52,6 +52,7 @@ from app.routers import transfers_router  # Deposit/withdrawal tracking
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
+from app.services.rebalance_monitor import RebalanceMonitor
 from app.services.content_refresh_service import content_refresh_service
 from app.services.debt_ceiling_monitor import debt_ceiling_monitor
 from app.services.delisted_pair_monitor import TradingPairMonitor
@@ -115,6 +116,9 @@ set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 
 # Auto-buy BTC monitor - converts stablecoins to BTC based on account settings
 auto_buy_monitor = AutoBuyMonitor()
+
+# Portfolio rebalance monitor - maintains target USD/BTC/ETH allocations per account
+rebalance_monitor = RebalanceMonitor()
 
 # Perpetual futures position monitor - syncs open perps positions with exchange
 perps_monitor = PerpsMonitor(interval_seconds=60)
@@ -539,6 +543,10 @@ async def startup_event():
     await auto_buy_monitor.start()
     logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
 
+    logger.info("Starting portfolio rebalance monitor...")
+    await rebalance_monitor.start()
+    logger.info("Rebalance monitor started - maintaining target allocations per account")
+
     logger.info("Starting perps position monitor...")
     await perps_monitor.start()
     logger.info("Perps monitor started - syncing futures positions every 60s")
@@ -621,7 +629,7 @@ async def shutdown_event():
     logger.info("🛑 Stopping monitors...")
     for monitor in [
         price_monitor, content_refresh_service, domain_blacklist_service,
-        debt_ceiling_monitor, auto_buy_monitor, perps_monitor,
+        debt_ceiling_monitor, auto_buy_monitor, rebalance_monitor, perps_monitor,
     ]:
         if monitor:
             await monitor.stop()

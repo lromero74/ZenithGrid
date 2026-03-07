@@ -614,6 +614,37 @@ export const autoBuyApi = {
     api.put<AutoBuySettings>(`/accounts/${accountId}/auto-buy-settings`, settings).then((res) => res.data),
 };
 
+// Portfolio Rebalancing
+export interface RebalanceSettings {
+  enabled: boolean;
+  target_usd_pct: number;
+  target_btc_pct: number;
+  target_eth_pct: number;
+  drift_threshold_pct: number;
+  check_interval_minutes: number;
+}
+
+export interface RebalanceStatus {
+  account_id: number;
+  current_usd_pct: number;
+  current_btc_pct: number;
+  current_eth_pct: number;
+  total_free_value_usd: number;
+  target_usd_pct: number;
+  target_btc_pct: number;
+  target_eth_pct: number;
+  rebalance_enabled: boolean;
+}
+
+export const rebalanceApi = {
+  getSettings: (accountId: number) =>
+    api.get<RebalanceSettings>(`/accounts/${accountId}/rebalance-settings`).then((res) => res.data),
+  updateSettings: (accountId: number, settings: Partial<RebalanceSettings>) =>
+    api.put<RebalanceSettings>(`/accounts/${accountId}/rebalance-settings`, settings).then((res) => res.data),
+  getStatus: (accountId: number) =>
+    api.get<RebalanceStatus>(`/accounts/${accountId}/rebalance-status`).then((res) => res.data),
+};
+
 interface AccountValueSnapshot {
   date: string
   timestamp: string
