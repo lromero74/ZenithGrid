@@ -202,9 +202,11 @@ Use `/shipit` command for the full process. Key ordering:
 1. Lint + review diffs
 2. Commit with changelog + version updates (same commit)
 3. Merge to main (--no-ff)
-4. **Tag BEFORE restart** — backend snapshots `git describe --tags` at import time
+4. **Tag BEFORE deploy** — version is read live from git tags
 5. Push main + tags
-6. Deploy via `./bot.sh restart`
+6. Deploy:
+   - **Frontend-only (prod mode)**: `./bot.sh build` — no restart needed. Backend reads git tags live and serves new dist/ from disk. Users get a toast prompting reload.
+   - **Backend changes**: `./bot.sh restart --prod` (or `--dev --back-end`)
 7. Delete dev branch (local + remote)
 8. Verify: tag, services, no stale branches
 

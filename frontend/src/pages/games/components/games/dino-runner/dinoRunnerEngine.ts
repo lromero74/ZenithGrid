@@ -229,10 +229,16 @@ function generateTerrain(
   length: number, base: number,
   waves: [number, number, number][],
 ): number[] {
+  // Snap each wave frequency to the nearest whole-cycle multiple of 2π/length.
+  // This makes sin(0) == sin(length) so the terrain tiles seamlessly.
+  const snapped = waves.map(([amp, freq, phase]) => {
+    const cycles = Math.max(1, Math.round(freq * length / (2 * Math.PI)))
+    return [amp, (2 * Math.PI * cycles) / length, phase] as [number, number, number]
+  })
   const h: number[] = []
   for (let i = 0; i < length; i++) {
     let v = base
-    for (const [amp, freq, phase] of waves) v += Math.sin(i * freq + phase) * amp
+    for (const [amp, freq, phase] of snapped) v += Math.sin(i * freq + phase) * amp
     h.push(Math.max(0, Math.round(v)))
   }
   return h
