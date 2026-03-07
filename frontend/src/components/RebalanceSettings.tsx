@@ -6,7 +6,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Scale, Clock, Save, RefreshCw } from 'lucide-react'
+import { Scale, Clock, Save, RefreshCw, PieChart as PieChartIcon, BarChart3 } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { rebalanceApi, type RebalanceSettings as RebalanceSettingsType, type RebalanceStatus } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
 
@@ -48,6 +49,7 @@ export function RebalanceSettings({ accounts }: RebalanceSettingsProps) {
   const [saving, setSaving] = useState<number | null>(null)
   const [loadingStatus, setLoadingStatus] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [chartView, setChartView] = useState<'pie' | 'bar'>('bar')
 
   const cexAccounts = accounts.filter(a => a.type === 'cex')
 
@@ -324,30 +326,176 @@ export function RebalanceSettings({ accounts }: RebalanceSettingsProps) {
                   <div className="bg-slate-800/50 rounded p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-slate-400 uppercase tracking-wide">Current Allocation</span>
-                      <button
-                        onClick={() => fetchStatus(account.id)}
-                        disabled={loadingStatus === account.id}
-                        className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
-                      >
-                        <RefreshCw size={12} className={loadingStatus === account.id ? 'animate-spin' : ''} />
-                        Refresh
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {status && (
+                          <div className="flex bg-slate-700 rounded overflow-hidden">
+                            <button
+                              onClick={() => setChartView('bar')}
+                              className={`p-1 ${chartView === 'bar' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                              title="Stacked bar"
+                            >
+                              <BarChart3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => setChartView('pie')}
+                              className={`p-1 ${chartView === 'pie' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                              title="Pie chart"
+                            >
+                              <PieChartIcon size={14} />
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => fetchStatus(account.id)}
+                          disabled={loadingStatus === account.id}
+                          className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+                        >
+                          <RefreshCw size={12} className={loadingStatus === account.id ? 'animate-spin' : ''} />
+                          Refresh
+                        </button>
+                      </div>
                     </div>
                     {status ? (
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <div className="text-green-400 text-lg font-mono">{status.current_usd_pct}%</div>
-                          <div className="text-xs text-slate-500">USD</div>
-                        </div>
-                        <div>
-                          <div className="text-orange-400 text-lg font-mono">{status.current_btc_pct}%</div>
-                          <div className="text-xs text-slate-500">BTC</div>
-                        </div>
-                        <div>
-                          <div className="text-blue-400 text-lg font-mono">{status.current_eth_pct}%</div>
-                          <div className="text-xs text-slate-500">ETH</div>
-                        </div>
-                        <div className="col-span-3 text-xs text-slate-500 mt-1">
+                      <div>
+                        {chartView === 'pie' ? (
+                          /* Pie chart view */
+                          <div className="flex items-center justify-center gap-4">
+                            <div className="w-[140px] h-[140px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={[
+                                      { name: 'USD', value: status.current_usd_pct, color: '#22c55e' },
+                                      { name: 'BTC', value: status.current_btc_pct, color: '#f97316' },
+                                      { name: 'ETH', value: status.current_eth_pct, color: '#3b82f6' },
+                                    ].filter(d => d.value > 0)}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={35}
+                                    outerRadius={60}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                    strokeWidth={0}
+                                  >
+                                    {[
+                                      { name: 'USD', value: status.current_usd_pct, color: '#22c55e' },
+                                      { name: 'BTC', value: status.current_btc_pct, color: '#f97316' },
+                                      { name: 'ETH', value: status.current_eth_pct, color: '#3b82f6' },
+                                    ].filter(d => d.value > 0).map((entry, i) => (
+                                      <Cell key={i} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip
+                                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '6px' }}
+                                    itemStyle={{ color: '#e2e8f0' }}
+                                    formatter={(value: number) => [`${value.toFixed(1)}%`, '']}
+                                    labelFormatter={(name: string) => name}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-green-500" />
+                                <span className="text-green-400 font-mono text-sm">{status.current_usd_pct}%</span>
+                                <span className="text-xs text-slate-500">USD</span>
+                                <span className="text-xs text-slate-600">target {s.target_usd_pct}%</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-orange-500" />
+                                <span className="text-orange-400 font-mono text-sm">{status.current_btc_pct}%</span>
+                                <span className="text-xs text-slate-500">BTC</span>
+                                <span className="text-xs text-slate-600">target {s.target_btc_pct}%</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                                <span className="text-blue-400 font-mono text-sm">{status.current_eth_pct}%</span>
+                                <span className="text-xs text-slate-500">ETH</span>
+                                <span className="text-xs text-slate-600">target {s.target_eth_pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Stacked bar view */
+                          <div className="space-y-2">
+                            {/* Current allocation bar */}
+                            <div>
+                              <div className="text-[10px] text-slate-500 mb-1">CURRENT</div>
+                              <div className="h-7 rounded overflow-hidden flex relative">
+                                {status.current_usd_pct > 0 && (
+                                  <div
+                                    className="bg-green-500/80 flex items-center justify-center text-[10px] font-mono text-white transition-all"
+                                    style={{ width: `${status.current_usd_pct}%` }}
+                                  >
+                                    {status.current_usd_pct >= 8 && `${status.current_usd_pct}%`}
+                                  </div>
+                                )}
+                                {status.current_btc_pct > 0 && (
+                                  <div
+                                    className="bg-orange-500/80 flex items-center justify-center text-[10px] font-mono text-white transition-all"
+                                    style={{ width: `${status.current_btc_pct}%` }}
+                                  >
+                                    {status.current_btc_pct >= 8 && `${status.current_btc_pct}%`}
+                                  </div>
+                                )}
+                                {status.current_eth_pct > 0 && (
+                                  <div
+                                    className="bg-blue-500/80 flex items-center justify-center text-[10px] font-mono text-white transition-all"
+                                    style={{ width: `${status.current_eth_pct}%` }}
+                                  >
+                                    {status.current_eth_pct >= 8 && `${status.current_eth_pct}%`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {/* Target allocation bar */}
+                            <div>
+                              <div className="text-[10px] text-slate-500 mb-1">TARGET</div>
+                              <div className="h-7 rounded overflow-hidden flex">
+                                {s.target_usd_pct > 0 && (
+                                  <div
+                                    className="bg-green-500/30 border border-green-500/50 flex items-center justify-center text-[10px] font-mono text-green-300 transition-all"
+                                    style={{ width: `${s.target_usd_pct}%` }}
+                                  >
+                                    {s.target_usd_pct >= 8 && `${s.target_usd_pct}%`}
+                                  </div>
+                                )}
+                                {s.target_btc_pct > 0 && (
+                                  <div
+                                    className="bg-orange-500/30 border border-orange-500/50 flex items-center justify-center text-[10px] font-mono text-orange-300 transition-all"
+                                    style={{ width: `${s.target_btc_pct}%` }}
+                                  >
+                                    {s.target_btc_pct >= 8 && `${s.target_btc_pct}%`}
+                                  </div>
+                                )}
+                                {s.target_eth_pct > 0 && (
+                                  <div
+                                    className="bg-blue-500/30 border border-blue-500/50 flex items-center justify-center text-[10px] font-mono text-blue-300 transition-all"
+                                    style={{ width: `${s.target_eth_pct}%` }}
+                                  >
+                                    {s.target_eth_pct >= 8 && `${s.target_eth_pct}%`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {/* Legend */}
+                            <div className="flex justify-center gap-4 mt-1">
+                              <span className="flex items-center gap-1 text-[10px]">
+                                <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />
+                                <span className="text-slate-400">USD</span>
+                              </span>
+                              <span className="flex items-center gap-1 text-[10px]">
+                                <span className="w-2.5 h-2.5 rounded-sm bg-orange-500 inline-block" />
+                                <span className="text-slate-400">BTC</span>
+                              </span>
+                              <span className="flex items-center gap-1 text-[10px]">
+                                <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
+                                <span className="text-slate-400">ETH</span>
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="text-xs text-slate-500 text-center mt-2">
                           Total value: ${status.total_value_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </div>
                       </div>
