@@ -35,16 +35,27 @@ import Login from './pages/Login'
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
 import Dashboard from './pages/Dashboard'
-const Settings = lazy(() => import('./pages/Settings'))
-const Positions = lazy(() => import('./pages/Positions'))
-const ClosedPositions = lazy(() => import('./pages/ClosedPositions'))
-const Bots = lazy(() => import('./pages/Bots'))
-const Charts = lazy(() => import('./pages/Charts'))
-const Portfolio = lazy(() => import('./pages/Portfolio'))
-const News = lazy(() => import('./pages/News'))
-const Reports = lazy(() => import('./pages/Reports'))
-const Games = lazy(() => import('./pages/Games'))
-const Admin = lazy(() => import('./pages/Admin'))
+
+// Wrap lazy imports to auto-reload when chunks are missing after a deploy
+function lazyWithReload(factory: () => Promise<{ default: React.ComponentType }>) {
+  return lazy(() =>
+    factory().catch(() => {
+      window.location.reload()
+      return new Promise(() => {}) // never resolves — reload takes over
+    })
+  )
+}
+
+const Settings = lazyWithReload(() => import('./pages/Settings'))
+const Positions = lazyWithReload(() => import('./pages/Positions'))
+const ClosedPositions = lazyWithReload(() => import('./pages/ClosedPositions'))
+const Bots = lazyWithReload(() => import('./pages/Bots'))
+const Charts = lazyWithReload(() => import('./pages/Charts'))
+const Portfolio = lazyWithReload(() => import('./pages/Portfolio'))
+const News = lazyWithReload(() => import('./pages/News'))
+const Reports = lazyWithReload(() => import('./pages/Reports'))
+const Games = lazyWithReload(() => import('./pages/Games'))
+const Admin = lazyWithReload(() => import('./pages/Admin'))
 
 // Main App content (shown when authenticated)
 function AppContent() {
@@ -65,7 +76,7 @@ function AppContent() {
   const { seasonInfo, headerGradient } = useMarketSeason()
 
   // Fetch version from backend root endpoint (runs once on app load)
-  // Using root / endpoint since it's guaranteed to work (also serves as health check)
+  // Periodic version checking + toast is handled by NotificationContext
   useEffect(() => {
     fetch('/api/')
       .then(res => res.json())
