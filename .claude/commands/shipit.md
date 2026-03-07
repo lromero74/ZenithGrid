@@ -15,8 +15,9 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
 8. Push main with tags, deploy:
    - **Backend changes**: `./bot.sh restart --dev --back-end` (or `--prod`)
    - **Frontend in DEV mode** (Vite HMR): Do NOT run `npm run build`. HMR picks up changes automatically. Only restart frontend service if Vite config or dependencies changed (`./bot.sh restart --dev --front-end`).
-   - **Frontend in PROD mode** (serving dist/): `./bot.sh restart --prod` (rebuilds dist/ automatically)
-   - **Both changed**: `./bot.sh restart --dev --both` (or `--prod`)
+   - **Frontend-only in PROD mode**: `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend reads git tags live and serves static files from disk, so new bundles and version are live immediately. Users get a "new version" toast prompting them to reload. No restart needed.
+   - **Backend changes in PROD mode**: `./bot.sh restart --prod` (rebuilds dist/ + restarts backend)
+   - **Both changed in PROD mode**: `./bot.sh restart --prod`
 9. Post-ship verification: confirm tag, no stale branches, services healthy
 
 Do NOT skip any steps. The end state must be: main is tagged, all versions match, dev branch is gone, production is running the new code.
