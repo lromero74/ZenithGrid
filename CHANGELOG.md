@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.89.1] - 2026-03-07
+
+### Fixed
+- **Rebalance allocation display**: Current allocation now correctly shows aggregate portfolio value (free balance + open position values per currency) instead of showing 0% for all currencies
+- **Rebalance monitor**: Drift detection uses aggregate allocation; trades execute against free balances only
+
 ## [v2.89.0] - 2026-03-07
 
 ### Added

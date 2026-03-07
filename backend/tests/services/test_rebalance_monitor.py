@@ -238,10 +238,14 @@ class TestRebalanceMonitorProcess:
         db = AsyncMock()
 
         mock_client = AsyncMock()
-        # All in USD — needs rebalance
-        mock_client.get_currency_balance = AsyncMock(
+        # Aggregate values: all USD (drift detected via aggregate)
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
             side_effect=lambda c: 10000.0 if c == "USD" else 0.0
         )
+        # Free balances: all USD (used for trade planning)
+        mock_client.get_usd_balance = AsyncMock(return_value=10000.0)
+        mock_client.get_btc_balance = AsyncMock(return_value=0.0)
+        mock_client.get_eth_balance = AsyncMock(return_value=0.0)
         mock_client.get_current_price = AsyncMock(
             side_effect=lambda p: 100000.0 if p == "BTC-USD" else 2500.0
         )
@@ -277,8 +281,8 @@ class TestRebalanceMonitorProcess:
         db = AsyncMock()
 
         mock_client = AsyncMock()
-        # Roughly balanced: USD=3400, BTC=0.033*100k=3300, ETH=1.32*2500=3300
-        mock_client.get_currency_balance = AsyncMock(
+        # Aggregate values roughly balanced
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
             side_effect=lambda c: (
                 3400.0 if c == "USD"
                 else 0.033 if c == "BTC"
@@ -295,6 +299,7 @@ class TestRebalanceMonitorProcess:
         ):
             await monitor._process_account(account, db)
 
-        # No orders should be placed
+        # No orders should be placed (within threshold, so free balances
+        # are never even fetched)
         mock_client.buy_with_usd.assert_not_called()
         mock_client.create_market_order.assert_not_called()

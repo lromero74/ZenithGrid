@@ -1017,36 +1017,45 @@ async def get_rebalance_status(
         raise HTTPException(status_code=400, detail="Rebalancing only available for CEX accounts")
 
     try:
-        from app.services.rebalance_monitor import calculate_current_allocations
-
         coinbase = await get_coinbase_for_account(account)
 
-        # Fetch free balances
-        free_balances = {}
+        # Use aggregate quote value (free balance + open positions in that
+        # currency's pairs) — matches how bot budgets are calculated.
+        aggregate_values = {}
         for currency in ("USD", "BTC", "ETH"):
             try:
-                balance = await coinbase.get_currency_balance(currency)
-                free_balances[currency] = float(balance)
+                aggregate_values[currency] = float(
+                    await coinbase.calculate_aggregate_quote_value(currency)
+                )
             except Exception:
-                free_balances[currency] = 0.0
+                aggregate_values[currency] = 0.0
 
-        # Fetch prices
+        # Convert all to USD for percentage calculation
         prices = {}
         for product_id in ("BTC-USD", "ETH-USD"):
             try:
-                price = await coinbase.get_current_price(product_id)
-                prices[product_id] = float(price)
+                prices[product_id] = float(await coinbase.get_current_price(product_id))
             except Exception:
                 prices[product_id] = 0.0
 
-        current = calculate_current_allocations(free_balances, prices)
+        usd_value = aggregate_values["USD"]
+        btc_value = aggregate_values["BTC"] * prices.get("BTC-USD", 0.0)
+        eth_value = aggregate_values["ETH"] * prices.get("ETH-USD", 0.0)
+        total = usd_value + btc_value + eth_value
+
+        if total > 0:
+            usd_pct = round(usd_value / total * 100, 2)
+            btc_pct = round(btc_value / total * 100, 2)
+            eth_pct = round(eth_value / total * 100, 2)
+        else:
+            usd_pct = btc_pct = eth_pct = 0.0
 
         return {
             "account_id": account_id,
-            "current_usd_pct": round(current["usd_pct"], 2),
-            "current_btc_pct": round(current["btc_pct"], 2),
-            "current_eth_pct": round(current["eth_pct"], 2),
-            "total_free_value_usd": round(current["total_value_usd"], 2),
+            "current_usd_pct": usd_pct,
+            "current_btc_pct": btc_pct,
+            "current_eth_pct": eth_pct,
+            "total_value_usd": round(total, 2),
             "target_usd_pct": account.rebalance_target_usd_pct or 34.0,
             "target_btc_pct": account.rebalance_target_btc_pct or 33.0,
             "target_eth_pct": account.rebalance_target_eth_pct or 33.0,

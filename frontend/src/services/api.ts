@@ -629,7 +629,7 @@ export interface RebalanceStatus {
   current_usd_pct: number;
   current_btc_pct: number;
   current_eth_pct: number;
-  total_free_value_usd: number;
+  total_value_usd: number;
   target_usd_pct: number;
   target_btc_pct: number;
   target_eth_pct: number;

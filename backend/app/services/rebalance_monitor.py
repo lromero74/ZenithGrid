@@ -228,19 +228,6 @@ class RebalanceMonitor:
                 )
                 return
 
-            # Fetch free balances
-            free_balances = {}
-            for currency in ("USD", "BTC", "ETH"):
-                try:
-                    balance = await client.get_currency_balance(currency)
-                    free_balances[currency] = float(balance)
-                except Exception as e:
-                    logger.warning(
-                        f"Rebalance: could not get {currency} balance "
-                        f"for account {account.id}: {e}"
-                    )
-                    free_balances[currency] = 0.0
-
             # Fetch current prices
             prices = {}
             for product_id in ("BTC-USD", "ETH-USD"):
@@ -253,8 +240,21 @@ class RebalanceMonitor:
                     )
                     return  # Can't rebalance without prices
 
-            # Calculate current allocations
-            current = calculate_current_allocations(free_balances, prices)
+            # Aggregate values (free + positions) for drift detection
+            aggregate = {}
+            for currency in ("USD", "BTC", "ETH"):
+                try:
+                    aggregate[currency] = float(
+                        await client.calculate_aggregate_quote_value(currency)
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Rebalance: could not get aggregate {currency} "
+                        f"for account {account.id}: {e}"
+                    )
+                    aggregate[currency] = 0.0
+
+            current = calculate_current_allocations(aggregate, prices)
             targets = {
                 "usd_pct": account.rebalance_target_usd_pct or 34.0,
                 "btc_pct": account.rebalance_target_btc_pct or 33.0,
@@ -272,7 +272,24 @@ class RebalanceMonitor:
                 self._account_timers[account.id] = datetime.utcnow()
                 return
 
-            # Plan and execute trades
+            # Free balances only — trades only move free capital
+            free_balances = {}
+            balance_methods = {
+                "USD": client.get_usd_balance,
+                "BTC": client.get_btc_balance,
+                "ETH": client.get_eth_balance,
+            }
+            for currency, method in balance_methods.items():
+                try:
+                    free_balances[currency] = float(await method())
+                except Exception as e:
+                    logger.warning(
+                        f"Rebalance: could not get free {currency} "
+                        f"for account {account.id}: {e}"
+                    )
+                    free_balances[currency] = 0.0
+
+            # Plan trades using free balances only
             trades = plan_trades(free_balances, targets, prices)
 
             if not trades:
