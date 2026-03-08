@@ -9,6 +9,7 @@ This enables multi-account trading where each bot is linked to a specific accoun
 and the UI can filter by selected account.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -1035,6 +1036,43 @@ async def update_rebalance_settings(
     return _build_rebalance_response(account)
 
 
+async def get_public_prices() -> dict:
+    """Fetch current prices from public Coinbase API (no auth needed)."""
+    from app.coinbase_api import public_market_data
+    prices = {}
+    for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
+        try:
+            prices[product_id] = float(await public_market_data.get_current_price(product_id))
+        except Exception:
+            prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
+    return prices
+
+
+def _compute_allocation(balances: dict, prices: dict) -> dict:
+    """Compute USD-denominated allocation percentages from balances and prices."""
+    usd_value = balances.get("USD", 0.0)
+    btc_value = balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0)
+    eth_value = balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
+    usdc_value = balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
+    total = usd_value + btc_value + eth_value + usdc_value
+
+    if total > 0:
+        usd_pct = round(usd_value / total * 100, 2)
+        btc_pct = round(btc_value / total * 100, 2)
+        eth_pct = round(eth_value / total * 100, 2)
+        usdc_pct = round(usdc_value / total * 100, 2)
+    else:
+        usd_pct = btc_pct = eth_pct = usdc_pct = 0.0
+
+    return {
+        "current_usd_pct": usd_pct,
+        "current_btc_pct": btc_pct,
+        "current_eth_pct": eth_pct,
+        "current_usdc_pct": usdc_pct,
+        "total_value_usd": round(total, 2),
+    }
+
+
 @router.get("/{account_id}/rebalance-status")
 async def get_rebalance_status(
     account_id: int,
@@ -1055,49 +1093,36 @@ async def get_rebalance_status(
         raise HTTPException(status_code=400, detail="Rebalancing only available for CEX accounts")
 
     try:
-        coinbase = await get_coinbase_for_account(account)
-
-        # Use aggregate quote value (free balance + open positions in that
-        # currency's pairs) — matches how bot budgets are calculated.
-        aggregate_values = {}
-        for currency in ("USD", "BTC", "ETH", "USDC"):
-            try:
-                aggregate_values[currency] = float(
-                    await coinbase.calculate_aggregate_quote_value(currency)
-                )
-            except Exception:
-                aggregate_values[currency] = 0.0
-
-        # Convert all to USD for percentage calculation
-        prices = {}
-        for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
-            try:
-                prices[product_id] = float(await coinbase.get_current_price(product_id))
-            except Exception:
-                # USDC is pegged ~1:1 to USD
-                prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
-
-        usd_value = aggregate_values["USD"]
-        btc_value = aggregate_values["BTC"] * prices.get("BTC-USD", 0.0)
-        eth_value = aggregate_values["ETH"] * prices.get("ETH-USD", 0.0)
-        usdc_value = aggregate_values["USDC"] * prices.get("USDC-USD", 1.0)
-        total = usd_value + btc_value + eth_value + usdc_value
-
-        if total > 0:
-            usd_pct = round(usd_value / total * 100, 2)
-            btc_pct = round(btc_value / total * 100, 2)
-            eth_pct = round(eth_value / total * 100, 2)
-            usdc_pct = round(usdc_value / total * 100, 2)
+        if account.is_paper_trading:
+            # Paper trading: read balances from JSON, use public prices
+            balances = json.loads(account.paper_balances) if account.paper_balances else {}
+            prices = await get_public_prices()
+            alloc = _compute_allocation(balances, prices)
         else:
-            usd_pct = btc_pct = eth_pct = usdc_pct = 0.0
+            # Live account: use Coinbase client with aggregate values
+            coinbase = await get_coinbase_for_account(account)
+
+            aggregate_values = {}
+            for currency in ("USD", "BTC", "ETH", "USDC"):
+                try:
+                    aggregate_values[currency] = float(
+                        await coinbase.calculate_aggregate_quote_value(currency)
+                    )
+                except Exception:
+                    aggregate_values[currency] = 0.0
+
+            prices = {}
+            for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
+                try:
+                    prices[product_id] = float(await coinbase.get_current_price(product_id))
+                except Exception:
+                    prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
+
+            alloc = _compute_allocation(aggregate_values, prices)
 
         return {
             "account_id": account_id,
-            "current_usd_pct": usd_pct,
-            "current_btc_pct": btc_pct,
-            "current_eth_pct": eth_pct,
-            "current_usdc_pct": usdc_pct,
-            "total_value_usd": round(total, 2),
+            **alloc,
             "target_usd_pct": account.rebalance_target_usd_pct or 34.0,
             "target_btc_pct": account.rebalance_target_btc_pct or 33.0,
             "target_eth_pct": account.rebalance_target_eth_pct or 33.0,
