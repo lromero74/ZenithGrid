@@ -8,7 +8,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -138,7 +138,7 @@ export default function Rummy500() {
           <span className="text-xs text-slate-400 mb-1 block">AI ({gameState.hands[1].length} cards)</span>
           <div className="flex gap-1 justify-center flex-wrap">
             {gameState.hands[1].map((_, i) => (
-              <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+              <div key={i} className={CARD_SIZE}>
                 <CardBack />
               </div>
             ))}
@@ -150,7 +150,7 @@ export default function Rummy500() {
           <div className="text-center">
             <span className="text-[0.6rem] text-slate-500 block mb-0.5">Stock</span>
             <div
-              className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${
+              className={`${CARD_SIZE} ${
                 isDrawPhase ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''
               }`}
               onClick={isDrawPhase ? handleDrawStock : undefined}
@@ -165,7 +165,7 @@ export default function Rummy500() {
           <div className="text-center">
             <span className="text-[0.6rem] text-slate-500 block mb-0.5">Discard</span>
             <div
-              className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${
+              className={`${CARD_SIZE} ${
                 isDrawPhase && topDiscard ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''
               }`}
               onClick={isDrawPhase ? handleDrawDiscard : undefined}
@@ -193,7 +193,7 @@ export default function Rummy500() {
                   onClick={() => layOffTargets.includes(mi) && handleMeldClick(mi)}
                 >
                   {meld.cards.map((card, ci) => (
-                    <div key={ci} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+                    <div key={ci} className={CARD_SIZE}>
                       <CardFace card={{ ...card, faceUp: true }} />
                     </div>
                   ))}
@@ -249,7 +249,7 @@ export default function Rummy500() {
               return (
                 <div
                   key={i}
-                  className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                  className={`${CARD_SIZE} transition-transform ${
                     isMeldPhase ? 'cursor-pointer hover:-translate-y-1' : ''
                   } ${isSelected ? '-translate-y-2' : ''}
                   ${isLayOffSource ? '-translate-y-2' : ''}

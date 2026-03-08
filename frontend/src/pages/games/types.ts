@@ -33,4 +33,5 @@ export type GameGroupOption = 'none' | 'category' | 'difficulty' | 'a-z' | 'rece
 export interface GameGroup {
   label: string
   games: GameInfo[]
+  subgroups?: GameGroup[]
 }

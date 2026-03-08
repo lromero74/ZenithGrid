@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -142,16 +142,16 @@ export default function War() {
           <span className="text-xs text-slate-400 mb-1 block">AI ({gameState.aiDeck.length} cards)</span>
           <div className="flex justify-center">
             {gameState.aiDeck.length > 0 ? (
-              <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] relative">
+              <div className={`${CARD_SIZE} relative`}>
                 <CardBack />
                 {gameState.aiDeck.length > 1 && (
-                  <div className="absolute -top-0.5 -left-0.5 w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] -z-10">
+                  <div className={`absolute -top-0.5 -left-0.5 ${CARD_SIZE} -z-10`}>
                     <CardBack />
                   </div>
                 )}
               </div>
             ) : (
-              <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] border border-dashed border-slate-600 rounded-lg" />
+              <div className={`${CARD_SIZE} border border-dashed border-slate-600 rounded-lg`} />
             )}
           </div>
         </div>
@@ -159,7 +159,7 @@ export default function War() {
         {/* Battle area */}
         <div className="flex items-center gap-6 py-3">
           {/* Player's flipped card */}
-          <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+          <div className={CARD_SIZE}>
             {gameState.playerCard ? (
               <CardFace card={gameState.playerCard} />
             ) : (
@@ -189,7 +189,7 @@ export default function War() {
           )}
 
           {/* AI's flipped card */}
-          <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+          <div className={CARD_SIZE}>
             {gameState.aiCard ? (
               <CardFace card={gameState.aiCard} />
             ) : (
@@ -219,16 +219,16 @@ export default function War() {
         <div className="text-center">
           <div className="flex justify-center">
             {gameState.playerDeck.length > 0 ? (
-              <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] relative">
+              <div className={`${CARD_SIZE} relative`}>
                 <CardBack />
                 {gameState.playerDeck.length > 1 && (
-                  <div className="absolute -top-0.5 -left-0.5 w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] -z-10">
+                  <div className={`absolute -top-0.5 -left-0.5 ${CARD_SIZE} -z-10`}>
                     <CardBack />
                   </div>
                 )}
               </div>
             ) : (
-              <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] border border-dashed border-slate-600 rounded-lg" />
+              <div className={`${CARD_SIZE} border border-dashed border-slate-600 rounded-lg`} />
             )}
           </div>
           <span className="text-xs text-slate-400 mt-1 block">You ({gameState.playerDeck.length} cards)</span>

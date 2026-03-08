@@ -8,7 +8,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { getSuitSymbol } from '../../../utils/cardUtils'
@@ -195,7 +195,7 @@ export default function Euchre() {
           <span className="text-xs text-blue-400">North (Partner) ({gameState.hands[2].length})</span>
           <div className="flex gap-0.5 justify-center mt-0.5">
             {gameState.hands[2].map((_, i) => (
-              <div key={i} className="w-5 h-8"><CardBack /></div>
+              <div key={i} className={CARD_SLOT_V}><CardBack /></div>
             ))}
           </div>
         </div>
@@ -207,7 +207,7 @@ export default function Euchre() {
             <span className="text-[0.6rem] text-red-400">West ({gameState.hands[3].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[3].map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
           </div>
@@ -216,7 +216,7 @@ export default function Euchre() {
           <div className="flex-1 relative h-36 sm:h-48">
             {/* Flipped card during trump selection */}
             {(gameState.phase === 'trumpRound1' || gameState.phase === 'trumpRound2') && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+              <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${CARD_SIZE}`}>
                 {gameState.phase === 'trumpRound1' ? (
                   <CardFace card={gameState.flippedCard} />
                 ) : (
@@ -235,7 +235,7 @@ export default function Euchre() {
               ]
               return (
                 <div key={`${play.player}-${play.card.rank}-${play.card.suit}`}
-                  className={`absolute ${positions[play.player]} w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]`}
+                  className={`absolute ${positions[play.player]} ${CARD_SIZE}`}
                 >
                   <CardFace card={play.card} />
                 </div>
@@ -267,7 +267,7 @@ export default function Euchre() {
             <span className="text-[0.6rem] text-red-400">East ({gameState.hands[1].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[1].map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
           </div>
@@ -340,7 +340,7 @@ export default function Euchre() {
             return (
               <div
                 key={`${card.rank}-${card.suit}-${i}`}
-                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE} transition-transform ${
                   isValid ? 'cursor-pointer hover:-translate-y-1' : 'opacity-40'
                 }`}
                 onClick={() => {

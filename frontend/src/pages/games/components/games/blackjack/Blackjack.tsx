@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE_COMPACT } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -142,7 +142,7 @@ export default function Blackjack() {
           </span>
           <div className="flex gap-2 justify-center min-h-[5.625rem]">
             {gameState.dealerHand.map((card, i) => (
-              <div key={i} className="w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem]">
+              <div key={i} className={CARD_SIZE_COMPACT}>
                 {card.faceUp ? <CardFace card={card} /> : <CardBack />}
               </div>
             ))}
@@ -168,7 +168,7 @@ export default function Blackjack() {
                 )}
                 <div className="flex gap-2 justify-center">
                   {hand.cards.map((card, i) => (
-                    <div key={i} className={`w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem] ${isActive ? 'ring-1 ring-blue-400/40 rounded-md' : ''}`}>
+                    <div key={i} className={`${CARD_SIZE_COMPACT} ${isActive ? 'ring-1 ring-blue-400/40 rounded-md' : ''}`}>
                       <CardFace card={card} />
                     </div>
                   ))}

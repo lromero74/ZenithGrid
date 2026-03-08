@@ -49,10 +49,32 @@ export function groupGames(
       const catKeys = [...catMap.keys()].sort((a, b) =>
         (CATEGORY_LABELS[a] || a).localeCompare(CATEGORY_LABELS[b] || b)
       )
-      return catKeys.map(key => ({
-        label: CATEGORY_LABELS[key] || key,
-        games: sortAlpha(catMap.get(key)!),
-      }))
+      return catKeys.map(key => {
+        const catGames = catMap.get(key)!
+        // If any game in this category has a subcategory, create subgroups
+        const hasSubcategories = catGames.some(g => g.subcategory)
+        if (hasSubcategories) {
+          const subMap = new Map<string, GameInfo[]>()
+          for (const g of catGames) {
+            const subKey = g.subcategory || 'Other'
+            if (!subMap.has(subKey)) subMap.set(subKey, [])
+            subMap.get(subKey)!.push(g)
+          }
+          const subKeys = [...subMap.keys()].sort((a, b) => a.localeCompare(b))
+          return {
+            label: CATEGORY_LABELS[key] || key,
+            games: [],
+            subgroups: subKeys.map(sk => ({
+              label: sk,
+              games: sortAlpha(subMap.get(sk)!),
+            })),
+          }
+        }
+        return {
+          label: CATEGORY_LABELS[key] || key,
+          games: sortAlpha(catGames),
+        }
+      })
     }
 
     case 'difficulty': {

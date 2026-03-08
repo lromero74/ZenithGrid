@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getRankDisplay } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
@@ -127,7 +127,7 @@ export default function GoFish() {
         {/* Pond */}
         <div className="flex gap-3 items-center justify-center">
           <div
-            className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${gameState.phase === 'goFish' ? 'cursor-pointer' : ''}`}
+            className={`${CARD_SIZE} ${gameState.phase === 'goFish' ? 'cursor-pointer' : ''}`}
             onClick={gameState.phase === 'goFish' ? handleGoFish : undefined}
           >
             {gameState.pond.length > 0 ? (
@@ -168,7 +168,7 @@ export default function GoFish() {
             return (
               <div
                 key={i}
-                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE} transition-transform ${
                   isAskable ? 'cursor-pointer hover:-translate-y-1' : 'opacity-60'
                 }`}
                 onClick={() => isAskable && handleAsk(card.rank)}

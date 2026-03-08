@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -129,7 +129,7 @@ export default function VideoPoker() {
           {gameState.phase === 'betting' ? (
             // Show 5 card backs
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+              <div key={i} className={CARD_SIZE}>
                 <CardBack />
               </div>
             ))
@@ -137,7 +137,7 @@ export default function VideoPoker() {
             gameState.hand.map((card, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
                 <div
-                  className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] cursor-pointer ${gameState.phase === 'dealt' ? 'hover:opacity-80' : ''}`}
+                  className={`${CARD_SIZE} cursor-pointer ${gameState.phase === 'dealt' ? 'hover:opacity-80' : ''}`}
                   onClick={() => handleToggle(i)}
                 >
                   <CardFace card={card} held={gameState.held[i]} />

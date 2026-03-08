@@ -77,6 +77,8 @@ const GAME_SONGS: Record<string, SongAssignment> = {
   'war':                  { genre: 'rock',       seed: 5402, title: 'Battle Anthem' },
   'go-fish':              { genre: 'chiptune',   seed: 5403, title: 'Fish Pond Pixels' },
   'cribbage':             { genre: 'celtic',     seed: 5404, title: 'Pegging Jig' },
+  'speed':                { genre: 'edm',        seed: 5405, title: 'Lightning Hands' },
+  'spoons':               { genre: 'funk',       seed: 5406, title: 'Spoon Scramble' },
 }
 
 /**

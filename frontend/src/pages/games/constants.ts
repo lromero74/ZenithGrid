@@ -33,6 +33,8 @@ import {
   Footprints,
   Shield,
   Fish,
+  Zap,
+  Utensils,
   Banknote,
   BarChart3,
   Handshake,
@@ -317,6 +319,28 @@ export const GAMES: GameInfo[] = [
     subcategory: 'Classic',
   },
   {
+    id: 'speed',
+    name: 'Speed',
+    description: 'Race to empty your hand first!',
+    icon: 'Zap',
+    path: '/games/speed',
+    difficulty: 'medium',
+    sessionLength: '3-5 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
+  {
+    id: 'spoons',
+    name: 'Spoons',
+    description: 'Grab a spoon before they run out!',
+    icon: 'Utensils',
+    path: '/games/spoons',
+    difficulty: 'medium',
+    sessionLength: '10-15 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
+  {
     id: 'rummy-500',
     name: 'Rummy 500',
     description: 'Meld sets and runs to 500 points',
@@ -457,6 +481,8 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Footprints,
   Shield,
   Fish,
+  Zap,
+  Utensils,
   Banknote,
   BarChart3,
   Handshake,
@@ -468,21 +494,21 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
 /** Category filter options for the hub page */
 export const GAME_CATEGORIES = [
   { value: 'all', label: 'All' },
+  { value: 'arcade', label: 'Arcade' },
   { value: 'cards', label: 'Cards' },
   { value: 'puzzle', label: 'Puzzle' },
   { value: 'strategy', label: 'Strategy' },
   { value: 'word', label: 'Word' },
-  { value: 'arcade', label: 'Arcade' },
 ] as const
 
 /** Card game subcategory filter options */
 export const CARD_SUBCATEGORIES = [
   { value: 'all', label: 'All Cards' },
-  { value: 'Trick-Taking', label: 'Trick-Taking' },
-  { value: 'Rummy', label: 'Rummy' },
   { value: 'Casino', label: 'Casino' },
-  { value: 'Solitaire', label: 'Solitaire' },
   { value: 'Classic', label: 'Classic' },
+  { value: 'Rummy', label: 'Rummy' },
+  { value: 'Solitaire', label: 'Solitaire' },
+  { value: 'Trick-Taking', label: 'Trick-Taking' },
 ] as const
 
 /** Group-by options for the hub page */

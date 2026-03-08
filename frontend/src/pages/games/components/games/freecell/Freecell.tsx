@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace } from '../../PlayingCard'
+import { CardFace, CARD_SIZE_NARROW } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getSuitSymbol, type Suit } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
@@ -251,7 +251,7 @@ export default function Freecell() {
               <div
                 key={`fc-${i}`}
                 onClick={() => handleFreecellClick(i)}
-                className={`w-11 h-[4.25rem] sm:w-14 sm:h-[5.625rem] rounded-md border border-dashed border-slate-600/50 cursor-pointer ${
+                className={`${CARD_SIZE_NARROW} rounded-md border border-dashed border-slate-600/50 cursor-pointer ${
                   isSelected('freecell', i) ? 'ring-2 ring-yellow-400' : ''
                 }`}
               >
@@ -266,7 +266,7 @@ export default function Freecell() {
               <div
                 key={suit}
                 onClick={() => handleFoundationClick(f)}
-                className="w-11 h-[4.25rem] sm:w-14 sm:h-[5.625rem] rounded-md border border-dashed border-slate-600/50 cursor-pointer"
+                className={`${CARD_SIZE_NARROW} rounded-md border border-dashed border-slate-600/50 cursor-pointer`}
               >
                 {gameState.foundations[f].length > 0 ? (
                   <CardFace card={gameState.foundations[f][gameState.foundations[f].length - 1]} />

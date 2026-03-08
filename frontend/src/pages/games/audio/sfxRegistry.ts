@@ -143,6 +143,13 @@ export const SFX_REGISTRY: Record<string, GameSFXMap> = {
   'go-fish': {
     play: 'card_place', draw: 'card_deal', match: 'success_small',
   },
+  'speed': {
+    play: 'card_place', flip: 'card_flip', stall: 'warning_beep', win: 'victory_fanfare',
+  },
+  'spoons': {
+    play: 'card_place', discard: 'card_deal', grab: 'collect_coin',
+    four_of_kind: 'success_chime', letter: 'error_buzz',
+  },
   'cribbage': {
     play: 'card_place', peg: 'ui_click', fifteen: 'success_small', go: 'ui_confirm',
   },

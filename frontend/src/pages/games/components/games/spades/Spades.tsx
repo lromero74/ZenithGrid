@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE_COMPACT, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -120,7 +120,7 @@ export default function Spades() {
           <span className="text-xs text-blue-400">North (Partner) ({gameState.hands[2].length})</span>
           <div className="flex gap-0.5 justify-center mt-0.5">
             {gameState.hands[2].slice(0, 7).map((_, i) => (
-              <div key={i} className="w-5 h-8"><CardBack /></div>
+              <div key={i} className={CARD_SLOT_V}><CardBack /></div>
             ))}
             {gameState.hands[2].length > 7 && <span className="text-[0.6rem] text-slate-500 self-center">+{gameState.hands[2].length - 7}</span>}
           </div>
@@ -133,7 +133,7 @@ export default function Spades() {
             <span className="text-[0.6rem] text-red-400">West ({gameState.hands[3].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[3].slice(0, 5).map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
           </div>
@@ -149,7 +149,7 @@ export default function Spades() {
               ]
               return (
                 <div key={`${play.player}-${play.card.rank}-${play.card.suit}`}
-                  className={`absolute ${positions[play.player]} w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem]`}
+                  className={`absolute ${positions[play.player]} ${CARD_SIZE_COMPACT}`}
                 >
                   <CardFace card={play.card} />
                 </div>
@@ -167,7 +167,7 @@ export default function Spades() {
             <span className="text-[0.6rem] text-red-400">East ({gameState.hands[1].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[1].slice(0, 5).map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function Spades() {
             return (
               <div
                 key={`${card.rank}-${card.suit}`}
-                className={`w-12 h-[4.25rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE_COMPACT} transition-transform ${
                   isPlaying && isValid ? 'cursor-pointer hover:-translate-y-1' : 'opacity-40'
                 }`}
                 onClick={() => isPlaying && isValid && handlePlay(i)}

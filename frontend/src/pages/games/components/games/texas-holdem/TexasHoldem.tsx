@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -24,12 +24,19 @@ import {
   getMinRaise,
   aiAction,
   nextHand,
+  setBlinds,
   type TexasHoldemState,
 } from './TexasHoldemEngine'
 
 interface SavedState {
   gameState: TexasHoldemState
   gameStatus: GameStatus
+  gameStartTime: number
+}
+
+/** Format a lastAction string to use "P2/P3/P4" instead of "Player 1/2/3". */
+function formatAction(action: string): string {
+  return action.replace(/Player (\d+)/g, (_, n) => `P${Number(n) + 1}`)
 }
 
 export default function TexasHoldem() {
@@ -47,12 +54,30 @@ export default function TexasHoldem() {
   })
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [raiseAmount, setRaiseAmount] = useState(40)
+  const [gameStartTime, setGameStartTime] = useState(() => saved?.gameStartTime ?? Date.now())
+
+  // Shows the last AI action text for 2 seconds
+  const [aiActionText, setAiActionText] = useState<string | null>(null)
+
+  // Blinds increase every 10 minutes: level 0 = 10/20, level 1 = 20/40, etc.
+  useEffect(() => {
+    if (gameStatus !== 'playing') return
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - gameStartTime
+      const level = Math.floor(elapsed / (10 * 60 * 1000))
+      setGameState(prev => {
+        if (prev.blindLevel === level) return prev
+        return setBlinds(prev, level)
+      })
+    }, 5000) // check every 5s
+    return () => clearInterval(timer)
+  }, [gameStartTime, gameStatus])
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
-      save({ gameState, gameStatus })
+      save({ gameState, gameStatus, gameStartTime })
     }
-  }, [gameState, gameStatus, save])
+  }, [gameState, gameStatus, gameStartTime, save])
 
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
@@ -63,15 +88,29 @@ export default function TexasHoldem() {
     }
   }, [gameState, clear])
 
-  // Auto-run AI turns
+  // Auto-run AI turns — 2s delay, shows decision text
   useEffect(() => {
     if (gameState.currentPlayer !== 0 && gameState.phase !== 'handOver' && gameState.phase !== 'gameOver' && gameState.phase !== 'showdown') {
       const timer = setTimeout(() => {
-        setGameState(prev => aiAction(prev))
-      }, 600)
+        setGameState(prev => {
+          const next = aiAction(prev)
+          setAiActionText(formatAction(next.lastAction))
+          return next
+        })
+      }, 2000)
       return () => clearTimeout(timer)
     }
   }, [gameState.currentPlayer, gameState.phase])
+
+  // Clear AI action text after 2s (so it shows while next AI "thinks")
+  useEffect(() => {
+    if (!aiActionText) return
+    // Clear when it becomes the human's turn or hand is over
+    if (gameState.currentPlayer === 0 || gameState.phase === 'handOver' || gameState.phase === 'gameOver') {
+      const timer = setTimeout(() => setAiActionText(null), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [aiActionText, gameState.currentPlayer, gameState.phase])
 
   // SFX when community cards are revealed
   useEffect(() => {
@@ -96,6 +135,8 @@ export default function TexasHoldem() {
   const handleNewGame = useCallback(() => {
     setGameState(startHand(createTexasHoldemGame(4)))
     setGameStatus('playing')
+    setAiActionText(null)
+    setGameStartTime(Date.now())
     clear()
   }, [clear])
 
@@ -121,11 +162,21 @@ export default function TexasHoldem() {
             const folded = gameState.foldedPlayers[pi]
             const isAllIn = gameState.allInPlayers[pi]
             const showCards = gameState.phase === 'handOver' && gameState.showdownResults && !folded
+            const isDealer = gameState.dealerIdx === pi
+            const isSB = gameState.sbIdx === pi
+            const isBB = gameState.bbIdx === pi
             return (
               <div key={pi} className={`text-center ${folded ? 'opacity-40' : ''}`}>
-                <span className="text-xs text-slate-400">
-                  P{pi + 1} {isAllIn ? '(All-In)' : ''} {folded ? '(Fold)' : ''}
-                </span>
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <span className="text-xs text-slate-400">
+                    P{pi + 1}
+                  </span>
+                  {isDealer && <span className="text-[0.6rem] bg-white text-slate-900 font-bold rounded-full w-4 h-4 flex items-center justify-center">D</span>}
+                  {isSB && <span className="text-[0.6rem] bg-blue-500 text-white font-bold rounded-full px-1">SB</span>}
+                  {isBB && <span className="text-[0.6rem] bg-amber-500 text-white font-bold rounded-full px-1">BB</span>}
+                  {isAllIn && <span className="text-[0.6rem] text-red-400">(All-In)</span>}
+                  {folded && <span className="text-[0.6rem] text-slate-500">(Fold)</span>}
+                </div>
                 <div className="text-xs text-yellow-400">{gameState.chips[pi]}</div>
                 <div className="flex gap-0.5 justify-center mt-1">
                   {hand.map((c, j) => (
@@ -145,16 +196,26 @@ export default function TexasHoldem() {
         {/* Community cards */}
         <div className="flex gap-1.5 justify-center min-h-[5.625rem]">
           {gameState.community.map((card, i) => (
-            <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+            <div key={i} className={CARD_SIZE}>
               <CardFace card={card} />
             </div>
           ))}
           {Array.from({ length: 5 - gameState.community.length }).map((_, i) => (
-            <div key={`e${i}`} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] rounded-md border border-dashed border-slate-700/50" />
+            <div key={`e${i}`} className={`${CARD_SIZE} rounded-md border border-dashed border-slate-700/50`} />
           ))}
         </div>
 
-        {/* Message + showdown results */}
+        {/* AI action display */}
+        {aiActionText && (
+          <p className="text-sm text-blue-400 font-medium text-center">{aiActionText}</p>
+        )}
+        {gameState.currentPlayer !== 0 && gameState.phase !== 'handOver' && gameState.phase !== 'gameOver' && (
+          <p className="text-xs text-slate-500 text-center animate-pulse">
+            P{gameState.currentPlayer + 1} is thinking...
+          </p>
+        )}
+
+        {/* Phase / status message */}
         <p className="text-sm text-white font-medium text-center">{gameState.message}</p>
         {gameState.showdownResults && gameState.phase === 'handOver' && (
           <div className="text-xs text-slate-400 text-center">
@@ -169,14 +230,18 @@ export default function TexasHoldem() {
         {/* Player hand */}
         <div className="flex gap-2 justify-center">
           {gameState.hands[0].map((card, i) => (
-            <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+            <div key={i} className={CARD_SIZE}>
               <CardFace card={card} />
             </div>
           ))}
         </div>
-        <div className="text-xs text-slate-400">
-          Chips: <span className="text-white font-bold">{gameState.chips[0]}</span>
-          {gameState.bets[0] > 0 && <span className="ml-2">Bet: <span className="text-blue-400">{gameState.bets[0]}</span></span>}
+        <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+          <span>You</span>
+          {gameState.dealerIdx === 0 && <span className="text-[0.6rem] bg-white text-slate-900 font-bold rounded-full w-4 h-4 flex items-center justify-center">D</span>}
+          {gameState.sbIdx === 0 && <span className="text-[0.6rem] bg-blue-500 text-white font-bold rounded-full px-1">SB</span>}
+          {gameState.bbIdx === 0 && <span className="text-[0.6rem] bg-amber-500 text-white font-bold rounded-full px-1">BB</span>}
+          <span>— Chips: <span className="text-white font-bold">{gameState.chips[0]}</span></span>
+          {gameState.bets[0] > 0 && <span>Bet: <span className="text-blue-400">{gameState.bets[0]}</span></span>}
         </div>
 
         {/* Action buttons */}
@@ -223,15 +288,25 @@ export default function TexasHoldem() {
           </div>
         )}
 
-        {/* Hand over */}
-        {gameState.phase === 'handOver' && (
-          <button
-            onClick={handleNextHand}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            Next Hand
-          </button>
-        )}
+        {/* Hand over / New game */}
+        <div className="flex gap-2 justify-center">
+          {gameState.phase === 'handOver' && (
+            <button
+              onClick={handleNextHand}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Next Hand
+            </button>
+          )}
+          {gameStatus === 'playing' && (
+            <button
+              onClick={handleNewGame}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs transition-colors"
+            >
+              New Game
+            </button>
+          )}
+        </div>
 
         {(gameStatus === 'won' || gameStatus === 'lost') && (
           <GameOverModal

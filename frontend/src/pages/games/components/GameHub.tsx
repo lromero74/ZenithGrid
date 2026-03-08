@@ -76,7 +76,7 @@ export function GameHub() {
       const saved = sessionStorage.getItem(GROUP_KEY)
       if (saved) return saved as GameGroupOption
     } catch { /* ignore */ }
-    return 'none'
+    return 'category'
   })
   const setGroupOptionPersisted = (opt: GameGroupOption) => {
     setGroupOption(opt)
@@ -109,7 +109,9 @@ export function GameHub() {
     })
   }, [activeCategory, activeSubcategory, searchQuery, groupOption, getRecentMap])
 
-  const totalGames = displayedGroups.reduce((sum, g) => sum + g.games.length, 0)
+  const totalGames = displayedGroups.reduce((sum, g) =>
+    sum + g.games.length + (g.subgroups?.reduce((s, sg) => s + sg.games.length, 0) ?? 0), 0
+  )
 
   return (
     <div>
@@ -190,20 +192,43 @@ export function GameHub() {
           {group.label && (
             <div className="flex items-center gap-3 mb-3 mt-6 first:mt-0">
               <h2 className="text-sm font-semibold text-slate-300">{group.label}</h2>
-              <span className="text-xs text-slate-500">({group.games.length})</span>
+              <span className="text-xs text-slate-500">
+                ({group.games.length + (group.subgroups?.reduce((s, sg) => s + sg.games.length, 0) ?? 0)})
+              </span>
               <div className="flex-1 border-t border-slate-700/50" />
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {group.games.map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                highScore={getHighScore(game.id)}
-                onPlay={() => markPlayed(game.id)}
-              />
-            ))}
-          </div>
+          {group.games.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {group.games.map(game => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  highScore={getHighScore(game.id)}
+                  onPlay={() => markPlayed(game.id)}
+                />
+              ))}
+            </div>
+          )}
+          {group.subgroups?.map(sub => (
+            <div key={sub.label} className="ml-3">
+              <div className="flex items-center gap-2 mb-2 mt-4">
+                <h3 className="text-xs font-medium text-slate-400">{sub.label}</h3>
+                <span className="text-xs text-slate-600">({sub.games.length})</span>
+                <div className="flex-1 border-t border-slate-700/30" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sub.games.map(game => (
+                  <GameCard
+                    key={game.id}
+                    game={game}
+                    highScore={getHighScore(game.id)}
+                    onPlay={() => markPlayed(game.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
 

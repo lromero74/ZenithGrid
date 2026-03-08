@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_XS } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
@@ -154,7 +154,7 @@ export default function Cribbage() {
               return (
                 <div
                   key={i}
-                  className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${played ? 'opacity-30' : ''}`}
+                  className={`${CARD_SIZE} ${played ? 'opacity-30' : ''}`}
                 >
                   {showAiCards ? <CardFace card={card} /> : <CardBack />}
                 </div>
@@ -168,7 +168,7 @@ export default function Cribbage() {
           {/* Cut card */}
           <div className="text-center">
             <span className="text-[0.6rem] text-slate-500">Cut</span>
-            <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+            <div className={CARD_SIZE}>
               {gameState.cutCard ? (
                 <CardFace card={gameState.cutCard} />
               ) : (
@@ -189,7 +189,7 @@ export default function Cribbage() {
                 {gameState.pegCards.map((pc, i) => (
                   <div
                     key={i}
-                    className={`w-10 h-14 sm:w-11 sm:h-[3.75rem] ${
+                    className={`${CARD_SIZE_XS} ${
                       pc.player === 0 ? 'ring-1 ring-blue-500/50' : 'ring-1 ring-red-500/50'
                     } rounded`}
                   >
@@ -205,12 +205,12 @@ export default function Cribbage() {
             <span className="text-[0.6rem] text-slate-500">
               Crib ({gameState.dealer === 0 ? 'Yours' : "AI's"})
             </span>
-            <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+            <div className={CARD_SIZE}>
               {gameState.crib.length > 0 ? (
                 gameState.scoringStep === 'crib' || gameState.scoringStep === 'done' || gameState.phase === 'gameOver' ? (
                   <div className="flex -space-x-8">
                     {gameState.crib.slice(0, 2).map((c, i) => (
-                      <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+                      <div key={i} className={CARD_SIZE}>
                         <CardFace card={c} />
                       </div>
                     ))}
@@ -320,7 +320,7 @@ export default function Cribbage() {
               return (
                 <div
                   key={i}
-                  className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-all duration-150 ${
+                  className={`${CARD_SIZE} transition-all duration-150 ${
                     played ? 'opacity-30 pointer-events-none' : ''
                   } ${
                     clickable && !played ? 'cursor-pointer hover:-translate-y-1' : ''

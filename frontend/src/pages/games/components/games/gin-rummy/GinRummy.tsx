@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -98,7 +98,7 @@ export default function GinRummy() {
           <span className="text-xs text-slate-400 mb-1 block">AI ({gameState.aiHand.length} cards)</span>
           <div className="flex gap-1 justify-center flex-wrap">
             {gameState.aiHand.map((card, i) => (
-              <div key={i} className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+              <div key={i} className={CARD_SIZE}>
                 {showAiCards ? <CardFace card={{ ...card, faceUp: true }} /> : <CardBack />}
               </div>
             ))}
@@ -110,7 +110,7 @@ export default function GinRummy() {
           <div className="text-center">
             <span className="text-[0.6rem] text-slate-500 block mb-0.5">Draw</span>
             <div
-              className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${isDrawing ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''}`}
+              className={`${CARD_SIZE} ${isDrawing ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''}`}
               onClick={isDrawing ? handleDrawPile : undefined}
             >
               {gameState.drawPile.length > 0 ? <CardBack /> : (
@@ -121,7 +121,7 @@ export default function GinRummy() {
           <div className="text-center">
             <span className="text-[0.6rem] text-slate-500 block mb-0.5">Discard</span>
             <div
-              className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${isDrawing && topDiscard ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''}`}
+              className={`${CARD_SIZE} ${isDrawing && topDiscard ? 'cursor-pointer ring-2 ring-blue-400/50 rounded-md' : ''}`}
               onClick={isDrawing ? handleDrawDiscard : undefined}
             >
               {topDiscard ? <CardFace card={topDiscard} /> : (
@@ -151,7 +151,7 @@ export default function GinRummy() {
             {gameState.playerHand.map((card, i) => (
               <div
                 key={i}
-                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE} transition-transform ${
                   isDiscarding ? 'cursor-pointer hover:-translate-y-1' : ''
                 }`}
                 onClick={() => isDiscarding && handleDiscard(i)}

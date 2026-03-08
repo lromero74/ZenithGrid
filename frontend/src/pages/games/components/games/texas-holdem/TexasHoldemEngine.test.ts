@@ -13,6 +13,7 @@ import {
   showdown,
   getValidActions,
   getMinRaise,
+  setBlinds,
   type TexasHoldemState,
   type HandResult,
   type Phase,
@@ -47,6 +48,10 @@ function makeState(overrides: Partial<TexasHoldemState> = {}): TexasHoldemState 
     lastAction: '',
     roundBets: [20, 20],
     showdownResults: null,
+    actedThisRound: [false, false],
+    sbIdx: 0,
+    bbIdx: 1,
+    blindLevel: 0,
     ...overrides,
   }
 }
@@ -576,10 +581,12 @@ describe('check', () => {
       bets: [20, 20],
       currentBet: 20,
       pot: 40,
+      actedThisRound: [false, false],
     })
     const result = check(state)
     expect(result.pot).toBe(40) // unchanged
-    expect(result.currentPlayer).not.toBe(0)
+    // Player 0 checked; player 1 hasn't acted yet, so it should be their turn
+    expect(result.currentPlayer).toBe(1)
   })
 })
 
@@ -599,6 +606,7 @@ describe('call', () => {
       chips: [1000, 960, 1000],
       foldedPlayers: [false, false, false],
       allInPlayers: [false, false, false],
+      actedThisRound: [false, true, false],
       pot: 40,
     })
     const result = call(state)
@@ -619,6 +627,7 @@ describe('call', () => {
       chips: [50, 900, 1000],
       foldedPlayers: [false, false, false],
       allInPlayers: [false, false, false],
+      actedThisRound: [false, true, false],
       pot: 100,
     })
     const result = call(state)
@@ -671,6 +680,92 @@ describe('allIn', () => {
     expect(result.allInPlayers[0]).toBe(true)
     expect(result.bets[0]).toBe(1000) // 20 + 980
     expect(result.pot).toBe(1020) // 40 + 980
+  })
+})
+
+// ─── Betting Round Completion ────────────────────────────────────────────
+
+describe('betting round requires all players to act', () => {
+  test('flop betting does not skip players when currentBet is 0', () => {
+    // 4-player game, flop phase, bets all 0, nobody acted yet
+    const state = makeState({
+      phase: 'flop' as Phase,
+      hands: [
+        [card(14, 'hearts'), card(13, 'hearts')],
+        [card(2, 'clubs'), card(3, 'clubs')],
+        [card(7, 'diamonds'), card(8, 'diamonds')],
+        [card(9, 'spades'), card(10, 'spades')],
+      ],
+      bets: [0, 0, 0, 0],
+      currentBet: 0,
+      chips: [980, 980, 980, 980],
+      foldedPlayers: [false, false, false, false],
+      allInPlayers: [false, false, false, false],
+      actedThisRound: [false, false, false, false],
+      roundBets: [0, 0, 0, 0],
+      currentPlayer: 1,
+      community: [card(5, 'hearts'), card(6, 'clubs'), card(2, 'diamonds')],
+      deck: Array.from({ length: 10 }, (_, i) => card((i % 13) + 1, 'hearts')),
+      pot: 80,
+    })
+    // Player 1 checks — should NOT advance phase, players 2 and 3 haven't acted
+    const after1 = check(state)
+    expect(after1.phase).toBe('flop')
+    expect(after1.currentPlayer).toBe(2)
+
+    // Player 2 checks — still waiting on players 3 and 0
+    const after2 = check(after1)
+    expect(after2.phase).toBe('flop')
+    expect(after2.currentPlayer).toBe(3)
+
+    // Player 3 checks — still waiting on player 0
+    const after3 = check(after2)
+    expect(after3.phase).toBe('flop')
+    expect(after3.currentPlayer).toBe(0)
+
+    // Player 0 checks — all have acted, should advance to turn
+    const after4 = check(after3)
+    expect(after4.phase).toBe('turn')
+    expect(after4.community).toHaveLength(4)
+  })
+
+  test('raise resets acted flags so all must respond', () => {
+    const state = makeState({
+      phase: 'flop' as Phase,
+      hands: [
+        [card(14, 'hearts'), card(13, 'hearts')],
+        [card(2, 'clubs'), card(3, 'clubs')],
+        [card(7, 'diamonds'), card(8, 'diamonds')],
+      ],
+      bets: [0, 0, 0],
+      currentBet: 0,
+      chips: [980, 980, 980],
+      foldedPlayers: [false, false, false],
+      allInPlayers: [false, false, false],
+      actedThisRound: [false, false, false],
+      roundBets: [0, 0, 0],
+      currentPlayer: 1,
+      community: [card(5, 'hearts'), card(6, 'clubs'), card(2, 'diamonds')],
+      deck: Array.from({ length: 10 }, (_, i) => card((i % 13) + 1, 'hearts')),
+      pot: 60,
+      bigBlind: 20,
+    })
+    // Player 1 checks
+    const after1 = check(state)
+    expect(after1.phase).toBe('flop')
+
+    // Player 2 raises — resets acted for others
+    const after2 = raise(after1, 40)
+    expect(after2.phase).toBe('flop')
+    expect(after2.currentBet).toBe(40)
+
+    // Player 0 must respond (call)
+    const after3 = call(after2)
+    expect(after3.phase).toBe('flop') // Player 1 hasn't responded to raise yet
+
+    // Player 1 calls the raise — now all have acted
+    const after4 = call(after3)
+    expect(after4.phase).toBe('turn')
   })
 })
 
@@ -865,5 +960,135 @@ describe('getMinRaise', () => {
     })
     const min = getMinRaise(state)
     expect(min).toBe(40) // current bet (20) + big blind (20)
+  })
+})
+
+// ─── Blind Levels ──────────────────────────────────────────────────────
+
+describe('setBlinds', () => {
+  test('level 0 is 10/20', () => {
+    const state = makeState()
+    const result = setBlinds(state, 0)
+    expect(result.smallBlind).toBe(10)
+    expect(result.bigBlind).toBe(20)
+    expect(result.blindLevel).toBe(0)
+  })
+
+  test('level 1 is 20/40', () => {
+    const result = setBlinds(makeState(), 1)
+    expect(result.smallBlind).toBe(20)
+    expect(result.bigBlind).toBe(40)
+    expect(result.blindLevel).toBe(1)
+  })
+
+  test('level 2 is 40/80', () => {
+    const result = setBlinds(makeState(), 2)
+    expect(result.smallBlind).toBe(40)
+    expect(result.bigBlind).toBe(80)
+  })
+
+  test('level 3 is 80/160', () => {
+    const result = setBlinds(makeState(), 3)
+    expect(result.smallBlind).toBe(80)
+    expect(result.bigBlind).toBe(160)
+  })
+})
+
+// ─── Full Hand End-to-End ──────────────────────────────────────────────
+
+describe('full hand flow: preflop → flop → turn → river → showdown', () => {
+  test('all 5 stages execute with proper betting rounds', () => {
+    // 4-player game
+    const game = createTexasHoldemGame(4)
+    let state = startHand(game)
+
+    // ── Stage 1: Pre-flop ──
+    expect(state.phase).toBe('preflop')
+    expect(state.community).toHaveLength(0)
+    expect(state.hands.every(h => h.length === 2)).toBe(true)
+    // Blinds posted: SB=P1(10), BB=P2(20), UTG=P3 acts first
+    expect(state.currentPlayer).toBe(3)
+    expect(state.currentBet).toBe(20)
+
+    // Everyone calls the big blind
+    state = call(state) // P3 calls
+    expect(state.phase).toBe('preflop')
+    state = call(state) // P0 calls
+    expect(state.phase).toBe('preflop')
+    state = call(state) // P1 (SB) calls 10 more
+    expect(state.phase).toBe('preflop')
+    state = check(state) // P2 (BB) checks — all matched, round complete
+
+    // ── Stage 2: Flop ──
+    expect(state.phase).toBe('flop')
+    expect(state.community).toHaveLength(3)
+    expect(state.currentBet).toBe(0)
+    expect(state.bets.every(b => b === 0)).toBe(true)
+
+    // All players check through the flop
+    const flopFirstPlayer = state.currentPlayer
+    state = check(state) // 1st player
+    expect(state.phase).toBe('flop') // must NOT advance yet
+    state = check(state) // 2nd player
+    expect(state.phase).toBe('flop')
+    state = check(state) // 3rd player
+    expect(state.phase).toBe('flop')
+    state = check(state) // 4th player — NOW it advances
+
+    // ── Stage 3: Turn ──
+    expect(state.phase).toBe('turn')
+    expect(state.community).toHaveLength(4)
+    expect(state.currentBet).toBe(0)
+
+    // All players check through the turn
+    state = check(state)
+    expect(state.phase).toBe('turn')
+    state = check(state)
+    expect(state.phase).toBe('turn')
+    state = check(state)
+    expect(state.phase).toBe('turn')
+    state = check(state)
+
+    // ── Stage 4: River ──
+    expect(state.phase).toBe('river')
+    expect(state.community).toHaveLength(5)
+    expect(state.currentBet).toBe(0)
+
+    // All players check through the river
+    state = check(state)
+    expect(state.phase).toBe('river')
+    state = check(state)
+    expect(state.phase).toBe('river')
+    state = check(state)
+    expect(state.phase).toBe('river')
+    state = check(state)
+
+    // ── Stage 5: Showdown ──
+    expect(state.phase).toBe('handOver')
+    expect(state.showdownResults).not.toBeNull()
+    expect(state.showdownResults!.length).toBe(4)
+    // Pot was distributed to winner(s)
+    expect(state.pot).toBe(0)
+    expect(state.chips.reduce((a, b) => a + b, 0)).toBe(4000) // total chips conserved
+  })
+
+  test('fold during flop ends hand early without dealing turn/river', () => {
+    const game = createTexasHoldemGame(2)
+    let state = startHand(game)
+    expect(state.phase).toBe('preflop')
+
+    // Both players see flop
+    state = call(state) // one player calls
+    // After call in 2-player: SB called, BB checks to complete preflop
+    if (state.phase === 'preflop') state = check(state)
+
+    expect(state.phase).toBe('flop')
+    expect(state.community).toHaveLength(3)
+
+    // One player folds on the flop
+    state = fold(state)
+    expect(state.phase).toBe('handOver')
+    // No turn or river dealt — still only 3 community cards
+    expect(state.community).toHaveLength(3)
   })
 })

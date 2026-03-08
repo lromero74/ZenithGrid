@@ -56,6 +56,8 @@ const Euchre = lazy(() => import('./games/components/games/euchre/Euchre'))
 const TexasHoldem = lazy(() => import('./games/components/games/texas-holdem/TexasHoldem'))
 const Bridge = lazy(() => import('./games/components/games/bridge/Bridge'))
 const Canasta = lazy(() => import('./games/components/games/canasta/Canasta'))
+const Speed = lazy(() => import('./games/components/games/speed/Speed'))
+const Spoons = lazy(() => import('./games/components/games/spoons/Spoons'))
 
 // Phase 7: Arcade Games
 const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
@@ -105,6 +107,8 @@ export default function Games() {
         {/* Phase 8: New Card Games */}
         <Route path="war" element={<War />} />
         <Route path="go-fish" element={<GoFish />} />
+        <Route path="speed" element={<Speed />} />
+        <Route path="spoons" element={<Spoons />} />
         <Route path="rummy-500" element={<Rummy500 />} />
         <Route path="cribbage" element={<Cribbage />} />
         <Route path="euchre" element={<Euchre />} />

@@ -5,6 +5,23 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.95.0] - 2026-03-08
+
+### Added
+- **Speed card game**: Real-time 2-player race to empty your hand — play cards ±1 rank on center piles (contributed by Shantina Jackson-Romero)
+- **Spoons card game**: 3-player grab game — collect 4-of-a-kind and race to grab a spoon before opponents (contributed by Shantina Jackson-Romero)
+- **Card back branding**: Neon blue truck logo overlay on all playing card backs
+- **Subcategory subgrouping**: Games hub "All" view now groups card games by subcategory (Casino, Classic, Rummy, etc.)
+
+### Changed
+- **Texas Hold'em betting rounds**: Fixed community cards dealing — flop, turn, and river now each require a full betting round before advancing (contributed by David Greene)
+- **Texas Hold'em blind display**: Small blind and big blind badges shown on each player, rotating correctly between hands (contributed by David Greene)
+- **Texas Hold'em AI pacing**: AI opponents take 2 seconds per decision with visible action text so players can follow the action (contributed by David Greene)
+- **Texas Hold'em blind levels**: Blinds double every 10 minutes (10/20 → 20/40 → 40/80, etc.) for tournament-style pressure (contributed by David Greene)
+- **Texas Hold'em new game**: Added always-visible New Game button to restart the tournament at any time (contributed by David Greene)
+- **Card size standardization**: All 16 card games now use shared size constants from PlayingCard.tsx — no more per-game hardcoded sizes
+- **Game category pills alphabetized**: Category and subcategory filter pills sorted alphabetically
+
 ## [v2.94.2] - 2026-03-08
 
 ### Fixed

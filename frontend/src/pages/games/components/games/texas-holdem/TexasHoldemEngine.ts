@@ -37,6 +37,10 @@ export interface TexasHoldemState {
   lastAction: string
   roundBets: number[]
   showdownResults: HandResult[] | null
+  actedThisRound: boolean[]
+  sbIdx: number
+  bbIdx: number
+  blindLevel: number
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -74,10 +78,10 @@ function isBettingRoundComplete(state: TexasHoldemState): boolean {
   for (let i = 0; i < n; i++) {
     if (state.foldedPlayers[i] || state.allInPlayers[i]) continue
     if (state.chips[i] === 0) continue
-    if (state.bets[i] < state.currentBet) return false
+    // Player must have acted AND matched the current bet
+    if (!state.actedThisRound[i] || state.bets[i] < state.currentBet) return false
   }
-  return playersStillActing(state) <= 1 ||
-    state.bets.every((b, i) => state.foldedPlayers[i] || state.allInPlayers[i] || b === state.currentBet)
+  return true
 }
 
 // ── Hand Evaluator ───────────────────────────────────────────────────
@@ -231,6 +235,10 @@ export function createTexasHoldemGame(playerCount: number = 4): TexasHoldemState
     lastAction: '',
     roundBets: new Array(playerCount).fill(0),
     showdownResults: null,
+    actedThisRound: new Array(playerCount).fill(false),
+    sbIdx: 0,
+    bbIdx: 0,
+    blindLevel: 0,
   }
 }
 
@@ -307,6 +315,9 @@ export function startHand(state: TexasHoldemState): TexasHoldemState {
     lastAction: '',
     roundBets: [...bets],
     showdownResults: null,
+    actedThisRound: new Array(n).fill(false),
+    sbIdx: sbPos,
+    bbIdx: bbPos,
   }
 }
 
@@ -360,16 +371,22 @@ function autoComplete(state: TexasHoldemState): TexasHoldemState {
 export function fold(state: TexasHoldemState): TexasHoldemState {
   const foldedPlayers = [...state.foldedPlayers]
   foldedPlayers[state.currentPlayer] = true
+  const actedThisRound = [...state.actedThisRound]
+  actedThisRound[state.currentPlayer] = true
   return afterAction({
     ...state,
     foldedPlayers,
+    actedThisRound,
     lastAction: `Player ${state.currentPlayer} folds`,
   })
 }
 
 export function check(state: TexasHoldemState): TexasHoldemState {
+  const actedThisRound = [...state.actedThisRound]
+  actedThisRound[state.currentPlayer] = true
   return afterAction({
     ...state,
+    actedThisRound,
     lastAction: `Player ${state.currentPlayer} checks`,
   })
 }
@@ -390,12 +407,16 @@ export function call(state: TexasHoldemState): TexasHoldemState {
 
   if (chips[player] === 0) allInPlayers[player] = true
 
+  const actedThisRound = [...state.actedThisRound]
+  actedThisRound[player] = true
+
   return afterAction({
     ...state,
     bets,
     chips,
     roundBets,
     allInPlayers,
+    actedThisRound,
     pot: state.pot + actualCall,
     lastAction: `Player ${player} calls ${actualCall}`,
   })
@@ -416,12 +437,17 @@ export function raise(state: TexasHoldemState, amount: number): TexasHoldemState
 
   if (chips[player] === 0) allInPlayers[player] = true
 
+  // Raise resets acted flags — all other players must respond
+  const actedThisRound = new Array(state.hands.length).fill(false)
+  actedThisRound[player] = true
+
   return afterAction({
     ...state,
     bets,
     chips,
     roundBets,
     allInPlayers,
+    actedThisRound,
     pot: state.pot + additional,
     currentBet: amount,
     lastAction: `Player ${player} raises to ${amount}`,
@@ -445,12 +471,19 @@ export function allIn(state: TexasHoldemState): TexasHoldemState {
 
   const newCurrentBet = Math.max(state.currentBet, totalBet)
 
+  // If all-in exceeds current bet, it's a raise — reset acted flags
+  const actedThisRound = totalBet > state.currentBet
+    ? new Array(state.hands.length).fill(false)
+    : [...state.actedThisRound]
+  actedThisRound[player] = true
+
   return afterAction({
     ...state,
     bets,
     chips,
     roundBets,
     allInPlayers,
+    actedThisRound,
     pot: state.pot + allChips,
     currentBet: newCurrentBet,
     lastAction: `Player ${player} goes all-in for ${allChips}`,
@@ -503,6 +536,7 @@ export function advancePhase(state: TexasHoldemState): TexasHoldemState {
     bets,
     currentBet: 0,
     currentPlayer: firstPlayer,
+    actedThisRound: new Array(n).fill(false),
     message: `${nextPhase.charAt(0).toUpperCase() + nextPhase.slice(1)} betting`,
   }
 }
@@ -671,4 +705,11 @@ export function nextHand(state: TexasHoldemState): TexasHoldemState {
   while (state.chips[newDealer] <= 0) newDealer = (newDealer + 1) % state.hands.length
 
   return startHand({ ...state, dealerIdx: newDealer })
+}
+
+/** Increase blinds to the given level (0 = 10/20, 1 = 20/40, 2 = 40/80, ...). */
+export function setBlinds(state: TexasHoldemState, level: number): TexasHoldemState {
+  const sb = 10 * Math.pow(2, level)
+  const bb = 20 * Math.pow(2, level)
+  return { ...state, smallBlind: sb, bigBlind: bb, blindLevel: level }
 }

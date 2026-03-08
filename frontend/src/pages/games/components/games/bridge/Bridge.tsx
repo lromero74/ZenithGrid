@@ -9,7 +9,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { getSuitSymbol } from '../../../utils/cardUtils'
@@ -192,7 +192,7 @@ export default function Bridge() {
                 return (
                   <div
                     key={`${card.rank}-${card.suit}-${i}`}
-                    className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                    className={`${CARD_SIZE} transition-transform ${
                       isValid ? 'cursor-pointer hover:-translate-y-1' : isDummyPlayable ? 'opacity-40' : ''
                     }`}
                     onClick={() => isDummyPlayable && isValid && handlePlay(playerIdx, i)}
@@ -203,7 +203,7 @@ export default function Bridge() {
               })
             ) : (
               hand.slice(0, 7).map((_, i) => (
-                <div key={i} className="w-5 h-8"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_V}><CardBack /></div>
               ))
             )}
             {!isDummy && hand.length > 7 && (
@@ -236,7 +236,7 @@ export default function Bridge() {
             })
           ) : (
             hand.slice(0, 5).map((_, i) => (
-              <div key={i} className="w-8 h-3"><CardBack /></div>
+              <div key={i} className={CARD_SLOT_H}><CardBack /></div>
             ))
           )}
         </div>
@@ -267,7 +267,7 @@ export default function Bridge() {
               ]
               return (
                 <div key={`${play.player}-${play.card.rank}-${play.card.suit}`}
-                  className={`absolute ${positions[play.player]} w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]`}
+                  className={`absolute ${positions[play.player]} ${CARD_SIZE}`}
                 >
                   <CardFace card={play.card} />
                 </div>
@@ -389,7 +389,7 @@ export default function Bridge() {
             return (
               <div
                 key={`${card.rank}-${card.suit}-${i}`}
-                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE} transition-transform ${
                   canPlay ? 'cursor-pointer hover:-translate-y-1' : (isHumanTurn || isDummyTurn) ? 'opacity-40' : ''
                 }`}
                 onClick={() => canPlay && handlePlay(0, i)}

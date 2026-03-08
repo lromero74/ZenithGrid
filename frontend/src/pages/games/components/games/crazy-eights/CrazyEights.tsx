@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { SUITS, getSuitSymbol, type Suit } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
@@ -133,7 +133,7 @@ export default function CrazyEights() {
         {/* Draw pile + Discard pile */}
         <div className="flex gap-4 items-center justify-center">
           <div
-            className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] cursor-pointer"
+            className={`${CARD_SIZE} cursor-pointer`}
             onClick={handleDraw}
           >
             {gameState.drawPile.length > 0 ? (
@@ -144,7 +144,7 @@ export default function CrazyEights() {
               </div>
             )}
           </div>
-          <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+          <div className={CARD_SIZE}>
             {topDiscard && <CardFace card={topDiscard} />}
           </div>
           <span className="text-xs text-slate-500">{gameState.drawPile.length} left</span>
@@ -179,7 +179,7 @@ export default function CrazyEights() {
             return (
               <div
                 key={i}
-                className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+                className={`${CARD_SIZE} transition-transform ${
                   isPlayable ? 'cursor-pointer hover:-translate-y-1' : 'opacity-50'
                 }`}
                 onClick={() => isPlayable && handlePlay(i)}

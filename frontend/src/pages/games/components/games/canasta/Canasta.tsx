@@ -8,7 +8,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import type { Card } from '../../../utils/cardUtils'
@@ -60,7 +60,7 @@ function GameCard({ card, selected, onClick, disabled }: {
 }) {
   return (
     <div
-      className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] transition-transform ${
+      className={`${CARD_SIZE} transition-transform ${
         !disabled ? 'cursor-pointer hover:-translate-y-1' : 'opacity-40'
       } ${selected ? '-translate-y-2' : ''}`}
       onClick={disabled ? undefined : onClick}
@@ -292,7 +292,7 @@ export default function Canasta() {
           <span className="text-xs text-blue-400">North (Partner) ({gameState.hands[2].length})</span>
           <div className="flex gap-0.5 justify-center mt-0.5">
             {gameState.hands[2].slice(0, 7).map((_, i) => (
-              <div key={i} className="w-5 h-8"><CardBack /></div>
+              <div key={i} className={CARD_SLOT_V}><CardBack /></div>
             ))}
             {gameState.hands[2].length > 7 && (
               <span className="text-[0.6rem] text-slate-500 self-center">+{gameState.hands[2].length - 7}</span>
@@ -302,7 +302,7 @@ export default function Canasta() {
           {gameState.redThrees[2].length > 0 && (
             <div className="flex gap-0.5 justify-center mt-0.5">
               {gameState.redThrees[2].map((card, i) => (
-                <div key={i} className="w-5 h-8">
+                <div key={i} className={CARD_SLOT_V}>
                   <CardFace card={card} />
                 </div>
               ))}
@@ -317,13 +317,13 @@ export default function Canasta() {
             <span className="text-[0.6rem] text-red-400">West ({gameState.hands[3].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[3].slice(0, 5).map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
             {gameState.redThrees[3].length > 0 && (
               <div className="flex gap-0.5 justify-center mt-0.5">
                 {gameState.redThrees[3].map((card, i) => (
-                  <div key={i} className="w-5 h-8">
+                  <div key={i} className={CARD_SLOT_V}>
                     <CardFace card={card} />
                   </div>
                 ))}
@@ -336,11 +336,11 @@ export default function Canasta() {
             {/* Stock */}
             <div className="text-center">
               {gameState.stock.length > 0 ? (
-                <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem]">
+                <div className={CARD_SIZE}>
                   <CardBack />
                 </div>
               ) : (
-                <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] border border-dashed border-slate-600 rounded-md flex items-center justify-center">
+                <div className={`${CARD_SIZE} border border-dashed border-slate-600 rounded-md flex items-center justify-center`}>
                   <span className="text-[0.6rem] text-slate-600">Empty</span>
                 </div>
               )}
@@ -350,7 +350,7 @@ export default function Canasta() {
             {/* Discard pile */}
             <div className="text-center">
               {gameState.discardPile.length > 0 ? (
-                <div className={`w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] ${
+                <div className={`${CARD_SIZE} ${
                   gameState.pileFrozen ? 'ring-2 ring-cyan-400' : ''
                 }`}>
                   {(() => {
@@ -359,7 +359,7 @@ export default function Canasta() {
                   })()}
                 </div>
               ) : (
-                <div className="w-14 h-[5rem] sm:w-16 sm:h-[5.625rem] border border-dashed border-slate-600 rounded-md flex items-center justify-center">
+                <div className={`${CARD_SIZE} border border-dashed border-slate-600 rounded-md flex items-center justify-center`}>
                   <span className="text-[0.6rem] text-slate-600">Empty</span>
                 </div>
               )}
@@ -375,13 +375,13 @@ export default function Canasta() {
             <span className="text-[0.6rem] text-red-400">East ({gameState.hands[1].length})</span>
             <div className="flex flex-col items-center gap-0.5 mt-0.5">
               {gameState.hands[1].slice(0, 5).map((_, i) => (
-                <div key={i} className="w-8 h-3"><CardBack /></div>
+                <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
             </div>
             {gameState.redThrees[1].length > 0 && (
               <div className="flex gap-0.5 justify-center mt-0.5">
                 {gameState.redThrees[1].map((card, i) => (
-                  <div key={i} className="w-5 h-8">
+                  <div key={i} className={CARD_SLOT_V}>
                     <CardFace card={card} />
                   </div>
                 ))}
