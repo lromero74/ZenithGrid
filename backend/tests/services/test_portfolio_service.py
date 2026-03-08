@@ -572,3 +572,109 @@ class TestGetGenericCexPortfolio:
         assert result["total_usd_value"] == pytest.approx(1500.0)
         # First holding should have the unrealized PnL
         assert result["holdings"][0]["unrealized_pnl_usd"] == pytest.approx(500.0)
+
+
+# ---------------------------------------------------------------------------
+# _build_portfolio_holdings — in_positions calculation
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPortfolioHoldingsInPositions:
+    """Tests for in_positions / available calculation in _build_portfolio_holdings."""
+
+    def test_no_positions_available_equals_total(self):
+        """Without open positions, available equals total_balance and in_positions is 0."""
+        from app.services.portfolio_service import _build_portfolio_holdings
+
+        spot = [
+            {"asset": "ETH", "total_balance_crypto": "5.0",
+             "available_to_trade_crypto": "5.0", "total_balance_fiat": "12500"},
+        ]
+        holdings, *_ = _build_portfolio_holdings(spot, 100000.0, open_positions=None)
+
+        eth = holdings[0]
+        assert eth["total_balance"] == 5.0
+        assert eth["in_positions"] == 0.0
+        assert eth["available"] == 5.0
+
+    def test_positions_reduce_available(self):
+        """Open long positions reduce available and populate in_positions."""
+        from app.services.portfolio_service import _build_portfolio_holdings
+
+        spot = [
+            {"asset": "ETH", "total_balance_crypto": "5.0",
+             "available_to_trade_crypto": "5.0", "total_balance_fiat": "12500"},
+            {"asset": "SOL", "total_balance_crypto": "20.0",
+             "available_to_trade_crypto": "20.0", "total_balance_fiat": "3000"},
+        ]
+
+        pos1 = MagicMock()
+        pos1.direction = "long"
+        pos1.get_base_currency.return_value = "ETH"
+        pos1.total_base_acquired = 2.0
+
+        pos2 = MagicMock()
+        pos2.direction = "long"
+        pos2.get_base_currency.return_value = "ETH"
+        pos2.total_base_acquired = 1.5
+
+        pos3 = MagicMock()
+        pos3.direction = "long"
+        pos3.get_base_currency.return_value = "SOL"
+        pos3.total_base_acquired = 8.0
+
+        holdings, *_ = _build_portfolio_holdings(
+            spot, 100000.0, open_positions=[pos1, pos2, pos3]
+        )
+
+        eth = next(h for h in holdings if h["asset"] == "ETH")
+        assert eth["in_positions"] == pytest.approx(3.5)  # 2.0 + 1.5
+        assert eth["available"] == pytest.approx(1.5)  # 5.0 - 3.5
+
+        sol = next(h for h in holdings if h["asset"] == "SOL")
+        assert sol["in_positions"] == pytest.approx(8.0)
+        assert sol["available"] == pytest.approx(12.0)  # 20.0 - 8.0
+
+    def test_short_positions_excluded_from_in_positions(self):
+        """Short positions should NOT count toward in_positions."""
+        from app.services.portfolio_service import _build_portfolio_holdings
+
+        spot = [
+            {"asset": "BTC", "total_balance_crypto": "1.0",
+             "available_to_trade_crypto": "1.0", "total_balance_fiat": "100000"},
+        ]
+
+        short_pos = MagicMock()
+        short_pos.direction = "short"
+        short_pos.get_base_currency.return_value = "BTC"
+        short_pos.total_base_acquired = 0.5
+
+        holdings, *_ = _build_portfolio_holdings(
+            spot, 100000.0, open_positions=[short_pos]
+        )
+
+        btc = holdings[0]
+        assert btc["in_positions"] == 0.0
+        assert btc["available"] == 1.0
+
+    def test_in_positions_capped_at_total_balance(self):
+        """If positions exceed total balance (stale data), available floors at 0."""
+        from app.services.portfolio_service import _build_portfolio_holdings
+
+        spot = [
+            {"asset": "ETH", "total_balance_crypto": "1.0",
+             "available_to_trade_crypto": "1.0", "total_balance_fiat": "2500"},
+        ]
+
+        pos = MagicMock()
+        pos.direction = "long"
+        pos.get_base_currency.return_value = "ETH"
+        pos.total_base_acquired = 3.0  # More than we have
+
+        holdings, *_ = _build_portfolio_holdings(
+            spot, 100000.0, open_positions=[pos]
+        )
+
+        eth = holdings[0]
+        assert eth["in_positions"] == 3.0
+        assert eth["available"] == 0.0  # Floored at 0, not negative
