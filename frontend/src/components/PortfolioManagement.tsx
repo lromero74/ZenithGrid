@@ -912,8 +912,8 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                                   return pct > 0 ? (
                                     <div
                                       key={c.key}
-                                      className={`${c.bgColor}/80 flex items-center justify-center text-[10px] font-mono text-white transition-all`}
-                                      style={{ width: `${pct}%` }}
+                                      className="flex items-center justify-center text-[10px] font-mono text-white transition-all"
+                                      style={{ width: `${pct}%`, backgroundColor: `${CURRENCY_HEX[c.label]}cc` }}
                                     >
                                       {pct >= 8 && `${pct}%`}
                                     </div>

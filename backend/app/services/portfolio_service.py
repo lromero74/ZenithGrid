@@ -94,14 +94,31 @@ async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> Coinbas
     return client
 
 
-def _build_portfolio_holdings(spot_positions: list, btc_usd_price: float) -> tuple:
+def _build_portfolio_holdings(
+    spot_positions: list, btc_usd_price: float, open_positions: list = None
+) -> tuple:
     """
     Build portfolio holdings list from Coinbase breakdown data.
+
+    Args:
+        spot_positions: Raw spot positions from Coinbase portfolio breakdown
+        btc_usd_price: Current BTC-USD price
+        open_positions: Open bot positions (for calculating "in deals" amounts)
 
     Returns:
         Tuple of (holdings, total_usd, total_btc, actual_usd, actual_usdc,
                   actual_btc, breakdown_prices)
     """
+    # Pre-compute amount of each base currency held in open bot positions
+    positions_by_base = {}
+    if open_positions:
+        for pos in open_positions:
+            if pos.direction == "long":
+                base = pos.get_base_currency()
+                positions_by_base[base] = (
+                    positions_by_base.get(base, 0.0) + (pos.total_base_acquired or 0.0)
+                )
+
     portfolio_holdings = []
     total_usd_value = 0.0
     total_btc_value = 0.0
@@ -115,8 +132,9 @@ def _build_portfolio_holdings(spot_positions: list, btc_usd_price: float) -> tup
     for position in spot_positions:
         asset = position.get("asset", "")
         total_balance = float(position.get("total_balance_crypto", 0))
-        available = float(position.get("available_to_trade_crypto", 0))
-        hold = total_balance - available
+        in_positions = positions_by_base.get(asset, 0.0)
+        available = max(0.0, total_balance - in_positions)
+        hold = total_balance - float(position.get("available_to_trade_crypto", 0))
 
         if total_balance == 0:
             continue
@@ -164,6 +182,7 @@ def _build_portfolio_holdings(spot_positions: list, btc_usd_price: float) -> tup
             "asset": asset,
             "total_balance": total_balance,
             "available": available,
+            "in_positions": in_positions,
             "hold": hold,
             "current_price_usd": current_price_usd,
             "usd_value": usd_value,
@@ -374,20 +393,20 @@ async def get_cex_portfolio(
     # Get BTC/USD price for BTC value column (uses cache, very fast)
     btc_usd_price = await coinbase.get_btc_usd_price()
 
-    # Build portfolio holdings from breakdown data
-    (
-        portfolio_holdings, total_usd_value, total_btc_value,
-        actual_usd_balance, actual_usdc_balance, actual_btc_balance,
-        breakdown_prices,
-    ) = _build_portfolio_holdings(spot_positions, btc_usd_price)
-
-    # Get open positions for this account (strictly scoped)
+    # Get open positions for this account (needed for "in deals" amounts)
     positions_query = select(Position).where(
         Position.status == "open",
         Position.account_id == account.id
     )
     positions_result = await db.execute(positions_query)
     open_positions = positions_result.scalars().all()
+
+    # Build portfolio holdings from breakdown data
+    (
+        portfolio_holdings, total_usd_value, total_btc_value,
+        actual_usd_balance, actual_usdc_balance, actual_btc_balance,
+        breakdown_prices,
+    ) = _build_portfolio_holdings(spot_positions, btc_usd_price, open_positions)
 
     # Compute unrealized PnL and apply to holdings
     asset_pnl = _compute_position_pnl(open_positions, breakdown_prices, btc_usd_price)

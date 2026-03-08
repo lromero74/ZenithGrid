@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.94.0] - 2026-03-08
+
+### Changed
+- **Portfolio holdings table**: "Avail" and "Hold" columns replaced with **"Free"** (balance not in any deal) and **"In Deals"** (amount tied up in active bot positions). Balance column remains unchanged as the total
+- **Portfolio Management allocation bar chart**: Fixed invisible segments — colors are now visible instead of showing only a percentage number
+
+### Fixed
+- **Rebalance status endpoint**: 0% allocation targets displayed as defaults (34/33/33) due to same `or` falsy-zero bug fixed in v2.93.1
+
 ## [v2.93.1] - 2026-03-08
 
 ### Fixed

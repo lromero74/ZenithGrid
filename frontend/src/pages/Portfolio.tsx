@@ -21,6 +21,7 @@ interface Holding {
   asset: string
   total_balance: number
   available: number
+  in_positions?: number
   hold: number
   current_price_usd: number
   usd_value: number
@@ -641,10 +642,10 @@ function Portfolio() {
                     </div>
                   </th>
                   <th className="hidden md:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
-                    Avail
+                    Free
                   </th>
                   <th className="hidden md:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
-                    Hold
+                    In Deals
                   </th>
                   <th className="hidden sm:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
                     Price
@@ -714,8 +715,8 @@ function Portfolio() {
                     <td className="hidden md:table-cell px-3 py-3 text-right text-green-400 font-mono text-sm">
                       {formatCrypto(holding.available)}
                     </td>
-                    <td className="hidden md:table-cell px-3 py-3 text-right text-orange-400 font-mono text-sm">
-                      {holding.hold > 0 ? formatCrypto(holding.hold) : '-'}
+                    <td className="hidden md:table-cell px-3 py-3 text-right text-yellow-400 font-mono text-sm">
+                      {(holding.in_positions ?? 0) > 0 ? formatCrypto(holding.in_positions!) : '-'}
                     </td>
                     <td className="hidden sm:table-cell px-3 py-3 text-right text-slate-300 font-mono text-sm">
                       {holding.current_price_usd > 0

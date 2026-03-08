@@ -1120,14 +1120,18 @@ async def get_rebalance_status(
 
             alloc = _compute_allocation(aggregate_values, prices)
 
+        t_usd = account.rebalance_target_usd_pct
+        t_btc = account.rebalance_target_btc_pct
+        t_eth = account.rebalance_target_eth_pct
+        t_usdc = account.rebalance_target_usdc_pct
         return {
             "account_id": account_id,
             **alloc,
-            "target_usd_pct": account.rebalance_target_usd_pct or 34.0,
-            "target_btc_pct": account.rebalance_target_btc_pct or 33.0,
-            "target_eth_pct": account.rebalance_target_eth_pct or 33.0,
-            "target_usdc_pct": account.rebalance_target_usdc_pct or 0.0,
-            "rebalance_enabled": account.rebalance_enabled or False,
+            "target_usd_pct": t_usd if t_usd is not None else 34.0,
+            "target_btc_pct": t_btc if t_btc is not None else 33.0,
+            "target_eth_pct": t_eth if t_eth is not None else 33.0,
+            "target_usdc_pct": t_usdc if t_usdc is not None else 0.0,
+            "rebalance_enabled": bool(account.rebalance_enabled),
             "min_balance_usd": account.min_balance_usd or 0.0,
             "min_balance_btc": account.min_balance_btc or 0.0,
             "min_balance_eth": account.min_balance_eth or 0.0,
