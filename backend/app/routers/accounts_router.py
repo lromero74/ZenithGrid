@@ -1301,8 +1301,12 @@ async def sweep_dust(
         from app.services.rebalance_monitor import execute_dust_sweep
         results = await execute_dust_sweep(account, client, db)
 
+        successes = [r for r in results if r.get("status") == "success"]
+        failures = [r for r in results if r.get("status") == "failed"]
+
         return {
-            "swept": len(results),
+            "swept": len(successes),
+            "failed": len(failures),
             "details": [
                 {
                     "coin": r["coin"],
@@ -1311,7 +1315,16 @@ async def sweep_dust(
                     "target_currency": r["target_currency"],
                     "order_id": r.get("order_id", ""),
                 }
-                for r in results
+                for r in successes
+            ],
+            "errors": [
+                {
+                    "coin": r["coin"],
+                    "amount": r["amount"],
+                    "usd_value": r["usd_value"],
+                    "error": r.get("error", "Unknown error"),
+                }
+                for r in failures
             ],
         }
 

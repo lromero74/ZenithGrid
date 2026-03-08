@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.92.3] - 2026-03-08
+
+### Fixed
+- **Dust sweep shows success and failure feedback**: Sweep results now clearly report which coins were sold and which failed (with reason), instead of silently dropping failures
+
 ## [v2.92.2] - 2026-03-08
 
 ### Fixed

@@ -436,9 +436,16 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     setMessage(null)
     try {
       const result = await dustApi.sweep(accountId)
-      if (result.swept > 0) {
+      if (result.swept > 0 && result.failed === 0) {
         const coins = result.details.map(d => `${d.coin} → ${d.target_currency}`).join(', ')
         setMessage({ type: 'success', text: `Swept ${result.swept} coin(s): ${coins}` })
+      } else if (result.swept > 0 && result.failed > 0) {
+        const ok = result.details.map(d => d.coin).join(', ')
+        const fail = result.errors.map(e => `${e.coin}: ${e.error}`).join('; ')
+        setMessage({ type: 'success', text: `Swept ${ok}. Failed: ${fail}` })
+      } else if (result.failed > 0) {
+        const fail = result.errors.map(e => `${e.coin}: ${e.error}`).join('; ')
+        setMessage({ type: 'error', text: `Sweep failed — ${fail}` })
       } else {
         setMessage({ type: 'success', text: 'No dust positions to sweep' })
       }

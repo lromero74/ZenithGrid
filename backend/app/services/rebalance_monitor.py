@@ -858,17 +858,25 @@ class RebalanceMonitor:
                             f"→ {sweep['target_currency']} "
                             f"(Account: {account.name}, Order: {order_id})"
                         )
-                        results.append({**sweep, "order_id": order_id})
+                        results.append({**sweep, "order_id": order_id, "status": "success"})
                     else:
                         error = result.get("error_response", {})
+                        error_msg = error.get("message", "unknown error")
                         logger.warning(
-                            f"Dust sweep failed for {sweep['coin']}: "
-                            f"{error.get('message', 'unknown error')}"
+                            f"Dust sweep failed for {sweep['coin']}: {error_msg}"
                         )
+                        results.append({
+                            **sweep, "order_id": "", "status": "failed",
+                            "error": error_msg,
+                        })
                 except Exception as e:
                     logger.error(
                         f"Dust sweep error for {sweep['coin']}: {e}"
                     )
+                    results.append({
+                        **sweep, "order_id": "", "status": "failed",
+                        "error": str(e),
+                    })
 
             account.dust_last_sweep_at = datetime.utcnow()
             await db.commit()

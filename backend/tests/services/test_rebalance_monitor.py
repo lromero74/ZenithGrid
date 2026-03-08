@@ -740,3 +740,153 @@ class TestSubtractLockedAmounts:
 
         free = subtract_locked_amounts(balances, locked)
         assert "ADA" not in free
+
+
+# ---------------------------------------------------------------------------
+# _sweep_dust failure reporting
+# ---------------------------------------------------------------------------
+
+
+class TestSweepDustFailureReporting:
+    """Tests that _sweep_dust reports failures in results."""
+
+    @pytest.mark.asyncio
+    async def test_failed_order_included_in_results(self):
+        """When Coinbase returns an error response, it should appear in results."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 34.0
+        account.rebalance_target_btc_pct = 33.0
+        account.rebalance_target_eth_pct = 33.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        # Client with GRT dust and a failing market order
+        client = AsyncMock()
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "GRT", "available_balance": {"value": "100.5"}},
+        ]
+        client.get_current_price.return_value = "0.15"
+        client.list_products.return_value = [{"product_id": "GRT-USD"}]
+        # Simulate Coinbase error
+        client.create_market_order.return_value = {
+            "error_response": {"message": "Insufficient balance in source account"},
+        }
+
+        db = AsyncMock()
+
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={},
+        ):
+            results = await monitor._sweep_dust(
+                client, account, db,
+                prices={"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        assert len(results) == 1
+        assert results[0]["coin"] == "GRT"
+        assert results[0]["status"] == "failed"
+        assert "Insufficient balance" in results[0]["error"]
+
+    @pytest.mark.asyncio
+    async def test_successful_order_has_success_status(self):
+        """Successful orders should have status='success'."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 34.0
+        account.rebalance_target_btc_pct = 33.0
+        account.rebalance_target_eth_pct = 33.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        client = AsyncMock()
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "LTC", "available_balance": {"value": "0.5"}},
+        ]
+        client.get_current_price.return_value = "80.0"
+        client.list_products.return_value = [{"product_id": "LTC-USD"}]
+        client.create_market_order.return_value = {
+            "success_response": {"order_id": "order-123"},
+        }
+
+        db = AsyncMock()
+
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={},
+        ):
+            results = await monitor._sweep_dust(
+                client, account, db,
+                prices={"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        assert len(results) == 1
+        assert results[0]["coin"] == "LTC"
+        assert results[0]["status"] == "success"
+        assert results[0]["order_id"] == "order-123"
+
+    @pytest.mark.asyncio
+    async def test_exception_during_order_included_as_failure(self):
+        """If create_market_order raises, it should appear as a failure."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 34.0
+        account.rebalance_target_btc_pct = 33.0
+        account.rebalance_target_eth_pct = 33.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        client = AsyncMock()
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "ETC", "available_balance": {"value": "2.0"}},
+        ]
+        client.get_current_price.return_value = "18.0"
+        client.list_products.return_value = [{"product_id": "ETC-USD"}]
+        client.create_market_order.side_effect = Exception("Network timeout")
+
+        db = AsyncMock()
+
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={},
+        ):
+            results = await monitor._sweep_dust(
+                client, account, db,
+                prices={"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        assert len(results) == 1
+        assert results[0]["coin"] == "ETC"
+        assert results[0]["status"] == "failed"
+        assert "Network timeout" in results[0]["error"]

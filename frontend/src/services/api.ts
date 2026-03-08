@@ -673,12 +673,19 @@ export interface DustSweepSettings {
 
 export interface DustSweepResult {
   swept: number;
+  failed: number;
   details: {
     coin: string;
     amount: number;
     usd_value: number;
     target_currency: string;
     order_id: string;
+  }[];
+  errors: {
+    coin: string;
+    amount: number;
+    usd_value: number;
+    error: string;
   }[];
 }
 
