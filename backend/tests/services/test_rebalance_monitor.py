@@ -152,6 +152,7 @@ class TestPlanTrades:
         # 5% of 190 = $9.50, exchange floor = $10, so min = $10
         # Deltas ~$35 each, so trades should be planned (above $10)
         trades = plan_trades(free_balances, targets, prices, min_trade_pct=5.0)
+        assert len(trades) > 0  # Deltas above $10 floor
 
         # With 20% min: 20% of 190 = $38, deltas ~$35 are below that
         trades_20 = plan_trades(free_balances, targets, prices, min_trade_pct=20.0)
@@ -384,40 +385,37 @@ class TestPlanTopupTrades:
         assert trades == []
 
     def test_single_currency_below_minimum(self):
-        """Happy path: USDC below minimum, proportional buy from others."""
+        """Happy path: USDC below minimum, buy from all available donors."""
         from app.services.rebalance_monitor import plan_topup_trades
 
         # USDC has $300, minimum is $500 → deficit of $200
+        # USD=$500, BTC=0.003*100000=$300, ETH=0.08*2500=$200 → donors total $1000
         free_balances = {"USD": 500.0, "BTC": 0.003, "ETH": 0.08, "USDC": 300.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
-        # USD=$500, BTC=0.003*100000=$300, ETH=0.08*2500=$200
-        # Total available from others = $1000
-        # Deficit = $200 USDC
         trades = plan_topup_trades(free_balances, min_balances, prices)
 
         assert len(trades) > 0
         # All trades should be buying USDC
         for t in trades:
             assert t["to_currency"] == "USDC"
-        # Total USD amount across trades should be ~$200
+        # Total should be ~$200
         total = sum(t["usd_amount"] for t in trades)
         assert total == pytest.approx(200.0, rel=0.01)
 
     def test_proportional_sourcing(self):
-        """Happy path: verify funds sourced proportionally from other currencies."""
+        """Happy path: verify funds sourced proportionally from all donors."""
         from app.services.rebalance_monitor import plan_topup_trades
 
         # USDC deficit = $200
-        # Others: USD=$500 (50%), BTC=$300 (30%), ETH=$200 (20%)
+        # USD=$500 (50%), BTC=$300 (30%), ETH=$200 (20%) → total $1000
         free_balances = {"USD": 500.0, "BTC": 0.003, "ETH": 0.08, "USDC": 300.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
         trades = plan_topup_trades(free_balances, min_balances, prices)
 
-        # Find trades by source currency
         by_source = {t["from_currency"]: t["usd_amount"] for t in trades}
 
         # USD contributes 50% of $200 = $100
@@ -488,7 +486,7 @@ class TestPlanTopupTrades:
         from app.services.rebalance_monitor import plan_topup_trades
 
         # USDC deficit = $200
-        # Others: USD=$5000 (98%), BTC=$0, ETH=$100 (2%)
+        # USD=$5000 (98%), BTC=$0, ETH=$100 (2%)
         # ETH's contribution: 2% of $200 = $4 → below $10, should be skipped
         free_balances = {"USD": 5000.0, "BTC": 0.0, "ETH": 0.04, "USDC": 300.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
@@ -890,3 +888,185 @@ class TestSweepDustFailureReporting:
         assert results[0]["coin"] == "ETC"
         assert results[0]["status"] == "failed"
         assert "Network timeout" in results[0]["error"]
+
+
+# ---------------------------------------------------------------------------
+# USD↔USDC convert in _execute_trade
+# ---------------------------------------------------------------------------
+
+
+class TestConvertCurrency:
+    """Tests for USD↔USDC conversion via convert endpoint in rebalancing."""
+
+    @pytest.mark.asyncio
+    async def test_execute_trade_usd_to_usdc_uses_convert(self):
+        """Happy path: USD→USDC uses client.convert_currency, not market order."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+        client = AsyncMock()
+        client.convert_currency.return_value = {
+            "success_response": {"order_id": "convert-123"}
+        }
+
+        account = MagicMock()
+        account.name = "Test"
+
+        trade = {
+            "from_currency": "USD",
+            "to_currency": "USDC",
+            "usd_amount": 100.0,
+            "product_id": "USDC-USD",
+            "side": "BUY",
+        }
+
+        await monitor._execute_trade(client, account, trade, {})
+
+        client.convert_currency.assert_called_once_with("USD", "USDC", 99.0)
+        client.create_market_order.assert_not_called()
+        client.buy_with_usd.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_trade_usdc_to_usd_uses_convert(self):
+        """Happy path: USDC→USD also uses convert endpoint."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+        client = AsyncMock()
+        client.convert_currency.return_value = {
+            "success_response": {"order_id": "convert-456"}
+        }
+
+        account = MagicMock()
+        account.name = "Test"
+
+        trade = {
+            "from_currency": "USDC",
+            "to_currency": "USD",
+            "usd_amount": 50.0,
+            "product_id": "USDC-USD",
+            "side": "SELL",
+        }
+
+        await monitor._execute_trade(client, account, trade, {})
+
+        client.convert_currency.assert_called_once_with("USDC", "USD", 49.5)
+
+    @pytest.mark.asyncio
+    async def test_convert_failure_logged(self):
+        """Failure case: convert returns error_response — logged as warning."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+        client = AsyncMock()
+        client.convert_currency.return_value = {
+            "error_response": {"message": "Insufficient funds"}
+        }
+
+        account = MagicMock()
+        account.name = "Test"
+
+        trade = {
+            "from_currency": "USD",
+            "to_currency": "USDC",
+            "usd_amount": 100.0,
+            "product_id": "USDC-USD",
+            "side": "BUY",
+        }
+
+        # Should not raise — failures are logged, not thrown
+        await monitor._execute_trade(client, account, trade, {})
+
+        client.convert_currency.assert_called_once()
+
+    def test_plan_topup_usd_donates_to_usdc(self):
+        """Happy path: USD is a valid donor for USDC top-ups (via convert)."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # Only USD has funds, USDC needs top-up
+        free_balances = {"USD": 1000.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 100.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        assert len(trades) == 1
+        assert trades[0]["from_currency"] == "USD"
+        assert trades[0]["to_currency"] == "USDC"
+        assert trades[0]["usd_amount"] == pytest.approx(100.0, rel=0.01)
+
+    def test_plan_trades_usd_usdc_pair_included(self):
+        """Happy path: plan_trades generates USD→USDC when USDC is underweight."""
+        from app.services.rebalance_monitor import plan_trades
+
+        # USD is 100% of portfolio, target is 50% USD / 50% USDC
+        free_balances = {"USD": 1000.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0}
+        targets = {
+            "usd_pct": 50.0, "btc_pct": 0.0,
+            "eth_pct": 0.0, "usdc_pct": 50.0,
+        }
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_trades(free_balances, targets, prices)
+
+        assert len(trades) >= 1
+        usd_to_usdc = [
+            t for t in trades
+            if t["from_currency"] == "USD" and t["to_currency"] == "USDC"
+        ]
+        assert len(usd_to_usdc) == 1
+        assert usd_to_usdc[0]["usd_amount"] == pytest.approx(500.0, abs=50)
+
+
+# ---------------------------------------------------------------------------
+# Paper trading convert
+# ---------------------------------------------------------------------------
+
+
+class TestPaperConvert:
+    """Tests for paper trading USD↔USDC conversion."""
+
+    @pytest.mark.asyncio
+    async def test_paper_convert_usd_to_usdc_success(self):
+        """Happy path: paper convert moves balances 1:1."""
+        import json
+        from app.exchange_clients.paper_trading_client import PaperTradingClient
+
+        account = MagicMock()
+        account.id = 99
+        account.paper_balances = json.dumps({"USD": 500.0, "USDC": 100.0})
+
+        client = PaperTradingClient(account)
+        # Mock DB operations — unit test, no real DB
+        client._reload_balances = AsyncMock()
+        client._save_balances = AsyncMock()
+
+        result = await client.convert_currency("USD", "USDC", 200.0)
+
+        assert result.get("success_response", {}).get("order_id")
+        assert client.balances["USD"] == pytest.approx(300.0)
+        assert client.balances["USDC"] == pytest.approx(300.0)
+        client._save_balances.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_paper_convert_insufficient_balance_fails(self):
+        """Failure case: not enough source currency returns error."""
+        import json
+        from app.exchange_clients.paper_trading_client import PaperTradingClient
+
+        account = MagicMock()
+        account.id = 100
+        account.paper_balances = json.dumps({"USD": 50.0, "USDC": 0.0})
+
+        client = PaperTradingClient(account)
+        # Mock DB operations — unit test, no real DB
+        client._reload_balances = AsyncMock()
+        client._save_balances = AsyncMock()
+
+        result = await client.convert_currency("USD", "USDC", 200.0)
+
+        assert "error_response" in result
+        assert "Insufficient" in result["error_response"]["message"]
+        # Balances unchanged
+        assert client.balances["USD"] == pytest.approx(50.0)
+        client._save_balances.assert_not_called()

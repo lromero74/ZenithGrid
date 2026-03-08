@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.93.0] - 2026-03-08
+
+### Added
+- **USD↔USDC conversion for rebalancing**: Uses Coinbase's 1:1 convert endpoint instead of market orders (no spread, no fees). Deposited USD now flows directly to USDC allocations in a single rebalance cycle
+- **Paper trading convert support**: Paper accounts simulate USD↔USDC conversions with instant 1:1 balance swaps
+
+### Changed
+- **USD is now a valid donor for USDC reserves**: USD can top up USDC minimum balances directly via conversion, no longer stuck or routing through BTC/ETH
+
 ## [v2.92.4] - 2026-03-08
 
 ### Changed

@@ -848,6 +848,41 @@ class PaperTradingClient(ExchangeClient):
             size=str(base_amount)
         )
 
+    async def convert_currency(
+        self, from_currency: str, to_currency: str, amount: float
+    ) -> Dict[str, Any]:
+        """Simulate USD↔USDC 1:1 conversion for paper trading."""
+        lock = _get_account_lock(self.account.id)
+        async with lock:
+            await self._reload_balances()
+
+            available = self.balances.get(from_currency, 0.0)
+            if available < amount:
+                return {
+                    "error_response": {
+                        "message": (
+                            f"Insufficient {from_currency} balance. "
+                            f"Available: {available}, Required: {amount}"
+                        )
+                    }
+                }
+
+            self.balances[from_currency] = available - amount
+            self.balances[to_currency] = self.balances.get(to_currency, 0.0) + amount
+            await self._save_balances()
+
+        order_id = f"paper-convert-{uuid.uuid4()}"
+        logger.info(
+            f"Paper convert: {amount} {from_currency} → {to_currency} "
+            f"(order_id: {order_id})"
+        )
+        return {
+            "success": True,
+            "success_response": {"order_id": order_id},
+            "order_id": order_id,
+            "paper_trading": True,
+        }
+
     def get_exchange_type(self) -> str:
         """Return exchange type."""
         return "cex"  # Paper trading simulates CEX behavior

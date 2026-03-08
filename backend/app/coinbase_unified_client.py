@@ -16,6 +16,7 @@ from app.coinbase_api import account_balance_api
 from app.coinbase_api import market_data_api
 from app.coinbase_api import order_api
 from app.coinbase_api import perpetuals_api
+from app.coinbase_api import convert_api
 from app.coinbase_api import transaction_api
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,60 @@ class CoinbaseClient:
     async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
         """Sell crypto for USD"""
         return await order_api.sell_for_usd(self._request, base_amount, product_id)
+
+    async def convert_currency(
+        self, from_currency: str, to_currency: str, amount: float
+    ) -> Dict[str, Any]:
+        """Convert between USD and USDC using the 1:1 convert endpoint.
+
+        Uses a two-step flow: create quote → commit trade.
+        Returns standardized {"success_response": {"order_id": ...}} format.
+        """
+        # Look up Coinbase account UUIDs for both currencies
+        accounts = await self.get_accounts()
+        from_uuid = None
+        to_uuid = None
+        for acct in accounts:
+            if acct.get("currency") == from_currency:
+                from_uuid = acct.get("uuid")
+            if acct.get("currency") == to_currency:
+                to_uuid = acct.get("uuid")
+            if from_uuid and to_uuid:
+                break
+
+        if not from_uuid or not to_uuid:
+            missing = from_currency if not from_uuid else to_currency
+            return {
+                "error_response": {
+                    "message": f"Could not find Coinbase account for {missing}"
+                }
+            }
+
+        # Step 1: Create convert quote
+        quote = await convert_api.create_convert_quote(
+            self._request, from_uuid, to_uuid, str(amount)
+        )
+
+        trade = quote.get("trade", {})
+        trade_id = trade.get("id")
+        if not trade_id:
+            error_msg = quote.get("error", quote.get("message", str(quote)))
+            return {"error_response": {"message": f"Convert quote failed: {error_msg}"}}
+
+        # Step 2: Commit the trade
+        result = await convert_api.commit_convert_trade(
+            self._request, trade_id, from_uuid, to_uuid
+        )
+
+        committed_trade = result.get("trade", {})
+        committed_id = committed_trade.get("id", trade_id)
+
+        logger.info(
+            f"Convert {amount} {from_currency} → {to_currency} "
+            f"(trade_id: {committed_id})"
+        )
+
+        return {"success_response": {"order_id": committed_id}}
 
     # ===== Perpetual Futures (INTX) Methods =====
 

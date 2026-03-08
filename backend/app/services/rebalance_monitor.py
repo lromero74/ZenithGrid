@@ -413,6 +413,8 @@ def _get_trade_params(from_currency: str, to_currency: str) -> Tuple[str, str]:
 
     Returns (product_id, side).
     """
+    # USD↔USDC: _execute_trade uses convert_currency() instead of market orders,
+    # but plan functions still need these entries to build trade dicts.
     pair_map = {
         ("USD", "BTC"): ("BTC-USD", "BUY"),
         ("BTC", "USD"): ("BTC-USD", "SELL"),
@@ -661,17 +663,15 @@ class RebalanceMonitor:
             from_curr = trade["from_currency"]
             to_curr = trade["to_currency"]
 
-            if product_id == "USDC-USD":
-                # USDC↔USD: use buy_with_usd / sell_for_usd
-                usdc_price = prices.get("USDC-USD", 1.0)
-                if side == "BUY":
-                    # Buying USDC with USD
-                    result = await client.buy_with_usd(usd_amount, product_id)
-                else:
-                    # Selling USDC for USD
-                    usdc_amount = usd_amount / usdc_price
-                    result = await client.sell_for_usd(usdc_amount, product_id)
-            elif side == "BUY" and from_curr == "USD":
+            # USD↔USDC: use 1:1 convert endpoint (no market pair exists)
+            if {from_curr, to_curr} == {"USD", "USDC"}:
+                result = await client.convert_currency(
+                    from_curr, to_curr, usd_amount
+                )
+                self._log_trade_result(result, trade, account)
+                return
+
+            if side == "BUY" and from_curr == "USD":
                 # Buying BTC or ETH with USD
                 result = await client.buy_with_usd(usd_amount, product_id)
             elif side == "SELL" and to_curr == "USD":
@@ -723,34 +723,38 @@ class RebalanceMonitor:
                         size=f"{eth_amount:.8f}",
                     )
 
-            success = result.get("success_response", {})
-            order_id = success.get("order_id", "")
-
-            if order_id:
-                logger.info(
-                    f"Rebalance trade executed: {trade['from_currency']} → "
-                    f"{trade['to_currency']} ~${trade['usd_amount']:.2f} "
-                    f"(Account: {account.name}, Order: {order_id})"
-                )
-            else:
-                error = result.get("error_response", {})
-                error_msg = (
-                    error.get("message")
-                    or error.get("error")
-                    or error.get("preview_failure_reason")
-                    or f"Unknown failure — raw: {result}"
-                )
-                logger.warning(
-                    f"Rebalance trade skipped: {trade['from_currency']} → "
-                    f"{trade['to_currency']} ~${trade['usd_amount']:.2f} "
-                    f"(Account: {account.name}): {error_msg}"
-                )
+            self._log_trade_result(result, trade, account)
 
         except Exception as e:
             logger.error(
                 f"Error executing rebalance trade for account "
                 f"{account.name}: {e}",
                 exc_info=True,
+            )
+
+    def _log_trade_result(self, result: dict, trade: dict, account):
+        """Log success or failure for a rebalance trade/convert."""
+        success = result.get("success_response", {})
+        order_id = success.get("order_id", "")
+
+        if order_id:
+            logger.info(
+                f"Rebalance trade executed: {trade['from_currency']} → "
+                f"{trade['to_currency']} ~${trade['usd_amount']:.2f} "
+                f"(Account: {account.name}, Order: {order_id})"
+            )
+        else:
+            error = result.get("error_response", {})
+            error_msg = (
+                error.get("message")
+                or error.get("error")
+                or error.get("preview_failure_reason")
+                or f"Unknown failure — raw: {result}"
+            )
+            logger.warning(
+                f"Rebalance trade skipped: {trade['from_currency']} → "
+                f"{trade['to_currency']} ~${trade['usd_amount']:.2f} "
+                f"(Account: {account.name}): {error_msg}"
             )
 
     async def _sweep_dust(

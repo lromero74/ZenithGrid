@@ -269,6 +269,12 @@ class CoinbaseAdapter(ExchangeClient):
         """Sell crypto for USD."""
         return await self._client.sell_for_usd(base_amount, product_id)
 
+    async def convert_currency(
+        self, from_currency: str, to_currency: str, amount: float
+    ) -> Dict[str, Any]:
+        """Convert between USD and USDC (1:1 via Coinbase convert endpoint)."""
+        return await self._client.convert_currency(from_currency, to_currency, amount)
+
     # ========================================
     # EXCHANGE METADATA
     # ========================================
