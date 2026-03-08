@@ -516,6 +516,28 @@ class TestAutoBuySettings:
         assert result.usdc_enabled is True
         assert result.usdc_min == 25.0
 
+    @pytest.mark.asyncio
+    async def test_enable_autobuy_disables_rebalancing(
+        self, db_session, test_user, test_account,
+    ):
+        """Mutual exclusivity: enabling auto-buy disables rebalancing."""
+        # Pre-condition: rebalancing is enabled
+        test_account.rebalance_enabled = True
+        await db_session.flush()
+
+        from app.routers.accounts_router import (
+            update_auto_buy_settings, AutoBuySettingsUpdate,
+        )
+        settings = AutoBuySettingsUpdate(enabled=True)
+        result = await update_auto_buy_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result.enabled is True
+        # Rebalancing should now be disabled
+        await db_session.refresh(test_account)
+        assert test_account.rebalance_enabled is False
+
 
 # =============================================================================
 # link_perps_portfolio
@@ -611,6 +633,30 @@ class TestRebalanceSettings:
         assert result.target_usd_pct == pytest.approx(50.0)
         assert result.target_btc_pct == pytest.approx(30.0)
         assert result.target_eth_pct == pytest.approx(20.0)
+
+    @pytest.mark.asyncio
+    async def test_enable_rebalancing_disables_autobuy(
+        self, db_session, test_user, test_account,
+    ):
+        """Mutual exclusivity: enabling rebalancing disables auto-buy."""
+        # Pre-condition: auto-buy is enabled
+        test_account.auto_buy_enabled = True
+        await db_session.flush()
+
+        from app.routers.accounts_router import (
+            update_rebalance_settings, RebalanceSettingsUpdate,
+        )
+        settings = RebalanceSettingsUpdate(
+            enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
+        )
+        result = await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result.enabled is True
+        # Auto-buy should now be disabled
+        await db_session.refresh(test_account)
+        assert test_account.auto_buy_enabled is False
 
     @pytest.mark.asyncio
     async def test_update_rebalance_invalid_total(

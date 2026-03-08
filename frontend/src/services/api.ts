@@ -620,9 +620,14 @@ export interface RebalanceSettings {
   target_usd_pct: number;
   target_btc_pct: number;
   target_eth_pct: number;
+  target_usdc_pct: number;
   drift_threshold_pct: number;
   check_interval_minutes: number;
   min_trade_pct: number;
+  min_balance_usd: number;
+  min_balance_btc: number;
+  min_balance_eth: number;
+  min_balance_usdc: number;
 }
 
 export interface RebalanceStatus {
@@ -630,11 +635,17 @@ export interface RebalanceStatus {
   current_usd_pct: number;
   current_btc_pct: number;
   current_eth_pct: number;
+  current_usdc_pct: number;
   total_value_usd: number;
   target_usd_pct: number;
   target_btc_pct: number;
   target_eth_pct: number;
+  target_usdc_pct: number;
   rebalance_enabled: boolean;
+  min_balance_usd: number;
+  min_balance_btc: number;
+  min_balance_eth: number;
+  min_balance_usdc: number;
 }
 
 export const rebalanceApi = {

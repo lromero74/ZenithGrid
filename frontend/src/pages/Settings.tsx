@@ -4,8 +4,7 @@ import { AccountsManagement } from '../components/AccountsManagement'
 import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
-import { AutoBuySettings } from '../components/AutoBuySettings'
-import { RebalanceSettings } from '../components/RebalanceSettings'
+import { PortfolioManagement } from '../components/PortfolioManagement'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -909,14 +908,9 @@ export default function Settings() {
       {/* Paper Trading Section */}
       <PaperTradingManager />
 
-      {/* Auto-Buy BTC Section - Hidden when paper trading is active */}
+      {/* Portfolio Management (Auto-Buy BTC + Rebalancing) - Hidden when paper trading is active */}
       {!isPaperTradingActive && (
-        <AutoBuySettings accounts={accounts} />
-      )}
-
-      {/* Portfolio Rebalancing - Hidden when paper trading is active */}
-      {!isPaperTradingActive && (
-        <RebalanceSettings accounts={accounts} />
+        <PortfolioManagement accounts={accounts} />
       )}
 
       {/* Coin Categorization Section - Always visible (informational) */}

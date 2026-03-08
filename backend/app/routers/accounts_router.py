@@ -201,9 +201,14 @@ class RebalanceSettingsResponse(BaseModel):
     target_usd_pct: float
     target_btc_pct: float
     target_eth_pct: float
+    target_usdc_pct: float
     drift_threshold_pct: float
     check_interval_minutes: int
     min_trade_pct: float
+    min_balance_usd: float
+    min_balance_btc: float
+    min_balance_eth: float
+    min_balance_usdc: float
 
 
 class RebalanceSettingsUpdate(BaseModel):
@@ -212,9 +217,14 @@ class RebalanceSettingsUpdate(BaseModel):
     target_usd_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     target_btc_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     target_eth_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+    target_usdc_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     drift_threshold_pct: Optional[float] = Field(None, ge=1.0, le=10.0)
     check_interval_minutes: Optional[int] = Field(None, ge=15, le=1440)
     min_trade_pct: Optional[float] = Field(None, ge=1.0, le=25.0)
+    min_balance_usd: Optional[float] = Field(None, ge=0.0)
+    min_balance_btc: Optional[float] = Field(None, ge=0.0)
+    min_balance_eth: Optional[float] = Field(None, ge=0.0)
+    min_balance_usdc: Optional[float] = Field(None, ge=0.0)
 
 
 # =============================================================================
@@ -778,6 +788,10 @@ async def update_auto_buy_settings(
     if not account:
         raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
 
+    # Mutual exclusivity: enabling auto-buy disables portfolio rebalancing
+    if settings.enabled and account.rebalance_enabled:
+        account.rebalance_enabled = False
+
     # Update fields if provided
     if settings.enabled is not None:
         account.auto_buy_enabled = settings.enabled
@@ -933,14 +947,24 @@ async def get_rebalance_settings(
     if not account:
         raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
 
+    return _build_rebalance_response(account)
+
+
+def _build_rebalance_response(account) -> RebalanceSettingsResponse:
+    """Build RebalanceSettingsResponse from an Account model instance."""
     return RebalanceSettingsResponse(
         enabled=account.rebalance_enabled or False,
         target_usd_pct=account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
         target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
         target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
+        target_usdc_pct=account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
         drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
         check_interval_minutes=account.rebalance_check_interval_minutes or 60,
         min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
+        min_balance_usd=account.min_balance_usd or 0.0,
+        min_balance_btc=account.min_balance_btc or 0.0,
+        min_balance_eth=account.min_balance_eth or 0.0,
+        min_balance_usdc=account.min_balance_usdc or 0.0,
     )
 
 
@@ -965,13 +989,19 @@ async def update_rebalance_settings(
     usd = settings.target_usd_pct if settings.target_usd_pct is not None else account.rebalance_target_usd_pct or 34.0
     btc = settings.target_btc_pct if settings.target_btc_pct is not None else account.rebalance_target_btc_pct or 33.0
     eth = settings.target_eth_pct if settings.target_eth_pct is not None else account.rebalance_target_eth_pct or 33.0
+    usdc = (settings.target_usdc_pct if settings.target_usdc_pct is not None
+            else account.rebalance_target_usdc_pct or 0.0)
 
-    pct_total = usd + btc + eth
+    pct_total = usd + btc + eth + usdc
     if abs(pct_total - 100.0) > 0.1:
         raise HTTPException(
             status_code=400,
             detail=f"Target percentages must sum to 100% (got {pct_total:.1f}%)"
         )
+
+    # Mutual exclusivity: enabling rebalancing disables auto-buy
+    if settings.enabled and account.auto_buy_enabled:
+        account.auto_buy_enabled = False
 
     # Update fields
     if settings.enabled is not None:
@@ -982,25 +1012,27 @@ async def update_rebalance_settings(
         account.rebalance_target_btc_pct = settings.target_btc_pct
     if settings.target_eth_pct is not None:
         account.rebalance_target_eth_pct = settings.target_eth_pct
+    if settings.target_usdc_pct is not None:
+        account.rebalance_target_usdc_pct = settings.target_usdc_pct
     if settings.drift_threshold_pct is not None:
         account.rebalance_drift_threshold_pct = settings.drift_threshold_pct
     if settings.check_interval_minutes is not None:
         account.rebalance_check_interval_minutes = settings.check_interval_minutes
     if settings.min_trade_pct is not None:
         account.rebalance_min_trade_pct = settings.min_trade_pct
+    if settings.min_balance_usd is not None:
+        account.min_balance_usd = settings.min_balance_usd
+    if settings.min_balance_btc is not None:
+        account.min_balance_btc = settings.min_balance_btc
+    if settings.min_balance_eth is not None:
+        account.min_balance_eth = settings.min_balance_eth
+    if settings.min_balance_usdc is not None:
+        account.min_balance_usdc = settings.min_balance_usdc
 
     await db.commit()
     await db.refresh(account)
 
-    return RebalanceSettingsResponse(
-        enabled=account.rebalance_enabled or False,
-        target_usd_pct=account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
-        target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
-        target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
-        drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
-        check_interval_minutes=account.rebalance_check_interval_minutes or 60,
-        min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
-    )
+    return _build_rebalance_response(account)
 
 
 @router.get("/{account_id}/rebalance-status")
@@ -1028,7 +1060,7 @@ async def get_rebalance_status(
         # Use aggregate quote value (free balance + open positions in that
         # currency's pairs) — matches how bot budgets are calculated.
         aggregate_values = {}
-        for currency in ("USD", "BTC", "ETH"):
+        for currency in ("USD", "BTC", "ETH", "USDC"):
             try:
                 aggregate_values[currency] = float(
                     await coinbase.calculate_aggregate_quote_value(currency)
@@ -1038,34 +1070,43 @@ async def get_rebalance_status(
 
         # Convert all to USD for percentage calculation
         prices = {}
-        for product_id in ("BTC-USD", "ETH-USD"):
+        for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
             try:
                 prices[product_id] = float(await coinbase.get_current_price(product_id))
             except Exception:
-                prices[product_id] = 0.0
+                # USDC is pegged ~1:1 to USD
+                prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
 
         usd_value = aggregate_values["USD"]
         btc_value = aggregate_values["BTC"] * prices.get("BTC-USD", 0.0)
         eth_value = aggregate_values["ETH"] * prices.get("ETH-USD", 0.0)
-        total = usd_value + btc_value + eth_value
+        usdc_value = aggregate_values["USDC"] * prices.get("USDC-USD", 1.0)
+        total = usd_value + btc_value + eth_value + usdc_value
 
         if total > 0:
             usd_pct = round(usd_value / total * 100, 2)
             btc_pct = round(btc_value / total * 100, 2)
             eth_pct = round(eth_value / total * 100, 2)
+            usdc_pct = round(usdc_value / total * 100, 2)
         else:
-            usd_pct = btc_pct = eth_pct = 0.0
+            usd_pct = btc_pct = eth_pct = usdc_pct = 0.0
 
         return {
             "account_id": account_id,
             "current_usd_pct": usd_pct,
             "current_btc_pct": btc_pct,
             "current_eth_pct": eth_pct,
+            "current_usdc_pct": usdc_pct,
             "total_value_usd": round(total, 2),
             "target_usd_pct": account.rebalance_target_usd_pct or 34.0,
             "target_btc_pct": account.rebalance_target_btc_pct or 33.0,
             "target_eth_pct": account.rebalance_target_eth_pct or 33.0,
+            "target_usdc_pct": account.rebalance_target_usdc_pct or 0.0,
             "rebalance_enabled": account.rebalance_enabled or False,
+            "min_balance_usd": account.min_balance_usd or 0.0,
+            "min_balance_btc": account.min_balance_btc or 0.0,
+            "min_balance_eth": account.min_balance_eth or 0.0,
+            "min_balance_usdc": account.min_balance_usdc or 0.0,
         }
 
     except (HTTPException, AppError):

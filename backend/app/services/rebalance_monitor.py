@@ -1,7 +1,7 @@
 """
 Portfolio Rebalance Monitor Service
 
-Periodically checks each account's free USD/BTC/ETH allocation against
+Periodically checks each account's free USD/BTC/ETH/USDC allocation against
 configured targets and executes market trades to rebalance when any
 currency drifts beyond the threshold.
 
@@ -34,24 +34,26 @@ def calculate_current_allocations(
     """Calculate current allocation percentages from free balances.
 
     Args:
-        free_balances: {"USD": amount, "BTC": amount, "ETH": amount}
-        prices: {"BTC-USD": price, "ETH-USD": price}
+        free_balances: {"USD": amount, "BTC": amount, "ETH": amount, "USDC": amount}
+        prices: {"BTC-USD": price, "ETH-USD": price, "USDC-USD": price}
 
     Returns:
         {"usd_pct": float, "btc_pct": float, "eth_pct": float,
-         "total_value_usd": float}
+         "usdc_pct": float, "total_value_usd": float}
     """
     usd_value = free_balances.get("USD", 0.0)
     btc_value = free_balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0)
     eth_value = free_balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
+    usdc_value = free_balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
 
-    total = usd_value + btc_value + eth_value
+    total = usd_value + btc_value + eth_value + usdc_value
 
     if total <= 0:
         return {
             "usd_pct": 0.0,
             "btc_pct": 0.0,
             "eth_pct": 0.0,
+            "usdc_pct": 0.0,
             "total_value_usd": 0.0,
         }
 
@@ -59,6 +61,7 @@ def calculate_current_allocations(
         "usd_pct": (usd_value / total) * 100,
         "btc_pct": (btc_value / total) * 100,
         "eth_pct": (eth_value / total) * 100,
+        "usdc_pct": (usdc_value / total) * 100,
         "total_value_usd": total,
     }
 
@@ -72,11 +75,92 @@ def needs_rebalance(
 
     Returns True only if drift strictly exceeds the threshold.
     """
-    for key in ("usd_pct", "btc_pct", "eth_pct"):
+    for key in ("usd_pct", "btc_pct", "eth_pct", "usdc_pct"):
         drift = abs(current[key] - targets[key])
         if drift > threshold:
             return True
     return False
+
+
+def plan_topup_trades(
+    free_balances: Dict[str, float],
+    min_balances: Dict[str, float],
+    prices: Dict[str, float],
+) -> List[dict]:
+    """Plan trades to top up currencies that are below their minimum reserve.
+
+    For each currency below its minimum, calculates the deficit in USD terms
+    and sources funds proportionally from all other currencies based on their
+    free USD-equivalent values. Individual contributions below EXCHANGE_MIN_USD
+    are skipped.
+
+    Returns a list of trade dicts (same format as plan_trades).
+    """
+    # Price lookup helper: convert currency amount to USD
+    def to_usd(currency: str, amount: float) -> float:
+        if currency == "USD":
+            return amount
+        pair = f"{currency}-USD" if currency != "USDC" else "USDC-USD"
+        return amount * prices.get(pair, 1.0 if currency == "USDC" else 0.0)
+
+    # Find currencies with deficits
+    deficits = {}  # currency -> deficit in USD
+    for currency, min_bal in min_balances.items():
+        if min_bal <= 0:
+            continue
+        free = free_balances.get(currency, 0.0)
+        if free < min_bal:
+            deficit_native = min_bal - free
+            deficit_usd = to_usd(currency, deficit_native)
+            if deficit_usd >= EXCHANGE_MIN_USD:
+                deficits[currency] = deficit_usd
+
+    if not deficits:
+        return []
+
+    trades = []
+
+    for deficit_currency, deficit_usd in deficits.items():
+        # Calculate available USD-equivalent from all non-deficit currencies
+        donors = {}
+        for currency, free in free_balances.items():
+            if currency == deficit_currency or free <= 0:
+                continue
+            # Don't source from currencies that are themselves below minimum
+            min_bal = min_balances.get(currency, 0.0)
+            available = max(0.0, free - min_bal) if min_bal > 0 else free
+            available_usd = to_usd(currency, available)
+            if available_usd > 0:
+                donors[currency] = available_usd
+
+        total_donor_usd = sum(donors.values())
+        if total_donor_usd <= 0:
+            continue
+
+        # Cap deficit to what's actually available
+        actual_deficit = min(deficit_usd, total_donor_usd)
+
+        # Source proportionally from each donor
+        for donor_currency, donor_usd in donors.items():
+            proportion = donor_usd / total_donor_usd
+            contribution_usd = actual_deficit * proportion
+
+            if contribution_usd < EXCHANGE_MIN_USD:
+                continue
+
+            product_id, side = _get_trade_params(
+                donor_currency, deficit_currency
+            )
+
+            trades.append({
+                "from_currency": donor_currency,
+                "to_currency": deficit_currency,
+                "usd_amount": round(contribution_usd, 2),
+                "product_id": product_id,
+                "side": side,
+            })
+
+    return trades
 
 
 def plan_trades(
@@ -110,6 +194,7 @@ def plan_trades(
         ("USD", targets["usd_pct"]),
         ("BTC", targets["btc_pct"]),
         ("ETH", targets["eth_pct"]),
+        ("USDC", targets["usdc_pct"]),
     ]
 
     # USD value of each currency's free balance
@@ -117,6 +202,7 @@ def plan_trades(
         "USD": free_balances.get("USD", 0.0),
         "BTC": free_balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0),
         "ETH": free_balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0),
+        "USDC": free_balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0),
     }
 
     deltas = {}
@@ -181,6 +267,12 @@ def _get_trade_params(from_currency: str, to_currency: str) -> Tuple[str, str]:
         ("ETH", "USD"): ("ETH-USD", "SELL"),
         ("BTC", "ETH"): ("ETH-BTC", "BUY"),
         ("ETH", "BTC"): ("ETH-BTC", "SELL"),
+        ("USD", "USDC"): ("USDC-USD", "BUY"),
+        ("USDC", "USD"): ("USDC-USD", "SELL"),
+        ("BTC", "USDC"): ("BTC-USDC", "SELL"),
+        ("USDC", "BTC"): ("BTC-USDC", "BUY"),
+        ("ETH", "USDC"): ("ETH-USDC", "SELL"),
+        ("USDC", "ETH"): ("ETH-USDC", "BUY"),
     }
     return pair_map[(from_currency, to_currency)]
 
@@ -252,19 +344,73 @@ class RebalanceMonitor:
 
             # Fetch current prices
             prices = {}
-            for product_id in ("BTC-USD", "ETH-USD"):
+            for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
                 try:
                     price = await client.get_current_price(product_id)
                     prices[product_id] = float(price)
                 except Exception as e:
-                    logger.error(
-                        f"Rebalance: could not get price for {product_id}: {e}"
-                    )
-                    return  # Can't rebalance without prices
+                    if product_id == "USDC-USD":
+                        # USDC is pegged ~1:1, safe fallback
+                        prices[product_id] = 1.0
+                        logger.debug(
+                            f"Rebalance: USDC-USD price fetch failed, using 1.0: {e}"
+                        )
+                    else:
+                        logger.error(
+                            f"Rebalance: could not get price for {product_id}: {e}"
+                        )
+                        return  # Can't rebalance without BTC/ETH prices
 
-            # Aggregate values (free + positions) for drift detection
+            # Free balances — needed for both top-up and rebalancing
+            free_balances = {}
+            balance_methods = {
+                "USD": client.get_usd_balance,
+                "BTC": client.get_btc_balance,
+                "ETH": client.get_eth_balance,
+                "USDC": client.get_usdc_balance,
+            }
+            for currency, method in balance_methods.items():
+                try:
+                    free_balances[currency] = float(await method())
+                except Exception as e:
+                    logger.warning(
+                        f"Rebalance: could not get free {currency} "
+                        f"for account {account.id}: {e}"
+                    )
+                    free_balances[currency] = 0.0
+
+            # Load minimum balance reserves
+            min_balances = {
+                "USD": account.min_balance_usd or 0.0,
+                "BTC": account.min_balance_btc or 0.0,
+                "ETH": account.min_balance_eth or 0.0,
+                "USDC": account.min_balance_usdc or 0.0,
+            }
+
+            # Phase 1: Top-up currencies below their minimum reserve.
+            # This runs BEFORE drift detection — reserves must be
+            # maintained even when the portfolio is within threshold.
+            topup_trades = plan_topup_trades(
+                free_balances, min_balances, prices
+            )
+            if topup_trades:
+                logger.info(
+                    f"Rebalance: executing {len(topup_trades)} top-up "
+                    f"trade(s) for account {account.name}"
+                )
+                for trade in topup_trades:
+                    await self._execute_trade(
+                        client, account, trade, prices
+                    )
+                # Skip normal rebalancing this cycle — balances are stale
+                # after top-up trades. Next cycle will rebalance if needed.
+                self._account_timers[account.id] = datetime.utcnow()
+                return
+
+            # Phase 2: Percentage-based rebalancing (only if drifted)
+            # Use aggregate values (free + positions) for drift detection
             aggregate = {}
-            for currency in ("USD", "BTC", "ETH"):
+            for currency in ("USD", "BTC", "ETH", "USDC"):
                 try:
                     aggregate[currency] = float(
                         await client.calculate_aggregate_quote_value(currency)
@@ -281,6 +427,7 @@ class RebalanceMonitor:
                 "usd_pct": account.rebalance_target_usd_pct or 34.0,
                 "btc_pct": account.rebalance_target_btc_pct or 33.0,
                 "eth_pct": account.rebalance_target_eth_pct or 33.0,
+                "usdc_pct": account.rebalance_target_usdc_pct or 0.0,
             }
             threshold = account.rebalance_drift_threshold_pct or 5.0
 
@@ -289,35 +436,27 @@ class RebalanceMonitor:
                     f"Rebalance: account {account.name} within threshold "
                     f"(USD={current['usd_pct']:.1f}%, "
                     f"BTC={current['btc_pct']:.1f}%, "
-                    f"ETH={current['eth_pct']:.1f}%)"
+                    f"ETH={current['eth_pct']:.1f}%, "
+                    f"USDC={current['usdc_pct']:.1f}%)"
                 )
                 self._account_timers[account.id] = datetime.utcnow()
                 return
 
-            # Free balances only — trades only move free capital
-            free_balances = {}
-            balance_methods = {
-                "USD": client.get_usd_balance,
-                "BTC": client.get_btc_balance,
-                "ETH": client.get_eth_balance,
+            # Subtract reserves from free balances for rebalancing
+            rebalanceable = {
+                c: max(0.0, free_balances[c] - min_balances[c])
+                for c in free_balances
             }
-            for currency, method in balance_methods.items():
-                try:
-                    free_balances[currency] = float(await method())
-                except Exception as e:
-                    logger.warning(
-                        f"Rebalance: could not get free {currency} "
-                        f"for account {account.id}: {e}"
-                    )
-                    free_balances[currency] = 0.0
 
-            # Plan trades using free balances only
             min_pct = account.rebalance_min_trade_pct or DEFAULT_MIN_TRADE_PCT
-            trades = plan_trades(free_balances, targets, prices, min_trade_pct=min_pct)
+            trades = plan_trades(
+                rebalanceable, targets, prices, min_trade_pct=min_pct
+            )
 
             if not trades:
                 logger.debug(
-                    f"Rebalance: no actionable trades for account {account.name}"
+                    f"Rebalance: no actionable trades for account "
+                    f"{account.name}"
                 )
                 self._account_timers[account.id] = datetime.utcnow()
                 return
@@ -325,7 +464,9 @@ class RebalanceMonitor:
             logger.info(
                 f"Rebalance: executing {len(trades)} trade(s) for account "
                 f"{account.name} — current: USD={current['usd_pct']:.1f}%, "
-                f"BTC={current['btc_pct']:.1f}%, ETH={current['eth_pct']:.1f}%"
+                f"BTC={current['btc_pct']:.1f}%, "
+                f"ETH={current['eth_pct']:.1f}%, "
+                f"USDC={current['usdc_pct']:.1f}%"
             )
 
             for trade in trades:
@@ -353,16 +494,50 @@ class RebalanceMonitor:
             if usd_amount < EXCHANGE_MIN_USD:
                 return
 
-            if side == "BUY" and trade["from_currency"] == "USD":
+            from_curr = trade["from_currency"]
+            to_curr = trade["to_currency"]
+
+            if product_id == "USDC-USD":
+                # USDC↔USD: use buy_with_usd / sell_for_usd
+                usdc_price = prices.get("USDC-USD", 1.0)
+                if side == "BUY":
+                    # Buying USDC with USD
+                    result = await client.buy_with_usd(usd_amount, product_id)
+                else:
+                    # Selling USDC for USD
+                    usdc_amount = usd_amount / usdc_price
+                    result = await client.sell_for_usd(usdc_amount, product_id)
+            elif side == "BUY" and from_curr == "USD":
                 # Buying BTC or ETH with USD
                 result = await client.buy_with_usd(usd_amount, product_id)
-            elif side == "SELL" and trade["to_currency"] == "USD":
+            elif side == "SELL" and to_curr == "USD":
                 # Selling BTC or ETH for USD
                 price = prices.get(product_id, 0)
                 if price <= 0:
                     return
                 base_amount = usd_amount / price
                 result = await client.sell_for_usd(base_amount, product_id)
+            elif product_id in ("BTC-USDC", "ETH-USDC"):
+                # BTC↔USDC or ETH↔USDC via market order
+                if side == "BUY":
+                    # Buying BTC/ETH with USDC (funds in USDC)
+                    result = await client.create_market_order(
+                        product_id=product_id,
+                        side="BUY",
+                        funds=f"{usd_amount:.2f}",
+                    )
+                else:
+                    # Selling BTC/ETH for USDC
+                    base = product_id.split("-")[0]  # BTC or ETH
+                    base_price = prices.get(f"{base}-USD", 0)
+                    if base_price <= 0:
+                        return
+                    base_amount = usd_amount / base_price
+                    result = await client.create_market_order(
+                        product_id=product_id,
+                        side="SELL",
+                        size=f"{base_amount:.8f}",
+                    )
             else:
                 # BTC↔ETH via ETH-BTC pair
                 if side == "BUY":
