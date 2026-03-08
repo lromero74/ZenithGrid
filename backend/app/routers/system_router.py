@@ -161,8 +161,9 @@ def build_changelog_cache() -> None:
     versions = []
 
     # Single git log call for ALL commits with tag decorations and dates.
-    # Format: TAG_MARKER<tag>|<date> for tag commits, or <subject> for regular commits.
     # This replaces the previous O(T) subprocess loop (2 calls per tag) with 1 call.
+    # Log is newest-to-oldest; we accumulate commits per tag and finalize when
+    # the next tag is found.
     oldest_tag = tags[-1]
     try:
         result = subprocess.run(
@@ -171,12 +172,15 @@ def build_changelog_cache() -> None:
             capture_output=True, text=True, cwd=repo_root, timeout=30
         )
         if result.returncode == 0 and result.stdout.strip():
-            # Parse all commits and group by tag
             tag_set = set(tags)
             current_tag_idx = 0
-            current_commits = []
+            current_tag = None
             current_date = ""
+            current_commits = []
             seen = set()
+
+            def _is_merge(subj):
+                return subj.startswith("Merge ") and "/" in subj.split(":")[0]
 
             for line in result.stdout.strip().split('\n'):
                 parts = line.split('|', 2)
@@ -194,34 +198,43 @@ def build_changelog_cache() -> None:
                             break
 
                 if found_tag and found_tag == tags[current_tag_idx]:
-                    # Save current tag's data
-                    current_date = date_str[:16]
-                    # The tagged commit's subject is also a commit for this version
-                    if subject and subject not in seen:
-                        if not (subject.startswith("Merge ") and "/" in subject.split(":")[0]):
-                            seen.add(subject)
-                            current_commits.append(subject)
+                    # Finalize the PREVIOUS tag's version (if any)
+                    if current_tag is not None:
+                        versions.append({
+                            "version": current_tag,
+                            "date": current_date,
+                            "commits": current_commits,
+                            "is_installed": current_tag == current_version,
+                        })
 
-                    versions.append({
-                        "version": tags[current_tag_idx],
-                        "date": current_date,
-                        "commits": current_commits,
-                        "is_installed": tags[current_tag_idx] == current_version,
-                    })
+                    # Start accumulating for this tag
+                    current_tag = found_tag
+                    current_date = date_str[:16]
                     current_tag_idx += 1
                     current_commits = []
                     seen = set()
-                    if current_tag_idx >= len(tags) - 1:
+
+                    # Include the tagged commit's subject
+                    if subject and subject not in seen and not _is_merge(subject):
+                        seen.add(subject)
+                        current_commits.append(subject)
+
+                    if current_tag_idx >= len(tags):
                         break
                 else:
-                    if not subject:
-                        continue
-                    if subject.startswith("Merge ") and "/" in subject.split(":")[0]:
-                        continue
-                    if subject in seen:
+                    if not subject or _is_merge(subject) or subject in seen:
                         continue
                     seen.add(subject)
                     current_commits.append(subject)
+
+            # Finalize the last tag
+            if current_tag is not None:
+                versions.append({
+                    "version": current_tag,
+                    "date": current_date,
+                    "commits": current_commits,
+                    "is_installed": current_tag == current_version,
+                })
     except Exception:
         # Fallback: build versions with empty commits if single-log approach fails
         for i in range(len(tags) - 1):

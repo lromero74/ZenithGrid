@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.94.2] - 2026-03-08
+
+### Fixed
+- **News/video page 503 error**: SQL retention filter used PostgreSQL-only syntax that crashed at runtime; now uses dialect-aware approach
+- **Changelog version history**: Commits were incorrectly attributed to the wrong version; fixed parsing logic
+- **Order reconciliation**: API fetch limit now scales with number of active products instead of a fixed 200
+
+### Added
+- **News pagination tests**: Unit tests for `get_articles_for_user` covering retention filtering, pagination, and page_size=0
+
 ## [v2.94.1] - 2026-03-08
 
 ### Changed

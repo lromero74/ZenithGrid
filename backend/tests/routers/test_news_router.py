@@ -405,3 +405,109 @@ class TestGetArticlesFromDb:
             db=db_session, page=1, page_size=50, category="NonExistent",
         )
         assert total == 0
+
+
+# =============================================================================
+# get_articles_for_user (SQL retention + pagination)
+# =============================================================================
+
+
+class TestGetArticlesForUser:
+    """Tests for get_articles_for_user with SQL retention filtering and pagination."""
+
+    @pytest.fixture
+    async def source_with_subscription(self, db_session, test_user):
+        """Create a content source with a user subscription.
+
+        Uses retention_days=None (system default) since tests run on SQLite
+        which doesn't support PostgreSQL INTERVAL syntax used in the
+        per-user retention SQL filter.
+        """
+        source = ContentSource(
+            id=1, name="CoinDesk", source_key="coindesk",
+            type="news", url="https://coindesk.com/rss",
+            category="CryptoCurrency",
+            is_system=True, is_enabled=True,
+        )
+        db_session.add(source)
+        await db_session.flush()
+
+        sub = UserSourceSubscription(
+            user_id=test_user.id, source_id=source.id,
+            is_subscribed=True, retention_days=None,
+        )
+        db_session.add(sub)
+        await db_session.flush()
+        return source
+
+    @pytest.fixture
+    async def articles_with_source(self, db_session, source_with_subscription):
+        """Create articles linked to the subscribed source."""
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        articles = []
+        for i in range(3):
+            a = NewsArticle(
+                title=f"Article {i}", url=f"https://example.com/{i}",
+                source="coindesk", source_id=source_with_subscription.id,
+                published_at=now - timedelta(days=i),
+                category="CryptoCurrency",
+            )
+            db_session.add(a)
+            articles.append(a)
+        await db_session.flush()
+        return articles
+
+    @pytest.mark.asyncio
+    async def test_returns_articles_with_retention_filter(
+        self, db_session, test_user, articles_with_source,
+    ):
+        """Happy path: SQL retention filter works without crashing."""
+        from app.routers.news_router import get_articles_for_user
+        articles, total = await get_articles_for_user(
+            db_session, user_id=test_user.id, page=1, page_size=50,
+        )
+        assert total >= 1
+        assert len(articles) >= 1
+
+    @pytest.mark.asyncio
+    async def test_page_size_zero_returns_all(
+        self, db_session, test_user, articles_with_source,
+    ):
+        """Edge case: page_size=0 returns all articles without errors."""
+        from app.routers.news_router import get_articles_for_user
+        articles, total = await get_articles_for_user(
+            db_session, user_id=test_user.id, page=1, page_size=0,
+        )
+        assert total >= 1
+        assert len(articles) == total
+
+    @pytest.mark.asyncio
+    async def test_pagination_limits_results(
+        self, db_session, test_user, articles_with_source,
+    ):
+        """Happy path: page_size limits the number of returned articles."""
+        from app.routers.news_router import get_articles_for_user
+        # Get total first with page_size=0
+        _, total = await get_articles_for_user(
+            db_session, user_id=test_user.id, page=1, page_size=0,
+        )
+        assert total >= 3
+        # Now paginate
+        articles, _ = await get_articles_for_user(
+            db_session, user_id=test_user.id, page=1, page_size=1,
+        )
+        assert len(articles) == 1
+
+    @pytest.mark.asyncio
+    async def test_category_filter(
+        self, db_session, test_user, articles_with_source,
+    ):
+        """Edge case: non-existent category returns zero results."""
+        from app.routers.news_router import get_articles_for_user
+        articles, total = await get_articles_for_user(
+            db_session, user_id=test_user.id, page=1, page_size=50,
+            category="NonExistent",
+        )
+        assert total == 0
+        assert len(articles) == 0

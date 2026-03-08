@@ -260,15 +260,20 @@ class MissingOrderDetector:
                 all_pending_orders.update(pending_orders_by_position.get(pid, {}))
 
             # Fetch ALL filled orders in a single API call (no product_id filter)
-            # This replaces the previous O(U) per-product loop with O(1) API call
+            # This replaces the previous O(U) per-product loop with O(1) API call.
+            # Scale the limit with the number of tracked products so we don't miss
+            # orders when many products are active (old code fetched 200 per product).
             missing_buys = []
             missing_sells = []
             stuck_pending_orders = []
 
+            num_products = len(positions_by_product)
+            fetch_limit = max(200, num_products * 200)
+
             try:
                 exchange_orders = await self.exchange.list_orders(
                     order_status=["FILLED"],
-                    limit=200,
+                    limit=fetch_limit,
                 )
             except Exception as e:
                 logger.warning(f"Could not fetch filled orders: {e}")

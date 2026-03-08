@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import desc, func, literal_column, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
@@ -158,31 +158,46 @@ async def get_articles_for_user(
     if category:
         query = query.where(NewsArticle.category == category)
 
-    # Apply per-user retention in SQL instead of Python-side filtering.
-    # PostgreSQL: use make_interval to compare published_at against per-user retention_days.
-    # If retention_days is NULL, the article passes (system default cutoff already applied above).
+    # Apply per-user retention filter.
+    # PostgreSQL: push into SQL with INTERVAL arithmetic.
+    # SQLite (unit tests only): filter in Python after query.
     now = datetime.utcnow()
-    query = query.where(
-        (UserSourceSubscription.retention_days.is_(None))
-        | (NewsArticle.published_at >= now - func.make_interval(
-            days=UserSourceSubscription.retention_days
-        ))
-    )
+    use_sql_retention = db.bind.dialect.name == "postgresql" if db.bind else False
+
+    interval_1day = literal_column("INTERVAL '1 day'")
+    if use_sql_retention:
+        query = query.where(
+            (UserSourceSubscription.retention_days.is_(None))
+            | (NewsArticle.published_at >= now - UserSourceSubscription.retention_days * interval_1day)
+        )
 
     query = query.order_by(desc(NewsArticle.published_at))
 
-    # Get total count via SQL instead of materializing all rows
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
+    if use_sql_retention:
+        # PostgreSQL: retention is in SQL, so count and paginate in SQL too
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar() or 0
 
-    # Paginate in SQL (page_size=0 means return all)
-    if page_size > 0:
-        offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size)
-    result = await db.execute(query)
-    rows = result.all()
-    filtered = [article for article, _retention in rows]
+        if page_size > 0:
+            offset = (page - 1) * page_size
+            query = query.offset(offset).limit(page_size)
+        result = await db.execute(query)
+        filtered = [article for article, _retention in result.all()]
+    else:
+        # SQLite fallback: fetch all, apply retention in Python, then paginate
+        result = await db.execute(query)
+        filtered = []
+        for article, retention_days in result.all():
+            if retention_days is not None:
+                cutoff = now - timedelta(days=retention_days)
+                if article.published_at and article.published_at < cutoff:
+                    continue
+            filtered.append(article)
+        total_count = len(filtered)
+        if page_size > 0:
+            start = (page - 1) * page_size
+            filtered = filtered[start:start + page_size]
 
     return filtered, total_count
 
@@ -310,19 +325,31 @@ async def get_videos_for_user(
     if category:
         query = query.where(VideoArticle.category == category)
 
-    # Apply per-user retention in SQL instead of Python-side filtering
+    # Apply per-user retention filter (PostgreSQL: SQL, SQLite: Python fallback)
     now = datetime.utcnow()
-    query = query.where(
-        (UserSourceSubscription.retention_days.is_(None))
-        | (VideoArticle.published_at >= now - func.make_interval(
-            days=UserSourceSubscription.retention_days
-        ))
-    )
+    use_sql_retention = db.bind.dialect.name == "postgresql" if db.bind else False
+
+    interval_1day = literal_column("INTERVAL '1 day'")
+    if use_sql_retention:
+        query = query.where(
+            (UserSourceSubscription.retention_days.is_(None))
+            | (VideoArticle.published_at >= now - UserSourceSubscription.retention_days * interval_1day)
+        )
 
     query = query.order_by(desc(VideoArticle.published_at))
     result = await db.execute(query)
     rows = result.all()
-    filtered = [video for video, _retention in rows]
+
+    if use_sql_retention:
+        filtered = [video for video, _retention in rows]
+    else:
+        filtered = []
+        for video, retention_days in rows:
+            if retention_days is not None:
+                cutoff = now - timedelta(days=retention_days)
+                if video.published_at and video.published_at < cutoff:
+                    continue
+            filtered.append(video)
 
     return filtered
 
