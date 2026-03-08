@@ -1,5 +1,6 @@
 /**
  * Texas Hold'em — poker with community cards.
+ * Refined by David Greene: proper betting rounds, blind rotation, AI pacing, blind levels.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
