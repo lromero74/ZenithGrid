@@ -163,6 +163,8 @@ export interface GameState {
   nextWeatherCheck: number
   parallax: ParallaxState
   scorePopups: ScorePopup[]
+  rhythmMode: boolean
+  rhythmQueue: number[]
 }
 
 // ---------------------------------------------------------------------------
@@ -752,6 +754,55 @@ function randomObstacleGap(speed: number): number {
   return base + Math.random() * 200
 }
 
+/** BPM scaling: mirrors useGameMusic.ts formula so beat gaps stay in sync with music. */
+export function getCurrentBPM(speed: number): number {
+  const BASE_BPM = 120
+  const t = Math.max(0, Math.min(1, (speed - INITIAL_SPEED) / (MAX_SPEED - INITIAL_SPEED)))
+  return Math.round(BASE_BPM * (1.0 + t * 0.2))
+}
+
+// Curated phrase library — each phrase is a sequence of gaps in beats.
+// All gaps are even (2, 4, 6, 8) to keep obstacles on strong beats (1 and 3 in 4/4).
+const RHYTHM_PHRASES: number[][] = [
+  // Steady patterns
+  [4, 4, 4, 4],               // quarter-note pulse — same beat each measure
+  [2, 2, 2, 2, 2, 2],         // double-time — beats 1 & 3 every measure
+  [4, 4, 2, 2],               // steady then pickup
+  [2, 2, 4, 4],               // quick start, ease off
+
+  // Call-and-response patterns
+  [2, 4, 2, 4],               // alternating quick-steady
+  [4, 2, 2, 4],               // bookend a quick pair
+  [2, 6, 2, 2],               // quick, pause, quick-quick
+  [4, 2, 6],                  // build and release
+
+  // Patterns with built-in breathers
+  [2, 2, 8, 2, 2],            // quick-quick, hold a measure, quick-quick
+  [2, 2, 2, 6],               // triple hit then breathe
+  [4, 4, 8, 4],               // steady, rest, resume
+  [2, 2, 4, 8, 2, 2],         // bookend a rest with quick pairs
+]
+
+function generateRhythmPhrase(): number[] {
+  const phrase = RHYTHM_PHRASES[Math.floor(Math.random() * RHYTHM_PHRASES.length)]
+  // Breather between phrases: 8, 10, or 12 beats (even, to stay on-beat)
+  const breather = 8 + Math.floor(Math.random() * 3) * 2
+  return [...phrase, breather]
+}
+
+function nextRhythmGap(queue: number[], speed: number): { gap: number; queue: number[] } {
+  let q = queue
+  if (q.length === 0) {
+    q = generateRhythmPhrase()
+  }
+  const beats = q[0]
+  const rest = q.slice(1)
+  const bpm = getCurrentBPM(speed)
+  const framesPerBeat = 3600 / bpm
+  const pixelsPerBeat = framesPerBeat * speed
+  return { gap: beats * pixelsPerBeat, queue: rest }
+}
+
 function randomObstacleType(score: number): ObstacleType {
   const types: ObstacleType[] = ['cactus-small', 'cactus-tall', 'cactus-group']
   if (score >= PTERO_MIN_SCORE) types.push('pterodactyl')
@@ -1229,7 +1280,7 @@ export function computeAutoInput(state: GameState): InputState {
 // Game creation
 // ---------------------------------------------------------------------------
 
-export function createGame(highScore: number): GameState {
+export function createGame(highScore: number, rhythmMode: boolean = false): GameState {
   return {
     dino: {
       x: DINO_X,
@@ -1264,6 +1315,8 @@ export function createGame(highScore: number): GameState {
       nextBiomeScore: BIOME_CHANGE_MIN + Math.random() * (BIOME_CHANGE_MAX - BIOME_CHANGE_MIN),
     },
     scorePopups: [],
+    rhythmMode,
+    rhythmQueue: [],
   }
 }
 
@@ -1331,6 +1384,7 @@ export function update(state: GameState, input: InputState): GameState {
   let dino = { ...state.dino }
   let { speed, score, highScore, nightMode, nightTransition,
         nextObstacleDistance, milestoneFlash } = state
+  let rhythmQueue = state.rhythmQueue
   let frameCount = state.frameCount + 1
 
   // --- Dino physics ---
@@ -1417,7 +1471,13 @@ export function update(state: GameState, input: InputState): GameState {
       y: getObstacleY(type),
       frame: 0,
     })
-    nextObstacleDistance = randomObstacleGap(effectiveSpeed)
+    if (state.rhythmMode) {
+      const result = nextRhythmGap(rhythmQueue, effectiveSpeed)
+      nextObstacleDistance = result.gap
+      rhythmQueue = result.queue
+    } else {
+      nextObstacleDistance = randomObstacleGap(effectiveSpeed)
+    }
   }
 
   // --- Collision detection ---
@@ -1439,6 +1499,7 @@ export function update(state: GameState, input: InputState): GameState {
         milestoneFlash: 0,
         ground: { offset: (state.ground.offset + effectiveSpeed) % 12, particles: state.ground.particles },
         weather: { type: 'none', timer: 0, intensity: 0, particles: [], lightning: 0, stormClouds: [], impacts: [], windStrength: 0 },
+        rhythmQueue,
       }
     }
   }
@@ -1561,5 +1622,6 @@ export function update(state: GameState, input: InputState): GameState {
     nextWeatherCheck: weatherResult.nextWeatherCheck,
     parallax,
     scorePopups,
+    rhythmQueue,
   }
 }

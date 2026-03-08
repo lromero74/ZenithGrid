@@ -17,7 +17,7 @@ import {
   getWeatherMultiplier, GROUND_LAYER_SPEEDS,
   type GameState, type InputState,
 } from './dinoRunnerEngine'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Music } from 'lucide-react'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
@@ -172,6 +172,8 @@ export default function DinoRunner() {
   const [displayHigh, setDisplayHigh] = useState(0)
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('dino-runner') ?? 0
+
+  const [rhythmMode, setRhythmMode] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<GameState>(createGame(bestScore))
@@ -607,7 +609,7 @@ export default function DinoRunner() {
     // Auto-play: auto-restart on death
     if (autoPlayRef.current && next.phase === 'dead') {
       const hi = Math.max(bestScore, Math.floor(next.highScore))
-      stateRef.current = createGame(hi)
+      stateRef.current = createGame(hi, next.rhythmMode)
       stateRef.current = { ...stateRef.current, phase: 'waiting' }
       render(stateRef.current)
       rafRef.current = requestAnimationFrame(gameLoop)
@@ -652,12 +654,12 @@ export default function DinoRunner() {
 
   const restartGame = useCallback(() => {
     const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))
-    stateRef.current = createGame(hi)
+    stateRef.current = createGame(hi, rhythmMode)
     inputRef.current = { jump: false, duck: false }
     gameStatusRef.current = 'idle'
     setGameStatus('idle')
     setDisplayScore(0)
-  }, [bestScore])
+  }, [bestScore, rhythmMode])
 
   // -----------------------------------------------------------------------
   // Keyboard controls
@@ -798,12 +800,26 @@ export default function DinoRunner() {
       const phase = stateRef.current.phase
       if (phase === 'waiting' || phase === 'dead') {
         const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))
-        stateRef.current = createGame(hi)
+        stateRef.current = createGame(hi, stateRef.current.rhythmMode)
         inputRef.current = { jump: false, duck: false }
         gameStatusRef.current = 'idle'
         setGameStatus('idle')
       }
     }
+  }, [bestScore])
+
+  const toggleRhythmMode = useCallback(() => {
+    setRhythmMode(prev => {
+      const next = !prev
+      // Restart game with new mode
+      const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))
+      stateRef.current = createGame(hi, next)
+      inputRef.current = { jump: false, duck: false }
+      gameStatusRef.current = 'idle'
+      setGameStatus('idle')
+      setDisplayScore(0)
+      return next
+    })
   }, [bestScore])
 
   const controls = (
@@ -820,10 +836,23 @@ export default function DinoRunner() {
           {autoPlay ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
           View Mode
         </button>
+        <button
+          onClick={toggleRhythmMode}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+            rhythmMode
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+              : 'bg-slate-700/50 text-slate-400 border border-slate-600/30 hover:bg-slate-700'
+          }`}
+        >
+          <Music className="w-3 h-3" />
+          Rhythm
+        </button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
       <span className="text-xs text-slate-500">
-        {autoPlay ? 'AI is playing — sit back and watch' : 'Space / Tap = Jump  |  Down = Duck'}
+        {autoPlay ? 'AI is playing — sit back and watch'
+          : rhythmMode ? 'Rhythm Mode — obstacles sync to the beat'
+          : 'Space / Tap = Jump  |  Down = Duck'}
       </span>
     </div>
   )
