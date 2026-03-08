@@ -657,6 +657,40 @@ export const rebalanceApi = {
     api.get<RebalanceStatus>(`/accounts/${accountId}/rebalance-status`).then((res) => res.data),
 };
 
+// Dust Sweep
+export interface DustPosition {
+  coin: string;
+  amount: number;
+  usd_value: number;
+}
+
+export interface DustSweepSettings {
+  enabled: boolean;
+  threshold_usd: number;
+  last_sweep_at: string | null;
+  dust_positions: DustPosition[];
+}
+
+export interface DustSweepResult {
+  swept: number;
+  details: {
+    coin: string;
+    amount: number;
+    usd_value: number;
+    target_currency: string;
+    order_id: string;
+  }[];
+}
+
+export const dustApi = {
+  getSettings: (accountId: number) =>
+    api.get<DustSweepSettings>(`/accounts/${accountId}/dust-sweep-settings`).then((res) => res.data),
+  updateSettings: (accountId: number, settings: { enabled?: boolean; threshold_usd?: number }) =>
+    api.put(`/accounts/${accountId}/dust-sweep-settings`, settings).then((res) => res.data),
+  sweep: (accountId: number) =>
+    api.post<DustSweepResult>(`/accounts/${accountId}/dust-sweep`).then((res) => res.data),
+};
+
 interface AccountValueSnapshot {
   date: string
   timestamp: string

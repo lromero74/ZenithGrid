@@ -1139,3 +1139,184 @@ async def get_rebalance_status(
     except Exception as e:
         logger.error(f"Error getting rebalance status for account {account_id}: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+# =============================================================================
+# Dust Sweep Endpoints
+# =============================================================================
+
+
+class DustSweepSettingsUpdate(BaseModel):
+    """Update model for dust sweep settings."""
+    enabled: Optional[bool] = None
+    threshold_usd: Optional[float] = Field(None, ge=1.0, le=1000.0)
+
+
+TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
+
+
+@router.get("/{account_id}/dust-sweep-settings")
+async def get_dust_sweep_settings(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get dust sweep settings and current dust positions for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # Build dust positions list
+    dust_positions = []
+    try:
+        if account.is_paper_trading:
+            balances = json.loads(account.paper_balances) if account.paper_balances else {}
+        else:
+            # Live account: get all balances via exchange client
+            try:
+                coinbase = await get_coinbase_for_account(account)
+                accounts_data = await coinbase.get_accounts()
+                balances = {}
+                for acct in accounts_data:
+                    currency = acct.get("currency", "")
+                    available = float(
+                        acct.get("available_balance", {}).get("value", 0)
+                    )
+                    if available > 0:
+                        balances[currency] = available
+            except Exception:
+                balances = {}
+
+        # Subtract amounts locked in open positions
+        from app.services.rebalance_monitor import (
+            get_position_locked_amounts, subtract_locked_amounts,
+        )
+        locked = await get_position_locked_amounts(db, account.id)
+        balances = subtract_locked_amounts(balances, locked)
+
+        prices = await get_public_prices()
+        threshold = account.dust_sweep_threshold_usd or 5.0
+
+        for coin, amount in balances.items():
+            if coin in TARGET_CURRENCIES or amount <= 0:
+                continue
+            usd_price = prices.get(f"{coin}-USD", 0.0)
+            if usd_price <= 0:
+                # Try fetching price for this coin
+                try:
+                    from app.coinbase_api import public_market_data
+                    usd_price = float(
+                        await public_market_data.get_current_price(f"{coin}-USD")
+                    )
+                except Exception:
+                    continue
+            usd_value = amount * usd_price
+            if usd_value >= threshold:
+                dust_positions.append({
+                    "coin": coin,
+                    "amount": round(amount, 8),
+                    "usd_value": round(usd_value, 2),
+                })
+
+        dust_positions.sort(key=lambda d: d["usd_value"], reverse=True)
+    except Exception as e:
+        logger.warning(f"Error building dust positions for account {account_id}: {e}")
+
+    return {
+        "enabled": account.dust_sweep_enabled or False,
+        "threshold_usd": account.dust_sweep_threshold_usd or 5.0,
+        "last_sweep_at": (
+            account.dust_last_sweep_at.isoformat()
+            if account.dust_last_sweep_at else None
+        ),
+        "dust_positions": dust_positions,
+    }
+
+
+@router.put("/{account_id}/dust-sweep-settings")
+async def update_dust_sweep_settings(
+    account_id: int,
+    settings: DustSweepSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
+):
+    """Update dust sweep settings for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    if settings.enabled is not None:
+        account.dust_sweep_enabled = settings.enabled
+    if settings.threshold_usd is not None:
+        account.dust_sweep_threshold_usd = settings.threshold_usd
+
+    await db.commit()
+    await db.refresh(account)
+
+    return {
+        "enabled": account.dust_sweep_enabled or False,
+        "threshold_usd": account.dust_sweep_threshold_usd or 5.0,
+        "last_sweep_at": (
+            account.dust_last_sweep_at.isoformat()
+            if account.dust_last_sweep_at else None
+        ),
+    }
+
+
+@router.post("/{account_id}/dust-sweep")
+async def sweep_dust(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
+):
+    """Execute an on-demand dust sweep for an account."""
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    if account.type != "cex":
+        raise HTTPException(status_code=400, detail="Dust sweep only available for CEX accounts")
+
+    try:
+        if account.is_paper_trading:
+            client = await get_coinbase_for_account(account)
+        else:
+            client = await get_coinbase_for_account(account)
+
+        from app.services.rebalance_monitor import execute_dust_sweep
+        results = await execute_dust_sweep(account, client, db)
+
+        return {
+            "swept": len(results),
+            "details": [
+                {
+                    "coin": r["coin"],
+                    "amount": r["amount"],
+                    "usd_value": r["usd_value"],
+                    "target_currency": r["target_currency"],
+                    "order_id": r.get("order_id", ""),
+                }
+                for r in results
+            ],
+        }
+
+    except (HTTPException, AppError):
+        raise
+    except Exception as e:
+        logger.error(f"Error executing dust sweep for account {account_id}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")

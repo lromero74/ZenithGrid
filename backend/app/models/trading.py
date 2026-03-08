@@ -88,6 +88,11 @@ class Account(Base):
     rebalance_min_trade_usd = Column(Float, default=50.0)  # deprecated, use pct
     rebalance_min_trade_pct = Column(Float, default=5.0)
 
+    # Dust sweeping (sell non-target-currency dust into portfolio allocation)
+    dust_sweep_enabled = Column(Boolean, default=False)
+    dust_sweep_threshold_usd = Column(Float, default=5.0)
+    dust_last_sweep_at = Column(DateTime, nullable=True)
+
     # Paper Trading
     is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
     paper_balances = Column(String, nullable=True)  # JSON: {"BTC": 1.0, "ETH": 10.0, "USD": 100000.0, ...}
