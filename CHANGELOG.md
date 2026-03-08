@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.93.1] - 2026-03-08
+
+### Fixed
+- **Rebalancer ignored 0% allocation targets**: Setting a currency target to 0% was silently treated as the default (34% USD, 33% BTC, 33% ETH) due to Python's `or` operator treating `0.0` as falsy. Now correctly uses `is not None` checks for all target percentages, drift threshold, and minimum trade size
+
 ## [v2.93.0] - 2026-03-08
 
 ### Added

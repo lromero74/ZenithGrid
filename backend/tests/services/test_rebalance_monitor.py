@@ -364,6 +364,64 @@ class TestRebalanceMonitorProcess:
         mock_client.buy_with_usd.assert_not_called()
         mock_client.create_market_order.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_zero_pct_targets_not_treated_as_defaults(self):
+        """Bug fix: 0.0 targets must not fall back to defaults via `or` operator."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "BTC Only"
+        account.rebalance_enabled = True
+        account.rebalance_target_usd_pct = 0.0   # Must stay 0, not default to 34
+        account.rebalance_target_btc_pct = 100.0
+        account.rebalance_target_eth_pct = 0.0    # Must stay 0, not default to 33
+        account.rebalance_target_usdc_pct = 0.0
+        account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 0.0     # Must stay 0, not default
+        account.min_balance_usd = 10.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+
+        db = AsyncMock()
+
+        mock_client = AsyncMock()
+        # Portfolio: $500 USD, 0 BTC — should sell $490 USD to BTC (keeping $10 reserve)
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
+            side_effect=lambda c: 500.0 if c == "USD" else 0.0
+        )
+        mock_client.get_usd_balance = AsyncMock(return_value=500.0)
+        mock_client.get_btc_balance = AsyncMock(return_value=0.0)
+        mock_client.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_client.get_usdc_balance = AsyncMock(return_value=0.0)
+        mock_client.get_current_price = AsyncMock(
+            side_effect=lambda p: {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}.get(p, 0.0)
+        )
+        mock_client.buy_with_usd = AsyncMock(return_value={
+            "success_response": {"order_id": "btc-buy-123"}
+        })
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=mock_client
+        ):
+            await monitor._process_account(account, db)
+
+        # Should buy BTC with USD. If the bug existed (0.0 or 34.0 = 34.0),
+        # targets would total 167% and produce wrong trades.
+        assert mock_client.buy_with_usd.call_count >= 1
+        # Should NOT buy ETH (target is 0%)
+        for call in mock_client.buy_with_usd.call_args_list:
+            # buy_with_usd(usd_amount, product_id)
+            product_id = call[0][1] if len(call[0]) > 1 else call[1].get("product_id", "")
+            assert product_id != "ETH-USD", "Should not buy ETH when ETH target is 0%"
+
 
 # ---------------------------------------------------------------------------
 # plan_topup_trades
