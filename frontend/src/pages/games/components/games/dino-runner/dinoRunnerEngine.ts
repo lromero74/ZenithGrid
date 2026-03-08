@@ -1117,7 +1117,7 @@ export function computeAutoInput(state: GameState): InputState {
   const SH = 12 * PIXEL_SCALE   // 36 — standing height
   const DH = 7 * PIXEL_SCALE    // 21 — duck height
   const M = 4                    // safety margin (pixels)
-  const LOOK = 120               // look-ahead frames (~2 sec)
+  const LOOK = 180               // look-ahead frames (~3 sec, covers rhythm phrases)
 
   // Precompute danger zones: frame window + vertical hitbox for each obstacle
   type Danger = { fStart: number; fEnd: number; top: number; bot: number }
@@ -1193,7 +1193,7 @@ export function computeAutoInput(state: GameState): InputState {
           if (hits(f, y, SH)) { safe = false; break }
         } else if (f > 5) {
           // Landed — safe if we can stand OR duck through remaining
-          for (let ff = f; ff <= Math.min(f + 40, LOOK); ff++) {
+          for (let ff = f; ff <= Math.min(f + 15, LOOK); ff++) {
             if (hits(ff, GROUND_Y, SH) && hits(ff, GROUND_Y, DH)) {
               safe = false; break
             }
@@ -1219,7 +1219,7 @@ export function computeAutoInput(state: GameState): InputState {
       if (y >= GROUND_Y) {
         // Landed — check this frame AND next ~40 ground frames for obstacles
         // we can't duck or react to (too close after landing)
-        for (let ff = f; ff <= Math.min(f + 40, LOOK); ff++) {
+        for (let ff = f; ff <= Math.min(f + 15, LOOK); ff++) {
           if (hits(ff, GROUND_Y, SH) && hits(ff, GROUND_Y, DH)) {
             releaseHits = true
             break
@@ -1238,7 +1238,7 @@ export function computeAutoInput(state: GameState): InputState {
         hVy += g
         hY += hVy
         if (hY >= GROUND_Y) {
-          for (let ff = f; ff <= Math.min(f + 40, LOOK); ff++) {
+          for (let ff = f; ff <= Math.min(f + 15, LOOK); ff++) {
             if (hits(ff, GROUND_Y, SH) && hits(ff, GROUND_Y, DH)) {
               holdHits = true
               break
