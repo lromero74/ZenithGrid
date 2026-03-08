@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.91.1] - 2026-03-08
+
+### Fixed
+- **Portfolio rebalancing now works for paper trading accounts**: Current allocation display reads simulated balances instead of requiring live exchange credentials
+- **Settings sections no longer hidden by paper trading mode**: RBAC is now the sole mechanism controlling feature visibility — Portfolio Management and Accounts Management are visible to all users with appropriate permissions
+
 ## [v2.91.0] - 2026-03-08
 
 ### Added

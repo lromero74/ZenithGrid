@@ -716,3 +716,101 @@ class TestRebalanceSettings:
         assert result.drift_threshold_pct == pytest.approx(3.0)
         # Percentages remain at defaults
         assert result.target_usd_pct == pytest.approx(34.0)
+
+
+# =============================================================================
+# Rebalance Status (paper trading support)
+# =============================================================================
+
+
+class TestRebalanceStatus:
+    """Tests for GET /{account_id}/rebalance-status endpoint."""
+
+    @pytest.fixture
+    async def paper_account(self, db_session, test_user):
+        import json
+        account = Account(
+            id=10, user_id=test_user.id, name="Paper Account",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 50000.0, "BTC": 0.5, "ETH": 5.0, "USDC": 10000.0}),
+            rebalance_enabled=True,
+            rebalance_target_usd_pct=25.0,
+            rebalance_target_btc_pct=25.0,
+            rebalance_target_eth_pct=25.0,
+            rebalance_target_usdc_pct=25.0,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+        return account
+
+    @pytest.mark.asyncio
+    async def test_paper_account_returns_allocation(
+        self, db_session, test_user, paper_account,
+    ):
+        """Paper trading accounts should return current allocation from paper_balances."""
+        from app.routers.accounts_router import get_rebalance_status
+
+        # Mock the public price API — no exchange credentials needed
+        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices:
+            mock_prices.return_value = {"BTC-USD": 90000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
+            result = await get_rebalance_status(
+                account_id=paper_account.id, db=db_session, current_user=test_user,
+            )
+
+        assert result["account_id"] == paper_account.id
+        # BTC value: 0.5 * 90000 = 45000
+        # ETH value: 5.0 * 3000 = 15000
+        # USD value: 50000
+        # USDC value: 10000 * 1.0 = 10000
+        # Total: 120000
+        assert result["total_value_usd"] == pytest.approx(120000.0)
+        assert result["current_usd_pct"] == pytest.approx(41.67)
+        assert result["current_btc_pct"] == pytest.approx(37.5)
+        assert result["current_eth_pct"] == pytest.approx(12.5)
+        assert result["current_usdc_pct"] == pytest.approx(8.33)
+
+    @pytest.mark.asyncio
+    async def test_paper_account_no_balances_returns_zeros(
+        self, db_session, test_user,
+    ):
+        """Paper trading account with no balances returns zero allocation."""
+        from app.routers.accounts_router import get_rebalance_status
+
+        account = Account(
+            id=11, user_id=test_user.id, name="Empty Paper",
+            type="cex", is_paper_trading=True, paper_balances=None,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices:
+            mock_prices.return_value = {"BTC-USD": 90000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        assert result["total_value_usd"] == 0.0
+        assert result["current_usd_pct"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_live_account_uses_coinbase(
+        self, db_session, test_user, test_account,
+    ):
+        """Live (non-paper) accounts should still use Coinbase client."""
+        from app.routers.accounts_router import get_rebalance_status
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.calculate_aggregate_quote_value = AsyncMock(return_value=10000.0)
+        mock_coinbase.get_current_price = AsyncMock(return_value=90000.0)
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=test_account.id, db=db_session, current_user=test_user,
+            )
+
+        mock_get.assert_called_once_with(test_account)
+        assert result["account_id"] == test_account.id
+        assert result["total_value_usd"] > 0

@@ -87,6 +87,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
   const [loadingStatus, setLoadingStatus] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [chartView, setChartView] = useState<'pie' | 'bar'>('bar')
+  const [reservesOpen, setReservesOpen] = useState<Record<number, boolean>>({})
 
   const cexAccounts = accounts.filter(a => a.type === 'cex')
 
@@ -126,6 +127,35 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       setBots(botsData)
     })
   }, [cexAccounts.length])
+
+  // Initialize reserves open/closed state from localStorage + settings
+  const hasAnyReserve = useCallback((rb: RebalanceSettings) => {
+    return (rb.min_balance_usd || 0) > 0 || (rb.min_balance_btc || 0) > 0 ||
+           (rb.min_balance_eth || 0) > 0 || (rb.min_balance_usdc || 0) > 0
+  }, [])
+
+  useEffect(() => {
+    const openState: Record<number, boolean> = {}
+    for (const [accountIdStr, rb] of Object.entries(rebalanceSettings)) {
+      const accountId = parseInt(accountIdStr)
+      const storageKey = `reserves_open_${accountId}`
+      const stored = localStorage.getItem(storageKey)
+      if (stored !== null) {
+        openState[accountId] = stored === 'true'
+      } else {
+        openState[accountId] = hasAnyReserve(rb)
+      }
+    }
+    setReservesOpen(openState)
+  }, [rebalanceSettings, hasAnyReserve])
+
+  const toggleReservesOpen = (accountId: number) => {
+    setReservesOpen(prev => {
+      const newVal = !prev[accountId]
+      localStorage.setItem(`reserves_open_${accountId}`, String(newVal))
+      return { ...prev, [accountId]: newVal }
+    })
+  }
 
   // Derive current mode from loaded settings
   const getMode = (accountId: number): PortfolioMode => {
@@ -568,7 +598,16 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                   </div>
 
                   {/* Minimum Balance Reserves */}
-                  <details className="group border-t border-slate-600 pt-3">
+                  <details
+                    className="group border-t border-slate-600 pt-3"
+                    open={reservesOpen[account.id] ?? false}
+                    onToggle={(e) => {
+                      const isOpen = (e.target as HTMLDetailsElement).open
+                      if (isOpen !== (reservesOpen[account.id] ?? false)) {
+                        toggleReservesOpen(account.id)
+                      }
+                    }}
+                  >
                     <summary className="cursor-pointer text-sm font-medium text-slate-300 hover:text-white select-none flex items-center gap-1">
                       <span className="text-xs text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
                       Minimum Balance Reserves

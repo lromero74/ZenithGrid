@@ -15,12 +15,10 @@ import { settingsApi } from '../services/api'
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
-  const { accounts, selectedAccount } = useAccount()
+  const { accounts } = useAccount()
   const { theme, toggleTheme } = useTheme()
   const isAdmin = useIsAdmin()
 
-  // Check if paper trading is currently active
-  const isPaperTradingActive = Boolean(selectedAccount?.is_paper_trading)
 
   const canWriteSettings = usePermission('settings', 'write')
 
@@ -900,18 +898,14 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Accounts Management Section - Hidden when paper trading is active */}
-      {!isPaperTradingActive && (
-        <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
-      )}
+      {/* Accounts Management Section */}
+      <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
 
       {/* Paper Trading Section */}
       <PaperTradingManager />
 
-      {/* Portfolio Management (Auto-Buy BTC + Rebalancing) - Hidden when paper trading is active */}
-      {!isPaperTradingActive && (
-        <PortfolioManagement accounts={accounts} />
-      )}
+      {/* Portfolio Management (Auto-Buy BTC + Rebalancing) */}
+      <PortfolioManagement accounts={accounts} />
 
       {/* Coin Categorization Section - Always visible (informational) */}
       <BlacklistManager />
