@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.90.9] - 2026-03-08
+
+### Changed
+- **Dino Runner rhythm mode — beat-locked timing** (inspired by Alexa Adams, who heard what the rest of us were only seeing): Obstacles now arrive exactly on musical beats using frame-based countdown locked to the BPM grid, not pixel distances that drift with speed changes
+- **Dino Runner rhythm energy matching**: Obstacle phrases now mirror the music's intensity — gentle quarter-note patterns when only drums and bass are playing, rapid double-time sequences when the full band kicks in
+- **Dino Runner ground specks**: Particles re-enter at random positions instead of wrapping to fixed spots, eliminating the repeating pattern
+
 ## [v2.90.8] - 2026-03-08
 
 ### Changed

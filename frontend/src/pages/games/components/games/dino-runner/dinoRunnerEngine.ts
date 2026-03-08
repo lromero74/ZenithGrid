@@ -761,46 +761,74 @@ export function getCurrentBPM(speed: number): number {
   return Math.round(BASE_BPM * (1.0 + t * 0.2))
 }
 
-// Curated phrase library — each phrase is a sequence of gaps in beats.
+// Energy-tiered phrase libraries — obstacles match the music's intensity.
 // All gaps are even (2, 4, 6, 8) to keep obstacles on strong beats (1 and 3 in 4/4).
-const RHYTHM_PHRASES: number[][] = [
-  // Steady patterns
-  [4, 4, 4, 4],               // quarter-note pulse — same beat each measure
-  [2, 2, 2, 2, 2, 2],         // double-time — beats 1 & 3 every measure
-  [4, 4, 2, 2],               // steady then pickup
-  [2, 2, 4, 4],               // quick start, ease off
+// Tiers mirror the song's intensityMap: calm → moderate → energetic as score rises.
 
-  // Call-and-response patterns
+const CALM_PHRASES: number[][] = [
+  [4, 4, 4],                  // quarter-note pulse, 3 obstacles
+  [4, 8, 4],                  // steady with a long rest
+  [6, 6],                     // slow two-step
+  [4, 4, 6, 4],               // easy pace with a breath
+]
+
+const MODERATE_PHRASES: number[][] = [
+  [4, 4, 2, 2],               // steady then pickup
   [2, 4, 2, 4],               // alternating quick-steady
   [4, 2, 2, 4],               // bookend a quick pair
   [2, 6, 2, 2],               // quick, pause, quick-quick
-  [4, 2, 6],                  // build and release
-
-  // Patterns with built-in breathers
-  [2, 2, 8, 2, 2],            // quick-quick, hold a measure, quick-quick
-  [2, 2, 2, 6],               // triple hit then breathe
-  [4, 4, 8, 4],               // steady, rest, resume
-  [2, 2, 4, 8, 2, 2],         // bookend a rest with quick pairs
+  [2, 2, 4, 4],               // quick start, ease off
 ]
 
-function generateRhythmPhrase(): number[] {
-  const phrase = RHYTHM_PHRASES[Math.floor(Math.random() * RHYTHM_PHRASES.length)]
-  // Breather between phrases: 8, 10, or 12 beats (even, to stay on-beat)
-  const breather = 8 + Math.floor(Math.random() * 3) * 2
+const ENERGETIC_PHRASES: number[][] = [
+  [2, 2, 2, 2, 2, 2],         // double-time — beats 1 & 3 every measure
+  [2, 2, 2, 2, 4],            // four hits then steady
+  [2, 2, 8, 2, 2],            // quick-quick, hold, quick-quick
+  [2, 2, 2, 6],               // triple hit then breathe
+  [2, 2, 4, 2, 2],            // bookend a rest with quick pairs
+]
+
+function generateRhythmPhrase(score: number): number[] {
+  let pool: number[][]
+  let breather: number
+  if (score < 300) {
+    pool = CALM_PHRASES
+    breather = 10 + Math.floor(Math.random() * 3) * 2 // 10, 12, or 14 beats
+  } else if (score < 1500) {
+    pool = MODERATE_PHRASES
+    breather = 8 + Math.floor(Math.random() * 3) * 2  // 8, 10, or 12 beats
+  } else {
+    pool = ENERGETIC_PHRASES
+    breather = 6 + Math.floor(Math.random() * 3) * 2  // 6, 8, or 10 beats
+  }
+  const phrase = pool[Math.floor(Math.random() * pool.length)]
   return [...phrase, breather]
 }
 
-function nextRhythmGap(queue: number[], speed: number): { gap: number; queue: number[] } {
+/**
+ * Compute initial rhythm gap so the first obstacle arrives ON a beat.
+ * Travel time from spawn to dino must be a whole number of beats.
+ */
+function computeInitialRhythmGap(): number {
+  const bpm = getCurrentBPM(INITIAL_SPEED)
+  const framesPerBeat = Math.round(3600 / bpm)
+  const travelFrames = Math.round((CANVAS_WIDTH + 10 - DINO_X) / INITIAL_SPEED)
+  const offset = travelFrames % framesPerBeat
+  const snap = offset === 0 ? 0 : framesPerBeat - offset
+  return 4 * framesPerBeat + snap // 4 beats + alignment correction
+}
+
+/** Returns gap in FRAMES (not pixels) for beat-locked timing. */
+function nextRhythmGap(queue: number[], speed: number, score: number): { gap: number; queue: number[] } {
   let q = queue
   if (q.length === 0) {
-    q = generateRhythmPhrase()
+    q = generateRhythmPhrase(score)
   }
   const beats = q[0]
   const rest = q.slice(1)
   const bpm = getCurrentBPM(speed)
-  const framesPerBeat = 3600 / bpm
-  const pixelsPerBeat = framesPerBeat * speed
-  return { gap: beats * pixelsPerBeat, queue: rest }
+  const framesPerBeat = Math.round(3600 / bpm)
+  return { gap: beats * framesPerBeat, queue: rest }
 }
 
 function randomObstacleType(score: number): ObstacleType {
@@ -1301,7 +1329,7 @@ export function createGame(highScore: number, rhythmMode: boolean = false): Game
     nightMode: false,
     nightTransition: 0,
     frameCount: 0,
-    nextObstacleDistance: 400,
+    nextObstacleDistance: rhythmMode ? computeInitialRhythmGap() : 400,
     milestoneFlash: 0,
     weather: { type: 'none', timer: 0, intensity: 0, particles: [], lightning: 0, stormClouds: [], impacts: [], windStrength: 0 },
     nextWeatherCheck: WEATHER_CHECK_INTERVAL,
@@ -1462,7 +1490,9 @@ export function update(state: GameState, input: InputState): GameState {
   obstacles = obstacles.filter(obs => obs.x > -60)
 
   // Spawn new obstacles
-  nextObstacleDistance -= effectiveSpeed
+  // Rhythm mode: frame-based countdown (locked to BPM grid)
+  // Normal mode: pixel-distance countdown (speed-dependent)
+  nextObstacleDistance -= state.rhythmMode ? 1 : effectiveSpeed
   if (nextObstacleDistance <= 0) {
     const type = randomObstacleType(score)
     obstacles.push({
@@ -1472,7 +1502,7 @@ export function update(state: GameState, input: InputState): GameState {
       frame: 0,
     })
     if (state.rhythmMode) {
-      const result = nextRhythmGap(rhythmQueue, effectiveSpeed)
+      const result = nextRhythmGap(rhythmQueue, speed, score)
       nextObstacleDistance = result.gap
       rhythmQueue = result.queue
     } else {
@@ -1557,10 +1587,12 @@ export function update(state: GameState, input: InputState): GameState {
 
   // --- Ground scroll ---
   const groundOffset = (state.ground.offset + effectiveSpeed) % 12
-  const wrapWidth = CANVAS_WIDTH + 200
   const groundParticles = state.ground.particles.map(p => {
     let nx = p.x - effectiveSpeed * GROUND_LAYER_SPEEDS[p.layer]
-    if (nx < -10) nx += wrapWidth
+    if (nx < -10) {
+      // Re-enter from the right at a random offset — prevents repeating patterns
+      nx = CANVAS_WIDTH + Math.random() * 200
+    }
     return { ...p, x: nx }
   })
 
