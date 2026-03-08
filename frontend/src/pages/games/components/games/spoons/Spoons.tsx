@@ -1,5 +1,6 @@
 /**
  * Spoons — grab a spoon before they run out!
+ * Contributed by Shantina Jackson-Romero.
  *
  * 3 players (1 human + 2 AI) pass cards trying to collect 4 of a kind.
  * When someone does, everyone races to grab a spoon.

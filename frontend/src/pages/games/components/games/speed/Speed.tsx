@@ -1,5 +1,6 @@
 /**
  * Speed — real-time 2-player card game. Race to empty your hand first!
+ * Contributed by Shantina Jackson-Romero.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
