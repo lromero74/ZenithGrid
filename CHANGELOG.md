@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.91.0] - 2026-03-08
+
+### Added
+- **USDC portfolio rebalancing**: USDC is now a 4th rebalanceable asset alongside USD, BTC, and ETH with its own target allocation percentage
+- **Minimum balance reserves**: Set a floor per currency (e.g., keep at least $500 USDC for debit card spending) — the rebalancer will top up from other currencies proportionally if a balance falls below its reserve
+- **Unified Portfolio Management settings**: Auto-Buy BTC and Portfolio Rebalancing are now grouped together in a single settings card with a clear mode selector
+
+### Changed
+- **Auto-Buy BTC and Portfolio Rebalancing are now mutually exclusive**: Enabling one automatically disables the other to prevent conflicting trade loops
+
 ## [v2.90.9] - 2026-03-08
 
 ### Changed

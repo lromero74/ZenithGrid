@@ -77,6 +77,12 @@ class Account(Base):
     rebalance_target_usd_pct = Column(Float, default=34.0)
     rebalance_target_btc_pct = Column(Float, default=33.0)
     rebalance_target_eth_pct = Column(Float, default=33.0)
+    rebalance_target_usdc_pct = Column(Float, default=0.0)
+    # Minimum balance reserves (floor that rebalancing won't trade below)
+    min_balance_usd = Column(Float, default=0.0)
+    min_balance_btc = Column(Float, default=0.0)
+    min_balance_eth = Column(Float, default=0.0)
+    min_balance_usdc = Column(Float, default=0.0)
     rebalance_drift_threshold_pct = Column(Float, default=5.0)
     rebalance_check_interval_minutes = Column(Integer, default=60)
     rebalance_min_trade_usd = Column(Float, default=50.0)  # deprecated, use pct

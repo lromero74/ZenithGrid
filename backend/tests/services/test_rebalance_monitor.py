@@ -74,8 +74,8 @@ class TestNeedsRebalance:
         """Happy path: all currencies within ±5% drift — no rebalance needed."""
         from app.services.rebalance_monitor import needs_rebalance
 
-        current = {"usd_pct": 36.0, "btc_pct": 31.0, "eth_pct": 33.0}
-        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
+        current = {"usd_pct": 36.0, "btc_pct": 31.0, "eth_pct": 33.0, "usdc_pct": 0.0}
+        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0}
 
         assert needs_rebalance(current, targets, threshold=5.0) is False
 
@@ -92,8 +92,8 @@ class TestNeedsRebalance:
         """Edge case: allocations exactly match targets."""
         from app.services.rebalance_monitor import needs_rebalance
 
-        current = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0}
-        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0}
+        current = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0, "usdc_pct": 0.0}
+        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0, "usdc_pct": 0.0}
 
         assert needs_rebalance(current, targets, threshold=5.0) is False
 
@@ -101,8 +101,8 @@ class TestNeedsRebalance:
         """Edge case: drift exactly at threshold — no rebalance (must exceed)."""
         from app.services.rebalance_monitor import needs_rebalance
 
-        current = {"usd_pct": 39.0, "btc_pct": 33.0, "eth_pct": 28.0}
-        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
+        current = {"usd_pct": 39.0, "btc_pct": 33.0, "eth_pct": 28.0, "usdc_pct": 0.0}
+        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0}
 
         # USD drift = 5.0 exactly, ETH drift = -5.0 exactly
         assert needs_rebalance(current, targets, threshold=5.0) is False
@@ -121,7 +121,7 @@ class TestPlanTrades:
         from app.services.rebalance_monitor import plan_trades
 
         free_balances = {"USD": 10000.0, "BTC": 0.0, "ETH": 0.0}
-        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0}
+        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         trades = plan_trades(free_balances, targets, prices)
@@ -145,7 +145,7 @@ class TestPlanTrades:
 
         # Small portfolio — 5% of $190 = $9.50, below exchange floor of $10
         free_balances = {"USD": 100.0, "BTC": 0.00045, "ETH": 0.018}
-        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
+        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         # USD: 100, BTC: 45, ETH: 45 => total=190
@@ -162,7 +162,7 @@ class TestPlanTrades:
         from app.services.rebalance_monitor import plan_trades
 
         free_balances = {"USD": 10000.0, "BTC": 0.0, "ETH": 0.0}
-        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0}
+        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         # Total = $10000. BTC trade = $3000 (30%), ETH trade = $2000 (20%)
@@ -180,7 +180,7 @@ class TestPlanTrades:
         from app.services.rebalance_monitor import plan_trades
 
         free_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0}
-        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
+        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         trades = plan_trades(free_balances, targets, prices)
@@ -192,7 +192,7 @@ class TestPlanTrades:
 
         # Heavy BTC, light USD and ETH
         free_balances = {"USD": 1000.0, "BTC": 0.08, "ETH": 0.4}
-        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0}
+        targets = {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         # USD: 1000, BTC: 8000, ETH: 1000 => total=10000
@@ -213,7 +213,7 @@ class TestPlanTrades:
 
         # Target says sell lots of USD, but only $200 free
         free_balances = {"USD": 200.0, "BTC": 0.0, "ETH": 0.0}
-        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 50.0}
+        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 50.0, "usdc_pct": 0.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0}
 
         # Total free = $200, all in USD
@@ -268,8 +268,13 @@ class TestRebalanceMonitorProcess:
         account.rebalance_target_usd_pct = 50.0
         account.rebalance_target_btc_pct = 30.0
         account.rebalance_target_eth_pct = 20.0
+        account.rebalance_target_usdc_pct = 0.0
         account.rebalance_drift_threshold_pct = 5.0
         account.rebalance_min_trade_pct = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
 
         db = AsyncMock()
 
@@ -282,8 +287,9 @@ class TestRebalanceMonitorProcess:
         mock_client.get_usd_balance = AsyncMock(return_value=10000.0)
         mock_client.get_btc_balance = AsyncMock(return_value=0.0)
         mock_client.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_client.get_usdc_balance = AsyncMock(return_value=0.0)
         mock_client.get_current_price = AsyncMock(
-            side_effect=lambda p: 100000.0 if p == "BTC-USD" else 2500.0
+            side_effect=lambda p: {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}.get(p, 0.0)
         )
         mock_client.buy_with_usd = AsyncMock(return_value={
             "success_response": {"order_id": "test-123"}
@@ -312,7 +318,12 @@ class TestRebalanceMonitorProcess:
         account.rebalance_target_usd_pct = 34.0
         account.rebalance_target_btc_pct = 33.0
         account.rebalance_target_eth_pct = 33.0
+        account.rebalance_target_usdc_pct = 0.0
         account.rebalance_drift_threshold_pct = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
 
         db = AsyncMock()
 
@@ -322,12 +333,18 @@ class TestRebalanceMonitorProcess:
             side_effect=lambda c: (
                 3400.0 if c == "USD"
                 else 0.033 if c == "BTC"
-                else 1.32
+                else 1.32 if c == "ETH"
+                else 0.0
             )
         )
         mock_client.get_current_price = AsyncMock(
-            side_effect=lambda p: 100000.0 if p == "BTC-USD" else 2500.0
+            side_effect=lambda p: {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}.get(p, 0.0)
         )
+        # Free balances are fetched first (for top-up check)
+        mock_client.get_usd_balance = AsyncMock(return_value=3400.0)
+        mock_client.get_btc_balance = AsyncMock(return_value=0.033)
+        mock_client.get_eth_balance = AsyncMock(return_value=1.32)
+        mock_client.get_usdc_balance = AsyncMock(return_value=0.0)
 
         with patch(
             "app.services.rebalance_monitor.get_exchange_client_for_account",
@@ -335,7 +352,144 @@ class TestRebalanceMonitorProcess:
         ):
             await monitor._process_account(account, db)
 
-        # No orders should be placed (within threshold, so free balances
-        # are never even fetched)
+        # No orders should be placed — within drift threshold
+        # and no min balance reserves to top up
         mock_client.buy_with_usd.assert_not_called()
         mock_client.create_market_order.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# plan_topup_trades
+# ---------------------------------------------------------------------------
+
+
+class TestPlanTopupTrades:
+    """Tests for plan_topup_trades() — minimum balance reserve top-ups."""
+
+    def test_no_deficit_no_trades(self):
+        """Happy path: all currencies above minimum — no top-up trades needed."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        free_balances = {"USD": 1000.0, "BTC": 0.1, "ETH": 2.0, "USDC": 500.0}
+        min_balances = {"USD": 500.0, "BTC": 0.05, "ETH": 1.0, "USDC": 200.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+        assert trades == []
+
+    def test_single_currency_below_minimum(self):
+        """Happy path: USDC below minimum, proportional buy from others."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC has $300, minimum is $500 → deficit of $200
+        free_balances = {"USD": 500.0, "BTC": 0.003, "ETH": 0.08, "USDC": 300.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        # USD=$500, BTC=0.003*100000=$300, ETH=0.08*2500=$200
+        # Total available from others = $1000
+        # Deficit = $200 USDC
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        assert len(trades) > 0
+        # All trades should be buying USDC
+        for t in trades:
+            assert t["to_currency"] == "USDC"
+        # Total USD amount across trades should be ~$200
+        total = sum(t["usd_amount"] for t in trades)
+        assert total == pytest.approx(200.0, rel=0.01)
+
+    def test_proportional_sourcing(self):
+        """Happy path: verify funds sourced proportionally from other currencies."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC deficit = $200
+        # Others: USD=$500 (50%), BTC=$300 (30%), ETH=$200 (20%)
+        free_balances = {"USD": 500.0, "BTC": 0.003, "ETH": 0.08, "USDC": 300.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        # Find trades by source currency
+        by_source = {t["from_currency"]: t["usd_amount"] for t in trades}
+
+        # USD contributes 50% of $200 = $100
+        assert by_source.get("USD", 0) == pytest.approx(100.0, rel=0.01)
+        # BTC contributes 30% of $200 = $60
+        assert by_source.get("BTC", 0) == pytest.approx(60.0, rel=0.01)
+        # ETH contributes 20% of $200 = $40
+        assert by_source.get("ETH", 0) == pytest.approx(40.0, rel=0.01)
+
+    def test_deficit_larger_than_available(self):
+        """Edge case: deficit exceeds total available — trades capped to what's available."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC deficit = $900 (need 1000, have 100)
+        # Others: USD=$200, BTC=$100, ETH=$0 → total only $300
+        free_balances = {"USD": 200.0, "BTC": 0.001, "ETH": 0.0, "USDC": 100.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 1000.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        total = sum(t["usd_amount"] for t in trades)
+        # Can't exceed total available ($300)
+        assert total <= 300.0
+
+    def test_multiple_currencies_below_minimum(self):
+        """Edge case: two currencies below minimum — both get top-up trades."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USD deficit=$200 (need 500, have 300), USDC deficit=$100 (need 200, have 100)
+        # Available donors: BTC=$5000, ETH=$2500
+        free_balances = {"USD": 300.0, "BTC": 0.05, "ETH": 1.0, "USDC": 100.0}
+        min_balances = {"USD": 500.0, "BTC": 0.0, "ETH": 0.0, "USDC": 200.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        # Should have trades buying both USD and USDC
+        buy_targets = {t["to_currency"] for t in trades}
+        assert "USD" in buy_targets
+        assert "USDC" in buy_targets
+
+    def test_small_deficit_below_exchange_min(self):
+        """Edge case: deficit < $10 exchange minimum — no trades."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC deficit = $5 (need 505, have 500) — below $10 minimum
+        free_balances = {"USD": 1000.0, "BTC": 0.1, "ETH": 2.0, "USDC": 500.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 505.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+        assert trades == []
+
+    def test_all_zeros_no_trades(self):
+        """Edge case: all minimums at zero — no top-up needed."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        free_balances = {"USD": 100.0, "BTC": 0.001, "ETH": 0.04, "USDC": 50.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+        assert trades == []
+
+    def test_individual_contribution_below_exchange_min_skipped(self):
+        """Edge case: proportional contribution from a currency is below $10 — skip that source."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC deficit = $200
+        # Others: USD=$5000 (98%), BTC=$0, ETH=$100 (2%)
+        # ETH's contribution: 2% of $200 = $4 → below $10, should be skipped
+        free_balances = {"USD": 5000.0, "BTC": 0.0, "ETH": 0.04, "USDC": 300.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        sources = {t["from_currency"] for t in trades}
+        assert "ETH" not in sources  # Too small a contribution
+        assert "USD" in sources
