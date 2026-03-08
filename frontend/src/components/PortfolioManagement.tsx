@@ -6,9 +6,9 @@
  * A 3-way mode selector lets users pick: Off, Auto-Buy BTC, or Rebalancing.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Clock, Save, RefreshCw, AlertTriangle,
+  Clock, Save, RefreshCw, AlertTriangle, Loader2,
   DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Briefcase, Trash2,
 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
@@ -76,28 +76,60 @@ const MODE_OPTIONS: { value: PortfolioMode; label: string; description: string }
   { value: 'rebalance', label: 'Rebalancing', description: 'Maintain target allocations' },
 ]
 
+// ─── Module-level cache (survives unmount/remount) ──────────────────────────
+
+interface PortfolioCache {
+  autoBuy: Record<number, AutoBuySettings>
+  rebalance: Record<number, RebalanceSettings>
+  dust: Record<number, DustSweepSettings>
+  bots: Bot[]
+  timestamp: number
+}
+
+let _portfolioCache: PortfolioCache | null = null
+const CACHE_STALE_MS = 5 * 60 * 1000  // refresh in background after 5 min
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
   const canWrite = usePermission('accounts', 'write')
-  const [autoBuySettings, setAutoBuySettings] = useState<Record<number, AutoBuySettings>>({})
-  const [rebalanceSettings, setRebalanceSettings] = useState<Record<number, RebalanceSettings>>({})
+  const [autoBuySettings, setAutoBuySettings] = useState<Record<number, AutoBuySettings>>(
+    _portfolioCache?.autoBuy ?? {}
+  )
+  const [rebalanceSettings, setRebalanceSettings] = useState<Record<number, RebalanceSettings>>(
+    _portfolioCache?.rebalance ?? {}
+  )
   const [statuses, setStatuses] = useState<Record<number, RebalanceStatus>>({})
-  const [bots, setBots] = useState<Bot[]>([])
+  const [bots, setBots] = useState<Bot[]>(_portfolioCache?.bots ?? [])
   const [saving, setSaving] = useState<number | null>(null)
   const [loadingStatus, setLoadingStatus] = useState<number | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [chartView, setChartView] = useState<'pie' | 'bar'>('bar')
   const [reservesOpen, setReservesOpen] = useState<Record<number, boolean>>({})
-  const [dustSettings, setDustSettings] = useState<Record<number, DustSweepSettings>>({})
+  const [dustSettings, setDustSettings] = useState<Record<number, DustSweepSettings>>(
+    _portfolioCache?.dust ?? {}
+  )
   const [sweeping, setSweeping] = useState<number | null>(null)
   const [dustOpen, setDustOpen] = useState<Record<number, boolean>>({})
+  const [loading, setLoading] = useState(!_portfolioCache)
+  const fetchingRef = useRef(false)
 
   const cexAccounts = accounts.filter(a => a.type === 'cex')
 
-  // Load all settings on mount
+  // Load all settings on mount (from cache instantly, fetch if stale or missing)
   useEffect(() => {
     if (cexAccounts.length === 0) return
+    if (fetchingRef.current) return
+    // Skip fetch if cache is fresh
+    if (_portfolioCache && Date.now() - _portfolioCache.timestamp < CACHE_STALE_MS) {
+      setLoading(false)
+      return
+    }
+
+    fetchingRef.current = true
+    const isBackgroundRefresh = !!_portfolioCache
+
+    if (!isBackgroundRefresh) setLoading(true)
 
     Promise.all([
       Promise.all(cexAccounts.map(async (account) => {
@@ -142,6 +174,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       setDustSettings(dustMap)
 
       setBots(botsData)
+
+      _portfolioCache = { autoBuy: abMap, rebalance: rbMap, dust: dustMap, bots: botsData, timestamp: Date.now() }
+      setLoading(false)
+    }).finally(() => {
+      fetchingRef.current = false
     })
   }, [cexAccounts.length])
 
@@ -165,6 +202,21 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     }
     setReservesOpen(openState)
   }, [rebalanceSettings, hasAnyReserve])
+
+  // Initialize dust sweep open/closed state from localStorage + settings
+  useEffect(() => {
+    const openState: Record<number, boolean> = {}
+    for (const [accountIdStr, dust] of Object.entries(dustSettings)) {
+      const accountId = parseInt(accountIdStr)
+      const stored = localStorage.getItem(`dust_open_${accountId}`)
+      if (stored !== null) {
+        openState[accountId] = stored === 'true'
+      } else {
+        openState[accountId] = dust.enabled
+      }
+    }
+    setDustOpen(openState)
+  }, [dustSettings])
 
   const toggleReservesOpen = (accountId: number) => {
     setReservesOpen(prev => {
@@ -260,7 +312,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     setMessage(null)
     try {
       const updated = await autoBuyApi.updateSettings(accountId, autoBuySettings[accountId])
-      setAutoBuySettings(prev => ({ ...prev, [accountId]: updated }))
+      setAutoBuySettings(prev => {
+        const next = { ...prev, [accountId]: updated }
+        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, autoBuy: next, timestamp: Date.now() }
+        return next
+      })
       setMessage({ type: 'success', text: `Auto-buy settings saved for ${cexAccounts.find(a => a.id === accountId)?.name}` })
       setTimeout(() => setMessage(null), 3000)
     } catch (err) {
@@ -332,7 +388,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     setMessage(null)
     try {
       const updated = await rebalanceApi.updateSettings(accountId, rebalanceSettings[accountId])
-      setRebalanceSettings(prev => ({ ...prev, [accountId]: updated }))
+      setRebalanceSettings(prev => {
+        const next = { ...prev, [accountId]: updated }
+        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, rebalance: next, timestamp: Date.now() }
+        return next
+      })
       setMessage({ type: 'success', text: `Rebalance settings saved for ${cexAccounts.find(a => a.id === accountId)?.name}` })
       setTimeout(() => setMessage(null), 3000)
     } catch (err) {
@@ -359,7 +419,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
   const handleDustSettingsSave = async (accountId: number, updates: { enabled?: boolean; threshold_usd?: number }) => {
     try {
       const result = await dustApi.updateSettings(accountId, updates)
-      setDustSettings(prev => ({ ...prev, [accountId]: { ...prev[accountId], ...result } }))
+      setDustSettings(prev => {
+        const next = { ...prev, [accountId]: { ...prev[accountId], ...result } }
+        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }
+        return next
+      })
       setMessage({ type: 'success', text: 'Dust sweep settings saved' })
       setTimeout(() => setMessage(null), 3000)
     } catch (err) {
@@ -380,7 +444,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       }
       // Refresh dust settings to get updated positions and last_sweep_at
       const refreshed = await dustApi.getSettings(accountId)
-      setDustSettings(prev => ({ ...prev, [accountId]: refreshed }))
+      setDustSettings(prev => {
+        const next = { ...prev, [accountId]: refreshed }
+        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }
+        return next
+      })
       setTimeout(() => setMessage(null), 5000)
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Sweep failed' })
@@ -390,7 +458,11 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
   }
 
   const toggleDustOpen = (accountId: number) => {
-    setDustOpen(prev => ({ ...prev, [accountId]: !prev[accountId] }))
+    setDustOpen(prev => {
+      const newVal = !prev[accountId]
+      localStorage.setItem(`dust_open_${accountId}`, String(newVal))
+      return { ...prev, [accountId]: newVal }
+    })
   }
 
   // Auto-fetch status for accounts with rebalancing enabled on initial load
@@ -415,6 +487,21 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           Portfolio Management
         </h2>
         <p className="text-slate-400 mt-2">No CEX accounts available. Add an exchange account to use portfolio management.</p>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <Briefcase size={20} />
+          Portfolio Management
+        </h2>
+        <div className="flex items-center gap-2 mt-4 text-slate-400">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-sm">Loading portfolio settings...</span>
+        </div>
       </div>
     )
   }

@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.92.1] - 2026-03-08
+
+### Changed
+- **Portfolio Management loads instantly**: Settings are cached so navigating away and back shows data immediately instead of re-fetching every time
+- **Loading spinner**: Shows a spinner while portfolio settings are loading on first visit
+- **Dust sweep section remembers state**: Collapse/expand preference is saved per account in the browser; defaults to expanded when dust sweep is enabled
+
 ## [v2.92.0] - 2026-03-08
 
 ### Added
