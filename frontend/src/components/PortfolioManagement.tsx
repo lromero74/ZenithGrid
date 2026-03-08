@@ -337,6 +337,18 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     }
   }, [])
 
+  // Auto-fetch status for accounts with rebalancing enabled on initial load
+  useEffect(() => {
+    for (const [accountIdStr, rb] of Object.entries(rebalanceSettings)) {
+      if (rb.enabled) {
+        const accountId = parseInt(accountIdStr)
+        if (!statuses[accountId]) {
+          fetchStatus(accountId)
+        }
+      }
+    }
+  }, [rebalanceSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (cexAccounts.length === 0) {
