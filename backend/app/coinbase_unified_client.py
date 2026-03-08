@@ -279,6 +279,13 @@ class CoinbaseClient:
         """Cancel an open order"""
         return await order_api.cancel_order(self._request, order_id)
 
+    async def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
+        """Cancel multiple orders in a single batch API call."""
+        if not order_ids:
+            return {"results": []}
+        data = {"order_ids": order_ids}
+        return await self._request("POST", "/api/v3/brokerage/orders/batch_cancel", data=data)
+
     async def edit_order(
         self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
     ) -> Dict[str, Any]:

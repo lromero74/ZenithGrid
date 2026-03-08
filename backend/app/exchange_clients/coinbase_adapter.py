@@ -224,6 +224,10 @@ class CoinbaseAdapter(ExchangeClient):
         """Cancel a pending order."""
         return await self._client.cancel_order(order_id)
 
+    async def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
+        """Cancel multiple orders in a single batch API call."""
+        return await self._client.cancel_orders(order_ids)
+
     async def edit_order(
         self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
     ) -> Dict[str, Any]:

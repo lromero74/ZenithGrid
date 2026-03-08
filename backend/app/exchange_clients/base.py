@@ -390,6 +390,28 @@ class ExchangeClient(ABC):
         """
         pass
 
+    async def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
+        """
+        Cancel multiple orders in a single batch call.
+
+        Default implementation calls cancel_order() in a loop.
+        Subclasses (e.g., CoinbaseAdapter) may override with a true batch API.
+
+        Args:
+            order_ids: List of order IDs to cancel
+
+        Returns:
+            Dict with results per order
+        """
+        results = {}
+        for oid in order_ids:
+            try:
+                result = await self.cancel_order(oid)
+                results[oid] = result
+            except Exception as e:
+                results[oid] = {"error": str(e)}
+        return results
+
     async def edit_order(
         self,
         order_id: str,

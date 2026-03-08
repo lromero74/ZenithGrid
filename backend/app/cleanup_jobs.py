@@ -83,6 +83,13 @@ async def cleanup_old_decision_logs():
                     else:
                         logger.debug(f"No old closed positions to clean up (retention: {retention_days} days)")
 
+            # Clean up expired entries from the API cache
+            try:
+                from app.cache import api_cache
+                await api_cache.cleanup_expired()
+            except Exception as cache_err:
+                logger.debug(f"Cache cleanup: {cache_err}")
+
         except Exception as e:
             logger.error(f"Error in decision log cleanup job: {e}", exc_info=True)
 

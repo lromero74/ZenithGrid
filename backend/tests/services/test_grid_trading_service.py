@@ -136,7 +136,8 @@ class TestCancelGridOrders:
         count = await cancel_grid_orders(bot, position, exchange, db, reason="test")
 
         assert count == 2
-        assert exchange.cancel_order.call_count == 2
+        # Batch cancel: single call with all order IDs
+        exchange.cancel_orders.assert_called_once_with(["order-111", "order-222"])
         assert order1.status == "cancelled"
         assert order2.status == "cancelled"
         assert order1.reserved_amount_quote == 0.0
@@ -162,15 +163,16 @@ class TestCancelGridOrders:
         exchange.cancel_order.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exchange_cancel_failure_still_marks_cancelled(self):
-        """Even if exchange cancel fails, mark order as cancelled in DB to release capital"""
+    async def test_exchange_cancel_failure_falls_back_to_individual(self):
+        """When batch cancel fails, falls back to individual cancels; DB still updated."""
         db = AsyncMock()
         bot = MagicMock()
         bot.id = 1
         position = MagicMock()
         position.id = 10
         exchange = AsyncMock()
-        exchange.cancel_order.side_effect = Exception("Exchange unavailable")
+        exchange.cancel_orders.side_effect = Exception("Exchange unavailable")
+        exchange.cancel_order.side_effect = Exception("Still unavailable")
 
         order = MagicMock()
         order.order_id = "order-333"
@@ -182,7 +184,7 @@ class TestCancelGridOrders:
 
         count = await cancel_grid_orders(bot, position, exchange, db, reason="test")
 
-        assert count == 0  # Exchange cancel failed, not counted as cancelled
+        assert count == 0  # Both batch and individual cancel failed
         assert order.status == "cancelled"  # But DB status is updated
         assert order.reserved_amount_quote == 0.0
 

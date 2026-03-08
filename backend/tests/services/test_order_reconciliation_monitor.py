@@ -369,6 +369,7 @@ class TestCheckForMissingOrders:
         exchange.list_orders = AsyncMock(return_value=[
             {
                 "order_id": "missing-buy-1",
+                "product_id": "ETH-BTC",
                 "filled_size": 2.5,
                 "filled_value": 0.005,
                 "side": "BUY",
@@ -380,6 +381,54 @@ class TestCheckForMissingOrders:
 
         # Should not raise (just logs warning)
         await detector.check_for_missing_orders()
+
+    @pytest.mark.asyncio
+    async def test_single_api_call_for_multiple_products(self):
+        """Optimization: list_orders called once (no product_id filter), not per product."""
+        db = AsyncMock()
+
+        pos1 = _make_position(id=1, product_id="ETH-BTC")
+        pos2 = _make_position(id=2, product_id="SOL-BTC")
+        pos3 = _make_position(id=3, product_id="ADA-BTC")
+        pos_result = MagicMock()
+        pos_result.scalars.return_value.all.return_value = [pos1, pos2, pos3]
+
+        trade_result = MagicMock()
+        trade_result.fetchall.return_value = [("existing-order-1", 1)]
+
+        pending_result = MagicMock()
+        pending_result.fetchall.return_value = []
+
+        db.execute = AsyncMock(side_effect=[pos_result, trade_result, pending_result])
+
+        exchange = AsyncMock()
+        exchange.list_orders = AsyncMock(return_value=[
+            {
+                "order_id": "existing-order-1",
+                "product_id": "ETH-BTC",
+                "filled_size": 1.0,
+                "filled_value": 0.01,
+                "side": "BUY",
+                "created_time": "2025-01-01T12:00:00Z",
+            },
+            {
+                "order_id": "missing-order-2",
+                "product_id": "SOL-BTC",
+                "filled_size": 5.0,
+                "filled_value": 0.005,
+                "side": "BUY",
+                "created_time": "2025-01-01T12:00:00Z",
+            },
+        ])
+
+        detector = MissingOrderDetector(db, exchange)
+        await detector.check_for_missing_orders()
+
+        # Key assertion: list_orders called exactly ONCE (not 3 times for 3 products)
+        assert exchange.list_orders.await_count == 1
+        # Verify called without product_id filter
+        call_kwargs = exchange.list_orders.call_args[1] if exchange.list_orders.call_args[1] else {}
+        assert call_kwargs.get("product_id") is None
 
     @pytest.mark.asyncio
     async def test_exception_caught_and_logged(self):

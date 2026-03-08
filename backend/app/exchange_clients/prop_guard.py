@@ -668,6 +668,9 @@ class PropGuardClient(ExchangeClient):
     async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         return await self._inner.cancel_order(order_id)
 
+    async def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
+        return await self._inner.cancel_orders(order_ids)
+
     async def list_orders(
         self,
         product_id: Optional[str] = None,

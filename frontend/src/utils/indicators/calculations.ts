@@ -9,12 +9,17 @@ import type { CandleData, MACDResult, BollingerBandsResult, StochasticResult } f
  */
 export function calculateSMA(data: number[], period: number): (number | null)[] {
   const result: (number | null)[] = []
+  // Use running sum O(N) instead of slice+reduce O(N*P)
+  let windowSum = 0
   for (let i = 0; i < data.length; i++) {
+    windowSum += data[i]
     if (i < period - 1) {
       result.push(null)
     } else {
-      const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0)
-      result.push(sum / period)
+      if (i >= period) {
+        windowSum -= data[i - period]
+      }
+      result.push(windowSum / period)
     }
   }
   return result
@@ -161,14 +166,23 @@ export function calculateBollingerBands(
   const upper: (number | null)[] = []
   const lower: (number | null)[] = []
 
+  // Compute variance using running sum of squares O(N) instead of slice per element O(N*P)
+  let sumSq = 0
+  let windowSum = 0
   for (let i = 0; i < data.length; i++) {
+    windowSum += data[i]
+    sumSq += data[i] * data[i]
+    if (i >= period) {
+      windowSum -= data[i - period]
+      sumSq -= data[i - period] * data[i - period]
+    }
     if (i < period - 1 || middle[i] === null) {
       upper.push(null)
       lower.push(null)
     } else {
-      const subset = data.slice(i - period + 1, i + 1)
       const mean = middle[i]!
-      const variance = subset.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period
+      // variance = E[x^2] - (E[x])^2
+      const variance = Math.max(0, sumSq / period - mean * mean)
       const std = Math.sqrt(variance)
       upper.push(mean + stdDev * std)
       lower.push(mean - stdDev * std)
@@ -196,12 +210,36 @@ export function calculateStochastic(
 ): StochasticResult {
   const kLine: (number | null)[] = []
 
+  // Use monotonic deques for O(N) sliding window max/min
+  // instead of slice+Math.max/min O(N*P)
+  const highDeque: number[] = []  // indices of decreasing highs
+  const lowDeque: number[] = []   // indices of increasing lows
+
   for (let i = 0; i < closes.length; i++) {
+    // Maintain decreasing deque for highs
+    while (highDeque.length > 0 && highs[highDeque[highDeque.length - 1]] <= highs[i]) {
+      highDeque.pop()
+    }
+    highDeque.push(i)
+    // Remove elements outside the window
+    while (highDeque[0] <= i - kPeriod) {
+      highDeque.shift()
+    }
+
+    // Maintain increasing deque for lows
+    while (lowDeque.length > 0 && lows[lowDeque[lowDeque.length - 1]] >= lows[i]) {
+      lowDeque.pop()
+    }
+    lowDeque.push(i)
+    while (lowDeque[0] <= i - kPeriod) {
+      lowDeque.shift()
+    }
+
     if (i < kPeriod - 1) {
       kLine.push(null)
     } else {
-      const highestHigh = Math.max(...highs.slice(i - kPeriod + 1, i + 1))
-      const lowestLow = Math.min(...lows.slice(i - kPeriod + 1, i + 1))
+      const highestHigh = highs[highDeque[0]]
+      const lowestLow = lows[lowDeque[0]]
       const currentClose = closes[i]
 
       if (highestHigh === lowestLow) {
