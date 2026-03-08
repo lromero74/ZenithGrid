@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models import Account
+from app.precision import format_base_amount
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -833,10 +834,19 @@ class RebalanceMonitor:
             results = []
             for sweep in sweeps:
                 try:
+                    # Format size with proper precision for the product
+                    # and apply a tiny haircut to avoid "Insufficient balance"
+                    # from rounding/hold timing differences
+                    coin = sweep["coin"]
+                    sell_amount = sweep["amount"] * 0.999
+                    size_str = format_base_amount(sell_amount, coin)
+                    if float(size_str) <= 0:
+                        continue
+
                     result = await client.create_market_order(
                         product_id=sweep["product_id"],
                         side="SELL",
-                        size=f"{sweep['amount']:.8f}",
+                        size=size_str,
                     )
                     success = result.get("success_response", {})
                     order_id = success.get("order_id", "")

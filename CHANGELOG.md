@@ -5,7 +5,10 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.92.1] - 2026-03-08
+## [v2.92.2] - 2026-03-08
+
+### Fixed
+- **Dust sweep now works on live accounts**: Fixed "Insufficient balance" errors by properly formatting sell amounts with correct product precision and a small safety margin
 
 ### Changed
 - **Portfolio Management loads instantly**: Settings are cached so navigating away and back shows data immediately instead of re-fetching every time
