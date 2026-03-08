@@ -76,7 +76,7 @@ const MODE_OPTIONS: { value: PortfolioMode; label: string; description: string }
   { value: 'rebalance', label: 'Rebalancing', description: 'Maintain target allocations' },
 ]
 
-// ─── Module-level cache (survives unmount/remount) ──────────────────────────
+// ─── Cache (survives unmount/remount AND page reloads via sessionStorage) ───
 
 interface PortfolioCache {
   autoBuy: Record<number, AutoBuySettings>
@@ -86,8 +86,22 @@ interface PortfolioCache {
   timestamp: number
 }
 
-let _portfolioCache: PortfolioCache | null = null
+const CACHE_KEY = 'portfolioMgmtCache'
 const CACHE_STALE_MS = 5 * 60 * 1000  // refresh in background after 5 min
+
+function loadCache(): PortfolioCache | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as PortfolioCache
+  } catch { return null }
+}
+
+function saveCache(cache: PortfolioCache) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache)) } catch {}
+}
+
+let _portfolioCache: PortfolioCache | null = loadCache()
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -176,6 +190,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       setBots(botsData)
 
       _portfolioCache = { autoBuy: abMap, rebalance: rbMap, dust: dustMap, bots: botsData, timestamp: Date.now() }
+      saveCache(_portfolioCache)
       setLoading(false)
     }).finally(() => {
       fetchingRef.current = false
@@ -314,7 +329,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       const updated = await autoBuyApi.updateSettings(accountId, autoBuySettings[accountId])
       setAutoBuySettings(prev => {
         const next = { ...prev, [accountId]: updated }
-        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, autoBuy: next, timestamp: Date.now() }
+        if (_portfolioCache) { _portfolioCache = { ..._portfolioCache, autoBuy: next, timestamp: Date.now() }; saveCache(_portfolioCache) }
         return next
       })
       setMessage({ type: 'success', text: `Auto-buy settings saved for ${cexAccounts.find(a => a.id === accountId)?.name}` })
@@ -390,7 +405,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       const updated = await rebalanceApi.updateSettings(accountId, rebalanceSettings[accountId])
       setRebalanceSettings(prev => {
         const next = { ...prev, [accountId]: updated }
-        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, rebalance: next, timestamp: Date.now() }
+        if (_portfolioCache) { _portfolioCache = { ..._portfolioCache, rebalance: next, timestamp: Date.now() }; saveCache(_portfolioCache) }
         return next
       })
       setMessage({ type: 'success', text: `Rebalance settings saved for ${cexAccounts.find(a => a.id === accountId)?.name}` })
@@ -421,7 +436,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       const result = await dustApi.updateSettings(accountId, updates)
       setDustSettings(prev => {
         const next = { ...prev, [accountId]: { ...prev[accountId], ...result } }
-        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }
+        if (_portfolioCache) { _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }; saveCache(_portfolioCache) }
         return next
       })
       setMessage({ type: 'success', text: 'Dust sweep settings saved' })
@@ -453,7 +468,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       const refreshed = await dustApi.getSettings(accountId)
       setDustSettings(prev => {
         const next = { ...prev, [accountId]: refreshed }
-        if (_portfolioCache) _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }
+        if (_portfolioCache) { _portfolioCache = { ..._portfolioCache, dust: next, timestamp: Date.now() }; saveCache(_portfolioCache) }
         return next
       })
       setTimeout(() => setMessage(null), 5000)

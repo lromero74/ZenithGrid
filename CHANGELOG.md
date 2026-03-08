@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.92.4] - 2026-03-08
+
+### Changed
+- **Portfolio Management cache survives page reloads**: Settings are now persisted in sessionStorage so refreshing the page shows data instantly without re-fetching
+
 ## [v2.92.3] - 2026-03-08
 
 ### Fixed
