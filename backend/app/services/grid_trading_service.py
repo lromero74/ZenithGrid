@@ -308,28 +308,30 @@ async def cancel_grid_orders(
     )
     pending_orders = result.scalars().all()
 
+    # Batch cancel all orders in a single API call instead of one-by-one
+    order_ids = [order.order_id for order in pending_orders if order.order_id]
     cancelled_count = 0
 
-    for order in pending_orders:
+    if order_ids:
         try:
-            # Cancel on exchange
-            logger.debug(f"   Cancelling order {order.order_id[:8]}...")
-            await exchange_client.cancel_order(order.order_id)
-
-            # Update status and release reserved capital
-            order.status = "cancelled"
-            order.canceled_at = datetime.utcnow()
-            order.reserved_amount_quote = 0.0
-            order.reserved_amount_base = 0.0
-
-            cancelled_count += 1
-
+            await exchange_client.cancel_orders(order_ids)
+            cancelled_count = len(order_ids)
         except Exception as e:
-            logger.error(f"Failed to cancel order {order.order_id}: {e}")
-            # Mark as cancelled in DB anyway to release capital
-            order.status = "cancelled"
-            order.reserved_amount_quote = 0.0
-            order.reserved_amount_base = 0.0
+            logger.error(f"Batch cancel failed: {e}, falling back to individual cancels")
+            for order in pending_orders:
+                try:
+                    await exchange_client.cancel_order(order.order_id)
+                    cancelled_count += 1
+                except Exception as e2:
+                    logger.error(f"Failed to cancel order {order.order_id}: {e2}")
+
+    # Update all pending orders in DB regardless of exchange result
+    now = datetime.utcnow()
+    for order in pending_orders:
+        order.status = "cancelled"
+        order.canceled_at = now
+        order.reserved_amount_quote = 0.0
+        order.reserved_amount_base = 0.0
 
     await db.commit()
 

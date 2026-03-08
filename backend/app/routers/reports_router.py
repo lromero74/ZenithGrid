@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import selectinload
@@ -1002,19 +1002,18 @@ async def bulk_delete_reports(
     current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete multiple reports at once."""
-    result = await db.execute(
-        select(Report).where(
+    # Use bulk DELETE instead of individual db.delete() per report
+    del_result = await db.execute(
+        delete(Report).where(
             Report.id.in_(body.report_ids),
             Report.user_id == current_user.id,
         )
     )
-    reports = list(result.scalars().all())
-    if not reports:
+    deleted_count = del_result.rowcount
+    if deleted_count == 0:
         raise HTTPException(status_code=404, detail="No matching reports found")
-    for report in reports:
-        await db.delete(report)
     await db.commit()
-    return {"deleted": len(reports)}
+    return {"deleted": deleted_count}
 
 
 @router.get("/{report_id}/pdf")

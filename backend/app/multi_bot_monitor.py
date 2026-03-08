@@ -815,6 +815,22 @@ class MultiBotMonitor:
                         for bid in stale_schedule_keys:
                             del self._bot_next_check[bid]
 
+                        # Prune _candle_cache for pairs no longer tracked by any bot
+                        all_active_pairs = set()
+                        for b in bots:
+                            all_active_pairs.update(b.get_trading_pairs())
+                        stale_candle_keys = [
+                            k for k in self._candle_cache
+                            if k.rsplit(":", 1)[0] not in all_active_pairs
+                        ]
+                        for k in stale_candle_keys:
+                            del self._candle_cache[k]
+                        if stale_candle_keys:
+                            logger.debug(
+                                f"Pruned {len(stale_candle_keys)} stale "
+                                "entries from candle cache"
+                            )
+
                 # Wait for next interval - check frequently so bots with short intervals are responsive
                 logger.debug("Sleeping 10 seconds before next iteration...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing

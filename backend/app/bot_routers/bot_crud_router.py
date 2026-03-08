@@ -267,16 +267,17 @@ async def get_bot(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    # Count positions
-    open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
-    total_pos_query = select(Position).where(Position.bot_id == bot.id)
-
-    open_result = await db.execute(open_pos_query)
-    total_result = await db.execute(total_pos_query)
+    # Count positions via SQL COUNT instead of materializing all rows
+    count_query = select(
+        func.count(Position.id),
+        func.count(case((Position.status == "open", 1))),
+    ).where(Position.bot_id == bot.id)
+    count_result = await db.execute(count_query)
+    total_count, open_count = count_result.one()
 
     bot_response = BotResponse.model_validate(bot)
-    bot_response.open_positions_count = len(open_result.scalars().all())
-    bot_response.total_positions_count = len(total_result.scalars().all())
+    bot_response.open_positions_count = open_count
+    bot_response.total_positions_count = total_count
 
     return bot_response
 
@@ -478,16 +479,20 @@ async def clone_bot(
         # No (Copy) yet → add (Copy)
         new_name = f"{new_name} (Copy)"
 
-    # Ensure name is unique (in case of conflicts)
-    counter = 2
+    # Ensure name is unique with a single query instead of a per-conflict loop
     base_new_name = new_name
-    while True:
-        name_check_query = select(Bot).where(Bot.name == new_name, Bot.user_id == current_user.id)
-        name_check_result = await db.execute(name_check_query)
-        if not name_check_result.scalars().first():
-            break
+    existing_names_result = await db.execute(
+        select(Bot.name).where(
+            Bot.user_id == current_user.id,
+            Bot.name.like(f"{base_new_name}%"),
+        )
+    )
+    existing_names = {row[0] for row in existing_names_result.all()}
+    if new_name in existing_names:
+        counter = 2
+        while f"{base_new_name} {counter}" in existing_names:
+            counter += 1
         new_name = f"{base_new_name} {counter}"
-        counter += 1
 
     # Create cloned bot
     cloned_bot = Bot(

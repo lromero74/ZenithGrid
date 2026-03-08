@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -348,82 +348,64 @@ async def get_completed_trades_stats(
     - Total completed trades count
     - Average profit per trade
     """
-    # Get closed positions
-    query = select(Position).where(
-        Position.status == "closed",
-        Position.closed_at is not None
-    )
+    empty_stats = {
+        "total_profit_btc": 0.0,
+        "total_profit_usd": 0.0,
+        "win_rate": 0.0,
+        "total_trades": 0,
+        "winning_trades": 0,
+        "losing_trades": 0,
+        "average_profit_usd": 0.0,
+    }
 
     accounts_query = select(Account.id).where(Account.user_id == current_user.id)
     accounts_result = await db.execute(accounts_query)
     user_account_ids = [row[0] for row in accounts_result.fetchall()]
-    if user_account_ids:
-        query = query.where(Position.account_id.in_(user_account_ids))
-    else:
-        return {
-            "total_profit_btc": 0.0,
-            "total_profit_usd": 0.0,
-            "win_rate": 0.0,
-            "total_trades": 0,
-            "winning_trades": 0,
-            "losing_trades": 0,
-            "average_profit_usd": 0.0,
-        }
+    if not user_account_ids:
+        return empty_stats
 
-    # Filter by account_id if provided
+    # Build conditions for closed positions
+    conditions = [
+        Position.status == "closed",
+        Position.account_id.in_(user_account_ids),
+    ]
     if account_id is not None:
-        query = query.where(Position.account_id == account_id)
+        conditions.append(Position.account_id == account_id)
 
-    result = await db.execute(query)
-    positions = result.scalars().all()
+    # Use SQL aggregation instead of materializing all rows
+    # BTC profit: profit_quote for BTC pairs, profit_usd/btc_usd_price_at_close for others
+    btc_profit_expr = func.coalesce(func.sum(
+        case(
+            (Position.product_id.like('%-BTC'), Position.profit_quote),
+            else_=case(
+                (Position.btc_usd_price_at_close > 0,
+                 Position.profit_usd / Position.btc_usd_price_at_close),
+                else_=0.0,
+            ),
+        )
+    ), 0.0)
 
-    if not positions:
-        return {
-            "total_profit_btc": 0.0,
-            "total_profit_usd": 0.0,
-            "win_rate": 0.0,
-            "total_trades": 0,
-            "winning_trades": 0,
-            "losing_trades": 0,
-            "average_profit_usd": 0.0,
-        }
+    agg_query = select(
+        func.count(Position.id),
+        func.coalesce(func.sum(Position.profit_usd), 0.0),
+        func.count(case((Position.profit_usd > 0, 1))),
+        func.count(case((Position.profit_usd < 0, 1))),
+        btc_profit_expr,
+    ).where(*conditions)
 
-    # Calculate statistics
-    total_trades = len(positions)
-    total_profit_btc = 0.0
-    total_profit_usd = 0.0
-    winning_trades = 0
-    losing_trades = 0
+    result = await db.execute(agg_query)
+    row = result.one()
+    total_trades, total_profit_usd, winning_trades, losing_trades, total_profit_btc = row
 
-    for pos in positions:
-        # BTC profit calculation
-        if pos.product_id and '-BTC' in pos.product_id:
-            # For BTC pairs, profit_quote is already in BTC
-            if pos.profit_quote is not None:
-                total_profit_btc += pos.profit_quote
-        else:
-            # For USD pairs, convert USD profit to BTC
-            if pos.profit_usd is not None and pos.btc_usd_price_at_close:
-                # profit_usd / btc_price = profit_btc
-                total_profit_btc += pos.profit_usd / pos.btc_usd_price_at_close
+    if total_trades == 0:
+        return empty_stats
 
-        # USD profit
-        if pos.profit_usd is not None:
-            total_profit_usd += pos.profit_usd
-            if pos.profit_usd > 0:
-                winning_trades += 1
-            elif pos.profit_usd < 0:
-                losing_trades += 1
-
-    # Calculate win rate
-    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
-
-    # Calculate average profit
-    average_profit_usd = total_profit_usd / total_trades if total_trades > 0 else 0.0
+    win_rate = (winning_trades / total_trades * 100)
+    average_profit_usd = total_profit_usd / total_trades
 
     return {
-        "total_profit_btc": round(total_profit_btc, 8),
-        "total_profit_usd": round(total_profit_usd, 2),
+        "total_profit_btc": round(float(total_profit_btc), 8),
+        "total_profit_usd": round(float(total_profit_usd), 2),
         "win_rate": round(win_rate, 2),
         "total_trades": total_trades,
         "winning_trades": winning_trades,
@@ -495,21 +477,14 @@ async def get_realized_pnl(
     # Start of year (January 1st of current year)
     start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # Get closed positions
-    query = select(Position).where(
-        Position.status == "closed",
-        Position.closed_at is not None
-    )
+    periods = [
+        'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
+        'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
 
     accounts_query = select(Account.id).where(Account.user_id == current_user.id)
     accounts_result = await db.execute(accounts_query)
     user_account_ids = [row[0] for row in accounts_result.fetchall()]
-    if user_account_ids:
-        query = query.where(Position.account_id.in_(user_account_ids))
-    else:
-        periods = [
-            'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
-            'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
+    if not user_account_ids:
         empty = {}
         for p in periods:
             empty[f"{p}_profit_btc"] = 0.0
@@ -517,17 +492,25 @@ async def get_realized_pnl(
             empty[f"{p}_profit_by_quote"] = {}
         return empty
 
-    # Filter by account_id if provided
+    # Fetch only the columns we need instead of full ORM objects
+    query = select(
+        Position.closed_at,
+        Position.product_id,
+        Position.profit_usd,
+        Position.profit_quote,
+    ).where(
+        Position.status == "closed",
+        Position.closed_at.isnot(None),
+        Position.account_id.in_(user_account_ids),
+    )
+
     if account_id is not None:
         query = query.where(Position.account_id == account_id)
 
     result = await db.execute(query)
-    positions = result.scalars().all()
+    positions = result.all()
 
     # Calculate PnL for all time periods, broken down by quote currency
-    periods = [
-        'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
-        'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
     by_quote = {p: {} for p in periods}
     profit_usd = {p: 0.0 for p in periods}
 
@@ -546,16 +529,16 @@ async def get_realized_pnl(
         ('ytd', start_of_year, None),
     ]
 
-    for pos in positions:
-        if not pos.closed_at:
+    for closed_at, product_id, pos_profit_usd, pos_profit_quote in positions:
+        if not closed_at:
             continue
 
-        quote_currency = pos.product_id.split('-')[1] if pos.product_id and '-' in pos.product_id else 'BTC'
-        pu = pos.profit_usd if pos.profit_usd is not None else 0.0
+        quote_currency = product_id.split('-')[1] if product_id and '-' in product_id else 'BTC'
+        pu = pos_profit_usd if pos_profit_usd is not None else 0.0
         # Fall back to profit_usd for USD-like pairs when profit_quote is NULL
         # (e.g. force-closed write-off positions that were never sold)
-        if pos.profit_quote is not None:
-            pq = pos.profit_quote
+        if pos_profit_quote is not None:
+            pq = pos_profit_quote
         elif quote_currency in ('USD', 'USDC', 'USDT'):
             pq = pu
         else:
@@ -571,10 +554,10 @@ async def get_realized_pnl(
         # Check each time period
         for period_name, start, end in period_checks:
             if end is None:
-                if pos.closed_at >= start:
+                if closed_at >= start:
                     add_to(period_name)
             else:
-                if start <= pos.closed_at <= end:
+                if start <= closed_at <= end:
                     add_to(period_name)
 
     # Build response with per-quote breakdown + backward-compatible _btc (native BTC only)

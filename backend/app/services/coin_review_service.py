@@ -320,6 +320,16 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
     }
 
     async with async_session_maker() as db:
+        # Pre-fetch all existing global BlacklistedCoin entries in one query
+        # instead of O(N) individual SELECT per symbol
+        all_symbols = [s.upper() for s in analysis.keys()]
+        prefetch_query = select(BlacklistedCoin).where(
+            BlacklistedCoin.symbol.in_(all_symbols),
+            BlacklistedCoin.user_id.is_(None)
+        )
+        prefetch_result = await db.execute(prefetch_query)
+        existing_by_symbol = {coin.symbol: coin for coin in prefetch_result.scalars().all()}
+
         for symbol, data in analysis.items():
             category = data.get("category", "BLACKLISTED").upper()
             reason = data.get("reason", "No reason provided")
@@ -328,13 +338,7 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
             prefix = category_prefix.get(category, "")
             full_reason = f"{prefix} {reason}".strip() if prefix else reason
 
-            # Check if global coin entry exists (user_id IS NULL)
-            query = select(BlacklistedCoin).where(
-                BlacklistedCoin.symbol == symbol.upper(),
-                BlacklistedCoin.user_id.is_(None)
-            )
-            result = await db.execute(query)
-            existing = result.scalars().first()
+            existing = existing_by_symbol.get(symbol.upper())
 
             if existing:
                 if existing.reason != full_reason:

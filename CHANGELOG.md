@@ -5,6 +5,23 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.94.1] - 2026-03-08
+
+### Changed
+- **Performance optimizations across backend and frontend**: Reduced database queries, API calls, and computation complexity in 16 modules
+- **Order reconciliation**: Single API call to check all products instead of one call per product
+- **Coin review service**: Batch database lookup instead of per-coin individual queries
+- **News/video feeds**: Retention filtering and pagination now handled in SQL instead of Python
+- **Volume analysis**: Concurrent API calls for market stats instead of serial fetching
+- **Grid order cancellation**: Single batch cancel API call instead of individual cancels per order
+- **Trade stats and PnL**: SQL aggregation instead of loading all closed positions into memory
+- **Dashboard win rate**: SQL count instead of materializing all positions
+- **Changelog cache**: Single git subprocess instead of two per version tag
+- **Frontend indicators**: O(N) running sums and monotonic deques replace O(N×P) slice operations for SMA, Bollinger Bands, and Stochastic calculations
+- **Bot detail queries**: SQL COUNT replaces loading all positions; clone name check uses single LIKE query
+- **Report bulk delete**: Single SQL DELETE instead of per-row deletion loop
+- **Candle cache**: Evicts data for inactive trading pairs to bound memory usage
+
 ## [v2.94.0] - 2026-03-08
 
 ### Changed

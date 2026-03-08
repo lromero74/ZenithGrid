@@ -152,24 +152,37 @@ async def _filter_by_volume(
     """Filter pairs by minimum 24h volume, always keeping pairs with open positions."""
     logger.info(f"  📊 Filtering pairs by minimum 24h volume: {min_daily_volume}")
     pairs_with_existing_positions = {p.product_id for p in open_positions if p.product_id}
-    filtered_pairs = []
 
+    # Separate pairs into bypass (have positions) and need-check groups
+    bypass_pairs = []
+    check_pairs = []
     for product_id in pairs:
         if product_id in pairs_with_existing_positions:
-            filtered_pairs.append(product_id)
+            bypass_pairs.append(product_id)
             logger.info(f"    🔒 {product_id}: Has open position (bypassing volume filter)")
-            continue
+        else:
+            check_pairs.append(product_id)
+
+    # Fetch all volume stats concurrently instead of serially
+    async def _fetch_stats(product_id):
         try:
             stats = await monitor.exchange.get_product_stats(product_id)
-            volume_24h = stats.get("volume_24h", 0.0)
-            if volume_24h >= min_daily_volume:
-                filtered_pairs.append(product_id)
-                logger.info(f"    ✅ {product_id}: Volume {volume_24h:.2f} (meets threshold)")
-            else:
-                logger.info(f"    ⏭️  {product_id}: Volume {volume_24h:.2f} (below {min_daily_volume})")
+            return product_id, stats.get("volume_24h", 0.0), None
         except Exception as e:
-            logger.warning(f"    ⚠️  {product_id}: Could not fetch volume stats ({e}), including anyway")
+            return product_id, None, e
+
+    results = await asyncio.gather(*[_fetch_stats(pid) for pid in check_pairs])
+
+    filtered_pairs = list(bypass_pairs)
+    for product_id, volume_24h, error in results:
+        if error is not None:
+            logger.warning(f"    ⚠️  {product_id}: Could not fetch volume stats ({error}), including anyway")
             filtered_pairs.append(product_id)
+        elif volume_24h >= min_daily_volume:
+            filtered_pairs.append(product_id)
+            logger.info(f"    ✅ {product_id}: Volume {volume_24h:.2f} (meets threshold)")
+        else:
+            logger.info(f"    ⏭️  {product_id}: Volume {volume_24h:.2f} (below {min_daily_volume})")
 
     logger.info(f"  📊 After volume filter: {len(filtered_pairs)} pairs remain")
     return filtered_pairs

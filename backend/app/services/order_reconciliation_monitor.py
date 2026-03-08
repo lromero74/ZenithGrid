@@ -252,67 +252,72 @@ class MissingOrderDetector:
                 if order_id:
                     pending_orders_by_position.setdefault(pos_id, {})[order_id] = status
 
+            # Build global lookup sets from bulk DB results
+            all_recorded_order_ids = set()
+            all_pending_orders = {}
+            for pid in all_position_ids:
+                all_recorded_order_ids.update(recorded_order_ids_by_position.get(pid, set()))
+                all_pending_orders.update(pending_orders_by_position.get(pid, {}))
+
+            # Fetch ALL filled orders in a single API call (no product_id filter)
+            # This replaces the previous O(U) per-product loop with O(1) API call
             missing_buys = []
             missing_sells = []
             stuck_pending_orders = []
 
-            for product_id, product_positions in positions_by_product.items():
-                # Merge recorded order_ids for this product group from bulk results
-                position_ids = [p.id for p in product_positions]
-                recorded_order_ids = set()
-                pending_orders = {}
-                for pid in position_ids:
-                    recorded_order_ids.update(recorded_order_ids_by_position.get(pid, set()))
-                    pending_orders.update(pending_orders_by_position.get(pid, {}))
+            try:
+                exchange_orders = await self.exchange.list_orders(
+                    order_status=["FILLED"],
+                    limit=200,
+                )
+            except Exception as e:
+                logger.warning(f"Could not fetch filled orders: {e}")
+                return
 
-                # Get filled orders from exchange for this product
-                try:
-                    exchange_orders = await self.exchange.list_orders(
-                        product_id=product_id,
-                        order_status=["FILLED"],
-                        limit=200,
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not fetch orders for {product_id}: {e}")
+            # Filter to only products we're tracking
+            tracked_products = set(positions_by_product.keys())
+
+            for order in exchange_orders:
+                order_id = order.get("order_id", "")
+                product_id = order.get("product_id", "")
+                filled_size = float(order.get("filled_size", 0) or 0)
+                filled_value = float(order.get("filled_value", 0) or 0)
+                side = order.get("side", "")
+
+                # Skip orders for products we're not tracking
+                if product_id not in tracked_products:
                     continue
 
-                # Check for missing orders (both BUY and SELL)
-                for order in exchange_orders:
-                    order_id = order.get("order_id", "")
-                    filled_size = float(order.get("filled_size", 0) or 0)
-                    filled_value = float(order.get("filled_value", 0) or 0)
-                    side = order.get("side", "")
+                # Skip orders with no fills
+                if filled_size == 0:
+                    continue
 
-                    # Skip orders with no fills
-                    if filled_size == 0:
-                        continue
+                # Check if order is recorded in trades table
+                if order_id and order_id not in all_recorded_order_ids:
+                    # Check if it's in pending_orders with status='pending' (stuck order)
+                    if order_id in all_pending_orders and all_pending_orders[order_id] == "pending":
+                        stuck_pending_orders.append({
+                            "product_id": product_id,
+                            "order_id": order_id,
+                            "side": side,
+                            "base_amount": filled_size,
+                            "quote_amount": filled_value,
+                            "created_time": order.get("created_time", ""),
+                        })
+                    else:
+                        # Found a missing order!
+                        order_info = {
+                            "product_id": product_id,
+                            "order_id": order_id,
+                            "base_amount": filled_size,
+                            "quote_amount": filled_value,
+                            "created_time": order.get("created_time", ""),
+                        }
 
-                    # Check if order is recorded in trades table
-                    if order_id and order_id not in recorded_order_ids:
-                        # Check if it's in pending_orders with status='pending' (stuck order)
-                        if order_id in pending_orders and pending_orders[order_id] == "pending":
-                            stuck_pending_orders.append({
-                                "product_id": product_id,
-                                "order_id": order_id,
-                                "side": side,
-                                "base_amount": filled_size,
-                                "quote_amount": filled_value,
-                                "created_time": order.get("created_time", ""),
-                            })
-                        else:
-                            # Found a missing order!
-                            order_info = {
-                                "product_id": product_id,
-                                "order_id": order_id,
-                                "base_amount": filled_size,
-                                "quote_amount": filled_value,
-                                "created_time": order.get("created_time", ""),
-                            }
-
-                            if side == "BUY":
-                                missing_buys.append(order_info)
-                            elif side == "SELL":
-                                missing_sells.append(order_info)
+                        if side == "BUY":
+                            missing_buys.append(order_info)
+                        elif side == "SELL":
+                            missing_sells.append(order_info)
 
             # Report findings
             total_issues = len(missing_buys) + len(missing_sells) + len(stuck_pending_orders)

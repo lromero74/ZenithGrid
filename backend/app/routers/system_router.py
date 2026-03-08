@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi.responses import FileResponse
@@ -160,57 +160,75 @@ def build_changelog_cache() -> None:
 
     versions = []
 
-    for i in range(len(tags) - 1):
-        curr_tag = tags[i]
-        prev_tag = tags[i + 1]
-
-        # Get commits between these tags
-        try:
-            result = subprocess.run(
-                ["git", "log", "--format=%s", f"{prev_tag}..{curr_tag}"],
-                capture_output=True,
-                text=True,
-                cwd=repo_root,
-                timeout=5
-            )
-            commits = []
+    # Single git log call for ALL commits with tag decorations and dates.
+    # Format: TAG_MARKER<tag>|<date> for tag commits, or <subject> for regular commits.
+    # This replaces the previous O(T) subprocess loop (2 calls per tag) with 1 call.
+    oldest_tag = tags[-1]
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%D|%ai|%s", f"{oldest_tag}..{tags[0]}",
+             "--decorate=short", "--decorate-refs=refs/tags/"],
+            capture_output=True, text=True, cwd=repo_root, timeout=30
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Parse all commits and group by tag
+            tag_set = set(tags)
+            current_tag_idx = 0
+            current_commits = []
+            current_date = ""
             seen = set()
-            if result.returncode == 0 and result.stdout.strip():
-                for line in result.stdout.strip().split('\n'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Skip merge commits with branch names (internal git noise)
-                    if line.startswith("Merge ") and ("/" in line.split(":")[0]):
-                        continue
-                    # Deduplicate: --no-ff merges create a merge commit with
-                    # the same subject as the feature commit
-                    if line in seen:
-                        continue
-                    seen.add(line)
-                    commits.append(line)
-        except Exception:
-            commits = []
 
-        # Get tag date
-        try:
-            date_result = subprocess.run(
-                ["git", "log", "-1", "--format=%ai", curr_tag],
-                capture_output=True,
-                text=True,
-                cwd=repo_root,
-                timeout=5
-            )
-            tag_date = date_result.stdout.strip()[:16] if date_result.stdout else ""
-        except Exception:
-            tag_date = ""
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split('|', 2)
+                if len(parts) < 3:
+                    continue
+                decoration, date_str, subject = parts[0].strip(), parts[1].strip(), parts[2].strip()
 
-        versions.append({
-            "version": curr_tag,
-            "date": tag_date,
-            "commits": commits,
-            "is_installed": curr_tag == current_version
-        })
+                # Check if this commit is tagged
+                found_tag = None
+                if decoration:
+                    for deco_part in decoration.split(','):
+                        deco_part = deco_part.strip().replace('tag: ', '')
+                        if deco_part in tag_set:
+                            found_tag = deco_part
+                            break
+
+                if found_tag and found_tag == tags[current_tag_idx]:
+                    # Save current tag's data
+                    current_date = date_str[:16]
+                    # The tagged commit's subject is also a commit for this version
+                    if subject and subject not in seen:
+                        if not (subject.startswith("Merge ") and "/" in subject.split(":")[0]):
+                            seen.add(subject)
+                            current_commits.append(subject)
+
+                    versions.append({
+                        "version": tags[current_tag_idx],
+                        "date": current_date,
+                        "commits": current_commits,
+                        "is_installed": tags[current_tag_idx] == current_version,
+                    })
+                    current_tag_idx += 1
+                    current_commits = []
+                    seen = set()
+                    if current_tag_idx >= len(tags) - 1:
+                        break
+                else:
+                    if not subject:
+                        continue
+                    if subject.startswith("Merge ") and "/" in subject.split(":")[0]:
+                        continue
+                    if subject in seen:
+                        continue
+                    seen.add(subject)
+                    current_commits.append(subject)
+    except Exception:
+        # Fallback: build versions with empty commits if single-log approach fails
+        for i in range(len(tags) - 1):
+            versions.append({
+                "version": tags[i], "date": "", "commits": [],
+                "is_installed": tags[i] == current_version,
+            })
 
     _changelog_cache = {
         "latest_tag": tags[0] if tags else None,
@@ -468,16 +486,16 @@ async def get_dashboard(
         profit_result = await db.execute(profit_query)
         total_profit_btc = profit_result.scalar() or 0.0
 
-        # Win rate (scoped to user)
-        closed_positions_query = select(Position).where(
+        # Win rate via SQL aggregation instead of materializing all rows
+        win_rate_query = select(
+            func.count(Position.id),
+            func.count(case((Position.profit_btc > 0, 1))),
+        ).where(
             Position.status == "closed",
             Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
         )
-        closed_result = await db.execute(closed_positions_query)
-        closed_positions = closed_result.scalars().all()
-
-        win_count = sum(1 for p in closed_positions if p.profit_btc and p.profit_btc > 0)
-        total_closed = len(closed_positions)
+        wr_result = await db.execute(win_rate_query)
+        total_closed, win_count = wr_result.one()
         win_rate = (win_count / total_closed * 100) if total_closed > 0 else 0.0
 
         # Current price
