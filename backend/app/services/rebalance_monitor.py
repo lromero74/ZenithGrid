@@ -477,7 +477,8 @@ class RebalanceMonitor:
         last_check = self._account_timers.get(account.id)
         if not last_check:
             return True
-        interval_seconds = (account.rebalance_check_interval_minutes or 60) * 60
+        interval_min = account.rebalance_check_interval_minutes
+        interval_seconds = (interval_min if interval_min is not None else 60) * 60
         return (now - last_check).total_seconds() >= interval_seconds
 
     async def _process_account(self, account, db: AsyncSession):
@@ -590,12 +591,13 @@ class RebalanceMonitor:
 
             current = calculate_current_allocations(aggregate, prices)
             targets = {
-                "usd_pct": account.rebalance_target_usd_pct or 34.0,
-                "btc_pct": account.rebalance_target_btc_pct or 33.0,
-                "eth_pct": account.rebalance_target_eth_pct or 33.0,
-                "usdc_pct": account.rebalance_target_usdc_pct or 0.0,
+                "usd_pct": account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
+                "btc_pct": account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
+                "eth_pct": account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
+                "usdc_pct": account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
             }
-            threshold = account.rebalance_drift_threshold_pct or 5.0
+            drift_thresh = account.rebalance_drift_threshold_pct
+            threshold = drift_thresh if drift_thresh is not None else 5.0
 
             if not needs_rebalance(current, targets, threshold):
                 logger.debug(
@@ -614,7 +616,8 @@ class RebalanceMonitor:
                 for c in free_balances
             }
 
-            min_pct = account.rebalance_min_trade_pct or DEFAULT_MIN_TRADE_PCT
+            min_trade = account.rebalance_min_trade_pct
+            min_pct = min_trade if min_trade is not None else DEFAULT_MIN_TRADE_PCT
             trades = plan_trades(
                 rebalanceable, targets, prices, min_trade_pct=min_pct
             )
@@ -818,13 +821,13 @@ class RebalanceMonitor:
                 pass
 
             targets = {
-                "usd_pct": account.rebalance_target_usd_pct or 34.0,
-                "btc_pct": account.rebalance_target_btc_pct or 33.0,
-                "eth_pct": account.rebalance_target_eth_pct or 33.0,
-                "usdc_pct": account.rebalance_target_usdc_pct or 0.0,
+                "usd_pct": account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
+                "btc_pct": account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
+                "eth_pct": account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
+                "usdc_pct": account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
             }
 
-            threshold = account.dust_sweep_threshold_usd or 5.0
+            threshold = account.dust_sweep_threshold_usd if account.dust_sweep_threshold_usd is not None else 5.0
             sweeps = plan_dust_sweeps(
                 all_balances, targets, prices, available_products, threshold
             )
