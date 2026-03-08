@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.92.0] - 2026-03-08
+
+### Added
+- **Dust sweeper**: Automatically sells non-target altcoin dust (ADA, SOL, UNI, etc.) into the most underweight portfolio currency to help rebalancing
+- **Position-aware sweeping**: Coins locked in active bot deals are excluded from dust sweeps — only truly free balances are swept
+- **Monthly auto-sweep**: Optional toggle to sweep dust automatically every 30 days
+- **On-demand sweep**: "Sweep Now" button in the Portfolio Management panel for immediate dust cleanup
+- **Configurable threshold**: Set a minimum USD value for dust positions to avoid sweeping trivially small amounts (default $5)
+- **RBAC-controlled**: Observers can view dust positions but only users with write access can execute sweeps
+
 ## [v2.91.2] - 2026-03-08
 
 ### Fixed

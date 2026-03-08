@@ -9,12 +9,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Clock, Save, RefreshCw, AlertTriangle,
-  DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Briefcase,
+  DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Briefcase, Trash2,
 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import {
-  autoBuyApi, rebalanceApi, botsApi,
+  autoBuyApi, rebalanceApi, dustApi, botsApi,
   type AutoBuySettings, type RebalanceSettings, type RebalanceStatus,
+  type DustSweepSettings,
 } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
 import type { Bot } from '../types'
@@ -88,6 +89,9 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [chartView, setChartView] = useState<'pie' | 'bar'>('bar')
   const [reservesOpen, setReservesOpen] = useState<Record<number, boolean>>({})
+  const [dustSettings, setDustSettings] = useState<Record<number, DustSweepSettings>>({})
+  const [sweeping, setSweeping] = useState<number | null>(null)
+  const [dustOpen, setDustOpen] = useState<Record<number, boolean>>({})
 
   const cexAccounts = accounts.filter(a => a.type === 'cex')
 
@@ -114,8 +118,17 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           return { accountId: account.id, data: null }
         }
       })),
+      Promise.all(cexAccounts.map(async (account) => {
+        try {
+          const data = await dustApi.getSettings(account.id)
+          return { accountId: account.id, data }
+        } catch (err) {
+          console.error(`Failed to load dust settings for account ${account.id}:`, err)
+          return { accountId: account.id, data: null }
+        }
+      })),
       botsApi.getAll(),
-    ]).then(([abResults, rbResults, botsData]) => {
+    ]).then(([abResults, rbResults, dustResults, botsData]) => {
       const abMap: Record<number, AutoBuySettings> = {}
       abResults.forEach(({ accountId, data }) => { if (data) abMap[accountId] = data })
       setAutoBuySettings(abMap)
@@ -123,6 +136,10 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       const rbMap: Record<number, RebalanceSettings> = {}
       rbResults.forEach(({ accountId, data }) => { if (data) rbMap[accountId] = data })
       setRebalanceSettings(rbMap)
+
+      const dustMap: Record<number, DustSweepSettings> = {}
+      dustResults.forEach(({ accountId, data }) => { if (data) dustMap[accountId] = data })
+      setDustSettings(dustMap)
 
       setBots(botsData)
     })
@@ -336,6 +353,45 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       setLoadingStatus(null)
     }
   }, [])
+
+  // ─── Dust sweep handlers ────────────────────────────────────────────────────
+
+  const handleDustSettingsSave = async (accountId: number, updates: { enabled?: boolean; threshold_usd?: number }) => {
+    try {
+      const result = await dustApi.updateSettings(accountId, updates)
+      setDustSettings(prev => ({ ...prev, [accountId]: { ...prev[accountId], ...result } }))
+      setMessage({ type: 'success', text: 'Dust sweep settings saved' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save dust settings' })
+    }
+  }
+
+  const handleSweepNow = async (accountId: number) => {
+    setSweeping(accountId)
+    setMessage(null)
+    try {
+      const result = await dustApi.sweep(accountId)
+      if (result.swept > 0) {
+        const coins = result.details.map(d => `${d.coin} → ${d.target_currency}`).join(', ')
+        setMessage({ type: 'success', text: `Swept ${result.swept} coin(s): ${coins}` })
+      } else {
+        setMessage({ type: 'success', text: 'No dust positions to sweep' })
+      }
+      // Refresh dust settings to get updated positions and last_sweep_at
+      const refreshed = await dustApi.getSettings(accountId)
+      setDustSettings(prev => ({ ...prev, [accountId]: refreshed }))
+      setTimeout(() => setMessage(null), 5000)
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Sweep failed' })
+    } finally {
+      setSweeping(null)
+    }
+  }
+
+  const toggleDustOpen = (accountId: number) => {
+    setDustOpen(prev => ({ ...prev, [accountId]: !prev[accountId] }))
+  }
 
   // Auto-fetch status for accounts with rebalancing enabled on initial load
   useEffect(() => {
@@ -799,6 +855,118 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                       </p>
                     )}
                   </div>
+
+                  {/* Dust Sweep */}
+                  {(() => {
+                    const dust = dustSettings[account.id]
+                    if (!dust) return null
+                    const totalDustUsd = dust.dust_positions.reduce((sum, d) => sum + d.usd_value, 0)
+                    return (
+                      <details
+                        className="group border-t border-slate-600 pt-3"
+                        open={dustOpen[account.id] ?? false}
+                        onToggle={(e) => {
+                          const isOpen = (e.target as HTMLDetailsElement).open
+                          if (isOpen !== (dustOpen[account.id] ?? false)) {
+                            toggleDustOpen(account.id)
+                          }
+                        }}
+                      >
+                        <summary className="cursor-pointer text-sm font-medium text-slate-300 hover:text-white select-none flex items-center gap-1">
+                          <span className="text-xs text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+                          <Trash2 size={14} className="mr-1" />
+                          Dust Sweep
+                          {dust.dust_positions.length > 0 && (
+                            <span className="text-xs text-slate-500 font-normal ml-1">
+                              ({dust.dust_positions.length} coin{dust.dust_positions.length !== 1 ? 's' : ''}, ~${totalDustUsd.toFixed(2)})
+                            </span>
+                          )}
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <p className="text-xs text-slate-500">
+                            Sell non-target dust positions into the most underweight target currency.
+                          </p>
+
+                          {/* Controls row */}
+                          <div className="flex items-center gap-4">
+                            <label className={`flex items-center gap-2 ${!canWrite ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                              <input
+                                type="checkbox"
+                                checked={dust.enabled}
+                                onChange={(e) => handleDustSettingsSave(account.id, { enabled: e.target.checked })}
+                                disabled={!canWrite}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-sm text-slate-300">Auto-sweep monthly</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400">Threshold:</span>
+                              <div className="flex items-center">
+                                <span className="text-xs text-slate-400 mr-1">$</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="1000"
+                                  step="1"
+                                  value={dust.threshold_usd}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 5
+                                    setDustSettings(prev => ({
+                                      ...prev,
+                                      [account.id]: { ...prev[account.id], threshold_usd: val },
+                                    }))
+                                  }}
+                                  onBlur={(e) => {
+                                    const val = parseFloat(e.target.value) || 5
+                                    handleDustSettingsSave(account.id, { threshold_usd: val })
+                                  }}
+                                  disabled={!canWrite}
+                                  className="w-16 bg-slate-700 text-white px-2 py-1 rounded border border-slate-600 text-sm font-mono"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Dust positions list */}
+                          {dust.dust_positions.length > 0 ? (
+                            <div className="bg-slate-800/50 rounded p-2">
+                              <div className="space-y-1">
+                                {dust.dust_positions.map(pos => (
+                                  <div key={pos.coin} className="flex items-center justify-between text-sm px-2 py-1">
+                                    <span className="text-white font-medium w-12">{pos.coin}</span>
+                                    <span className="text-slate-400 font-mono flex-1 text-right mr-4">{pos.amount}</span>
+                                    <span className="text-slate-300 font-mono w-20 text-right">${pos.usd_value.toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 text-center py-2">No dust positions above threshold</p>
+                          )}
+
+                          {/* Sweep Now + last swept */}
+                          <div className="flex items-center justify-between">
+                            <button
+                              onClick={() => handleSweepNow(account.id)}
+                              disabled={sweeping === account.id || !canWrite || dust.dust_positions.length === 0}
+                              className="bg-amber-600 hover:bg-amber-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm flex items-center gap-2"
+                            >
+                              <Trash2 size={14} />
+                              {sweeping === account.id ? 'Sweeping...' : 'Sweep Now'}
+                            </button>
+                            <span className="text-xs text-slate-500">
+                              Last swept: {dust.last_sweep_at
+                                ? new Date(dust.last_sweep_at).toLocaleDateString()
+                                : 'never'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-600">
+                            Sells into the most underweight target currency to help rebalancing.
+                          </p>
+                        </div>
+                      </details>
+                    )
+                  })()}
 
                   {/* Save */}
                   <button

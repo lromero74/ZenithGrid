@@ -275,6 +275,9 @@ class TestRebalanceMonitorProcess:
         account.min_balance_btc = 0.0
         account.min_balance_eth = 0.0
         account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
 
         db = AsyncMock()
 
@@ -324,6 +327,9 @@ class TestRebalanceMonitorProcess:
         account.min_balance_btc = 0.0
         account.min_balance_eth = 0.0
         account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
 
         db = AsyncMock()
 
@@ -493,3 +499,244 @@ class TestPlanTopupTrades:
         sources = {t["from_currency"] for t in trades}
         assert "ETH" not in sources  # Too small a contribution
         assert "USD" in sources
+
+
+# ---------------------------------------------------------------------------
+# plan_dust_sweeps
+# ---------------------------------------------------------------------------
+
+
+class TestPlanDustSweeps:
+    """Tests for plan_dust_sweeps() — identify non-target dust and sell into underweight currency."""
+
+    TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
+
+    def test_identifies_coins_above_threshold(self):
+        """Happy path: finds sweepable dust coins above the USD threshold."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        all_balances = {
+            "USD": 5000.0, "BTC": 0.05, "ETH": 2.0, "USDC": 500.0,
+            "ADA": 73.5, "SOL": 0.06,
+        }
+        prices = {
+            "BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0,
+            "ADA-USD": 0.38, "SOL-USD": 163.0,
+        }
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+        available_products = {"ADA-USD", "SOL-USD", "ADA-BTC", "SOL-BTC"}
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, available_products, threshold_usd=5.0
+        )
+
+        swept_coins = {s["coin"] for s in result}
+        assert "ADA" in swept_coins  # 73.5 * 0.38 = $27.93
+        assert "SOL" in swept_coins  # 0.06 * 163 = $9.78
+
+    def test_skips_below_threshold(self):
+        """Edge case: coins below threshold are skipped."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        all_balances = {
+            "USD": 5000.0, "BTC": 0.05, "ETH": 2.0, "USDC": 500.0,
+            "ADA": 5.0,  # 5 * 0.38 = $1.90, below $5 threshold
+        }
+        prices = {
+            "BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0,
+            "ADA-USD": 0.38,
+        }
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+        available_products = {"ADA-USD"}
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, available_products, threshold_usd=5.0
+        )
+        assert len(result) == 0
+
+    def test_targets_underweight_currency(self):
+        """Happy path: sells dust into the most underweight target currency."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        # ETH is most underweight: current 10% vs target 33%
+        all_balances = {
+            "USD": 5000.0, "BTC": 0.04, "ETH": 0.4, "USDC": 500.0,
+            "ADA": 100.0,
+        }
+        prices = {
+            "BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0,
+            "ADA-USD": 0.50,
+        }
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+        available_products = {"ADA-USD", "ADA-ETH"}
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, available_products, threshold_usd=5.0
+        )
+
+        assert len(result) == 1
+        # Should target the most underweight currency
+        assert result[0]["target_currency"] in {"USD", "BTC", "ETH", "USDC"}
+
+    def test_skips_untradable_coins(self):
+        """Edge case: coins with no available trading pair are skipped."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        all_balances = {
+            "USD": 5000.0, "BTC": 0.05, "ETH": 2.0, "USDC": 500.0,
+            "SHIB": 1000000.0,  # No trading pair available
+        }
+        prices = {
+            "BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0,
+        }
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+        available_products = set()  # No products for SHIB
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, available_products, threshold_usd=5.0
+        )
+        assert len(result) == 0
+
+    def test_empty_balances_returns_empty(self):
+        """Edge case: no non-target currencies in balances."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        all_balances = {"USD": 5000.0, "BTC": 0.05, "ETH": 2.0, "USDC": 500.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, set(), threshold_usd=5.0
+        )
+        assert result == []
+
+    def test_prefers_direct_pair_to_underweight_currency(self):
+        """Happy path: uses direct pair to underweight currency if available."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        # BTC is most underweight
+        all_balances = {
+            "USD": 8000.0, "BTC": 0.01, "ETH": 2.0, "USDC": 0.0,
+            "ADA": 200.0,
+        }
+        prices = {
+            "BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0,
+            "ADA-USD": 0.50, "ADA-BTC": 0.000005,
+        }
+        targets = {
+            "usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0,
+        }
+        # ADA-BTC pair available
+        available_products = {"ADA-USD", "ADA-BTC"}
+
+        result = plan_dust_sweeps(
+            all_balances, targets, prices, available_products, threshold_usd=5.0
+        )
+
+        assert len(result) == 1
+        assert result[0]["coin"] == "ADA"
+        # Should prefer ADA-BTC since BTC is underweight
+        assert result[0]["product_id"] == "ADA-BTC"
+        assert result[0]["target_currency"] == "BTC"
+
+
+# ---------------------------------------------------------------------------
+# Dust sweep monthly cadence
+# ---------------------------------------------------------------------------
+
+
+class TestDustSweepCadence:
+    """Tests for the monthly cadence check in dust sweeping."""
+
+    def test_should_sweep_never_swept(self):
+        """Happy path: account that has never been swept should be swept."""
+        from app.services.rebalance_monitor import should_dust_sweep
+
+        assert should_dust_sweep(None) is True
+
+    def test_should_sweep_after_30_days(self):
+        """Happy path: sweep if last sweep was >30 days ago."""
+        from datetime import datetime, timedelta
+        from app.services.rebalance_monitor import should_dust_sweep
+
+        last_sweep = datetime.utcnow() - timedelta(days=31)
+        assert should_dust_sweep(last_sweep) is True
+
+    def test_should_not_sweep_within_30_days(self):
+        """Edge case: skip sweep if last sweep was <30 days ago."""
+        from datetime import datetime, timedelta
+        from app.services.rebalance_monitor import should_dust_sweep
+
+        last_sweep = datetime.utcnow() - timedelta(days=15)
+        assert should_dust_sweep(last_sweep) is False
+
+    def test_should_sweep_exactly_30_days(self):
+        """Edge case: sweep at exactly 30 days."""
+        from datetime import datetime, timedelta
+        from app.services.rebalance_monitor import should_dust_sweep
+
+        last_sweep = datetime.utcnow() - timedelta(days=30)
+        assert should_dust_sweep(last_sweep) is True
+
+
+# ---------------------------------------------------------------------------
+# subtract_locked_amounts
+# ---------------------------------------------------------------------------
+
+
+class TestSubtractLockedAmounts:
+    """Tests for subtract_locked_amounts() — exclude position-held coins from dust."""
+
+    def test_subtracts_locked_from_balances(self):
+        """Happy path: locked amounts are subtracted from total balances."""
+        from app.services.rebalance_monitor import subtract_locked_amounts
+
+        balances = {"USD": 5000, "ADA": 100.0, "SOL": 5.0}
+        locked = {"ADA": 60.0}  # 60 ADA in open positions
+
+        free = subtract_locked_amounts(balances, locked)
+
+        assert free["ADA"] == pytest.approx(40.0)
+        assert free["SOL"] == pytest.approx(5.0)
+        assert free["USD"] == pytest.approx(5000.0)
+
+    def test_fully_locked_coin_excluded(self):
+        """Edge case: coin fully locked in positions is excluded entirely."""
+        from app.services.rebalance_monitor import subtract_locked_amounts
+
+        balances = {"ADA": 50.0, "SOL": 2.0}
+        locked = {"ADA": 50.0}  # All ADA in positions
+
+        free = subtract_locked_amounts(balances, locked)
+
+        assert "ADA" not in free  # Zero free, excluded
+        assert free["SOL"] == pytest.approx(2.0)
+
+    def test_no_locked_returns_original(self):
+        """Edge case: no locked positions returns original balances."""
+        from app.services.rebalance_monitor import subtract_locked_amounts
+
+        balances = {"ADA": 100.0, "SOL": 5.0}
+        free = subtract_locked_amounts(balances, {})
+
+        assert free == balances
+
+    def test_locked_more_than_balance_excluded(self):
+        """Edge case: locked > balance (shouldn't happen, but handle gracefully)."""
+        from app.services.rebalance_monitor import subtract_locked_amounts
+
+        balances = {"ADA": 30.0}
+        locked = {"ADA": 50.0}  # Over-locked
+
+        free = subtract_locked_amounts(balances, locked)
+        assert "ADA" not in free

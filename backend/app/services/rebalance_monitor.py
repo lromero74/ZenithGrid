@@ -10,9 +10,10 @@ are rebalanced — funds in open bot positions are untouched.
 """
 
 import asyncio
+import json
 import logging
-from datetime import datetime
-from typing import Dict, List, Tuple
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 EXCHANGE_MIN_USD = 10.0  # Coinbase minimum order size
 DEFAULT_MIN_TRADE_PCT = 5.0  # Default: only trade if shift is >= 5% of portfolio
+TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
+DUST_SWEEP_INTERVAL_DAYS = 30
 
 
 def calculate_current_allocations(
@@ -255,6 +258,155 @@ def plan_trades(
     return trades
 
 
+async def get_position_locked_amounts(
+    db: AsyncSession, account_id: int,
+) -> Dict[str, float]:
+    """Get base currency amounts locked in open positions for an account.
+
+    Returns {coin: locked_amount} for every base currency with open positions.
+    E.g., if there's an open ADA-USD position with 50 ADA acquired,
+    returns {"ADA": 50.0}.
+    """
+    from app.models import Position
+
+    query = select(Position).where(
+        Position.account_id == account_id,
+        Position.status == "open",
+    )
+    result = await db.execute(query)
+    positions = result.scalars().all()
+
+    locked: Dict[str, float] = {}
+    for pos in positions:
+        if not pos.product_id or not pos.total_base_acquired:
+            continue
+        base_currency = pos.product_id.split("-")[0]
+        locked[base_currency] = locked.get(base_currency, 0.0) + (
+            pos.total_base_acquired or 0.0
+        )
+    return locked
+
+
+def subtract_locked_amounts(
+    balances: Dict[str, float],
+    locked: Dict[str, float],
+) -> Dict[str, float]:
+    """Subtract position-locked amounts from balances, returning free amounts.
+
+    Only includes coins with positive free balance.
+    """
+    free = {}
+    for coin, amount in balances.items():
+        free_amount = amount - locked.get(coin, 0.0)
+        if free_amount > 0:
+            free[coin] = free_amount
+    return free
+
+
+def should_dust_sweep(last_sweep_at: Optional[datetime]) -> bool:
+    """Check if enough time has passed for another dust sweep.
+
+    Returns True if last_sweep_at is None or >= DUST_SWEEP_INTERVAL_DAYS ago.
+    """
+    if last_sweep_at is None:
+        return True
+    elapsed = datetime.utcnow() - last_sweep_at
+    return elapsed >= timedelta(days=DUST_SWEEP_INTERVAL_DAYS)
+
+
+def plan_dust_sweeps(
+    all_balances: Dict[str, float],
+    targets: Dict[str, float],
+    prices: Dict[str, float],
+    available_products: Set[str],
+    threshold_usd: float = 5.0,
+) -> List[dict]:
+    """Plan dust sweep trades for non-target currencies.
+
+    Identifies coins not in TARGET_CURRENCIES whose USD value exceeds
+    threshold_usd, and plans to sell each into the most underweight
+    target currency.
+
+    Args:
+        all_balances: {coin: amount} for ALL coins in the account
+        targets: {"usd_pct": float, "btc_pct": float, ...} target allocations
+        prices: {pair: price} e.g. {"BTC-USD": 100000, "ADA-USD": 0.38}
+        available_products: set of tradable product IDs e.g. {"ADA-USD", "ADA-BTC"}
+        threshold_usd: minimum USD value to sweep a dust position
+
+    Returns:
+        List of dicts: {"coin", "amount", "usd_value", "product_id",
+                        "side", "target_currency"}
+    """
+    # Calculate current allocation to find most underweight target
+    target_balances = {c: all_balances.get(c, 0.0) for c in TARGET_CURRENCIES}
+    current = calculate_current_allocations(target_balances, prices)
+    total_usd = current["total_value_usd"]
+
+    # Find most underweight target currency
+    if total_usd > 0:
+        deficits = []
+        for currency in TARGET_CURRENCIES:
+            key = f"{currency.lower()}_pct"
+            target_pct = targets.get(key, 0.0)
+            current_pct = current.get(key, 0.0)
+            deficit = target_pct - current_pct  # positive = underweight
+            deficits.append((currency, deficit))
+        deficits.sort(key=lambda x: x[1], reverse=True)
+        most_underweight = deficits[0][0]
+    else:
+        most_underweight = "USD"  # fallback
+
+    sweeps = []
+
+    for coin, amount in all_balances.items():
+        if coin in TARGET_CURRENCIES or amount <= 0:
+            continue
+
+        # Price the dust coin in USD
+        usd_price = prices.get(f"{coin}-USD", 0.0)
+        if usd_price <= 0:
+            continue
+
+        usd_value = amount * usd_price
+        if usd_value < threshold_usd:
+            continue
+
+        # Find the best trading pair: prefer direct pair to underweight currency
+        product_id = None
+        target_currency = None
+
+        # Try direct pair to most underweight currency first
+        if most_underweight != "USD":
+            direct_pair = f"{coin}-{most_underweight}"
+            if direct_pair in available_products:
+                product_id = direct_pair
+                target_currency = most_underweight
+
+        # Fall back to {COIN}-USD
+        if product_id is None:
+            usd_pair = f"{coin}-USD"
+            if usd_pair in available_products:
+                product_id = usd_pair
+                target_currency = "USD"
+
+        if product_id is None:
+            continue  # No tradable pair
+
+        sweeps.append({
+            "coin": coin,
+            "amount": amount,
+            "usd_value": round(usd_value, 2),
+            "product_id": product_id,
+            "side": "SELL",
+            "target_currency": target_currency,
+        })
+
+    # Sort by USD value descending (sweep largest dust first)
+    sweeps.sort(key=lambda s: s["usd_value"], reverse=True)
+    return sweeps
+
+
 def _get_trade_params(from_currency: str, to_currency: str) -> Tuple[str, str]:
     """Determine product_id and side for a currency conversion.
 
@@ -378,6 +530,17 @@ class RebalanceMonitor:
                         f"for account {account.id}: {e}"
                     )
                     free_balances[currency] = 0.0
+
+            # Phase 0: Dust sweep (monthly or on-demand)
+            if (account.dust_sweep_enabled
+                    and should_dust_sweep(account.dust_last_sweep_at)):
+                swept = await self._sweep_dust(
+                    client, account, db, prices, free_balances
+                )
+                if swept:
+                    # Balances are stale after sweeps; skip rebalancing this cycle
+                    self._account_timers[account.id] = datetime.utcnow()
+                    return
 
             # Load minimum balance reserves
             min_balances = {
@@ -588,3 +751,155 @@ class RebalanceMonitor:
                 f"{account.name}: {e}",
                 exc_info=True,
             )
+
+    async def _sweep_dust(
+        self, client, account, db: AsyncSession,
+        prices: dict, free_balances: dict,
+    ) -> List[dict]:
+        """Sweep non-target dust positions into the most underweight currency.
+
+        Returns list of executed sweep results.
+        """
+        try:
+            # Get all balances (paper or live)
+            if account.is_paper_trading:
+                all_balances = (
+                    json.loads(account.paper_balances)
+                    if account.paper_balances else {}
+                )
+            else:
+                all_balances = {}
+                try:
+                    accounts_data = await client.get_accounts()
+                    for acct in accounts_data:
+                        currency = acct.get("currency", "")
+                        available = float(
+                            acct.get("available_balance", {}).get("value", 0)
+                        )
+                        if available > 0:
+                            all_balances[currency] = available
+                except Exception:
+                    # Fallback: use known free balances only
+                    all_balances = free_balances.copy()
+
+            # Subtract amounts locked in open positions — don't sweep
+            # coins that bots are actively trading
+            locked = await get_position_locked_amounts(db, account.id)
+            all_balances = subtract_locked_amounts(all_balances, locked)
+
+            # Fetch prices for dust coins
+            dust_coins = {
+                c for c in all_balances
+                if c not in TARGET_CURRENCIES and all_balances[c] > 0
+            }
+            for coin in dust_coins:
+                pair = f"{coin}-USD"
+                if pair not in prices:
+                    try:
+                        p = await client.get_current_price(pair)
+                        prices[pair] = float(p)
+                    except Exception:
+                        pass  # Can't price it, will be skipped
+
+            # Get available products
+            available_products = set()
+            try:
+                products = await client.list_products()
+                for p in products:
+                    pid = p.get("product_id", "")
+                    if pid:
+                        available_products.add(pid)
+            except Exception:
+                pass
+
+            targets = {
+                "usd_pct": account.rebalance_target_usd_pct or 34.0,
+                "btc_pct": account.rebalance_target_btc_pct or 33.0,
+                "eth_pct": account.rebalance_target_eth_pct or 33.0,
+                "usdc_pct": account.rebalance_target_usdc_pct or 0.0,
+            }
+
+            threshold = account.dust_sweep_threshold_usd or 5.0
+            sweeps = plan_dust_sweeps(
+                all_balances, targets, prices, available_products, threshold
+            )
+
+            if not sweeps:
+                # Update timestamp even if nothing to sweep
+                account.dust_last_sweep_at = datetime.utcnow()
+                await db.commit()
+                return []
+
+            results = []
+            for sweep in sweeps:
+                try:
+                    result = await client.create_market_order(
+                        product_id=sweep["product_id"],
+                        side="SELL",
+                        size=f"{sweep['amount']:.8f}",
+                    )
+                    success = result.get("success_response", {})
+                    order_id = success.get("order_id", "")
+
+                    if order_id:
+                        logger.info(
+                            f"Dust sweep: sold {sweep['amount']:.6f} "
+                            f"{sweep['coin']} (~${sweep['usd_value']}) "
+                            f"→ {sweep['target_currency']} "
+                            f"(Account: {account.name}, Order: {order_id})"
+                        )
+                        results.append({**sweep, "order_id": order_id})
+                    else:
+                        error = result.get("error_response", {})
+                        logger.warning(
+                            f"Dust sweep failed for {sweep['coin']}: "
+                            f"{error.get('message', 'unknown error')}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Dust sweep error for {sweep['coin']}: {e}"
+                    )
+
+            account.dust_last_sweep_at = datetime.utcnow()
+            await db.commit()
+            return results
+
+        except Exception as e:
+            logger.error(
+                f"Dust sweep failed for account {account.id}: {e}",
+                exc_info=True,
+            )
+            return []
+
+
+async def execute_dust_sweep(account, client, db: AsyncSession) -> List[dict]:
+    """Execute an on-demand dust sweep for an account.
+
+    Called from the API endpoint. Fetches prices, products, and balances,
+    then plans and executes sweeps.
+    """
+    monitor = RebalanceMonitor()
+    # Fetch prices
+    prices = {}
+    for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
+        try:
+            price = await client.get_current_price(product_id)
+            prices[product_id] = float(price)
+        except Exception:
+            prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
+
+    # Free balances
+    free_balances = {}
+    balance_methods = {
+        "USD": client.get_usd_balance,
+        "BTC": client.get_btc_balance,
+        "ETH": client.get_eth_balance,
+        "USDC": client.get_usdc_balance,
+    }
+    for currency, method in balance_methods.items():
+        try:
+            free_balances[currency] = float(await method())
+        except Exception:
+            free_balances[currency] = 0.0
+
+    return await monitor._sweep_dust(client, account, db, prices, free_balances)
