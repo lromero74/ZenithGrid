@@ -43,6 +43,7 @@ const GAME_SONGS: Record<string, SongAssignment> = {
   // ---- Word ----
   'hangman':              { genre: 'blues',      seed: 3001, title: 'Last Letter Blues' },
   'wordle':               { genre: 'lofi',       seed: 3002, title: 'Five Letter Chill' },
+  'crossword':            { genre: 'classical',  seed: 3003, title: 'Clue by Clue' },
 
   // ---- Arcade ----
   'snake':                { genre: 'chiptune',   seed: 4001, title: 'Serpent Circuit' },

@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -33,6 +34,71 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ──────────────────────────────────────────────────────
+function Rummy500Help({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Rummy 500</h2>
+
+        <Sec title="Goal">
+          <p>Be the first player to reach <B>500 cumulative points</B> across multiple rounds. Score points by forming melds and laying off cards.</p>
+        </Sec>
+
+        <Sec title="Card Values">
+          <ul className="space-y-1">
+            <Li><B>Ace</B> — 1 point (or 15 in a high run with King).</Li>
+            <Li><B>2–10</B> — Face value.</Li>
+            <Li><B>J, Q, K</B> — 10 points each.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Turn Structure">
+          <ul className="space-y-1">
+            <Li><B>Draw</B> — Take the top card from the stock pile, or take from the discard pile.</Li>
+            <Li><B>Meld</B> — Optionally play melds from your hand (sets or runs of 3+ cards).</Li>
+            <Li><B>Lay Off</B> — Optionally add cards from your hand to any existing meld on the table.</Li>
+            <Li><B>Discard</B> — End your turn by placing one card on the discard pile.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Melds">
+          <ul className="space-y-1">
+            <Li><B>Set</B> — 3 or 4 cards of the same rank, each a different suit.</Li>
+            <Li><B>Run</B> — 3+ consecutive cards of the same suit (Ace can be low A-2-3 or high Q-K-A).</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Scoring">
+          <ul className="space-y-1">
+            <Li>Points come from cards in your melds and lay-offs.</Li>
+            <Li>Cards left in your hand at round end are <B>subtracted</B> from your score.</Li>
+            <Li>A round ends when someone empties their hand or the stock runs out.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Meld early to lock in points — cards in hand are a liability.</Li>
+            <Li>Watch what the AI discards to guess what they're collecting.</Li>
+            <Li>Laying off on the AI's melds scores you points too!</Li>
+            <Li>Keep low-value cards in hand to minimize penalties at round end.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function Rummy500() {
   const { load, save, clear } = useGameState<SavedState>('rummy-500')
   const saved = useRef(load()).current
@@ -47,6 +113,7 @@ export default function Rummy500() {
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [layOffMode, setLayOffMode] = useState<number | null>(null) // card index being laid off
+  const [showHelp, setShowHelp] = useState(false)
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
@@ -126,7 +193,12 @@ export default function Rummy500() {
       <span className="text-xs text-slate-400">
         Stock: {gameState.stock.length}
       </span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -330,6 +402,7 @@ export default function Rummy500() {
           />
         )}
       </div>
+      {showHelp && <Rummy500Help onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

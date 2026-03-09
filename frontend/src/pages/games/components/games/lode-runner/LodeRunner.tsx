@@ -21,6 +21,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { HelpCircle, X } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -46,6 +47,143 @@ const C_BRICK_FILL_A = '#8b5e3c'
 const C_BRICK_FILL_B = '#9b6840'
 
 const DIG_BLAST_DURATION = 0.25
+
+// ---------------------------------------------------------------------------
+// Help modal
+// ---------------------------------------------------------------------------
+
+function LodeRunnerHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Lode Runner</h2>
+
+        <Sec title="Goal">
+          Collect all the gold on each level, then climb to the top of the screen to escape.
+          A hidden ladder appears once all gold is collected. Complete all {TOTAL_LEVELS} levels to win!
+        </Sec>
+
+        <Sec title="Movement">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Arrow keys</B> or <B>WASD</B> to move left, right, up, and down.</Li>
+            <Li>Climb <B>ladders</B> to move vertically (up/down).</Li>
+            <Li>Traverse <B>bars</B> (horizontal rails) by moving left/right while hanging.</Li>
+            <Li>Press <B>down</B> while on a bar to drop off and fall.</Li>
+            <Li>You cannot walk through <B>bricks</B> or <B>solid blocks</B>.</Li>
+            <Li>You will <B>fall</B> if there is nothing beneath you (no ground, ladder, or bar).</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Digging">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Q</B> or <B>Z</B> to dig the brick below-left. <B>E</B> or <B>X</B> to dig below-right.</Li>
+            <Li>You can only dig <B>bricks</B> — solid blocks and empty space cannot be dug.</Li>
+            <Li>Dug holes stay open for <B>5 seconds</B>, then fill back in over 1.5 seconds.</Li>
+            <Li>There is a short <B>cooldown</B> between digs (0.4 seconds).</Li>
+            <Li>Use digging to create paths through brick floors or to <B>trap guards</B>.</Li>
+            <Li>If you are standing inside a brick when it refills, you <B>die</B>.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Gold & Escape">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Collect all <B>gold nuggets</B> on the level (<B>250 points</B> each).</Li>
+            <Li>Once all gold is collected, <B>hidden ladders</B> appear (flashing green).</Li>
+            <Li>Reach the <B>top of the screen</B> (row 0) to complete the level (<B>500 points</B>).</Li>
+            <Li>Guards can also <B>pick up gold</B> — trap them to make them drop it.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Guards">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Red guards <B>chase you</B> using pathfinding (BFS). They climb ladders, traverse bars, and fall.</Li>
+            <Li>Contact with a guard <B>kills you</B> (unless you have post-respawn invincibility).</Li>
+            <Li>Guards can be <B>trapped</B> by digging a hole and letting them fall in.</Li>
+            <Li>Trapped guards try to <B>climb out</B> after a few seconds.</Li>
+            <Li>If a brick refills while a guard is trapped, the guard <B>dies</B> and respawns at the top
+              of the level after 3 seconds (<B>75 points</B>).</Li>
+            <Li>Guards carrying gold <B>drop it</B> above the hole when trapped.</Li>
+            <Li>You can stand on top of a <B>trapped guard</B> as a platform.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Trap Bricks">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Some bricks are <B>traps</B> — they look identical to normal bricks but are passable.</Li>
+            <Li>Both you and guards will <B>fall through</B> trap bricks.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Lives & Scoring">
+          <ul className="space-y-1 text-slate-300">
+            <Li>You start with <B>3 lives</B>. Losing all lives ends the game.</Li>
+            <Li>After dying, you respawn with brief <B>invincibility</B> (blinking sprite, 2 seconds).</Li>
+            <Li><B>250 pts</B> per gold collected, <B>75 pts</B> per guard killed,
+              <B> 500 pts</B> for completing a level.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls (Desktop)">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Arrow keys</B> or <B>WASD</B> — move left / right / up / down.</Li>
+            <Li><B>Q / Z</B> — dig left (brick below and to your left).</Li>
+            <Li><B>E / X</B> — dig right (brick below and to your right).</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls (Mobile)">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Use the on-screen <B>d-pad</B> for movement.</Li>
+            <Li>Tap <B>DL</B> to dig left, <B>DR</B> to dig right.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Plan your route before grabbing gold — some paths become one-way once bricks refill.</Li>
+            <Li>Dig holes to trap guards and create safe passages through brick platforms.</Li>
+            <Li>You can run across the top of a hole before it fills, but don&apos;t linger!</Li>
+            <Li>Guards will chase you intelligently — use ladders and bars to outmaneuver them.</Li>
+            <Li>Your game is <B>auto-saved</B> — you can resume where you left off.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded bg-slate-700 text-slate-300 text-xs hover:bg-slate-600 transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
 
 // ---------------------------------------------------------------------------
 // C64-style brick rendering
@@ -704,6 +842,7 @@ export default function LodeRunner() {
   const [score, setScore] = useState(0)
   const [level, setLevel] = useState(1)
   const [lives, setLives] = useState(3)
+  const [showHelp, setShowHelp] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1025,6 +1164,13 @@ export default function LodeRunner() {
         Lvl {level}/{TOTAL_LEVELS}
       </span>
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
         <button
           onClick={startGame}
@@ -1131,6 +1277,8 @@ export default function LodeRunner() {
           Arrow keys / WASD to move. Q/Z dig left. E/X dig right.
         </p>
       </div>
+
+      {showHelp && <LodeRunnerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

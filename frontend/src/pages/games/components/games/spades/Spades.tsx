@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE_COMPACT, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
@@ -28,6 +29,67 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SpadesHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Spades</h2>
+
+        <Sec title="Overview">
+          <p>4-player partnership trick-taking game. You (South) and North vs East and West. <B>Spades are always trump.</B></p>
+        </Sec>
+
+        <Sec title="Bidding">
+          <ul className="space-y-1">
+            <Li>Each player bids how many tricks they expect to win (0–13).</Li>
+            <Li>Your team's bids are combined — you must win at least that many tricks total.</Li>
+            <Li>A bid of <B>0 (Nil)</B> means you'll try to win zero tricks — risky but rewarding.</Li>
+            <Li><B>Blind Nil</B> — Bid Nil without looking at your cards for even bigger reward.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Playing">
+          <ul className="space-y-1">
+            <Li>You must <B>follow suit</B> — play the same suit as the lead card if you can.</Li>
+            <Li>If you can't follow suit, you may play any card (including a spade to trump).</Li>
+            <Li>Spades cannot be led until they've been <B>broken</B> (played on another trick).</Li>
+            <Li>Highest card of the led suit wins, unless a spade trumps it.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Scoring">
+          <ul className="space-y-1">
+            <Li><B>Making bid</B> — 10 points per trick bid, plus 1 per overtrick (bag).</Li>
+            <Li><B>Bags penalty</B> — Every 10 accumulated bags costs −100 points.</Li>
+            <Li><B>Nil success</B> — +100 points. Nil failure — −100 points.</Li>
+            <Li><B>Blind Nil success</B> — +200 points. Failure — −200 points.</Li>
+            <Li>First team to <B>500</B> wins. If tied, play continues.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Bid conservatively — bags add up fast and the penalty is steep.</Li>
+            <Li>Lead with off-suit winners early to force out trumps.</Li>
+            <Li>Protect your partner's Nil bid by taking tricks that might force them to win.</Li>
+            <Li>Count spades played — knowing how many remain is key in late tricks.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function Spades() {
   const { load, save, clear } = useGameState<SavedState>('spades')
   const saved = useRef(load()).current
@@ -37,6 +99,7 @@ export default function Spades() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('spades')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [gameState, setGameState] = useState<SpadesState>(
     () => saved?.gameState ?? createSpadesGame()
   )
@@ -108,7 +171,12 @@ export default function Spades() {
           ))}
         </div>
       )}
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -251,6 +319,7 @@ export default function Spades() {
           />
         )}
       </div>
+      {showHelp && <SpadesHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

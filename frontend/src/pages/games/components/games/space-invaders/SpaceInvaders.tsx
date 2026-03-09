@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -244,12 +245,80 @@ function drawPlayerLifeIcon(
 // Component
 // ---------------------------------------------------------------------------
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SpaceInvadersHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Space Invaders</h2>
+
+        <Sec title="Goal">
+          <p>Destroy all waves of alien invaders before they reach the bottom. Survive as long as possible and rack up points.</p>
+        </Sec>
+
+        <Sec title="Aliens">
+          <ul className="space-y-1">
+            <Li>5 rows of 11 aliens march across the screen and step down when they reach an edge.</Li>
+            <Li><B>Top row</B> — 30 points each (small aliens).</Li>
+            <Li><B>Middle rows</B> — 20 points each.</Li>
+            <Li><B>Bottom rows</B> — 10 points each.</Li>
+            <Li>Aliens speed up as fewer remain.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="UFO">
+          <p>A <B>mystery UFO</B> flies across the top periodically, worth 50–300 bonus points. Shoot it for a big score boost!</p>
+        </Sec>
+
+        <Sec title="Shields">
+          <p>Four shields protect you from alien fire. Both your bullets and alien bullets erode them over time.</p>
+        </Sec>
+
+        <Sec title="Lives & Waves">
+          <ul className="space-y-1">
+            <Li>You start with <B>3 lives</B>. Getting hit costs one life.</Li>
+            <Li>Clear all aliens to advance to the next <B>wave</B> (aliens start lower and faster).</Li>
+            <Li>Game over if aliens reach your position or you lose all lives.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1">
+            <Li><B>Arrow keys / A, D</B> — Move left and right.</Li>
+            <Li><B>Space</B> — Fire (one bullet at a time).</Li>
+            <Li><B>Touch/drag</B> — Move on mobile; tap to shoot.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Pick off aliens from the edges to slow their descent.</Li>
+            <Li>Target top-row aliens for more points when safe.</Li>
+            <Li>Use shields strategically — they won't last forever.</Li>
+            <Li>Watch for the UFO — it's worth big points but easy to miss.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function SpaceInvaders() {
   // Music
   const song = useMemo(() => getSongForGame('space-invaders'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('space-invaders')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [lives, setLives] = useState(3)
@@ -610,6 +679,9 @@ export default function SpaceInvaders() {
       </div>
       <span className="text-xs text-slate-400">Wave {wave}</span>
       <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
         <button
           onClick={startGame}
@@ -667,6 +739,7 @@ export default function SpaceInvaders() {
           Arrow keys or A/D to move. Space to shoot. Touch/click and drag on mobile.
         </p>
       </div>
+      {showHelp && <SpaceInvadersHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

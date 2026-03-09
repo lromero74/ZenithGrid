@@ -63,6 +63,9 @@ export const SFX_REGISTRY: Record<string, GameSFXMap> = {
   'hangman': {
     correct: 'letter_correct', wrong: 'letter_wrong', win: 'victory_fanfare', lose: 'defeat_tone',
   },
+  'crossword': {
+    key: 'key_press', check: 'ui_toggle', reveal: 'success_small', win: 'victory_fanfare',
+  },
 
   // ---- Arcade ----
   'snake': {

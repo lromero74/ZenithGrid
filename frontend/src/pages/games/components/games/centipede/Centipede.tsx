@@ -5,7 +5,8 @@
  * progressive difficulty, high score tracking.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -239,6 +240,178 @@ function drawHUD(
 }
 
 // ---------------------------------------------------------------------------
+// Help modal
+// ---------------------------------------------------------------------------
+
+function CentipedeHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Centipede</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Destroy the centipede as it winds its way down the screen. Shoot every
+          segment before it reaches your ship at the bottom. Survive as long as
+          possible and rack up the highest score.
+        </Sec>
+
+        {/* Player Movement */}
+        <Sec title="Player Movement">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Your ship (the green triangle) can move freely within the
+              <B> bottom 5 rows</B> of the field.</Li>
+            <Li>Use <B>arrow keys</B> or <B>WASD</B> to move on desktop.</Li>
+            <Li>On mobile, <B>touch and drag</B> anywhere on the canvas to move
+              your ship to that position.</Li>
+          </ul>
+        </Sec>
+
+        {/* Shooting */}
+        <Sec title="Shooting">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Press <B>Space</B> to fire on desktop, or simply <B>touch the
+              canvas</B> on mobile.</Li>
+            <Li>Your ship <B>auto-fires</B> while the fire key/touch is held
+              down.</Li>
+            <Li>Only <B>one bullet</B> can be on screen at a time &mdash; wait
+              for it to hit something or leave the screen before the next shot
+              fires.</Li>
+          </ul>
+        </Sec>
+
+        {/* Centipede */}
+        <Sec title="The Centipede">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The centipede starts as a chain of <B>12 segments</B> entering
+              from the top-left corner.</Li>
+            <Li>It moves <B>horizontally</B> across the grid. When it hits a
+              wall or a mushroom, it <B>drops down one row</B> and reverses
+              direction.</Li>
+            <Li>When the centipede reaches the bottom, it reverses vertically
+              and begins <B>climbing back up</B>.</Li>
+            <Li>Shooting a segment <B>splits</B> the chain &mdash; each
+              remaining piece becomes an independent centipede with its own
+              head.</Li>
+            <Li>A destroyed segment leaves a <B>mushroom</B> behind at its
+              position.</Li>
+          </ul>
+        </Sec>
+
+        {/* Mushrooms */}
+        <Sec title="Mushrooms">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The field starts with <B>35 randomly placed mushrooms</B>.</Li>
+            <Li>Mushrooms have <B>4 hit points</B>. Each shot reduces their HP
+              by 1 &mdash; they visually shrink as they take damage.</Li>
+            <Li>Mushrooms <B>block the centipede</B>, causing it to drop and
+              reverse just like a wall.</Li>
+            <Li>Destroying a mushroom scores <B>1 point</B>.</Li>
+            <Li>When a new level begins, all damaged mushrooms are <B>restored
+              to full HP</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Spider */}
+        <Sec title="The Spider">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>A spider appears every <B>5 seconds</B> and roams the bottom
+              portion of the field for <B>5 seconds</B> before leaving.</Li>
+            <Li>It bounces diagonally around the player zone and can
+              <B> eat mushrooms</B> it touches.</Li>
+            <Li>Touching the spider <B>kills your ship</B> (unless
+              invulnerable).</Li>
+            <Li>Shooting the spider awards <B>300, 600, or 900 points</B>
+              (random each spawn).</Li>
+          </ul>
+        </Sec>
+
+        {/* Lives & Respawn */}
+        <Sec title="Lives &amp; Respawn">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>You start with <B>3 lives</B> (shown as green triangles).</Li>
+            <Li>Touching a centipede segment or the spider costs a life.</Li>
+            <Li>After losing a life, your ship respawns at the bottom center
+              with <B>2 seconds of invulnerability</B> (ship blinks).</Li>
+            <Li>When all lives are lost, the game is over.</Li>
+          </ul>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Head segment</B> &mdash; 100 points.</Li>
+            <Li><B>Body segment</B> &mdash; 10 points.</Li>
+            <Li><B>Spider</B> &mdash; 300, 600, or 900 points.</Li>
+            <Li><B>Mushroom destroyed</B> &mdash; 1 point.</Li>
+          </ul>
+        </Sec>
+
+        {/* Level Progression */}
+        <Sec title="Level Progression">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Clear all centipede segments to advance to the next level.</Li>
+            <Li>Each new level spawns a fresh centipede that moves <B>faster</B>
+              &mdash; speed increases with every level.</Li>
+            <Li>Damaged mushrooms are restored, and you receive a brief moment
+              of invulnerability.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Target the head.</B> Destroying the head is worth 10x more
+              than a body segment and prevents the chain from advancing.</Li>
+            <Li><B>Clear mushroom paths.</B> Removing mushrooms near the bottom
+              gives the centipede fewer reasons to drop down quickly.</Li>
+            <Li><B>Watch for splits.</B> Each destroyed mid-chain segment creates
+              a new independent centipede &mdash; multiple small chains can be
+              harder to dodge than one long one.</Li>
+            <Li><B>Use invulnerability wisely.</B> After respawning, you have 2
+              seconds to reposition safely.</Li>
+            <Li><B>Keep an eye on the spider.</B> It can sneak up from the side
+              and eat useful mushroom barriers.</Li>
+            <Li><B>Stay mobile.</B> Sitting still makes you an easy target
+              &mdash; keep moving laterally while firing.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -252,6 +425,7 @@ export default function Centipede() {
   const sfx = useGameSFX('centipede')
 
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
+  const [showHelp, setShowHelp] = useState(false)
   const [score, setScore] = useState(0)
   const [level, setLevel] = useState(1)
   const [lives, setLives] = useState(3)
@@ -559,6 +733,13 @@ export default function Centipede() {
       </div>
       <span className="text-xs text-slate-400">Level {level}</span>
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to Play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
         <button
           onClick={startGame}
@@ -632,6 +813,9 @@ export default function Centipede() {
           Touch and drag on mobile.
         </p>
       </div>
+
+      {/* Help modal */}
+      {showHelp && <CentipedeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

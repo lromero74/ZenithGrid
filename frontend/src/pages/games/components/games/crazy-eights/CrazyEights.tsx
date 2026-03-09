@@ -2,7 +2,8 @@
  * Crazy Eights — match rank or suit, 8s are wild.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -28,6 +29,150 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function CrazyEightsHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Crazy Eights</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Be the first player to <B>empty your hand</B> each round and score
+          points from the cards left in your opponents&apos; hands. The first
+          player to reach <B>200 points</B> wins the game.
+        </Sec>
+
+        {/* Setup */}
+        <Sec title="Setup">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>A standard <B>52-card deck</B> is used.</Li>
+            <Li>With <B>2 players</B>, each is dealt <B>7 cards</B>. With
+              3 or 4 players, each is dealt <B>5 cards</B>.</Li>
+            <Li>One card is placed face-up to start the <B>discard pile</B>.
+              The starting card is never an 8.</Li>
+            <Li>The remaining cards form the <B>draw pile</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* How to Play */}
+        <Sec title="How to Play">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li>On your turn, play a card from your hand that matches the
+              top discard by <B>suit</B> or <B>rank</B> -- or play an 8
+              (wild).</li>
+            <li>If you have no playable card, click the <B>draw pile</B> to
+              draw. If the drawn card is playable, you may play it
+              immediately.</li>
+            <li>If the draw pile is empty, the discard pile (except the top
+              card) is reshuffled to form a new draw pile.</li>
+            <li>The round ends when any player empties their hand.</li>
+          </ol>
+        </Sec>
+
+        {/* Eights are Wild */}
+        <Sec title="Eights are Wild">
+          An <B>8</B> can be played on <B>any card</B>, regardless of suit
+          or rank. When you play an 8, you choose the <B>new suit</B> that
+          the next player must match. The current suit is shown in the
+          controls area. AI opponents pick the suit they hold the most of.
+        </Sec>
+
+        {/* Matching Rules */}
+        <Sec title="Matching Rules">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Match by suit</B> -- play any card of the current suit
+              (shown in the controls bar).</Li>
+            <Li><B>Match by rank</B> -- play a card of the same rank as the
+              top discard, regardless of suit.</Li>
+            <Li><B>Play an 8</B> -- always valid. You then choose the new
+              suit.</Li>
+          </ul>
+          <p className="mt-1.5 text-slate-400">
+            Playable cards in your hand are highlighted; non-playable cards
+            are dimmed.
+          </p>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          When a player goes out, they earn points for every card remaining
+          in all opponents&apos; hands:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>8s</B> -- <B>50 points</B> each (the most valuable).</Li>
+            <Li><B>Face cards (J, Q, K) and Aces</B> -- <B>10 points</B> each.</Li>
+            <Li><B>Number cards (2-7, 9, 10)</B> -- <B>face value</B> (e.g.,
+              a 5 is worth 5 points).</Li>
+          </ul>
+        </Sec>
+
+        {/* Winning */}
+        <Sec title="Winning the Game">
+          <ul className="space-y-1 text-slate-300">
+            <Li>After each round, scores accumulate. A new round begins with
+              a fresh deal.</Li>
+            <Li>The first player to reach <B>200 points</B> wins the
+              game.</Li>
+            <Li>If an AI opponent reaches 200 first, you lose.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Save your 8s.</B> They are wild and incredibly powerful --
+              don&apos;t waste them early. Play non-8 cards when possible.</Li>
+            <Li><B>Change the suit strategically.</B> When you play an 8,
+              pick the suit you have the most of to maximize your future
+              plays.</Li>
+            <Li><B>Watch the draw pile.</B> When it runs low, the discard
+              pile reshuffles. Plan accordingly.</Li>
+            <Li><B>Go out fast.</B> Holding high-value cards (especially 8s
+              at 50 points each) is risky -- if an opponent goes out, those
+              cards count against you.</Li>
+            <Li><B>Track what&apos;s been played.</B> If many cards of a suit
+              have been discarded, switching to that suit may force opponents
+              to draw.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function CrazyEights() {
   const { load, save, clear } = useGameState<SavedState>('crazy-eights')
   const saved = useRef(load()).current
@@ -36,6 +181,9 @@ export default function CrazyEights() {
   const song = useMemo(() => getSongForGame('crazy-eights'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('crazy-eights')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<CrazyEightsState>(
     () => saved?.gameState ?? createCrazyEightsGame(2)
@@ -104,7 +252,16 @@ export default function CrazyEights() {
           {getSuitSymbol(gameState.currentSuit)}
         </span>
       </span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -211,6 +368,9 @@ export default function CrazyEights() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <CrazyEightsHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

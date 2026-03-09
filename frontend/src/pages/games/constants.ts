@@ -41,6 +41,7 @@ import {
   Star,
   Building2,
   Boxes,
+  Grid2X2,
 } from 'lucide-react'
 import { createElement, type ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -114,6 +115,16 @@ export const GAMES: GameInfo[] = [
     path: '/games/wordle',
     difficulty: 'medium',
     sessionLength: '5-10 min',
+    category: 'word',
+  },
+  {
+    id: 'crossword',
+    name: 'Crossword',
+    description: 'Daily themed crossword puzzle',
+    icon: 'Grid2X2',
+    path: '/games/crossword',
+    difficulty: 'medium',
+    sessionLength: '10-20 min',
     category: 'word',
   },
   {
@@ -512,6 +523,7 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Star,
   Building2,
   Boxes,
+  Grid2X2,
   Peace,
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect} from 'react'
-import { Bomb, SmilePlus } from 'lucide-react'
+import { Bomb, HelpCircle, SmilePlus, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameTimer } from '../../../hooks/useGameTimer'
@@ -22,6 +22,77 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+
+// ── Help modal ──────────────────────────────────────────────────────
+function MinesweeperHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Minesweeper</h2>
+
+        <Sec title="Goal">
+          <p>Reveal all safe cells on the grid without clicking on a mine.</p>
+        </Sec>
+
+        <Sec title="How to Play">
+          <ul className="space-y-1">
+            <Li><B>Left-click</B> a cell to reveal it. If it has no adjacent mines, surrounding cells auto-reveal (flood fill).</Li>
+            <Li><B>Right-click</B> (or long-press on mobile) to place a <B>flag</B> marking a suspected mine.</Li>
+            <Li>Numbers show how many of the 8 surrounding cells contain mines.</Li>
+            <Li>A blank revealed cell means zero adjacent mines.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="First-Click Safety">
+          <p>Your very first click is always safe — the board generates after your first reveal, ensuring that cell and its neighbors are mine-free.</p>
+        </Sec>
+
+        <Sec title="Difficulty Levels">
+          <ul className="space-y-1">
+            <Li><B>Beginner</B> — 9×9 grid, 10 mines</Li>
+            <Li><B>Intermediate</B> — 16×16 grid, 40 mines</Li>
+            <Li><B>Expert</B> — 16×30 grid, 99 mines (scrollable)</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Winning & Losing">
+          <ul className="space-y-1">
+            <Li><B>Win</B> by revealing every non-mine cell. Flags are not required.</Li>
+            <Li><B>Lose</B> by clicking a mine — all mines are revealed.</Li>
+            <Li>Best times are saved per difficulty level.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1">
+            <Li><B>Left-click</B> — Reveal a cell</Li>
+            <Li><B>Right-click / Long-press</B> — Toggle flag</Li>
+            <Li><B>Smiley button</B> — Start a new game</Li>
+            <Li>Mine counter shows remaining unflagged mines.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Start with corners or edges — they touch fewer cells, giving clearer info.</Li>
+            <Li>If a "1" cell has only one hidden neighbor, that neighbor is definitely a mine — flag it.</Li>
+            <Li>Use the mine counter to track how many unflagged mines remain.</Li>
+            <Li>Work the borders of revealed regions where numbers meet hidden cells.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
 
 interface DifficultyConfig {
   rows: number
@@ -54,6 +125,7 @@ export default function Minesweeper() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('minesweeper')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [diffKey, setDiffKey] = useState(saved?.diffKey ?? 'beginner')
   const diff = DIFFICULTIES[diffKey]
   const [board, setBoard] = useState<MineBoard | null>(saved?.board ?? null)
@@ -181,6 +253,9 @@ export default function Minesweeper() {
         >
           <SmilePlus className="w-5 h-5 text-yellow-400" />
         </button>
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
         <span className="text-slate-400 font-mono text-xs">{timer.formatted}</span>
       </div>
@@ -214,6 +289,7 @@ export default function Minesweeper() {
           />
         )}
       </div>
+      {showHelp && <MinesweeperHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

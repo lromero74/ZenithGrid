@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -30,6 +31,179 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function GinRummyHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Gin Rummy</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Form <B>melds</B> (sets and runs) in your hand while minimizing
+          your <B>deadwood</B> (unmatched cards). Be the first player to
+          reach <B>100 points</B> across multiple rounds.
+        </Sec>
+
+        {/* Setup */}
+        <Sec title="Setup">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>A standard <B>52-card deck</B> is used.</Li>
+            <Li>Each player is dealt <B>10 cards</B>.</Li>
+            <Li>One card is placed face-up to start the <B>discard pile</B>.</Li>
+            <Li>The remaining cards form the <B>draw pile</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Melds */}
+        <Sec title="Melds">
+          There are two types of melds:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Sets</B> -- 3 or 4 cards of the <B>same rank</B> (e.g.,
+              three 7s or four Kings).</Li>
+            <Li><B>Runs</B> -- 3 or more <B>consecutive cards</B> of the
+              same suit (e.g., 4-5-6 of hearts). Aces are low (A-2-3 is
+              valid, but Q-K-A is not).</Li>
+          </ul>
+        </Sec>
+
+        {/* How to Play */}
+        <Sec title="How to Play">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li>On your turn, <B>draw one card</B> -- either the top card
+              of the draw pile (face-down) or the top card of the discard
+              pile (face-up). You will then have 11 cards.</li>
+            <li><B>Discard one card</B> from your hand by clicking it. This
+              brings you back to 10 cards and ends your turn.</li>
+            <li>The AI takes its turn automatically, then play returns
+              to you.</li>
+          </ol>
+        </Sec>
+
+        {/* Deadwood */}
+        <Sec title="Deadwood">
+          Cards not part of any meld are called <B>deadwood</B>. Each has
+          a point value:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Face cards (J, Q, K)</B> -- 10 points each.</Li>
+            <Li><B>Number cards (2-10)</B> -- face value.</Li>
+            <Li><B>Aces</B> -- 1 point each.</Li>
+          </ul>
+          <p className="mt-1.5 text-slate-400">
+            Your current deadwood total is shown in the controls bar. The
+            game automatically finds the best arrangement of melds to
+            minimize your deadwood.
+          </p>
+        </Sec>
+
+        {/* Knocking */}
+        <Sec title="Knocking">
+          <ul className="space-y-1 text-slate-300">
+            <Li>During the discard phase (when you have 11 cards), if your
+              deadwood total would be <B>10 or less</B> after discarding
+              your worst deadwood card, you can <B>knock</B>.</Li>
+            <Li>When you knock, your worst deadwood card is automatically
+              discarded for you.</Li>
+            <Li>The round then ends and hands are compared for scoring.</Li>
+            <Li>The AI will also knock when its deadwood is low enough.</Li>
+          </ul>
+        </Sec>
+
+        {/* Gin */}
+        <Sec title="Going Gin">
+          If your deadwood is exactly <B>0</B> (all 10 cards form melds),
+          the knock button changes to <B>&quot;Gin!&quot;</B>. Going Gin earns a
+          bonus -- the defender&apos;s deadwood plus a <B>25-point Gin
+          bonus</B>.
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Normal knock</B> -- the knocker scores the difference
+              between the defender&apos;s deadwood and the knocker&apos;s
+              deadwood.</Li>
+            <Li><B>Gin</B> -- the knocker scores the defender&apos;s full
+              deadwood total <B>plus 25 bonus points</B>.</Li>
+            <Li><B>Undercut</B> -- if the defender&apos;s deadwood is equal
+              to or lower than the knocker&apos;s, the defender wins the
+              round instead. The defender scores the difference <B>plus a
+              25-point undercut bonus</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Draw */}
+        <Sec title="Draw">
+          If the draw pile runs out of cards and neither player has knocked,
+          the round ends in a <B>draw</B> with no points awarded.
+        </Sec>
+
+        {/* Winning */}
+        <Sec title="Winning the Game">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Scores accumulate across rounds. After each round, a new
+              hand is dealt while scores carry over.</Li>
+            <Li>The first player to reach <B>100 points</B> wins the
+              game.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Watch the discard pile.</B> Drawing from the discard pile
+              reveals information to your opponent -- only take it if it
+              clearly helps form a meld.</Li>
+            <Li><B>Discard high deadwood first.</B> Face cards (10 points)
+              are costly if you get caught with them.</Li>
+            <Li><B>Knock early when possible.</B> Waiting for Gin is risky
+              -- the AI may knock first or undercut you.</Li>
+            <Li><B>Think about runs and sets together.</B> A card like 7 of
+              hearts could be part of a set (three 7s) or a run (6-7-8 of
+              hearts). Keep your options open.</Li>
+            <Li><B>Watch your deadwood total.</B> Getting to 10 or below
+              lets you knock. Sometimes discarding a medium card to get
+              under 10 is better than holding it for a potential meld.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function GinRummy() {
   const { load, save, clear } = useGameState<SavedState>('gin-rummy')
   const saved = useRef(load()).current
@@ -38,6 +212,9 @@ export default function GinRummy() {
   const song = useMemo(() => getSongForGame('gin-rummy'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('gin-rummy')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<GinRummyState>(
     () => saved?.gameState ?? createGinRummyGame()
@@ -86,7 +263,16 @@ export default function GinRummy() {
         <span className="text-slate-400">AI: {gameState.aiScore}</span>
       </div>
       <span className="text-xs text-slate-400">Deadwood: {deadwood}</span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -186,6 +372,9 @@ export default function GinRummy() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <GinRummyHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

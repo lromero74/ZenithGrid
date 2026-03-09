@@ -17,7 +17,7 @@ import {
   getWeatherMultiplier, GROUND_LAYER_SPEEDS,
   type GameState, type InputState,
 } from './dinoRunnerEngine'
-import { Eye, EyeOff, Music } from 'lucide-react'
+import { Eye, EyeOff, HelpCircle, Music, X } from 'lucide-react'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
@@ -163,11 +163,203 @@ function drawSprite(
 }
 
 // ---------------------------------------------------------------------------
+// Help modal
+// ---------------------------------------------------------------------------
+
+function DinoRunnerHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Dino Runner</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Run as far as you can! Dodge obstacles by jumping over them or ducking
+          under pterodactyls. The game gets progressively faster &mdash; survive
+          as long as possible for the highest score.
+        </Sec>
+
+        {/* Controls */}
+        <Sec title="Controls">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Space</B> or <B>Arrow Up</B> &mdash; Jump.</Li>
+            <Li><B>Arrow Down</B> &mdash; Duck (crouch to avoid pterodactyls).</Li>
+            <Li>On mobile: <B>Tap</B> to jump, <B>swipe down</B> to duck,
+              <B> swipe up</B> to jump.</Li>
+            <Li><B>Hold jump</B> for a higher, floatier leap. Tap quickly for
+              a short hop.</Li>
+          </ul>
+        </Sec>
+
+        {/* Obstacles */}
+        <Sec title="Obstacles">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Small Cactus</B> &mdash; short single cactus. Jump over it. Bonus: <B>+10</B>.</Li>
+            <Li><B>Tall Cactus</B> &mdash; taller single cactus. Needs a full jump. Bonus: <B>+15</B>.</Li>
+            <Li><B>Cactus Group</B> &mdash; cluster of three cacti, wider to clear. Bonus: <B>+20</B>.</Li>
+            <Li><B>Pterodactyl</B> &mdash; appears after 300 points. Flies at
+              three heights: <B>head height</B> (duck!), <B>mid</B> (jump),
+              or <B>high</B> (run under safely). Bonus: <B>+25</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Score increases continuously as you run &mdash; faster speed means
+              more points per second.</Li>
+            <Li>Clearing an obstacle earns a <B>bonus</B> (shown as a floating
+              popup).</Li>
+            <Li>Every <B>100 points</B> triggers a milestone flash.</Li>
+            <Li>Weather events provide a <B>score multiplier</B> (shown as a
+              yellow badge).</Li>
+          </ul>
+        </Sec>
+
+        {/* Speed & Difficulty */}
+        <Sec title="Speed &amp; Difficulty">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Speed starts at <B>2.5</B> and increases gradually up to a
+              maximum of <B>6</B>.</Li>
+            <Li>As speed rises, the camera shifts forward so you can see
+              obstacles further ahead.</Li>
+            <Li>Occasionally a <B>breather gap</B> (4&ndash;10 seconds of clear
+              running) gives you a moment to relax.</Li>
+          </ul>
+        </Sec>
+
+        {/* Day/Night Cycle */}
+        <Sec title="Day / Night Cycle">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The sky transitions between day and night every <B>4,500 points</B>.</Li>
+            <Li>Transitions include a multi-stage sunset: blue sky, golden hour,
+              red dusk, deep purple twilight, and dark night.</Li>
+            <Li>At night, colors desaturate to simulate scotopic (low-light)
+              vision. Stars and clouds shift color with the time of day.</Li>
+          </ul>
+        </Sec>
+
+        {/* Biomes */}
+        <Sec title="Biomes">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The landscape cycles through <B>6 biomes</B>: Mountains, Forest,
+              Plains, Desert, Jungle, and Snow.</Li>
+            <Li>Biomes change every <B>300&ndash;900 points</B> with a smooth
+              crossfade transition.</Li>
+            <Li>Each biome has unique terrain silhouettes, ground colors, and
+              obstacle tints.</Li>
+            <Li>Three parallax layers (far, mid, near) scroll at different speeds
+              for depth.</Li>
+          </ul>
+        </Sec>
+
+        {/* Weather Events */}
+        <Sec title="Weather Events">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Weather begins appearing after <B>600 points</B> with a 20% chance
+              each check.</Li>
+            <Li><B>Rain</B> &mdash; gentle rainfall with layered depth. Score
+              multiplier: <B>1.2x</B>.</Li>
+            <Li><B>Thunderstorm</B> &mdash; heavy rain, dark clouds, and lightning
+              flashes. Wind slows you down significantly. Score multiplier: <B>1.5x</B>.</Li>
+            <Li><B>Sandstorm</B> &mdash; horizontal sand particles and a brown
+              overlay tint. Strong wind drag. Score multiplier: <B>1.5x</B>.</Li>
+            <Li><B>Meteor Shower</B> &mdash; night-only event with fiery streaks
+              and ground impacts. Temporarily restores color during night.
+              Score multiplier: <B>1.3x</B>.</Li>
+            <Li><B>Snowstorm</B> &mdash; appears in the Snow biome. Gentle
+              snowflakes with a cool blue overlay. Score multiplier: <B>1.3x</B>.</Li>
+            <Li>Weather has <B>wind drag</B> that reduces your effective speed (up
+              to 40% at max). This also leans the dino forward visually.</Li>
+          </ul>
+        </Sec>
+
+        {/* Rhythm Mode */}
+        <Sec title="Rhythm Mode">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Toggle <B>Rhythm Mode</B> to sync obstacles to the beat of the
+              music.</Li>
+            <Li>Obstacles arrive on <B>strong beats</B> (beats 1 and 3 in 4/4
+              time). The BPM scales with speed.</Li>
+            <Li>Phrases are energy-tiered: <B>calm</B> patterns at low scores,
+              <B> moderate</B> in the mid-range, and <B>energetic</B>
+              double-time at high scores.</Li>
+            <Li>A breather gap follows each phrase so you can reset your rhythm.</Li>
+          </ul>
+        </Sec>
+
+        {/* View Mode */}
+        <Sec title="View Mode (Auto-Play)">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Toggle <B>View Mode</B> to watch the AI play automatically.</Li>
+            <Li>The AI uses physics-based trajectory prediction &mdash; it
+              simulates jump arcs to find the minimum hold duration that clears
+              all obstacles.</Li>
+            <Li>It can duck under head-height pterodactyls and pre-set duck
+              while still airborne for a smooth landing.</Li>
+            <Li>The AI auto-restarts on death, so you can leave it running as
+              a screensaver.</Li>
+          </ul>
+        </Sec>
+
+        {/* Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Short hops</B> are faster than full jumps &mdash; tap quickly
+              for small cacti, hold for tall ones and groups.</Li>
+            <Li><B>Duck early</B> for head-height pterodactyls. If you see wings
+              at eye level, press down immediately.</Li>
+            <Li><B>Use weather multipliers.</B> Surviving a thunderstorm earns
+              1.5x points &mdash; the wind makes it harder, but the payoff is
+              worth it.</Li>
+            <Li><B>Listen to the music</B> in Rhythm Mode &mdash; obstacles
+              land on beats, so you can anticipate timing by ear.</Li>
+            <Li><B>Watch the score badge.</B> The yellow multiplier indicator
+              tells you the current bonus rate during weather.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export default function DinoRunner() {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
+  const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
   const [displayHigh, setDisplayHigh] = useState(0)
   const { getHighScore, saveScore } = useGameScores()
@@ -848,6 +1040,13 @@ export default function DinoRunner() {
           Rhythm
         </button>
         <MusicToggle music={music} sfx={sfx} />
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to Play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
       </div>
       <span className="text-xs text-slate-500">
         {autoPlay ? 'AI is playing — sit back and watch'
@@ -899,6 +1098,8 @@ export default function DinoRunner() {
           />
         )}
       </div>
+
+      {showHelp && <DinoRunnerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

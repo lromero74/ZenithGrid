@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -31,6 +32,118 @@ interface MemoryState {
   bestMoves: Record<string, number>
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function MemoryHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Memory</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Find all matching pairs of cards by flipping them two at a time.
+          Complete the board in as few <B>moves</B> as possible.
+        </Sec>
+
+        {/* How It Works */}
+        <Sec title="How It Works">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li>All cards start <B>face-down</B>, showing a &ldquo;?&rdquo; symbol.</li>
+            <li>Click a card to <B>flip</B> it and reveal the emoji underneath.</li>
+            <li>Flip a <B>second card</B> to check for a match.</li>
+            <li>If the two cards have the <B>same emoji</B>, they stay face-up and
+              are marked as matched.</li>
+            <li>If they <B>don&rsquo;t match</B>, both cards flip back face-down after
+              a brief delay.</li>
+            <li>The game is <B>won</B> when every pair has been found.</li>
+          </ol>
+        </Sec>
+
+        {/* Moves & Timer */}
+        <Sec title="Moves & Timer">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Every <B>two flips</B> count as one move.</Li>
+            <Li>A <B>timer</B> starts on your first flip and stops when you win.</Li>
+            <Li>Your <B>best score</B> (fewest moves) is tracked per difficulty level.</Li>
+          </ul>
+        </Sec>
+
+        {/* Difficulty Levels */}
+        <Sec title="Difficulty Levels">
+          Choose a grid size before starting:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Easy</B> &mdash; 3 &times; 4 grid (6 pairs, 12 cards).</Li>
+            <Li><B>Medium</B> &mdash; 4 &times; 4 grid (8 pairs, 16 cards).</Li>
+            <Li><B>Hard</B> &mdash; 4 &times; 6 grid (12 pairs, 24 cards).</Li>
+          </ul>
+          Changing difficulty starts a <B>new game</B>.
+        </Sec>
+
+        {/* Card Appearance */}
+        <Sec title="Card Appearance">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Face-down</B> &mdash; Dark card with a &ldquo;?&rdquo; symbol.</Li>
+            <Li><B>Flipped</B> &mdash; White card showing the emoji.</Li>
+            <Li><B>Matched</B> &mdash; Green-bordered card with a slightly faded emoji.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Remember positions</B> &mdash; pay attention to every card you flip,
+              even when it doesn&rsquo;t match.</Li>
+            <Li><B>Work systematically</B> &mdash; scan a row or column at a time
+              rather than flipping randomly.</Li>
+            <Li><B>Use mismatches</B> &mdash; a failed flip reveals useful information
+              for future turns.</Li>
+          </ul>
+        </Sec>
+
+        {/* Game State */}
+        <Sec title="Game State">
+          Your current game &mdash; including card positions, moves, timer, and
+          best scores &mdash; is <B>saved automatically</B>. You can close the
+          browser and come back to continue where you left off.
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 const GRID_COLS: Record<GridSize, number> = { easy: 4, medium: 4, hard: 6 }
 
 export default function Memory() {
@@ -52,6 +165,7 @@ export default function Memory() {
   const [totalFlips, setTotalFlips] = useState(saved?.totalFlips ?? 0)
   const [elapsed, setElapsed] = useState(saved?.elapsed ?? 0)
   const [bestMoves, setBestMoves] = useState<Record<string, number>>(saved?.bestMoves ?? {})
+  const [showHelp, setShowHelp] = useState(false)
 
   const flippedIndices = useRef<number[]>([])
   const lockRef = useRef(false)
@@ -182,6 +296,13 @@ export default function Memory() {
         {best !== undefined && (
           <span className="text-yellow-400">Best: {best}</span>
         )}
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to Play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
@@ -255,6 +376,7 @@ export default function Memory() {
           />
         )}
       </div>
+      {showHelp && <MemoryHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

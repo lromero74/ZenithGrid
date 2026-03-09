@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack } from '../../PlayingCard'
@@ -54,6 +55,68 @@ interface Selection {
 
 const FOUNDATION_SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades']
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SolitaireHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Solitaire</h2>
+
+        <Sec title="Goal">
+          <p>Move all 52 cards to the four <B>foundation piles</B> (top right), sorted by suit from Ace to King.</p>
+        </Sec>
+
+        <Sec title="Layout">
+          <ul className="space-y-1">
+            <Li><B>Tableau</B> — 7 columns of cards. Only the top card of each column is face-up.</Li>
+            <Li><B>Stock</B> — The draw pile (top left). Click to flip cards to the waste.</Li>
+            <Li><B>Waste</B> — Flipped cards from the stock. The top card is playable.</Li>
+            <Li><B>Foundations</B> — 4 piles (top right), one per suit, built Ace → King.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="How to Play">
+          <ul className="space-y-1">
+            <Li>Click a face-up card to select it, then click a valid destination to move it.</Li>
+            <Li><B>Tableau stacking</B> — Cards stack in descending order, alternating colors (red on black, black on red).</Li>
+            <Li><B>Moving groups</B> — You can move a stack of properly-ordered face-up cards together.</Li>
+            <Li><B>Empty columns</B> — Only a King (or a stack starting with a King) can be placed on an empty column.</Li>
+            <Li><B>Foundations</B> — Build up by suit: A, 2, 3, ... K. Cards auto-move when double-clicked.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1">
+            <Li><B>Click stock</B> — Flip the next card to the waste pile.</Li>
+            <Li><B>Click card → click destination</B> — Move a card or stack.</Li>
+            <Li><B>Undo</B> — Reverse the last move.</Li>
+            <Li><B>Hint</B> — Highlights a possible move.</Li>
+            <Li><B>New Game</B> — Shuffle and deal a fresh game.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Prioritize uncovering face-down cards in the tableau.</Li>
+            <Li>Don't rush cards to foundations — you may need them for tableau building.</Li>
+            <Li>Keep columns open for Kings to unlock new building opportunities.</Li>
+            <Li>Use Undo freely to explore different move sequences.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 // ── Component ────────────────────────────────────────────────────────
 
 export default function Solitaire() {
@@ -69,6 +132,7 @@ export default function Solitaire() {
     () => saved?.gameState ?? deal(shuffleDeck(createDeck()))
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [showHelp, setShowHelp] = useState(false)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [undoStack, setUndoStack] = useState<SolitaireState[]>([])
   const [autoCompleting, setAutoCompleting] = useState(false)
@@ -387,7 +451,12 @@ export default function Solitaire() {
         </button>
       </div>
       <span className="text-xs text-slate-400">Moves: {gameState.moves}</span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -548,6 +617,7 @@ export default function Solitaire() {
           }
         }
       `}</style>
+      {showHelp && <SolitaireHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

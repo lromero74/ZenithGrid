@@ -14,6 +14,7 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import RateLimitError, SessionLimitError
 from app.auth.dependencies import (
     check_token_revocation,
     decode_token,
@@ -198,8 +199,9 @@ async def login(
     session_expires_at = None
 
     if has_any_limits(policy):
+        # Let session limit/cooldown errors propagate — they must block login
+        await check_session_limits(user_id, client_ip, policy, db)
         try:
-            await check_session_limits(user_id, client_ip, policy, db)
             session_id_str = str(uuid.uuid4())
             timeout = policy.get("session_timeout_minutes")
             if timeout:
@@ -213,6 +215,8 @@ async def login(
                 db=db,
             )
             await db.commit()
+        except (RateLimitError, SessionLimitError):
+            raise  # Must not swallow limit enforcement
         except Exception as e:
             logger.warning(f"Non-critical: failed to create session for {user_email}: {e}")
             await db.rollback()

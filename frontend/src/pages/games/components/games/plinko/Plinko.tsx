@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
@@ -20,6 +21,74 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+
+// ── Help modal ──────────────────────────────────────────────────────
+function PlinkoHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Plinko</h2>
+
+        <Sec title="Goal">
+          <p>Drop balls from the top of the board and watch them bounce through pegs into multiplier slots at the bottom. Maximize your balance by landing on high-value slots.</p>
+        </Sec>
+
+        <Sec title="How to Play">
+          <ul className="space-y-1">
+            <Li><B>Click or tap</B> the board to drop a ball from the center (with slight random variance).</Li>
+            <Li>Each drop costs your current <B>bet amount</B>, deducted from your balance.</Li>
+            <Li>The ball bounces off pegs and lands in a <B>multiplier slot</B> at the bottom.</Li>
+            <Li>Your payout is <B>bet × slot multiplier</B>.</Li>
+            <Li>You can drop multiple balls at once — they even collide with each other!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Risk Levels">
+          <ul className="space-y-1">
+            <Li><B>Low</B> — Multipliers range 0.3× to 1.5×. Safer, smaller swings.</Li>
+            <Li><B>Medium</B> — Multipliers range 0.2× to 3×. Balanced risk/reward.</Li>
+            <Li><B>High</B> — Multipliers range 0.2× to 10×. High variance, big potential wins.</Li>
+          </ul>
+          <p className="mt-1">Edge slots pay the most; center slots pay the least (bell-curve distribution).</p>
+        </Sec>
+
+        <Sec title="Board Layouts">
+          <ul className="space-y-1">
+            <Li><B>Classic</B> — Slot-aligned pegs, natural stagger for even distribution.</Li>
+            <Li><B>Pyramid</B> — Fewer pegs at top, expanding toward bottom.</Li>
+            <Li><B>Diamond</B> — Wide in the middle, narrow at top and bottom.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Betting">
+          <ul className="space-y-1">
+            <Li>Set your bet using the input field or the <B>½×</B>, <B>2×</B>, <B>Max</B> buttons.</Li>
+            <Li>Minimum bet is <B>10</B>. You start with a balance of <B>1,000</B>.</Li>
+            <Li>When your balance drops below your bet, the game ends — click <B>New Game</B> to reset.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Low risk is great for steady play — you rarely lose big.</Li>
+            <Li>High risk is boom-or-bust — edge slots pay 10× but the center is 0.2×.</Li>
+            <Li>The Classic layout gives the most predictable distribution.</Li>
+            <Li>Dropping multiple balls at once doesn't change odds — each bounce is independent.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
 
 const MIN_BET = 10
 const INITIAL_BALANCE = 1000
@@ -80,6 +149,7 @@ export default function Plinko() {
   const [layout, setLayout] = useState<PegLayout>(saved?.layout ?? 'classic')
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(saved?.lastWin ?? null)
   const [ballsActive, setBallsActive] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -519,6 +589,9 @@ export default function Plinko() {
           >
             New Game
           </button>
+          <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+            <HelpCircle className="w-4 h-4 text-blue-400" />
+          </button>
           <MusicToggle music={music} sfx={sfx} />
         </div>
       </div>
@@ -573,6 +646,7 @@ export default function Plinko() {
           Click the board to drop a ball. Pegs bounce it randomly into a slot.
         </p>
       </div>
+      {showHelp && <PlinkoHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

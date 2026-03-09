@@ -2,7 +2,8 @@
  * Blackjack — 6-deck shoe, standard rules with split & double down.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -38,6 +39,205 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function BlackjackHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Blackjack</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Beat the dealer by getting a hand value closer to <B>21</B> without
+          going over. You don&apos;t play against other players at the table —
+          only the dealer.
+        </Sec>
+
+        {/* Setup */}
+        <Sec title="Setup">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The game uses a <B>6-deck shoe</B> (312 cards). The shoe is
+              reshuffled automatically when roughly 25% of the cards remain.</Li>
+            <Li>You and the dealer each start with <B>1,000 chips</B>. The
+              dealer&apos;s bank is 5x yours.</Li>
+            <Li>Chip denominations for betting: <B>10, 25, 50, 100, 500</B>.</Li>
+            <Li>You can add <B>1 or 2 AI opponents</B> who play alongside you
+              against the dealer.</Li>
+          </ul>
+        </Sec>
+
+        {/* Card Values */}
+        <Sec title="Card Values">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Number cards (2-10)</B> — face value.</Li>
+            <Li><B>Face cards (J, Q, K)</B> — worth <B>10</B>.</Li>
+            <Li><B>Ace</B> — worth <B>11</B> or <B>1</B>. It counts as 11
+              unless that would bust your hand, in which case it automatically
+              counts as 1. A hand with an Ace valued at 11 is called a
+              &quot;soft&quot; hand.</Li>
+          </ul>
+        </Sec>
+
+        {/* How to Play */}
+        <Sec title="How to Play">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li>Select a <B>chip amount</B> and click <B>Deal</B> to place
+              your bet.</li>
+            <li>You and the dealer each receive <B>2 cards</B>. Both of yours
+              are face-up; the dealer has one face-up and one face-down (the
+              &quot;hole card&quot;).</li>
+            <li>Choose an action: <B>Hit</B>, <B>Stand</B>, <B>Double Down</B>,
+              or <B>Split</B> (when available).</li>
+            <li>After you finish, any AI opponents play, then the dealer
+              reveals their hole card and draws according to the rules.</li>
+          </ol>
+        </Sec>
+
+        {/* Actions */}
+        <Sec title="Player Actions">
+          <div className="space-y-3">
+            <ActionItem color="text-blue-400" name="Hit">
+              Draw one more card. You can hit as many times as you like. If
+              your total exceeds 21, you <B>bust</B> and lose immediately.
+            </ActionItem>
+            <ActionItem color="text-slate-300" name="Stand">
+              Keep your current hand and end your turn.
+            </ActionItem>
+            <ActionItem color="text-yellow-400" name="Double Down">
+              Available only on your <B>first two cards</B>. Your bet is
+              doubled, you receive <B>exactly one more card</B>, and your turn
+              ends automatically. You must have enough chips to cover the
+              additional bet.
+            </ActionItem>
+            <ActionItem color="text-purple-400" name="Split">
+              Available when your first two cards have the <B>same rank</B>.
+              The pair is separated into two independent hands, each receiving
+              a new second card. Each hand plays with the original bet amount.
+              You can split up to <B>4 hands</B> total. You must have enough
+              chips to cover the new hand&apos;s bet.
+            </ActionItem>
+          </div>
+        </Sec>
+
+        {/* Blackjack */}
+        <Sec title="Blackjack (Natural 21)">
+          If your first two cards total exactly <B>21</B> (an Ace + a 10-value
+          card), that&apos;s a <B>Blackjack</B>. It pays <B>3:2</B> (1.5x your
+          bet). If the dealer also has Blackjack, it&apos;s a <B>push</B> (tie)
+          and your bet is returned.
+        </Sec>
+
+        {/* Dealer Rules */}
+        <Sec title="Dealer Rules">
+          <ul className="space-y-1 text-slate-300">
+            <Li>The dealer <B>must hit</B> on 16 or below.</Li>
+            <Li>The dealer <B>stands</B> on 17 or above.</Li>
+            <Li>On <B>Hard mode</B>, the dealer hits on a soft 17 (Ace + 6),
+              making the game tougher.</Li>
+            <Li>If the dealer busts, all remaining (non-busted) player hands
+              win.</Li>
+          </ul>
+        </Sec>
+
+        {/* Payouts */}
+        <Sec title="Payouts">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Blackjack</B> — pays <B>3:2</B> (bet 100, win 150).</Li>
+            <Li><B>Regular win</B> — pays <B>1:1</B> (bet 100, win 100).</Li>
+            <Li><B>Push (tie)</B> — your bet is returned, no gain or loss.</Li>
+            <Li><B>Lose / Bust</B> — you lose your bet.</Li>
+            <Li><B>Split bonus</B> — win <B>both</B> hands after a split and
+              earn an extra <B>+100 chip bonus</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Difficulty */}
+        <Sec title="Difficulty">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Easy</B> — dealer stands on all 17s (including soft 17).</Li>
+            <Li><B>Hard</B> — dealer hits on soft 17, giving the house a
+              stronger edge.</Li>
+          </ul>
+        </Sec>
+
+        {/* Game Over */}
+        <Sec title="Winning &amp; Losing">
+          <ul className="space-y-1 text-slate-300">
+            <Li>The game ends when either you or the dealer runs out of
+              chips.</Li>
+            <Li>If <B>you</B> hit 0 chips — you lose.</Li>
+            <Li>If the <B>dealer</B> hits 0 chips — you broke the bank and
+              win!</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Stand on 17+</B> — the odds of busting are high if you hit
+              on 17 or above.</Li>
+            <Li><B>Always split Aces and 8s.</B> Two hands starting with 11 or
+              8 are much stronger than a 12 or 16.</Li>
+            <Li><B>Never split 10s or 5s.</B> A 20 is almost unbeatable, and
+              two 5s make a great double-down hand (10).</Li>
+            <Li><B>Double down on 10 or 11</B> when the dealer shows a weak
+              card (2-6). You have a strong chance of hitting 20 or 21.</Li>
+            <Li><B>Hit on soft 17</B> (Ace + 6). You can&apos;t bust, and
+              you&apos;ll likely improve.</Li>
+            <Li><B>Assume the hole card is 10.</B> Since 10, J, Q, K all equal
+              10, there are more 10-value cards in the deck than any other
+              value.</Li>
+            <Li><B>Manage your bets.</B> Bet small when losing, and increase
+              bets when on a streak.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function ActionItem({ color, name, children }: { color: string; name: string; children: React.ReactNode }) {
+  return (
+    <div className="pl-3 border-l-2 border-slate-700">
+      <div className={`text-xs font-bold ${color} mb-0.5`}>{name}</div>
+      <div className="text-xs text-slate-400 leading-relaxed">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function Blackjack() {
   const { load, save, clear } = useGameState<SavedState>('blackjack')
   const saved = useRef(load()).current
@@ -46,6 +246,9 @@ export default function Blackjack() {
   const song = useMemo(() => getSongForGame('blackjack'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('blackjack')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<BlackjackState>(
     () => {
@@ -175,7 +378,16 @@ export default function Blackjack() {
             Hard
           </button>
         </div>
-        <MusicToggle music={music} sfx={sfx} />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp(true)}
+            className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+            title="How to play"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+          <MusicToggle music={music} sfx={sfx} />
+        </div>
       </div>
       <div className="flex items-center justify-center gap-1">
         <span className="text-[0.6rem] text-slate-500">Players:</span>
@@ -387,6 +599,9 @@ export default function Blackjack() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <BlackjackHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

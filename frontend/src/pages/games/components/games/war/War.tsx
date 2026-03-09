@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -25,6 +26,40 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+function WarHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play War</h2>
+        <Sec title="Goal"><p>Capture all 52 cards from your opponent.</p></Sec>
+        <Sec title="How to Play"><ul className="space-y-1">
+          <Li>Both players flip their top card simultaneously.</Li>
+          <Li>The <B>higher card</B> wins — the winner takes both cards.</Li>
+          <Li>Ace is the highest card, 2 is the lowest.</Li>
+        </ul></Sec>
+        <Sec title="War!"><ul className="space-y-1">
+          <Li>When both cards are the <B>same rank</B>, it's <B>War!</B></Li>
+          <Li>Each player places cards face-down, then flips one more card.</Li>
+          <Li>The higher new card wins <B>all</B> the cards from the war.</Li>
+          <Li>If it's a tie again, war continues!</Li>
+        </ul></Sec>
+        <Sec title="Controls"><ul className="space-y-1">
+          <Li><B>Click your deck</B> or press <B>Space</B> to flip.</Li>
+          <Li><B>Auto mode</B> — Plays automatically so you can watch.</Li>
+        </ul></Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function War() {
   const { load, save, clear } = useGameState<SavedState>('war')
   const saved = useRef(load()).current
@@ -33,6 +68,7 @@ export default function War() {
   const song = useMemo(() => getSongForGame('war'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('war')
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<WarState>(
     () => saved?.gameState ?? createWarGame()
@@ -130,7 +166,10 @@ export default function War() {
       >
         {autoPlay ? 'Auto: ON' : 'Auto: OFF'}
       </button>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play"><HelpCircle className="w-4 h-4 text-blue-400" /></button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -246,6 +285,7 @@ export default function War() {
           />
         )}
       </div>
+      {showHelp && <WarHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

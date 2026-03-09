@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_MINI } from '../../PlayingCard'
@@ -78,6 +79,70 @@ function DifficultySelect({ onStart }: { onStart: (difficulty: AiDifficulty) => 
 
 // ── Main component ──────────────────────────────────────────────────
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SpeedHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Speed</h2>
+
+        <Sec title="Goal">
+          <p>Be the first to get rid of all your cards (hand + draw pile). It's a real-time race — no turns!</p>
+        </Sec>
+
+        <Sec title="Setup">
+          <ul className="space-y-1">
+            <Li>Each player gets a <B>5-card hand</B> and a <B>15-card draw pile</B>.</Li>
+            <Li>Two <B>center piles</B> start with one card each.</Li>
+            <Li>Two <B>replacement piles</B> (5 cards each) are used to unstick the game.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="How to Play">
+          <ul className="space-y-1">
+            <Li>Click a card in your hand to play it on either center pile.</Li>
+            <Li>A card can be played if its rank is <B>±1</B> from the center pile's top card (Ace wraps to King).</Li>
+            <Li>After playing, your hand auto-refills from your draw pile (back to 5 cards).</Li>
+            <Li>The AI plays simultaneously — speed matters!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Stalls">
+          <ul className="space-y-1">
+            <Li>If neither player can play, cards are flipped from <B>replacement piles</B> onto the center.</Li>
+            <Li>If replacement piles are empty and nobody can play, the game ends — fewest cards remaining wins.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Difficulty">
+          <ul className="space-y-1">
+            <Li><B>Easy</B> — AI plays slowly.</Li>
+            <Li><B>Normal</B> — AI plays at moderate speed.</Li>
+            <Li><B>Adept</B> — AI plays fast and aggressively.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Play fast — this is a race, not a strategy game.</Li>
+            <Li>Watch both center piles — sometimes only one has a valid play.</Li>
+            <Li>Prioritize getting through your draw pile early.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function Speed() {
   const { load, save, clear } = useGameState<SavedState>('speed')
   const saved = useRef(load()).current
@@ -87,6 +152,7 @@ export default function Speed() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('speed')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [showDifficultySelect, setShowDifficultySelect] = useState<boolean>(() => {
     const s = saved?.gameState
     return !(s && s.replacementPiles && s.difficulty)
@@ -258,7 +324,12 @@ export default function Speed() {
         <span className="text-slate-500">{difficultyLabel}</span>
         <span className="text-slate-400">You: {playerCardsLeft} | AI: {aiCardsLeft}</span>
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -439,6 +510,7 @@ export default function Speed() {
           />
         )}
       </div>
+      {showHelp && <SpeedHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

@@ -26,6 +26,7 @@ import { useAccount, Account, getChainName } from '../contexts/AccountContext'
 import { accountApi, api } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission'
 import { PropGuardStatus } from './PropGuardStatus'
 
@@ -43,6 +44,12 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     refreshAccounts,
   } = useAccount()
   const canWriteAccounts = usePermission('accounts', 'write')
+  const { user } = useAuth()
+  const isLiveRestricted = (() => {
+    if (!user || user.is_superuser) return false
+    const groups = new Set((user.groups || []).map(g => g.name))
+    return !groups.has('System Owners') && !groups.has('Administrators') && !groups.has('Traders')
+  })()
 
   const confirm = useConfirm()
   const { addToast } = useNotifications()
@@ -265,14 +272,16 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
           >
             <RefreshCw className="w-4 h-4 text-slate-400" />
           </button>
-          <button
-            onClick={onAddAccount}
-            disabled={!canWriteAccounts}
-            className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={!canWriteAccounts ? 'Only admins can manage accounts' : undefined}
-          >
-            Add Account
-          </button>
+          {!isLiveRestricted && (
+            <button
+              onClick={onAddAccount}
+              disabled={!canWriteAccounts}
+              className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors ${!canWriteAccounts ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={!canWriteAccounts ? 'Only admins can manage accounts' : undefined}
+            >
+              Add Account
+            </button>
+          )}
         </div>
       </div>
 
@@ -284,8 +293,37 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
         </div>
       )}
 
+      {/* Live Account Restriction Notice */}
+      {isLiveRestricted && (
+        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-5">
+          <div className="flex items-start gap-3">
+            <Shield className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-amber-300 font-semibold mb-2">Live Trading Not Available</h4>
+              <p className="text-slate-300 text-sm leading-relaxed mb-3">
+                We're not accepting new live exchange connections at this time. Your account
+                is set up for <span className="text-white font-medium">paper trading</span> so
+                you can explore all features with simulated funds.
+              </p>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Want to trade live? Deploy your own instance from the{' '}
+                <a
+                  href="https://github.com/lromero74/ZenithGrid"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >ZenithGrid repository</a>, or try commercial platforms like{' '}
+                <a href="https://3commas.io" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">3Commas</a>{' '}
+                or{' '}
+                <a href="https://www.cryptohopper.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">Cryptohopper</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* No Accounts */}
-      {accounts.length === 0 && (
+      {accounts.length === 0 && !isLiveRestricted && (
         <div className="bg-slate-800 rounded-lg p-12 border border-slate-700 text-center">
           <Wallet className="w-16 h-16 text-slate-600 mx-auto mb-4" />
           <h4 className="text-xl font-semibold text-white mb-2">No Accounts Configured</h4>
