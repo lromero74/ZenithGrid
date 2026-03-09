@@ -8,9 +8,12 @@ import {
   newRound,
   aiDiscard,
   getAiGrabDelays,
+  getAiCardEvalDelays,
   getActiveCount,
   getNextActive,
   isHumanTurn,
+  generateSpoonGrabDelay,
+  generateCardEvalDelay,
   type SpoonsState,
   type PlayerInfo,
   type Phase,
@@ -31,7 +34,8 @@ function makePlayer(overrides: Partial<PlayerInfo> = {}): PlayerInfo {
     isHuman: false,
     name: 'Bot',
     grabbedSpoon: false,
-    reactionTime: 500,
+    spoonGrabDelay: 500,
+    cardEvalDelay: 800,
     ...overrides,
   }
 }
@@ -39,9 +43,9 @@ function makePlayer(overrides: Partial<PlayerInfo> = {}): PlayerInfo {
 function makeState(overrides: Partial<SpoonsState> = {}): SpoonsState {
   return {
     players: [
-      makePlayer({ isHuman: true, name: 'You', reactionTime: 0 }),
-      makePlayer({ name: 'Bot 1', reactionTime: 500 }),
-      makePlayer({ name: 'Bot 2', reactionTime: 800 }),
+      makePlayer({ isHuman: true, name: 'You', spoonGrabDelay: 0, cardEvalDelay: 0 }),
+      makePlayer({ name: 'Bot 1', spoonGrabDelay: 500, cardEvalDelay: 800 }),
+      makePlayer({ name: 'Bot 2', spoonGrabDelay: 800, cardEvalDelay: 1200 }),
     ],
     drawPile: [makeCard(2), makeCard(9), makeCard(7), makeCard(4), makeCard(6)],
     discardPile: [],
@@ -54,6 +58,8 @@ function makeState(overrides: Partial<SpoonsState> = {}): SpoonsState {
     spoonGrabber: null,
     roundLoser: null,
     roundNumber: 1,
+    mode: 'turn-based',
+    difficulty: 'normal',
     ...overrides,
   }
 }
@@ -140,6 +146,70 @@ describe('createSpoonsGame', () => {
     const state = createSpoonsGame()
     expect(state.players.every(p => !p.eliminated)).toBe(true)
   })
+
+  it('should accept mode and difficulty parameters', () => {
+    const state = createSpoonsGame('real-time', 'adept')
+    expect(state.mode).toBe('real-time')
+    expect(state.difficulty).toBe('adept')
+  })
+
+  it('should default to turn-based normal', () => {
+    const state = createSpoonsGame()
+    expect(state.mode).toBe('turn-based')
+    expect(state.difficulty).toBe('normal')
+  })
+
+  it('should set AI spoon grab and card eval delays', () => {
+    const state = createSpoonsGame('real-time', 'normal')
+    // Human has 0 delays
+    expect(state.players[0].spoonGrabDelay).toBe(0)
+    expect(state.players[0].cardEvalDelay).toBe(0)
+    // AI has positive delays
+    expect(state.players[1].spoonGrabDelay).toBeGreaterThan(0)
+    expect(state.players[1].cardEvalDelay).toBeGreaterThan(0)
+    expect(state.players[2].spoonGrabDelay).toBeGreaterThan(0)
+    expect(state.players[2].cardEvalDelay).toBeGreaterThan(0)
+  })
+})
+
+// ── Reaction time generation ────────────────────────────────────────
+
+describe('reaction time generation', () => {
+  it('should generate spoon grab delays within human range', () => {
+    // Run many times to verify bounds
+    for (let i = 0; i < 50; i++) {
+      const easy = generateSpoonGrabDelay('easy')
+      const adept = generateSpoonGrabDelay('adept')
+      // Min possible: 80+50+30+100 = 260ms (all at 90th percentile)
+      // Max possible: 200+150+100+250 = 700ms (all at 50th percentile)
+      expect(easy).toBeGreaterThanOrEqual(200)
+      expect(easy).toBeLessThanOrEqual(800)
+      expect(adept).toBeGreaterThanOrEqual(200)
+      expect(adept).toBeLessThanOrEqual(800)
+    }
+  })
+
+  it('should generate card eval delays within human range', () => {
+    for (let i = 0; i < 50; i++) {
+      const delay = generateCardEvalDelay('normal')
+      // Min possible: 100+200+150+80 = 530ms
+      // Max possible: 250+600+400+200 = 1450ms
+      expect(delay).toBeGreaterThanOrEqual(400)
+      expect(delay).toBeLessThanOrEqual(1600)
+    }
+  })
+
+  it('adept should tend to be faster than easy', () => {
+    let adeptTotal = 0
+    let easyTotal = 0
+    const n = 100
+    for (let i = 0; i < n; i++) {
+      adeptTotal += generateSpoonGrabDelay('adept')
+      easyTotal += generateSpoonGrabDelay('easy')
+    }
+    // Adept average should be lower than easy average
+    expect(adeptTotal / n).toBeLessThan(easyTotal / n)
+  })
 })
 
 // ── drawCard ────────────────────────────────────────────────────────
@@ -195,8 +265,6 @@ describe('discardCard', () => {
   })
 
   it('should send discard to discard pile when last player discards', () => {
-    // Last player is the one before dealer in the circle
-    // With dealer=0, players 0→1→2, last player is 2
     const state = makeState({
       phase: 'discarding',
       currentPlayer: 2,
@@ -299,27 +367,6 @@ describe('grabSpoon', () => {
   })
 
   it('should end game when only 1 player remains', () => {
-    const state = makeState({
-      phase: 'spoonGrab',
-      spoonsRemaining: 1,
-      players: [
-        makePlayer({ isHuman: true, name: 'You', grabbedSpoon: true }),
-        makePlayer({ name: 'Bot 1', letters: 'SPOON', grabbedSpoon: false }),
-        makePlayer({ name: 'Bot 2', eliminated: true }),
-      ],
-    })
-    // No one else to grab — Bot 1 will get their 6th letter
-    // But we need someone to grab the last spoon. Actually there's only 1 spoon left
-    // and only 2 active players. You already grabbed. So this is the losing scenario.
-    // Let's fix: there's 1 spoon remaining. Someone grabs it.
-    // Actually player 0 already grabbed. spoonsRemaining=1.
-    // We can't call grabSpoon for a player who already grabbed.
-    // The scenario is: 2 active players, 1 spoon. Player 0 grabbed it.
-    // Bot 1 is the loser. But grabSpoon is called when another player tries...
-    // Let me re-think: when spoonsRemaining drops to 0, loser is detected.
-    // Player 0 already has their spoon. Let's have a fresh scenario.
-
-    // Re-setup: 2 active players (You + Bot 1), Bot 2 eliminated, 1 spoon
     const state2 = makeState({
       phase: 'spoonGrab',
       spoonsRemaining: 1,
@@ -422,6 +469,24 @@ describe('newRound', () => {
     const next = newRound(state)
     expect(next.roundNumber).toBe(4)
   })
+
+  it('should regenerate AI reaction times each round', () => {
+    const state = makeState({
+      phase: 'roundOver',
+      difficulty: 'adept',
+      players: [
+        makePlayer({ isHuman: true, name: 'You', spoonGrabDelay: 0 }),
+        makePlayer({ name: 'Bot 1', spoonGrabDelay: 500, cardEvalDelay: 800 }),
+        makePlayer({ name: 'Bot 2', spoonGrabDelay: 600, cardEvalDelay: 900 }),
+      ],
+    })
+    const next = newRound(state)
+    // Human stays at 0
+    expect(next.players[0].spoonGrabDelay).toBe(0)
+    // AI gets new (non-zero) delays
+    expect(next.players[1].spoonGrabDelay).toBeGreaterThan(0)
+    expect(next.players[2].spoonGrabDelay).toBeGreaterThan(0)
+  })
 })
 
 // ── aiDiscard ───────────────────────────────────────────────────────
@@ -469,8 +534,8 @@ describe('getAiGrabDelays', () => {
       phase: 'spoonGrab',
       players: [
         makePlayer({ isHuman: true, name: 'You' }),
-        makePlayer({ name: 'Bot 1', reactionTime: 500 }),
-        makePlayer({ name: 'Bot 2', reactionTime: 300 }),
+        makePlayer({ name: 'Bot 1', spoonGrabDelay: 500 }),
+        makePlayer({ name: 'Bot 2', spoonGrabDelay: 300 }),
       ],
     })
     const delays = getAiGrabDelays(state)
@@ -491,6 +556,23 @@ describe('getAiGrabDelays', () => {
     const delays = getAiGrabDelays(state)
     expect(delays).toHaveLength(1)
     expect(delays[0].playerIndex).toBe(2)
+  })
+})
+
+// ── getAiCardEvalDelays ─────────────────────────────────────────────
+
+describe('getAiCardEvalDelays', () => {
+  it('should return AI card evaluation delays sorted by speed', () => {
+    const state = makeState({
+      players: [
+        makePlayer({ isHuman: true, name: 'You', cardEvalDelay: 0 }),
+        makePlayer({ name: 'Bot 1', cardEvalDelay: 800 }),
+        makePlayer({ name: 'Bot 2', cardEvalDelay: 600 }),
+      ],
+    })
+    const delays = getAiCardEvalDelays(state)
+    expect(delays).toHaveLength(2)
+    expect(delays[0].delay).toBeLessThanOrEqual(delays[1].delay)
   })
 })
 

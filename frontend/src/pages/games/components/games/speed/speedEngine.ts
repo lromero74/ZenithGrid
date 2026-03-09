@@ -1,13 +1,13 @@
 /**
  * Speed card game engine — pure logic, no side effects.
  *
- * Rules:
- * - 52-card deck split evenly (26 each)
- * - Each player has a 5-card hand and a draw pile
- * - 2 center piles with 1 starting card each
+ * Standard Speed rules:
+ * - 52-card deck dealt as: 5-card hand + 15-card draw pile per player,
+ *   2 replacement piles of 5 each, 2 center piles of 1 each
  * - Play a card if its rank is ±1 from center pile top (Ace wraps to King)
  * - After playing, auto-draw to refill hand to 5
- * - When neither player can play, flip new center cards from draw piles
+ * - When neither player can play, flip from replacement piles onto center
+ * - When replacement piles are empty and stalled, game is over
  * - First to empty hand + draw pile wins
  */
 
@@ -16,6 +16,7 @@ import { createDeck, shuffleDeck, type Card } from '../../../utils/cardUtils'
 // ── Types ───────────────────────────────────────────────────────────
 
 export type Phase = 'ready' | 'playing' | 'stalled' | 'gameOver'
+export type AiDifficulty = 'easy' | 'normal' | 'adept'
 
 export interface SpeedState {
   playerHand: Card[]
@@ -23,8 +24,50 @@ export interface SpeedState {
   aiHand: Card[]
   aiDrawPile: Card[]
   centerPiles: [Card[], Card[]]   // each is a stack; top card = last element
+  replacementPiles: [Card[], Card[]]  // 5-card piles used to unstick the game
   phase: Phase
   message: string
+  difficulty: AiDifficulty
+}
+
+// ── Human-modeled AI reaction timing ────────────────────────────────
+//
+// Speed is a real-time game. AI card play is broken into cognitive stages:
+//   1. Scan — scanning hand and center piles for a valid play
+//   2. Recognize — identifying the matching card
+//   3. Decide — committing to play it
+//   4. Act — executing the play
+//
+// Bounded: never faster than 90th percentile, never slower than 50th percentile.
+
+interface ReactionRange { min: number; max: number }
+
+const SPEED_PLAY_PROFILE: { scan: ReactionRange; recognize: ReactionRange; decide: ReactionRange; act: ReactionRange } = {
+  scan:      { min: 80,  max: 250 },
+  recognize: { min: 60,  max: 200 },
+  decide:    { min: 40,  max: 150 },
+  act:       { min: 60,  max: 180 },
+}
+
+function difficultyBias(difficulty: AiDifficulty): number {
+  switch (difficulty) {
+    case 'easy':   return 0.0 + Math.random() * 0.3
+    case 'normal': return 0.3 + Math.random() * 0.3
+    case 'adept':  return 0.6 + Math.random() * 0.4
+  }
+}
+
+/** Generate AI play delay using human cognitive model. */
+export function generateAiPlayDelay(difficulty: AiDifficulty): number {
+  const bias = difficultyBias(difficulty)
+  let total = 0
+  for (const stage of [SPEED_PLAY_PROFILE.scan, SPEED_PLAY_PROFILE.recognize, SPEED_PLAY_PROFILE.decide, SPEED_PLAY_PROFILE.act]) {
+    const range = stage.max - stage.min
+    const center = stage.max - (range * bias)
+    const variance = range * 0.3 * (Math.random() * 2 - 1)
+    total += Math.max(stage.min, Math.min(stage.max, center + variance))
+  }
+  return Math.round(total)
 }
 
 export interface Move {
@@ -85,25 +128,58 @@ function checkWin(state: SpeedState): SpeedState {
   return state
 }
 
+function resolveStall(state: SpeedState): SpeedState {
+  if (!checkStalled(state)) return state
+
+  // If replacement piles are both empty, game over — fewest cards wins
+  if (state.replacementPiles[0].length === 0 && state.replacementPiles[1].length === 0) {
+    const pLeft = state.playerHand.length + state.playerDrawPile.length
+    const aLeft = state.aiHand.length + state.aiDrawPile.length
+    if (pLeft < aLeft) return { ...state, phase: 'gameOver', message: 'You win! Fewer cards remaining!' }
+    if (aLeft < pLeft) return { ...state, phase: 'gameOver', message: 'AI wins — fewer cards remaining!' }
+    return { ...state, phase: 'gameOver', message: 'Draw! Same cards remaining.' }
+  }
+
+  return { ...state, phase: 'stalled', message: 'No moves! Flip from the replacement piles.' }
+}
+
 // ── Engine functions ────────────────────────────────────────────────
 
-/** Create a new Speed game: shuffle deck, split, deal hands. Center cards start face-down. */
-export function createSpeedGame(): SpeedState {
+/** Create a new Speed game with standard deal. */
+export function createSpeedGame(difficulty: AiDifficulty = 'normal'): SpeedState {
   const deck = shuffleDeck(createDeck())
-  const half1 = deck.slice(0, 26)
-  const half2 = deck.slice(26)
+  let i = 0
 
-  // Deal 5-card hands from each half (face-down until flip)
-  const playerHand = half1.slice(0, 5).map(c => ({ ...c, faceUp: false }))
-  const aiHand = half2.slice(0, 5).map(c => ({ ...c, faceUp: false }))
+  // Player hand: 5 cards (face-down until flip)
+  const playerHand = deck.slice(i, i + 5).map(c => ({ ...c, faceUp: false }))
+  i += 5
 
-  // Remaining go to draw piles
-  const playerDrawPile = half1.slice(5)
-  const aiDrawPile = half2.slice(5)
+  // Player draw pile: 15 cards
+  const playerDrawPile = deck.slice(i, i + 15).map(c => ({ ...c, faceUp: false }))
+  i += 15
 
-  // Place 1 card from each draw pile onto center piles (face-down until flip)
-  const centerLeft: Card[] = [{ ...playerDrawPile.shift()!, faceUp: false }]
-  const centerRight: Card[] = [{ ...aiDrawPile.shift()!, faceUp: false }]
+  // Replacement pile (left): 5 cards
+  const replacementLeft = deck.slice(i, i + 5).map(c => ({ ...c, faceUp: false }))
+  i += 5
+
+  // Center pile (left): 1 card (face-down until flip)
+  const centerLeft: Card[] = [{ ...deck[i], faceUp: false }]
+  i += 1
+
+  // Center pile (right): 1 card (face-down until flip)
+  const centerRight: Card[] = [{ ...deck[i], faceUp: false }]
+  i += 1
+
+  // Replacement pile (right): 5 cards
+  const replacementRight = deck.slice(i, i + 5).map(c => ({ ...c, faceUp: false }))
+  i += 5
+
+  // AI draw pile: 15 cards
+  const aiDrawPile = deck.slice(i, i + 15).map(c => ({ ...c, faceUp: false }))
+  i += 15
+
+  // AI hand: 5 cards (face-down until flip)
+  const aiHand = deck.slice(i, i + 5).map(c => ({ ...c, faceUp: false }))
 
   return {
     playerHand,
@@ -111,6 +187,8 @@ export function createSpeedGame(): SpeedState {
     aiHand,
     aiDrawPile,
     centerPiles: [centerLeft, centerRight],
+    replacementPiles: [replacementLeft, replacementRight],
+    difficulty,
     phase: 'ready',
     message: 'Ready? Flip the center cards to start!',
   }
@@ -143,16 +221,12 @@ export function playCard(state: SpeedState, handIndex: number, pileIndex: number
   const pile = state.centerPiles[pileIndex]
   if (pile.length === 0 || !isPlayable(card, pileTop(pile))) return state
 
-  // Remove card from hand
   const newHand = state.playerHand.filter((_, i) => i !== handIndex)
-
-  // Add card to center pile
   const newPiles: [Card[], Card[]] = [
     pileIndex === 0 ? [...pile, { ...card, faceUp: true }] : [...state.centerPiles[0]],
     pileIndex === 1 ? [...pile, { ...card, faceUp: true }] : [...state.centerPiles[1]],
   ]
 
-  // Refill hand from draw pile
   const { hand: filledHand, drawPile: newDrawPile } = refillHand(newHand, [...state.playerDrawPile])
 
   const next: SpeedState = {
@@ -163,24 +237,10 @@ export function playCard(state: SpeedState, handIndex: number, pileIndex: number
     message: 'Nice play!',
   }
 
-  // Check for win
   const afterWin = checkWin(next)
   if (afterWin.phase === 'gameOver') return afterWin
 
-  // Check for stall
-  if (checkStalled(afterWin)) {
-    // If both draw piles are empty and stalled, game over
-    if (afterWin.playerDrawPile.length === 0 && afterWin.aiDrawPile.length === 0) {
-      const pLeft = afterWin.playerHand.length + afterWin.playerDrawPile.length
-      const aLeft = afterWin.aiHand.length + afterWin.aiDrawPile.length
-      if (pLeft < aLeft) return { ...afterWin, phase: 'gameOver', message: 'You win! Fewer cards remaining!' }
-      if (aLeft < pLeft) return { ...afterWin, phase: 'gameOver', message: 'AI wins — fewer cards remaining!' }
-      return { ...afterWin, phase: 'gameOver', message: 'Draw! Same cards remaining.' }
-    }
-    return { ...afterWin, phase: 'stalled', message: 'No moves! Flip new center cards.' }
-  }
-
-  return afterWin
+  return resolveStall(afterWin)
 }
 
 /** AI plays a card from its hand onto a center pile. */
@@ -193,16 +253,12 @@ export function aiPlayCard(state: SpeedState, handIndex: number, pileIndex: numb
   const pile = state.centerPiles[pileIndex]
   if (pile.length === 0 || !isPlayable(card, pileTop(pile))) return state
 
-  // Remove card from AI hand
   const newHand = state.aiHand.filter((_, i) => i !== handIndex)
-
-  // Add card to center pile
   const newPiles: [Card[], Card[]] = [
     pileIndex === 0 ? [...pile, { ...card, faceUp: true }] : [...state.centerPiles[0]],
     pileIndex === 1 ? [...pile, { ...card, faceUp: true }] : [...state.centerPiles[1]],
   ]
 
-  // Refill AI hand from draw pile
   const { hand: filledHand, drawPile: newDrawPile } = refillHand(newHand, [...state.aiDrawPile])
 
   const next: SpeedState = {
@@ -213,64 +269,37 @@ export function aiPlayCard(state: SpeedState, handIndex: number, pileIndex: numb
     message: 'AI played a card!',
   }
 
-  // Check for win
   const afterWin = checkWin(next)
   if (afterWin.phase === 'gameOver') return afterWin
 
-  // Check for stall
-  if (checkStalled(afterWin)) {
-    if (afterWin.playerDrawPile.length === 0 && afterWin.aiDrawPile.length === 0) {
-      const pLeft = afterWin.playerHand.length + afterWin.playerDrawPile.length
-      const aLeft = afterWin.aiHand.length + afterWin.aiDrawPile.length
-      if (pLeft < aLeft) return { ...afterWin, phase: 'gameOver', message: 'You win! Fewer cards remaining!' }
-      if (aLeft < pLeft) return { ...afterWin, phase: 'gameOver', message: 'AI wins — fewer cards remaining!' }
-      return { ...afterWin, phase: 'gameOver', message: 'Draw! Same cards remaining.' }
-    }
-    return { ...afterWin, phase: 'stalled', message: 'No moves! Flip new center cards.' }
-  }
-
-  return afterWin
+  return resolveStall(afterWin)
 }
 
-/** Flip new center cards when stalled. Each player flips from their draw pile. */
+/** Flip new center cards from replacement piles when stalled. */
 export function flipCenterCards(state: SpeedState): SpeedState {
   if (state.phase !== 'stalled') return state
 
-  const playerDraw = [...state.playerDrawPile]
-  const aiDraw = [...state.aiDrawPile]
+  const leftRepl = [...state.replacementPiles[0]]
+  const rightRepl = [...state.replacementPiles[1]]
   const leftPile = [...state.centerPiles[0]]
   const rightPile = [...state.centerPiles[1]]
 
-  // Each player flips a card onto their side
-  if (playerDraw.length > 0) {
-    leftPile.push({ ...playerDraw.shift()!, faceUp: true })
+  if (leftRepl.length > 0) {
+    leftPile.push({ ...leftRepl.shift()!, faceUp: true })
   }
-  if (aiDraw.length > 0) {
-    rightPile.push({ ...aiDraw.shift()!, faceUp: true })
+  if (rightRepl.length > 0) {
+    rightPile.push({ ...rightRepl.shift()!, faceUp: true })
   }
 
   const next: SpeedState = {
     ...state,
-    playerDrawPile: playerDraw,
-    aiDrawPile: aiDraw,
+    replacementPiles: [leftRepl, rightRepl],
     centerPiles: [leftPile, rightPile],
     phase: 'playing',
     message: 'New cards flipped! Keep playing!',
   }
 
-  // Check for stall again after flipping
-  if (checkStalled(next)) {
-    if (next.playerDrawPile.length === 0 && next.aiDrawPile.length === 0) {
-      const pLeft = next.playerHand.length
-      const aLeft = next.aiHand.length
-      if (pLeft < aLeft) return { ...next, phase: 'gameOver', message: 'You win! Fewer cards remaining!' }
-      if (aLeft < pLeft) return { ...next, phase: 'gameOver', message: 'AI wins — fewer cards remaining!' }
-      return { ...next, phase: 'gameOver', message: 'Draw! Same cards remaining.' }
-    }
-    return { ...next, phase: 'stalled', message: 'Still stalled! Flip again.' }
-  }
-
-  return next
+  return resolveStall(next)
 }
 
 /** Get a random valid move for the AI, or null if none available. */

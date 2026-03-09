@@ -58,6 +58,7 @@ const Bridge = lazy(() => import('./games/components/games/bridge/Bridge'))
 const Canasta = lazy(() => import('./games/components/games/canasta/Canasta'))
 const Speed = lazy(() => import('./games/components/games/speed/Speed'))
 const Spoons = lazy(() => import('./games/components/games/spoons/Spoons'))
+const Shalas = lazy(() => import('./games/components/games/shalas/Shalas'))
 
 // Phase 7: Arcade Games
 const Centipede = lazy(() => import('./games/components/games/centipede/Centipede'))
@@ -115,6 +116,7 @@ export default function Games() {
         <Route path="texas-holdem" element={<TexasHoldem />} />
         <Route path="bridge" element={<Bridge />} />
         <Route path="canasta" element={<Canasta />} />
+        <Route path="shalas" element={<Shalas />} />
         {/* Phase 7: Arcade Games */}
         <Route path="centipede" element={<Centipede />} />
         <Route path="space-invaders" element={<SpaceInvaders />} />

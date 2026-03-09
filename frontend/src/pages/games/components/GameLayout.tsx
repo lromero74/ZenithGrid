@@ -17,9 +17,10 @@ interface GameLayoutProps {
   bestScore?: number
   timer?: string
   controls?: React.ReactNode
+  subtitle?: React.ReactNode
 }
 
-export function GameLayout({ title, children, score, bestScore, timer, controls }: GameLayoutProps) {
+export function GameLayout({ title, children, score, bestScore, timer, controls, subtitle }: GameLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -43,7 +44,10 @@ export function GameLayout({ title, children, score, bestScore, timer, controls 
           <span className="hidden sm:inline">Back to Games</span>
         </button>
 
-        <h1 className="text-lg sm:text-xl font-bold text-white">{title}</h1>
+        <div className="text-center">
+          <h1 className="text-lg sm:text-xl font-bold text-white">{title}</h1>
+          {subtitle}
+        </div>
 
         <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm">
           {timer && <span className="text-slate-400 font-mono">{timer}</span>}

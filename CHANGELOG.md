@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.96.0] - 2026-03-09
+
+### Added
+- **Shalas card game**: New original card game invented by David Damir Greene — special card mechanics (Destroyer, Wildcard, Selector, Blocker, 4-of-a-kind Wild Set), Ace dual-rank rule, staggered hand fan layout, undo support, and circular discard fan (contributed by David Greene)
+- **Speed difficulty selection**: Choose Easy, Normal, or Adept AI difficulty before starting a game of Speed (contributed by Shantina Jackson-Romero)
+- **Speed face-down deal**: Cards dealt face-down with simultaneous center card flip to start the game (contributed by Shantina Jackson-Romero)
+- **Spoons game modes**: Turn-based and Real-time modes with Easy/Normal/Adept AI difficulty (contributed by Shantina Jackson-Romero)
+- **Blackjack animated dealer**: Step-by-step dealer card reveals with AI-narrated commentary (contributed by David Greene)
+- **GameLayout subtitle support**: Shared game wrapper now accepts an optional subtitle displayed beneath the title
+
+### Changed
+- **Blackjack card size**: Player and dealer cards use standard size instead of compact for better readability (contributed by David Greene)
+- **Texas Hold'em larger player cards**: Player hole cards now use the large card size for easier viewing (contributed by David Greene)
+- **Texas Hold'em touch-friendly raise slider**: Drag-based vertical raise slider with touch support (contributed by David Greene)
+
 ## [v2.95.2] - 2026-03-09
 
 ### Added

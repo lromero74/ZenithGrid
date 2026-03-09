@@ -42,7 +42,7 @@ import {
   Building2,
   Boxes,
 } from 'lucide-react'
-import type { ComponentType } from 'react'
+import { createElement, type ComponentType } from 'react'
 import type { GameInfo } from './types'
 
 export const GAMES: GameInfo[] = [
@@ -447,9 +447,32 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'arcade',
   },
+  {
+    id: 'shalas',
+    name: 'Shalas',
+    description: 'Strategic card stacking on the table',
+    icon: 'Peace',
+    path: '/games/shalas',
+    difficulty: 'medium',
+    sessionLength: '10-20 min',
+    category: 'cards',
+    subcategory: 'Classic',
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
+/** Peace hand (V-sign / U+270C ✌) icon. */
+function Peace({ className }: { className?: string }) {
+  return createElement('svg', {
+    xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', className,
+  },
+    createElement('text', {
+      x: '12', y: '18', textAnchor: 'middle', fontSize: '20',
+      style: { userSelect: 'none' } as React.CSSProperties,
+    }, '\u270C\uFE0F'),
+  )
+}
+
 export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   Grid3X3,
   CircleDot,
@@ -489,6 +512,7 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Star,
   Building2,
   Boxes,
+  Peace,
 }
 
 /** Category filter options for the hub page */
