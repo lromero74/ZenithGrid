@@ -526,6 +526,22 @@ export function advancePhase(state: TexasHoldemState): TexasHoldemState {
       return state
   }
 
+  // Flop bonus: add 1000 to pot for special flop patterns
+  let flopBonus = 0
+  let flopBonusMsg = ''
+  if (nextPhase === 'flop' && community.length === 3) {
+    const [c1, c2, c3] = community
+    const ranks = [compareRank(c1.rank), compareRank(c2.rank), compareRank(c3.rank)].sort((a, b) => a - b)
+    const allSameRank = ranks[0] === ranks[1] && ranks[1] === ranks[2]
+    const isRun = ranks[2] - ranks[0] === 2 && new Set(ranks).size === 3
+    const allSameSuit = c1.suit === c2.suit && c2.suit === c3.suit
+    if (allSameRank || isRun || allSameSuit) {
+      flopBonus = 1000
+      const reason = allSameRank ? 'three of a kind' : isRun ? 'a run' : 'suited flop'
+      flopBonusMsg = ` Flop bonus: +1000 pot (${reason})!`
+    }
+  }
+
   // Reset round bets, find first active player after dealer
   const bets = new Array(n).fill(0)
   let firstPlayer = (state.dealerIdx + 1) % n
@@ -542,18 +558,19 @@ export function advancePhase(state: TexasHoldemState): TexasHoldemState {
     deck,
     community,
     phase: nextPhase,
+    pot: state.pot + flopBonus,
     bets,
     currentBet: 0,
     currentPlayer: firstPlayer,
     actedThisRound: new Array(n).fill(false),
     raiseCount: 0,
-    message: `${nextPhase.charAt(0).toUpperCase() + nextPhase.slice(1)} betting`,
+    message: `${nextPhase.charAt(0).toUpperCase() + nextPhase.slice(1)} betting${flopBonusMsg}`,
   }
 }
 
 // ── Bonus Hands ─────────────────────────────────────────────────────
 
-const BONUS_HANDS: [number, number][] = [[11, 11], [2, 3], [12, 7]]
+const BONUS_HANDS: [number, number][] = [[11, 11], [2, 3], [12, 7], [11, 2]]
 const BONUS_AMOUNT = 1000
 
 /** Check if a player's hole cards match a bonus combo (order-independent). */

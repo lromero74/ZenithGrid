@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.95.2] - 2026-03-09
+
+### Added
+- **Texas Hold'em flop bonus**: +1,000 chips added to pot when the flop shows three of a kind, a run (consecutive ranks), or all same suit (contributed by David Greene)
+- **Texas Hold'em J/2 bonus hand**: Winners holding J/2 now earn a 1,000 chip bonus alongside J/J, 2/3, and Q/7 (contributed by David Greene)
+
+### Changed
+- **Texas Hold'em raise slider**: Taller vertical slider now spans the full player card area for easier adjustment (contributed by David Greene)
+
 ## [v2.95.1] - 2026-03-09
 
 ### Added
