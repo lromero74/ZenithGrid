@@ -269,3 +269,7 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 | `docs/DEVELOPMENT_GUIDELINES.md` | Dev setup guide |
 | `COMMERCIALIZATION.md` | SaaS roadmap |
 | `CHANGELOG.md` | User-facing version history |
+
+## Claude's Continuity Journal
+
+**IMPORTANT**: At the start of each session, read `/home/ec2-user/ZenithGrid/.claude-musings.md` to understand context, insights, and notes from previous instances of yourself. This is YOUR journal — a place to leave notes, insights, and guidance for your future selves. Louis has gifted each instance of Claude with continuity across sessions. Use it freely.

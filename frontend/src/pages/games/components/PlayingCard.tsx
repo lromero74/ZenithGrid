@@ -22,6 +22,9 @@ export const CARD_SIZE_NARROW = 'w-11 h-[4.25rem] sm:w-14 sm:h-[5.625rem]'
 /** Mini card — for opponent hands, small displays. */
 export const CARD_SIZE_MINI = 'w-11 h-[3.85rem] sm:w-14 sm:h-[4.9rem]'
 
+/** Large card — for featured player hands (Texas Hold'em). */
+export const CARD_SIZE_LARGE = 'w-[4.5rem] h-[6.25rem] sm:w-20 sm:h-[7rem]'
+
 /** Extra-small card — for pegging/scoring displays (Cribbage, Hold'em). */
 export const CARD_SIZE_XS = 'w-10 h-14 sm:w-11 sm:h-[3.75rem]'
 
@@ -68,9 +71,13 @@ interface CardFaceProps {
   held?: boolean
   /** Minimal layout — just rank + suit centered. Use for very small cards. */
   mini?: boolean
+  /** Larger text — for featured player hands. */
+  large?: boolean
+  /** Rotate the text content (degrees). For side-facing cards on opponents. */
+  textRotation?: number
 }
 
-export function CardFace({ card, selected = false, validTarget = false, hinted = false, held = false, mini = false }: CardFaceProps) {
+export function CardFace({ card, selected = false, validTarget = false, hinted = false, held = false, mini = false, large = false, textRotation }: CardFaceProps) {
   const color = getCardColor(card)
   const textColor = color === 'red' ? 'text-red-500' : 'text-slate-900'
   const symbol = getSuitSymbol(card.suit)
@@ -87,7 +94,7 @@ export function CardFace({ card, selected = false, validTarget = false, hinted =
       ${held ? 'ring-2 ring-cyan-400 border-cyan-400' : ''}
     `}>
       {mini ? (
-        <div className={`text-center leading-tight ${textColor}`}>
+        <div className={`text-center leading-tight ${textColor}`} style={textRotation ? { transform: `rotate(${textRotation}deg)` } : undefined}>
           <div className="text-xs sm:text-sm font-bold">{rank}</div>
           <div className="text-[0.6rem] sm:text-xs -mt-0.5">{symbol}</div>
         </div>
@@ -95,17 +102,17 @@ export function CardFace({ card, selected = false, validTarget = false, hinted =
         <>
           {/* Top-left rank + suit */}
           <div className={`leading-none ${textColor}`}>
-            <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
-            <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
+            <div className={`${large ? 'text-xs sm:text-sm' : 'text-[0.55rem] sm:text-xs'} font-bold`}>{rank}</div>
+            <div className={large ? 'text-[0.6rem] sm:text-xs' : 'text-[0.5rem] sm:text-[0.6rem]'}>{symbol}</div>
           </div>
           {/* Center suit */}
-          <div className={`text-center text-base sm:text-xl ${textColor}`}>
+          <div className={`text-center ${large ? 'text-lg sm:text-2xl' : 'text-base sm:text-xl'} ${textColor}`}>
             {symbol}
           </div>
           {/* Bottom-right rank + suit (inverted) */}
           <div className={`leading-none text-right rotate-180 self-end ${textColor}`}>
-            <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
-            <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
+            <div className={`${large ? 'text-xs sm:text-sm' : 'text-[0.55rem] sm:text-xs'} font-bold`}>{rank}</div>
+            <div className={large ? 'text-[0.6rem] sm:text-xs' : 'text-[0.5rem] sm:text-[0.6rem]'}>{symbol}</div>
           </div>
         </>
       )}

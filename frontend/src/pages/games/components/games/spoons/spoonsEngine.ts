@@ -10,6 +10,15 @@
  * - When someone gets 4 of a kind, they grab a spoon — everyone races!
  * - Player without a spoon gets a letter from S-P-O-O-N-S
  * - 6 letters = eliminated. Last player standing wins.
+ *
+ * Two modes:
+ *   turn-based — sequential draw/discard, classic digital adaptation
+ *   real-time  — all players act simultaneously with human-modeled AI timing
+ *
+ * Three AI difficulties (affect reaction times across all cognitive stages):
+ *   easy   — 50th percentile human reactions (slower, more hesitant)
+ *   normal — 70th percentile (competent, occasionally fast)
+ *   adept  — 90th percentile (quick perception and decisive, but still human)
  */
 
 import { createDeck, shuffleDeck, type Card } from '../../../utils/cardUtils'
@@ -23,6 +32,9 @@ export type Phase =
   | 'roundOver'    // Round result shown
   | 'gameOver'     // Only 1 player left
 
+export type GameMode = 'turn-based' | 'real-time'
+export type AiDifficulty = 'easy' | 'normal' | 'adept'
+
 export interface PlayerInfo {
   hand: Card[]
   letters: string         // accumulated: '', 'S', 'SP', 'SPO', etc.
@@ -30,7 +42,10 @@ export interface PlayerInfo {
   isHuman: boolean
   name: string
   grabbedSpoon: boolean
-  reactionTime: number    // AI spoon grab delay in ms (0 for human)
+  /** Spoon grab delay in ms (set per-round based on difficulty). 0 for human. */
+  spoonGrabDelay: number
+  /** Card evaluation delay in ms (real-time mode). 0 for human. */
+  cardEvalDelay: number
 }
 
 export interface SpoonsState {
@@ -46,12 +61,93 @@ export interface SpoonsState {
   spoonGrabber: number | null   // who triggered the grab
   roundLoser: number | null
   roundNumber: number
+  mode: GameMode
+  difficulty: AiDifficulty
 }
 
 // ── Constants ───────────────────────────────────────────────────────
 
 const SPOONS_WORD = 'SPOONS'
 const PLAYER_COUNT = 3
+
+// ── Human-modeled reaction time system ──────────────────────────────
+//
+// Each AI action is broken into 4 cognitive stages:
+//   1. Perception  — noticing the stimulus (card appeared, spoon grab triggered)
+//   2. Understanding — processing what it means (is this card useful? do I need to grab?)
+//   3. Deciding    — choosing an action (which card to discard, whether to grab)
+//   4. Acting      — motor execution (reaching, tapping)
+//
+// Each stage has a range in ms. Difficulty shifts where in the range the AI lands.
+// No AI is faster than 90th percentile humans. No AI is slower than 50th percentile.
+
+interface ReactionRange {
+  min: number  // 90th percentile (fastest allowed)
+  max: number  // 50th percentile (slowest allowed)
+}
+
+interface CognitiveProfile {
+  perception: ReactionRange
+  understanding: ReactionRange
+  deciding: ReactionRange
+  acting: ReactionRange
+}
+
+/** Cognitive stage ranges for spoon grabbing (simpler task — react and grab). */
+const SPOON_GRAB_PROFILE: CognitiveProfile = {
+  perception:    { min: 80,  max: 200 },   // noticing someone grabbed / you have 4-of-a-kind
+  understanding: { min: 50,  max: 150 },   // processing "I need to grab NOW"
+  deciding:      { min: 30,  max: 100 },   // committing to the action
+  acting:        { min: 100, max: 250 },   // motor execution (reaching for spoon)
+}
+
+/** Cognitive stage ranges for card evaluation (complex — pick up, evaluate hand, choose discard). */
+const CARD_EVAL_PROFILE: CognitiveProfile = {
+  perception:    { min: 100, max: 250 },   // noticing a card is available
+  understanding: { min: 200, max: 600 },   // evaluating hand + new card
+  deciding:      { min: 150, max: 400 },   // choosing which card to discard
+  acting:        { min: 80,  max: 200 },   // executing the discard
+}
+
+/**
+ * Generate a total reaction time from a cognitive profile.
+ *
+ * @param profile  The 4-stage cognitive model
+ * @param bias     0.0 = always pick max (50th pctile), 1.0 = always pick min (90th pctile)
+ *                 Difficulty maps: easy=0.0-0.3, normal=0.3-0.6, adept=0.6-1.0
+ */
+function generateReactionTime(profile: CognitiveProfile, bias: number): number {
+  let total = 0
+  for (const stage of [profile.perception, profile.understanding, profile.deciding, profile.acting]) {
+    const range = stage.max - stage.min
+    // Bias shifts the center point; randomness adds human-like variance
+    const center = stage.max - (range * bias)
+    // ±30% variance around the center, clamped to [min, max]
+    const variance = range * 0.3 * (Math.random() * 2 - 1)
+    const value = Math.max(stage.min, Math.min(stage.max, center + variance))
+    total += value
+  }
+  return Math.round(total)
+}
+
+/** Map difficulty to a bias range, then pick a random bias within that range. */
+function difficultyBias(difficulty: AiDifficulty): number {
+  switch (difficulty) {
+    case 'easy':   return 0.0 + Math.random() * 0.3   // 0.0–0.3 (lean slow)
+    case 'normal': return 0.3 + Math.random() * 0.3   // 0.3–0.6 (middle)
+    case 'adept':  return 0.6 + Math.random() * 0.4   // 0.6–1.0 (lean fast)
+  }
+}
+
+/** Generate spoon grab delay for an AI player. */
+export function generateSpoonGrabDelay(difficulty: AiDifficulty): number {
+  return generateReactionTime(SPOON_GRAB_PROFILE, difficultyBias(difficulty))
+}
+
+/** Generate card evaluation delay for an AI player. */
+export function generateCardEvalDelay(difficulty: AiDifficulty): number {
+  return generateReactionTime(CARD_EVAL_PROFILE, difficultyBias(difficulty))
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -100,8 +196,11 @@ function getLastActivePlayer(players: PlayerInfo[], dealer: number): number {
 
 // ── Engine functions ────────────────────────────────────────────────
 
-/** Create a new Spoons game. */
-export function createSpoonsGame(): SpoonsState {
+/** Create a new Spoons game with the given mode and difficulty. */
+export function createSpoonsGame(
+  mode: GameMode = 'turn-based',
+  difficulty: AiDifficulty = 'normal'
+): SpoonsState {
   const deck = shuffleDeck(createDeck())
 
   const players: PlayerInfo[] = []
@@ -109,14 +208,16 @@ export function createSpoonsGame(): SpoonsState {
   for (let i = 0; i < PLAYER_COUNT; i++) {
     const hand = deck.slice(cardIdx, cardIdx + 4).map(c => ({ ...c, faceUp: true }))
     cardIdx += 4
+    const isHuman = i === 0
     players.push({
       hand,
       letters: '',
       eliminated: false,
-      isHuman: i === 0,
-      name: i === 0 ? 'You' : `Bot ${i}`,
+      isHuman,
+      name: isHuman ? 'You' : `Bot ${i}`,
       grabbedSpoon: false,
-      reactionTime: i === 0 ? 0 : 300 + Math.floor(Math.random() * 900),
+      spoonGrabDelay: isHuman ? 0 : generateSpoonGrabDelay(difficulty),
+      cardEvalDelay: isHuman ? 0 : generateCardEvalDelay(difficulty),
     })
   }
 
@@ -135,6 +236,8 @@ export function createSpoonsGame(): SpoonsState {
     spoonGrabber: null,
     roundLoser: null,
     roundNumber: 1,
+    mode,
+    difficulty,
   }
 }
 
@@ -293,7 +396,7 @@ export function grabSpoon(state: SpoonsState, playerIndex: number): SpoonsState 
   }
 }
 
-/** Start a new round after round over. */
+/** Start a new round after round over. Regenerates AI reaction times. */
 export function newRound(state: SpoonsState): SpoonsState {
   if (state.phase !== 'roundOver') return state
 
@@ -305,6 +408,9 @@ export function newRound(state: SpoonsState): SpoonsState {
     ...p,
     hand: [] as Card[],
     grabbedSpoon: false,
+    // Regenerate AI reaction times each round for natural variance
+    spoonGrabDelay: p.isHuman ? 0 : generateSpoonGrabDelay(state.difficulty),
+    cardEvalDelay: p.isHuman ? 0 : generateCardEvalDelay(state.difficulty),
   }))
 
   // Deal 4 cards to each active player
@@ -374,13 +480,24 @@ export function aiDiscard(hand: Card[]): number {
   return discardIdx
 }
 
-/** Get AI spoon grab delays for all active AI players. */
+/** Get AI spoon grab delays for all active AI players. Uses per-player delays. */
 export function getAiGrabDelays(state: SpoonsState): Array<{ playerIndex: number; delay: number }> {
   return state.players
-    .map((p, i) => ({ playerIndex: i, delay: p.reactionTime }))
+    .map((p, i) => ({ playerIndex: i, delay: p.spoonGrabDelay }))
     .filter(({ playerIndex }) => {
       const p = state.players[playerIndex]
       return !p.eliminated && !p.isHuman && !p.grabbedSpoon
+    })
+    .sort((a, b) => a.delay - b.delay)
+}
+
+/** Get AI card evaluation delays for real-time mode. */
+export function getAiCardEvalDelays(state: SpoonsState): Array<{ playerIndex: number; delay: number }> {
+  return state.players
+    .map((p, i) => ({ playerIndex: i, delay: p.cardEvalDelay }))
+    .filter(({ playerIndex }) => {
+      const p = state.players[playerIndex]
+      return !p.eliminated && !p.isHuman
     })
     .sort((a, b) => a.delay - b.delay)
 }

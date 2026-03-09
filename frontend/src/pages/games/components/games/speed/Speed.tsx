@@ -22,13 +22,61 @@ import {
   flipStartingCards,
   getAiMove,
   getPlayerMoves,
+  generateAiPlayDelay,
   type SpeedState,
+  type AiDifficulty,
 } from './speedEngine'
 
 interface SavedState {
   gameState: SpeedState
   gameStatus: GameStatus
 }
+
+// ── Difficulty selection screen ─────────────────────────────────────
+
+function DifficultySelect({ onStart }: { onStart: (difficulty: AiDifficulty) => void }) {
+  const [difficulty, setDifficulty] = useState<AiDifficulty>('normal')
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-4">
+      <div className="text-center">
+        <h3 className="text-sm font-medium text-slate-300 mb-3 uppercase tracking-wider">AI Difficulty</h3>
+        <div className="flex gap-2">
+          {(['easy', 'normal', 'adept'] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => setDifficulty(d)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all capitalize ${
+                difficulty === d
+                  ? d === 'easy' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'
+                    : d === 'normal' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
+                    : 'bg-red-600 text-white shadow-lg shadow-red-900/40'
+                  : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-2 max-w-xs">
+          {difficulty === 'easy' ? 'AI reacts like an average human — room to breathe.'
+            : difficulty === 'normal' ? 'AI is competent — occasionally catches you off guard.'
+            : 'AI has fast reflexes — top 10% reaction speed.'}
+        </p>
+      </div>
+
+      <button
+        onClick={() => onStart(difficulty)}
+        className="mt-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl
+          text-lg font-bold transition-all active:scale-95 shadow-lg shadow-emerald-900/50"
+      >
+        Deal Cards
+      </button>
+    </div>
+  )
+}
+
+// ── Main component ──────────────────────────────────────────────────
 
 export default function Speed() {
   const { load, save, clear } = useGameState<SavedState>('speed')
@@ -39,9 +87,15 @@ export default function Speed() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('speed')
 
-  const [gameState, setGameState] = useState<SpeedState>(
-    () => saved?.gameState ?? createSpeedGame()
-  )
+  const [showDifficultySelect, setShowDifficultySelect] = useState<boolean>(() => {
+    const s = saved?.gameState
+    return !(s && s.replacementPiles && s.difficulty)
+  })
+  const [gameState, setGameState] = useState<SpeedState>(() => {
+    const s = saved?.gameState
+    if (s && s.replacementPiles && s.difficulty) return s
+    return createSpeedGame()
+  })
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
   const [flipping, setFlipping] = useState(false)
@@ -49,13 +103,15 @@ export default function Speed() {
 
   // Persist state
   useEffect(() => {
+    if (showDifficultySelect) return
     if (gameStatus !== 'won' && gameStatus !== 'lost' && gameStatus !== 'draw') {
       save({ gameState, gameStatus })
     }
-  }, [gameState, gameStatus, save])
+  }, [gameState, gameStatus, save, showDifficultySelect])
 
   // Detect game over
   useEffect(() => {
+    if (showDifficultySelect) return
     if (gameState.phase === 'gameOver') {
       const pLeft = gameState.playerHand.length + gameState.playerDrawPile.length
       const aLeft = gameState.aiHand.length + gameState.aiDrawPile.length
@@ -64,14 +120,15 @@ export default function Speed() {
       else setGameStatus('draw')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, showDifficultySelect])
 
-  // AI play loop — AI makes moves with random delay
+  // AI play loop — human-modeled reaction timing
   const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    if (showDifficultySelect) return
     if (gameState.phase !== 'playing' || gameStatus !== 'playing') return
 
-    const delay = 400 + Math.random() * 400 // 400-800ms
+    const delay = generateAiPlayDelay(gameState.difficulty)
     aiTimerRef.current = setTimeout(() => {
       setGameState(prev => {
         if (prev.phase !== 'playing') return prev
@@ -85,7 +142,7 @@ export default function Speed() {
     return () => {
       if (aiTimerRef.current) clearTimeout(aiTimerRef.current)
     }
-  }, [gameState, gameStatus, sfx])
+  }, [gameState, gameStatus, sfx, showDifficultySelect])
 
   // Get valid player moves
   const playerMoves = useMemo(() => getPlayerMoves(gameState), [gameState])
@@ -159,18 +216,48 @@ export default function Speed() {
   }, [music, sfx])
 
   const handleNewGame = useCallback(() => {
-    setGameState(createSpeedGame())
+    setShowDifficultySelect(true)
     setGameStatus('playing')
     setSelectedCard(null)
     clear()
   }, [clear])
 
+  const handleStart = useCallback((difficulty: AiDifficulty) => {
+    music.init()
+    sfx.init()
+    music.start()
+    setGameState(createSpeedGame(difficulty))
+    setGameStatus('playing')
+    setSelectedCard(null)
+    setShowDifficultySelect(false)
+  }, [music, sfx])
+
+  // ── Difficulty selection screen ───────────────────────────────────
+  if (showDifficultySelect) {
+    return (
+      <GameLayout title="Speed" controls={<MusicToggle music={music} sfx={sfx} />}>
+        <DifficultySelect onStart={handleStart} />
+      </GameLayout>
+    )
+  }
+
+  // ── Game screen ───────────────────────────────────────────────────
   const playerCardsLeft = gameState.playerHand.length + gameState.playerDrawPile.length
   const aiCardsLeft = gameState.aiHand.length + gameState.aiDrawPile.length
+  const difficultyLabel = gameState.difficulty === 'easy' ? 'Easy' : gameState.difficulty === 'normal' ? 'Normal' : 'Adept'
 
   const controls = (
     <div className="flex items-center justify-between text-xs w-full">
-      <span className="text-slate-400">You: {playerCardsLeft} | AI: {aiCardsLeft}</span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleNewGame}
+          className="px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          New Game
+        </button>
+        <span className="text-slate-500">{difficultyLabel}</span>
+        <span className="text-slate-400">You: {playerCardsLeft} | AI: {aiCardsLeft}</span>
+      </div>
       <MusicToggle music={music} sfx={sfx} />
     </div>
   )
@@ -209,8 +296,21 @@ export default function Speed() {
           </div>
         </div>
 
-        {/* Center piles */}
-        <div className="flex items-center justify-center gap-6 py-2">
+        {/* Center area: replacement piles flanking center piles */}
+        <div className="flex items-center justify-center gap-3 py-2">
+          {/* Left replacement pile */}
+          <div className="text-center">
+            <div className={CARD_SIZE_MINI}>
+              {gameState.replacementPiles[0].length > 0 ? <CardBack /> : (
+                <div className="w-full h-full border border-dashed border-slate-700/50 rounded-md" />
+              )}
+            </div>
+            <span className="text-[0.5rem] text-slate-600 block mt-0.5">
+              {gameState.replacementPiles[0].length}
+            </span>
+          </div>
+
+          {/* Center piles */}
           {[0, 1].map(pi => {
             const pile = gameState.centerPiles[pi]
             const topCard = pile.length > 0 ? pile[pile.length - 1] : null
@@ -226,9 +326,7 @@ export default function Speed() {
                   onClick={() => isReady ? undefined : handlePileClick(pi)}
                   disabled={isReady || !isTarget}
                   className={`${CARD_SIZE} transition-all ${
-                    isTarget
-                      ? 'ring-2 ring-green-400 rounded-lg cursor-pointer scale-105'
-                      : ''
+                    isTarget ? 'cursor-pointer' : ''
                   } ${flipping ? 'animate-card-flip' : ''}`}
                   style={flipping ? {
                     animation: 'cardFlip 600ms ease-in-out',
@@ -246,6 +344,18 @@ export default function Speed() {
               </div>
             )
           })}
+
+          {/* Right replacement pile */}
+          <div className="text-center">
+            <div className={CARD_SIZE_MINI}>
+              {gameState.replacementPiles[1].length > 0 ? <CardBack /> : (
+                <div className="w-full h-full border border-dashed border-slate-700/50 rounded-md" />
+              )}
+            </div>
+            <span className="text-[0.5rem] text-slate-600 block mt-0.5">
+              {gameState.replacementPiles[1].length}
+            </span>
+          </div>
         </div>
 
         {/* Message + flip buttons */}
@@ -284,7 +394,7 @@ export default function Speed() {
                   onClick={() => !isReady && handleCardClick(i)}
                   disabled={isReady || (!canPlay && !isSelected)}
                   className={`${CARD_SIZE} transition-all ${
-                    isReady ? '' : canPlay ? 'hover:-translate-y-1 cursor-pointer' : 'opacity-60'
+                    isReady ? '' : canPlay ? 'hover:-translate-y-1 cursor-pointer' : 'cursor-default'
                   } ${isSelected ? '-translate-y-2' : ''}`}
                 >
                   {isReady ? <CardBack /> : <CardFace card={card} selected={isSelected} />}
@@ -307,7 +417,7 @@ export default function Speed() {
 
         {/* Center pile labels */}
         {gameState.phase === 'playing' && playerMoves.length > 0 && selectedCard === null && (
-          <p className="text-xs text-slate-500">Tap a highlighted card to play it</p>
+          <p className="text-xs text-slate-500">Tap a card, then tap a center pile to play it</p>
         )}
         {selectedCard !== null && (
           <p className="text-xs text-green-400">

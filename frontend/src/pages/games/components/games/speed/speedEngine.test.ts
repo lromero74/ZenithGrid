@@ -10,6 +10,7 @@ import {
   getPlayableMoves,
   getAiMove,
   getPlayerMoves,
+  generateAiPlayDelay,
   type SpeedState,
   type Phase,
 } from './speedEngine'
@@ -28,8 +29,10 @@ function makeState(overrides: Partial<SpeedState> = {}): SpeedState {
     aiHand: [makeCard(6), makeCard(10), makeCard(3)],
     aiDrawPile: [makeCard(4), makeCard(7)],
     centerPiles: [[makeCard(7)], [makeCard(12)]],
+    replacementPiles: [[makeCard(1), makeCard(3)], [makeCard(9), makeCard(4)]],
     phase: 'playing' as Phase,
     message: '',
+    difficulty: 'normal' as const,
     ...overrides,
   }
 }
@@ -79,10 +82,10 @@ describe('createSpeedGame', () => {
     expect(state.aiHand).toHaveLength(5)
   })
 
-  it('should deal 20 cards to each draw pile', () => {
+  it('should deal 15 cards to each draw pile', () => {
     const state = createSpeedGame()
-    expect(state.playerDrawPile).toHaveLength(20)
-    expect(state.aiDrawPile).toHaveLength(20)
+    expect(state.playerDrawPile).toHaveLength(15)
+    expect(state.aiDrawPile).toHaveLength(15)
   })
 
   it('should have 1 card in each center pile', () => {
@@ -91,11 +94,18 @@ describe('createSpeedGame', () => {
     expect(state.centerPiles[1]).toHaveLength(1)
   })
 
+  it('should have 5 cards in each replacement pile', () => {
+    const state = createSpeedGame()
+    expect(state.replacementPiles[0]).toHaveLength(5)
+    expect(state.replacementPiles[1]).toHaveLength(5)
+  })
+
   it('should total 52 cards', () => {
     const state = createSpeedGame()
     const total = state.playerHand.length + state.playerDrawPile.length +
       state.aiHand.length + state.aiDrawPile.length +
-      state.centerPiles[0].length + state.centerPiles[1].length
+      state.centerPiles[0].length + state.centerPiles[1].length +
+      state.replacementPiles[0].length + state.replacementPiles[1].length
     expect(total).toBe(52)
   })
 
@@ -109,6 +119,39 @@ describe('createSpeedGame', () => {
     expect(state.aiHand.every(c => !c.faceUp)).toBe(true)
     expect(state.centerPiles[0].every(c => !c.faceUp)).toBe(true)
     expect(state.centerPiles[1].every(c => !c.faceUp)).toBe(true)
+  })
+
+  it('should default to normal difficulty', () => {
+    expect(createSpeedGame().difficulty).toBe('normal')
+  })
+
+  it('should accept difficulty parameter', () => {
+    expect(createSpeedGame('easy').difficulty).toBe('easy')
+    expect(createSpeedGame('adept').difficulty).toBe('adept')
+  })
+})
+
+// ── generateAiPlayDelay ─────────────────────────────────────────────
+
+describe('generateAiPlayDelay', () => {
+  it('should generate delays within human range', () => {
+    for (let i = 0; i < 50; i++) {
+      const delay = generateAiPlayDelay('normal')
+      // Min: 80+60+40+60 = 240ms, Max: 250+200+150+180 = 780ms
+      expect(delay).toBeGreaterThanOrEqual(180)
+      expect(delay).toBeLessThanOrEqual(900)
+    }
+  })
+
+  it('adept should tend to be faster than easy', () => {
+    let adeptTotal = 0
+    let easyTotal = 0
+    const n = 100
+    for (let i = 0; i < n; i++) {
+      adeptTotal += generateAiPlayDelay('adept')
+      easyTotal += generateAiPlayDelay('easy')
+    }
+    expect(adeptTotal / n).toBeLessThan(easyTotal / n)
   })
 })
 
@@ -211,24 +254,32 @@ describe('playCard', () => {
     expect(next.message).toContain('You win')
   })
 
-  it('should detect stall when no moves remain', () => {
-    // After playing, create a state where no one can move
+  it('should detect stall when no moves remain and replacement piles exist', () => {
     const state = makeState({
       playerHand: [makeCard(8)],
       playerDrawPile: [makeCard(1)],
       aiHand: [makeCard(1)],
       aiDrawPile: [makeCard(1)],
       centerPiles: [[makeCard(7)], [makeCard(5, 'diamonds')]],
+      replacementPiles: [[makeCard(10)], [makeCard(11)]],
     })
     const next = playCard(state, 0, 0)
-    // After playing 8 on 7, center piles are [8] and [5]
-    // Player hand: [1], AI hand: [1] — 1 is not ±1 of 8 or 5
-    // Wait: 1 (Ace) wraps. diff(1,8)=7, diff(1,5)=4. Neither is 1 or 12. So stalled.
-    // Actually no: Ace wraps to King (diff 12). Let me reconsider.
-    // isPlayable(1, 8): diff = |1-8| = 7, not 1 or 12. Not playable.
-    // isPlayable(1, 5): diff = |1-5| = 4, not 1 or 12. Not playable.
-    // Yes, stalled.
     expect(next.phase).toBe('stalled')
+  })
+
+  it('should end game when stalled with empty replacement piles', () => {
+    const state = makeState({
+      playerHand: [makeCard(8)],
+      playerDrawPile: [makeCard(1)],
+      aiHand: [makeCard(1), makeCard(1, 'spades')],
+      aiDrawPile: [makeCard(1, 'diamonds')],
+      centerPiles: [[makeCard(7)], [makeCard(5, 'diamonds')]],
+      replacementPiles: [[], []],
+    })
+    const next = playCard(state, 0, 0)
+    // Stalled with no replacement piles → game over, player has fewer cards
+    expect(next.phase).toBe('gameOver')
+    expect(next.message).toContain('You win')
   })
 })
 
@@ -266,11 +317,13 @@ describe('aiPlayCard', () => {
 // ── flipCenterCards ─────────────────────────────────────────────────
 
 describe('flipCenterCards', () => {
-  it('should flip cards from draw piles onto center', () => {
+  it('should flip cards from replacement piles onto center', () => {
     const state = makeState({ phase: 'stalled' })
     const next = flipCenterCards(state)
     expect(next.centerPiles[0].length).toBe(state.centerPiles[0].length + 1)
     expect(next.centerPiles[1].length).toBe(state.centerPiles[1].length + 1)
+    expect(next.replacementPiles[0].length).toBe(state.replacementPiles[0].length - 1)
+    expect(next.replacementPiles[1].length).toBe(state.replacementPiles[1].length - 1)
     expect(next.phase).toBe('playing')
   })
 
@@ -280,17 +333,16 @@ describe('flipCenterCards', () => {
     expect(next).toBe(state)
   })
 
-  it('should handle empty draw piles gracefully', () => {
+  it('should handle empty replacement piles gracefully', () => {
     const state = makeState({
       phase: 'stalled',
-      playerDrawPile: [],
-      aiDrawPile: [],
+      replacementPiles: [[], []],
       playerHand: [makeCard(5)],
       aiHand: [makeCard(5, 'spades')],
       centerPiles: [[makeCard(10)], [makeCard(10, 'diamonds')]],
     })
     const next = flipCenterCards(state)
-    // No cards to flip, still stalled, both draw piles empty → game over
+    // No cards to flip, still stalled, replacement piles empty → game over
     expect(next.phase).toBe('gameOver')
   })
 })

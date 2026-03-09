@@ -219,8 +219,8 @@ function getRestProbability(genre: string, sectionName: string): number {
     ambient: 0.4, japanese: 0.35, cinematic: 0.3, lofi: 0.25,
     jazz: 0.25, blues: 0.2, bossanova: 0.2, classical: 0.2,
     reggae: 0.2, celtic: 0.15, latin: 0.15, funk: 0.15,
-    synthwave: 0.15, rock: 0.12, disco: 0.12, edm: 0.1,
-    chiptune: 0.1, metal: 0.08, electronic: 0.12, arabic: 0.2,
+    synthwave: 0.15, rock: 0.12, disco: 0.12, edm: 0.25,
+    chiptune: 0.1, metal: 0.08, electronic: 0.2, arabic: 0.2,
   }
   const prob = base[genre] ?? 0.15
   // More rests in intro/outro, fewer in chorus/drop
@@ -391,14 +391,14 @@ export const GENRE_PRESETS: Record<string, GenrePreset> = {
     name: 'EDM',
     scaleOptions: ['minor', 'dorian', 'harmonicMinor'],
     keyOptions: ['F', 'G', 'A', 'C'],
-    bpmRange: [125, 140],
+    bpmRange: [126, 132],
     progressions: ['dark', 'sad', 'pop'],
-    rhythmStyle: 'straight16ths',
+    rhythmStyle: 'straight8ths',
     arpStyle: 'updown',
     drumStyle: 'fourOnFloor',
-    channelTypes: { bass: 'sawtooth', lead: 'sawtooth', pad: 'triangle', arp: 'square' },
+    channelTypes: { bass: 'sine', lead: 'sawtooth', pad: 'triangle', arp: 'square' },
     sectionFlow: ['intro', 'buildup', 'drop', 'breakdown', 'buildup2', 'drop2', 'outro'],
-    bassOctave: 1, chordOctave: 3, leadOctave: 4,
+    bassOctave: 2, chordOctave: 3, leadOctave: 4,
     filterRange: [200, 3000],
     hasDelay: true,
     character: 'Build-drop structure',
@@ -840,6 +840,25 @@ function generateBassPatterns(
         notes.push({ pitch: bassRoot, duration: 3, velocity: 0.65 * section.velocityMul })
         notes.push({ pitch: bassFifth, duration: 3, velocity: 0.55 * section.velocityMul })
         notes.push({ pitch: 0, duration: 2 })
+      } else if (genre === 'edm' || genre === 'electronic') {
+        // EDM/electronic: sustained sub-bass with sidechain-style pumping
+        if (section.density === 'full') {
+          // Drop sections: pumping quarter-note sub-bass
+          notes.push({ pitch: bassRoot, duration: 3, velocity: 0.8 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+          notes.push({ pitch: bassRoot, duration: 3, velocity: 0.75 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+          notes.push({ pitch: bassRoot, duration: 3, velocity: 0.75 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+          notes.push({ pitch: bassFifth, duration: 3, velocity: 0.7 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+        } else {
+          // Buildup/verse: sustained half-note sub-bass
+          notes.push({ pitch: bassRoot, duration: 7, velocity: 0.6 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+          notes.push({ pitch: bassRoot, duration: 7, velocity: 0.55 * section.velocityMul })
+          notes.push({ pitch: 0, duration: 1 })
+        }
       } else {
         // Default: rhythm template with root + 5th variation
         const rhythm = RHYTHM_TEMPLATES[preset.rhythmStyle] || RHYTHM_TEMPLATES['straight8ths']
@@ -1045,13 +1064,21 @@ function generateMotif(
     notes.push({ pitch: 0, duration: 2 })
     notes.push({ pitch: pick(chordTones, rng), duration: 4, velocity: 0.45 })
     notes.push({ pitch: 0, duration: 2 })
-  } else if (genre === 'chiptune' || genre === 'edm') {
+  } else if (genre === 'chiptune') {
     // Fast repeated motif with octave jump
     const base = pick(chordTones, rng)
     notes.push({ pitch: base, duration: 2, velocity: 0.7 })
     notes.push({ pitch: base * 2, duration: 1, velocity: 0.6 }) // octave up
     notes.push({ pitch: pick(chordTones, rng), duration: 2, velocity: 0.65 })
     notes.push({ pitch: base, duration: 1, velocity: 0.55 })
+  } else if (genre === 'edm' || genre === 'electronic') {
+    // EDM: anthemic, longer held notes with build energy
+    const base = pick(chordTones, rng)
+    const second = pick(chordTones, rng)
+    notes.push({ pitch: base, duration: 4, velocity: 0.7 })
+    notes.push({ pitch: 0, duration: 1 })
+    notes.push({ pitch: second, duration: 3, velocity: 0.65 })
+    notes.push({ pitch: base, duration: 4, velocity: 0.6 })
   } else if (genre === 'jazz' || genre === 'blues') {
     // Chromatic approach + wider leaps
     const root = pick(chordTones, rng)

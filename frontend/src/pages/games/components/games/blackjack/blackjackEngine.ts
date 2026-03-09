@@ -13,17 +13,31 @@ export interface Hand {
   bet: number
   stood: boolean
   doubled: boolean
+  result: string  // '', 'win', 'lose', 'push', 'bust', 'blackjack'
 }
 
-export type Phase = 'betting' | 'playerTurn' | 'dealerTurn' | 'payout'
+export type Phase = 'betting' | 'playerTurn' | 'aiTurn' | 'dealerTurn' | 'payout'
 export type Difficulty = 'easy' | 'hard'
+
+export interface AiPlayer {
+  cards: Card[]
+  stood: boolean
+  result: string  // '', 'win', 'lose', 'push', 'bust', 'blackjack'
+  chips: number
+  bet: number
+}
 
 export interface BlackjackState {
   shoe: Card[]
   playerHands: Hand[]
   dealerHand: Card[]
+  aiPlayers: AiPlayer[]
+  aiChips: number[]
+  numOpponents: number
   activeHandIndex: number
+  activeAiIndex: number
   chips: number
+  dealerChips: number
   currentBet: number
   phase: Phase
   difficulty: Difficulty
@@ -41,7 +55,7 @@ export interface HandScore {
 
 const SHOE_DECKS = 6
 const RESHUFFLE_THRESHOLD = 0.25
-export const BET_SIZES = [10, 25, 50, 100]
+export const BET_SIZES = [10, 25, 50, 100, 500]
 export const STARTING_CHIPS = 1000
 
 // ── Scoring ──────────────────────────────────────────────────────────
@@ -91,13 +105,18 @@ function drawCard(shoe: Card[]): [Card, Card[]] {
 
 // ── Game creation ────────────────────────────────────────────────────
 
-export function createBlackjackGame(difficulty: Difficulty = 'easy'): BlackjackState {
+export function createBlackjackGame(difficulty: Difficulty = 'easy', numOpponents = 0): BlackjackState {
   return {
     shoe: createShoe(SHOE_DECKS),
     playerHands: [],
     dealerHand: [],
+    aiPlayers: [],
+    aiChips: new Array(numOpponents).fill(STARTING_CHIPS),
+    numOpponents,
     activeHandIndex: 0,
+    activeAiIndex: 0,
     chips: STARTING_CHIPS,
+    dealerChips: STARTING_CHIPS * 5,
     currentBet: BET_SIZES[0],
     phase: 'betting',
     difficulty,
@@ -113,17 +132,35 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
 
   let shoe = ensureShoe(state.shoe)
 
-  // Deal 2 to player, 2 to dealer (one face-down)
+  // Deal 2 to player, AI opponents, and dealer (one face-down)
   let card: Card
   const playerCards: Card[] = []
   const dealerCards: Card[] = []
+  const aiPlayers: AiPlayer[] = []
 
+  // Initialize AI player hands
+  for (let i = 0; i < state.numOpponents; i++) {
+    const aiBet = Math.min(BET_SIZES[Math.floor(Math.random() * BET_SIZES.length)], state.aiChips[i] || STARTING_CHIPS)
+    aiPlayers.push({ cards: [], stood: false, result: '', chips: state.aiChips[i] ?? STARTING_CHIPS, bet: aiBet })
+  }
+
+  // Round 1: one card each (player, AIs, dealer)
   ;[card, shoe] = drawCard(shoe)
   playerCards.push(card)
+  for (let i = 0; i < aiPlayers.length; i++) {
+    ;[card, shoe] = drawCard(shoe)
+    aiPlayers[i] = { ...aiPlayers[i], cards: [...aiPlayers[i].cards, card] }
+  }
   ;[card, shoe] = drawCard(shoe)
   dealerCards.push(card)
+
+  // Round 2: second card each
   ;[card, shoe] = drawCard(shoe)
   playerCards.push(card)
+  for (let i = 0; i < aiPlayers.length; i++) {
+    ;[card, shoe] = drawCard(shoe)
+    aiPlayers[i] = { ...aiPlayers[i], cards: [...aiPlayers[i].cards, card] }
+  }
   ;[card, shoe] = drawCard(shoe)
   dealerCards.push({ ...card, faceUp: false }) // dealer hole card face-down
 
@@ -135,8 +172,9 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
     return {
       ...state,
       shoe,
-      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false }],
+      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: 'push' }],
       dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+      aiPlayers,
       activeHandIndex: 0,
       phase: 'payout',
       message: 'Push — both Blackjack!',
@@ -147,8 +185,9 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
     return {
       ...state,
       shoe,
-      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false }],
+      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: 'blackjack' }],
       dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+      aiPlayers,
       activeHandIndex: 0,
       chips: state.chips + Math.floor(bet * 1.5),
       phase: 'payout',
@@ -160,8 +199,9 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
     return {
       ...state,
       shoe,
-      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false }],
+      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: '' }],
       dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+      aiPlayers,
       activeHandIndex: 0,
       chips: state.chips - bet,
       phase: 'payout',
@@ -172,9 +212,11 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
   return {
     ...state,
     shoe,
-    playerHands: [{ cards: playerCards, bet, stood: false, doubled: false }],
+    playerHands: [{ cards: playerCards, bet, stood: false, doubled: false, result: '' }],
     dealerHand: dealerCards,
+    aiPlayers,
     activeHandIndex: 0,
+    activeAiIndex: 0,
     currentBet: bet,
     phase: 'playerTurn',
     message: `Your hand: ${playerScore.total}${playerScore.isSoft ? ' (soft)' : ''}`,
@@ -245,6 +287,7 @@ export function doubleDown(state: BlackjackState): BlackjackState {
     bet: hand.bet * 2,
     stood: true,
     doubled: true,
+    result: '',
   }
 
   const msg = score.isBust ? 'Double Down — Bust!' : `Double Down — ${score.total}`
@@ -265,8 +308,8 @@ export function split(state: BlackjackState): BlackjackState {
   ;[card1, shoe] = drawCard(shoe)
   ;[card2, shoe] = drawCard(shoe)
 
-  const hand1: Hand = { cards: [hand.cards[0], card1], bet: hand.bet, stood: false, doubled: false }
-  const hand2: Hand = { cards: [hand.cards[1], card2], bet: hand.bet, stood: false, doubled: false }
+  const hand1: Hand = { cards: [hand.cards[0], card1], bet: hand.bet, stood: false, doubled: false, result: '' }
+  const hand2: Hand = { cards: [hand.cards[1], card2], bet: hand.bet, stood: false, doubled: false, result: '' }
 
   const newHands = [...state.playerHands]
   newHands.splice(state.activeHandIndex, 1, hand1, hand2)
@@ -291,12 +334,15 @@ function advanceHand(state: BlackjackState, _msg: string): BlackjackState {
     }
   }
 
-  // All hands done — dealer plays
+  // All hands done — AI opponents play next, or dealer
+  if (state.numOpponents > 0) {
+    return { ...state, phase: 'aiTurn', activeAiIndex: 0, message: `P2 is playing...` }
+  }
   return playDealer(state)
 }
 
 function playDealer(state: BlackjackState): BlackjackState {
-  // Check if all player hands busted
+  // Check if all player hands busted — skip straight to payout
   const allBusted = state.playerHands.every(h => scoreHand(h.cards).isBust)
   if (allBusted) {
     const totalLoss = state.playerHands.reduce((sum, h) => sum + h.bet, 0)
@@ -309,53 +355,170 @@ function playDealer(state: BlackjackState): BlackjackState {
     }
   }
 
-  // Flip dealer hole card
-  let dealerCards = state.dealerHand.map(c => ({ ...c, faceUp: true }))
+  // Flip dealer hole card and enter dealerTurn phase (cards drawn one-by-one by UI)
+  const dealerCards = state.dealerHand.map(c => ({ ...c, faceUp: true }))
+  const score = scoreHand(dealerCards)
+  return {
+    ...state,
+    dealerHand: dealerCards,
+    phase: 'dealerTurn',
+    message: `Dealer shows ${score.total}`,
+  }
+}
+
+/** AI opponent takes one action (hit or stand). Called repeatedly by the component. */
+export function aiStep(state: BlackjackState): BlackjackState {
+  if (state.phase !== 'aiTurn') return state
+  const idx = state.activeAiIndex
+  if (idx >= state.aiPlayers.length) return playDealer(state)
+
+  const ai = state.aiPlayers[idx]
+  const score = scoreHand(ai.cards)
+
+  // Already stood or busted — move to next AI
+  if (ai.stood || score.isBust) {
+    const nextIdx = idx + 1
+    if (nextIdx >= state.aiPlayers.length) return playDealer(state)
+    return { ...state, activeAiIndex: nextIdx, message: `P${nextIdx + 2} is playing...` }
+  }
+
+  // Basic strategy: hit on 16 or less, stand on 17+
+  if (score.total >= 17) {
+    const newAi = [...state.aiPlayers]
+    newAi[idx] = { ...ai, stood: true }
+    const nextIdx = idx + 1
+    if (nextIdx >= newAi.length) return playDealer({ ...state, aiPlayers: newAi })
+    return { ...state, aiPlayers: newAi, activeAiIndex: nextIdx, message: `P${nextIdx + 2} is playing...` }
+  }
+
+  // Hit
   let shoe = [...state.shoe]
+  let card: Card
+  ;[card, shoe] = drawCard(shoe)
+  const newCards = [...ai.cards, card]
+  const newScore = scoreHand(newCards)
 
-  // Dealer hits until 17+ (hard mode: hits soft 17)
-  let score = scoreHand(dealerCards)
+  const newAi = [...state.aiPlayers]
+  newAi[idx] = { ...ai, cards: newCards, stood: newScore.isBust || newScore.total >= 17 }
+
+  if (newScore.isBust) {
+    const nextIdx = idx + 1
+    if (nextIdx >= newAi.length) return playDealer({ ...state, shoe, aiPlayers: newAi })
+    return { ...state, shoe, aiPlayers: newAi, activeAiIndex: nextIdx, message: `P${nextIdx + 2} is playing...` }
+  }
+
+  return { ...state, shoe, aiPlayers: newAi, message: `P${idx + 2} hits — ${newScore.total}` }
+}
+
+/** Draw one card for the dealer. Returns updated state still in dealerTurn or advances to payout. */
+export function dealerStep(state: BlackjackState): BlackjackState {
+  if (state.phase !== 'dealerTurn') return state
+
+  const score = scoreHand(state.dealerHand)
   const hitSoft17 = state.difficulty === 'hard'
+  const mustHit = score.total < 17 || (hitSoft17 && score.total === 17 && score.isSoft)
 
-  while (score.total < 17 || (hitSoft17 && score.total === 17 && score.isSoft)) {
-    let card: Card
-    ;[card, shoe] = drawCard(shoe)
-    dealerCards = [...dealerCards, card]
-    score = scoreHand(dealerCards)
-  }
+  if (!mustHit) return resolvePayout(state)
 
-  // Calculate payouts
-  let chipDelta = 0
-  const results: string[] = []
-
-  for (let i = 0; i < state.playerHands.length; i++) {
-    const hand = state.playerHands[i]
-    const pScore = scoreHand(hand.cards)
-    const prefix = state.playerHands.length > 1 ? `Hand ${i + 1}: ` : ''
-
-    if (pScore.isBust) {
-      chipDelta -= hand.bet
-      results.push(`${prefix}Bust (-${hand.bet})`)
-    } else if (score.isBust) {
-      chipDelta += hand.bet
-      results.push(`${prefix}Dealer bust! (+${hand.bet})`)
-    } else if (pScore.total > score.total) {
-      chipDelta += hand.bet
-      results.push(`${prefix}Win! (+${hand.bet})`)
-    } else if (pScore.total < score.total) {
-      chipDelta -= hand.bet
-      results.push(`${prefix}Lose (-${hand.bet})`)
-    } else {
-      results.push(`${prefix}Push`)
-    }
-  }
+  let shoe = [...state.shoe]
+  let card: Card
+  ;[card, shoe] = drawCard(shoe)
+  const dealerCards = [...state.dealerHand, card]
+  const newScore = scoreHand(dealerCards)
 
   return {
     ...state,
     shoe,
     dealerHand: dealerCards,
+    message: `Dealer draws — ${newScore.total}${newScore.isBust ? ' BUST!' : ''}`,
+  }
+}
+
+/** Check if dealer still needs to draw. */
+export function dealerMustHit(state: BlackjackState): boolean {
+  const score = scoreHand(state.dealerHand)
+  const hitSoft17 = state.difficulty === 'hard'
+  return score.total < 17 || (hitSoft17 && score.total === 17 && score.isSoft)
+}
+
+function resolvePayout(state: BlackjackState): BlackjackState {
+  const score = scoreHand(state.dealerHand)
+
+  let chipDelta = 0
+  const results: string[] = []
+  const updatedHands = [...state.playerHands]
+
+  for (let i = 0; i < updatedHands.length; i++) {
+    const hand = updatedHands[i]
+    const pScore = scoreHand(hand.cards)
+    const prefix = updatedHands.length > 1 ? `Hand ${i + 1}: ` : ''
+    let result = ''
+
+    if (pScore.isBust) {
+      chipDelta -= hand.bet
+      result = 'bust'
+      results.push(`${prefix}Bust (-${hand.bet})`)
+    } else if (score.isBust) {
+      chipDelta += hand.bet
+      result = 'win'
+      results.push(`${prefix}Dealer bust! (+${hand.bet})`)
+    } else if (pScore.total > score.total) {
+      chipDelta += hand.bet
+      result = 'win'
+      results.push(`${prefix}Win! (+${hand.bet})`)
+    } else if (pScore.total < score.total) {
+      chipDelta -= hand.bet
+      result = 'lose'
+      results.push(`${prefix}Lose (-${hand.bet})`)
+    } else {
+      result = 'push'
+      results.push(`${prefix}Push`)
+    }
+    updatedHands[i] = { ...hand, result }
+  }
+
+  // Split bonus: +100 for winning both hands after a split
+  if (state.playerHands.length >= 2) {
+    const allWon = state.playerHands.every(h => {
+      const ps = scoreHand(h.cards)
+      return !ps.isBust && (score.isBust || ps.total > score.total)
+    })
+    if (allWon) {
+      chipDelta += 100
+      results.push('Split bonus! (+100)')
+    }
+  }
+
+  // Resolve AI results and update their chips
+  const newAiChips = [...state.aiChips]
+  const newAi = state.aiPlayers.map((ai, idx) => {
+    const aiScore = scoreHand(ai.cards)
+    let result = ''
+    if (aiScore.isBust) result = 'bust'
+    else if (score.isBust) result = 'win'
+    else if (aiScore.total > score.total) result = 'win'
+    else if (aiScore.total < score.total) result = 'lose'
+    else result = 'push'
+    if (result === 'win') newAiChips[idx] = (newAiChips[idx] ?? STARTING_CHIPS) + ai.bet
+    else if (result === 'lose' || result === 'bust') newAiChips[idx] = (newAiChips[idx] ?? STARTING_CHIPS) - ai.bet
+    return { ...ai, result, chips: newAiChips[idx] }
+  })
+
+  // Dealer chip delta is the inverse of all player/AI changes
+  let dealerDelta = -chipDelta
+  for (const ai of newAi) {
+    if (ai.result === 'win') dealerDelta -= ai.bet
+    else if (ai.result === 'lose' || ai.result === 'bust') dealerDelta += ai.bet
+  }
+
+  return {
+    ...state,
+    playerHands: updatedHands,
+    aiPlayers: newAi,
+    aiChips: newAiChips,
     phase: 'payout',
     chips: state.chips + chipDelta,
+    dealerChips: (state.dealerChips ?? STARTING_CHIPS * 5) + dealerDelta,
     message: results.join(' | '),
   }
 }
@@ -381,15 +544,18 @@ export function canDoubleDown(state: BlackjackState): boolean {
 }
 
 export function isGameOver(state: BlackjackState): boolean {
-  return state.chips <= 0 && state.phase === 'payout'
+  if (state.phase !== 'payout') return false
+  return state.chips <= 0 || (state.dealerChips ?? 1) <= 0
+}
+
+export function didPlayerWin(state: BlackjackState): boolean {
+  return state.phase === 'payout' && (state.dealerChips ?? 1) <= 0
 }
 
 export function newRound(state: BlackjackState): BlackjackState {
+  // Keep previous round's cards visible until the player places a new bet
   return {
     ...state,
-    playerHands: [],
-    dealerHand: [],
-    activeHandIndex: 0,
     phase: 'betting',
     message: 'Place your bet',
   }

@@ -570,7 +570,7 @@ export function advancePhase(state: TexasHoldemState): TexasHoldemState {
 
 // ── Bonus Hands ─────────────────────────────────────────────────────
 
-const BONUS_HANDS: [number, number][] = [[11, 11], [2, 3], [12, 7], [11, 2]]
+const BONUS_HANDS: [number, number][] = [[11, 11], [2, 3], [12, 7], [11, 2], [11, 10], [3, 5]]
 const BONUS_AMOUNT = 1000
 
 /** Check if a player's hole cards match a bonus combo (order-independent). */

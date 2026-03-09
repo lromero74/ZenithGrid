@@ -6,7 +6,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_LARGE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -59,6 +59,10 @@ export default function TexasHoldem() {
 
   // Shows the last AI action text for 2 seconds
   const [aiActionText, setAiActionText] = useState<string | null>(null)
+  const [showSlider, setShowSlider] = useState(false)
+  const [slideVal, setSlideVal] = useState(0)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
 
   // Blinds increase every 10 minutes: level 0 = 10/20, level 1 = 20/40, etc.
   useEffect(() => {
@@ -141,6 +145,16 @@ export default function TexasHoldem() {
     clear()
   }, [clear])
 
+  const startDrag = useCallback(() => { dragging.current = true }, [])
+  const moveDrag = useCallback((clientX: number) => {
+    if (!dragging.current || !trackRef.current) return
+    const rect = trackRef.current.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(100, ((clientX - rect.left - 14) / (rect.width - 28)) * 100))
+    setSlideVal(pct)
+    if (pct >= 95) { dragging.current = false; setShowSlider(false); setSlideVal(0); handleNewGame() }
+  }, [handleNewGame])
+  const endDrag = useCallback(() => { dragging.current = false; setSlideVal(0) }, [])
+
   // Winning hand card keys for highlighting (all winners' cards in community)
   const winningCardKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -220,17 +234,17 @@ export default function TexasHoldem() {
         </div>
 
         {/* Community cards */}
-        <div className="flex gap-1.5 justify-center min-h-[5.625rem]">
+        <div className="flex gap-1.5 justify-center min-h-[7rem]">
           {gameState.community.map((card, i) => {
             const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
             return (
-              <div key={i} className={`${CARD_SIZE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
-                <CardFace card={card} />
+              <div key={i} className={`${CARD_SIZE_LARGE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
+                <CardFace card={card} large />
               </div>
             )
           })}
           {Array.from({ length: 5 - gameState.community.length }).map((_, i) => (
-            <div key={`e${i}`} className={`${CARD_SIZE} rounded-md border border-dashed border-slate-700/50`} />
+            <div key={`e${i}`} className={`${CARD_SIZE_LARGE} rounded-md border border-dashed border-slate-700/50`} />
           ))}
         </div>
 
@@ -332,12 +346,39 @@ export default function TexasHoldem() {
             </button>
           )}
           {gameStatus === 'playing' && (
-            <button
-              onClick={handleNewGame}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs transition-colors"
-            >
-              New Game
-            </button>
+            showSlider ? (
+              <div className="flex items-center gap-2">
+                <div
+                  ref={trackRef}
+                  className="relative w-40 h-8 bg-slate-800 rounded-full border border-slate-600 select-none touch-none"
+                  onMouseMove={e => moveDrag(e.clientX)}
+                  onMouseUp={endDrag}
+                  onMouseLeave={endDrag}
+                  onTouchMove={e => moveDrag(e.touches[0].clientX)}
+                  onTouchEnd={endDrag}
+                >
+                  <div className="absolute inset-0 flex items-center justify-end pr-3 pointer-events-none">
+                    <span className="text-[0.6rem] text-red-400/70 font-medium">New Game &raquo;</span>
+                  </div>
+                  <div
+                    className="absolute top-0.5 w-7 h-7 bg-slate-300 rounded-full flex items-center justify-center shadow-md cursor-grab active:cursor-grabbing"
+                    style={{ left: `${slideVal / 100 * (160 - 28) + 2}px` }}
+                    onMouseDown={startDrag}
+                    onTouchStart={startDrag}
+                  >
+                    <span className="text-xs text-slate-700 font-bold">&raquo;</span>
+                  </div>
+                </div>
+                <button onClick={() => { setShowSlider(false); setSlideVal(0) }} className="text-xs text-slate-500 hover:text-slate-300">&times;</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSlider(true)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs transition-colors"
+              >
+                New Game
+              </button>
+            )
           )}
         </div>
 

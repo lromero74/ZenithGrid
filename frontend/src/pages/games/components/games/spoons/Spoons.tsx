@@ -5,6 +5,10 @@
  * 3 players (1 human + 2 AI) pass cards trying to collect 4 of a kind.
  * When someone does, everyone races to grab a spoon.
  * Last player without a spoon gets a letter. Spell SPOONS and you're out!
+ *
+ * Two modes:
+ *   Turn-based — sequential draw/discard (classic digital adaptation)
+ *   Real-time  — all players act simultaneously with human-modeled AI timing
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
@@ -26,6 +30,8 @@ import {
   aiDiscard,
   getAiGrabDelays,
   type SpoonsState,
+  type GameMode,
+  type AiDifficulty,
 } from './spoonsEngine'
 
 interface SavedState {
@@ -34,6 +40,87 @@ interface SavedState {
 }
 
 const SPOONS_WORD = 'SPOONS'
+
+// ── Mode selection screen ───────────────────────────────────────────
+
+function ModeSelect({ onStart }: { onStart: (mode: GameMode, difficulty: AiDifficulty) => void }) {
+  const [mode, setMode] = useState<GameMode>('turn-based')
+  const [difficulty, setDifficulty] = useState<AiDifficulty>('normal')
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-4">
+      {/* Mode selection */}
+      <div className="text-center">
+        <h3 className="text-sm font-medium text-slate-300 mb-3 uppercase tracking-wider">Game Mode</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMode('turn-based')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              mode === 'turn-based'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'
+            }`}
+          >
+            Turn-Based
+          </button>
+          <button
+            onClick={() => setMode('real-time')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              mode === 'real-time'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'
+            }`}
+          >
+            Real-Time
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mt-2 max-w-xs">
+          {mode === 'turn-based'
+            ? 'Players take turns drawing and discarding cards.'
+            : 'All players act simultaneously — be quick!'}
+        </p>
+      </div>
+
+      {/* Difficulty selection */}
+      <div className="text-center">
+        <h3 className="text-sm font-medium text-slate-300 mb-3 uppercase tracking-wider">AI Difficulty</h3>
+        <div className="flex gap-2">
+          {(['easy', 'normal', 'adept'] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => setDifficulty(d)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all capitalize ${
+                difficulty === d
+                  ? d === 'easy' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'
+                    : d === 'normal' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
+                    : 'bg-red-600 text-white shadow-lg shadow-red-900/40'
+                  : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-2 max-w-xs">
+          {difficulty === 'easy' ? 'AI reacts like an average human — room to breathe.'
+            : difficulty === 'normal' ? 'AI is competent — occasionally catches you off guard.'
+            : 'AI has fast reflexes — top 10% reaction speed.'}
+        </p>
+      </div>
+
+      {/* Start button */}
+      <button
+        onClick={() => onStart(mode, difficulty)}
+        className="mt-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl
+          text-lg font-bold transition-all active:scale-95 shadow-lg shadow-emerald-900/50"
+      >
+        Deal Cards
+      </button>
+    </div>
+  )
+}
+
+// ── Main component ──────────────────────────────────────────────────
 
 export default function Spoons() {
   const { load, save, clear } = useGameState<SavedState>('spoons')
@@ -44,13 +131,22 @@ export default function Spoons() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('spoons')
 
+  const [showModeSelect, setShowModeSelect] = useState<boolean>(() => {
+    const s = saved?.gameState
+    return !(s && s.mode && s.difficulty)
+  })
   const [gameState, setGameState] = useState<SpoonsState>(
-    () => saved?.gameState ?? createSpoonsGame()
+    () => {
+      const s = saved?.gameState
+      if (s && s.mode && s.difficulty) return s
+      return createSpoonsGame()
+    }
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
 
   // Persist state
   useEffect(() => {
+    if (showModeSelect) return
     if (gameStatus !== 'won' && gameStatus !== 'lost' && gameStatus !== 'draw') {
       save({ gameState, gameStatus })
     }
@@ -58,6 +154,7 @@ export default function Spoons() {
 
   // Detect game over
   useEffect(() => {
+    if (showModeSelect) return
     if (gameState.phase === 'gameOver') {
       const human = gameState.players[0]
       setGameStatus(human.eliminated ? 'lost' : 'won')
@@ -65,8 +162,10 @@ export default function Spoons() {
     }
   }, [gameState, clear])
 
-  // AI drawing + discarding
+  // ── Turn-based AI: draw + discard ─────────────────────────────────
   useEffect(() => {
+    if (showModeSelect) return
+    if (gameState.mode !== 'turn-based') return
     if (gameState.phase !== 'drawing' && gameState.phase !== 'discarding') return
     if (gameState.players[gameState.currentPlayer]?.isHuman) return
     if (gameStatus !== 'playing') return
@@ -75,7 +174,6 @@ export default function Spoons() {
       setGameState(prev => {
         if (prev.phase === 'drawing') {
           const afterDraw = drawCard(prev)
-          // AI immediately discards
           const idx = aiDiscard(afterDraw.players[afterDraw.currentPlayer].hand)
           sfx.play('discard')
           return discardCard(afterDraw, idx)
@@ -89,7 +187,37 @@ export default function Spoons() {
       })
     }, 300)
     return () => clearTimeout(timer)
-  }, [gameState.phase, gameState.currentPlayer, gameStatus, sfx])
+  }, [gameState.phase, gameState.currentPlayer, gameState.mode, gameStatus, sfx, showModeSelect])
+
+  // ── Real-time AI: draw + discard with human-modeled delays ────────
+  useEffect(() => {
+    if (showModeSelect) return
+    if (gameState.mode !== 'real-time') return
+    if (gameState.phase !== 'drawing' && gameState.phase !== 'discarding') return
+    if (gameState.players[gameState.currentPlayer]?.isHuman) return
+    if (gameStatus !== 'playing') return
+
+    const player = gameState.players[gameState.currentPlayer]
+    const delay = player.cardEvalDelay || 500
+
+    const timer = setTimeout(() => {
+      setGameState(prev => {
+        if (prev.phase === 'drawing') {
+          const afterDraw = drawCard(prev)
+          const idx = aiDiscard(afterDraw.players[afterDraw.currentPlayer].hand)
+          sfx.play('discard')
+          return discardCard(afterDraw, idx)
+        }
+        if (prev.phase === 'discarding') {
+          const idx = aiDiscard(prev.players[prev.currentPlayer].hand)
+          sfx.play('discard')
+          return discardCard(prev, idx)
+        }
+        return prev
+      })
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [gameState.phase, gameState.currentPlayer, gameState.mode, gameStatus, sfx, showModeSelect])
 
   // Auto-draw for human when it's their turn (dealer draws from pile)
   const handleDraw = useCallback(() => {
@@ -111,6 +239,7 @@ export default function Spoons() {
 
   // AI spoon grab timers
   useEffect(() => {
+    if (showModeSelect) return
     if (gameState.phase !== 'spoonGrab') return
     if (gameStatus !== 'playing') return
 
@@ -122,7 +251,7 @@ export default function Spoons() {
       }, delay)
     )
     return () => timers.forEach(clearTimeout)
-  }, [gameState.phase, gameState.spoonGrabber, gameStatus, sfx])
+  }, [gameState.phase, gameState.spoonGrabber, gameStatus, sfx, showModeSelect])
 
   // Human grabs spoon
   const handleGrabSpoon = useCallback(() => {
@@ -138,21 +267,53 @@ export default function Spoons() {
     setGameState(prev => newRound(prev))
   }, [])
 
-  // New game
+  // New game (back to mode select)
   const handleNewGame = useCallback(() => {
-    setGameState(createSpoonsGame())
+    setShowModeSelect(true)
     setGameStatus('playing')
     clear()
   }, [clear])
 
+  // Start game from mode select
+  const handleStart = useCallback((mode: GameMode, difficulty: AiDifficulty) => {
+    music.init()
+    sfx.init()
+    music.start()
+    setGameState(createSpoonsGame(mode, difficulty))
+    setGameStatus('playing')
+    setShowModeSelect(false)
+  }, [music, sfx])
+
+  // ── Mode selection screen ─────────────────────────────────────────
+  if (showModeSelect) {
+    return (
+      <GameLayout title="Spoons" controls={<MusicToggle music={music} sfx={sfx} />}>
+        <ModeSelect onStart={handleStart} />
+      </GameLayout>
+    )
+  }
+
+  // ── Game screen ───────────────────────────────────────────────────
   const humanPlayer = gameState.players[0]
   const humanIsCurrentAndDrawing = gameState.phase === 'drawing' && gameState.currentPlayer === 0
   const humanIsCurrentAndDiscarding = gameState.phase === 'discarding' && gameState.currentPlayer === 0
   const canGrabSpoon = gameState.phase === 'spoonGrab' && !humanPlayer.grabbedSpoon && !humanPlayer.eliminated
 
+  const difficultyLabel = gameState.difficulty === 'easy' ? 'Easy' : gameState.difficulty === 'normal' ? 'Normal' : 'Adept'
+  const modeLabel = gameState.mode === 'turn-based' ? 'Turn' : 'RT'
+
   const controls = (
     <div className="flex items-center justify-between text-xs w-full">
-      <span className="text-slate-400">Round {gameState.roundNumber}</span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleNewGame}
+          className="px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          New Game
+        </button>
+        <span className="text-slate-500">{modeLabel} · {difficultyLabel}</span>
+        <span className="text-slate-400">Rd {gameState.roundNumber}</span>
+      </div>
       <MusicToggle music={music} sfx={sfx} />
     </div>
   )
