@@ -29,7 +29,7 @@ function makeState(overrides: Partial<TexasHoldemState> = {}): TexasHoldemState 
   return {
     hands: [
       [card(14, 'hearts'), card(13, 'hearts')],
-      [card(2, 'clubs'), card(3, 'clubs')],
+      [card(9, 'clubs'), card(6, 'clubs')],
     ],
     community: [],
     deck: [],
@@ -52,6 +52,7 @@ function makeState(overrides: Partial<TexasHoldemState> = {}): TexasHoldemState 
     sbIdx: 0,
     bbIdx: 1,
     blindLevel: 0,
+    raiseCount: 0,
     ...overrides,
   }
 }
@@ -859,8 +860,8 @@ describe('showdown', () => {
     const state = makeState({
       phase: 'showdown',
       hands: [
-        [card(2, 'hearts'), card(3, 'hearts')],
-        [card(2, 'clubs'), card(3, 'clubs')],
+        [card(4, 'hearts'), card(5, 'hearts')],
+        [card(4, 'clubs'), card(5, 'clubs')],
       ],
       community: [
         card(1, 'diamonds'), card(13, 'spades'), card(12, 'diamonds'),
@@ -880,7 +881,7 @@ describe('showdown', () => {
     const state = makeState({
       phase: 'showdown',
       hands: [
-        [card(2, 'hearts'), card(3, 'hearts')],
+        [card(4, 'hearts'), card(5, 'hearts')],
         [card(1, 'spades'), card(1, 'clubs')],
       ],
       community: [

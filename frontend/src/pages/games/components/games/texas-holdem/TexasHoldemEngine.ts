@@ -41,6 +41,7 @@ export interface TexasHoldemState {
   sbIdx: number
   bbIdx: number
   blindLevel: number
+  raiseCount: number
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -239,6 +240,7 @@ export function createTexasHoldemGame(playerCount: number = 4): TexasHoldemState
     sbIdx: 0,
     bbIdx: 0,
     blindLevel: 0,
+    raiseCount: 0,
   }
 }
 
@@ -318,6 +320,7 @@ export function startHand(state: TexasHoldemState): TexasHoldemState {
     actedThisRound: new Array(n).fill(false),
     sbIdx: sbPos,
     bbIdx: bbPos,
+    raiseCount: 0,
   }
 }
 
@@ -329,12 +332,17 @@ function afterAction(state: TexasHoldemState): TexasHoldemState {
     const winner = state.foldedPlayers.findIndex(f => !f)
     const chips = [...state.chips]
     chips[winner] += state.pot
+    let bonusMsg = ''
+    if (hasBonusHand(state.hands[winner])) {
+      chips[winner] += BONUS_AMOUNT
+      bonusMsg = ` +${BONUS_AMOUNT} chip bonus!`
+    }
     return {
       ...state,
       chips,
       pot: 0,
       phase: 'handOver',
-      message: `Player ${winner === 0 ? 'You' : winner} wins the pot!`,
+      message: `${winner === 0 ? 'You win' : `Player ${winner + 1} wins`} the pot!${bonusMsg}`,
     }
   }
 
@@ -450,6 +458,7 @@ export function raise(state: TexasHoldemState, amount: number): TexasHoldemState
     actedThisRound,
     pot: state.pot + additional,
     currentBet: amount,
+    raiseCount: state.raiseCount + 1,
     lastAction: `Player ${player} raises to ${amount}`,
   })
 }
@@ -537,8 +546,21 @@ export function advancePhase(state: TexasHoldemState): TexasHoldemState {
     currentBet: 0,
     currentPlayer: firstPlayer,
     actedThisRound: new Array(n).fill(false),
+    raiseCount: 0,
     message: `${nextPhase.charAt(0).toUpperCase() + nextPhase.slice(1)} betting`,
   }
+}
+
+// ── Bonus Hands ─────────────────────────────────────────────────────
+
+const BONUS_HANDS: [number, number][] = [[11, 11], [2, 3], [12, 7]]
+const BONUS_AMOUNT = 1000
+
+/** Check if a player's hole cards match a bonus combo (order-independent). */
+function hasBonusHand(hand: Card[]): boolean {
+  if (hand.length !== 2) return false
+  const [a, b] = [hand[0].rank, hand[1].rank]
+  return BONUS_HANDS.some(([x, y]) => (a === x && b === y) || (a === y && b === x))
 }
 
 // ── Showdown ─────────────────────────────────────────────────────────
@@ -588,6 +610,16 @@ export function showdown(state: TexasHoldemState): TexasHoldemState {
     if (remainder > 0) chips[winners[0]] += remainder
   }
 
+  // Bonus for special hole cards
+  let bonusMsg = ''
+  for (const w of winners) {
+    if (hasBonusHand(state.hands[w])) {
+      chips[w] += BONUS_AMOUNT
+      const name = w === 0 ? 'You' : `Player ${w + 1}`
+      bonusMsg += ` ${name} earned a ${BONUS_AMOUNT} chip bonus!`
+    }
+  }
+
   const winnerNames = winners.map(w => w === 0 ? 'You' : `Player ${w + 1}`).join(', ')
   const winnerHand = results[winners[0]]
 
@@ -597,7 +629,7 @@ export function showdown(state: TexasHoldemState): TexasHoldemState {
     pot: 0,
     phase: 'handOver',
     showdownResults: results,
-    message: `${winnerNames} win${winners.length === 1 && winners[0] !== 0 ? 's' : ''} with ${winnerHand.name}!`,
+    message: `${winnerNames} win${winners.length === 1 && winners[0] !== 0 ? 's' : ''} with ${winnerHand.name}!${bonusMsg}`,
   }
 }
 
@@ -634,31 +666,89 @@ export function getMinRaise(state: TexasHoldemState): number {
 
 function aiHandStrength(hand: Card[], community: Card[]): number {
   if (community.length === 0) {
-    // Pre-flop: simple rank-based evaluation
+    // Pre-flop: Sklansky-inspired hand ranking
     const r1 = compareRank(hand[0].rank)
     const r2 = compareRank(hand[1].rank)
     const paired = r1 === r2
     const suited = hand[0].suit === hand[1].suit
     const high = Math.max(r1, r2)
+    const low = Math.min(r1, r2)
+    const gap = high - low
+
     let score = high
-    if (paired) score += 15
-    if (suited) score += 3
-    if (Math.abs(r1 - r2) <= 2) score += 2 // connected
+    if (paired) score += high >= 10 ? 20 : 15      // premium pairs score higher
+    if (suited) score += 4
+    if (gap <= 1) score += 3                         // connectors
+    else if (gap <= 2) score += 2                    // one-gappers
+    else if (gap <= 3) score += 1                    // two-gappers
+    if (high >= 12 && low >= 10) score += 5          // broadway
+    if (high === 14) score += 3                      // ace bonus
     return score
   }
+
   const result = evaluateHand([...hand, ...community])
-  return result.rank * 10 + (result.tiebreaker[0] ?? 0) / 15
+  // Weight hand rank heavily, add tiebreaker for differentiation
+  return result.rank * 12 + (result.tiebreaker[0] ?? 0) / 10
+}
+
+/** Estimate draw potential (flush/straight draws). */
+function aiDrawStrength(hand: Card[], community: Card[]): number {
+  if (community.length === 0 || community.length >= 5) return 0
+  const allCards = [...hand, ...community]
+
+  // Flush draw: 4 cards of same suit
+  const suitCounts = new Map<string, number>()
+  for (const c of allCards) suitCounts.set(c.suit, (suitCounts.get(c.suit) ?? 0) + 1)
+  const maxSuit = Math.max(...suitCounts.values())
+  let draw = 0
+  if (maxSuit === 4) draw += 8  // flush draw
+
+  // Straight draw: count unique ranks in sequence
+  const ranks = [...new Set(allCards.map(c => compareRank(c.rank)))].sort((a, b) => a - b)
+  for (let i = 0; i < ranks.length - 3; i++) {
+    const span = ranks[Math.min(i + 3, ranks.length - 1)] - ranks[i]
+    if (span <= 4) { draw += 6; break }  // open-ended or gutshot
+  }
+
+  return draw
 }
 
 export function aiAction(state: TexasHoldemState): TexasHoldemState {
   const player = state.currentPlayer
   const actions = getValidActions(state)
-  const strength = aiHandStrength(state.hands[player], state.community)
+  const hand = state.hands[player]
+  const strength = aiHandStrength(hand, state.community)
+  const draws = aiDrawStrength(hand, state.community)
+  const effectiveStrength = strength + draws
   const toCall = state.currentBet - state.bets[player]
-  const bluff = Math.random() < 0.1
+  const potOdds = state.pot > 0 ? toCall / (state.pot + toCall) : 0
+
+  // After 3+ raises in a round, AI commits all-in with any reasonable hand
+  if (state.raiseCount >= 3 && effectiveStrength > 15) {
+    return allIn(state)
+  }
+
+  // Very strong hand or monster draw: raise aggressively or all-in
+  if (effectiveStrength > 35) {
+    // Slow-play occasionally with monster hands post-flop
+    if (state.community.length > 0 && Math.random() < 0.15) {
+      if (actions.includes('call') && toCall > 0) return call(state)
+      if (actions.includes('check')) return check(state)
+    }
+    if (actions.includes('raise')) {
+      const multiplier = effectiveStrength > 50 ? 4 : 3
+      const raiseAmount = Math.min(
+        state.currentBet + state.bigBlind * multiplier,
+        state.bets[player] + state.chips[player]
+      )
+      return raise(state, Math.max(raiseAmount, getMinRaise(state)))
+    }
+    if (actions.includes('call')) return call(state)
+    if (actions.includes('check')) return check(state)
+  }
 
   // Strong hand: raise
-  if (strength > 25 || (strength > 18 && bluff)) {
+  if (effectiveStrength > 25 || (effectiveStrength > 20 && Math.random() < 0.25)) {
     if (actions.includes('raise')) {
       const raiseAmount = Math.min(
         state.currentBet + state.bigBlind * 2,
@@ -666,20 +756,34 @@ export function aiAction(state: TexasHoldemState): TexasHoldemState {
       )
       return raise(state, Math.max(raiseAmount, getMinRaise(state)))
     }
-  }
-
-  // Medium hand: call
-  if (strength > 12 || (toCall <= state.bigBlind && strength > 8)) {
     if (actions.includes('call')) return call(state)
     if (actions.includes('check')) return check(state)
+  }
+
+  // Medium hand: call if pot odds are right
+  if (effectiveStrength > 14 || (toCall <= state.bigBlind * 2 && effectiveStrength > 10)) {
+    // Consider pot odds — only call if the price is right
+    if (potOdds < 0.4 || effectiveStrength > 18) {
+      if (actions.includes('call')) return call(state)
+      if (actions.includes('check')) return check(state)
+    }
   }
 
   // Check if free
   if (actions.includes('check')) return check(state)
 
-  // Weak hand with small bet: sometimes call
-  if (toCall <= state.bigBlind && Math.random() < 0.5) {
+  // Weak hand with small bet: sometimes call (but less often)
+  if (toCall <= state.bigBlind && Math.random() < 0.35) {
     if (actions.includes('call')) return call(state)
+  }
+
+  // Bluff raise occasionally with nothing (post-flop only)
+  if (state.community.length >= 3 && Math.random() < 0.08 && actions.includes('raise')) {
+    const raiseAmount = Math.min(
+      state.currentBet + state.bigBlind * 2,
+      state.bets[player] + state.chips[player]
+    )
+    return raise(state, Math.max(raiseAmount, getMinRaise(state)))
   }
 
   // Fold

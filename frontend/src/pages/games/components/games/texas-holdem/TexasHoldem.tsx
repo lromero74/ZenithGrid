@@ -141,6 +141,28 @@ export default function TexasHoldem() {
     clear()
   }, [clear])
 
+  // Winning hand card keys for highlighting (all winners' cards in community)
+  const winningCardKeys = useMemo(() => {
+    const keys = new Set<string>()
+    if (gameState.phase !== 'handOver' || !gameState.showdownResults) return keys
+    // Find best hand rank among non-folded players
+    let bestRank = 0
+    for (let i = 0; i < gameState.showdownResults.length; i++) {
+      if (!gameState.foldedPlayers[i] && gameState.showdownResults[i].rank > bestRank) {
+        bestRank = gameState.showdownResults[i].rank
+      }
+    }
+    // Collect cards from all players with the best rank
+    for (let i = 0; i < gameState.showdownResults.length; i++) {
+      if (!gameState.foldedPlayers[i] && gameState.showdownResults[i].rank === bestRank) {
+        for (const c of gameState.showdownResults[i].cards) {
+          keys.add(`${c.suit}-${c.rank}`)
+        }
+      }
+    }
+    return keys
+  }, [gameState.phase, gameState.showdownResults, gameState.foldedPlayers])
+
   const validActions = gameState.currentPlayer === 0 ? getValidActions(gameState) : []
   const toCall = gameState.currentBet - gameState.bets[0]
   const isPlayerTurn = gameState.currentPlayer === 0 && gameState.phase !== 'handOver' && gameState.phase !== 'gameOver'
@@ -180,11 +202,14 @@ export default function TexasHoldem() {
                 </div>
                 <div className="text-xs text-yellow-400">{gameState.chips[pi]}</div>
                 <div className="flex gap-0.5 justify-center mt-1">
-                  {hand.map((c, j) => (
-                    <div key={j} className="w-10 h-14 sm:w-12 sm:h-[4rem]">
-                      {showCards ? <CardFace card={c} /> : <CardBack />}
-                    </div>
-                  ))}
+                  {hand.map((c, j) => {
+                    const isWin = showCards && winningCardKeys.has(`${c.suit}-${c.rank}`)
+                    return (
+                      <div key={j} className={`w-10 h-14 sm:w-12 sm:h-[4rem] transition-transform ${isWin ? 'ring-2 ring-blue-400 rounded-md -translate-y-1' : ''}`}>
+                        {showCards ? <CardFace card={c} mini /> : <CardBack />}
+                      </div>
+                    )
+                  })}
                 </div>
                 {gameState.bets[pi] > 0 && (
                   <span className="text-xs text-blue-400">Bet: {gameState.bets[pi]}</span>
@@ -196,11 +221,14 @@ export default function TexasHoldem() {
 
         {/* Community cards */}
         <div className="flex gap-1.5 justify-center min-h-[5.625rem]">
-          {gameState.community.map((card, i) => (
-            <div key={i} className={CARD_SIZE}>
-              <CardFace card={card} />
-            </div>
-          ))}
+          {gameState.community.map((card, i) => {
+            const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
+            return (
+              <div key={i} className={`${CARD_SIZE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
+                <CardFace card={card} />
+              </div>
+            )
+          })}
           {Array.from({ length: 5 - gameState.community.length }).map((_, i) => (
             <div key={`e${i}`} className={`${CARD_SIZE} rounded-md border border-dashed border-slate-700/50`} />
           ))}
@@ -218,23 +246,17 @@ export default function TexasHoldem() {
 
         {/* Phase / status message */}
         <p className="text-sm text-white font-medium text-center">{gameState.message}</p>
-        {gameState.showdownResults && gameState.phase === 'handOver' && (
-          <div className="text-xs text-slate-400 text-center">
-            {gameState.showdownResults.map((r, i) => (
-              !gameState.foldedPlayers[i] && r.name !== 'Folded' ? (
-                <div key={i}>{i === 0 ? 'You' : `P${i + 1}`}: {r.name}</div>
-              ) : null
-            ))}
-          </div>
-        )}
 
         {/* Player hand */}
         <div className="flex gap-2 justify-center">
-          {gameState.hands[0].map((card, i) => (
-            <div key={i} className={CARD_SIZE}>
-              <CardFace card={card} />
-            </div>
-          ))}
+          {gameState.hands[0].map((card, i) => {
+            const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
+            return (
+              <div key={i} className={`${CARD_SIZE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
+                <CardFace card={card} />
+              </div>
+            )
+          })}
         </div>
         <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
           <span>You</span>
@@ -247,7 +269,7 @@ export default function TexasHoldem() {
 
         {/* Action buttons */}
         {isPlayerTurn && !gameState.foldedPlayers[0] && (
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="flex gap-2 flex-wrap justify-center">
               {validActions.includes('fold') && (
                 <button onClick={handleFold} className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
@@ -276,15 +298,20 @@ export default function TexasHoldem() {
               )}
             </div>
             {validActions.includes('raise') && (
-              <input
-                type="range"
-                min={getMinRaise(gameState)}
-                max={gameState.chips[0] + gameState.bets[0]}
-                step={gameState.bigBlind}
-                value={raiseAmount}
-                onChange={e => setRaiseAmount(Number(e.target.value))}
-                className="w-48"
-              />
+              <div className="flex flex-col items-center gap-0.5 h-24">
+                <span className="text-[0.5rem] text-slate-500">{gameState.chips[0] + gameState.bets[0]}</span>
+                <input
+                  type="range"
+                  min={getMinRaise(gameState)}
+                  max={gameState.chips[0] + gameState.bets[0]}
+                  step={gameState.bigBlind}
+                  value={raiseAmount}
+                  onChange={e => setRaiseAmount(Number(e.target.value))}
+                  className="h-20"
+                  style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                />
+                <span className="text-[0.5rem] text-slate-500">{getMinRaise(gameState)}</span>
+              </div>
             )}
           </div>
         )}

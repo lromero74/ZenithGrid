@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.95.1] - 2026-03-09
+
+### Added
+- **Texas Hold'em bonus hands**: Winners holding J/J, 2/3, or Q/7 earn a 1,000 chip bonus (contributed by David Greene)
+- **Texas Hold'em winning card highlights**: Winning 5-card hand highlighted with blue ring and lifted on both hole cards and community cards (contributed by David Greene)
+- **Texas Hold'em vertical raise slider**: Raise slider moved to a vertical orientation beside action buttons, low-to-high bottom-to-top (contributed by David Greene)
+
+### Changed
+- **Texas Hold'em smarter AI**: AI uses Sklansky-inspired pre-flop evaluation, flush/straight draw awareness, pot odds, occasional slow-plays and bluffs (contributed by David Greene)
+- **Texas Hold'em auto all-in**: AI goes all-in after 3+ re-raises in a single betting round (contributed by David Greene)
+- **Mini card layout**: Small opponent cards in Texas Hold'em now show only rank + suit centered for better readability at small sizes
+
 ## [v2.95.0] - 2026-03-08
 
 ### Added

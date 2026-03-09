@@ -66,9 +66,11 @@ interface CardFaceProps {
   validTarget?: boolean
   hinted?: boolean
   held?: boolean
+  /** Minimal layout — just rank + suit centered. Use for very small cards. */
+  mini?: boolean
 }
 
-export function CardFace({ card, selected = false, validTarget = false, hinted = false, held = false }: CardFaceProps) {
+export function CardFace({ card, selected = false, validTarget = false, hinted = false, held = false, mini = false }: CardFaceProps) {
   const color = getCardColor(card)
   const textColor = color === 'red' ? 'text-red-500' : 'text-slate-900'
   const symbol = getSuitSymbol(card.suit)
@@ -77,27 +79,36 @@ export function CardFace({ card, selected = false, validTarget = false, hinted =
   return (
     <div className={`
       w-full h-full rounded-md bg-slate-50 border shadow-md cursor-pointer
-      flex flex-col justify-between p-0.5 sm:p-1 select-none text-left overflow-hidden
+      ${mini ? 'flex items-center justify-center' : 'flex flex-col justify-between p-0.5 sm:p-1'} select-none text-left overflow-hidden
       transition-all duration-150
       ${selected ? 'ring-2 ring-yellow-400 -translate-y-1 border-yellow-400' : 'border-slate-300'}
       ${validTarget ? 'ring-2 ring-emerald-400/60' : ''}
       ${hinted ? 'ring-2 ring-amber-400 animate-pulse -translate-y-1' : ''}
       ${held ? 'ring-2 ring-cyan-400 border-cyan-400' : ''}
     `}>
-      {/* Top-left rank + suit */}
-      <div className={`leading-none ${textColor}`}>
-        <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
-        <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
-      </div>
-      {/* Center suit */}
-      <div className={`text-center text-base sm:text-xl ${textColor}`}>
-        {symbol}
-      </div>
-      {/* Bottom-right rank + suit (inverted) */}
-      <div className={`leading-none text-right rotate-180 self-end ${textColor}`}>
-        <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
-        <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
-      </div>
+      {mini ? (
+        <div className={`text-center leading-tight ${textColor}`}>
+          <div className="text-xs sm:text-sm font-bold">{rank}</div>
+          <div className="text-[0.6rem] sm:text-xs -mt-0.5">{symbol}</div>
+        </div>
+      ) : (
+        <>
+          {/* Top-left rank + suit */}
+          <div className={`leading-none ${textColor}`}>
+            <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
+            <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
+          </div>
+          {/* Center suit */}
+          <div className={`text-center text-base sm:text-xl ${textColor}`}>
+            {symbol}
+          </div>
+          {/* Bottom-right rank + suit (inverted) */}
+          <div className={`leading-none text-right rotate-180 self-end ${textColor}`}>
+            <div className="text-[0.55rem] sm:text-xs font-bold">{rank}</div>
+            <div className="text-[0.5rem] sm:text-[0.6rem]">{symbol}</div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
