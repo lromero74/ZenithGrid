@@ -247,74 +247,79 @@ export default function TexasHoldem() {
         {/* Phase / status message */}
         <p className="text-sm text-white font-medium text-center">{gameState.message}</p>
 
-        {/* Player hand */}
-        <div className="flex gap-2 justify-center">
-          {gameState.hands[0].map((card, i) => {
-            const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
-            return (
-              <div key={i} className={`${CARD_SIZE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
-                <CardFace card={card} />
-              </div>
-            )
-          })}
-        </div>
-        <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
-          <span>You</span>
-          {gameState.dealerIdx === 0 && <span className="text-[0.6rem] bg-white text-slate-900 font-bold rounded-full w-4 h-4 flex items-center justify-center">D</span>}
-          {gameState.sbIdx === 0 && <span className="text-[0.6rem] bg-blue-500 text-white font-bold rounded-full px-1">SB</span>}
-          {gameState.bbIdx === 0 && <span className="text-[0.6rem] bg-amber-500 text-white font-bold rounded-full px-1">BB</span>}
-          <span>— Chips: <span className="text-white font-bold">{gameState.chips[0]}</span></span>
-          {gameState.bets[0] > 0 && <span>Bet: <span className="text-blue-400">{gameState.bets[0]}</span></span>}
-        </div>
-
-        {/* Action buttons */}
-        {isPlayerTurn && !gameState.foldedPlayers[0] && (
-          <div className="flex items-center gap-3">
-            <div className="flex gap-2 flex-wrap justify-center">
-              {validActions.includes('fold') && (
-                <button onClick={handleFold} className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
-                  Fold
-                </button>
-              )}
-              {validActions.includes('check') && (
-                <button onClick={handleCheck} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors">
-                  Check
-                </button>
-              )}
-              {validActions.includes('call') && (
-                <button onClick={handleCall} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
-                  Call {toCall}
-                </button>
-              )}
-              {validActions.includes('raise') && (
-                <button onClick={handleRaise} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm transition-colors">
-                  Raise {raiseAmount}
-                </button>
-              )}
-              {validActions.includes('allIn') && (
-                <button onClick={handleAllIn} className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-sm transition-colors">
-                  All-In
-                </button>
-              )}
+        {/* Player hand + raise slider */}
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center gap-1">
+            {/* Player cards */}
+            <div className="flex gap-2 justify-center">
+              {gameState.hands[0].map((card, i) => {
+                const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
+                return (
+                  <div key={i} className={`${CARD_SIZE} transition-transform ${isWinning ? 'ring-2 ring-blue-400 rounded-lg -translate-y-2' : ''}`}>
+                    <CardFace card={card} />
+                  </div>
+                )
+              })}
             </div>
-            {validActions.includes('raise') && (
-              <div className="flex flex-col items-center gap-0.5 h-24">
-                <span className="text-[0.5rem] text-slate-500">{gameState.chips[0] + gameState.bets[0]}</span>
-                <input
-                  type="range"
-                  min={getMinRaise(gameState)}
-                  max={gameState.chips[0] + gameState.bets[0]}
-                  step={gameState.bigBlind}
-                  value={raiseAmount}
-                  onChange={e => setRaiseAmount(Number(e.target.value))}
-                  className="h-20"
-                  style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-                />
-                <span className="text-[0.5rem] text-slate-500">{getMinRaise(gameState)}</span>
+            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+              <span>You</span>
+              {gameState.dealerIdx === 0 && <span className="text-[0.6rem] bg-white text-slate-900 font-bold rounded-full w-4 h-4 flex items-center justify-center">D</span>}
+              {gameState.sbIdx === 0 && <span className="text-[0.6rem] bg-blue-500 text-white font-bold rounded-full px-1">SB</span>}
+              {gameState.bbIdx === 0 && <span className="text-[0.6rem] bg-amber-500 text-white font-bold rounded-full px-1">BB</span>}
+              <span>— Chips: <span className="text-white font-bold">{gameState.chips[0]}</span></span>
+              {gameState.bets[0] > 0 && <span>Bet: <span className="text-blue-400">{gameState.bets[0]}</span></span>}
+            </div>
+
+            {/* Action buttons */}
+            {isPlayerTurn && !gameState.foldedPlayers[0] && (
+              <div className="flex gap-2 flex-wrap justify-center">
+                {validActions.includes('fold') && (
+                  <button onClick={handleFold} className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
+                    Fold
+                  </button>
+                )}
+                {validActions.includes('check') && (
+                  <button onClick={handleCheck} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors">
+                    Check
+                  </button>
+                )}
+                {validActions.includes('call') && (
+                  <button onClick={handleCall} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
+                    Call {toCall}
+                  </button>
+                )}
+                {validActions.includes('raise') && (
+                  <button onClick={handleRaise} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm transition-colors">
+                    Raise {raiseAmount}
+                  </button>
+                )}
+                {validActions.includes('allIn') && (
+                  <button onClick={handleAllIn} className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-sm transition-colors">
+                    All-In
+                  </button>
+                )}
               </div>
             )}
           </div>
-        )}
+
+          {/* Vertical raise slider spanning cards + buttons */}
+          {isPlayerTurn && !gameState.foldedPlayers[0] && validActions.includes('raise') && (
+            <div className="flex flex-col items-center gap-0.5 self-stretch">
+              <span className="text-[0.5rem] text-slate-500">{gameState.chips[0] + gameState.bets[0]}</span>
+              <input
+                type="range"
+                min={getMinRaise(gameState)}
+                max={gameState.chips[0] + gameState.bets[0]}
+                step={gameState.bigBlind}
+                value={raiseAmount}
+                onChange={e => setRaiseAmount(Number(e.target.value))}
+                className="flex-1"
+                style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+              />
+              <span className="text-[0.5rem] text-slate-500">{getMinRaise(gameState)}</span>
+            </div>
+          )}
+        </div>
 
         {/* Hand over / New game */}
         <div className="flex gap-2 justify-center">

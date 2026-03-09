@@ -1070,7 +1070,93 @@ describe('full hand flow: preflop → flop → turn → river → showdown', () 
     expect(state.showdownResults!.length).toBe(4)
     // Pot was distributed to winner(s)
     expect(state.pot).toBe(0)
-    expect(state.chips.reduce((a, b) => a + b, 0)).toBe(4000) // total chips conserved
+    // Total chips = 4000 starting + possible 1000 flop bonus
+    const totalChips = state.chips.reduce((a, b) => a + b, 0)
+    expect(totalChips === 4000 || totalChips === 5000).toBe(true)
+  })
+
+  test('flop bonus adds 1000 to pot for suited flop', () => {
+    // Create a state where we control the deck so the flop is all hearts
+    const suitedDeck: Card[] = [
+      card(2, 'hearts'), card(7, 'hearts'), card(9, 'hearts'), // flop: all hearts
+      card(4, 'clubs'), card(8, 'diamonds'),                    // turn, river
+    ]
+    const state = makeState({
+      hands: [
+        [card(14, 'spades'), card(13, 'spades')],
+        [card(10, 'clubs'), card(6, 'diamonds')],
+      ],
+      deck: suitedDeck,
+      community: [],
+      phase: 'preflop' as Phase,
+      pot: 40,
+    })
+    const result = advancePhase(state)
+    expect(result.phase).toBe('flop')
+    expect(result.community).toHaveLength(3)
+    expect(result.pot).toBe(1040) // 40 + 1000 flop bonus
+    expect(result.message).toContain('Flop bonus')
+    expect(result.message).toContain('suited flop')
+  })
+
+  test('flop bonus adds 1000 for three of a kind on flop', () => {
+    const tripsDeck: Card[] = [
+      card(5, 'hearts'), card(5, 'clubs'), card(5, 'diamonds'), // flop: trips
+      card(4, 'clubs'), card(8, 'diamonds'),
+    ]
+    const state = makeState({
+      hands: [
+        [card(14, 'spades'), card(13, 'spades')],
+        [card(10, 'clubs'), card(6, 'diamonds')],
+      ],
+      deck: tripsDeck,
+      community: [],
+      phase: 'preflop' as Phase,
+      pot: 40,
+    })
+    const result = advancePhase(state)
+    expect(result.pot).toBe(1040)
+    expect(result.message).toContain('three of a kind')
+  })
+
+  test('flop bonus adds 1000 for a run on flop', () => {
+    const runDeck: Card[] = [
+      card(6, 'hearts'), card(7, 'clubs'), card(8, 'diamonds'), // flop: 6-7-8 run
+      card(4, 'clubs'), card(2, 'diamonds'),
+    ]
+    const state = makeState({
+      hands: [
+        [card(14, 'spades'), card(13, 'spades')],
+        [card(10, 'clubs'), card(3, 'diamonds')],
+      ],
+      deck: runDeck,
+      community: [],
+      phase: 'preflop' as Phase,
+      pot: 40,
+    })
+    const result = advancePhase(state)
+    expect(result.pot).toBe(1040)
+    expect(result.message).toContain('a run')
+  })
+
+  test('no flop bonus for non-special flop', () => {
+    const normalDeck: Card[] = [
+      card(2, 'hearts'), card(7, 'clubs'), card(10, 'diamonds'), // no pattern
+      card(4, 'clubs'), card(8, 'diamonds'),
+    ]
+    const state = makeState({
+      hands: [
+        [card(14, 'spades'), card(13, 'spades')],
+        [card(10, 'clubs'), card(6, 'diamonds')],
+      ],
+      deck: normalDeck,
+      community: [],
+      phase: 'preflop' as Phase,
+      pot: 40,
+    })
+    const result = advancePhase(state)
+    expect(result.pot).toBe(40) // unchanged
+    expect(result.message).not.toContain('Flop bonus')
   })
 
   test('fold during flop ends hand early without dealing turn/river', () => {
