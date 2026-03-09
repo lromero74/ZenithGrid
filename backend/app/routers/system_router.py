@@ -44,6 +44,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["system"])
 
+# Captured once at process start — lets the frontend detect actual restarts
+# vs. just a tag push (where the live git version changes but the process hasn't restarted).
+_STARTUP_TIME = datetime.utcnow().isoformat()
+
 
 def get_repo_root():
     """Get the repository root path"""
@@ -376,7 +380,8 @@ async def root():
         "status": "running",
         "version": current_version,
         "latest_version": latest_version,
-        "update_available": latest_version != current_version and current_version != "dev"
+        "update_available": latest_version != current_version and current_version != "dev",
+        "startup_time": _STARTUP_TIME,
     }
 
 

@@ -60,6 +60,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const loadedVersionRef = useRef<string | null>(null)
+  const loadedStartupTimeRef = useRef<string | null>(null)
   const updateToastShownForRef = useRef<string | null>(null)
   const versionCheckIntervalRef = useRef<number | null>(null)
   const { playOrderSound, setAudioEnabled: setAudioHookEnabled } = useAudio()
@@ -101,17 +102,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       .then(res => res.json())
       .then(data => {
         const serverVersion = data.version
+        const startupTime = data.startup_time
         if (!serverVersion) return
 
-        // Capture the initially loaded version on first check
+        // Capture the initially loaded version + startup time on first check
         if (!loadedVersionRef.current) {
           loadedVersionRef.current = serverVersion
+          loadedStartupTimeRef.current = startupTime || null
           return
         }
 
-        // If version differs from what was loaded and we haven't shown this toast yet
+        // Require BOTH version change AND startup_time change (actual restart).
+        // This prevents the toast from firing when a tag is pushed but the
+        // backend hasn't restarted yet — the live git tag would change but
+        // startup_time stays the same until the process restarts.
+        const versionChanged = serverVersion !== loadedVersionRef.current
+        const serverRestarted = startupTime && startupTime !== loadedStartupTimeRef.current
         if (
-          serverVersion !== loadedVersionRef.current &&
+          versionChanged &&
+          serverRestarted &&
           updateToastShownForRef.current !== serverVersion
         ) {
           // Verify the server is fully stable: check 3 times over 15 seconds.
@@ -127,6 +136,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                 } else {
                   // All checks passed — server is stable
                   updateToastShownForRef.current = serverVersion
+                  loadedStartupTimeRef.current = data.startup_time || null
                   addToast({
                     type: 'update',
                     title: 'New Version Available',
