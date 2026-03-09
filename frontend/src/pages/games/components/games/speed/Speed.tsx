@@ -19,6 +19,7 @@ import {
   playCard,
   aiPlayCard,
   flipCenterCards,
+  flipStartingCards,
   getAiMove,
   getPlayerMoves,
   type SpeedState,
@@ -43,6 +44,8 @@ export default function Speed() {
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
+  const [flipping, setFlipping] = useState(false)
+  const [flipRevealed, setFlipRevealed] = useState(false)
 
   // Persist state
   useEffect(() => {
@@ -130,6 +133,23 @@ export default function Speed() {
     setSelectedCard(null)
   }, [selectedCard, playablePileIndices, sfx])
 
+  const handleStartingFlip = useCallback(() => {
+    music.init()
+    sfx.init()
+    music.start()
+    sfx.play('flip')
+    setFlipping(true)
+    setFlipRevealed(false)
+    // At the halfway point (card is edge-on), swap to face-up
+    setTimeout(() => setFlipRevealed(true), 300)
+    // After full animation, update game state
+    setTimeout(() => {
+      setGameState(prev => flipStartingCards(prev))
+      setFlipping(false)
+      setFlipRevealed(false)
+    }, 600)
+  }, [music, sfx])
+
   const handleFlip = useCallback(() => {
     music.init()
     sfx.init()
@@ -157,6 +177,14 @@ export default function Speed() {
 
   return (
     <GameLayout title="Speed" controls={controls}>
+      {/* Card flip animation keyframes */}
+      <style>{`
+        @keyframes cardFlip {
+          0% { transform: rotateY(0deg); }
+          50% { transform: rotateY(90deg); }
+          100% { transform: rotateY(0deg); }
+        }
+      `}</style>
       <div className="flex flex-col items-center w-full max-w-md space-y-3">
         {/* AI area */}
         <div className="flex items-center justify-center gap-4 w-full">
@@ -187,30 +215,51 @@ export default function Speed() {
             const pile = gameState.centerPiles[pi]
             const topCard = pile.length > 0 ? pile[pile.length - 1] : null
             const isTarget = playablePileIndices.has(pi)
+            const isReady = gameState.phase === 'ready'
             return (
-              <button
+              <div
                 key={pi}
-                onClick={() => handlePileClick(pi)}
-                disabled={!isTarget}
-                className={`${CARD_SIZE} transition-all ${
-                  isTarget
-                    ? 'ring-2 ring-green-400 rounded-lg cursor-pointer scale-105'
-                    : ''
-                }`}
+                className="perspective-500"
+                style={{ perspective: '500px' }}
               >
-                {topCard ? (
-                  <CardFace card={topCard} validTarget={isTarget} />
-                ) : (
-                  <div className="w-full h-full border border-dashed border-slate-600 rounded-lg" />
-                )}
-              </button>
+                <button
+                  onClick={() => isReady ? undefined : handlePileClick(pi)}
+                  disabled={isReady || !isTarget}
+                  className={`${CARD_SIZE} transition-all ${
+                    isTarget
+                      ? 'ring-2 ring-green-400 rounded-lg cursor-pointer scale-105'
+                      : ''
+                  } ${flipping ? 'animate-card-flip' : ''}`}
+                  style={flipping ? {
+                    animation: 'cardFlip 600ms ease-in-out',
+                    transformStyle: 'preserve-3d',
+                  } : undefined}
+                >
+                  {isReady && !flipRevealed ? (
+                    <CardBack />
+                  ) : topCard ? (
+                    <CardFace card={{ ...topCard, faceUp: true }} validTarget={isTarget} />
+                  ) : (
+                    <div className="w-full h-full border border-dashed border-slate-600 rounded-lg" />
+                  )}
+                </button>
+              </div>
             )
           })}
         </div>
 
-        {/* Message + stall button */}
+        {/* Message + flip buttons */}
         <div className="text-center min-h-[2.5rem]">
           <p className="text-sm text-white font-medium">{gameState.message}</p>
+          {gameState.phase === 'ready' && !flipping && (
+            <button
+              onClick={handleStartingFlip}
+              className="mt-2 px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg
+                text-base font-bold transition-colors active:scale-95 animate-pulse shadow-lg shadow-emerald-900/50"
+            >
+              Flip!
+            </button>
+          )}
           {gameState.phase === 'stalled' && gameStatus === 'playing' && (
             <button
               onClick={handleFlip}
@@ -226,18 +275,19 @@ export default function Speed() {
         <div className="flex items-center justify-center gap-4 w-full">
           <div className="flex gap-1.5">
             {gameState.playerHand.map((card, i) => {
-              const canPlay = playableCardIndices.has(i)
+              const isReady = gameState.phase === 'ready'
+              const canPlay = !isReady && playableCardIndices.has(i)
               const isSelected = selectedCard === i
               return (
                 <button
                   key={`${card.suit}-${card.rank}-${i}`}
-                  onClick={() => handleCardClick(i)}
-                  disabled={!canPlay && !isSelected}
+                  onClick={() => !isReady && handleCardClick(i)}
+                  disabled={isReady || (!canPlay && !isSelected)}
                   className={`${CARD_SIZE} transition-all ${
-                    canPlay ? 'hover:-translate-y-1 cursor-pointer' : 'opacity-60'
+                    isReady ? '' : canPlay ? 'hover:-translate-y-1 cursor-pointer' : 'opacity-60'
                   } ${isSelected ? '-translate-y-2' : ''}`}
                 >
-                  <CardFace card={card} selected={isSelected} />
+                  {isReady ? <CardBack /> : <CardFace card={card} selected={isSelected} />}
                 </button>
               )
             })}

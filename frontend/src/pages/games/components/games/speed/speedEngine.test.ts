@@ -5,6 +5,7 @@ import {
   playCard,
   aiPlayCard,
   flipCenterCards,
+  flipStartingCards,
   checkStalled,
   getPlayableMoves,
   getAiMove,
@@ -98,14 +99,42 @@ describe('createSpeedGame', () => {
     expect(total).toBe(52)
   })
 
-  it('should set phase to playing', () => {
-    expect(createSpeedGame().phase).toBe('playing')
+  it('should set phase to ready', () => {
+    expect(createSpeedGame().phase).toBe('ready')
   })
 
-  it('should have all hand cards face up', () => {
+  it('should have all cards face down before flip', () => {
     const state = createSpeedGame()
-    expect(state.playerHand.every(c => c.faceUp)).toBe(true)
-    expect(state.aiHand.every(c => c.faceUp)).toBe(true)
+    expect(state.playerHand.every(c => !c.faceUp)).toBe(true)
+    expect(state.aiHand.every(c => !c.faceUp)).toBe(true)
+    expect(state.centerPiles[0].every(c => !c.faceUp)).toBe(true)
+    expect(state.centerPiles[1].every(c => !c.faceUp)).toBe(true)
+  })
+})
+
+// ── flipStartingCards ───────────────────────────────────────────────
+
+describe('flipStartingCards', () => {
+  it('should transition from ready to playing', () => {
+    const state = createSpeedGame()
+    expect(state.phase).toBe('ready')
+    const next = flipStartingCards(state)
+    expect(next.phase).toBe('playing')
+  })
+
+  it('should reveal player hand, AI hand, and center cards', () => {
+    const state = createSpeedGame()
+    const next = flipStartingCards(state)
+    expect(next.playerHand.every(c => c.faceUp)).toBe(true)
+    expect(next.aiHand.every(c => c.faceUp)).toBe(true)
+    expect(next.centerPiles[0].every(c => c.faceUp)).toBe(true)
+    expect(next.centerPiles[1].every(c => c.faceUp)).toBe(true)
+  })
+
+  it('should not change state if phase is not ready', () => {
+    const state = makeState({ phase: 'playing' })
+    const next = flipStartingCards(state)
+    expect(next).toBe(state)
   })
 })
 

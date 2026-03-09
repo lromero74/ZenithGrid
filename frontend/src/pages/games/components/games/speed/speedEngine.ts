@@ -15,7 +15,7 @@ import { createDeck, shuffleDeck, type Card } from '../../../utils/cardUtils'
 
 // ── Types ───────────────────────────────────────────────────────────
 
-export type Phase = 'playing' | 'stalled' | 'gameOver'
+export type Phase = 'ready' | 'playing' | 'stalled' | 'gameOver'
 
 export interface SpeedState {
   playerHand: Card[]
@@ -87,23 +87,23 @@ function checkWin(state: SpeedState): SpeedState {
 
 // ── Engine functions ────────────────────────────────────────────────
 
-/** Create a new Speed game: shuffle deck, split, deal hands, flip center cards. */
+/** Create a new Speed game: shuffle deck, split, deal hands. Center cards start face-down. */
 export function createSpeedGame(): SpeedState {
   const deck = shuffleDeck(createDeck())
   const half1 = deck.slice(0, 26)
   const half2 = deck.slice(26)
 
-  // Deal 5-card hands from each half
-  const playerHand = half1.slice(0, 5).map(c => ({ ...c, faceUp: true }))
-  const aiHand = half2.slice(0, 5).map(c => ({ ...c, faceUp: true }))
+  // Deal 5-card hands from each half (face-down until flip)
+  const playerHand = half1.slice(0, 5).map(c => ({ ...c, faceUp: false }))
+  const aiHand = half2.slice(0, 5).map(c => ({ ...c, faceUp: false }))
 
   // Remaining go to draw piles
   const playerDrawPile = half1.slice(5)
   const aiDrawPile = half2.slice(5)
 
-  // Flip 1 card from each draw pile onto center piles
-  const centerLeft: Card[] = [{ ...playerDrawPile.shift()!, faceUp: true }]
-  const centerRight: Card[] = [{ ...aiDrawPile.shift()!, faceUp: true }]
+  // Place 1 card from each draw pile onto center piles (face-down until flip)
+  const centerLeft: Card[] = [{ ...playerDrawPile.shift()!, faceUp: false }]
+  const centerRight: Card[] = [{ ...aiDrawPile.shift()!, faceUp: false }]
 
   return {
     playerHand,
@@ -111,7 +111,24 @@ export function createSpeedGame(): SpeedState {
     aiHand,
     aiDrawPile,
     centerPiles: [centerLeft, centerRight],
+    phase: 'ready',
+    message: 'Ready? Flip the center cards to start!',
+  }
+}
+
+/** Flip the starting center cards and reveal hands — transitions from 'ready' to 'playing'. */
+export function flipStartingCards(state: SpeedState): SpeedState {
+  if (state.phase !== 'ready') return state
+
+  return {
+    ...state,
     phase: 'playing',
+    playerHand: state.playerHand.map(c => ({ ...c, faceUp: true })),
+    aiHand: state.aiHand.map(c => ({ ...c, faceUp: true })),
+    centerPiles: [
+      state.centerPiles[0].map(c => ({ ...c, faceUp: true })),
+      state.centerPiles[1].map(c => ({ ...c, faceUp: true })),
+    ],
     message: 'Play a card!',
   }
 }
