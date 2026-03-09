@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { TicTacToeBoard } from './TicTacToeBoard'
@@ -37,6 +38,40 @@ interface TicTacToeSaved {
   scores: Scores
 }
 
+function TicTacToeHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Tic-Tac-Toe</h2>
+        <Sec title="Goal"><p>Get three of your marks (<B>X</B>) in a row — horizontally, vertically, or diagonally — before the AI (<B>O</B>).</p></Sec>
+        <Sec title="How to Play"><ul className="space-y-1">
+          <Li>You play as <B>X</B> and go first. Click any empty cell to place your mark.</Li>
+          <Li>The AI plays as <B>O</B> and responds automatically.</Li>
+          <Li>The game ends when someone gets three in a row, or all 9 cells are filled (draw).</Li>
+        </ul></Sec>
+        <Sec title="Difficulty"><ul className="space-y-1">
+          <Li><B>Easy</B> — AI makes random moves.</Li>
+          <Li><B>Medium</B> — AI plays reasonably but can be beaten.</Li>
+          <Li><B>Hard</B> — AI plays optimally — best you can do is draw!</Li>
+        </ul></Sec>
+        <Sec title="Strategy Tips"><ul className="space-y-1">
+          <Li>Take the center if it's open — it's part of the most winning lines.</Li>
+          <Li>Corners are the next best — they create fork opportunities.</Li>
+          <Li>On Hard difficulty, the AI is unbeatable. Play for the draw!</Li>
+        </ul></Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function TicTacToe() {
   const { load, save, clear } = useGameState<TicTacToeSaved>('tic-tac-toe')
   const saved = useRef(load()).current
@@ -46,6 +81,7 @@ export default function TicTacToe() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('tic-tac-toe')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [board, setBoard] = useState<Board>(() => saved?.board ?? createBoard())
   const [isPlayerTurn, setIsPlayerTurn] = useState(true)
   const [winResult, setWinResult] = useState<WinResult | null>(null)
@@ -154,6 +190,7 @@ export default function TicTacToe() {
         <span className="text-blue-400">X: {scores.x}</span>
         <span className="text-slate-500">Draw: {scores.draws}</span>
         <span className="text-red-400">O: {scores.o}</span>
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play"><HelpCircle className="w-4 h-4 text-blue-400" /></button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
@@ -193,6 +230,7 @@ export default function TicTacToe() {
           />
         )}
       </div>
+      {showHelp && <TicTacToeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

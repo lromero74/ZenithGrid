@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
-import { Undo2 } from 'lucide-react'
+import { HelpCircle, Undo2, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameState } from '../../../hooks/useGameState'
@@ -42,6 +42,43 @@ function initialState(): UTTTGameState {
   }
 }
 
+function UTTTHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Ultimate Tic-Tac-Toe</h2>
+        <Sec title="Goal"><p>Win three <B>sub-boards</B> in a row on the 3×3 meta-board to win the game.</p></Sec>
+        <Sec title="The Twist"><ul className="space-y-1">
+          <Li>The board is a 3×3 grid of <B>9 smaller tic-tac-toe boards</B>.</Li>
+          <Li>Where you play in a sub-board determines which sub-board your opponent must play in next.</Li>
+          <Li>For example: if you play in the top-right cell of any sub-board, your opponent must play in the <B>top-right sub-board</B>.</Li>
+          <Li>If the target sub-board is already won or full, your opponent can play in <B>any open sub-board</B>.</Li>
+        </ul></Sec>
+        <Sec title="Winning a Sub-Board"><p>Win a sub-board by getting three in a row within it — just like regular tic-tac-toe. The sub-board is then claimed by that player.</p></Sec>
+        <Sec title="Winning the Game"><p>Win three sub-boards in a row (horizontally, vertically, or diagonally) on the meta-board.</p></Sec>
+        <Sec title="Controls"><ul className="space-y-1">
+          <Li><B>Click</B> an empty cell in a highlighted (valid) sub-board.</Li>
+          <Li><B>Undo</B> — Reverse the last move.</Li>
+          <Li>Valid sub-boards are highlighted with a colored border.</Li>
+        </ul></Sec>
+        <Sec title="Strategy Tips"><ul className="space-y-1">
+          <Li>Think about where your move sends the opponent — avoid giving them a free choice.</Li>
+          <Li>Winning a corner sub-board is powerful — it contributes to multiple lines.</Li>
+          <Li>Sometimes it's better to sacrifice a sub-board to control where the opponent plays.</Li>
+        </ul></Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function UltimateTicTacToe() {
   const { load, save, clear } = useGameState<UTTTSaved>('ultimate-tic-tac-toe')
   const savedData = useRef(load()).current
@@ -50,6 +87,7 @@ export default function UltimateTicTacToe() {
   const song = useMemo(() => getSongForGame('ultimate-tic-tac-toe'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('ultimate-tic-tac-toe')
+  const [showHelp, setShowHelp] = useState(false)
 
   const [state, setState] = useState<UTTTGameState>(() => savedData?.state ?? initialState())
   const [gameStatus, setGameStatus] = useState<GameStatus>(savedData?.gameStatus ?? 'playing')
@@ -166,6 +204,7 @@ export default function UltimateTicTacToe() {
         <p className="text-xs text-slate-400">
           {gameStatus === 'playing' && (state.currentPlayer === 'X' ? 'Your turn (X)' : 'AI thinking...')}
         </p>
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play"><HelpCircle className="w-4 h-4 text-blue-400" /></button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
@@ -198,6 +237,7 @@ export default function UltimateTicTacToe() {
           />
         )}
       </div>
+      {showHelp && <UTTTHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

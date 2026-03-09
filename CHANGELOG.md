@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.97.0] - 2026-03-09
+
+### Added
+- **Daily Crossword puzzle**: Themed crossword puzzles with Easy, Medium, and Hard difficulty — one puzzle per difficulty per day, algorithmically generated from 100+ themed word banks (contributed by Shantina Jackson-Romero)
+- **How to Play help modals**: Every game now has a blue "?" button with rules, controls, strategy tips, and game-specific details — 40 games covered
+- **Live account restrictions**: Non-privileged users see a friendly notice explaining paper trading access, with links to self-host or use commercial platforms
+
+### Fixed
+- **Session limit enforcement**: Login session limit and cooldown errors are no longer swallowed by the catch-all error handler — they now correctly block login as intended
+
 ## [v2.96.0] - 2026-03-09
 
 ### Added

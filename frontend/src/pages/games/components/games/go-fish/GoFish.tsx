@@ -2,7 +2,8 @@
  * Go Fish — ask for ranks, collect books of four.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -27,6 +28,159 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function GoFishHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Go Fish</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Collect the most <B>books</B> (sets of four cards of the same rank).
+          There are <B>13 possible books</B> in a standard deck (one for each
+          rank from Ace through King). The player with the most books when all
+          13 have been collected wins.
+        </Sec>
+
+        {/* Setup */}
+        <Sec title="Setup">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>A standard <B>52-card deck</B> is used.</Li>
+            <Li>Each player is dealt <B>7 cards</B>.</Li>
+            <Li>The remaining <B>38 cards</B> form the <B>pond</B> (draw pile).</Li>
+            <Li>You go first.</Li>
+          </ul>
+        </Sec>
+
+        {/* How to Play */}
+        <Sec title="How to Play">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li>On your turn, <B>tap a card</B> in your hand to ask the AI for
+              all cards of that rank. You must hold at least one card of the
+              rank you ask for.</li>
+            <li>If the AI has any cards of that rank, they are <B>transferred
+              to your hand</B> and you get <B>another turn</B>.</li>
+            <li>If the AI has none, it says <B>&quot;Go Fish!&quot;</B> and you
+              must draw a card from the pond.</li>
+            <li>If the card you draw matches the rank you asked for, you get
+              <B> another turn</B>. Otherwise, the turn passes to the AI.</li>
+          </ol>
+        </Sec>
+
+        {/* Books */}
+        <Sec title="Books">
+          <ul className="space-y-1 text-slate-300">
+            <Li>When you collect all <B>4 cards of the same rank</B>, a book
+              is automatically formed and those cards are removed from your
+              hand.</Li>
+            <Li>Your completed books are shown below the pond. The AI&apos;s
+              books are shown above.</Li>
+            <Li>Both players&apos; book counts are displayed in the controls
+              bar at the top.</Li>
+          </ul>
+        </Sec>
+
+        {/* The Pond */}
+        <Sec title="The Pond">
+          <ul className="space-y-1 text-slate-300">
+            <Li>The pond is the central draw pile. Its card count is shown
+              next to it.</Li>
+            <Li>When you hear &quot;Go Fish!&quot;, tap the <B>pond card</B> or
+              the <B>Go Fish! button</B> to draw.</Li>
+            <Li>If the pond runs out and a player has no cards, the game
+              ends.</Li>
+          </ul>
+        </Sec>
+
+        {/* AI Behavior */}
+        <Sec title="AI Opponent">
+          <ul className="space-y-1 text-slate-300">
+            <Li>The AI takes its turn automatically after a short delay.</Li>
+            <Li>It prioritizes asking for ranks where it already holds <B>3
+              cards</B> (close to a book), then <B>2 cards</B>.</Li>
+            <Li>It <B>remembers ranks you have asked for</B> and may ask for
+              those if it holds a matching card.</Li>
+            <Li>If the AI successfully gets cards from you, it gets another
+              turn -- it may chain several asks in a row.</Li>
+            <Li>If it draws the rank it asked for from the pond, it also
+              gets another turn.</Li>
+          </ul>
+        </Sec>
+
+        {/* Empty Hand */}
+        <Sec title="Running Out of Cards">
+          <ul className="space-y-1 text-slate-300">
+            <Li>If your hand is emptied (by books or transfers), you
+              automatically <B>draw a card</B> from the pond if any remain.</Li>
+            <Li>If the pond is also empty, the turn passes.</Li>
+          </ul>
+        </Sec>
+
+        {/* Game Over */}
+        <Sec title="Game Over">
+          <ul className="space-y-1 text-slate-300">
+            <Li>The game ends when all <B>13 books</B> have been collected, or
+              the pond is empty and a player has no cards.</Li>
+            <Li>The player with the <B>most books wins</B>. If both have the
+              same number, it is a <B>tie</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Ask for ranks you hold multiples of.</B> If you have 2 or 3
+              of a rank, asking for it maximizes your chance of completing a
+              book.</Li>
+            <Li><B>Pay attention to AI asks.</B> When the AI asks for a rank,
+              you know it holds at least one -- ask for it back on your next
+              turn if you have one.</Li>
+            <Li><B>Track the books.</B> Once a rank is booked, no one can ask
+              for it. Focus on the remaining ranks.</Li>
+            <Li><B>Lucky draws matter.</B> Drawing the rank you asked for
+              gives you an extra turn -- ask for ranks where there are still
+              cards unaccounted for.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function GoFish() {
   const { load, save, clear } = useGameState<SavedState>('go-fish')
   const saved = useRef(load()).current
@@ -35,6 +189,9 @@ export default function GoFish() {
   const song = useMemo(() => getSongForGame('go-fish'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('go-fish')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<GoFishState>(
     () => saved?.gameState ?? createGoFishGame()
@@ -97,7 +254,16 @@ export default function GoFish() {
       <span className="text-xs text-slate-400">
         Pond: {gameState.pond.length} cards
       </span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -190,6 +356,7 @@ export default function GoFish() {
           />
         )}
       </div>
+      {showHelp && <GoFishHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

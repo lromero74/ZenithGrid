@@ -6,7 +6,8 @@
  * 13 tricks per hand. First team to 500 wins.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
@@ -46,6 +47,203 @@ const STRAIN_LABELS: { strain: Strain; label: string; color: string }[] = [
   { strain: 'nt', label: 'NT', color: 'bg-amber-700 hover:bg-amber-600' },
 ]
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function BridgeHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Bridge</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Win tricks with your partner to fulfill your <B>contract</B> (the number
+          of tricks you bid). The first team to reach <B>500 points</B> wins the game.
+        </Sec>
+
+        {/* Partnerships */}
+        <Sec title="Partnerships">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>You sit <B>South</B>. Your AI partner sits <B>North</B> (directly
+              across from you).</Li>
+            <Li>Your opponents are <B>East</B> and <B>West</B>, both controlled by AI.</Li>
+            <Li>Each hand deals all <B>52 cards</B> evenly &mdash; <B>13 cards</B> per player.</Li>
+          </ul>
+        </Sec>
+
+        {/* Bidding */}
+        <Sec title="Bidding Phase">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Bidding starts with the player to the left of the <B>dealer</B> and
+              proceeds clockwise.</Li>
+            <Li>A bid consists of a <B>level</B> (1&ndash;7) and a <B>strain</B> (suit
+              or No Trump). For example, &quot;2{'\u2665'}&quot; means you commit to
+              winning <B>8 tricks</B> (6 + level) with hearts as trump.</Li>
+            <Li>Strains rank from lowest to highest:
+              {' '}<B>{'\u2663'}</B> (Clubs) &lt; <B>{'\u2666'}</B> (Diamonds)
+              {' '}&lt; <B>{'\u2665'}</B> (Hearts) &lt; <B>{'\u2660'}</B> (Spades)
+              {' '}&lt; <B>NT</B> (No Trump).</Li>
+            <Li>Each new bid must be <B>higher</B> than the previous &mdash; either a
+              higher level, or the same level with a higher-ranking strain.</Li>
+            <Li>You may <B>Pass</B> instead of bidding. If all four players pass
+              without a bid, the hand is redealt with a new dealer.</Li>
+            <Li>Bidding ends when <B>three consecutive passes</B> follow a bid. The
+              last bid becomes the <B>contract</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Declarer & Dummy */}
+        <Sec title="Declarer &amp; Dummy">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The <B>declarer</B> is the first player on the winning team who bid
+              the contract&apos;s strain.</Li>
+            <Li>The declarer&apos;s partner becomes the <B>dummy</B>. Dummy&apos;s
+              cards are placed face-up on the table, and the declarer plays both
+              hands.</Li>
+            <Li>If you are the declarer, you will play your own cards AND select
+              cards from dummy&apos;s hand when it is dummy&apos;s turn.</Li>
+          </ul>
+        </Sec>
+
+        {/* Card Play */}
+        <Sec title="Card Play">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The player to the <B>left of the declarer</B> leads the first trick.</Li>
+            <Li>Play proceeds <B>clockwise</B>. Each player plays one card per trick.</Li>
+            <Li>You <B>must follow suit</B> if you can. If you have no cards in the
+              led suit, you may play any card (including a trump).</Li>
+            <Li>The trick is won by the highest <B>trump</B> played, or if no trump
+              was played, by the highest card <B>in the led suit</B>.</Li>
+            <Li>The winner of each trick leads the next one.</Li>
+            <Li><B>Ace is the highest</B> card in each suit.</Li>
+          </ul>
+        </Sec>
+
+        {/* Tricks Required */}
+        <Sec title="Making Your Contract">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Your team needs to win at least <B>6 + bid level</B> tricks.
+              For example, a 3{'\u2660'} contract requires <B>9 tricks</B>.</Li>
+            <Li>Extra tricks beyond the contract are called <B>overtricks</B>.</Li>
+            <Li>If you fall short, each missing trick is an <B>undertrick</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          <div className="space-y-2">
+            <div>
+              <div className="text-xs text-slate-300 font-medium mb-1">Trick Points (contracted tricks only):</div>
+              <ul className="space-y-1 text-slate-300">
+                <Li><B>{'\u2663'} Clubs / {'\u2666'} Diamonds</B> &mdash; 20 points per trick.</Li>
+                <Li><B>{'\u2665'} Hearts / {'\u2660'} Spades</B> &mdash; 30 points per trick.</Li>
+                <Li><B>No Trump</B> &mdash; 40 for the first trick, 30 for each additional.</Li>
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs text-slate-300 font-medium mb-1">Bonuses:</div>
+              <ul className="space-y-1 text-slate-300">
+                <Li><B>Game bonus</B> &mdash; +300 if trick points reach 100 or more.</Li>
+                <Li><B>Partial bonus</B> &mdash; +50 if trick points are below 100.</Li>
+                <Li><B>Small slam</B> &mdash; +500 for bidding and making a level 6 contract (12 tricks).</Li>
+                <Li><B>Grand slam</B> &mdash; +1,000 for bidding and making a level 7 contract (all 13 tricks).</Li>
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs text-slate-300 font-medium mb-1">Overtricks &amp; Undertricks:</div>
+              <ul className="space-y-1 text-slate-300">
+                <Li><B>Overtricks</B> &mdash; same per-trick value as the contract strain.</Li>
+                <Li><B>Undertricks</B> &mdash; the declaring team loses <B>50 points per trick short</B>.</Li>
+              </ul>
+            </div>
+          </div>
+        </Sec>
+
+        {/* AI */}
+        <Sec title="AI Partner &amp; Opponents">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Your partner (North) and both opponents are played by <B>AI</B>.</Li>
+            <Li>AI bids based on <B>high-card points</B> (HCP): Ace=4, King=3,
+              Queen=2, Jack=1. It needs <B>13+ HCP</B> to open.</Li>
+            <Li>AI will try to <B>support its partner&apos;s strain</B> at the
+              next level when possible.</Li>
+            <Li>During play, AI follows standard strategy: lead non-trumps, play
+              low when partner is winning, try to beat the current best card, and
+              avoid trumping partner&apos;s winning trick.</Li>
+          </ul>
+        </Sec>
+
+        {/* Controls */}
+        <Sec title="Controls">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>During <B>bidding</B>: select a level (1&ndash;7) and a strain, then
+              click <B>Bid</B>. Or click <B>Pass</B> to pass.</Li>
+            <Li>During <B>play</B>: click a valid card in your hand. Valid cards are
+              highlighted; invalid ones are dimmed.</Li>
+            <Li>When you are the declarer, click on <B>dummy&apos;s cards</B> to play
+              them during dummy&apos;s turn.</Li>
+            <Li>After each hand, click <B>Next Hand</B> to continue.</Li>
+          </ul>
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Count your points before bidding.</B> With 13+ HCP, you have
+              enough to open. Below that, pass and let your partner bid.</Li>
+            <Li><B>Bid your longest suit.</B> A 5+ card suit often makes a good
+              trump. With balanced hands (no long suit), consider No Trump.</Li>
+            <Li><B>Support your partner.</B> If partner bids a suit and you have
+              3+ cards in it, raise to show support.</Li>
+            <Li><B>Lead with strong suits.</B> Open with your best non-trump suit
+              to establish winning tricks early.</Li>
+            <Li><B>Follow suit wisely.</B> If you cannot beat the current winning
+              card, play your lowest to save your high cards.</Li>
+            <Li><B>Count trumps.</B> Track how many trump cards have been played to
+              know when it is safe to lead trump.</Li>
+            <Li><B>Don&apos;t overbid.</B> Undertricks cost points. A modest contract
+              you can make is better than an ambitious one you cannot.</Li>
+            <Li><B>Watch the dummy.</B> When dummy&apos;s cards are visible, plan your
+              play around what you can see.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function Bridge() {
   const { load, save, clear } = useGameState<SavedState>('bridge')
   const saved = useRef(load()).current
@@ -54,6 +252,9 @@ export default function Bridge() {
   const song = useMemo(() => getSongForGame('bridge'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('bridge')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<BridgeState>(
     () => saved?.gameState ?? createBridgeGame()
@@ -169,7 +370,16 @@ export default function Bridge() {
         )}
         <span>Dealer: {PLAYER_NAMES[gameState.dealer]}</span>
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -421,6 +631,9 @@ export default function Bridge() {
             sfx={sfx}
           />
         )}
+
+        {/* Help modal */}
+        {showHelp && <BridgeHelp onClose={() => setShowHelp(false)} />}
       </div>
     </GameLayout>
   )

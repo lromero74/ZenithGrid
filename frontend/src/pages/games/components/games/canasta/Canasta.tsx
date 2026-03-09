@@ -5,7 +5,8 @@
  * Canasta = 7+ cards. First team to 5000 wins.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
@@ -112,6 +113,210 @@ function MeldDisplay({ meld }: { meld: CanastaMeld }) {
   )
 }
 
+// ── Help modal ──────────────────────────────────────────────────────
+
+function CanastaHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Canasta</h2>
+
+        {/* Goal */}
+        <Sec title="Goal">
+          Be the first team to reach <B>5,000 points</B> across multiple rounds.
+          You play with a partner (North) against two opponents (East &amp; West).
+          Score points by forming <B>melds</B> (groups of same-rank cards) and
+          completing <B>canastas</B> (melds of 7 or more cards).
+        </Sec>
+
+        {/* Setup */}
+        <Sec title="Setup">
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Uses a <B>double deck</B> (108 cards) including <B>4 jokers</B>.</Li>
+            <Li><B>4 players</B> in 2 teams: You &amp; North vs East &amp; West.</Li>
+            <Li>Each player is dealt <B>11 cards</B>. One card starts the discard pile.</Li>
+            <Li><B>Red 3s</B> are automatically played to the table and replaced from the stock.</Li>
+          </ul>
+        </Sec>
+
+        {/* Card Values */}
+        <Sec title="Card Point Values">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Jokers</B> — <B>50</B> points (wild).</Li>
+            <Li><B>Aces &amp; 2s</B> — <B>20</B> points. 2s are wild.</Li>
+            <Li><B>8 through King</B> — <B>10</B> points each.</Li>
+            <Li><B>4 through 7</B> — <B>5</B> points each.</Li>
+            <Li><B>Black 3s</B> — <B>5</B> points. Cannot be melded (but block pile pickup when discarded).</Li>
+            <Li><B>Red 3s</B> — <B>100</B> point bonus each (or penalty if your team has no melds). All 4 = <B>800</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Wild Cards */}
+        <Sec title="Wild Cards">
+          <B>Jokers</B> and <B>2s</B> are wild and can substitute for natural cards
+          in melds. A meld can have at most <B>3 wild cards</B> and must always
+          contain more natural cards than wilds.
+        </Sec>
+
+        {/* Melds & Canastas */}
+        <Sec title="Melds &amp; Canastas">
+          <ul className="space-y-1 text-slate-300">
+            <Li>A <B>meld</B> is 3 or more cards of the same rank (no runs/sequences).</Li>
+            <Li>Must contain <B>more natural cards than wild cards</B>, with a max of 3 wilds.</Li>
+            <Li>A <B>canasta</B> is a meld with <B>7 or more</B> cards.</Li>
+            <Li>A <B>natural canasta</B> (no wilds) earns a <B>500-point</B> bonus — shown with a gold border.</Li>
+            <Li>A <B>mixed canasta</B> (contains wilds) earns a <B>300-point</B> bonus — shown with a silver border.</Li>
+            <Li>Both partners contribute to the same team melds.</Li>
+          </ul>
+        </Sec>
+
+        {/* Initial Meld */}
+        <Sec title="Initial Meld Requirement">
+          Your team&apos;s <B>first meld</B> of each round must meet a minimum point
+          threshold based on your team&apos;s total score:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>Score under 1,500 — first meld needs <B>50+ points</B>.</Li>
+            <Li>Score 1,500 to 2,999 — first meld needs <B>90+ points</B>.</Li>
+            <Li>Score 3,000+ — first meld needs <B>120+ points</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* How to Play */}
+        <Sec title="How to Play">
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li><B>Draw</B> — take <B>2 cards</B> from the stock, or pick up the
+              entire discard pile (if allowed).</li>
+            <li><B>Meld</B> — optionally play melds from your hand (select cards,
+              then click &quot;Meld Selected&quot;). You can meld multiple times per turn.</li>
+            <li><B>Discard</B> — end your turn by discarding <B>1 card</B> to the
+              discard pile.</li>
+          </ol>
+        </Sec>
+
+        {/* Picking Up the Pile */}
+        <Sec title="Picking Up the Discard Pile">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Select <B>2 cards</B> from your hand that form a valid meld with the
+              top card, then click &quot;Pick Up Pile.&quot;</Li>
+            <Li>You get <B>all cards</B> from the pile added to your hand (the top
+              card goes into the new meld).</Li>
+            <Li>If the pile is <B>frozen</B>, you need <B>2 natural cards</B> matching
+              the top card (no wilds).</Li>
+            <Li>If your team hasn&apos;t melded yet, you also need a natural pair and
+              must meet the initial meld requirement.</Li>
+            <Li>Cannot pick up the pile if the top card is a <B>black 3</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Freezing */}
+        <Sec title="Freezing the Discard Pile">
+          The pile becomes <B>frozen</B> (shown with a cyan border) when:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>A <B>wild card</B> (joker or 2) is discarded.</Li>
+            <Li>The pile starts frozen if the initial top card is wild or a red 3.</Li>
+          </ul>
+          A frozen pile can only be picked up with a <B>natural pair</B> matching the
+          top card — no wilds allowed.
+        </Sec>
+
+        {/* Going Out */}
+        <Sec title="Going Out">
+          <ul className="space-y-1 text-slate-300">
+            <Li>To go out, you must have <B>no cards left</B> in your hand and your
+              team must have at least <B>one canasta</B>.</Li>
+            <Li>Going out earns a <B>100-point bonus</B>.</Li>
+            <Li>If neither team goes out, the round ends when the <B>stock is exhausted</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="End-of-Round Scoring">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Meld card points</B> — sum of point values of all melded cards.</Li>
+            <Li><B>Natural canasta bonus</B> — <B>+500</B> per natural canasta.</Li>
+            <Li><B>Mixed canasta bonus</B> — <B>+300</B> per mixed canasta.</Li>
+            <Li><B>Going out bonus</B> — <B>+100</B>.</Li>
+            <Li><B>Red 3 bonus</B> — <B>+100</B> each (or <B>+800</B> for all 4), but becomes a
+              <B> penalty</B> if your team has no melds.</Li>
+            <Li><B>Unmelded cards</B> — point values of cards left in hand are <B>subtracted</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* AI */}
+        <Sec title="AI Opponents">
+          Your three AI opponents (East, North, West) play automatically:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>They draw from the stock (never pick up the pile).</Li>
+            <Li>They meld when they have 3+ cards of the same rank, prioritizing additions
+              to existing melds.</Li>
+            <Li>They discard black 3s first (to block you), then low-value singletons,
+              keeping pairs and potential melds.</Li>
+          </ul>
+        </Sec>
+
+        {/* Controls */}
+        <Sec title="Controls">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Click cards</B> to select/deselect them (they rise when selected).</Li>
+            <Li><B>Draw 2</B> — draw 2 cards from the stock.</Li>
+            <Li><B>Pick Up Pile</B> — pick up the discard pile (select 2 matching cards first).</Li>
+            <Li><B>Meld Selected</B> — meld your selected cards.</Li>
+            <Li><B>Discard</B> — discard your single selected card to end your turn.</Li>
+            <Li><B>Go Out</B> — appears when your hand is empty and your team has a canasta.</Li>
+          </ul>
+        </Sec>
+
+        {/* Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Build toward canastas</B> — you cannot go out without one, and they
+              earn big bonuses.</Li>
+            <Li><B>Hold wild cards</B> — they are worth 20-50 points and freeze the pile
+              if discarded. Use them to complete canastas.</Li>
+            <Li><B>Pick up the pile</B> when it has many cards — a large pile can give you
+              huge melding opportunities.</Li>
+            <Li><B>Discard black 3s</B> to block opponents from picking up the pile.</Li>
+            <Li><B>Watch the score thresholds</B> — as your score increases, the initial
+              meld requirement gets harder (50 → 90 → 120).</Li>
+            <Li><B>Coordinate with your partner</B> — North&apos;s melds help you and
+              vice versa. You share team melds.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
 // ── Constants ────────────────────────────────────────────────────────
 
 const AI_DELAY = 800
@@ -126,6 +331,9 @@ export default function Canasta() {
   const song = useMemo(() => getSongForGame('canasta'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('canasta')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<CanastaState>(
     () => saved?.gameState ?? createCanastaGame()
@@ -279,7 +487,16 @@ export default function Canasta() {
         <span>Pile: {gameState.discardPile.length}</span>
         {gameState.pileFrozen && <span className="text-cyan-400">Frozen</span>}
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to Play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -517,6 +734,9 @@ export default function Canasta() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <CanastaHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

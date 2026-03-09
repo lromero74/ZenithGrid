@@ -20,6 +20,7 @@ import type { GameStatus } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
+import { HelpCircle, X } from 'lucide-react'
 import { MusicToggle } from '../../MusicToggle'
 import {
   createSpoonsGame,
@@ -122,6 +123,62 @@ function ModeSelect({ onStart }: { onStart: (mode: GameMode, difficulty: AiDiffi
 
 // ── Main component ──────────────────────────────────────────────────
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SpoonsHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Spoons</h2>
+
+        <Sec title="Goal">
+          <p>Collect four of a kind, then grab a spoon before everyone else. Last player without a spoon gets a letter. Spell <B>S-P-O-O-N-S</B> and you're eliminated!</p>
+        </Sec>
+
+        <Sec title="Gameplay">
+          <ul className="space-y-1">
+            <Li>Each player holds <B>4 cards</B>. Cards are passed around the table.</Li>
+            <Li>Draw a card, decide to keep or discard. You must always have exactly 4.</Li>
+            <Li>When someone gets <B>four of a kind</B>, they grab a spoon.</Li>
+            <Li>Once any spoon is grabbed, everyone races to grab the remaining spoons.</Li>
+            <Li>There's always one fewer spoon than players — someone gets a letter!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Game Modes">
+          <ul className="space-y-1">
+            <Li><B>Turn-based</B> — Classic sequential draw/discard. Strategic and thoughtful.</Li>
+            <Li><B>Real-time</B> — Simultaneous card passing. Fast and frantic!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Elimination">
+          <ul className="space-y-1">
+            <Li>Each round the loser gains a letter: S → P → O → O → N → S.</Li>
+            <Li>Spell SPOONS and you're out. Last player standing wins!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Focus on collecting one rank — don't spread too thin.</Li>
+            <Li>Watch the spoon area closely — you might miss a grab!</Li>
+            <Li>In real-time mode, speed is everything.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function Spoons() {
   const { load, save, clear } = useGameState<SavedState>('spoons')
   const saved = useRef(load()).current
@@ -131,6 +188,7 @@ export default function Spoons() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('spoons')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [showModeSelect, setShowModeSelect] = useState<boolean>(() => {
     const s = saved?.gameState
     return !(s && s.mode && s.difficulty)
@@ -314,7 +372,12 @@ export default function Spoons() {
         <span className="text-slate-500">{modeLabel} · {difficultyLabel}</span>
         <span className="text-slate-400">Rd {gameState.roundNumber}</span>
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -471,6 +534,7 @@ export default function Spoons() {
           />
         )}
       </div>
+      {showHelp && <SpoonsHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

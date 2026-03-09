@@ -370,6 +370,16 @@ async def create_account(
     For CEX accounts, provide exchange, api_key_name, and api_private_key.
     For DEX accounts, provide chain_id, wallet_address, and optionally rpc_url and wallet_private_key.
     """
+    # Block non-privileged users from adding live exchange accounts
+    if not current_user.is_superuser:
+        user_groups = {g.name for g in (current_user.groups or [])}
+        privileged = {"System Owners", "Administrators", "Traders"}
+        if not user_groups & privileged:
+            raise HTTPException(
+                status_code=403,
+                detail="live_accounts_restricted",
+            )
+
     try:
         account = await create_exchange_account(db, current_user, account_data)
 

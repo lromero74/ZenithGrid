@@ -3,7 +3,8 @@
  * Refined by David Greene: proper betting rounds, blind rotation, AI pacing, blind levels.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_LARGE } from '../../PlayingCard'
@@ -40,6 +41,187 @@ function formatAction(action: string): string {
   return action.replace(/Player (\d+)/g, (_, n) => `P${Number(n) + 1}`)
 }
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function HoldemHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => (
+    <span className="text-white font-medium">{children}</span>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">•</span><span>{children}</span></li>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Texas Hold&apos;em</h2>
+
+        <Sec title="Overview">
+          Texas Hold&apos;em is a poker game where you compete against 3 AI
+          opponents. Each player gets 2 private <B>hole cards</B>, and 5
+          shared <B>community cards</B> are dealt to the center of the
+          table. Make the best 5-card hand using any combination of your
+          hole cards and the community cards. The last player with chips
+          wins the tournament.
+        </Sec>
+
+        <Sec title="Game Setup">
+          <ul className="space-y-1 text-slate-300">
+            <Li>4 players total — you (P1) and 3 AI opponents (P2, P3, P4).</Li>
+            <Li>Everyone starts with <B>1,000 chips</B>.</Li>
+            <Li>Blinds start at <B>10/20</B> and double every 10 minutes (20/40, 40/80, etc.).</Li>
+            <Li>The <B>dealer button</B> (D) rotates each hand.</Li>
+            <Li>The player left of the dealer posts the <B>small blind</B> (SB), and the next player posts the <B>big blind</B> (BB).</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Betting Rounds">
+          Each hand has up to 4 betting rounds:
+          <ol className="mt-1.5 space-y-2 text-slate-300 list-decimal list-inside">
+            <li><B>Pre-Flop</B> — After receiving your 2 hole cards. Action
+              starts left of the big blind (Under-the-Gun). You must at
+              least match the big blind to stay in.</li>
+            <li><B>Flop</B> — 3 community cards are dealt face-up. A new
+              betting round begins starting left of the dealer.</li>
+            <li><B>Turn</B> — A 4th community card is dealt. Another betting
+              round.</li>
+            <li><B>River</B> — The 5th and final community card is dealt.
+              Final betting round before showdown.</li>
+          </ol>
+        </Sec>
+
+        <Sec title="Your Actions">
+          On your turn, you can:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Check</B> — Pass without betting (only when no bet to
+              match). Free to stay in the hand.</Li>
+            <Li><B>Call</B> — Match the current bet to stay in the hand.</Li>
+            <Li><B>Raise</B> — Increase the bet. Use the vertical slider to
+              choose your raise amount. Minimum raise is the current bet
+              plus one big blind.</Li>
+            <Li><B>All-In</B> — Bet all your remaining chips. You stay in
+              the hand for the showdown even if others bet more.</Li>
+            <Li><B>Fold</B> — Surrender your cards and forfeit any chips
+              already bet. You&apos;re out for this hand.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Showdown">
+          After the river betting round, all remaining players reveal
+          their hands. The best 5-card hand wins the pot. If two or
+          more players tie, the pot is split equally.
+          <p className="mt-1 text-slate-400">
+            If only one player remains (everyone else folded), they win the
+            pot without showing their cards.
+          </p>
+          <p className="mt-1 text-slate-400">
+            If all active players are all-in, remaining community cards are
+            dealt automatically and the hand goes straight to showdown.
+          </p>
+        </Sec>
+
+        <Sec title="Hand Rankings (Best to Worst)">
+          <div className="space-y-0.5 font-mono text-[0.7rem]">
+            {[
+              ['Royal Flush', 'A K Q J 10 — same suit'],
+              ['Straight Flush', '5 cards in sequence — same suit'],
+              ['Four of a Kind', '4 cards of the same rank'],
+              ['Full House', '3 of a kind + a pair'],
+              ['Flush', '5 cards of the same suit'],
+              ['Straight', '5 cards in sequence (any suit)'],
+              ['Three of a Kind', '3 cards of the same rank'],
+              ['Two Pair', '2 different pairs'],
+              ['Pair', '2 cards of the same rank'],
+              ['High Card', 'Highest card when nothing else connects'],
+            ].map(([name, desc], i) => (
+              <div key={i} className="flex gap-2">
+                <span className={`w-32 flex-shrink-0 ${i === 0 ? 'text-yellow-400' : i < 3 ? 'text-amber-300' : 'text-slate-300'}`}>{i + 1}. {name}</span>
+                <span className="text-slate-500">{desc}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-slate-500 text-[0.65rem]">
+            Ace can be high (A-K-Q-J-10) or low (A-2-3-4-5 &quot;wheel&quot;).
+          </p>
+        </Sec>
+
+        <Sec title="Flop Bonus">
+          When the 3-card flop is dealt, a <B>1,000 chip bonus</B> is
+          added to the pot if the flop contains any of these patterns:
+          <ul className="mt-1 space-y-0.5 text-slate-300">
+            <Li><B>Three of a kind</B> — all 3 flop cards are the same rank.</Li>
+            <Li><B>A run</B> — 3 consecutive ranks (e.g. 7-8-9).</Li>
+            <Li><B>Suited</B> — all 3 flop cards are the same suit.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Bonus Hands">
+          If you <B>win the pot</B> and your hole cards match one of
+          these special combos, you earn an extra <B>1,000 chips</B> on
+          top of the pot:
+          <div className="mt-1.5 grid grid-cols-3 gap-1 text-center text-[0.7rem]">
+            {[
+              'J + J', '2 + 3', 'Q + 7', 'J + 2', 'J + 10', '3 + 5',
+            ].map(h => (
+              <span key={h} className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-amber-300">{h}</span>
+            ))}
+          </div>
+          <p className="mt-1 text-slate-500 text-[0.65rem]">Suit doesn&apos;t matter — just the ranks.</p>
+        </Sec>
+
+        <Sec title="Elimination &amp; Winning">
+          <ul className="space-y-1 text-slate-300">
+            <Li>A player who runs out of chips is <B>eliminated</B>.</Li>
+            <Li>If you can&apos;t cover a blind, you go all-in for whatever
+              you have.</Li>
+            <Li>The tournament ends when <B>one player has all the chips</B>.</Li>
+            <Li>If you&apos;re the last one standing, you win!</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="AI Opponents">
+          <p className="text-slate-300">
+            AI players use a strategy based on hand strength, pot odds, and
+            draw potential. They can check, call, raise, bluff, and fold.
+            They think for ~2 seconds per action.
+          </p>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Action buttons appear on <B>your turn only</B>.</Li>
+            <Li>Use the <B>vertical slider</B> next to your cards to set raise amounts.</Li>
+            <Li>Click <B>Next Hand</B> after each hand resolves.</Li>
+            <Li><B>New Game</B> resets the tournament (slide to confirm).</Li>
+            <Li>Winning hand cards are <B>highlighted in blue</B> at showdown.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function TexasHoldem() {
   const { load, save, clear } = useGameState<SavedState>('texas-holdem')
   const saved = useRef(load()).current
@@ -56,6 +238,8 @@ export default function TexasHoldem() {
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
   const [raiseAmount, setRaiseAmount] = useState(40)
   const [gameStartTime, setGameStartTime] = useState(() => saved?.gameStartTime ?? Date.now())
+
+  const [showHelp, setShowHelp] = useState(false)
 
   // Shows the last AI action text for 2 seconds
   const [aiActionText, setAiActionText] = useState<string | null>(null)
@@ -185,7 +369,12 @@ export default function TexasHoldem() {
     <div className="flex items-center justify-between text-xs">
       <span className="text-slate-400">Pot: <span className="text-yellow-400 font-bold">{gameState.pot}</span></span>
       <span className="text-slate-400">Blinds: {gameState.smallBlind}/{gameState.bigBlind}</span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white" title="How to play">
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -393,6 +582,7 @@ export default function TexasHoldem() {
           />
         )}
       </div>
+      {showHelp && <HoldemHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

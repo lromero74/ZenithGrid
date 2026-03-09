@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
-import { Share2 } from 'lucide-react'
+import { HelpCircle, Share2, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameState } from '../../../hooks/useGameState'
@@ -41,6 +41,44 @@ interface WordleSaved {
   hardMode: boolean
 }
 
+function WordleHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Wordle</h2>
+        <Sec title="Goal"><p>Guess the hidden 5-letter word in <B>6 tries</B> or fewer.</p></Sec>
+        <Sec title="How to Play"><ul className="space-y-1">
+          <Li>Type a valid 5-letter word and press <B>Enter</B> to submit.</Li>
+          <Li>After each guess, tiles change color to show how close you are.</Li>
+        </ul></Sec>
+        <Sec title="Color Clues"><ul className="space-y-1">
+          <Li><span className="inline-block w-4 h-4 rounded bg-green-600 align-middle mr-1"></span> <B>Green</B> — Correct letter in the correct position.</Li>
+          <Li><span className="inline-block w-4 h-4 rounded bg-yellow-600 align-middle mr-1"></span> <B>Yellow</B> — Correct letter but in the wrong position.</Li>
+          <Li><span className="inline-block w-4 h-4 rounded bg-slate-700 align-middle mr-1"></span> <B>Gray</B> — Letter is not in the word.</Li>
+        </ul></Sec>
+        <Sec title="Modes"><ul className="space-y-1">
+          <Li><B>Daily</B> — Everyone gets the same word each day.</Li>
+          <Li><B>Random</B> — A new random word each game.</Li>
+          <Li><B>Hard Mode</B> — Revealed hints must be used in subsequent guesses.</Li>
+        </ul></Sec>
+        <Sec title="Strategy Tips"><ul className="space-y-1">
+          <Li>Start with words that have common letters: E, A, R, S, T, O.</Li>
+          <Li>Use your second guess to test new letters, not repeat confirmed ones.</Li>
+          <Li>Pay attention to the keyboard colors — they track all your guesses.</Li>
+        </ul></Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function Wordle() {
   const { load, save, clear } = useGameState<WordleSaved>('wordle')
   const saved = useRef(load()).current
@@ -62,6 +100,7 @@ export default function Wordle() {
   const [hardMode, setHardMode] = useState(saved?.hardMode ?? false)
   const [shake, setShake] = useState(false)
   const [toast, setToast] = useState('')
+  const [showHelp, setShowHelp] = useState(false)
 
   // Persist state
   useEffect(() => {
@@ -213,6 +252,7 @@ export default function Wordle() {
         </button>
       </div>
       <div className="flex items-center space-x-3">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play"><HelpCircle className="w-4 h-4 text-blue-400" /></button>
         <MusicToggle music={music} sfx={sfx} />
         <label className="flex items-center space-x-1.5 cursor-pointer">
           <input
@@ -281,6 +321,7 @@ export default function Wordle() {
           />
         )}
       </div>
+      {showHelp && <WordleHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

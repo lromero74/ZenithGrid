@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, HelpCircle, Pause, Play, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameScores } from '../../../hooks/useGameScores'
@@ -34,6 +34,62 @@ const INITIAL_SNAKE: Position[] = [
   { x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 },
 ]
 
+// ── Help modal ──────────────────────────────────────────────────────
+function SnakeHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Snake</h2>
+
+        <Sec title="Goal">
+          <p>Guide the snake to eat food and grow as long as possible without crashing.</p>
+        </Sec>
+
+        <Sec title="How to Play">
+          <ul className="space-y-1">
+            <Li>The snake moves continuously in the current direction.</Li>
+            <Li>Eat the <B>food</B> (colored dot) to grow longer and score a point.</Li>
+            <Li>Every <B>5 points</B> the level increases and the snake speeds up.</Li>
+            <Li>You cannot reverse direction — turning 180° into yourself isn't allowed.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Wall Modes">
+          <ul className="space-y-1">
+            <Li><B>Walls: Kill</B> — Hitting the edge ends the game.</Li>
+            <Li><B>Walls: Wrap</B> — The snake wraps around to the opposite side.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1">
+            <Li><B>Arrow keys / WASD</B> — Change direction.</Li>
+            <Li><B>Space / P</B> — Pause/resume.</Li>
+            <Li><B>On-screen arrows</B> — Tap for mobile/touch control.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Stay in the center when short — more escape routes.</Li>
+            <Li>As you grow, trace a pattern along the edges to avoid trapping yourself.</Li>
+            <Li>Wrap mode is more forgiving — use it to learn, then switch to Kill mode for a challenge.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
+
 interface SnakeSaved { wallsMode: boolean }
 
 export default function Snake() {
@@ -45,6 +101,7 @@ export default function Snake() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('snake')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [score, setScore] = useState(0)
   const [wallsMode, setWallsMode] = useState(saved?.wallsMode ?? true)
@@ -243,6 +300,9 @@ export default function Snake() {
         </button>
       </div>
       <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
         <span className="text-xs text-slate-500">
           Level {Math.floor(score / 5) + 1}
@@ -314,6 +374,7 @@ export default function Snake() {
           />
         )}
       </div>
+      {showHelp && <SnakeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

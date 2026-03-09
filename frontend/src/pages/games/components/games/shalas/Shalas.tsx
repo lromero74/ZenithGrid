@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE_COMPACT } from '../../PlayingCard'
@@ -41,6 +42,196 @@ interface SavedState {
 
 const WILD_CHOICES = [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
+// ── Help modal ───────────────────────────────────────────────────────
+
+function ShalasHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-1">How to Play Shalas</h2>
+        <p className="text-[0.65rem] text-slate-500 mb-4">&copy; 2026 David Damir Greene</p>
+
+        {/* Goal */}
+        <Section title="Goal">
+          Clear every card from your hand and the table. The discard pile and
+          burned pile don&apos;t count — only cards you still control matter.
+        </Section>
+
+        {/* Setup */}
+        <Section title="Setup">
+          A standard 52-card deck is shuffled and dealt into four areas:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Row 4</B> (top) — 3 stacks of 2 cards each: one face-down, one face-up on top.</Li>
+            <Li><B>Row 3</B> — 4 stacks of 3 face-down cards.</Li>
+            <Li><B>Row 2</B> — 4 face-up cards.</Li>
+            <Li><B>Your Hand</B> (bottom) — 5 face-up cards. The rest go to the <B>draw stack</B>.</Li>
+          </ul>
+        </Section>
+
+        {/* Basic play */}
+        <Section title="Playing Cards">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Play a card from your hand onto the discard pile. It must be
+              <B> equal or higher rank</B> than the current top card.</Li>
+            <Li>Click a card to select it, then click <B>Play</B>. Or double-click to play instantly.</Li>
+            <Li>You may select <B>multiple cards of the same rank</B> and play them together in one move.</Li>
+            <Li>When your hand drops below 3 cards, it <B>auto-refills to 5</B> from the draw stack.</Li>
+            <Li>You can also click the draw stack at any time to draw an extra card.</Li>
+          </ul>
+        </Section>
+
+        {/* Card order */}
+        <Section title="Card Ranking">
+          <p className="text-slate-300">
+            Low to high: <B>A, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K</B>
+          </p>
+          <p className="text-slate-400 text-[0.7rem] mt-1">
+            The <B>Ace</B> is special — it&apos;s always playable (acts as
+            the highest card), but after it&apos;s played, the effective rank
+            resets to 1. Any card except King can follow an Ace.
+          </p>
+          <p className="text-slate-400 text-[0.7rem] mt-1">
+            <B>2</B> is not in the normal rank order — it&apos;s a Wildcard (see below).
+          </p>
+        </Section>
+
+        {/* Special cards */}
+        <Section title="Special Cards">
+          <div className="space-y-3">
+            <SpecialCard color="text-red-400" name="10 — Destroyer">
+              Removes itself <B>and the entire discard pile</B> from the
+              game permanently (burned). The discard resets to empty — any
+              card can be played next. Only triggers when the discard pile
+              has at least one card in it.
+            </SpecialCard>
+            <SpecialCard color="text-cyan-400" name="2 — Wildcard">
+              Always playable regardless of the current rank. After playing
+              a 2, you <B>choose the new effective rank</B> (Ace, or 3
+              through King). The 2 stays on the discard pile. Great for
+              resetting a high pile back down.
+            </SpecialCard>
+            <SpecialCard color="text-emerald-400" name="7 — Selector">
+              Always playable. After playing a 7, <B>pick any card from the
+              table</B> (any row, including your hand) to move to the
+              discard pile. That card becomes the new top. If you select a
+              10, the Destroyer effect triggers automatically.
+            </SpecialCard>
+            <SpecialCard color="text-amber-400" name="Ace — Dual Rank">
+              Always playable (highest card). After played, effective rank
+              becomes 1. <B>Kings cannot be played on top of an Ace</B> —
+              only lower cards or special cards (2, 7, 10) can follow.
+            </SpecialCard>
+            <SpecialCard color="text-purple-400" name="4-of-a-Kind — Wild Set">
+              If you hold all 4 cards of the same rank, play them all at
+              once. <B>Always valid regardless of the current rank.</B> All
+              4 cards go on the discard pile and the effective rank resets
+              to Ace.
+            </SpecialCard>
+          </div>
+        </Section>
+
+        {/* Table progression */}
+        <Section title="Table Progression">
+          You must empty your hand (and draw stack) before touching the table.
+          Then play from the table <B>top to bottom</B>:
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li><B>Row 4</B> first — face-up cards, then face-down cards revealed as you play.</li>
+            <li><B>Row 3</B> next — all face-down (blind plays). Click a stack to flip and play the top card.</li>
+            <li><B>Row 2</B> last — the 4 face-up cards.</li>
+          </ol>
+        </Section>
+
+        {/* Blind plays */}
+        <Section title="Blind Plays (Face-Down Cards)">
+          When playing face-down cards from Row 3 or Row 4, the card is revealed
+          as you play it. If it <B>can&apos;t beat the current top</B>, the play fails:
+          the revealed card plus <B>the entire discard pile</B> go into your hand.
+          The discard resets to empty.
+        </Section>
+
+        {/* Can't play */}
+        <Section title="Can&apos;t Play?">
+          If no card in your active area can beat the discard, a <B>&quot;Can&apos;t
+          Play&quot;</B> button appears. Clicking it shuffles the discard pile,
+          and you take 10 cards from it into your hand. Remaining cards stay
+          on the discard pile. This is a penalty — avoid it if you can!
+        </Section>
+
+        {/* Invalid plays */}
+        <Section title="Invalid Play Penalty">
+          If you play a card that <B>doesn&apos;t meet the rank requirement</B>,
+          you pick up the played card plus the entire discard pile into your hand.
+          The discard resets to empty.
+        </Section>
+
+        {/* Strategy tips */}
+        <Section title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li>Save <B>10s</B> (Destroyers) for when the discard pile is large — burn more cards at once.</Li>
+            <Li>Use <B>2s</B> (Wildcards) to reset a high discard rank back down to something manageable.</Li>
+            <Li>The <B>7</B> (Selector) lets you move a problematic card off the table to the discard. Use it strategically to clear face-up cards from Row 4.</Li>
+            <Li>Playing an <B>Ace</B> blocks Kings — useful for controlling what can follow.</Li>
+            <Li>Try to <B>clear face-up pairs</B> from Row 4 early to access the face-down cards underneath.</Li>
+            <Li>Keep your hand small when possible — a huge hand means more cards to clear later.</Li>
+            <Li>Draw extra cards when the draw stack is running low to keep options open.</Li>
+          </ul>
+        </Section>
+
+        {/* Controls */}
+        <Section title="Controls">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Click</B> a hand card to select it. Click more of the same rank to multi-select.</Li>
+            <Li><B>Double-click</B> a hand card to play it instantly.</Li>
+            <Li><B>Play</B> button appears when cards are selected.</Li>
+            <Li><B>Undo</B> reverts the last action (one level).</Li>
+            <Li><B>Draw stack</B> — click to draw an extra card into your hand.</Li>
+            <Li>Yellow highlight shows which cards are currently clickable.</Li>
+          </ul>
+        </Section>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function SpecialCard({ color, name, children }: { color: string; name: string; children: React.ReactNode }) {
+  return (
+    <div className="pl-3 border-l-2 border-slate-700">
+      <div className={`text-xs font-bold ${color} mb-0.5`}>{name}</div>
+      <div className="text-xs text-slate-400 leading-relaxed">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">•</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
 // ── Component ────────────────────────────────────────────────────────
 
 export default function Shalas() {
@@ -54,6 +245,9 @@ export default function Shalas() {
   const song = useMemo(() => getSongForGame('shalas'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('shalas')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   // Undo support — store previous state
   const [prevState, setPrevState] = useState<ShalasState | null>(null)
@@ -485,7 +679,16 @@ export default function Shalas() {
           </button>
         )}
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -565,6 +768,9 @@ export default function Shalas() {
           sfx={sfx}
         />
       )}
+
+      {/* Help modal */}
+      {showHelp && <ShalasHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
@@ -43,6 +44,174 @@ const SUIT_OPTIONS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades']
 
 const AI_DELAY = 600
 
+// ── Help modal ─────────────────────────────────────────────────────
+
+function EuchreHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Euchre</h2>
+
+        {/* Overview */}
+        <Sec title="Goal">
+          Be the first team to reach <B>10 points</B>. Euchre is a 4-player
+          partnership trick-taking game. You are paired with <B>North</B> against
+          <B> East</B> and <B>West</B>.
+        </Sec>
+
+        {/* The Deck */}
+        <Sec title="The Deck">
+          Euchre uses a <B>24-card deck</B> consisting of 9, 10, Jack, Queen,
+          King, and Ace in each of the four suits. Lower cards (2-8) are not used.
+        </Sec>
+
+        {/* Dealing */}
+        <Sec title="Dealing">
+          Each player is dealt <B>5 cards</B>. The remaining 4 cards form the
+          <B> kitty</B>, and the top card is flipped face-up. The dealer rotates
+          clockwise each hand. Play always begins with the player to the
+          left of the dealer.
+        </Sec>
+
+        {/* Trump Selection */}
+        <Sec title="Trump Selection">
+          Trump is chosen in two rounds:
+          <ol className="mt-1.5 space-y-1 text-slate-300 list-decimal list-inside">
+            <li><B>Round 1</B> — each player (starting left of dealer) may
+              <B> order up</B> the flipped card&apos;s suit as trump, or
+              <B> pass</B>. If someone orders up, the dealer picks up the
+              flipped card and discards one card from their hand.</li>
+            <li><B>Round 2</B> — if all players pass in round 1, each player
+              may <B>name any suit except</B> the flipped card&apos;s suit as
+              trump, or pass. The dealer <B>cannot pass</B> in round 2 (they
+              are &quot;stuck&quot; and must name a suit).</li>
+          </ol>
+        </Sec>
+
+        {/* Bowers */}
+        <Sec title="Bowers (Highest Cards)">
+          The two Jacks of the trump color are the most powerful cards:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Right Bower</B> — the Jack of the trump suit. This is the
+              <B> highest card in the game</B>.</Li>
+            <Li><B>Left Bower</B> — the Jack of the same color as trump (e.g.,
+              if hearts is trump, the Jack of diamonds is the Left Bower). This
+              is the <B>second highest card</B> and counts as a trump card, not
+              its printed suit.</Li>
+          </ul>
+        </Sec>
+
+        {/* Card Ranking */}
+        <Sec title="Card Ranking">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Trump suit</B> (highest to lowest): Right Bower, Left Bower,
+              Ace, King, Queen, 10, 9.</Li>
+            <Li><B>Non-trump suits</B> (highest to lowest): Ace, King, Queen,
+              Jack, 10, 9.</Li>
+          </ul>
+        </Sec>
+
+        {/* Playing Tricks */}
+        <Sec title="Playing Tricks">
+          The player to the left of the dealer leads the first trick.
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li>The lead player plays any card. The suit of that card becomes the
+              <B> led suit</B> for the trick.</Li>
+            <Li>Other players <B>must follow the led suit</B> if they have a card
+              of that suit (the Left Bower counts as trump, not its printed suit).</Li>
+            <Li>If you have no cards of the led suit, you may play <B>any card</B>,
+              including trump.</Li>
+            <Li>The highest trump card wins the trick. If no trump was played,
+              the highest card of the led suit wins.</Li>
+            <Li>The trick winner leads the next trick.</Li>
+          </ul>
+        </Sec>
+
+        {/* Scoring */}
+        <Sec title="Scoring">
+          After all 5 tricks are played, the hand is scored. The team that called
+          trump is the <B>making team</B>.
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>3 or 4 tricks</B> by the makers — <B>1 point</B>.</Li>
+            <Li><B>All 5 tricks (march)</B> by the makers — <B>2 points</B>.</Li>
+            <Li><B>Euchre</B> — if the makers win fewer than 3 tricks, the
+              defending team scores <B>2 points</B>.</Li>
+            <Li><B>Lone march</B> — if a player goes alone and takes all 5
+              tricks, their team scores <B>4 points</B>.</Li>
+          </ul>
+        </Sec>
+
+        {/* Going Alone */}
+        <Sec title="Going Alone">
+          When calling trump, a player may choose to <B>go alone</B>, meaning
+          their partner sits out the hand. If the lone player takes all 5 tricks,
+          their team earns <B>4 points</B> instead of 2. If they take 3 or 4,
+          they still earn 1 point. Going alone is a high-risk, high-reward play.
+        </Sec>
+
+        {/* Dealer Discard */}
+        <Sec title="Dealer Discard">
+          When trump is ordered up in round 1, the dealer <B>picks up the
+          flipped card</B> and adds it to their hand (giving them 6 cards).
+          The dealer must then <B>discard one card</B> to return to 5 cards
+          before play begins.
+        </Sec>
+
+        {/* Strategy Tips */}
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Count your trump</B> — with 3 or more trump cards (including
+              bowers), consider ordering up or naming trump.</Li>
+            <Li><B>Lead with your Right Bower</B> — it cannot be beaten and
+              forces opponents to lose trump cards.</Li>
+            <Li><B>Lead off-suit Aces</B> — they win tricks without spending
+              trump.</Li>
+            <Li><B>Watch your partner</B> — if your partner is winning the
+              trick, play your lowest card to save strong cards for later.</Li>
+            <Li><B>Be careful calling trump as the maker</B> — getting euchred
+              gives your opponents 2 points.</Li>
+            <Li><B>Remember the Left Bower</B> — it belongs to the trump suit,
+              not its printed suit. This affects which cards you must follow
+              with.</Li>
+          </ul>
+        </Sec>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-white font-medium">{children}</span>
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function Euchre() {
   const { load, save, clear } = useGameState<SavedState>('euchre')
   const saved = useRef(load()).current
@@ -56,6 +225,7 @@ export default function Euchre() {
     () => saved?.gameState ?? createEuchreGame()
   )
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
+  const [showHelp, setShowHelp] = useState(false)
   const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // SFX on trick completion
@@ -183,7 +353,16 @@ export default function Euchre() {
         )}
         <span>Dealer: {PLAYER_NAMES[gameState.dealer]}</span>
       </div>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp(true)}
+            className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+            title="How to play"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+          <MusicToggle music={music} sfx={sfx} />
+        </div>
     </div>
   )
 
@@ -376,6 +555,9 @@ export default function Euchre() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <EuchreHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

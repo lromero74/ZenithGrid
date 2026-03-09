@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -21,6 +22,125 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+
+// ── Help modal ───────────────────────────────────────────────────────
+
+function ConnectFourHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Connect Four</h2>
+
+        {/* Goal */}
+        <Section title="Goal">
+          Be the first player to connect <B>four of your discs</B> in a row &mdash;
+          horizontally, vertically, or diagonally &mdash; before the AI does.
+        </Section>
+
+        {/* Setup */}
+        <Section title="Setup">
+          The game is played on a <B>7-column by 6-row</B> vertical grid.
+          You play as <B className="text-red-400">Red</B> and the AI plays as{' '}
+          <B className="text-yellow-400">Yellow</B>. Red always goes first.
+        </Section>
+
+        {/* How to play */}
+        <Section title="How to Play">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Click a column</B> (or hover to preview) to drop your disc into that column.</Li>
+            <Li>Discs fall to the <B>lowest available row</B> in the chosen column, just like gravity.</Li>
+            <Li>You and the AI take <B>alternating turns</B>. After your move, the AI responds automatically.</Li>
+            <Li>If a column is full, you cannot drop a disc there.</Li>
+          </ul>
+        </Section>
+
+        {/* Winning */}
+        <Section title="Winning">
+          Connect four discs in an unbroken line to win. Lines can be:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Horizontal</B> &mdash; four in a row across a single row.</Li>
+            <Li><B>Vertical</B> &mdash; four stacked in the same column.</Li>
+            <Li><B>Diagonal</B> &mdash; four in a row on either diagonal direction.</Li>
+          </ul>
+          <p className="mt-1.5 text-slate-400">
+            Winning cells are <B>highlighted</B> when a line is completed.
+          </p>
+        </Section>
+
+        {/* Draw */}
+        <Section title="Draw">
+          If all 42 cells are filled and neither player has four in a row,
+          the game ends in a <B>draw</B>.
+        </Section>
+
+        {/* AI opponent */}
+        <Section title="AI Opponent">
+          The AI uses <B>minimax with alpha-beta pruning</B> to choose its moves.
+          Select a difficulty before starting:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>Easy</B> &mdash; the AI looks only 2 moves ahead. Good for learning.</Li>
+            <Li><B>Medium</B> &mdash; the AI looks 4 moves ahead. A solid challenge.</Li>
+            <Li><B>Hard</B> &mdash; the AI looks 6 moves ahead. Very difficult to beat.</Li>
+          </ul>
+        </Section>
+
+        {/* Controls */}
+        <Section title="Controls">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Click</B> a column to drop your disc.</Li>
+            <Li><B>Hover</B> over the board to see which column you are targeting.</Li>
+            <Li><B>Difficulty selector</B> (top-left) changes the AI strength and starts a new game.</Li>
+            <Li><B>New Game</B> resets the board. Scores are preserved across games.</Li>
+          </ul>
+        </Section>
+
+        {/* Strategy tips */}
+        <Section title="Strategy Tips">
+          <ul className="space-y-1 text-slate-300">
+            <Li><B>Control the center.</B> The middle column participates in the most possible winning lines.</Li>
+            <Li><B>Build threats in two directions</B> so the AI cannot block both at once.</Li>
+            <Li><B>Look for forced wins</B> &mdash; create a position where you have two ways to complete four in a row.</Li>
+            <Li><B>Watch for the AI&apos;s setups.</B> Block three-in-a-row threats before they become four.</Li>
+            <Li><B>Plan vertically.</B> Stacking discs can create diagonal opportunities the opponent may miss.</Li>
+            <Li><B>Think ahead.</B> Consider where your disc will land and what moves it enables for both players.</Li>
+          </ul>
+        </Section>
+
+        <div className="mt-4 pt-3 border-t border-slate-700 text-center">
+          <button onClick={onClose} className="px-6 py-2 text-sm rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3>
+      <div className="text-xs leading-relaxed text-slate-400">{children}</div>
+    </div>
+  )
+}
+
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+}
+
+function B({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <span className={`font-medium ${className ?? 'text-white'}`}>{children}</span>
+}
+
+// ── Constants ─────────────────────────────────────────────────────────
 
 const DIFFICULTY_DEPTH: Record<string, number> = {
   easy: 2, medium: 4, hard: 6,
@@ -42,6 +162,9 @@ export default function ConnectFour() {
   const song = useMemo(() => getSongForGame('connect-four'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('connect-four')
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false)
 
   const [board, setBoard] = useState<Board>(() => saved?.board ?? createBoard())
   const [currentPlayer, setCurrentPlayer] = useState<Player>(saved?.currentPlayer ?? 'red')
@@ -137,6 +260,13 @@ export default function ConnectFour() {
         <span className="text-red-400">You: {scores.red}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>
         <span className="text-yellow-400">AI: {scores.yellow}</span>
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
+          title="How to play"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
@@ -177,6 +307,9 @@ export default function ConnectFour() {
           />
         )}
       </div>
+
+      {/* Help modal */}
+      {showHelp && <ConnectFourHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

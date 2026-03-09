@@ -21,6 +21,7 @@ const TwentyFortyEight = lazy(() => import('./games/components/games/twenty-fort
 const ConnectFour = lazy(() => import('./games/components/games/connect-four/ConnectFour'))
 const Minesweeper = lazy(() => import('./games/components/games/minesweeper/Minesweeper'))
 const Wordle = lazy(() => import('./games/components/games/wordle/Wordle'))
+const Crossword = lazy(() => import('./games/components/games/crossword/Crossword'))
 const Nonogram = lazy(() => import('./games/components/games/nonogram/Nonogram'))
 
 // Phase 3: Hard Games
@@ -84,6 +85,7 @@ export default function Games() {
         <Route path="connect-four" element={<ConnectFour />} />
         <Route path="minesweeper" element={<Minesweeper />} />
         <Route path="wordle" element={<Wordle />} />
+        <Route path="crossword" element={<Crossword />} />
         <Route path="nonogram" element={<Nonogram />} />
         {/* Phase 3: Hard Games */}
         <Route path="sudoku" element={<Sudoku />} />

@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo} from 'react'
+import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
@@ -31,6 +32,48 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
+function VideoPokerHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Video Poker</h2>
+        <Sec title="Goal"><p>Make the best 5-card poker hand. This is <B>Jacks or Better</B> — you need at least a pair of Jacks to win.</p></Sec>
+        <Sec title="How to Play"><ul className="space-y-1">
+          <Li><B>Bet</B> credits and click <B>Deal</B> to receive 5 cards.</Li>
+          <Li><B>Hold</B> the cards you want to keep by clicking them.</Li>
+          <Li>Click <B>Draw</B> to replace un-held cards with new ones from the deck.</Li>
+          <Li>Your final hand is evaluated and pays according to the pay table.</Li>
+        </ul></Sec>
+        <Sec title="Hand Rankings (Low to High)"><ul className="space-y-1">
+          <Li><B>Jacks or Better</B> — Pair of J, Q, K, or A.</Li>
+          <Li><B>Two Pair</B> — Two different pairs.</Li>
+          <Li><B>Three of a Kind</B> — Three cards of the same rank.</Li>
+          <Li><B>Straight</B> — Five consecutive cards.</Li>
+          <Li><B>Flush</B> — Five cards of the same suit.</Li>
+          <Li><B>Full House</B> — Three of a kind + a pair.</Li>
+          <Li><B>Four of a Kind</B> — Four cards of the same rank.</Li>
+          <Li><B>Straight Flush</B> — Straight + flush.</Li>
+          <Li><B>Royal Flush</B> — 10, J, Q, K, A of the same suit.</Li>
+        </ul></Sec>
+        <Sec title="Strategy Tips"><ul className="space-y-1">
+          <Li>Always hold a paying hand (pair of Jacks or better).</Li>
+          <Li>Hold 4 to a flush or straight — the draw odds are good.</Li>
+          <Li>Never hold a kicker with a high pair.</Li>
+          <Li>Max bet for the best Royal Flush payout.</Li>
+        </ul></Sec>
+      </div>
+    </div>
+  )
+}
+
 export default function VideoPoker() {
   const { load, save, clear } = useGameState<SavedState>('video-poker')
   const saved = useRef(load()).current
@@ -39,6 +82,7 @@ export default function VideoPoker() {
   const song = useMemo(() => getSongForGame('video-poker'), [])
   const music = useGameMusic(song)
   const sfx = useGameSFX('video-poker')
+  const [showHelp, setShowHelp] = useState(false)
 
   const [gameState, setGameState] = useState<VideoPokerState>(
     () => saved?.gameState ?? createVideoPokerGame()
@@ -87,7 +131,10 @@ export default function VideoPoker() {
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-400">Jacks or Better</span>
       <span className="text-xs text-yellow-400 font-mono">Credits: {gameState.credits}</span>
-      <MusicToggle music={music} sfx={sfx} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play"><HelpCircle className="w-4 h-4 text-blue-400" /></button>
+        <MusicToggle music={music} sfx={sfx} />
+      </div>
     </div>
   )
 
@@ -213,6 +260,7 @@ export default function VideoPoker() {
           />
         )}
       </div>
+      {showHelp && <VideoPokerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }

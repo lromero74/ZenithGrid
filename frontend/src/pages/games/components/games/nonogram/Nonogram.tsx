@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { HelpCircle, RotateCcw, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { useGameTimer } from '../../../hooks/useGameTimer'
@@ -23,6 +23,70 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+
+// ── Help modal ──────────────────────────────────────────────────────
+function NonogramHelp({ onClose }: { onClose: () => void }) {
+  const Sec = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-4"><h3 className="text-sm font-semibold text-slate-200 mb-1">{title}</h3><div className="text-xs leading-relaxed text-slate-400">{children}</div></div>
+  )
+  const Li = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex gap-1.5 text-xs"><span className="text-slate-600 mt-0.5">&bull;</span><span>{children}</span></li>
+  )
+  const B = ({ children }: { children: React.ReactNode }) => <span className="text-white font-medium">{children}</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        <h2 className="text-lg font-bold text-white mb-4">How to Play Nonogram</h2>
+
+        <Sec title="Goal">
+          <p>Fill in cells on the grid to reveal a hidden picture. Use the number clues along each row and column to determine which cells to fill.</p>
+        </Sec>
+
+        <Sec title="Reading Clues">
+          <ul className="space-y-1">
+            <Li>Each row and column has a set of numbers — these are <B>run lengths</B>.</Li>
+            <Li>A clue like <B>3 1</B> means there's a group of 3 filled cells, then at least one gap, then 1 filled cell.</Li>
+            <Li>A clue of <B>0</B> means the entire row/column is empty.</Li>
+            <Li>Clues turn <B>green</B> when the row or column is correctly completed.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Controls">
+          <ul className="space-y-1">
+            <Li><B>Left-click</B> — Fill a cell (click again to clear).</Li>
+            <Li><B>Right-click</B> — Mark a cell with X (to remember it's empty). Click again to clear.</Li>
+            <Li><B>Reset button</B> — Clear the grid and start over.</Li>
+            <Li><B>Next Puzzle</B> — Skip to a different puzzle.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Puzzle Sizes">
+          <ul className="space-y-1">
+            <Li><B>5×5</B> — Small, beginner-friendly puzzles.</Li>
+            <Li><B>10×10</B> — Medium puzzles with more detail.</Li>
+            <Li><B>15×15</B> — Large, challenging puzzles.</Li>
+          </ul>
+        </Sec>
+
+        <Sec title="Winning">
+          <p>Complete the puzzle by filling all the correct cells. The timer tracks your solve time — try to beat your best!</p>
+        </Sec>
+
+        <Sec title="Strategy Tips">
+          <ul className="space-y-1">
+            <Li>Start with rows/columns that have the largest clues — they're the most constrained.</Li>
+            <Li>If a clue fills more than half the row, some cells can be determined by overlap.</Li>
+            <Li>Use X marks to track cells you've confirmed as empty — this prevents mistakes.</Li>
+            <Li>A clue of <B>0</B> means every cell in that row/column should be marked X.</Li>
+            <Li>Work back and forth between rows and columns — solving one often reveals info for the other.</Li>
+          </ul>
+        </Sec>
+      </div>
+    </div>
+  )
+}
 
 type SizeFilter = '5x5' | '10x10' | '15x15'
 
@@ -43,6 +107,7 @@ export default function Nonogram() {
   const music = useGameMusic(song)
   const sfx = useGameSFX('nonogram')
 
+  const [showHelp, setShowHelp] = useState(false)
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>(saved?.sizeFilter ?? '5x5')
   const [puzzleIndex, setPuzzleIndex] = useState(saved?.puzzleIndex ?? 0)
   const [gameStatus, setGameStatus] = useState<GameStatus>(saved?.gameStatus ?? 'playing')
@@ -158,6 +223,9 @@ export default function Nonogram() {
         >
           <RotateCcw className="w-4 h-4 text-slate-400" />
         </button>
+        <button onClick={() => setShowHelp(true)} className="p-1 hover:bg-slate-700 rounded transition-colors" title="How to Play">
+          <HelpCircle className="w-4 h-4 text-blue-400" />
+        </button>
         <MusicToggle music={music} sfx={sfx} />
       </div>
     </div>
@@ -200,6 +268,7 @@ export default function Nonogram() {
           />
         )}
       </div>
+      {showHelp && <NonogramHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
   )
 }
