@@ -59,7 +59,7 @@ async def set_display_name(
         raise HTTPException(status_code=409, detail="Display name is already taken")
 
     current_user.display_name = name
-    await db.flush()
+    await db.commit()
     return {"display_name": name}
 
 

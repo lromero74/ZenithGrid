@@ -307,7 +307,7 @@ async def update_visibility(
         )
         db.add(vis)
 
-    await db.flush()
+    await db.commit()
 
     return {
         "default_visibility": vis.default_visibility,

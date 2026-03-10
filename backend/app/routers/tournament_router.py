@@ -54,11 +54,11 @@ async def create_tournament(
         status="pending",
     )
     db.add(tournament)
-    await db.flush()
+    await db.commit()
 
     # Auto-enroll creator
     db.add(TournamentPlayer(tournament_id=tournament.id, user_id=current_user.id))
-    await db.flush()
+    await db.commit()
 
     return {
         "id": tournament.id,
@@ -204,7 +204,7 @@ async def join_tournament(
         raise HTTPException(status_code=409, detail="Already joined this tournament")
 
     db.add(TournamentPlayer(tournament_id=tournament_id, user_id=current_user.id))
-    await db.flush()
+    await db.commit()
     return {"status": "joined", "tournament_id": tournament_id}
 
 
@@ -237,7 +237,7 @@ async def leave_tournament(
         raise HTTPException(status_code=404, detail="Not joined in this tournament")
 
     await db.delete(player)
-    await db.flush()
+    await db.commit()
     return {"status": "left", "tournament_id": tournament_id}
 
 
@@ -273,7 +273,7 @@ async def start_tournament(
 
     tournament.status = "active"
     tournament.started_at = datetime.utcnow()
-    await db.flush()
+    await db.commit()
 
     return {
         "id": tournament.id,
@@ -300,7 +300,7 @@ async def archive_tournament(
         raise HTTPException(status_code=404, detail="Not a participant in this tournament")
 
     player.archived = True
-    await db.flush()
+    await db.commit()
     return {"status": "archived", "tournament_id": tournament_id}
 
 
@@ -344,7 +344,7 @@ async def vote_delete_tournament(
 
     # Cast vote
     db.add(TournamentDeleteVote(tournament_id=tournament_id, user_id=current_user.id))
-    await db.flush()
+    await db.commit()
 
     # Count votes and players
     vote_count_q = await db.execute(
@@ -376,7 +376,7 @@ async def vote_delete_tournament(
             )
         )
         await db.delete(tournament)
-        await db.flush()
+        await db.commit()
         return {"votes": vote_count, "needed": majority_needed, "deleted": True}
 
     return {

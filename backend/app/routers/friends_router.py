@@ -133,7 +133,7 @@ async def send_friend_request(
 
     req = FriendRequest(from_user_id=current_user.id, to_user_id=target.id)
     db.add(req)
-    await db.flush()
+    await db.commit()
     return {"id": req.id, "to_user_id": target.id, "to_display_name": target.display_name}
 
 
@@ -203,7 +203,7 @@ async def cancel_sent_friend_request(
         raise HTTPException(status_code=404, detail="Sent request not found")
 
     await db.delete(req)
-    await db.flush()
+    await db.commit()
     return {"status": "cancelled"}
 
 
@@ -230,7 +230,7 @@ async def accept_friend_request(
 
     # Delete the request
     await db.delete(req)
-    await db.flush()
+    await db.commit()
     return {"friend_id": req.from_user_id, "status": "accepted"}
 
 
@@ -252,7 +252,7 @@ async def reject_friend_request(
         raise HTTPException(status_code=404, detail="Friend request not found")
 
     await db.delete(req)
-    await db.flush()
+    await db.commit()
     return {"status": "rejected"}
 
 
@@ -272,7 +272,7 @@ async def remove_friend(
             )
         )
     )
-    await db.flush()
+    await db.commit()
     return {"status": "removed"}
 
 
@@ -322,7 +322,7 @@ async def block_user(
     )
 
     db.add(BlockedUser(blocker_id=current_user.id, blocked_id=body.user_id))
-    await db.flush()
+    await db.commit()
     return {"status": "blocked"}
 
 
@@ -344,7 +344,7 @@ async def unblock_user(
         raise HTTPException(status_code=404, detail="Block not found")
 
     await db.delete(block)
-    await db.flush()
+    await db.commit()
     return {"status": "unblocked"}
 
 
