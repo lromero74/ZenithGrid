@@ -690,7 +690,8 @@ export default function Centipede() {
     if (!container) return
     const updateScale = () => {
       const w = container.clientWidth
-      const availableHeight = window.innerHeight - 260
+      const chromeOffset = window.innerWidth < 640 ? 320 : 260
+      const availableHeight = window.innerHeight - chromeOffset
       scaleRef.current = Math.min(
         1,
         w / GAME_WIDTH,

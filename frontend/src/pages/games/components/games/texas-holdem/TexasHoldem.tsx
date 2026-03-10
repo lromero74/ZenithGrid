@@ -380,7 +380,7 @@ export default function TexasHoldem() {
 
   return (
     <GameLayout title="Texas Hold'em" controls={controls}>
-      <div className="relative flex flex-col items-center w-full max-w-xl space-y-3">
+      <div className="relative flex flex-col items-center w-full max-w-xl space-y-2 sm:space-y-3">
         {/* AI players */}
         <div className="flex gap-4 justify-center flex-wrap">
           {gameState.hands.slice(1).map((hand, i) => {
@@ -423,7 +423,7 @@ export default function TexasHoldem() {
         </div>
 
         {/* Community cards */}
-        <div className="flex gap-1.5 justify-center min-h-[7rem]">
+        <div className="flex gap-1.5 justify-center min-h-[5rem] sm:min-h-[7rem]">
           {gameState.community.map((card, i) => {
             const isWinning = winningCardKeys.has(`${card.suit}-${card.rank}`)
             return (
@@ -475,29 +475,29 @@ export default function TexasHoldem() {
 
             {/* Action buttons */}
             {isPlayerTurn && !gameState.foldedPlayers[0] && (
-              <div className="flex gap-2 flex-wrap justify-center">
+              <div className="flex gap-1.5 sm:gap-2 flex-wrap justify-center">
                 {validActions.includes('fold') && (
-                  <button onClick={handleFold} className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
+                  <button onClick={handleFold} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm transition-colors">
                     Fold
                   </button>
                 )}
                 {validActions.includes('check') && (
-                  <button onClick={handleCheck} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors">
+                  <button onClick={handleCheck} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-xs sm:text-sm transition-colors">
                     Check
                   </button>
                 )}
                 {validActions.includes('call') && (
-                  <button onClick={handleCall} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
+                  <button onClick={handleCall} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs sm:text-sm transition-colors">
                     Call {toCall}
                   </button>
                 )}
                 {validActions.includes('raise') && (
-                  <button onClick={handleRaise} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm transition-colors">
+                  <button onClick={handleRaise} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-xs sm:text-sm transition-colors">
                     Raise {raiseAmount}
                   </button>
                 )}
                 {validActions.includes('allIn') && (
-                  <button onClick={handleAllIn} className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-sm transition-colors">
+                  <button onClick={handleAllIn} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-xs sm:text-sm transition-colors">
                     All-In
                   </button>
                 )}

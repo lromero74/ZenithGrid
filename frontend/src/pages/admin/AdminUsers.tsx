@@ -184,7 +184,8 @@ export function AdminUsers() {
         </div>
       )}
 
-      <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden sm:block bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-700 text-slate-400">
@@ -282,6 +283,89 @@ export function AdminUsers() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card layout */}
+      <div className="sm:hidden space-y-3">
+        {users.map(user => (
+          <div key={user.id} className="bg-slate-800 rounded-lg border border-slate-700 p-3 space-y-2">
+            {/* User info */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                {user.is_superuser && <Shield className="w-4 h-4 text-yellow-400 shrink-0" />}
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{user.display_name || user.email}</p>
+                  {user.display_name && <p className="text-[0.65rem] text-slate-400 truncate">{user.email}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {user.mfa_enabled || user.mfa_email_enabled
+                  ? <ShieldCheck className="w-4 h-4 text-green-400" />
+                  : <ShieldOff className="w-4 h-4 text-slate-500" />}
+                {user.is_active
+                  ? <CheckCircle className="w-4 h-4 text-green-400" />
+                  : <XCircle className="w-4 h-4 text-red-400" />}
+              </div>
+            </div>
+
+            {/* Groups */}
+            {editingUserId === user.id ? (
+              <div className="space-y-1.5 bg-slate-900/50 rounded p-2">
+                {groups.map(g => (
+                  <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroupIds.includes(g.id)}
+                      onChange={() => toggleGroup(g.id)}
+                      className="rounded border-slate-600"
+                    />
+                    <span className={g.is_system ? 'text-yellow-300' : ''}>{g.name}</span>
+                  </label>
+                ))}
+                <div className="flex gap-1.5 mt-2">
+                  <button onClick={handleSaveGroups} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs">Save</button>
+                  <button onClick={() => setEditingUserId(null)} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 rounded text-xs">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {user.groups.length === 0 && <span className="text-slate-500 text-xs">No groups</span>}
+                {user.groups.map(g => (
+                  <span key={g.id} className="px-2 py-0.5 bg-slate-700 rounded text-xs">{g.name}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-1.5 pt-1 border-t border-slate-700/50">
+              <button
+                onClick={() => openSessionModal(user)}
+                className="px-2.5 py-1 text-xs text-amber-400 hover:bg-slate-700 rounded transition-colors"
+              >
+                Session
+              </button>
+              <button
+                onClick={() => handleEditGroups(user)}
+                className="px-2.5 py-1 text-xs text-blue-400 hover:bg-slate-700 rounded transition-colors"
+              >
+                Groups
+              </button>
+              <button
+                onClick={() => handleToggleStatus(user)}
+                disabled={user.is_superuser}
+                className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                  user.is_superuser
+                    ? 'text-slate-600 cursor-not-allowed'
+                    : user.is_active
+                      ? 'text-red-400 hover:bg-slate-700'
+                      : 'text-green-400 hover:bg-slate-700'
+                }`}
+              >
+                {user.is_active ? 'Disable' : 'Enable'}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Session Management Modal */}

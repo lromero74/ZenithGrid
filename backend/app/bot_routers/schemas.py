@@ -68,6 +68,7 @@ class BotResponse(BaseModel):
     insufficient_funds: bool = False
     budget_utilization_percentage: float = 0.0
     win_rate: float = 0.0  # Percentage of profitable closed positions
+    quote_currency: str = "BTC"  # Quote currency for this bot's pairs (BTC or USD)
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
 

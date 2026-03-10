@@ -257,16 +257,19 @@ export const BotListItem = memo(function BotListItem({
           const pnlUsd = (bot as any).total_pnl_usd || 0
           const pnlBtc = (bot as any).total_pnl_btc || 0
           const pnlPct = (bot as any).total_pnl_percentage || 0
-          const isPositive = pnlUsd > 0
-          const isNegative = pnlUsd < 0
+          const quoteCurrency = (bot as any).quote_currency || 'BTC'
+          const isUsd = quoteCurrency === 'USD'
+          const primaryPnl = isUsd ? pnlUsd : pnlBtc
+          const isPositive = primaryPnl > 0
+          const isNegative = primaryPnl < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
           return (
             <div className="flex flex-col items-end text-xs">
               <span className={colorClass}>
-                {pnlBtc.toFixed(8)} BTC
+                {isUsd ? `$${pnlUsd.toFixed(2)}` : `${pnlBtc.toFixed(8)} BTC`}
               </span>
-              <span className={colorClass}>
-                ${pnlUsd.toFixed(2)}
+              <span className={`${colorClass} opacity-60 text-[10px]`}>
+                {isUsd ? `${pnlBtc.toFixed(8)} BTC` : `$${pnlUsd.toFixed(2)}`}
               </span>
               <span className={colorClass}>
                 {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
@@ -304,11 +307,18 @@ export const BotListItem = memo(function BotListItem({
           const isNegative = dailyPnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
+          const quoteCurrency = (bot as any).quote_currency || 'BTC'
+          const isUsd = quoteCurrency === 'USD'
+
           const renderBox = (projection: typeof projections[0]) => (
             <div className={`${colorClass} ${projection.bg} rounded px-2 py-0.5 border ${projection.border} ${projection.opacity}`}>
               <div className="font-medium text-slate-300 whitespace-nowrap">{projection.label}:</div>
-              <div className="whitespace-nowrap">{projection.data.btc.toFixed(8)} BTC</div>
-              <div className="whitespace-nowrap">${projection.data.usd.toFixed(2)}</div>
+              <div className="whitespace-nowrap">
+                {isUsd ? `$${projection.data.usd.toFixed(2)}` : `${projection.data.btc.toFixed(8)} BTC`}
+              </div>
+              <div className="whitespace-nowrap opacity-60">
+                {isUsd ? `${projection.data.btc.toFixed(8)} BTC` : `$${projection.data.usd.toFixed(2)}`}
+              </div>
             </div>
           )
 

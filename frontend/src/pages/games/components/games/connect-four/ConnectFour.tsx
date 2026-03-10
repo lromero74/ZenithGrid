@@ -173,6 +173,8 @@ export default function ConnectFour() {
   const [difficulty, setDifficulty] = useState<Difficulty>(saved?.difficulty ?? 'medium')
   const [scores, setScores] = useState(saved?.scores ?? { red: 0, yellow: 0, draw: 0 })
   const [hoverCol, setHoverCol] = useState<number | null>(null)
+  const [droppingDisc, setDroppingDisc] = useState<{ row: number; col: number; player: 'red' | 'yellow' } | null>(null)
+  const [naturalDrop, setNaturalDrop] = useState(true)
   const aiThinking = useRef(false)
 
   // Persist state
@@ -192,6 +194,7 @@ export default function ConnectFour() {
     if (row === -1) return
 
     sfx.play('drop')
+    if (naturalDrop) setDroppingDisc({ row, col, player: 'red' })
     setBoard(newBoard)
     const winner = checkWinner(newBoard)
     if (winner) {
@@ -218,8 +221,9 @@ export default function ConnectFour() {
     const timer = setTimeout(() => {
       const depth = DIFFICULTY_DEPTH[difficulty] || 4
       const col = getAIMove(board, 'yellow', depth)
-      const { board: newBoard } = dropDisc(board, col, 'yellow')
+      const { board: newBoard, row } = dropDisc(board, col, 'yellow')
       sfx.play('drop')
+      if (naturalDrop) setDroppingDisc({ row, col, player: 'yellow' })
       setBoard(newBoard)
 
       const winner = checkWinner(newBoard)
@@ -234,7 +238,7 @@ export default function ConnectFour() {
         setCurrentPlayer('red')
       }
       aiThinking.current = false
-    }, 300)
+    }, difficulty === 'easy' ? 400 : difficulty === 'medium' ? 700 : 1000)
 
     return () => clearTimeout(timer)
   }, [currentPlayer, gameStatus, board, difficulty])
@@ -245,21 +249,39 @@ export default function ConnectFour() {
     setGameStatus('playing')
     setWinResult(null)
     setHoverCol(null)
+    setDroppingDisc(null)
     music.start()
     clear()
   }, [music, clear])
 
   const controls = (
-    <div className="flex items-center justify-between">
-      <DifficultySelector
-        value={difficulty}
-        onChange={(d) => { setDifficulty(d); handleNewGame() }}
-        options={['easy', 'medium', 'hard']}
-      />
-      <div className="flex items-center space-x-3 text-xs">
+    <div className="flex flex-col gap-1.5 sm:gap-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between sm:justify-start gap-2">
+        <DifficultySelector
+          value={difficulty}
+          onChange={(d) => { setDifficulty(d); handleNewGame() }}
+          options={['easy', 'medium', 'hard']}
+        />
+        <button
+          onClick={() => setNaturalDrop(d => !d)}
+          className={`px-2 py-1 rounded text-[0.6rem] font-medium transition-colors ${
+            naturalDrop ? 'bg-blue-900/50 text-blue-400' : 'bg-slate-700 text-slate-400'
+          }`}
+          title={naturalDrop ? 'Gravity drop on' : 'Gravity drop off'}
+        >
+          {naturalDrop ? 'Drop' : 'Snap'}
+        </button>
+      </div>
+      <div className="flex items-center justify-center sm:justify-end space-x-2 sm:space-x-3 text-xs">
         <span className="text-red-400">You: {scores.red}</span>
         <span className="text-slate-500">Draw: {scores.draw}</span>
         <span className="text-yellow-400">AI: {scores.yellow}</span>
+        <button
+          onClick={handleNewGame}
+          className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          New
+        </button>
         <button
           onClick={() => setShowHelp(true)}
           className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
@@ -296,6 +318,7 @@ export default function ConnectFour() {
           disabled={gameStatus !== 'playing' || currentPlayer !== 'red'}
           hoverCol={hoverCol}
           currentPlayer={currentPlayer}
+          droppingDisc={droppingDisc}
         />
 
         {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && (

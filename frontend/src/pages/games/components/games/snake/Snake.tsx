@@ -24,7 +24,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 
 const GRID_SIZE = 20
 const CELL_SIZE_DESKTOP = 20
-const CELL_SIZE_MOBILE = 16
+const CELL_SIZE_MOBILE = 14
 
 function getCellSize() {
   return window.innerWidth < 640 ? CELL_SIZE_MOBILE : CELL_SIZE_DESKTOP
@@ -216,14 +216,18 @@ export default function Snake() {
     gameLoopRef.current = setTimeout(tick, getSpeed(0))
   }, [draw, tick, music])
 
+  const pausedRef = useRef(false)
+
   const togglePause = useCallback(() => {
     if (gameStatusRef.current === 'playing') {
       gameStatusRef.current = 'idle'
       setGameStatus('idle')
+      pausedRef.current = true
       if (gameLoopRef.current) clearTimeout(gameLoopRef.current)
-    } else if (gameStatusRef.current === 'idle' && scoreRef.current > 0) {
+    } else if (gameStatusRef.current === 'idle' && pausedRef.current) {
       gameStatusRef.current = 'playing'
       setGameStatus('playing')
+      pausedRef.current = false
       gameLoopRef.current = setTimeout(tick, getSpeed(scoreRef.current))
     }
   }, [tick])
@@ -250,7 +254,7 @@ export default function Snake() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [changeDirection, togglePause])
 
-  // Touch/swipe controls
+  // Touch/swipe controls — use touchmove for immediate response
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -258,23 +262,27 @@ export default function Snake() {
       const t = e.touches[0]
       touchStartRef.current = { x: t.clientX, y: t.clientY }
     }
-    const handleTouchEnd = (e: TouchEvent) => {
+    const handleTouchMove = (e: TouchEvent) => {
       if (!touchStartRef.current) return
-      const t = e.changedTouches[0]
+      const t = e.touches[0]
       const dx = t.clientX - touchStartRef.current.x
       const dy = t.clientY - touchStartRef.current.y
-      const minSwipe = 30
+      const minSwipe = 20
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > minSwipe) {
         changeDirection(dx > 0 ? 'RIGHT' : 'LEFT')
+        touchStartRef.current = { x: t.clientX, y: t.clientY }
       } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > minSwipe) {
         changeDirection(dy > 0 ? 'DOWN' : 'UP')
+        touchStartRef.current = { x: t.clientX, y: t.clientY }
       }
-      touchStartRef.current = null
     }
+    const handleTouchEnd = () => { touchStartRef.current = null }
     canvas.addEventListener('touchstart', handleTouchStart, { passive: true })
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: true })
     canvas.addEventListener('touchend', handleTouchEnd, { passive: true })
     return () => {
       canvas.removeEventListener('touchstart', handleTouchStart)
+      canvas.removeEventListener('touchmove', handleTouchMove)
       canvas.removeEventListener('touchend', handleTouchEnd)
     }
   }, [changeDirection])
@@ -325,8 +333,8 @@ export default function Snake() {
           style={{ touchAction: 'none' }}
         />
 
-        {/* Start / Pause overlay */}
-        {gameStatus === 'idle' && score === 0 && (
+        {/* Start overlay — only before game begins */}
+        {gameStatus === 'idle' && !pausedRef.current && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/70 rounded-lg">
             <button
               onClick={startGame}
@@ -337,23 +345,35 @@ export default function Snake() {
           </div>
         )}
 
-        {/* Mobile D-pad */}
-        <div className="flex flex-col items-center space-y-1 sm:hidden">
-          <button onClick={() => changeDirection('UP')} className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
+        {/* Pause overlay */}
+        {gameStatus === 'idle' && pausedRef.current && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/70 rounded-lg">
+            <button
+              onClick={togglePause}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors"
+            >
+              Resume
+            </button>
+          </div>
+        )}
+
+        {/* Mobile D-pad — onTouchStart for instant response */}
+        <div className="flex flex-col items-center space-y-0.5 sm:hidden mt-1">
+          <button onTouchStart={(e) => { e.preventDefault(); changeDirection('UP') }} onClick={() => changeDirection('UP')} className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
             <ArrowUp className="w-5 h-5 text-slate-300" />
           </button>
-          <div className="flex space-x-1">
-            <button onClick={() => changeDirection('LEFT')} className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
+          <div className="flex space-x-0.5">
+            <button onTouchStart={(e) => { e.preventDefault(); changeDirection('LEFT') }} onClick={() => changeDirection('LEFT')} className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
               <ArrowLeft className="w-5 h-5 text-slate-300" />
             </button>
-            <button onClick={togglePause} className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
+            <button onTouchStart={(e) => { e.preventDefault(); togglePause() }} onClick={togglePause} className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
               {gameStatus === 'playing' ? <Pause className="w-5 h-5 text-slate-300" /> : <Play className="w-5 h-5 text-slate-300" />}
             </button>
-            <button onClick={() => changeDirection('RIGHT')} className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
+            <button onTouchStart={(e) => { e.preventDefault(); changeDirection('RIGHT') }} onClick={() => changeDirection('RIGHT')} className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
               <ArrowRight className="w-5 h-5 text-slate-300" />
             </button>
           </div>
-          <button onClick={() => changeDirection('DOWN')} className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
+          <button onTouchStart={(e) => { e.preventDefault(); changeDirection('DOWN') }} onClick={() => changeDirection('DOWN')} className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center active:bg-slate-600">
             <ArrowDown className="w-5 h-5 text-slate-300" />
           </button>
         </div>
