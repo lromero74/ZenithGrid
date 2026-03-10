@@ -6,6 +6,8 @@ export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
 
 export type GameCategory = 'puzzle' | 'strategy' | 'arcade' | 'word' | 'cards'
 
+export type MultiplayerMode = 'vs' | 'race'
+
 export interface GameInfo {
   id: string
   name: string
@@ -16,6 +18,7 @@ export interface GameInfo {
   sessionLength: string
   category: GameCategory
   subcategory?: string
+  multiplayer?: MultiplayerMode[]
 }
 
 export interface GameScore {

@@ -6,9 +6,14 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { Trophy } from 'lucide-react'
+import { Trophy, Swords, Timer } from 'lucide-react'
 import { GAME_ICONS } from '../constants'
-import type { GameInfo } from '../types'
+import type { GameInfo, MultiplayerMode } from '../types'
+
+const MODE_BADGE: Record<MultiplayerMode, { icon: typeof Swords; label: string; color: string }> = {
+  vs:   { icon: Swords, label: 'VS', color: 'text-purple-400' },
+  race: { icon: Timer, label: 'Race', color: 'text-cyan-400' },
+}
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-emerald-900/50 text-emerald-400',
@@ -44,9 +49,19 @@ export function GameCard({ game, highScore, onPlay }: GameCardProps) {
           {IconComponent && <IconComponent className="w-5 h-5 text-slate-300" />}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-semibold text-sm sm:text-base truncate">
-            {game.name}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-white font-semibold text-sm sm:text-base truncate">
+              {game.name}
+            </h3>
+            {game.multiplayer?.map(mode => {
+              const badge = MODE_BADGE[mode]
+              return (
+                <span key={mode} className={`flex items-center gap-0.5 ${badge.color}`} title={`Multiplayer ${badge.label}`}>
+                  <badge.icon className="w-3 h-3" />
+                </span>
+              )
+            })}
+          </div>
           <p className="text-slate-400 text-xs sm:text-sm truncate">
             {game.description}
           </p>

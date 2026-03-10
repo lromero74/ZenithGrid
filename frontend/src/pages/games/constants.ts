@@ -66,6 +66,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '3-5 min',
     category: 'strategy',
+    multiplayer: ['vs', 'race'],
   },
   {
     id: '2048',
@@ -394,6 +395,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Casino',
+    multiplayer: ['vs', 'race'],
   },
   {
     id: 'bridge',
@@ -457,6 +459,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '5-15 min',
     category: 'arcade',
+    multiplayer: ['race'],
   },
   {
     id: 'shalas',

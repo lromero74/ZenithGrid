@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, LayoutList } from 'lucide-react'
+import { Search, LayoutList, Swords, Timer } from 'lucide-react'
 import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
@@ -16,7 +16,7 @@ import { GameCard } from './GameCard'
 import { FriendsPanel } from './social/FriendsPanel'
 import { GameHistory } from './social/GameHistory'
 import { Tournaments } from './social/Tournaments'
-import type { GameCategory, GameGroupOption, GameInfo } from '../types'
+import type { GameCategory, GameGroupOption, GameInfo, MultiplayerMode } from '../types'
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
 const CATEGORY_KEY = 'zenith-games-category'
@@ -86,6 +86,8 @@ export function GameHub() {
     try { sessionStorage.setItem(GROUP_KEY, opt) } catch { /* ignore */ }
   }
 
+  const [multiplayerFilter, setMultiplayerFilter] = useState<'all' | MultiplayerMode>('all')
+
   const displayedGroups = useMemo(() => {
     let games = GAMES as GameInfo[]
 
@@ -99,6 +101,11 @@ export function GameHub() {
       games = games.filter(g => g.subcategory === activeSubcategory)
     }
 
+    // Filter by multiplayer mode
+    if (multiplayerFilter !== 'all') {
+      games = games.filter(g => g.multiplayer?.includes(multiplayerFilter))
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
@@ -110,7 +117,7 @@ export function GameHub() {
       recentlyPlayed: getRecentMap(),
       isCardsView: activeCategory === 'cards',
     })
-  }, [activeCategory, activeSubcategory, searchQuery, groupOption, getRecentMap])
+  }, [activeCategory, activeSubcategory, multiplayerFilter, searchQuery, groupOption, getRecentMap])
 
   const totalGames = displayedGroups.reduce((sum, g) =>
     sum + g.games.length + (g.subgroups?.reduce((s, sg) => s + sg.games.length, 0) ?? 0), 0
@@ -175,6 +182,28 @@ export function GameHub() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Multiplayer filter pills */}
+      <div className="flex flex-wrap gap-2 mb-4 -mt-3">
+        {([
+          { value: 'all' as const, label: 'Any Mode', icon: null },
+          { value: 'vs' as const, label: 'VS', icon: Swords },
+          { value: 'race' as const, label: 'Race', icon: Timer },
+        ]).map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setMultiplayerFilter(opt.value)}
+            className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+              multiplayerFilter === opt.value
+                ? 'bg-purple-600 text-white'
+                : 'bg-slate-700/60 text-slate-400 hover:bg-slate-600 hover:text-slate-300'
+            }`}
+          >
+            {opt.icon && <opt.icon className="w-3 h-3" />}
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {/* Card subcategory pills */}
