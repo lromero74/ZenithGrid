@@ -56,6 +56,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '1-2 min',
     category: 'strategy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'connect-four',
@@ -66,7 +67,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '3-5 min',
     category: 'strategy',
-    multiplayer: ['vs', 'race'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: '2048',
@@ -87,6 +88,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '3-15 min',
     category: 'puzzle',
+    multiplayer: ['best_score'],
   },
   {
     id: 'hangman',
@@ -97,6 +99,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-5 min',
     category: 'word',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'sudoku',
@@ -107,6 +110,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-20 min',
     category: 'puzzle',
+    multiplayer: ['best_score'],
   },
   {
     id: 'wordle',
@@ -117,6 +121,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-10 min',
     category: 'word',
+    multiplayer: ['best_score'],
   },
   {
     id: 'crossword',
@@ -137,6 +142,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-10 min',
     category: 'arcade',
+    multiplayer: ['best_score'],
   },
   {
     id: 'ultimate-tic-tac-toe',
@@ -147,6 +153,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '10-20 min',
     category: 'strategy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'mahjong',
@@ -157,6 +164,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '10-20 min',
     category: 'puzzle',
+    multiplayer: ['best_score'],
   },
   {
     id: 'nonogram',
@@ -177,6 +185,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'strategy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'plinko',
@@ -197,6 +206,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-5 min',
     category: 'puzzle',
+    multiplayer: ['best_score'],
   },
   {
     id: 'solitaire',
@@ -218,6 +228,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '15-30 min',
     category: 'strategy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'chess',
@@ -228,6 +239,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '10-30 min',
     category: 'strategy',
+    multiplayer: ['first_to_win'],
   },
   // Phase 6: Card Games
   {
@@ -240,6 +252,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'cards',
     subcategory: 'Casino',
+    multiplayer: ['best_score'],
   },
   {
     id: 'video-poker',
@@ -262,6 +275,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'spades',
@@ -273,6 +287,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'crazy-eights',
@@ -284,6 +299,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'gin-rummy',
@@ -295,6 +311,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
     subcategory: 'Rummy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'freecell',
@@ -318,6 +335,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'go-fish',
@@ -329,6 +347,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'speed',
@@ -373,6 +392,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'euchre',
@@ -384,6 +404,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'texas-holdem',
@@ -395,7 +416,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Casino',
-    multiplayer: ['vs', 'race'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'bridge',
@@ -407,6 +428,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '20-40 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'canasta',
@@ -418,6 +440,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '20-40 min',
     category: 'cards',
     subcategory: 'Rummy',
+    multiplayer: ['first_to_win'],
   },
   // Phase 7: Arcade Games
   {
@@ -429,6 +452,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-15 min',
     category: 'arcade',
+    multiplayer: ['survival', 'best_score'],
   },
   {
     id: 'space-invaders',
@@ -439,6 +463,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-15 min',
     category: 'arcade',
+    multiplayer: ['survival', 'best_score'],
   },
   {
     id: 'lode-runner',
@@ -449,6 +474,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '15-30 min',
     category: 'arcade',
+    multiplayer: ['best_score'],
   },
   {
     id: 'dino-runner',
@@ -459,7 +485,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '5-15 min',
     category: 'arcade',
-    multiplayer: ['race'],
+    multiplayer: ['survival', 'best_score'],
   },
   {
     id: 'shalas',

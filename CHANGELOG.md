@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.102.0] - 2026-03-10
+
+### Added
+- **Multiplayer for 20 more games**: Hearts, Gin Rummy, Crazy Eights, Cribbage, Euchre, Go Fish, Blackjack, Bridge, Canasta, War, Spades, Memory, Centipede, Space Invaders, Lode Runner, Minesweeper, Sudoku, Wordle, Hangman, and Mahjong now all support race mode multiplayer
+- **Reconnection framework**: Disconnected players get a 60-second window to rejoin their game automatically — game pauses with countdown for remaining players
+- **Session management**: View and terminate other active sessions from Settings; required before entering multiplayer to prevent multi-device play
+- **Forfeit and disconnect handling**: Players can gracefully forfeit (counts as loss) or disconnect (game suspended, no result recorded) — distinct from each other in tournaments and scoring
+- **Play-on mode**: In Memory, Minesweeper, Sudoku, Wordle, Hangman, and Mahjong races, the loser can keep playing after the winner finishes while the winner spectates
+- **Spectator state broadcasting framework**: All 28 multiplayer games support the `onStateChange` interface for sharing visual game state with spectators; arcade games use throttled broadcasts to minimize data
+- **Multiplayer badges and hub filter**: Game cards show multiplayer badges; hub filter lets users browse multiplayer-enabled games
+
+### Changed
+- Disconnection no longer immediately removes players from in-progress games — they stay in the room during the reconnect window
+- Race overlay now shows pause screen with countdown timer when opponent disconnects
+
 ## [v2.101.0] - 2026-03-10
 
 ### Added

@@ -18,6 +18,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createBridgeGame,
   makeBid,
@@ -244,7 +246,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Bridge() {
+function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('bridge')
   const saved = useRef(load()).current
 
@@ -280,10 +282,12 @@ export default function Bridge() {
   // Detect game over
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
-      setGameStatus(gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost')
+      const won = gameState.teamScores[0] > gameState.teamScores[1]
+      setGameStatus(won ? 'won' : 'lost')
+      onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleBid = useCallback(() => {
     music.init()
@@ -636,5 +640,49 @@ export default function Bridge() {
         {showHelp && <BridgeHelp onClose={() => setShowHelp(false)} />}
       </div>
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function BridgeRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <BridgeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Bridge() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'bridge',
+        gameName: 'Bridge',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to make contract wins',
+      }}
+      renderSinglePlayer={() => <BridgeSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <BridgeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

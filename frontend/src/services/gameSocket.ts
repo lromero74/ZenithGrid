@@ -13,9 +13,20 @@ class GameSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private _token: string | null = null
   private _connected = false
+  /** Room ID of an active game — used for auto-rejoin on reconnect. */
+  private _activeRoomId: string | null = null
 
   get connected(): boolean {
     return this._connected
+  }
+
+  get activeRoomId(): string | null {
+    return this._activeRoomId
+  }
+
+  /** Track that we're in an active game (for auto-rejoin on reconnect). */
+  setActiveRoom(roomId: string | null): void {
+    this._activeRoomId = roomId
   }
 
   connect(token: string): void {
@@ -30,6 +41,10 @@ class GameSocketClient {
     this.ws.onopen = () => {
       this._connected = true
       this._emit('connection', { connected: true })
+      // Auto-rejoin if we were in a game when we disconnected
+      if (this._activeRoomId) {
+        this.send({ type: 'game:rejoin', roomId: this._activeRoomId })
+      }
     }
 
     this.ws.onclose = () => {
@@ -59,6 +74,7 @@ class GameSocketClient {
       this.reconnectTimer = null
     }
     this._token = null
+    this._activeRoomId = null
     if (this.ws) {
       this.ws.onclose = null // prevent reconnect
       this.ws.close()
@@ -99,7 +115,12 @@ class GameSocketClient {
   }
 
   leaveRoom(roomId: string): void {
+    this._activeRoomId = null
     this.send({ type: 'game:leave', roomId })
+  }
+
+  rejoinRoom(roomId: string): void {
+    this.send({ type: 'game:rejoin', roomId })
   }
 
   sendReady(roomId: string): void {

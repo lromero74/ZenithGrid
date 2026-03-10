@@ -23,6 +23,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -210,7 +212,7 @@ interface ChessSavedState {
   isPlayerTurn: boolean
 }
 
-export default function Chess() {
+function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<ChessSavedState>('chess')
   const saved = useRef(load()).current
 
@@ -242,20 +244,23 @@ export default function Chess() {
       sfx.play('checkmate')
       if (nextPlayer === 'black') {
         setGameStatus('won')
+        onGameEnd?.('win')
         setScores(s => ({ ...s, white: s.white + 1 }))
       } else {
         setGameStatus('lost')
+        onGameEnd?.('loss')
         setScores(s => ({ ...s, black: s.black + 1 }))
       }
       return true
     }
     if (isStalemate(state, nextPlayer) || isDraw(state)) {
       setGameStatus('draw')
+      onGameEnd?.('draw')
       setScores(s => ({ ...s, draw: s.draw + 1 }))
       return true
     }
     return false
-  }, [])
+  }, [onGameEnd])
 
   const handleSquareClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing' || !isPlayerTurn || aiThinking.current) return
@@ -334,9 +339,11 @@ export default function Chess() {
         // No moves available — check why
         if (isInCheck(chessState, 'black')) {
           setGameStatus('won')
+          onGameEnd?.('win')
           setScores(s => ({ ...s, white: s.white + 1 }))
         } else {
           setGameStatus('draw')
+          onGameEnd?.('draw')
           setScores(s => ({ ...s, draw: s.draw + 1 }))
         }
         aiThinking.current = false
@@ -472,5 +479,48 @@ export default function Chess() {
       {/* Help modal */}
       {showHelp && <ChessHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ─────────────────────────────────────────
+function ChessRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <ChessSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Chess() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'chess',
+        gameName: 'Chess',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to beat the AI wins',
+      }}
+      renderSinglePlayer={() => <ChessSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <ChessRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      )}
+    />
   )
 }

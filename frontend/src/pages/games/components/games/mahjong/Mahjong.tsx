@@ -22,6 +22,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 type LayoutName = 'turtle' | 'pyramid'
 const LAYOUTS = { turtle: TURTLE_LAYOUT, pyramid: PYRAMID_LAYOUT }
@@ -157,7 +159,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Mahjong() {
+function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<MahjongSaved>('mahjong')
   const saved = useRef(load()).current
 
@@ -224,15 +226,17 @@ export default function Mahjong() {
         sfx.play('win')
         setGameStatus('won')
         timer.stop()
+        onGameEnd?.('win', timer.seconds)
       } else if (isGameOver(newTiles)) {
         setGameStatus('lost')
         timer.stop()
+        onGameEnd?.('loss', timer.seconds)
       }
     } else {
       // Select the new tile instead
       setSelectedId(id)
     }
-  }, [game, selectedId, gameStatus, timer])
+  }, [game, selectedId, gameStatus, timer, onGameEnd])
 
   const handleShuffle = useCallback(() => {
     if (shufflesLeft <= 0) return
@@ -354,5 +358,50 @@ export default function Mahjong() {
       </div>
       {showHelp && <MahjongHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (fastest to clear all tiles) ───────────────────────
+
+function MahjongRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, score)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <MahjongSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Mahjong() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'mahjong',
+        gameName: 'Mahjong Solitaire',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'Fastest to clear all tiles wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <MahjongSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <MahjongRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

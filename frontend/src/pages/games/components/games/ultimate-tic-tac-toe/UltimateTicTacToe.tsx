@@ -20,6 +20,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface UTTTGameState {
   boards: SubBoardType[]
@@ -79,7 +81,7 @@ function UTTTHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function UltimateTicTacToe() {
+function UltimateTicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<UTTTSaved>('ultimate-tic-tac-toe')
   const savedData = useRef(load()).current
 
@@ -122,11 +124,13 @@ export default function UltimateTicTacToe() {
       sfx.play('win')
       setState({ boards: result.boards, meta: result.meta, activeBoard: null, currentPlayer: 'X' })
       setGameStatus('won')
+      onGameEnd?.('win')
       return
     }
     if (result.isDraw) {
       setState({ boards: result.boards, meta: result.meta, activeBoard: null, currentPlayer: 'X' })
       setGameStatus('draw')
+      onGameEnd?.('draw')
       return
     }
 
@@ -136,7 +140,7 @@ export default function UltimateTicTacToe() {
       activeBoard: result.nextActiveBoard,
       currentPlayer: 'O',
     })
-  }, [state, gameStatus])
+  }, [state, gameStatus, onGameEnd])
 
   // AI turn
   useEffect(() => {
@@ -156,9 +160,11 @@ export default function UltimateTicTacToe() {
       if (result.winner) {
         setState({ boards: result.boards, meta: result.meta, activeBoard: null, currentPlayer: 'O' })
         setGameStatus('lost')
+        onGameEnd?.('loss')
       } else if (result.isDraw) {
         setState({ boards: result.boards, meta: result.meta, activeBoard: null, currentPlayer: 'O' })
         setGameStatus('draw')
+        onGameEnd?.('draw')
       } else {
         setState({
           boards: result.boards,
@@ -171,7 +177,7 @@ export default function UltimateTicTacToe() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [state, gameStatus])
+  }, [state, gameStatus, onGameEnd])
 
   const handleUndo = useCallback(() => {
     if (history.length === 0 || aiThinking.current) return
@@ -239,5 +245,48 @@ export default function UltimateTicTacToe() {
       </div>
       {showHelp && <UTTTHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ─────────────────────────────────────────
+function UltimateTicTacToeRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <UltimateTicTacToeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function UltimateTicTacToe() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'ultimate-tic-tac-toe',
+        gameName: 'Ultimate Tic Tac Toe',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to beat the AI wins',
+      }}
+      renderSinglePlayer={() => <UltimateTicTacToeSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <UltimateTicTacToeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      )}
+    />
   )
 }

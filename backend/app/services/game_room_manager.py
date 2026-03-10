@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_PLAYERS = 2
 ROOM_TTL_SECONDS = 3600  # 1 hour — rooms older than this are cleaned up
+RECONNECT_WINDOW_SECONDS = 60  # seconds to wait for disconnected player to rejoin
 
 
 @dataclass
@@ -32,6 +33,8 @@ class GameRoom:
     state: Dict[str, Any] = field(default_factory=dict)
     sequence: int = 0
     status: str = "waiting"  # "waiting", "playing", "finished"
+    disconnected_players: Set[int] = field(default_factory=set)
+    disconnect_times: Dict[int, datetime] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -83,6 +86,13 @@ class GameRoomManager:
     def get_user_room(self, user_id: int) -> Optional[str]:
         return self._user_rooms.get(user_id)
 
+    def get_rooms_for_player(self, user_id: int) -> List[GameRoom]:
+        """Return all rooms the player is currently in."""
+        room_id = self._user_rooms.get(user_id)
+        if room_id and room_id in self._rooms:
+            return [self._rooms[room_id]]
+        return []
+
     def join_room(self, room_id: str, user_id: int) -> GameRoom:
         """Add a player to an existing room."""
         room = self._rooms.get(room_id)
@@ -116,6 +126,94 @@ class GameRoomManager:
         self._user_rooms[user_id] = room_id
         logger.info(f"User {user_id} mid-game joined room {room_id}")
         return room
+
+    def mark_disconnected(self, room_id: str, user_id: int) -> bool:
+        """Mark a player as disconnected (not removed) during an in-progress game.
+
+        Returns True if marked, False if room not found or not playing.
+        The player stays in the room and has RECONNECT_WINDOW_SECONDS to rejoin.
+        """
+        room = self._rooms.get(room_id)
+        if not room or room.status != "playing":
+            return False
+        if user_id not in room.players:
+            return False
+
+        room.disconnected_players.add(user_id)
+        room.disconnect_times[user_id] = datetime.utcnow()
+        logger.info(f"User {user_id} marked disconnected in room {room_id}")
+        return True
+
+    def reconnect_player(self, room_id: str, user_id: int) -> Optional[GameRoom]:
+        """Reconnect a disconnected player to their room.
+
+        Returns the room if reconnection succeeded, None otherwise.
+        """
+        room = self._rooms.get(room_id)
+        if not room:
+            return None
+        if user_id not in room.players:
+            return None
+        if user_id not in room.disconnected_players:
+            return None
+
+        # Check if reconnect window has expired
+        dc_time = room.disconnect_times.get(user_id)
+        if dc_time:
+            elapsed = (datetime.utcnow() - dc_time).total_seconds()
+            if elapsed > RECONNECT_WINDOW_SECONDS:
+                logger.info(f"Reconnect window expired for user {user_id} in room {room_id}")
+                return None
+
+        room.disconnected_players.discard(user_id)
+        room.disconnect_times.pop(user_id, None)
+        logger.info(f"User {user_id} reconnected to room {room_id}")
+        return room
+
+    def get_pending_rejoin(self, user_id: int) -> Optional[GameRoom]:
+        """Check if a user has a room they can rejoin after disconnect.
+
+        Returns the room if found and reconnect window is still open.
+        """
+        room_id = self._user_rooms.get(user_id)
+        if not room_id:
+            return None
+        room = self._rooms.get(room_id)
+        if not room or room.status != "playing":
+            return None
+        if user_id not in room.disconnected_players:
+            return None
+
+        # Check window
+        dc_time = room.disconnect_times.get(user_id)
+        if dc_time:
+            elapsed = (datetime.utcnow() - dc_time).total_seconds()
+            if elapsed > RECONNECT_WINDOW_SECONDS:
+                # Window expired — clean up
+                self.leave_room(room_id, user_id)
+                return None
+
+        return room
+
+    def expire_disconnected_players(self, room_id: str) -> List[int]:
+        """Remove players whose reconnect window has expired. Returns expired user IDs."""
+        room = self._rooms.get(room_id)
+        if not room:
+            return []
+
+        now = datetime.utcnow()
+        expired = []
+        for uid in list(room.disconnected_players):
+            dc_time = room.disconnect_times.get(uid)
+            if dc_time and (now - dc_time).total_seconds() > RECONNECT_WINDOW_SECONDS:
+                expired.append(uid)
+                room.disconnected_players.discard(uid)
+                room.disconnect_times.pop(uid, None)
+                room.players.discard(uid)
+                self._user_rooms.pop(uid, None)
+                logger.info(f"Reconnect window expired — removed user {uid} from room {room_id}")
+
+        return expired
 
     def leave_room(self, room_id: str, user_id: int) -> None:
         """Remove a player from a room. If host leaves, room is closed."""

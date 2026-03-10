@@ -21,6 +21,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 const GRID_SIZE = 20
 const CELL_SIZE_DESKTOP = 20
@@ -92,7 +94,7 @@ function SnakeHelp({ onClose }: { onClose: () => void }) {
 
 interface SnakeSaved { wallsMode: boolean }
 
-export default function Snake() {
+function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange }: { onGameEnd?: (score: number) => void; onScoreChange?: (score: number, level: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
   const { load, save } = useGameState<SnakeSaved>('snake')
   const saved = useRef(load()).current
 
@@ -166,7 +168,8 @@ export default function Snake() {
     if (gameLoopRef.current) clearTimeout(gameLoopRef.current)
     saveScore('snake', scoreRef.current)
     sfx.play('die')
-  }, [saveScore])
+    onGameEnd?.(scoreRef.current)
+  }, [saveScore, onGameEnd])
 
   const tick = useCallback(() => {
     if (gameStatusRef.current !== 'playing') return
@@ -193,12 +196,14 @@ export default function Snake() {
       sfx.play('eat')
       scoreRef.current += 1
       setScore(scoreRef.current)
+      const newLevel = Math.floor(scoreRef.current / 5) + 1
+      onScoreChange?.(scoreRef.current, newLevel)
       foodRef.current = generateFood(snakeRef.current, GRID_SIZE)
     }
 
     draw()
     gameLoopRef.current = setTimeout(tick, getSpeed(scoreRef.current))
-  }, [wallsMode, draw, gameOver])
+  }, [wallsMode, draw, gameOver, onScoreChange])
 
   const startGame = useCallback(() => {
     snakeRef.current = [...INITIAL_SNAKE.map(p => ({ ...p }))]
@@ -396,5 +401,57 @@ export default function Snake() {
       </div>
       {showHelp && <SnakeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ──────────────────────────────────────────
+function SnakeRaceWrapper({ roomId }: { roomId: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, reportScore, reportLevel } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+  const lastLevelRef = useRef(1)
+
+  const handleGameEnd = useCallback((score: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish('loss', score)
+  }, [reportFinish])
+
+  const handleScoreChange = useCallback((score: number, level: number) => {
+    reportScore(score)
+    if (level > lastLevelRef.current) {
+      lastLevelRef.current = level
+      reportLevel(level, `Snake length: ${level * 5}`)
+    }
+  }, [reportScore, reportLevel])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <SnakeSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={throttledBroadcast} />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer support ───────────────────────────
+export default function Snake() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'snake',
+        gameName: 'Snake',
+        modes: ['race'],
+        maxPlayers: 2,
+        raceDescription: 'Longest snake wins',
+      }}
+      renderSinglePlayer={() => <SnakeSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
+        <SnakeRaceWrapper roomId={roomId} />
+      )}
+    />
   )
 }

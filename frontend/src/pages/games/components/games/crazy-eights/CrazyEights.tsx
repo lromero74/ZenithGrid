@@ -9,7 +9,7 @@ import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { SUITS, getSuitSymbol, type Suit } from '../../../utils/cardUtils'
-import type { GameStatus } from '../../../types'
+import type { GameStatus, Difficulty } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
@@ -23,6 +23,8 @@ import {
   getHumanPlayableCards,
   type CrazyEightsState,
 } from './crazyEightsEngine'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface SavedState {
   gameState: CrazyEightsState
@@ -173,7 +175,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function CrazyEights() {
+function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('crazy-eights')
   const saved = useRef(load()).current
 
@@ -201,6 +203,7 @@ export default function CrazyEights() {
       const humanWon = gameState.scores[0] >= gameState.targetScore
       if (humanWon) sfx.play('match')
       setGameStatus(humanWon ? 'won' : 'lost')
+      onGameEnd?.(humanWon ? 'win' : 'loss')
       clear()
     }
   }, [gameState, clear])
@@ -372,5 +375,48 @@ export default function CrazyEights() {
       {/* Help modal */}
       {showHelp && <CrazyEightsHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <CrazyEightsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function CrazyEights() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'crazy-eights',
+        gameName: 'Crazy Eights',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'First to empty their hand wins',
+      }}
+      renderSinglePlayer={() => <CrazyEightsSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <CrazyEightsRaceWrapper roomId={roomId} difficulty={roomConfig?.difficulty} />
+      )}
+    />
   )
 }

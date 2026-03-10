@@ -3,17 +3,30 @@
  *
  * Displays whether the opponent is still playing, their score,
  * race result (won/lost/waiting), and level-up announcements.
+ *
+ * Race types:
+ * - first_to_win: First player to beat the AI wins immediately
+ * - survival: Last player alive wins (first to die loses)
+ * - best_score: Both play until done; highest score/level wins
+ *
+ * Features:
+ * - Play On mode: losers can keep playing after the winner is determined
+ * - Spectator State: games can broadcast visual state for spectators
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Trophy, Skull, Clock, Wifi, X, TrendingUp } from 'lucide-react'
+import { Trophy, Skull, Clock, Wifi, X, TrendingUp, Eye, WifiOff, Pause } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
+
+const RECONNECT_WINDOW_SECONDS = 60
 
 interface OpponentStatus {
   finished: boolean
   result?: 'win' | 'loss'
   score?: number
   level?: number | string
+  /** How the opponent exited: normal finish, forfeit, or disconnect (abend). */
+  exitType?: 'completed' | 'forfeit' | 'abend'
 }
 
 /** Transient level-up announcement from opponent. */
@@ -23,17 +36,43 @@ interface LevelAnnouncement {
   timestamp: number
 }
 
-export function useRaceMode(roomId: string, raceType: 'first_to_win' | 'last_to_lose') {
+export type RaceType = 'first_to_win' | 'survival' | 'best_score'
+
+interface RaceModeOptions {
+  allowPlayOn?: boolean
+}
+
+export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceModeOptions) {
+  const allowPlayOn = options?.allowPlayOn ?? false
+
   const [opponentStatus, setOpponentStatus] = useState<OpponentStatus>({ finished: false })
-  const [raceResult, setRaceResult] = useState<'won' | 'lost' | null>(null)
+  const [raceResult, setRaceResult] = useState<'won' | 'lost' | 'tied' | null>(null)
   const [localFinished, setLocalFinished] = useState(false)
   const [opponentLevelUp, setOpponentLevelUp] = useState<LevelAnnouncement | null>(null)
+  const [playOnActive, setPlayOnActive] = useState(false)
+  const [spectatorState, setSpectatorState] = useState<any>(null)
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false)
+  /** Countdown seconds remaining for opponent to reconnect (null = not paused). */
+  const [reconnectCountdown, setReconnectCountdown] = useState<number | null>(null)
+  /** Whether we (the local player) are currently disconnected. */
+  const [selfDisconnected, setSelfDisconnected] = useState(false)
 
   // Refs to avoid stale closures in reportFinish
   const opponentStatusRef = useRef(opponentStatus)
   opponentStatusRef.current = opponentStatus
   const localFinishedRef = useRef(localFinished)
   localFinishedRef.current = localFinished
+  const localScoreRef = useRef<number | undefined>(undefined)
+  const allowPlayOnRef = useRef(allowPlayOn)
+  allowPlayOnRef.current = allowPlayOn
+
+  /** When allowPlayOn is true, defer showing the full result overlay. */
+  const setRaceResultWithPlayOn = useCallback((result: 'won' | 'lost' | 'tied') => {
+    setRaceResult(result)
+    if (allowPlayOnRef.current && result !== 'tied') {
+      setPlayOnActive(true)
+    }
+  }, [])
 
   useEffect(() => {
     const unsub = gameSocket.on('game:action', (msg) => {
@@ -56,19 +95,93 @@ export function useRaceMode(roomId: string, raceType: 'first_to_win' | 'last_to_
 
       if (action.type === 'race_finished') {
         const oppResult = action.result as 'win' | 'loss'
-        setOpponentStatus({ finished: true, result: oppResult, score: action.score })
+        const oppScore = action.score as number | undefined
+        setOpponentStatus({ finished: true, result: oppResult, score: oppScore })
 
-        // Determine race winner
+        // Determine race winner based on type
         if (raceType === 'first_to_win' && oppResult === 'win' && !localFinishedRef.current) {
-          setRaceResult('lost')
+          setRaceResultWithPlayOn('lost')
         }
-        if (raceType === 'last_to_lose' && oppResult === 'loss' && !localFinishedRef.current) {
-          setRaceResult('won')
+        if (raceType === 'survival' && oppResult === 'loss' && !localFinishedRef.current) {
+          // Opponent died while we're still alive — we win
+          setRaceResultWithPlayOn('won')
+        }
+        if (raceType === 'best_score' && localFinishedRef.current) {
+          // Both done now — compare scores
+          resolveHighestScore(localScoreRef.current, oppScore)
         }
       }
     })
     return unsub
-  }, [roomId, raceType])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, raceType, setRaceResultWithPlayOn])
+
+  // Listen for forfeit, disconnect, and reconnect events
+  useEffect(() => {
+    const unsubForfeit = gameSocket.on('game:player_forfeit', (_msg) => {
+      // Opponent forfeited — they lose, we win
+      setOpponentStatus({ finished: true, result: 'loss', exitType: 'forfeit' })
+      if (!localFinishedRef.current) {
+        setRaceResultWithPlayOn('won')
+      }
+    })
+    const unsubDisconnect = gameSocket.on('game:player_disconnect', (msg) => {
+      // Opponent disconnected — game paused, start reconnect countdown
+      setOpponentDisconnected(true)
+      setOpponentStatus(prev => ({ ...prev, exitType: 'abend' }))
+      const window = msg.reconnectWindowSeconds ?? RECONNECT_WINDOW_SECONDS
+      setReconnectCountdown(window)
+    })
+    const unsubReconnect = gameSocket.on('game:player_reconnected', (_msg) => {
+      // Opponent reconnected — resume game
+      setOpponentDisconnected(false)
+      setReconnectCountdown(null)
+      setOpponentStatus(prev => {
+        const { exitType: _, ...rest } = prev
+        return rest
+      })
+    })
+    return () => { unsubForfeit(); unsubDisconnect(); unsubReconnect() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, setRaceResultWithPlayOn])
+
+  // Reconnect countdown timer
+  useEffect(() => {
+    if (reconnectCountdown === null || reconnectCountdown <= 0) return
+    const timer = setTimeout(() => {
+      setReconnectCountdown(prev => (prev !== null && prev > 0) ? prev - 1 : null)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [reconnectCountdown])
+
+  // Track own connection state
+  useEffect(() => {
+    const unsub = gameSocket.on('connection', (msg) => {
+      setSelfDisconnected(!msg.connected)
+    })
+    return unsub
+  }, [])
+
+  // Listen for spectator state from opponent
+  useEffect(() => {
+    const unsub = gameSocket.on('game:player_state', (msg) => {
+      if (msg.state) {
+        setSpectatorState(msg.state)
+      }
+    })
+    return unsub
+  }, [roomId])
+
+  function resolveHighestScore(myScore: number | undefined, oppScore: number | undefined) {
+    const mine = myScore ?? 0
+    const theirs = oppScore ?? 0
+    if (mine > theirs) setRaceResultWithPlayOn('won')
+    else if (theirs > mine) setRaceResultWithPlayOn('lost')
+    else {
+      setRaceResult('tied')
+      // Ties don't activate play-on
+    }
+  }
 
   // Auto-dismiss level-up announcements after 3 seconds
   useEffect(() => {
@@ -79,31 +192,45 @@ export function useRaceMode(roomId: string, raceType: 'first_to_win' | 'last_to_
 
   const reportFinish = useCallback((result: 'win' | 'loss', score?: number) => {
     setLocalFinished(true)
+    localScoreRef.current = score
     gameSocket.sendAction(roomId, { type: 'race_finished', result, score })
 
     const opp = opponentStatusRef.current
-    if (raceType === 'first_to_win' && result === 'win' && !opp.finished) {
-      setRaceResult('won')
-    }
-    if (raceType === 'first_to_win' && result === 'loss') {
-      if (opp.finished && opp.result === 'win') {
-        setRaceResult('lost')
+
+    if (raceType === 'first_to_win') {
+      if (result === 'win' && !opp.finished) {
+        setRaceResultWithPlayOn('won')
+      }
+      if (result === 'loss' && opp.finished && opp.result === 'win') {
+        setRaceResultWithPlayOn('lost')
       }
     }
-    if (raceType === 'last_to_lose' && result === 'loss') {
+
+    if (raceType === 'survival' && result === 'loss') {
       if (!opp.finished) {
-        setRaceResult('lost')
+        // I died first — I lose
+        setRaceResultWithPlayOn('lost')
       } else if (opp.result === 'loss') {
-        setRaceResult('won')
+        // Both dead — whoever died second wins (that's me, since opp already finished)
+        setRaceResultWithPlayOn('won')
       }
     }
-  }, [roomId, raceType])
+
+    if (raceType === 'best_score') {
+      if (opp.finished) {
+        // Both done — compare
+        resolveHighestScore(score, opp.score)
+      }
+      // Otherwise wait for opponent to finish
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, raceType, setRaceResultWithPlayOn])
 
   const reportScore = useCallback((score: number) => {
     gameSocket.sendAction(roomId, { type: 'race_status', score })
   }, [roomId])
 
-  /** Report a level-up to the opponent. label is the display text (e.g., "Level 5", "Reached 2048"). */
+  /** Report a level-up to the opponent. label is the display text (e.g., "Level 5", "Snake length: 12"). */
   const reportLevel = useCallback((level: number | string, label?: string) => {
     gameSocket.sendAction(roomId, {
       type: 'race_level_up',
@@ -112,9 +239,51 @@ export function useRaceMode(roomId: string, raceType: 'first_to_win' | 'last_to_
     })
   }, [roomId])
 
+  /** Intentionally forfeit the game — counts as a loss in scoring/tournaments. */
+  const forfeit = useCallback(() => {
+    gameSocket.send({ type: 'game:forfeit', roomId })
+    setLocalFinished(true)
+    setRaceResult('lost')
+  }, [roomId])
+
+  /** Broadcast visual game state for spectators. Sends immediately. */
+  const broadcastState = useCallback((state: object) => {
+    gameSocket.sendState(roomId, state)
+  }, [roomId])
+
+  /**
+   * Throttled state broadcast for real-time games (arcade, etc.).
+   * Limits sends to at most once per `intervalMs` (default 500ms).
+   * Event-driven games should use `broadcastState` directly instead.
+   */
+  const lastBroadcastRef = useRef(0)
+  const throttledBroadcast = useCallback((state: object, intervalMs = 500) => {
+    const now = Date.now()
+    if (now - lastBroadcastRef.current >= intervalMs) {
+      lastBroadcastRef.current = now
+      gameSocket.sendState(roomId, state)
+    }
+  }, [roomId])
+
+  /** Dismiss play-on mode and show final results. */
+  const dismissPlayOn = useCallback(() => {
+    setPlayOnActive(false)
+  }, [])
+
+  // isSpectating: local player finished but play-on is active (winner watching loser)
+  const isSpectating = localFinished && playOnActive
+
+  // Track active room for auto-rejoin on reconnect
+  useEffect(() => {
+    gameSocket.setActiveRoom(roomId)
+    return () => { gameSocket.setActiveRoom(null) }
+  }, [roomId])
+
   return {
-    opponentStatus, raceResult, localFinished, opponentLevelUp,
-    reportFinish, reportScore, reportLevel,
+    opponentStatus, raceResult, localFinished, opponentLevelUp, opponentDisconnected,
+    reconnectCountdown, selfDisconnected,
+    reportFinish, reportScore, reportLevel, forfeit,
+    playOnActive, isSpectating, spectatorState, broadcastState, throttledBroadcast, dismissPlayOn,
   }
 }
 
@@ -124,21 +293,176 @@ export function RaceOverlay({
   opponentFinished,
   opponentLevelUp,
   onDismiss,
+  playOnActive,
+  isLoser,
+  opponentName,
+  onDismissPlayOn,
+  opponentDisconnected,
+  reconnectCountdown,
+  selfDisconnected,
 }: {
-  raceResult: 'won' | 'lost' | null
+  raceResult: 'won' | 'lost' | 'tied' | null
   opponentScore?: number
   opponentFinished: boolean
   opponentLevelUp?: LevelAnnouncement | null
   onDismiss?: () => void
+  /** Whether play-on mode is active (race ended but loser still playing). */
+  playOnActive?: boolean
+  /** Whether the local player is the loser (still playing in play-on mode). */
+  isLoser?: boolean
+  /** Opponent display name for spectator banners. */
+  opponentName?: string
+  /** Dismiss play-on mode and show final results. */
+  onDismissPlayOn?: () => void
+  /** Whether the opponent disconnected (abend — not a loss). */
+  opponentDisconnected?: boolean
+  /** Called when the local player forfeits. */
+  onForfeit?: () => void
+  /** Seconds remaining for opponent to reconnect (null = not paused). */
+  reconnectCountdown?: number | null
+  /** Whether the local player is currently disconnected (reconnecting). */
+  selfDisconnected?: boolean
 }) {
-  // Race result banner
-  if (raceResult) {
+  // Self-disconnected overlay — shown when we lose connection
+  if (selfDisconnected) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+        <div className="flex flex-col items-center gap-4 px-8 py-6 bg-slate-800/95 border border-slate-600/50 rounded-xl max-w-sm text-center">
+          <WifiOff className="w-10 h-10 text-red-400 animate-pulse" />
+          <span className="text-lg font-bold text-white">Connection Lost</span>
+          <span className="text-sm text-slate-300">
+            Reconnecting automatically... Your game is paused and waiting for you.
+          </span>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Clock className="w-3.5 h-3.5 animate-spin" />
+            <span>Attempting to reconnect</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Opponent disconnected — game paused with reconnect countdown
+  if (opponentDisconnected && !raceResult) {
+    const timeLeft = reconnectCountdown ?? 0
+    const expired = timeLeft <= 0
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+        <div className="flex flex-col items-center gap-4 px-8 py-6 bg-slate-800/95 border border-slate-600/50 rounded-xl max-w-sm text-center">
+          <Pause className="w-10 h-10 text-amber-400" />
+          <span className="text-lg font-bold text-white">Game Paused</span>
+          {expired ? (
+            <>
+              <span className="text-sm text-slate-300">
+                {opponentName || 'Opponent'} did not reconnect in time.
+                No result recorded — the game is abandoned.
+              </span>
+              {onDismiss && (
+                <button
+                  onClick={onDismiss}
+                  className="px-4 py-2 text-sm bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+                >
+                  Return to Games
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-slate-300">
+                {opponentName || 'Opponent'} lost connection.
+                Waiting for them to reconnect...
+              </span>
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-700/80 rounded-lg">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span className="text-2xl font-mono font-bold text-amber-300">{timeLeft}s</span>
+              </div>
+              <span className="text-xs text-slate-500">
+                Game will be abandoned if opponent doesn't reconnect
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Play-on mode: winner spectating the loser
+  if (playOnActive && raceResult && !isLoser) {
+    return (
+      <>
+        {/* Spectator bar for the winner */}
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 bg-indigo-900/90 border border-indigo-500/50 rounded-lg text-sm">
+          <Eye className="w-4 h-4 text-indigo-300" />
+          <span className="text-indigo-200">
+            You won! Watching {opponentName || 'opponent'} play...
+          </span>
+          {onDismissPlayOn && (
+            <button
+              onClick={onDismissPlayOn}
+              className="ml-2 px-2.5 py-1 text-xs bg-indigo-700 hover:bg-indigo-600 text-white rounded transition-colors"
+            >
+              View Final Results
+            </button>
+          )}
+        </div>
+
+        {/* Still show opponent score if available */}
+        {opponentScore !== undefined && (
+          <div className="fixed top-2 right-2 z-30 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 border border-slate-600/50 rounded-lg text-xs">
+            <Wifi className="w-3 h-3 text-green-400" />
+            <span className="text-slate-400">Opponent score:</span>
+            <span className="text-slate-300 font-mono">{opponentScore}</span>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  // Play-on mode: loser still playing
+  if (playOnActive && raceResult && isLoser) {
+    return (
+      <>
+        {/* Non-blocking banner for the loser */}
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 bg-amber-900/90 border border-amber-500/50 rounded-lg text-sm">
+          <Trophy className="w-4 h-4 text-amber-400" />
+          <span className="text-amber-200">
+            {opponentName || 'Opponent'} won the race! Keep playing to finish your game.
+          </span>
+          {onDismissPlayOn && (
+            <button
+              onClick={onDismissPlayOn}
+              className="ml-2 px-2.5 py-1 text-xs bg-amber-700 hover:bg-amber-600 text-white rounded transition-colors"
+            >
+              View Final Results
+            </button>
+          )}
+        </div>
+
+        {/* Opponent level-up announcement toast */}
+        {opponentLevelUp && (
+          <div className="fixed top-14 right-2 z-30 flex items-center gap-2 px-3 py-2 bg-amber-900/90 border border-amber-500/50 rounded-lg text-xs animate-bounce">
+            <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-amber-200 font-medium">
+              Opponent: {opponentLevelUp.label}
+            </span>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  // Full-screen race result overlay (standard behavior when play-on is not active)
+  if (raceResult && !playOnActive) {
+    const isWin = raceResult === 'won'
+    const isTie = raceResult === 'tied'
     return (
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
         <div className={`relative flex flex-col items-center gap-3 px-8 py-6 rounded-xl border ${
-          raceResult === 'won'
+          isWin
             ? 'bg-green-900/90 border-green-500/50'
-            : 'bg-red-900/90 border-red-500/50'
+            : isTie
+              ? 'bg-yellow-900/90 border-yellow-500/50'
+              : 'bg-red-900/90 border-red-500/50'
         }`}>
           {onDismiss && (
             <button
@@ -148,15 +472,17 @@ export function RaceOverlay({
               <X className="w-4 h-4" />
             </button>
           )}
-          {raceResult === 'won' ? (
+          {isWin ? (
             <Trophy className="w-10 h-10 text-yellow-400" />
+          ) : isTie ? (
+            <Trophy className="w-10 h-10 text-yellow-600" />
           ) : (
             <Skull className="w-10 h-10 text-red-400" />
           )}
           <span className={`text-2xl font-bold ${
-            raceResult === 'won' ? 'text-green-300' : 'text-red-300'
+            isWin ? 'text-green-300' : isTie ? 'text-yellow-300' : 'text-red-300'
           }`}>
-            {raceResult === 'won' ? 'You Win the Race!' : 'You Lost the Race!'}
+            {isWin ? 'You Win the Race!' : isTie ? 'It\'s a Tie!' : 'You Lost the Race!'}
           </span>
         </div>
       </div>

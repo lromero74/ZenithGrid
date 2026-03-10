@@ -24,6 +24,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { ConnectFourMultiplayer } from './ConnectFourMultiplayer'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ interface ConnectFourSaved {
   scores: { red: number; yellow: number; draw: number }
 }
 
-function ConnectFourSinglePlayer() {
+function ConnectFourSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<ConnectFourSaved>('connect-four')
   const saved = useRef(load()).current
 
@@ -204,16 +205,18 @@ function ConnectFourSinglePlayer() {
       sfx.play('win')
       setGameStatus('won')
       setScores(s => ({ ...s, red: s.red + 1 }))
+      onGameEnd?.('win')
       return
     }
     if (isBoardFull(newBoard)) {
       sfx.play('draw')
       setGameStatus('draw')
       setScores(s => ({ ...s, draw: s.draw + 1 }))
+      onGameEnd?.('draw')
       return
     }
     setCurrentPlayer('yellow')
-  }, [board, gameStatus, currentPlayer])
+  }, [board, gameStatus, currentPlayer, onGameEnd])
 
   // AI turn
   useEffect(() => {
@@ -233,9 +236,11 @@ function ConnectFourSinglePlayer() {
         setWinResult(winner)
         setGameStatus('lost')
         setScores(s => ({ ...s, yellow: s.yellow + 1 }))
+        onGameEnd?.('loss')
       } else if (isBoardFull(newBoard)) {
         setGameStatus('draw')
         setScores(s => ({ ...s, draw: s.draw + 1 }))
+        onGameEnd?.('draw')
       } else {
         setCurrentPlayer('red')
       }
@@ -340,6 +345,31 @@ function ConnectFourSinglePlayer() {
   )
 }
 
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function ConnectFourRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <ConnectFourSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
 export default function ConnectFour() {
   return (
     <MultiplayerWrapper
@@ -348,11 +378,15 @@ export default function ConnectFour() {
         gameName: 'Connect Four',
         modes: ['vs', 'race'],
         maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to beat the AI wins',
       }}
       renderSinglePlayer={() => <ConnectFourSinglePlayer />}
-      renderMultiplayer={(roomId, players, playerNames, _mode) => (
-        <ConnectFourMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig) =>
+        mode === 'race'
+          ? <ConnectFourRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+          : <ConnectFourMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
+      }
     />
   )
 }

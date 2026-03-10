@@ -33,6 +33,8 @@ import {
   type BlackjackState,
   type Difficulty,
 } from './blackjackEngine'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface SavedState {
   gameState: BlackjackState
@@ -238,7 +240,11 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Blackjack() {
+function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw') => void
+  onScoreChange?: (chips: number) => void
+  onStateChange?: (state: object) => void
+} = {}) {
   const { load, save, clear } = useGameState<SavedState>('blackjack')
   const saved = useRef(load()).current
 
@@ -276,11 +282,12 @@ export default function Blackjack() {
     }
   }, [gameState, gameStatus, save])
 
-  // SFX on payout
+  // SFX on payout + report score
   useEffect(() => {
     if (gameState.phase === 'payout') {
       if (gameState.message.toLowerCase().includes('blackjack')) sfx.play('blackjack')
       else if (gameState.message.toLowerCase().includes('bust')) sfx.play('bust')
+      onScoreChange?.(gameState.chips)
     }
   }, [gameState.phase])
 
@@ -310,10 +317,12 @@ export default function Blackjack() {
   // Check for game over (player broke or dealer broke)
   useEffect(() => {
     if (isGameOver(gameState)) {
-      setGameStatus(didPlayerWin(gameState) ? 'won' : 'lost')
+      const won = didPlayerWin(gameState)
+      setGameStatus(won ? 'won' : 'lost')
+      onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleDifficulty = useCallback((d: string) => {
     const newState = createBlackjackGame(d as Difficulty, gameState.numOpponents)
@@ -603,5 +612,56 @@ export default function Blackjack() {
       {/* Help modal */}
       {showHelp && <BlackjackHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (best_score — highest chip count wins) ─────────────
+
+function BlackjackRaceWrapper({ roomId }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore } =
+    useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+  const latestChips = useRef(1000)
+
+  const handleScoreChange = useCallback((chips: number) => {
+    latestChips.current = chips
+    reportScore(chips)
+  }, [reportScore])
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, latestChips.current)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <BlackjackSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Blackjack() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'blackjack',
+        gameName: 'Blackjack',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'Highest chip count wins',
+      }}
+      renderSinglePlayer={() => <BlackjackSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <BlackjackRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

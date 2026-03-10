@@ -8,11 +8,13 @@ import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE_COMPACT, CARD_SLOT_V, CARD_SLOT_H } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
-import type { GameStatus } from '../../../types'
+import type { GameStatus, Difficulty } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createHeartsGame,
   togglePassCard,
@@ -186,7 +188,7 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
-export default function Hearts() {
+function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('hearts')
   const saved = useRef(load()).current
 
@@ -218,10 +220,12 @@ export default function Hearts() {
     if (gameState.phase === 'gameOver') {
       const humanScore = gameState.scores[0]
       const minScore = Math.min(...gameState.scores)
-      setGameStatus(humanScore === minScore ? 'won' : 'lost')
+      const result = humanScore === minScore ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleTogglePass = useCallback((i: number) => {
     music.init()
@@ -397,5 +401,48 @@ export default function Hearts() {
       </div>
       {showHelp && <HeartsHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function HeartsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <HeartsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Hearts() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'hearts',
+        gameName: 'Hearts',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'First to win a hand wins',
+      }}
+      renderSinglePlayer={() => <HeartsSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <HeartsRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      )}
+    />
   )
 }

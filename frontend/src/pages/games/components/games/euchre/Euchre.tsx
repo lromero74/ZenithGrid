@@ -18,6 +18,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createEuchreGame,
   orderUp,
@@ -212,7 +214,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Euchre() {
+function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('euchre')
   const saved = useRef(load()).current
 
@@ -245,10 +247,12 @@ export default function Euchre() {
   // Detect game over
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
-      setGameStatus(gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost')
+      const result = gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   // AI auto-advance: trump selection, dealer discard, and playing
   useEffect(() => {
@@ -559,5 +563,48 @@ export default function Euchre() {
       {/* Help modal */}
       {showHelp && <EuchreHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function EuchreRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <EuchreSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Euchre() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'euchre',
+        gameName: 'Euchre',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'First to win a round wins',
+      }}
+      renderSinglePlayer={() => <EuchreSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <EuchreRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

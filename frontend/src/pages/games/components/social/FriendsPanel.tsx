@@ -23,6 +23,7 @@ import {
   useUnblockUser,
   useBlockedUsers,
   useUserSearch,
+  useOnlineFriends,
 } from '../../hooks/useFriends'
 
 type Tab = 'friends' | 'requests' | 'sent' | 'search' | 'blocked'
@@ -31,6 +32,7 @@ export function FriendsPanel(props: { defaultOpen?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>('friends')
   const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false)
   const { data: requests = [] } = useFriendRequests()
+  const { data: onlineIds = [] } = useOnlineFriends()
 
   const tabs: { key: Tab; label: string; icon: typeof Users; badge?: number }[] = [
     { key: 'friends', label: 'Friends', icon: Users },
@@ -50,6 +52,12 @@ export function FriendsPanel(props: { defaultOpen?: boolean }) {
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-blue-400" />
           <span className="text-sm font-medium text-slate-200">Social</span>
+          {onlineIds.length > 0 && (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+              {onlineIds.length}
+            </span>
+          )}
           {requests.length > 0 && (
             <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full">
               {requests.length}
@@ -104,18 +112,33 @@ export function FriendsPanel(props: { defaultOpen?: boolean }) {
 
 function FriendsList() {
   const { data: friends = [], isLoading } = useFriends()
+  const { data: onlineIds = [] } = useOnlineFriends()
   const removeFriend = useRemoveFriend()
   const blockUser = useBlockUser()
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
 
+  const onlineSet = new Set(onlineIds)
+
   if (isLoading) return <p className="text-xs text-slate-500 py-2">Loading...</p>
   if (!friends.length) return <p className="text-xs text-slate-500 py-2">No friends yet. Search for players to add!</p>
 
+  // Sort online friends first
+  const sorted = [...friends].sort((a, b) => {
+    const aOnline = onlineSet.has(a.id) ? 0 : 1
+    const bOnline = onlineSet.has(b.id) ? 0 : 1
+    return aOnline - bOnline
+  })
+
   return (
     <div className="space-y-1 max-h-48 overflow-y-auto">
-      {friends.map(f => (
+      {sorted.map(f => (
         <div key={f.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-slate-700/30 group">
-          <span className="text-sm text-slate-200">{f.display_name}</span>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${
+              onlineSet.has(f.id) ? 'bg-green-400' : 'bg-slate-600'
+            }`} title={onlineSet.has(f.id) ? 'Online' : 'Offline'} />
+            <span className="text-sm text-slate-200">{f.display_name}</span>
+          </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {confirmRemove === f.id ? (
               <>

@@ -22,6 +22,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { HelpCircle, X } from 'lucide-react'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -828,7 +830,7 @@ const emptyInput: Input = {
   digLeft: false, digRight: false,
 }
 
-export default function LodeRunner() {
+function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('lode-runner') ?? 0
   const { load: loadSaved, save: saveState, clear: clearSaved } = useGameState<GameState>('lode-runner')
@@ -980,6 +982,7 @@ export default function LodeRunner() {
       setGameStatus('lost')
       saveScore('lode-runner', gs.score)
       clearSaved()
+      onGameEnd?.('loss', gs.level)
       draw()
       return
     }
@@ -994,10 +997,12 @@ export default function LodeRunner() {
         setGameStatus('won')
         saveScore('lode-runner', next.score)
         clearSaved()
+        onGameEnd?.('win', next.level)
         draw()
         return
       }
       setLevel(next.level)
+      onGameEnd?.('win', next.level)
     }
 
     // Auto-save game state (skip if player is dead — next frame handles respawn)
@@ -1280,5 +1285,51 @@ export default function LodeRunner() {
 
       {showHelp && <LodeRunnerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (highest level reached wins) ─────────────────────────
+
+function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportScore, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    const lvl = score ?? 1
+    reportScore(lvl)
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, lvl)
+  }, [reportScore, reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <LodeRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+    </div>
+  )
+}
+
+export default function LodeRunner() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'lode-runner',
+        gameName: 'Lode Runner',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'Highest level reached wins',
+      }}
+      renderSinglePlayer={() => <LodeRunnerSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <LodeRunnerRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

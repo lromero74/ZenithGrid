@@ -6,13 +6,15 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { Trophy, Swords, Timer } from 'lucide-react'
+import { Trophy, Swords, Flag, Shield, TrendingUp } from 'lucide-react'
 import { GAME_ICONS } from '../constants'
 import type { GameInfo, MultiplayerMode } from '../types'
 
 const MODE_BADGE: Record<MultiplayerMode, { icon: typeof Swords; label: string; color: string }> = {
-  vs:   { icon: Swords, label: 'VS', color: 'text-purple-400' },
-  race: { icon: Timer, label: 'Race', color: 'text-cyan-400' },
+  vs:           { icon: Swords,     label: 'VS',           color: 'text-purple-400' },
+  first_to_win: { icon: Flag,       label: 'First to Win', color: 'text-cyan-400' },
+  survival:     { icon: Shield,     label: 'Survival',     color: 'text-amber-400' },
+  best_score:   { icon: TrendingUp, label: 'Best Score',   color: 'text-emerald-400' },
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -56,7 +58,7 @@ export function GameCard({ game, highScore, onPlay }: GameCardProps) {
             {game.multiplayer?.map(mode => {
               const badge = MODE_BADGE[mode]
               return (
-                <span key={mode} className={`flex items-center gap-0.5 ${badge.color}`} title={`Multiplayer ${badge.label}`}>
+                <span key={mode} className={`flex items-center gap-0.5 ${badge.color}`} title={badge.label}>
                   <badge.icon className="w-3 h-3" />
                 </span>
               )

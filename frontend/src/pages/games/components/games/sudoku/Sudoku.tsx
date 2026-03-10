@@ -24,6 +24,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface PuzzleState {
   puzzle: Board
@@ -83,7 +85,7 @@ function SudokuHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Sudoku() {
+function SudokuSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SudokuSaved>('sudoku')
   const saved = useRef(load()).current
 
@@ -187,8 +189,9 @@ export default function Sudoku() {
       sfx.play('win')
       setGameStatus('won')
       timer.stop()
+      onGameEnd?.('win', timer.seconds)
     }
-  }, [selected, gameStatus, notesMode, board, puzzleState.given, checkWin, timer])
+  }, [selected, gameStatus, notesMode, board, puzzleState.given, checkWin, timer, onGameEnd])
 
   const handleErase = useCallback(() => {
     if (!selected || gameStatus !== 'playing') return
@@ -225,8 +228,9 @@ export default function Sudoku() {
     if (checkWin(newBoard)) {
       setGameStatus('won')
       timer.stop()
+      onGameEnd?.('win', timer.seconds)
     }
-  }, [hints, selected, gameStatus, board, puzzleState, checkWin, timer])
+  }, [hints, selected, gameStatus, board, puzzleState, checkWin, timer, onGameEnd])
 
   const handleNewGame = useCallback((diff?: Difficulty) => {
     const d = diff ?? difficulty
@@ -296,5 +300,51 @@ export default function Sudoku() {
       </div>
       {showHelp && <SudokuHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (fastest solve time wins) ──────────────────────────
+
+function SudokuRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    // Invert time so faster = higher score
+    const invertedScore = score != null ? 999999 - score : 0
+    reportFinish(result === 'draw' ? 'loss' : result, invertedScore)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <SudokuSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Sudoku() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'sudoku',
+        gameName: 'Sudoku',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'Fastest to solve the puzzle wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <SudokuSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <SudokuRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

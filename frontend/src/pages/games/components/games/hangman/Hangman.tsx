@@ -19,6 +19,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -162,7 +164,7 @@ interface HangmanSaved {
   streak: number
 }
 
-export default function Hangman() {
+function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<HangmanSaved>('hangman')
   const saved = useRef(load()).current
 
@@ -208,16 +210,18 @@ export default function Hangman() {
       sfx.play('win')
       setGameStatus('won')
       setStreak(s => s + 1)
+      onGameEnd?.('win')
     } else if (!isCorrect && isGameLost(getWrongGuesses(word, newGuessed))) {
       sfx.play('lose')
       setGameStatus('lost')
       setStreak(0)
+      onGameEnd?.('loss')
     } else if (isCorrect) {
       sfx.play('correct')
     } else {
       sfx.play('wrong')
     }
-  }, [gameStatus, guessedLetters, word])
+  }, [gameStatus, guessedLetters, word, onGameEnd])
 
   // Physical keyboard support
   useKeyboard((e) => {
@@ -318,5 +322,50 @@ export default function Hangman() {
       </div>
       {showHelp && <HangmanHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-solve against opponent) ──────────────────
+
+function HangmanRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <HangmanSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Hangman() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'hangman',
+        gameName: 'Hangman',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to solve the word wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <HangmanSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <HangmanRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

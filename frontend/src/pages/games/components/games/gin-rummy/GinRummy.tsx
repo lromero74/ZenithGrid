@@ -8,11 +8,13 @@ import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
-import type { GameStatus } from '../../../types'
+import type { GameStatus, Difficulty } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createGinRummyGame,
   drawFromPile,
@@ -204,7 +206,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function GinRummy() {
+function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('gin-rummy')
   const saved = useRef(load()).current
 
@@ -230,10 +232,12 @@ export default function GinRummy() {
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
       if (gameState.playerScore >= gameState.targetScore) sfx.play('gin')
-      setGameStatus(gameState.playerScore >= gameState.targetScore ? 'won' : 'lost')
+      const result = gameState.playerScore >= gameState.targetScore ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleDrawPile = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromPile(prev)) }, [])
   const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
@@ -376,5 +380,48 @@ export default function GinRummy() {
       {/* Help modal */}
       {showHelp && <GinRummyHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function GinRummyRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <GinRummySinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function GinRummy() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'gin-rummy',
+        gameName: 'Gin Rummy',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'First to gin wins',
+      }}
+      renderSinglePlayer={() => <GinRummySinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <GinRummyRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

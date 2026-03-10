@@ -27,7 +27,9 @@ async def handle_game_message(
         "game:create": _handle_create,
         "game:join": _handle_join,
         "game:mid_join": _handle_mid_join,
+        "game:rejoin": _handle_rejoin,
         "game:leave": _handle_leave,
+        "game:forfeit": _handle_forfeit,
         "game:ready": _handle_ready,
         "game:start": _handle_start,
         "game:action": _handle_action,
@@ -41,7 +43,7 @@ async def handle_game_message(
         return
 
     # RBAC: create/join/mid_join require games:multiplayer permission
-    if msg_type in ("game:create", "game:join", "game:mid_join"):
+    if msg_type in ("game:create", "game:join", "game:mid_join", "game:rejoin"):
         perms = user_permissions or set()
         if MULTIPLAYER_PERMISSION not in perms:
             await websocket.send_json({
@@ -106,6 +108,7 @@ async def _handle_join(ws_manager, websocket, user_id, msg, display_name):
         "gameId": room.game_id,
         "players": list(room.players),
         "playerNames": _build_player_names(room),
+        "config": room.config,
     })
 
     # Notify existing players
@@ -157,6 +160,48 @@ async def _handle_mid_join(ws_manager, websocket, user_id, msg, display_name):
     )
 
 
+async def _handle_rejoin(ws_manager, websocket, user_id, msg, display_name):
+    """Reconnect a disconnected player to their in-progress game."""
+    room_id = msg.get("roomId")
+    if not room_id:
+        # Auto-detect: check if user has a pending rejoin
+        room = game_room_manager.get_pending_rejoin(user_id)
+        if not room:
+            await websocket.send_json({"type": "game:rejoin_failed", "error": "No game to rejoin"})
+            return
+        room_id = room.room_id
+
+    room = game_room_manager.reconnect_player(room_id, user_id)
+    if not room:
+        await websocket.send_json({"type": "game:rejoin_failed", "error": "Reconnect window expired"})
+        return
+
+    room.player_names[user_id] = display_name
+
+    # Send full game state to reconnected player
+    await websocket.send_json({
+        "type": "game:rejoin_success",
+        "roomId": room.room_id,
+        "gameId": room.game_id,
+        "mode": room.mode,
+        "players": list(room.players),
+        "playerNames": _build_player_names(room),
+        "config": room.config,
+    })
+
+    # Notify other players that the disconnected player is back
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:player_reconnected",
+            "roomId": room.room_id,
+            "playerId": user_id,
+            "playerName": display_name,
+        },
+        exclude_user=user_id,
+    )
+
+
 async def _handle_leave(ws_manager, websocket, user_id, msg, display_name):
     room_id = msg.get("roomId")
     if not room_id:
@@ -188,6 +233,78 @@ async def _handle_leave(ws_manager, websocket, user_id, msg, display_name):
                 "players": list(room.players),
                 "playerNames": _build_player_names(room),
             },
+        )
+
+
+async def _handle_forfeit(ws_manager, websocket, user_id, msg, display_name):
+    """Player intentionally forfeits — counts as a loss in scoring/tournaments."""
+    room_id = msg.get("roomId")
+    if not room_id:
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room or room.status != "playing":
+        return
+
+    if user_id not in room.players:
+        return
+
+    player_name = room.player_names.get(user_id, display_name)
+
+    # Broadcast forfeit to all players (game:action with type forfeit)
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:action",
+            "roomId": room_id,
+            "playerId": user_id,
+            "action": {"type": "race_forfeit", "playerName": player_name},
+            "sequence": game_room_manager.record_action(room_id, user_id, {"type": "race_forfeit"}),
+        },
+    )
+
+    # Notify with a dedicated message for UI handling
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:player_forfeit",
+            "roomId": room_id,
+            "playerId": user_id,
+            "playerName": player_name,
+            "exit_type": "forfeit",
+        },
+    )
+
+
+async def handle_player_disconnect(ws_manager, user_id: int):
+    """Called when a WebSocket disconnects — mark player as disconnected.
+
+    Connection loss is NOT a loss — the player is given a reconnect window
+    (RECONNECT_WINDOW_SECONDS) to rejoin. The game is paused for remaining players.
+    """
+    from app.services.game_room_manager import RECONNECT_WINDOW_SECONDS
+
+    for room in game_room_manager.get_rooms_for_player(user_id):
+        if room.status != "playing":
+            continue
+
+        player_name = room.player_names.get(user_id, f"Player {user_id}")
+
+        # Mark as disconnected (keep in room for reconnect window)
+        game_room_manager.mark_disconnected(room.room_id, user_id)
+
+        # Broadcast pause notification to remaining players
+        await ws_manager.send_to_room(
+            room.players,
+            {
+                "type": "game:player_disconnect",
+                "roomId": room.room_id,
+                "playerId": user_id,
+                "playerName": player_name,
+                "exit_type": "abend",
+                "reconnectWindowSeconds": RECONNECT_WINDOW_SECONDS,
+            },
+            exclude_user=user_id,
         )
 
 
@@ -226,6 +343,7 @@ async def _handle_start(ws_manager, websocket, user_id, msg, display_name):
             "gameId": room.game_id,
             "players": list(room.players),
             "playerNames": _build_player_names(room),
+            "config": room.config,
         },
     )
 

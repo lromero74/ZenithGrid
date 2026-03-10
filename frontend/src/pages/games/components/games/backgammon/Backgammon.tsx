@@ -15,6 +15,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -201,7 +203,7 @@ interface SavedState {
   scores: { white: number; brown: number }
 }
 
-export default function Backgammon() {
+function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('backgammon')
   const saved = useRef(load()).current
 
@@ -237,12 +239,14 @@ export default function Backgammon() {
       setGameStatus('won')
       setScores(s => ({ ...s, white: s.white + 1 }))
       setGameState({ ...state, gamePhase: 'gameOver' })
+      onGameEnd?.('win')
       return
     }
     if (winner === 'brown') {
       setGameStatus('lost')
       setScores(s => ({ ...s, brown: s.brown + 1 }))
       setGameState({ ...state, gamePhase: 'gameOver' })
+      onGameEnd?.('loss')
       return
     }
 
@@ -255,7 +259,7 @@ export default function Backgammon() {
       dice: [],
       usedDice: [],
     })
-  }, [])
+  }, [onGameEnd])
 
   // Handle dice roll
   const handleRoll = useCallback(() => {
@@ -491,5 +495,51 @@ export default function Backgammon() {
       {/* Help modal */}
       {showHelp && <BackgammonHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ─────────────────────────────────────────
+
+function BackgammonRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <BackgammonSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer support ──────────────────────────
+
+export default function Backgammon() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'backgammon',
+        gameName: 'Backgammon',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to beat the AI wins',
+      }}
+      renderSinglePlayer={() => <BackgammonSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <BackgammonRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      )}
+    />
   )
 }

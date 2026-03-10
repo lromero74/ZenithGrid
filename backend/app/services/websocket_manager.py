@@ -117,6 +117,10 @@ class WebSocketManager:
                     (ws, uid) for ws, uid in self.active_connections if ws not in disconnected
                 ]
 
+    def get_connected_user_ids(self) -> set[int]:
+        """Return the set of user IDs that have active WebSocket connections."""
+        return {uid for _, uid in self.active_connections}
+
     async def send_to_user(self, user_id: int, message: dict):
         """Send a message to a specific user's connections."""
         await self.broadcast(message, user_id=user_id)

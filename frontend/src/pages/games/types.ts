@@ -6,7 +6,7 @@ export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
 
 export type GameCategory = 'puzzle' | 'strategy' | 'arcade' | 'word' | 'cards'
 
-export type MultiplayerMode = 'vs' | 'race'
+export type MultiplayerMode = 'vs' | 'first_to_win' | 'survival' | 'best_score'
 
 export interface GameInfo {
   id: string

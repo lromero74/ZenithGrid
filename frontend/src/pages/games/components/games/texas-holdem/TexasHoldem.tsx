@@ -598,9 +598,10 @@ export default function TexasHoldem() {
         gameName: 'Texas Hold\'em',
         modes: ['vs', 'race'],
         maxPlayers: 4,
+        raceDescription: 'First to win a hand wins',
       }}
       renderSinglePlayer={() => <TexasHoldemSinglePlayer />}
-      renderMultiplayer={(roomId, players, playerNames, mode) => (
+      renderMultiplayer={(roomId, players, playerNames, mode, _roomConfig) => (
         mode === 'race'
           ? <TexasHoldemRace roomId={roomId} players={players} />
           : <TexasHoldemMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
