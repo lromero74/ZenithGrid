@@ -14,6 +14,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createGoFishGame,
   askForRank,
@@ -181,7 +183,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function GoFish() {
+function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('go-fish')
   const saved = useRef(load()).current
 
@@ -209,7 +211,9 @@ export default function GoFish() {
       const humanWon = gameState.books[0].length > gameState.books[1].length
       const tied = gameState.books[0].length === gameState.books[1].length
       if (humanWon) sfx.play('match')
-      setGameStatus(tied ? 'draw' : humanWon ? 'won' : 'lost')
+      const result = tied ? 'draw' : humanWon ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(tied ? 'draw' : humanWon ? 'win' : 'loss')
       clear()
     }
   }, [gameState, clear])
@@ -358,5 +362,49 @@ export default function GoFish() {
       </div>
       {showHelp && <GoFishHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function GoFishRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <GoFishSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function GoFish() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'go-fish',
+        gameName: 'Go Fish',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to collect the most sets wins',
+      }}
+      renderSinglePlayer={() => <GoFishSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <GoFishRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

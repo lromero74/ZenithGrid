@@ -23,6 +23,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -415,7 +417,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function Centipede() {
+export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('centipede') ?? 0
 
@@ -580,6 +582,7 @@ export default function Centipede() {
       setGameStatus('lost')
       saveScore('centipede', gs.score)
       sfx.play('die')
+      onGameEnd?.('loss', gs.score)
       draw()
       return
     }
@@ -592,7 +595,7 @@ export default function Centipede() {
 
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore])
+  }, [draw, saveScore, onGameEnd])
 
   // -------------------------------------------------------------------------
   // Start / restart
@@ -818,5 +821,56 @@ export default function Centipede() {
       {/* Help modal */}
       {showHelp && <CentipedeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Race wrapper (survival or best_score — last alive or highest score wins)
+// ---------------------------------------------------------------------------
+
+function CentipedeRaceWrapper({ roomId, roomConfig }: { roomId: string; roomConfig: RoomConfig }) {
+  const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
+  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, raceType)
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((_result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish('loss', score ?? 0)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Default export — multiplayer wrapper
+// ---------------------------------------------------------------------------
+
+export default function Centipede() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'centipede',
+        gameName: 'Centipede',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        raceDescription: 'Last alive or highest score wins',
+      }}
+      renderSinglePlayer={() => <CentipedeSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <CentipedeRaceWrapper roomId={roomId} roomConfig={roomConfig} />
+      )}
+    />
   )
 }

@@ -359,7 +359,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-function DinoRunnerSinglePlayer({ onGameEnd }: { onGameEnd?: (score: number) => void } = {}) {
+function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -1108,7 +1108,7 @@ function DinoRunnerSinglePlayer({ onGameEnd }: { onGameEnd?: (score: number) => 
 }
 
 function DinoRunnerRaceWrapper({ roomId }: { roomId: string }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'last_to_lose')
+  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, 'survival')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((score: number) => {
@@ -1128,7 +1128,7 @@ function DinoRunnerRaceWrapper({ roomId }: { roomId: string }) {
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
       />
-      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} />
+      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
     </div>
   )
 }
@@ -1141,9 +1141,10 @@ export default function DinoRunner() {
         gameName: 'Dino Runner',
         modes: ['race'],
         maxPlayers: 2,
+        raceDescription: 'Last dino standing wins',
       }}
       renderSinglePlayer={() => <DinoRunnerSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode) => (
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
         <DinoRunnerRaceWrapper roomId={roomId} />
       )}
     />

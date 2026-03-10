@@ -14,6 +14,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createCribbageGame,
   toggleCribSelection,
@@ -218,7 +220,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Cribbage() {
+function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('cribbage')
   const saved = useRef(load()).current
 
@@ -241,7 +243,9 @@ export default function Cribbage() {
 
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
-      setGameStatus(gameState.scores[0] >= 121 ? 'won' : 'lost')
+      const won = gameState.scores[0] >= 121
+      setGameStatus(won ? 'won' : 'lost')
+      onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
   }, [gameState, clear])
@@ -568,5 +572,48 @@ export default function Cribbage() {
       {/* Help modal */}
       {showHelp && <CribbageHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function CribbageRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <CribbageSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Cribbage() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'cribbage',
+        gameName: 'Cribbage',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'First to 121 points wins',
+      }}
+      renderSinglePlayer={() => <CribbageSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <CribbageRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

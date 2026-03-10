@@ -2,27 +2,37 @@
  * Game Lobby — pre-game room for multiplayer games.
  *
  * Handles room creation, joining, readying up, and game start.
- * Includes friend invite functionality.
+ * Includes friend invite functionality and difficulty selection for race mode.
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Copy, Check, Play, Loader2, UserPlus } from 'lucide-react'
+import { Users, Copy, Check, Play, Loader2, UserPlus, Lock } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useFriends } from '../../hooks/useFriends'
+import type { Difficulty } from '../../types'
+import type { RoomConfig } from './MultiplayerWrapper'
 
 export interface LobbyProps {
   gameId: string
   gameName: string
   mode: 'vs' | 'race'
   maxPlayers?: number
-  onGameStart: (roomId: string, players: number[], playerNames: Record<number, string>) => void
+  /** Show difficulty selector (for race mode games with difficulty) */
+  hasDifficulty?: boolean
+  onGameStart: (roomId: string, players: number[], playerNames: Record<number, string>, config: RoomConfig) => void
   onBack: () => void
 }
 
 type LobbyState = 'idle' | 'creating' | 'waiting' | 'joining' | 'ready'
 
-export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart, onBack }: LobbyProps) {
+const DIFFICULTY_OPTIONS: { value: Difficulty; label: string; color: string }[] = [
+  { value: 'easy', label: 'Easy', color: 'bg-emerald-900/50 text-emerald-400 border-emerald-700/50' },
+  { value: 'medium', label: 'Medium', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50' },
+  { value: 'hard', label: 'Hard', color: 'bg-red-900/50 text-red-400 border-red-700/50' },
+]
+
+export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, hasDifficulty, onGameStart, onBack }: LobbyProps) {
   const { user, getAccessToken } = useAuth()
   const [lobbyState, setLobbyState] = useState<LobbyState>('idle')
   const [roomId, setRoomId] = useState<string | null>(null)
@@ -35,6 +45,8 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium')
+  const [roomConfig, setRoomConfig] = useState<RoomConfig>({})
 
   // Connect WebSocket
   useEffect(() => {
@@ -58,6 +70,11 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
         setRoomId(msg.roomId)
         setPlayers(msg.players)
         if (msg.playerNames) setPlayerNames(msg.playerNames)
+        if (msg.config) {
+          setRoomConfig(msg.config)
+          // Lock difficulty to host's choice
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+        }
         setLobbyState('waiting')
       }),
       gameSocket.on('game:player_joined', (msg) => {
@@ -72,7 +89,8 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
         setReadyPlayers(msg.readyPlayers)
       }),
       gameSocket.on('game:started', (msg) => {
-        onGameStart(msg.roomId, msg.players, msg.playerNames || {})
+        const cfg = msg.config || roomConfig
+        onGameStart(msg.roomId, msg.players, msg.playerNames || {}, cfg)
       }),
       gameSocket.on('game:room_closed', () => {
         setLobbyState('idle')
@@ -84,13 +102,16 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
       }),
     ]
     return () => unsubs.forEach(fn => fn())
-  }, [onGameStart])
+  }, [onGameStart, roomConfig])
 
   const createRoom = useCallback(() => {
     setError(null)
     setLobbyState('creating')
-    gameSocket.createRoom(gameId, mode, { max_players: maxPlayers })
-  }, [gameId, mode, maxPlayers])
+    const config: RoomConfig = { max_players: maxPlayers }
+    if (hasDifficulty) config.difficulty = difficulty
+    setRoomConfig(config)
+    gameSocket.createRoom(gameId, mode, config)
+  }, [gameId, mode, maxPlayers, hasDifficulty, difficulty])
 
   const joinRoom = useCallback(() => {
     if (!joinCode.trim()) return
@@ -126,6 +147,7 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
     setReadyPlayers([])
     setIsReady(false)
     setIsHost(false)
+    setRoomConfig({})
   }, [roomId])
 
   const getDisplayName = (pid: number) => {
@@ -135,6 +157,9 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
 
   const allReady = players.length >= 2 && readyPlayers.length === players.length
 
+  // Whether difficulty is locked (joiner can't change it)
+  const difficultyLocked = !isHost && lobbyState === 'waiting'
+
   // Pre-game lobby
   if (lobbyState === 'idle') {
     return (
@@ -143,6 +168,26 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
         <p className="text-sm text-slate-400">
           Mode: <span className="text-blue-400 font-medium">{mode === 'vs' ? 'VS' : 'Race'}</span>
         </p>
+
+        {/* Difficulty selector (host picks before creating) */}
+        {hasDifficulty && (
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-slate-400">Difficulty (shared with opponent)</span>
+            <div className="flex gap-2">
+              {DIFFICULTY_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDifficulty(opt.value)}
+                  className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                    difficulty === opt.value ? opt.color : 'bg-slate-800 text-slate-500 border-slate-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-400 bg-red-900/20 px-3 py-1.5 rounded">{error}</p>
@@ -178,7 +223,7 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
           onClick={onBack}
           className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
         >
-          Back to single player
+          Back
         </button>
       </div>
     )
@@ -197,6 +242,20 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
           <button onClick={copyRoomId} className="p-1 text-slate-400 hover:text-white">
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
+        </div>
+      )}
+
+      {/* Locked difficulty display */}
+      {hasDifficulty && difficulty && (
+        <div className="flex items-center gap-2 text-xs">
+          <Lock className="w-3 h-3 text-slate-400" />
+          <span className="text-slate-400">Difficulty:</span>
+          <span className={`px-2 py-0.5 rounded-full ${
+            DIFFICULTY_OPTIONS.find(o => o.value === difficulty)?.color ?? 'text-slate-300'
+          }`}>
+            {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+          </span>
+          {difficultyLocked && <span className="text-slate-500">(set by host)</span>}
         </div>
       )}
 

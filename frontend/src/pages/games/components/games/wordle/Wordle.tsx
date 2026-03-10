@@ -2,7 +2,8 @@
  * Wordle game — guess the 5-letter word in 6 tries.
  *
  * Features: daily word mode, random mode, hard mode toggle,
- * keyboard coloring, share button, physical keyboard support.
+ * keyboard coloring, share button, physical keyboard support,
+ * multiplayer race mode.
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
@@ -23,6 +24,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 const MAX_GUESSES = 6
 
@@ -79,7 +82,7 @@ function WordleHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Wordle() {
+function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<WordleSaved>('wordle')
   const saved = useRef(load()).current
 
@@ -167,9 +170,11 @@ export default function Wordle() {
       if (evaluation.every(r => r === 'correct')) {
         sfx.play('win')
         setGameStatus('won')
+        onGameEnd?.('win', newGuesses.length)
       } else if (newGuesses.length >= MAX_GUESSES) {
         sfx.play('wrong')
         setGameStatus('lost')
+        onGameEnd?.('loss', MAX_GUESSES)
       } else {
         sfx.play('wrong')
       }
@@ -323,5 +328,51 @@ export default function Wordle() {
       </div>
       {showHelp && <WordleHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (fewest guesses wins) ──────────────────────────────
+
+function WordleRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    // Invert guess count so fewer guesses = higher score (7 - guessCount)
+    const invertedScore = score != null ? (MAX_GUESSES + 1) - score : 0
+    reportFinish(result === 'loss' ? 'loss' : 'win', invertedScore)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <WordleSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Wordle() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'wordle',
+        gameName: 'Wordle',
+        modes: ['race'],
+        hasDifficulty: false,
+        raceDescription: 'Fewest guesses wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <WordleSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <WordleRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty as string | undefined} />
+      }
+    />
   )
 }

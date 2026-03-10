@@ -21,6 +21,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface MemoryState {
   cards: Card[]
@@ -146,7 +148,11 @@ function B({ children }: { children: React.ReactNode }) {
 
 const GRID_COLS: Record<GridSize, number> = { easy: 4, medium: 4, hard: 6 }
 
-export default function Memory() {
+function MemorySinglePlayer({ onGameEnd, onMove, onStateChange: _onStateChange }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw', moveCount?: number) => void
+  onMove?: (moveCount: number) => void
+  onStateChange?: (state: object) => void
+} = {}) {
   const { load, save, clear } = useGameState<MemoryState>('memory')
   const saved = useRef(load()).current
 
@@ -219,6 +225,8 @@ export default function Memory() {
       const [first, second] = flippedIndices.current
       const card1 = newCards[first]
       const card2 = newCards[second]
+      const currentMoveCount = countMoves(totalFlips + 1)
+      onMove?.(currentMoveCount)
 
       if (checkMatch(card1, card2)) {
         sfx.play('match')
@@ -234,7 +242,7 @@ export default function Memory() {
         if (checkGameComplete(matched)) {
           sfx.play('win')
           setGameStatus('won')
-          const finalMoves = countMoves(totalFlips + 1)
+          const finalMoves = currentMoveCount
           setBestMoves(prev => {
             const key = currentDifficulty
             const current = prev[key]
@@ -243,6 +251,7 @@ export default function Memory() {
             }
             return prev
           })
+          onGameEnd?.('win', finalMoves)
         }
       } else {
         sfx.play('mismatch')
@@ -256,7 +265,7 @@ export default function Memory() {
         }, 800)
       }
     }
-  }, [cards, gameStatus, totalFlips, currentDifficulty])
+  }, [cards, gameStatus, totalFlips, currentDifficulty, onGameEnd, onMove])
 
   const startNewGame = useCallback((diff?: Difficulty) => {
     const d = diff ?? currentDifficulty
@@ -378,5 +387,55 @@ export default function Memory() {
       </div>
       {showHelp && <MemoryHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (fewest moves wins) ──────────────────────────────
+
+function MemoryRaceWrapper({ roomId }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportScore, reportFinish } =
+    useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleMove = useCallback((moveCount: number) => {
+    reportScore(moveCount)
+  }, [reportScore])
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', moveCount?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, moveCount)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <MemorySinglePlayer onGameEnd={handleGameEnd} onMove={handleMove} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Memory() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'memory',
+        gameName: 'Memory',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'Fewest moves wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <MemorySinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <MemoryRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

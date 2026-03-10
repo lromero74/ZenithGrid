@@ -22,6 +22,9 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import type { Difficulty } from '../../../types'
 
 // ── Help modal ──────────────────────────────────────────────────────
 function MinesweeperHelp({ onClose }: { onClose: () => void }) {
@@ -116,7 +119,7 @@ interface MinesweeperSaved {
   firstClick: boolean
 }
 
-export default function Minesweeper() {
+function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<MinesweeperSaved>('minesweeper')
   const saved = useRef(load()).current
 
@@ -171,6 +174,7 @@ export default function Minesweeper() {
       setExplodedCell([row, col])
       setGameStatus('lost')
       timer.stop()
+      onGameEnd?.('loss', timer.seconds)
       return
     }
 
@@ -184,8 +188,9 @@ export default function Minesweeper() {
       if (!best || timer.seconds < best) {
         saveScore(bestKey, timer.seconds)
       }
+      onGameEnd?.('win', timer.seconds)
     }
-  }, [board, gameStatus, diff, diffKey, timer, getHighScore, saveScore])
+  }, [board, gameStatus, diff, diffKey, timer, getHighScore, saveScore, onGameEnd])
 
   const handleFlag = useCallback((row: number, col: number) => {
     if (!board || gameStatus !== 'playing' && gameStatus !== 'idle') return
@@ -291,5 +296,53 @@ export default function Minesweeper() {
       </div>
       {showHelp && <MinesweeperHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (best_score — fastest clear time wins) ─────────────
+
+function MinesweeperRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    // Invert score so faster times rank higher in best_score comparison
+    const invertedScore = score != null ? Math.max(0, 999999 - score) : undefined
+    reportFinish(result === 'loss' ? 'loss' : 'win', invertedScore)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <MinesweeperSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer wrapper ─────────────────────────
+
+export default function Minesweeper() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'minesweeper',
+        gameName: 'Minesweeper',
+        modes: ['race'],
+        hasDifficulty: true,
+        raceDescription: 'Fastest to clear the board wins',
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <MinesweeperSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <MinesweeperRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

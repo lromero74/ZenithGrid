@@ -13,6 +13,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createSpadesGame,
   placeBid,
@@ -90,7 +92,7 @@ function SpadesHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Spades() {
+function SpadesSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('spades')
   const saved = useRef(load()).current
 
@@ -122,10 +124,12 @@ export default function Spades() {
 
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
-      setGameStatus(gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost')
+      const result = gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleBid = useCallback(() => {
     music.init()
@@ -321,5 +325,49 @@ export default function Spades() {
       </div>
       {showHelp && <SpadesHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function SpadesRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <SpadesSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Spades() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'spades',
+        gameName: 'Spades',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to make their bid wins',
+      }}
+      renderSinglePlayer={() => <SpadesSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <SpadesRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

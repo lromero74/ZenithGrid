@@ -20,6 +20,8 @@ import {
   resolveWar,
   type WarState,
 } from './WarEngine'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface SavedState {
   gameState: WarState
@@ -60,7 +62,7 @@ function WarHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function War() {
+function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('war')
   const saved = useRef(load()).current
 
@@ -90,13 +92,20 @@ export default function War() {
     if (gameState.phase === 'gameOver') {
       const pCount = gameState.playerDeck.length
       const aCount = gameState.aiDeck.length
-      if (pCount > aCount) setGameStatus('won')
-      else if (aCount > pCount) setGameStatus('lost')
-      else setGameStatus('draw')
+      if (pCount > aCount) {
+        setGameStatus('won')
+        onGameEnd?.('win')
+      } else if (aCount > pCount) {
+        setGameStatus('lost')
+        onGameEnd?.('loss')
+      } else {
+        setGameStatus('draw')
+        onGameEnd?.('draw')
+      }
       clear()
       setAutoPlay(false)
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   // Auto-advance: compare → resolve, war → resolve
   useEffect(() => {
@@ -287,5 +296,49 @@ export default function War() {
       </div>
       {showHelp && <WarHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against AI) ─────────────────────────
+
+function WarRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <WarSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function War() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'war',
+        gameName: 'War',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        raceDescription: 'First to win the war wins',
+      }}
+      renderSinglePlayer={() => <WarSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <WarRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

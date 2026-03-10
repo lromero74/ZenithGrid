@@ -18,6 +18,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createCanastaGame,
   drawFromStock,
@@ -323,7 +325,7 @@ const AI_DELAY = 800
 
 // ── Main component ───────────────────────────────────────────────────
 
-export default function Canasta() {
+function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<SavedState>('canasta')
   const saved = useRef(load()).current
 
@@ -352,11 +354,13 @@ export default function Canasta() {
   // Detect game over
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
-      if (gameState.teamScores[0] > gameState.teamScores[1]) sfx.play('gin')
-      setGameStatus(gameState.teamScores[0] > gameState.teamScores[1] ? 'won' : 'lost')
+      const won = gameState.teamScores[0] > gameState.teamScores[1]
+      if (won) sfx.play('gin')
+      setGameStatus(won ? 'won' : 'lost')
+      onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   // AI auto-play
   useEffect(() => {
@@ -738,5 +742,49 @@ export default function Canasta() {
       {/* Help modal */}
       {showHelp && <CanastaHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-meld-out against AI) ─────────────────────
+
+function CanastaRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <CanastaSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Canasta() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'canasta',
+        gameName: 'Canasta',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to meld out wins',
+      }}
+      renderSinglePlayer={() => <CanastaSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
+        <CanastaRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      }
+    />
   )
 }

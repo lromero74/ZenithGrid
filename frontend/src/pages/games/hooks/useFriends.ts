@@ -223,6 +223,19 @@ export function useCheckDisplayName(name: string) {
   })
 }
 
+/** Get IDs of friends currently online (active WebSocket connection). Polls every 30s. */
+export function useOnlineFriends() {
+  return useQuery<number[]>({
+    queryKey: ['online-friends'],
+    queryFn: async () => {
+      const { data } = await api.get('/friends/online')
+      return data
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  })
+}
+
 export function useSetDisplayName() {
   const qc = useQueryClient()
   return useMutation({

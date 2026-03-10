@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, LayoutList, Swords, Timer } from 'lucide-react'
+import { Search, LayoutList, Swords, Flag, Shield, TrendingUp } from 'lucide-react'
 import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
@@ -189,7 +189,9 @@ export function GameHub() {
         {([
           { value: 'all' as const, label: 'Any Mode', icon: null },
           { value: 'vs' as const, label: 'VS', icon: Swords },
-          { value: 'race' as const, label: 'Race', icon: Timer },
+          { value: 'first_to_win' as const, label: 'First to Win', icon: Flag },
+          { value: 'survival' as const, label: 'Survival', icon: Shield },
+          { value: 'best_score' as const, label: 'Best Score', icon: TrendingUp },
         ]).map(opt => (
           <button
             key={opt.value}

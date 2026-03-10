@@ -7,6 +7,8 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo} from 'react'
 import { HelpCircle, X } from 'lucide-react'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { DifficultySelector } from '../../DifficultySelector'
@@ -192,7 +194,7 @@ interface CheckersState {
   isPlayerTurn: boolean
 }
 
-export default function Checkers() {
+function CheckersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<CheckersState>('checkers')
   const saved = useRef(load()).current
 
@@ -273,9 +275,11 @@ export default function Checkers() {
         if (winner === 'red') {
           sfx.play('win')
           setGameStatus('won')
+          onGameEnd?.('win')
           setScores(s => ({ ...s, red: s.red + 1 }))
         } else if (winner === 'black') {
           setGameStatus('lost')
+          onGameEnd?.('loss')
           setScores(s => ({ ...s, black: s.black + 1 }))
         } else {
           setIsPlayerTurn(false)
@@ -286,7 +290,7 @@ export default function Checkers() {
         setValidMoves([])
       }
     }
-  }, [board, gameStatus, isPlayerTurn, selectedPiece, validMoves, getMovesForPiece])
+  }, [board, gameStatus, isPlayerTurn, selectedPiece, validMoves, getMovesForPiece, onGameEnd])
 
   // AI turn
   useEffect(() => {
@@ -298,6 +302,7 @@ export default function Checkers() {
       const aiMove = getAIMove(board, 'black', depth)
       if (!aiMove) {
         setGameStatus('won')
+        onGameEnd?.('win')
         setScores(s => ({ ...s, red: s.red + 1 }))
         aiThinking.current = false
         return
@@ -311,9 +316,11 @@ export default function Checkers() {
       const winner = checkGameOver(newBoard)
       if (winner === 'black') {
         setGameStatus('lost')
+        onGameEnd?.('loss')
         setScores(s => ({ ...s, black: s.black + 1 }))
       } else if (winner === 'red') {
         setGameStatus('won')
+        onGameEnd?.('win')
         setScores(s => ({ ...s, red: s.red + 1 }))
       } else {
         setIsPlayerTurn(true)
@@ -322,7 +329,7 @@ export default function Checkers() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [isPlayerTurn, gameStatus, board, difficulty])
+  }, [isPlayerTurn, gameStatus, board, difficulty, onGameEnd])
 
   const handleNewGame = useCallback(() => {
     setBoard(createBoard())
@@ -395,5 +402,48 @@ export default function Checkers() {
       {/* Help modal */}
       {showHelp && <CheckersHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ─────────────────────────────────────────
+function CheckersRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <CheckersSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function Checkers() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'checkers',
+        gameName: 'Checkers',
+        modes: ['race'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        raceDescription: 'First to beat the AI wins',
+      }}
+      renderSinglePlayer={() => <CheckersSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
+        <CheckersRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      )}
+    />
   )
 }

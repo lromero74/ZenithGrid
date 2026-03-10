@@ -414,3 +414,30 @@ async def search_users(
     )
     users = result.scalars().all()
     return [{"id": u.id, "display_name": u.display_name} for u in users]
+
+
+@router.get("/online")
+async def get_online_friends(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> list[int]:
+    """Return IDs of friends who have active WebSocket connections (online)."""
+    from app.services.websocket_manager import ws_manager
+
+    # Get friend IDs
+    result = await db.execute(
+        select(Friendship).where(
+            or_(
+                Friendship.user_id == current_user.id,
+                Friendship.friend_id == current_user.id,
+            )
+        )
+    )
+    friendships = result.scalars().all()
+    friend_ids = set()
+    for f in friendships:
+        friend_ids.add(f.friend_id if f.user_id == current_user.id else f.user_id)
+
+    # Intersect with connected users
+    connected = ws_manager.get_connected_user_ids()
+    return sorted(friend_ids & connected)

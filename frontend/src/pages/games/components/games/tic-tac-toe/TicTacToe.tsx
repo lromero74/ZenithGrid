@@ -6,6 +6,8 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
 import { HelpCircle, X } from 'lucide-react'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { TicTacToeBoard } from './TicTacToeBoard'
@@ -72,7 +74,7 @@ function TicTacToeHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function TicTacToe() {
+function TicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
   const { load, save, clear } = useGameState<TicTacToeSaved>('tic-tac-toe')
   const saved = useRef(load()).current
 
@@ -111,18 +113,20 @@ export default function TicTacToe() {
       setWinResult(result)
       sfx.play('win')
       setGameStatus('won')
+      onGameEnd?.('win')
       setScores(s => ({ ...s, x: s.x + 1 }))
       return
     }
     if (isBoardFull(newBoard)) {
       sfx.play('draw')
       setGameStatus('draw')
+      onGameEnd?.('draw')
       setScores(s => ({ ...s, draws: s.draws + 1 }))
       return
     }
 
     setIsPlayerTurn(false)
-  }, [board, isPlayerTurn, gameStatus])
+  }, [board, isPlayerTurn, gameStatus, onGameEnd])
 
   // AI move
   useEffect(() => {
@@ -141,12 +145,14 @@ export default function TicTacToe() {
         setWinResult(result)
         sfx.play('lose')
         setGameStatus('lost')
+        onGameEnd?.('loss')
         setScores(s => ({ ...s, o: s.o + 1 }))
         return
       }
       if (isBoardFull(newBoard)) {
         sfx.play('draw')
         setGameStatus('draw')
+        onGameEnd?.('draw')
         setScores(s => ({ ...s, draws: s.draws + 1 }))
         return
       }
@@ -155,7 +161,7 @@ export default function TicTacToe() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [isPlayerTurn, gameStatus, board, difficulty])
+  }, [isPlayerTurn, gameStatus, board, difficulty, onGameEnd])
 
   const handlePlayAgain = useCallback(() => {
     setBoard(createBoard())
@@ -232,5 +238,47 @@ export default function TicTacToe() {
       </div>
       {showHelp && <TicTacToeHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Multiplayer race wrapper ─────────────────────────────────────────
+function TicTacToeRaceWrapper({ roomId }: { roomId: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <TicTacToeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+    </div>
+  )
+}
+
+export default function TicTacToe() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'tic-tac-toe',
+        gameName: 'Tic Tac Toe',
+        modes: ['race'],
+        maxPlayers: 2,
+        raceDescription: 'First to beat the AI wins',
+      }}
+      renderSinglePlayer={() => <TicTacToeSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
+        <TicTacToeRaceWrapper roomId={roomId} />
+      )}
+    />
   )
 }

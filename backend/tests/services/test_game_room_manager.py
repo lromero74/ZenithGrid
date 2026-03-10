@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 import pytest
 from unittest.mock import AsyncMock
 
-from app.services.game_room_manager import GameRoomManager, GameRoom, ROOM_TTL_SECONDS
+from app.services.game_room_manager import (
+    GameRoomManager, GameRoom, ROOM_TTL_SECONDS, RECONNECT_WINDOW_SECONDS,
+)
 
 
 # =============================================================================
@@ -429,3 +431,148 @@ class TestPlayerNames:
         room_id = room.room_id
         manager.close_room(room_id)
         assert manager.get_room(room_id) is None
+
+
+# =============================================================================
+# Disconnect and Reconnect
+# =============================================================================
+
+
+def _make_playing_room(manager):
+    """Helper: create a 2-player room in 'playing' status."""
+    room = manager.create_room(host_user_id=1, game_id="chess", mode="race")
+    manager.join_room(room.room_id, user_id=2)
+    manager.set_ready(room.room_id, 1)
+    manager.set_ready(room.room_id, 2)
+    manager.start_game(room.room_id, 1)
+    return room
+
+
+class TestDisconnectReconnect:
+    """Tests for disconnect marking, reconnect windows, and expiry."""
+
+    def test_mark_disconnected_playing_room(self, manager):
+        room = _make_playing_room(manager)
+        result = manager.mark_disconnected(room.room_id, 2)
+        assert result is True
+        assert 2 in room.disconnected_players
+        assert 2 in room.disconnect_times
+        assert 2 in room.players  # still in room
+
+    def test_mark_disconnected_waiting_room_fails(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="race")
+        result = manager.mark_disconnected(room.room_id, 1)
+        assert result is False
+
+    def test_mark_disconnected_nonexistent_room(self, manager):
+        result = manager.mark_disconnected("fake-room", 1)
+        assert result is False
+
+    def test_mark_disconnected_player_not_in_room(self, manager):
+        room = _make_playing_room(manager)
+        result = manager.mark_disconnected(room.room_id, 99)
+        assert result is False
+
+    def test_reconnect_player_success(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        reconnected = manager.reconnect_player(room.room_id, 2)
+        assert reconnected is room
+        assert 2 not in room.disconnected_players
+        assert 2 not in room.disconnect_times
+        assert 2 in room.players
+
+    def test_reconnect_player_not_disconnected(self, manager):
+        room = _make_playing_room(manager)
+        result = manager.reconnect_player(room.room_id, 2)
+        assert result is None
+
+    def test_reconnect_player_nonexistent_room(self, manager):
+        result = manager.reconnect_player("fake-room", 2)
+        assert result is None
+
+    def test_reconnect_window_expired(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        # Push disconnect time past the window
+        room.disconnect_times[2] = (
+            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+        )
+        result = manager.reconnect_player(room.room_id, 2)
+        assert result is None
+
+    def test_reconnect_within_window(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        # Still within window
+        room.disconnect_times[2] = (
+            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS - 10)
+        )
+        result = manager.reconnect_player(room.room_id, 2)
+        assert result is room
+
+    def test_get_pending_rejoin_found(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        pending = manager.get_pending_rejoin(2)
+        assert pending is room
+
+    def test_get_pending_rejoin_no_disconnect(self, manager):
+        _make_playing_room(manager)
+        pending = manager.get_pending_rejoin(2)
+        assert pending is None
+
+    def test_get_pending_rejoin_expired_cleans_up(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        room.disconnect_times[2] = (
+            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+        )
+        pending = manager.get_pending_rejoin(2)
+        assert pending is None
+        # Player should be removed from room
+        assert 2 not in room.players
+        assert manager.get_user_room(2) is None
+
+    def test_get_pending_rejoin_unknown_user(self, manager):
+        assert manager.get_pending_rejoin(999) is None
+
+    def test_expire_disconnected_players_removes_expired(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        room.disconnect_times[2] = (
+            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+        )
+        expired = manager.expire_disconnected_players(room.room_id)
+        assert expired == [2]
+        assert 2 not in room.players
+        assert 2 not in room.disconnected_players
+        assert manager.get_user_room(2) is None
+
+    def test_expire_disconnected_nobody_expired(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        # Just disconnected — not expired yet
+        expired = manager.expire_disconnected_players(room.room_id)
+        assert expired == []
+        assert 2 in room.players
+
+    def test_expire_disconnected_nonexistent_room(self, manager):
+        expired = manager.expire_disconnected_players("nonexistent")
+        assert expired == []
+
+    def test_reconnect_preserves_room_state(self, manager):
+        room = _make_playing_room(manager)
+        room.player_names[2] = "Bob"
+        manager.mark_disconnected(room.room_id, 2)
+        reconnected = manager.reconnect_player(room.room_id, 2)
+        assert reconnected.player_names[2] == "Bob"
+        assert reconnected.status == "playing"
+
+    def test_get_rooms_for_disconnected_player(self, manager):
+        room = _make_playing_room(manager)
+        manager.mark_disconnected(room.room_id, 2)
+        # Player is still in the room
+        rooms = manager.get_rooms_for_player(2)
+        assert len(rooms) == 1
+        assert rooms[0].room_id == room.room_id

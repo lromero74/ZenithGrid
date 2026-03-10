@@ -53,6 +53,7 @@ from app.routers import friends_router  # Friends & social
 from app.routers import game_history_router  # Game history & privacy
 from app.routers import tournament_router  # Multiplayer tournaments
 from app.routers import display_name_router  # Display name management
+from app.routers import sessions_router  # Session management for multiplayer
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
@@ -178,6 +179,7 @@ app.include_router(friends_router.search_router)  # User search
 app.include_router(game_history_router.router)  # Game history & privacy
 app.include_router(tournament_router.router)  # Multiplayer tournaments
 app.include_router(display_name_router.router)  # Display name management
+app.include_router(sessions_router.router)  # Session management for multiplayer
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -757,26 +759,38 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
     except WebSocketDisconnect:
         pass
     finally:
-        # Clean up game room on disconnect
+        # Notify other players of disconnect (abend — not a forfeit/loss)
+        from app.services.game_ws_handler import handle_player_disconnect
+        await handle_player_disconnect(ws_manager, user_id)
+
+        # Clean up game room on disconnect — but NOT if game is in progress
+        # (disconnected players get a reconnect window before being removed)
         from app.services.game_room_manager import game_room_manager
         room_id = game_room_manager.get_user_room(user_id)
         if room_id:
             room = game_room_manager.get_room(room_id)
             if room:
-                players_before = set(room.players)
-                is_host = user_id == room.host_user_id
-                game_room_manager.leave_room(room_id, user_id)
-                if is_host:
-                    await ws_manager.send_to_room(
-                        players_before - {user_id},
-                        {"type": "game:room_closed", "roomId": room_id, "reason": "Host disconnected"},
-                    )
-                elif room_id in game_room_manager._rooms:
-                    await ws_manager.send_to_room(
-                        room.players,
-                        {"type": "game:player_left", "roomId": room_id, "playerId": user_id,
-                         "players": list(room.players)},
-                    )
+                if room.status == "playing":
+                    # Game in progress — player stays in room as "disconnected"
+                    # handle_player_disconnect already marked them; they can rejoin
+                    pass
+                else:
+                    # Waiting/finished — remove normally
+                    players_before = set(room.players)
+                    is_host = user_id == room.host_user_id
+                    game_room_manager.leave_room(room_id, user_id)
+                    if is_host:
+                        await ws_manager.send_to_room(
+                            players_before - {user_id},
+                            {"type": "game:room_closed", "roomId": room_id,
+                             "reason": "Host disconnected"},
+                        )
+                    elif room_id in game_room_manager._rooms:
+                        await ws_manager.send_to_room(
+                            room.players,
+                            {"type": "game:player_left", "roomId": room_id,
+                             "playerId": user_id, "players": list(room.players)},
+                        )
         # Opportunistically clean up stale rooms on disconnect
         game_room_manager.cleanup_stale_rooms()
         await ws_manager.disconnect(websocket)
