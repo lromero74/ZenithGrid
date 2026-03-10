@@ -688,7 +688,10 @@ const BotCard = memo(function BotCard({ bot, onNavigate: _onNavigate }: { bot: B
               <span className={`font-semibold ${
                 stats.total_profit_quote >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {stats.total_profit_quote >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_quote, 6)} BTC
+                {stats.quote_currency === 'USD'
+                  ? `${stats.total_profit_quote >= 0 ? '+' : ''}$${Math.abs(stats.total_profit_quote).toFixed(2)}`
+                  : `${stats.total_profit_quote >= 0 ? '+' : ''}${formatCrypto(stats.total_profit_quote, 6)} BTC`
+                }
               </span>
             </div>
           </>
