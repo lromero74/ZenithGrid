@@ -238,6 +238,7 @@ export interface Bot {
   budget_utilization_percentage?: number;
   account_id?: number | null;  // For multi-account support
   exchange_type?: 'cex' | 'dex';  // Exchange type
+  quote_currency?: string;  // Quote currency for bot's pairs (BTC or USD)
   open_positions_count?: number;  // Number of open positions for this bot
 }
 

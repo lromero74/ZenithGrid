@@ -5,6 +5,28 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.99.0] - 2026-03-10
+
+### Added
+- **Connect Four gravity drop**: Discs now fall under gravity with a realistic bounce and settle animation, just like the real game
+- **Connect Four drop toggle**: Switch between instant "Snap" placement and natural "Drop" with gravity animation (Drop is default)
+- **Connect Four new game button**: Quick-start a fresh game without changing difficulty
+- **Connect Four realistic discs**: 3D-styled discs with radial gradients, highlights, and inner rings matching real Connect Four pieces
+
+### Changed
+- **Bot profit display**: USD bots now show profit in USD as the primary value (BTC as secondary), and vice versa for BTC bots
+- **Connect Four AI timing**: AI opponent now pauses briefly before making a move for a more natural feel
+- **Connect Four mobile layout**: Controls split into two rows on mobile to prevent crowding; hover indicators hidden on touch devices
+- **Texas Hold'em mobile**: Bid and raise buttons now fit properly on mobile screens
+- **Admin page mobile**: User management page now uses a card-based layout on mobile for easy group editing
+- **Centipede mobile**: Game map now fits within the mobile viewport
+
+### Fixed
+- **Minesweeper mobile unflag**: Long-pressing a flagged cell now correctly removes the flag instead of revealing the cell
+- **Snake mobile input lag**: Swipe controls now respond instantly via touchmove instead of waiting for finger lift
+- **Snake mobile fit**: Game board and D-pad controls now fit on screen without scrolling
+- **Snake pause bug**: Pausing and unpausing no longer restarts the game
+
 ## [v2.98.2] - 2026-03-10
 
 ### Fixed

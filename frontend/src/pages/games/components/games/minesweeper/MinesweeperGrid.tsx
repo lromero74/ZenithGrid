@@ -2,6 +2,7 @@
  * Minesweeper grid — renders the mine board with colored numbers.
  */
 
+import { useRef } from 'react'
 import { Flag, Bomb } from 'lucide-react'
 import type { MineBoard } from './minesweeperEngine'
 
@@ -26,7 +27,9 @@ interface MinesweeperGridProps {
 
 export function MinesweeperGrid({ board, onReveal, onFlag, gameOver, explodedCell }: MinesweeperGridProps) {
   const cols = board[0]?.length ?? 0
-  const longPressRef = { timer: null as ReturnType<typeof setTimeout> | null, fired: false }
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+  const touchHandled = useRef(false)
 
   const handleContextMenu = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault()
@@ -34,16 +37,17 @@ export function MinesweeperGrid({ board, onReveal, onFlag, gameOver, explodedCel
   }
 
   const handleTouchStart = (r: number, c: number) => {
-    longPressRef.fired = false
-    longPressRef.timer = setTimeout(() => {
-      longPressRef.fired = true
+    longPressFired.current = false
+    touchHandled.current = true
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
       if (!gameOver) onFlag(r, c)
     }, 300)
   }
 
   const handleTouchEnd = (r: number, c: number) => {
-    if (longPressRef.timer) clearTimeout(longPressRef.timer)
-    if (!longPressRef.fired && !gameOver) onReveal(r, c)
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    if (!longPressFired.current && !gameOver) onReveal(r, c)
   }
 
   return (
@@ -79,7 +83,10 @@ export function MinesweeperGrid({ board, onReveal, onFlag, gameOver, explodedCel
             <button
               key={`${r}-${c}`}
               className={className}
-              onClick={() => !gameOver && !cell.isFlagged && onReveal(r, c)}
+              onClick={() => {
+                if (touchHandled.current) { touchHandled.current = false; return }
+                if (!gameOver && !cell.isFlagged) onReveal(r, c)
+              }}
               onContextMenu={(e) => handleContextMenu(e, r, c)}
               onTouchStart={() => handleTouchStart(r, c)}
               onTouchEnd={(e) => { e.preventDefault(); handleTouchEnd(r, c) }}

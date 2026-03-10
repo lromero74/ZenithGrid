@@ -203,6 +203,7 @@ async def list_bots(
             response = BotResponse.model_validate(bot)
             response.open_positions_count = open_count
             response.total_positions_count = total_count
+            response.quote_currency = bot.get_quote_currency()
             bot_responses.append(response)
         return bot_responses
 
@@ -246,6 +247,7 @@ async def list_bots(
         bot_response.insufficient_funds = budget["insufficient_funds"]
         bot_response.budget_utilization_percentage = budget["budget_utilization_percentage"]
         bot_response.win_rate = pnl["win_rate"]
+        bot_response.quote_currency = bot.get_quote_currency()
         bot_responses.append(bot_response)
 
     return bot_responses
@@ -278,6 +280,7 @@ async def get_bot(
     bot_response = BotResponse.model_validate(bot)
     bot_response.open_positions_count = open_count
     bot_response.total_positions_count = total_count
+    bot_response.quote_currency = bot.get_quote_currency()
 
     return bot_response
 
