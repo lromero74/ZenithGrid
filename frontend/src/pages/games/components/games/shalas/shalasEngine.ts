@@ -188,7 +188,18 @@ export function hasValidPlay(state: ShalasState): boolean {
   if (source === 'hand') {
     // Check for 4-of-a-kind
     if (hasFourOfAKind(state.hand)) return true
-    return state.hand.some(c => canPlay(c, state))
+    // Check for any playable single card
+    if (state.hand.some(c => canPlay(c, state))) return true
+    // Check for a consecutive run starting at a playable rank
+    const ranks = state.hand.map(c => c.rank).sort((a, b) => a - b)
+    const uniqueRanks = [...new Set(ranks)]
+    for (let i = 0; i < uniqueRanks.length; i++) {
+      if (canPlay({ rank: uniqueRanks[i], suit: 'hearts', faceUp: true }, state)) {
+        // Found a playable starting rank — valid
+        return true
+      }
+    }
+    return false
   }
   if (source === 'pairRow') {
     for (const p of state.pairRow) {
@@ -257,7 +268,18 @@ export function drawOneCard(state: ShalasState): ShalasState {
   return { ...state, hand, drawStack, message: 'Drew a card' }
 }
 
-/** Play one or more same-rank cards from hand by indices. */
+/** Check if card indices form a consecutive ascending run (e.g., 3,4,5 or 9,10,J,Q,K). */
+export function isConsecutiveRun(hand: Card[], indices: number[]): boolean {
+  if (indices.length < 2) return false
+  const ranks = indices.map(i => hand[i].rank).sort((a, b) => a - b)
+  for (let i = 1; i < ranks.length; i++) {
+    if (ranks[i] !== ranks[i - 1] + 1) return false
+  }
+  return true
+}
+
+/** Play one or more cards from hand by indices.
+ *  Supports same-rank groups AND consecutive runs (e.g., 4,5,6,7). */
 export function playFromHand(state: ShalasState, cardIndices: number[]): ShalasState {
   if (state.phase !== 'playing') return state
   if (cardIndices.length === 0) return state
@@ -267,13 +289,58 @@ export function playFromHand(state: ShalasState, cardIndices: number[]): ShalasS
     if (idx < 0 || idx >= state.hand.length) return state
   }
 
-  // All selected cards must be the same rank
-  const rank = state.hand[cardIndices[0]].rank
-  if (!cardIndices.every(i => state.hand[i].rank === rank)) {
-    return { ...state, message: 'All selected cards must be the same rank' }
+  const allSameRank = cardIndices.every(i => state.hand[i].rank === state.hand[cardIndices[0]].rank)
+  const isRun = !allSameRank && isConsecutiveRun(state.hand, cardIndices)
+
+  if (!allSameRank && !isRun) {
+    return { ...state, message: 'Select same-rank cards or a consecutive run' }
   }
 
-  // 4-of-a-kind: automatic wild set
+  // ── Consecutive run play ──────────────────────────────────────────
+  if (isRun) {
+    // Sort by rank ascending — play lowest first
+    const sorted = [...cardIndices].sort((a, b) => state.hand[a].rank - state.hand[b].rank)
+    const lowestCard = state.hand[sorted[0]]
+    const highestCard = state.hand[sorted[sorted.length - 1]]
+
+    // The lowest card in the run must be playable
+    if (!canPlay(lowestCard, state)) {
+      const playedCards = sorted.map(i => ({ ...state.hand[i], faceUp: true }))
+      const remainingHand = state.hand.filter((_, i) => !cardIndices.includes(i))
+      const pickUp = [...state.discardPile, ...playedCards].map(c => ({ ...c, faceUp: true }))
+      return {
+        ...state,
+        hand: [...remainingHand, ...pickUp],
+        discardPile: [],
+        effectiveRank: 0,
+        aceOnTop: false,
+        message: `Can't play run starting at ${rankName(lowestCard.rank)} — picked up the discard pile`,
+      }
+    }
+
+    // Play all cards in the run onto discard — no special effects trigger in runs
+    const playedCards = sorted.map(i => ({ ...state.hand[i], faceUp: true }))
+    const hand = state.hand.filter((_, i) => !cardIndices.includes(i))
+    const discardPile = [...state.discardPile, ...playedCards]
+    const isAce = highestCard.rank === 1
+
+    let next: ShalasState = {
+      ...state,
+      hand,
+      discardPile,
+      effectiveRank: highestCard.rank,
+      aceOnTop: isAce,
+      message: `Run! Played ${rankName(lowestCard.rank)}–${rankName(highestCard.rank)}`,
+    }
+    next = refillHand(next)
+    next = checkEndOfTurn(next)
+    return next
+  }
+
+  // ── Same-rank play (existing logic) ───────────────────────────────
+  const rank = state.hand[cardIndices[0]].rank
+
+  // 4-of-a-kind from hand: wild set — player chooses the new rank
   if (cardIndices.length >= 4) {
     const cards = cardIndices.slice(0, 4).map(i => ({ ...state.hand[i], faceUp: true }))
     const hand = state.hand.filter((_, i) => !cardIndices.slice(0, 4).includes(i))
@@ -283,12 +350,11 @@ export function playFromHand(state: ShalasState, cardIndices: number[]): ShalasS
       ...state,
       hand,
       discardPile,
-      effectiveRank: 1, // reset to Ace
-      aceOnTop: true,
-      message: '4-of-a-kind! Discard reset to Ace',
+      aceOnTop: false,
+      phase: 'choose_wild',
+      message: '4-of-a-kind Wild Set! Choose the reset value (A, or 3–K)',
     }
     next = refillHand(next)
-    next = checkEndOfTurn(next)
     return next
   }
 
@@ -305,7 +371,7 @@ export function playFromHand(state: ShalasState, cardIndices: number[]): ShalasS
       discardPile: [],
       effectiveRank: 0,
       aceOnTop: false,
-      message: `Can't play ${rankName(card.rank)} — picked up the discard pile`,
+      message: `Can't play ${rankName(rank)} — picked up the discard pile`,
     }
   }
 
@@ -434,10 +500,39 @@ export function playFromSecondRow(state: ShalasState, cardIndex: number): Shalas
   return resolvePlay({ ...state, secondRow }, { ...card, faceUp: true })
 }
 
+/** Count how many consecutive cards of the given rank sit on top of the discard pile. */
+function countMatchingOnTop(discardPile: Card[], rank: number): number {
+  let count = 0
+  for (let i = discardPile.length - 1; i >= 0; i--) {
+    if (discardPile[i].rank === rank) count++
+    else break
+  }
+  return count
+}
+
 /** Resolve a played card — handle special card effects.
  *  extraCards: additional same-rank cards played alongside the primary card. */
 function resolvePlay(state: ShalasState, card: Card, extraCards: Card[] = []): ShalasState {
   const allPlayed = [card, ...extraCards]
+
+  // ── Cross-discard 4-of-a-kind: cards being played + matching top of discard ─
+  // If together they form 4+, it's a wild set — player chooses the new rank.
+  // Does NOT apply to special cards (2, 7, 10) — their abilities take priority.
+  if (card.rank !== 2 && card.rank !== 7 && card.rank !== 10) {
+    const topMatching = countMatchingOnTop(state.discardPile, card.rank)
+    if (topMatching + allPlayed.length >= 4) {
+      const discardPile = [...state.discardPile, ...allPlayed]
+      let next: ShalasState = {
+        ...state,
+        discardPile,
+        aceOnTop: false,
+        phase: 'choose_wild',
+        message: `4-of-a-kind ${rankName(card.rank)}s! Choose the reset value (A, or 3–K)`,
+      }
+      next = refillHand(next)
+      return next
+    }
+  }
 
   // ── 10: Destroyer (only if discard pile has cards) ──────────────
   if (card.rank === 10 && state.discardPile.length > 0) {
@@ -502,11 +597,40 @@ function resolvePlay(state: ShalasState, card: Card, extraCards: Card[] = []): S
   return next
 }
 
-/** Complete the wildcard choice — set effective rank. */
+/** Complete the wildcard choice — set effective rank.
+ *  If the chosen rank is 7 (Selector) or 10 (Destroyer), the 2 also
+ *  triggers that card's special ability. */
 export function chooseWildValue(state: ShalasState, rank: number): ShalasState {
   if (state.phase !== 'choose_wild') return state
   // Valid choices: 1 (Ace) or 3–13
   if (rank !== 1 && (rank < 3 || rank > 13)) return state
+
+  // Wildcard mimics the 10 Destroyer
+  if (rank === 10 && state.discardPile.length > 0) {
+    let next: ShalasState = {
+      ...state,
+      burned: [...state.burned, ...state.discardPile],
+      discardPile: [],
+      effectiveRank: 0,
+      aceOnTop: false,
+      phase: 'playing',
+      message: 'Wildcard → Destroyer! Discard pile cleared',
+    }
+    next = checkEndOfTurn(next)
+    return next
+  }
+
+  // Wildcard mimics the 7 Selector
+  if (rank === 7) {
+    let next: ShalasState = {
+      ...state,
+      effectiveRank: 7,
+      aceOnTop: false,
+      phase: 'choose_selector',
+      message: 'Wildcard → Selector! Pick any card from the table to discard',
+    }
+    return next
+  }
 
   let next: ShalasState = {
     ...state,

@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.98.0] - 2026-03-10
+
+### Added
+- **Shalas game timer & leaderboard**: Tracks solve time per game with an arcade-style top 3 leaderboard — enter 3-letter initials on fastest wins (contributed by David Greene)
+- **Shalas consecutive run plays**: Select and play consecutive cards from your hand in one move (e.g., 4-5-6-7) — special card effects don't trigger in runs
+- **Crossword themed backgrounds**: Each puzzle displays a subtle themed background with large emoji behind the grid matching the daily theme (snowmen for winter, rockets for space, etc.)
+
+### Changed
+- **Shalas wildcard 2 mimics specials**: Choosing 7 triggers Selector ability, choosing 10 triggers Destroyer ability
+- **Shalas 4-of-a-kind Wild Set**: Now works like wildcard 2 — player chooses any rank including special abilities; also supports cross-discard counting (hand cards + matching discard pile top)
+- **Shalas hover highlights**: Playable hand cards show a yellow ring on hover
+- **Shalas face-down card confirmation**: Blind plays now require a "Flip & Play" button press instead of immediate play
+- **Crossword grid padding**: Added spacing between outermost cells and the grid border
+- **Crossword clues spacing**: Clues panel now stacks below the grid on mobile with proper padding
+
 ## [v2.97.1] - 2026-03-09
 
 ### Fixed

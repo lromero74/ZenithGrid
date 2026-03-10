@@ -16,6 +16,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import type { Difficulty as SharedDifficulty, GameStatus } from '../../../types'
+import { getThemeBackground } from './crosswordBackgrounds'
 import {
   generatePuzzle,
   createEmptyUserGrid,
@@ -29,6 +30,15 @@ import {
   type Direction,
 } from './crosswordEngine'
 import { CROSSWORD_THEMES } from './crosswordThemes'
+
+// ── Leaderboard ─────────────────────────────────────────────────────
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 
 // ── Saved state ─────────────────────────────────────────────────────
 
@@ -234,6 +244,7 @@ export default function Crossword() {
     saved?.dateStr === today && saved?.difficulty === difficulty ? saved.elapsed : 0,
   )
   const [showHelp, setShowHelp] = useState(false)
+  const [lastWinSeconds, setLastWinSeconds] = useState(0)
 
   // Is today's puzzle at current difficulty already completed?
   const isCompleted = useMemo(() => {
@@ -332,16 +343,18 @@ export default function Crossword() {
   const checkCompletion = useCallback((grid: string[][]) => {
     if (!puzzle) return
     if (isPuzzleComplete(puzzle, grid)) {
-      setGameStatus('won')
       timer.stop()
+      const seconds = timer.seconds
+      setLastWinSeconds(seconds)
       setCompletedDifficulties(prev => {
         const todayList = prev[today] ?? []
         if (todayList.includes(difficulty)) return prev
         const next = { ...prev, [today]: [...todayList, difficulty] }
-        save({ dateStr: today, difficulty, userGrid: grid, gameStatus: 'won', elapsed: timer.seconds, completedDifficulties: next })
+        save({ dateStr: today, difficulty, userGrid: grid, gameStatus: 'won', elapsed: seconds, completedDifficulties: next })
         return next
       })
       clear()
+      setGameStatus('won')
     }
   }, [puzzle, timer, today, difficulty, save, clear])
 
@@ -446,8 +459,9 @@ export default function Crossword() {
     return getWordCells(word).every(([r, c]) => userGrid[r]?.[c] !== '')
   }, [userGrid])
 
-  // Theme display name
+  // Theme display name & background
   const themeDisplay = puzzle?.theme.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) ?? ''
+  const themeBg = useMemo(() => puzzle ? getThemeBackground(puzzle.theme) : null, [puzzle])
 
   // Dynamic cell size — shrink for wider grids so they don't overflow
   // Max grid width ~320px mobile, ~400px desktop; cells should never be smaller than 24px
@@ -499,7 +513,7 @@ export default function Crossword() {
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <GameLayout title="Crossword" timer={gameStatus === 'playing' ? timer.formatted : undefined} controls={controls}>
+    <GameLayout title="Crossword" controls={controls}>
       <div className="flex flex-col items-center space-y-4 w-full max-w-3xl">
 
         {/* Completed banner */}
@@ -545,16 +559,48 @@ export default function Crossword() {
               <p className="text-sm font-medium text-slate-300">{themeDisplay}</p>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-4 w-full items-start justify-center">
+            <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-3 w-full">
               {/* Grid */}
-              <div
-                className="grid gap-0 border-2 border-slate-500 mx-auto shrink-0"
-                style={{ gridTemplateColumns: `repeat(${puzzle.width}, ${cellSize}px)` }}
-              >
+              <div className="relative border-2 border-slate-500 mx-auto shrink-0 p-[2px] overflow-hidden">
+                {/* Theme background inside grid frame */}
+                {themeBg && (
+                  <>
+                    <div
+                      className="absolute inset-0 pointer-events-none z-0"
+                      style={{ background: themeBg.gradient, opacity: themeBg.opacity, filter: 'blur(1px)' }}
+                    />
+                    <div
+                      className="absolute inset-0 pointer-events-none opacity-[0.25] z-0"
+                      style={{ filter: 'blur(2px)' }}
+                    >
+                      {[
+                        { top: '-15%', left: '-10%', rot: -18, size: '16rem' },
+                        { top: '15%', left: '30%', rot: 12, size: '18rem' },
+                        { top: '50%', left: '-5%', rot: -6, size: '15rem' },
+                      ].map((pos, i) => (
+                        <span
+                          key={i}
+                          className="absolute select-none"
+                          style={{
+                            top: pos.top, left: pos.left,
+                            fontSize: pos.size,
+                            transform: `rotate(${pos.rot}deg)`,
+                          }}
+                        >
+                          {themeBg.emoji}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <div
+                  className="relative z-10 grid gap-0"
+                  style={{ gridTemplateColumns: `repeat(${puzzle.width}, ${cellSize}px)` }}
+                >
                 {puzzle.grid.map((row, r) =>
                   row.map((cell, c) => {
                     if (cell.isBlack) {
-                      return <div key={`${r}-${c}`} className="bg-slate-950" style={{ width: cellSize, height: cellSize }} />
+                      return <div key={`${r}-${c}`} className="bg-slate-950/80" style={{ width: cellSize, height: cellSize }} />
                     }
 
                     const viewing = isCompleted && gameStatus === 'idle'
@@ -565,9 +611,9 @@ export default function Crossword() {
                     const isWrong = !viewing && checkedCells.has(cellKey) && userLetter.toUpperCase() !== cell.letter
                     const isRevealed = !viewing && revealedCells.has(cellKey)
 
-                    let bgClass = viewing ? 'bg-emerald-950/30' : 'bg-slate-800'
-                    if (isSelected) bgClass = viewing ? 'bg-emerald-800/40' : 'bg-blue-700/40'
-                    else if (isInWord) bgClass = viewing ? 'bg-emerald-900/25' : 'bg-blue-900/25'
+                    let bgClass = viewing ? 'bg-emerald-950/30' : 'bg-slate-800/70'
+                    if (isSelected) bgClass = viewing ? 'bg-emerald-800/40' : 'bg-blue-700/50'
+                    else if (isInWord) bgClass = viewing ? 'bg-emerald-900/25' : 'bg-blue-900/30'
 
                     // Scale font for smaller cells
                     const fontSize = cellSize >= 36 ? 'text-base' : cellSize >= 28 ? 'text-sm' : 'text-xs'
@@ -594,6 +640,7 @@ export default function Crossword() {
                     )
                   }),
                 )}
+                </div>
               </div>
 
               {/* Clues panel */}
@@ -688,16 +735,14 @@ export default function Crossword() {
         {gameStatus === 'won' && (
           <GameOverModal
             status="won"
-            message={`Solved in ${timer.formatted}! Theme: ${themeDisplay}`}
-            onPlayAgain={() => {
-              // Show the completed grid, then let user pick next difficulty
-              setGameStatus('idle')
-            }}
+            message={`Solved in ${formatTime(lastWinSeconds)}! Theme: ${themeDisplay}`}
+            onPlayAgain={() => setGameStatus('idle')}
             playAgainText="View Puzzle"
             music={music}
             sfx={sfx}
           />
         )}
+
       </div>
 
       {showHelp && <CrosswordHelp onClose={() => setShowHelp(false)} />}
