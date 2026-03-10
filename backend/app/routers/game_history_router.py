@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.database import get_db
 from app.models import User
 from app.models.social import (
@@ -198,7 +198,7 @@ async def list_own_game_history(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """List current user's game history (paginated, optional game_id filter)."""
     return await _build_game_history_response(db, current_user.id, game_id, limit, offset)
@@ -211,7 +211,7 @@ async def view_user_game_history(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """View another user's game history (respecting their privacy settings)."""
     # Verify target user exists
@@ -230,7 +230,7 @@ async def view_user_game_history(
 async def get_game_result_detail(
     game_result_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Get detailed game result. Only participants can view."""
     result = await db.execute(
@@ -286,7 +286,7 @@ async def get_game_result_detail(
 async def update_visibility(
     body: VisibilityUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Update current user's game history visibility settings."""
     result = await db.execute(

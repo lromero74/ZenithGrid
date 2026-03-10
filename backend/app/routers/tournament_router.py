@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.auth.dependencies import require_permission, Perm
 from app.database import get_db
 from app.models import User
 from app.models.social import (
@@ -74,7 +74,7 @@ async def create_tournament(
 @router.get("")
 async def list_tournaments(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """List tournaments the current user has joined (excludes archived)."""
     # Join with creator User to get creator_name
@@ -119,7 +119,7 @@ async def list_tournaments(
 async def get_tournament_detail(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Get tournament details including player list. Must be a participant."""
     result = await db.execute(
@@ -212,7 +212,7 @@ async def join_tournament(
 async def leave_tournament(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Leave a tournament (only if it hasn't started yet)."""
     result = await db.execute(
@@ -245,7 +245,7 @@ async def leave_tournament(
 async def start_tournament(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Start a tournament. Only the creator can start it."""
     result = await db.execute(
@@ -286,7 +286,7 @@ async def start_tournament(
 async def archive_tournament(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Archive a tournament for the current user (hides from list)."""
     result = await db.execute(
@@ -308,7 +308,7 @@ async def archive_tournament(
 async def vote_delete_tournament(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """
     Vote to delete a tournament. Requires majority of players to vote
@@ -390,7 +390,7 @@ async def vote_delete_tournament(
 async def get_tournament_standings(
     tournament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """Get tournament standings sorted by total score descending. Must be a participant."""
     # Check tournament exists

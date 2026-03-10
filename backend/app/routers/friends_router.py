@@ -12,9 +12,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_permission, Perm
 from app.database import get_db
 from app.models import User
+from app.models.auth import user_groups, group_roles, role_permissions, Permission
 from app.models.social import BlockedUser, FriendRequest, Friendship
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ class UserSearchResult(BaseModel):
 @router.get("")
 async def list_friends(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """List all friends of the current user."""
     result = await db.execute(
@@ -79,7 +80,7 @@ async def list_friends(
 async def send_friend_request(
     body: FriendRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Send a friend request by display name."""
     # Find target user
@@ -140,7 +141,7 @@ async def send_friend_request(
 @router.get("/requests")
 async def list_friend_requests(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """List pending incoming friend requests."""
     result = await db.execute(
@@ -164,7 +165,7 @@ async def list_friend_requests(
 @router.get("/requests/sent")
 async def list_sent_friend_requests(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """List pending outgoing friend requests sent by the current user."""
     result = await db.execute(
@@ -189,7 +190,7 @@ async def list_sent_friend_requests(
 async def cancel_sent_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Cancel a friend request you sent."""
     result = await db.execute(
@@ -211,7 +212,7 @@ async def cancel_sent_friend_request(
 async def accept_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Accept a pending friend request — creates bidirectional friendship."""
     result = await db.execute(
@@ -238,7 +239,7 @@ async def accept_friend_request(
 async def reject_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Reject/dismiss a friend request (silent — no block)."""
     result = await db.execute(
@@ -260,7 +261,7 @@ async def reject_friend_request(
 async def remove_friend(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Remove a friend — deletes both direction rows."""
     # Delete both directions
@@ -280,7 +281,7 @@ async def remove_friend(
 async def block_user(
     body: BlockUserRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Block a user. Also removes any existing friendship."""
     if body.user_id == current_user.id:
@@ -330,7 +331,7 @@ async def block_user(
 async def unblock_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> dict:
     """Unblock a user."""
     result = await db.execute(
@@ -351,7 +352,7 @@ async def unblock_user(
 @router.get("/blocked")
 async def list_blocked_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """List all blocked users."""
     result = await db.execute(
@@ -376,7 +377,7 @@ search_router = APIRouter(prefix="/api/users", tags=["users"])
 async def search_users(
     q: str = Query(..., min_length=1, max_length=50),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
 ) -> list[dict]:
     """Search for users by display name. Excludes inactive, self, and blocked users."""
     # Escape LIKE wildcards to prevent pattern injection
@@ -391,6 +392,15 @@ async def search_users(
         )
     ).subquery()
 
+    # Subquery: user IDs that have games:multiplayer permission via RBAC chain
+    multiplayer_user_ids = (
+        select(user_groups.c.user_id)
+        .join(group_roles, user_groups.c.group_id == group_roles.c.group_id)
+        .join(role_permissions, group_roles.c.role_id == role_permissions.c.role_id)
+        .join(Permission, role_permissions.c.permission_id == Permission.id)
+        .where(Permission.name == Perm.GAMES_MULTIPLAYER)
+    ).subquery()
+
     result = await db.execute(
         select(User)
         .where(
@@ -398,6 +408,7 @@ async def search_users(
             User.is_active.is_(True),
             User.id != current_user.id,
             User.id.not_in(select(blocked_ids)),
+            User.id.in_(select(multiplayer_user_ids)),
         )
         .limit(20)
     )
