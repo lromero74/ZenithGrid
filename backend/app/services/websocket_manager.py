@@ -117,6 +117,16 @@ class WebSocketManager:
                     (ws, uid) for ws, uid in self.active_connections if ws not in disconnected
                 ]
 
+    async def send_to_user(self, user_id: int, message: dict):
+        """Send a message to a specific user's connections."""
+        await self.broadcast(message, user_id=user_id)
+
+    async def send_to_room(self, player_ids: set[int], message: dict, exclude_user: int | None = None):
+        """Send a message to all players in a room."""
+        for uid in player_ids:
+            if uid != exclude_user:
+                await self.send_to_user(uid, message)
+
     async def broadcast_order_fill(self, event: OrderFillEvent):
         """Broadcast an order fill event to the owning user's connections"""
         message = {

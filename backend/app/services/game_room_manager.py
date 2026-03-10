@@ -1,0 +1,194 @@
+"""
+Game Room Manager — in-memory game room lifecycle management.
+
+Manages creation, joining, leaving, readiness, starting, actions, and cleanup
+of game rooms for multiplayer games. Rooms are ephemeral (in-memory only);
+game results are persisted separately via game_result_service.
+"""
+
+import logging
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_PLAYERS = 2
+
+
+@dataclass
+class GameRoom:
+    """A single game room instance."""
+    room_id: str
+    game_id: str
+    mode: str  # "vs" or "race"
+    host_user_id: int
+    config: Dict[str, Any] = field(default_factory=dict)
+    players: Set[int] = field(default_factory=set)
+    ready_players: Set[int] = field(default_factory=set)
+    state: Dict[str, Any] = field(default_factory=dict)
+    sequence: int = 0
+    status: str = "waiting"  # "waiting", "playing", "finished"
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+
+    @property
+    def max_players(self) -> int:
+        return self.config.get("max_players", DEFAULT_MAX_PLAYERS)
+
+    def all_ready(self) -> bool:
+        return len(self.players) >= 2 and self.players == self.ready_players
+
+
+class GameRoomManager:
+    """Manages in-memory game rooms."""
+
+    def __init__(self):
+        self._rooms: Dict[str, GameRoom] = {}
+        self._user_rooms: Dict[int, str] = {}  # user_id -> room_id
+
+    def create_room(
+        self,
+        host_user_id: int,
+        game_id: str,
+        mode: str,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> GameRoom:
+        """Create a new game room. Host is auto-added as a player."""
+        if host_user_id in self._user_rooms:
+            raise ValueError("User is already in a room")
+
+        room_id = str(uuid.uuid4())[:8]
+        room = GameRoom(
+            room_id=room_id,
+            game_id=game_id,
+            mode=mode,
+            host_user_id=host_user_id,
+            config=config or {},
+            players={host_user_id},
+        )
+        self._rooms[room_id] = room
+        self._user_rooms[host_user_id] = room_id
+        logger.info(f"Room {room_id} created by user {host_user_id} for {game_id} ({mode})")
+        return room
+
+    def get_room(self, room_id: str) -> Optional[GameRoom]:
+        return self._rooms.get(room_id)
+
+    def get_user_room(self, user_id: int) -> Optional[str]:
+        return self._user_rooms.get(user_id)
+
+    def join_room(self, room_id: str, user_id: int) -> GameRoom:
+        """Add a player to an existing room."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        if room.status != "waiting":
+            raise ValueError("Game has already started")
+        if user_id in self._user_rooms:
+            raise ValueError("User is already in a room")
+        if len(room.players) >= room.max_players:
+            raise ValueError("Room is full")
+
+        room.players.add(user_id)
+        self._user_rooms[user_id] = room_id
+        logger.info(f"User {user_id} joined room {room_id}")
+        return room
+
+    def leave_room(self, room_id: str, user_id: int) -> None:
+        """Remove a player from a room. If host leaves, room is closed."""
+        room = self._rooms.get(room_id)
+        if not room:
+            return
+
+        if user_id == room.host_user_id:
+            # Host leaving closes the room
+            self.close_room(room_id)
+            return
+
+        room.players.discard(user_id)
+        room.ready_players.discard(user_id)
+        self._user_rooms.pop(user_id, None)
+        logger.info(f"User {user_id} left room {room_id}")
+
+    def set_ready(self, room_id: str, user_id: int) -> None:
+        """Mark a player as ready."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        if user_id not in room.players:
+            raise ValueError("User not in room")
+        room.ready_players.add(user_id)
+
+    def start_game(self, room_id: str, user_id: int) -> GameRoom:
+        """Start the game. Only the host can start, and all players must be ready."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        if user_id != room.host_user_id:
+            raise ValueError("Only the host can start the game")
+        if len(room.players) < 2:
+            raise ValueError("Need at least 2 players to start")
+        if not room.all_ready():
+            raise ValueError("Cannot start: not all players ready")
+
+        room.status = "playing"
+        room.started_at = datetime.utcnow()
+        logger.info(f"Game started in room {room_id}")
+        return room
+
+    def record_action(self, room_id: str, user_id: int, action: Dict[str, Any]) -> int:
+        """Record a game action. Returns the sequence number."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        if room.status != "playing":
+            raise ValueError("Game is not in progress")
+        if user_id not in room.players:
+            raise ValueError("User not in room")
+
+        room.sequence += 1
+        return room.sequence
+
+    def update_state(self, room_id: str, state: Dict[str, Any]) -> None:
+        """Update the authoritative game state."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        room.state = state
+
+    def finish_game(self, room_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Mark a game as finished with results."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+
+        room.status = "finished"
+        room.finished_at = datetime.utcnow()
+        room.result = result
+        logger.info(f"Game finished in room {room_id}")
+        return result
+
+    def close_room(self, room_id: str) -> None:
+        """Remove a room and clean up all player references."""
+        room = self._rooms.pop(room_id, None)
+        if not room:
+            return
+
+        for player_id in room.players:
+            self._user_rooms.pop(player_id, None)
+        logger.info(f"Room {room_id} closed")
+
+    def list_rooms(self, game_id: Optional[str] = None) -> List[GameRoom]:
+        """List all rooms, optionally filtered by game_id."""
+        rooms = list(self._rooms.values())
+        if game_id:
+            rooms = [r for r in rooms if r.game_id == game_id]
+        return rooms
+
+
+# Global singleton
+game_room_manager = GameRoomManager()

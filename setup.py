@@ -1994,6 +1994,130 @@ def initialize_database(project_root, db_config=None):
             "ON prop_firm_equity_snapshots(timestamp)"
         )
 
+        # --- Social / Multiplayer Tables ---
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS friendships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_friendship UNIQUE (user_id, friend_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_friendships_user_id ON friendships(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_friendships_friend_id ON friendships(friend_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS friend_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                to_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_friend_request UNIQUE (from_user_id, to_user_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_friend_requests_from ON friend_requests(from_user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_friend_requests_to ON friend_requests(to_user_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS blocked_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_blocked_user UNIQUE (blocker_id, blocked_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_blocked_users_blocker ON blocked_users(blocker_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_blocked_users_blocked ON blocked_users(blocked_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tournaments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR NOT NULL,
+                creator_id INTEGER NOT NULL REFERENCES users(id),
+                game_ids JSON NOT NULL,
+                config JSON,
+                status VARCHAR DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tournaments_creator ON tournaments(creator_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tournament_players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                total_score INTEGER DEFAULT 0,
+                placement INTEGER,
+                archived BOOLEAN DEFAULT 0,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_tournament_player UNIQUE (tournament_id, user_id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_tournament_players_tournament ON tournament_players(tournament_id)"
+        )
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tournament_players_user ON tournament_players(user_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tournament_delete_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_tournament_delete_vote UNIQUE (tournament_id, user_id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_tournament_delete_votes_tournament "
+            "ON tournament_delete_votes(tournament_id)"
+        )
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id VARCHAR NOT NULL,
+                game_id VARCHAR NOT NULL,
+                mode VARCHAR NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                result_data JSON,
+                tournament_id INTEGER REFERENCES tournaments(id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_game_results_room ON game_results(room_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_game_results_game ON game_results(game_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_result_players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_result_id INTEGER NOT NULL REFERENCES game_results(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                placement INTEGER,
+                score INTEGER,
+                is_winner BOOLEAN DEFAULT 0,
+                stats JSON
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_game_result_players_result ON game_result_players(game_result_id)"
+        )
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_game_result_players_user ON game_result_players(user_id)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_history_visibility (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                default_visibility VARCHAR DEFAULT 'all_friends',
+                game_overrides JSON
+            )
+        """)
+
         # Seed default content sources
         # Format: (source_key, name, type, url, website, description, channel_id, category)
         default_sources = [
@@ -3083,7 +3207,7 @@ def seed_rbac_defaults(project_root, admin_user_id):
             "news:read", "news:write",
             "system:monitor", "system:restart", "system:shutdown",
             "admin:users", "admin:groups", "admin:roles", "admin:permissions",
-            "games:play",
+            "games:play", "games:multiplayer",
         ]
         for p in perms:
             idempotent_insert(

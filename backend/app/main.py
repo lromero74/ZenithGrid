@@ -49,6 +49,8 @@ from app.routers import admin_router  # RBAC admin management
 from app.routers import prop_guard_router
 from app.routers import reports_router  # Reporting & goals
 from app.routers import transfers_router  # Deposit/withdrawal tracking
+from app.routers import friends_router  # Friends & social
+from app.routers import display_name_router  # Display name management
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
@@ -169,6 +171,9 @@ app.include_router(admin_router.router)  # RBAC admin management
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
 app.include_router(reports_router.router)  # Reporting & goals
 app.include_router(transfers_router.router)  # Deposit/withdrawal tracking
+app.include_router(friends_router.router)  # Friends & social
+app.include_router(friends_router.search_router)  # User search
+app.include_router(display_name_router.router)  # Display name management
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -722,7 +727,21 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                 await websocket.close(code=4009, reason="Message too large")
                 break
 
-            await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
+            import json as _json
+            try:
+                msg = _json.loads(data)
+            except _json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "error": "Invalid JSON"})
+                continue
+
+            msg_type = msg.get("type", "")
+
+            # Route game messages to game room handler
+            if msg_type.startswith("game:"):
+                from app.services.game_ws_handler import handle_game_message
+                await handle_game_message(ws_manager, websocket, user_id, msg)
+            else:
+                await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
     except WebSocketDisconnect:
         pass
     finally:

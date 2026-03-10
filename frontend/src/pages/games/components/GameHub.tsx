@@ -13,6 +13,7 @@ import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
 import { groupGames } from '../groupGames'
 import { GameCard } from './GameCard'
+import { FriendsPanel } from './social/FriendsPanel'
 import type { GameCategory, GameGroupOption, GameInfo } from '../types'
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
@@ -121,6 +122,11 @@ export function GameHub() {
         <p className="text-slate-400 text-sm hidden sm:block">
           Take a break between trades
         </p>
+      </div>
+
+      {/* Social panel */}
+      <div className="mb-4">
+        <FriendsPanel />
       </div>
 
       {/* Search bar */}
