@@ -5,6 +5,23 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.101.0] - 2026-03-10
+
+### Added
+- **Multiplayer mid-game join**: Host can invite friends to replace AI players during active games (Texas Hold'em first)
+- **Game invite notifications**: Global toast overlay for incoming game invites with Accept/Decline buttons
+- **Floating Social button**: Access friends panel and social features from within any game, not just the hub
+- **Race mode level announcements**: Multiplayer race opponents see a toast when a player reaches a new level
+- **Sent friend requests tab**: View and cancel pending friend requests you've sent
+- **Display names in Connect Four multiplayer**: Player names shown instead of generic "You"/"Opponent"
+- **Tournaments panel**: Browse, create, join, and manage game tournaments (with defensive loading)
+
+### Fixed
+- **Texas Hold'em blind overflow**: Blinds no longer show astronomical numbers on resumed saved games; replaced exponential scaling with a capped 10-level blind schedule
+- **Texas Hold'em multiplayer routing**: Fixed broken condition that always routed to VS mode instead of Race
+- **Tournaments blank page crash**: Added Array.isArray guard to prevent crash when tournament API returns non-array data
+- **Mobile game filters**: Category filter pills now wrap on mobile instead of requiring horizontal scroll
+
 ## [v2.100.0] - 2026-03-10
 
 ### Added

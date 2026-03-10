@@ -25,6 +25,11 @@ from app.models.reporting import (
     ReportGoal, ExpenseItem, GoalProgressSnapshot,
     ReportSchedule, ReportScheduleGoal, Report, AccountTransfer,
 )
+from app.models.social import (
+    Friendship, FriendRequest, BlockedUser,
+    GameResult, GameResultPlayer, GameHistoryVisibility,
+    Tournament, TournamentPlayer, TournamentDeleteVote,
+)
 from app.models.system import (
     Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog,
 )
@@ -46,6 +51,10 @@ __all__ = [
     "AccountValueSnapshot", "MetricSnapshot", "PropFirmState", "PropFirmEquitySnapshot",
     "ReportGoal", "ExpenseItem", "GoalProgressSnapshot",
     "ReportSchedule", "ReportScheduleGoal", "Report", "AccountTransfer",
+    # Social
+    "Friendship", "FriendRequest", "BlockedUser",
+    "GameResult", "GameResultPlayer", "GameHistoryVisibility",
+    "Tournament", "TournamentPlayer", "TournamentDeleteVote",
     # System
     "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog",
 ]

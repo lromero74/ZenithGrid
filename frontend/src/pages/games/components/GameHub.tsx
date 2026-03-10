@@ -13,6 +13,9 @@ import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
 import { groupGames } from '../groupGames'
 import { GameCard } from './GameCard'
+import { FriendsPanel } from './social/FriendsPanel'
+import { GameHistory } from './social/GameHistory'
+import { Tournaments } from './social/Tournaments'
 import type { GameCategory, GameGroupOption, GameInfo } from '../types'
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
@@ -123,6 +126,13 @@ export function GameHub() {
         </p>
       </div>
 
+      {/* Social panels */}
+      <div className="space-y-2 mb-4">
+        <FriendsPanel />
+        <GameHistory />
+        <Tournaments />
+      </div>
+
       {/* Search bar */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -136,8 +146,8 @@ export function GameHub() {
       </div>
 
       {/* Category pills + Group By dropdown */}
-      <div className="flex items-center justify-between mb-6 gap-3">
-        <div className="flex space-x-2 overflow-x-auto pb-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2 sm:gap-3">
+        <div className="flex flex-wrap gap-2">
           {GAME_CATEGORIES.map(cat => (
             <button
               key={cat.value}
@@ -169,7 +179,7 @@ export function GameHub() {
 
       {/* Card subcategory pills */}
       {activeCategory === 'cards' && (
-        <div className="flex space-x-2 overflow-x-auto pb-1 mb-4 -mt-3">
+        <div className="flex flex-wrap gap-2 mb-4 -mt-3">
           {CARD_SUBCATEGORIES.map(sub => (
             <button
               key={sub.value}

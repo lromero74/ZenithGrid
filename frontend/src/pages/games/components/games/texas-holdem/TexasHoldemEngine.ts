@@ -828,9 +828,23 @@ export function nextHand(state: TexasHoldemState): TexasHoldemState {
   return startHand({ ...state, dealerIdx: newDealer })
 }
 
-/** Increase blinds to the given level (0 = 10/20, 1 = 20/40, 2 = 40/80, ...). */
+/** Standard blind schedule — caps at level 9 (2500/5000). */
+const BLIND_SCHEDULE: [number, number][] = [
+  [10, 20],     // level 0
+  [15, 30],     // level 1
+  [25, 50],     // level 2
+  [50, 100],    // level 3
+  [75, 150],    // level 4
+  [100, 200],   // level 5
+  [150, 300],   // level 6
+  [250, 500],   // level 7
+  [500, 1000],  // level 8
+  [2500, 5000], // level 9 (max)
+]
+
+/** Increase blinds to the given level. Capped at the last entry in the schedule. */
 export function setBlinds(state: TexasHoldemState, level: number): TexasHoldemState {
-  const sb = 10 * Math.pow(2, level)
-  const bb = 20 * Math.pow(2, level)
-  return { ...state, smallBlind: sb, bigBlind: bb, blindLevel: level }
+  const capped = Math.min(level, BLIND_SCHEDULE.length - 1)
+  const [sb, bb] = BLIND_SCHEDULE[capped]
+  return { ...state, smallBlind: sb, bigBlind: bb, blindLevel: capped }
 }

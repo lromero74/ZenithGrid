@@ -29,6 +29,9 @@ import {
   setBlinds,
   type TexasHoldemState,
 } from './TexasHoldemEngine'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { TexasHoldemRace } from './TexasHoldemRace'
+import { TexasHoldemMultiplayer } from './TexasHoldemMultiplayer'
 
 interface SavedState {
   gameState: TexasHoldemState
@@ -222,7 +225,7 @@ function HoldemHelp({ onClose }: { onClose: () => void }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function TexasHoldem() {
+function TexasHoldemSinglePlayer() {
   const { load, save, clear } = useGameState<SavedState>('texas-holdem')
   const saved = useRef(load()).current
 
@@ -584,5 +587,24 @@ export default function TexasHoldem() {
       </div>
       {showHelp && <HoldemHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+export default function TexasHoldem() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'texas-holdem',
+        gameName: 'Texas Hold\'em',
+        modes: ['vs', 'race'],
+        maxPlayers: 4,
+      }}
+      renderSinglePlayer={() => <TexasHoldemSinglePlayer />}
+      renderMultiplayer={(roomId, players, playerNames, mode) => (
+        mode === 'race'
+          ? <TexasHoldemRace roomId={roomId} players={players} />
+          : <TexasHoldemMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
+      )}
+    />
   )
 }

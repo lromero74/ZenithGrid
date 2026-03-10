@@ -23,6 +23,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Render helpers
@@ -357,7 +359,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function DinoRunner() {
+function DinoRunnerSinglePlayer({ onGameEnd }: { onGameEnd?: (score: number) => void } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -815,6 +817,7 @@ export default function DinoRunner() {
         setGameStatus('lost')
         saveScore('dino-runner', Math.floor(next.score))
         sfx.play('die')
+        onGameEnd?.(Math.floor(next.score))
       } else if (next.phase === 'playing' && state.phase === 'waiting') {
         gameStatusRef.current = 'playing'
         setGameStatus('playing')
@@ -1101,5 +1104,48 @@ export default function DinoRunner() {
 
       {showHelp && <DinoRunnerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+function DinoRunnerRaceWrapper({ roomId }: { roomId: string }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'last_to_lose')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((score: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish('loss', score)
+  }, [reportFinish])
+
+  // Report score periodically via a polling effect in the parent
+  // (the single player component handles its own game loop)
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+      />
+      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+export default function DinoRunner() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'dino-runner',
+        gameName: 'Dino Runner',
+        modes: ['race'],
+        maxPlayers: 2,
+      }}
+      renderSinglePlayer={() => <DinoRunnerSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode) => (
+        <DinoRunnerRaceWrapper roomId={roomId} />
+      )}
+    />
   )
 }

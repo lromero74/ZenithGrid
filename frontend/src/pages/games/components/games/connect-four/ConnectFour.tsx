@@ -22,6 +22,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { ConnectFourMultiplayer } from './ConnectFourMultiplayer'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -154,7 +156,7 @@ interface ConnectFourSaved {
   scores: { red: number; yellow: number; draw: number }
 }
 
-export default function ConnectFour() {
+function ConnectFourSinglePlayer() {
   const { load, save, clear } = useGameState<ConnectFourSaved>('connect-four')
   const saved = useRef(load()).current
 
@@ -335,5 +337,22 @@ export default function ConnectFour() {
       {/* Help modal */}
       {showHelp && <ConnectFourHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+export default function ConnectFour() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'connect-four',
+        gameName: 'Connect Four',
+        modes: ['vs', 'race'],
+        maxPlayers: 2,
+      }}
+      renderSinglePlayer={() => <ConnectFourSinglePlayer />}
+      renderMultiplayer={(roomId, players, playerNames, _mode) => (
+        <ConnectFourMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
+      )}
+    />
   )
 }

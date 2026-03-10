@@ -1,0 +1,176 @@
+"""Social models: friendships, friend requests, blocked users, game results, tournaments."""
+
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
+
+from app.database import Base
+
+
+class Friendship(Base):
+    """
+    Bidirectional friend relationship.
+
+    Stored as two rows per friendship: (A→B) and (B→A).
+    Created when recipient accepts a friend request.
+    """
+    __tablename__ = "friendships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    friend_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    friend = relationship("User", foreign_keys=[friend_id])
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "friend_id", name="uq_friendship"),
+    )
+
+
+class FriendRequest(Base):
+    """Pending friend request. Deleted on accept or reject."""
+    __tablename__ = "friend_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    from_user = relationship("User", foreign_keys=[from_user_id])
+    to_user = relationship("User", foreign_keys=[to_user_id])
+
+    __table_args__ = (
+        UniqueConstraint("from_user_id", "to_user_id", name="uq_friend_request"),
+    )
+
+
+class BlockedUser(Base):
+    """User A blocks user B. Prevents friend requests from B to A."""
+    __tablename__ = "blocked_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    blocker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    blocked_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    blocker = relationship("User", foreign_keys=[blocker_id])
+    blocked = relationship("User", foreign_keys=[blocked_id])
+
+    __table_args__ = (
+        UniqueConstraint("blocker_id", "blocked_id", name="uq_blocked_user"),
+    )
+
+
+class GameResult(Base):
+    """Persistent record of a completed multiplayer game."""
+    __tablename__ = "game_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(String, nullable=False, index=True)
+    game_id = Column(String, nullable=False, index=True)
+    mode = Column(String, nullable=False)  # "vs", "race"
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, default=datetime.utcnow)
+    result_data = Column(JSON, nullable=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=True)
+
+    players = relationship("GameResultPlayer", back_populates="game_result", cascade="all, delete-orphan")
+
+
+class GameResultPlayer(Base):
+    """Per-player result within a game."""
+    __tablename__ = "game_result_players"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_result_id = Column(
+        Integer, ForeignKey("game_results.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    placement = Column(Integer, nullable=True)
+    score = Column(Integer, nullable=True)
+    is_winner = Column(Boolean, default=False)
+    stats = Column(JSON, nullable=True)
+
+    game_result = relationship("GameResult", back_populates="players")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class GameHistoryVisibility(Base):
+    """Per-user privacy control for game history sharing."""
+    __tablename__ = "game_history_visibility"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    default_visibility = Column(String, default="all_friends")  # "all_friends", "opponents_only", "private"
+    game_overrides = Column(JSON, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class Tournament(Base):
+    """Multi-game tournament among friends."""
+    __tablename__ = "tournaments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    game_ids = Column(JSON, nullable=False)
+    config = Column(JSON, nullable=True)
+    status = Column(String, default="pending")  # "pending", "active", "completed"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+    creator = relationship("User", foreign_keys=[creator_id])
+    players = relationship("TournamentPlayer", back_populates="tournament", cascade="all, delete-orphan")
+    game_results = relationship("GameResult", backref="tournament")
+
+
+class TournamentPlayer(Base):
+    """Player enrolled in a tournament."""
+    __tablename__ = "tournament_players"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(
+        Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    total_score = Column(Integer, default=0)
+    placement = Column(Integer, nullable=True)
+    archived = Column(Boolean, default=False)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    tournament = relationship("Tournament", back_populates="players")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "user_id", name="uq_tournament_player"),
+    )
+
+
+class TournamentDeleteVote(Base):
+    """Committee vote for tournament deletion. All players must vote to delete."""
+    __tablename__ = "tournament_delete_votes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(
+        Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    voted_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "user_id", name="uq_tournament_delete_vote"),
+    )
