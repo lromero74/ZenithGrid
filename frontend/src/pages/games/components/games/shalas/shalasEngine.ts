@@ -118,6 +118,11 @@ export function createShalasGame(playerCount: 1 | 2 = 1): ShalasState {
   // Remaining cards → draw stack
   const drawStack = deck.slice(i).map(c => ({ ...c, faceUp: false }))
 
+  // Deal opponent hand for 2-player mode
+  const opponentHand: Card[] = playerCount === 2
+    ? drawStack.splice(-5).map(c => ({ ...c, faceUp: true }))
+    : []
+
   return {
     hand,
     secondRow,
@@ -130,7 +135,7 @@ export function createShalasGame(playerCount: 1 | 2 = 1): ShalasState {
     message: 'Play a card from your hand',
     playerCount,
     currentPlayer: 0,
-    opponentHand: [],
+    opponentHand,
     effectiveRank: 0, // 0 = any card can be played (empty discard)
     aceOnTop: false,
     selectedCards: [],
@@ -800,12 +805,34 @@ function checkEndOfTurn(state: ShalasState): ShalasState {
     return { ...state, phase: 'won', message: 'You win! All cards cleared!' }
   }
 
-  // In 2-player, switch turns
-  if (state.playerCount === 2 && state.currentPlayer === 0) {
-    return { ...state, currentPlayer: 1, message: "Opponent's turn" }
+  // In 2-player, switch turns (both directions)
+  if (state.playerCount === 2) {
+    const next = state.currentPlayer === 0 ? 1 : 0
+    return { ...state, currentPlayer: next }
   }
 
   return state
+}
+
+// ── Multiplayer helpers ──────────────────────────────────────────────
+
+/** Swap hand/opponentHand — used so engine functions (which operate on `hand`)
+ *  can be used for player 1 by swapping before and after. */
+function swapPerspective(state: ShalasState): ShalasState {
+  return { ...state, hand: state.opponentHand, opponentHand: state.hand }
+}
+
+/** Apply an engine action from the perspective of a given player.
+ *  Player 0 uses state directly; player 1 swaps hand/opponentHand first. */
+export function applyAsPlayer(
+  state: ShalasState,
+  playerIndex: number,
+  action: (s: ShalasState) => ShalasState,
+): ShalasState {
+  if (playerIndex === 0) return action(state)
+  const swapped = swapPerspective(state)
+  const result = action(swapped)
+  return swapPerspective(result)
 }
 
 /** Get display name for a rank. */

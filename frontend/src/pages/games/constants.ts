@@ -497,6 +497,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['vs'],
   },
 ]
 
