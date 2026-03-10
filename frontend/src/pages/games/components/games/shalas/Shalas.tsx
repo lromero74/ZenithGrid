@@ -5,17 +5,19 @@
  * Responsive: mobile (2-col) and desktop (3-col) layouts.
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE_COMPACT } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
+import { useGameTimer } from '../../../hooks/useGameTimer'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay } from '../../../utils/cardUtils'
+import { getStoragePrefix } from '../../../constants'
 import {
   createShalasGame,
   playFromHand,
@@ -28,6 +30,7 @@ import {
   cantPlay,
   getActiveSource,
   hasValidPlay,
+  isConsecutiveRun,
   rankName,
 } from './shalasEngine'
 import type { ShalasState } from './shalasEngine'
@@ -36,6 +39,143 @@ import type { ShalasState } from './shalasEngine'
 
 interface SavedState {
   gameState: ShalasState
+  elapsedSeconds?: number
+}
+
+// ── Leaderboard ─────────────────────────────────────────────────────
+
+interface LeaderboardEntry {
+  initials: string   // 3 uppercase letters
+  seconds: number    // solve time
+}
+
+const LB_KEY = `${getStoragePrefix()}shalas-lb`
+
+function loadLeaderboard(): LeaderboardEntry[] {
+  try {
+    const raw = localStorage.getItem(LB_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveLeaderboardData(lb: LeaderboardEntry[]): void {
+  try {
+    localStorage.setItem(LB_KEY, JSON.stringify(lb))
+  } catch { /* quota exceeded */ }
+}
+
+function qualifiesForLeaderboard(lb: LeaderboardEntry[], seconds: number): boolean {
+  if (lb.length < 3) return true
+  return seconds < lb[lb.length - 1].seconds
+}
+
+function insertIntoLeaderboard(lb: LeaderboardEntry[], entry: LeaderboardEntry): LeaderboardEntry[] {
+  return [...lb, entry].sort((a, b) => a.seconds - b.seconds).slice(0, 3)
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+// ── Initials Entry Modal ────────────────────────────────────────────
+
+function InitialsEntry({
+  seconds,
+  rank,
+  leaderboard,
+  onSubmit,
+}: {
+  seconds: number
+  rank: number
+  leaderboard: LeaderboardEntry[]
+  onSubmit: (initials: string) => void
+}) {
+  const [chars, setChars] = useState(['A', 'A', 'A'])
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  const handleChange = (index: number, value: string) => {
+    const letter = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(-1)
+    if (!letter) return
+    const next = [...chars]
+    next[index] = letter
+    setChars(next)
+    if (index < 2) inputRefs.current[index + 1]?.focus()
+  }
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && index > 0 && chars[index] === 'A') {
+      inputRefs.current[index - 1]?.focus()
+    }
+    if (e.key === 'Enter') {
+      onSubmit(chars.join(''))
+    }
+  }
+
+  useEffect(() => {
+    inputRefs.current[0]?.focus()
+  }, [])
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] animate-fade-in">
+      <div className="bg-slate-800 border border-yellow-600/50 rounded-xl p-6 text-center max-w-xs w-full mx-4 animate-scale-in">
+        <div className="text-yellow-400 text-3xl mb-2">&#9733;</div>
+        <h2 className="text-xl font-bold text-yellow-400 mb-1">Top {rank}!</h2>
+        <p className="text-slate-400 text-sm mb-1">Time: {formatTime(seconds)}</p>
+        <p className="text-slate-300 text-sm mb-4">Enter your initials</p>
+
+        <div className="flex justify-center gap-2 mb-4">
+          {[0, 1, 2].map(i => (
+            <input
+              key={i}
+              ref={el => { inputRefs.current[i] = el }}
+              type="text"
+              maxLength={1}
+              value={chars[i]}
+              onChange={e => handleChange(i, e.target.value)}
+              onKeyDown={e => handleKeyDown(i, e)}
+              onFocus={e => e.target.select()}
+              className="w-12 h-14 text-center text-2xl font-bold font-mono bg-slate-900 border-2 border-yellow-600/60
+                text-yellow-400 rounded-lg focus:border-yellow-400 focus:outline-none uppercase caret-transparent"
+            />
+          ))}
+        </div>
+
+        <div className="mb-4 text-xs">
+          <LeaderboardTable entries={leaderboard} />
+        </div>
+
+        <button
+          onClick={() => onSubmit(chars.join(''))}
+          className="px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Leaderboard Display ─────────────────────────────────────────────
+
+function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+  if (entries.length === 0) return <p className="text-slate-500 text-[0.6rem]">No times yet</p>
+  const medals = ['🥇', '🥈', '🥉']
+  return (
+    <table className="w-full text-center">
+      <tbody>
+        {entries.map((e, i) => (
+          <tr key={i} className="text-slate-400">
+            <td className="py-0.5 w-6 text-sm">{medals[i] ?? ''}</td>
+            <td className="py-0.5 font-mono font-bold tracking-widest text-xs">{e.initials}</td>
+            <td className="py-0.5 font-mono text-xs">{formatTime(e.seconds)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 }
 
 // ── Wild value choices ───────────────────────────────────────────────
@@ -114,8 +254,10 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
             <SpecialCard color="text-cyan-400" name="2 — Wildcard">
               Always playable regardless of the current rank. After playing
               a 2, you <B>choose the new effective rank</B> (Ace, or 3
-              through King). The 2 stays on the discard pile. Great for
-              resetting a high pile back down.
+              through King). The 2 stays on the discard pile. If you
+              choose <B>7</B>, the Selector ability triggers — pick a
+              table card. If you choose <B>10</B>, the Destroyer ability
+              triggers — the discard pile is cleared.
             </SpecialCard>
             <SpecialCard color="text-emerald-400" name="7 — Selector">
               Always playable. After playing a 7, <B>pick any card from the
@@ -129,10 +271,14 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
               only lower cards or special cards (2, 7, 10) can follow.
             </SpecialCard>
             <SpecialCard color="text-purple-400" name="4-of-a-Kind — Wild Set">
-              If you hold all 4 cards of the same rank, play them all at
-              once. <B>Always valid regardless of the current rank.</B> All
-              4 cards go on the discard pile and the effective rank resets
-              to Ace.
+              If you play cards that complete a set of 4 matching the same
+              rank, it becomes a Wild Set. This can happen by playing 4 from
+              your hand at once, <B>or</B> by playing cards that match the
+              top of the discard pile to reach 4. For example, if a 6 is on
+              top of the discard and you play three 6s, that&apos;s a
+              4-of-a-kind. Works just like the <B>2 Wildcard</B> — you
+              choose the new rank (A, or 3–K), and choosing 7 or 10
+              triggers their special abilities too.
             </SpecialCard>
           </div>
         </Section>
@@ -249,21 +395,41 @@ export default function Shalas() {
   // Help modal
   const [showHelp, setShowHelp] = useState(false)
 
+  // Timer & leaderboard
+  const timer = useGameTimer(load()?.elapsedSeconds ?? 0)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(loadLeaderboard)
+  const [showInitialsEntry, setShowInitialsEntry] = useState(false)
+  const [lastWinSeconds, setLastWinSeconds] = useState(0)
+
   // Undo support — store previous state
   const [prevState, setPrevState] = useState<ShalasState | null>(null)
 
   // Persist on changes
   const updateState = useCallback((newState: ShalasState) => {
+    // Start timer on first play action
+    if (!timer.isRunning && newState.phase !== 'won' && newState.phase !== 'lost') {
+      timer.start()
+    }
     setGameState(prev => {
       setPrevState(prev)
       return newState
     })
     if (newState.phase !== 'won' && newState.phase !== 'lost') {
-      save({ gameState: newState })
+      save({ gameState: newState, elapsedSeconds: timer.seconds })
     } else {
+      // Win — stop timer, check leaderboard
+      timer.stop()
+      if (newState.phase === 'won') {
+        const seconds = timer.seconds
+        setLastWinSeconds(seconds)
+        const lb = loadLeaderboard()
+        if (qualifiesForLeaderboard(lb, seconds)) {
+          setShowInitialsEntry(true)
+        }
+      }
       clear()
     }
-  }, [save, clear])
+  }, [save, clear, timer])
 
   const handleUndo = useCallback(() => {
     if (!prevState) return
@@ -277,12 +443,15 @@ export default function Shalas() {
     setGameState(createShalasGame())
     setSelectedHandIndices([])
     setPrevState(null)
+    timer.reset()
+    setShowInitialsEntry(false)
     clear()
-  }, [clear])
+  }, [clear, timer])
 
   // ── Hand selection state ────────────────────────────────────────
 
   const [selectedHandIndices, setSelectedHandIndices] = useState<number[]>([])
+  const [selectedBlindCard, setSelectedBlindCard] = useState<{ source: 'stackRow' | 'pairRow'; stackIndex: number; position?: 'faceDown' } | null>(null)
 
   // ── Game actions ─────────────────────────────────────────────────
 
@@ -296,7 +465,7 @@ export default function Shalas() {
   }, [activeSource, gameState, updateState])
 
   // Clear selection when game state changes phase or hand changes length
-  const clearSelection = useCallback(() => setSelectedHandIndices([]), [])
+  const clearSelection = useCallback(() => { setSelectedHandIndices([]); setSelectedBlindCard(null) }, [])
 
   const handleHandClick = useCallback((index: number) => {
     if (gameState.phase === 'choose_selector') {
@@ -314,16 +483,26 @@ export default function Shalas() {
       // Deselect
       setSelectedHandIndices(prev => prev.filter(i => i !== index))
     } else {
-      // Can only select cards of the same rank as already selected
       if (selectedHandIndices.length > 0) {
-        const selectedRank = gameState.hand[selectedHandIndices[0]].rank
-        if (clickedCard.rank !== selectedRank) {
-          // Different rank — start a new selection
-          setSelectedHandIndices([index])
-          return
+        const firstRank = gameState.hand[selectedHandIndices[0]].rank
+        const allSameRank = selectedHandIndices.every(i => gameState.hand[i].rank === firstRank)
+
+        if (allSameRank && clickedCard.rank === firstRank) {
+          // Adding another card of the same rank — extend same-rank group
+          setSelectedHandIndices(prev => [...prev, index])
+        } else {
+          // Check if adding this card forms a valid consecutive run
+          const newIndices = [...selectedHandIndices, index]
+          if (isConsecutiveRun(gameState.hand, newIndices)) {
+            setSelectedHandIndices(newIndices)
+          } else {
+            // Can't form a group or run — start a new selection
+            setSelectedHandIndices([index])
+          }
         }
+      } else {
+        setSelectedHandIndices([index])
       }
-      setSelectedHandIndices(prev => [...prev, index])
     }
   }, [gameState, activeSource, selectedHandIndices, sfx, updateState, clearSelection])
 
@@ -356,6 +535,13 @@ export default function Shalas() {
       return
     }
     if (gameState.phase !== 'playing' || activeSource !== 'pairRow') return
+    // Face-down: select for confirmation instead of immediate play
+    if (position === 'faceDown') {
+      setSelectedBlindCard(prev =>
+        prev?.source === 'pairRow' && prev.stackIndex === stackIndex ? null : { source: 'pairRow', stackIndex, position: 'faceDown' }
+      )
+      return
+    }
     const result = playFromPairRow(gameState, stackIndex, position)
     if (result !== gameState) sfx.play('place')
     updateState(result)
@@ -368,10 +554,11 @@ export default function Shalas() {
       return
     }
     if (gameState.phase !== 'playing' || activeSource !== 'stackRow') return
-    const result = playFromStackRow(gameState, stackIndex)
-    if (result !== gameState) sfx.play('flip')
-    updateState(result)
-  }, [gameState, activeSource, updateState, sfx])
+    // Select for confirmation instead of immediate play
+    setSelectedBlindCard(prev =>
+      prev?.source === 'stackRow' && prev.stackIndex === stackIndex ? null : { source: 'stackRow', stackIndex }
+    )
+  }, [gameState, activeSource])
 
   const handleSecondRowClick = useCallback((index: number) => {
     if (gameState.phase === 'choose_selector') {
@@ -384,6 +571,20 @@ export default function Shalas() {
     if (result !== gameState) sfx.play('place')
     updateState(result)
   }, [gameState, activeSource, updateState, sfx])
+
+  const handlePlayBlindCard = useCallback(() => {
+    if (!selectedBlindCard) return
+    if (selectedBlindCard.source === 'stackRow') {
+      const result = playFromStackRow(gameState, selectedBlindCard.stackIndex)
+      if (result !== gameState) sfx.play('flip')
+      updateState(result)
+    } else if (selectedBlindCard.source === 'pairRow') {
+      const result = playFromPairRow(gameState, selectedBlindCard.stackIndex, 'faceDown')
+      if (result !== gameState) sfx.play('flip')
+      updateState(result)
+    }
+    setSelectedBlindCard(null)
+  }, [selectedBlindCard, gameState, updateState, sfx])
 
   const handleWildChoice = useCallback((rank: number) => {
     sfx.play('place')
@@ -402,6 +603,14 @@ export default function Shalas() {
     updateState(cantPlay(gameState))
   }, [gameState, updateState, sfx])
 
+  const handleInitialsSubmit = useCallback((initials: string) => {
+    const lb = loadLeaderboard()
+    const updated = insertIntoLeaderboard(lb, { initials, seconds: lastWinSeconds })
+    saveLeaderboardData(updated)
+    setLeaderboard(updated)
+    setShowInitialsEntry(false)
+  }, [lastWinSeconds])
+
   // ── Derived state ────────────────────────────────────────────────
 
   const canPlayerPlay = gameState.phase === 'playing' && hasValidPlay(gameState)
@@ -418,7 +627,7 @@ export default function Shalas() {
       return { label: '4-of-a-Kind', desc: 'Resets discard to Ace. All 4 cards stay on pile.', color: 'text-purple-400' }
     }
     if (rank === 10) return { label: 'Destroyer', desc: 'Removes itself + entire discard pile from the game.', color: 'text-red-400' }
-    if (rank === 2) return { label: 'Wildcard', desc: 'Choose any reset value (A or 3–K). The 2 stays on discard.', color: 'text-cyan-400' }
+    if (rank === 2) return { label: 'Wildcard', desc: 'Choose any value (A or 3–K). Choosing 7 triggers Selector, 10 triggers Destroyer.', color: 'text-cyan-400' }
     if (rank === 7) return { label: 'Selector', desc: 'Pick any table card to move to discard.', color: 'text-emerald-400' }
     if (rank === 1) return { label: 'Ace', desc: 'Highest & lowest. Any card can follow except King.', color: 'text-amber-400' }
     return null
@@ -508,15 +717,19 @@ export default function Shalas() {
     <>
       {/* Row 4: pair stacks */}
       <div className={`w-full flex justify-center ${gapPair}`}>
-        {pairRow.map((pair, i) => (
+        {pairRow.map((pair, i) => {
+          const isPairBlindSelected = selectedBlindCard?.source === 'pairRow' && selectedBlindCard.stackIndex === i
+          return (
           <div key={i} className="relative" style={{ width: '4.5rem', height: '5.5rem' }}>
             {pair.faceDown ? (
               <div
-                className={`${CARD_SIZE_COMPACT} absolute top-0 left-0 group ${isClickable('pairRow') && pair.faceUp === null ? 'cursor-pointer' : ''}`}
+                className={`${CARD_SIZE_COMPACT} absolute top-0 left-0 group ${isClickable('pairRow') && pair.faceUp === null ? 'cursor-pointer' : ''} ${
+                  isPairBlindSelected && pair.faceUp === null ? 'ring-2 ring-yellow-400 rounded-md -translate-y-1' : ''
+                }`}
                 onClick={() => pair.faceUp === null && handlePairClick(i, 'faceDown')}
               >
                 <CardBack />
-                {isClickable('pairRow') && pair.faceUp === null && (
+                {isClickable('pairRow') && pair.faceUp === null && !isPairBlindSelected && (
                   <div className="absolute inset-0 rounded-md ring-0 group-hover:ring-2 group-hover:ring-yellow-400 pointer-events-none z-10" />
                 )}
               </div>
@@ -539,12 +752,15 @@ export default function Shalas() {
               <div className={`${CARD_SIZE_COMPACT} absolute rounded-md border border-dashed border-slate-600/20`} style={{ top: '10px', left: '14px' }} />
             ) : null}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Row 3: face-down stacks */}
       <div className={`w-full flex justify-center ${gapStack}`}>
-        {stackRow.map((stack, si) => (
+        {stackRow.map((stack, si) => {
+          const isBlindSelected = selectedBlindCard?.source === 'stackRow' && selectedBlindCard.stackIndex === si
+          return (
           <div
             key={si}
             className={`relative group ${isClickable('stackRow') && stack.length > 0 ? 'cursor-pointer' : ''}`}
@@ -556,10 +772,10 @@ export default function Shalas() {
                 {stack.map((_, ci) => {
                   const isTop = ci === stack.length - 1
                   return (
-                    <div key={ci} className={`${CARD_SIZE_COMPACT} absolute`}
+                    <div key={ci} className={`${CARD_SIZE_COMPACT} absolute ${isTop && isBlindSelected ? 'ring-2 ring-yellow-400 rounded-md -translate-y-1' : ''}`}
                       style={{ top: `${ci * 2}px`, left: `${ci * 1}px`, zIndex: ci }}>
                       <CardBack />
-                      {isTop && isClickable('stackRow') && (
+                      {isTop && isClickable('stackRow') && !isBlindSelected && (
                         <div className="absolute inset-0 rounded-md ring-0 group-hover:ring-2 group-hover:ring-yellow-400 pointer-events-none z-10" />
                       )}
                     </div>
@@ -573,7 +789,8 @@ export default function Shalas() {
               <span className="text-[0.6rem] text-slate-500">{stack.length}</span>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Row 2: face-up cards */}
@@ -614,7 +831,7 @@ export default function Shalas() {
             return (
               <div
                 key={i}
-                className={`${CARD_SIZE_COMPACT} absolute ${
+                className={`${CARD_SIZE_COMPACT} absolute group ${
                   isHandActive ? 'cursor-pointer rounded-md transition-all' : ''
                 } ${isSelected ? 'ring-2 ring-yellow-400 -translate-y-2 rounded-md' : ''}`}
                 style={{ left: leftCalc, top: '0.5rem', zIndex: isSelected ? 50 : i }}
@@ -622,6 +839,9 @@ export default function Shalas() {
                 onDoubleClick={() => handleHandDoubleClick(i)}
               >
                 <CardFace card={card} selected={isSelected} />
+                {isHandActive && !isSelected && (
+                  <div className="absolute inset-0 rounded-md ring-0 group-hover:ring-2 group-hover:ring-yellow-400 pointer-events-none z-10" />
+                )}
               </div>
             )
           }) : (
@@ -635,12 +855,37 @@ export default function Shalas() {
               onClick={handlePlaySelected}
               className="px-4 py-1.5 text-xs rounded bg-emerald-700 text-emerald-100 hover:bg-emerald-600 transition-colors"
             >
-              Play {selectedHandIndices.length > 1
-                ? `${selectedHandIndices.length} × ${getRankDisplay(gameState.hand[selectedHandIndices[0]].rank)}`
-                : getRankDisplay(gameState.hand[selectedHandIndices[0]].rank)}
+              Play {(() => {
+                const allSame = selectedHandIndices.every(i => gameState.hand[i].rank === gameState.hand[selectedHandIndices[0]].rank)
+                if (allSame) {
+                  return selectedHandIndices.length > 1
+                    ? `${selectedHandIndices.length} × ${getRankDisplay(gameState.hand[selectedHandIndices[0]].rank)}`
+                    : getRankDisplay(gameState.hand[selectedHandIndices[0]].rank)
+                }
+                // Consecutive run — show range
+                const ranks = selectedHandIndices.map(i => gameState.hand[i].rank).sort((a, b) => a - b)
+                return `Run ${getRankDisplay(ranks[0])}–${getRankDisplay(ranks[ranks.length - 1])}`
+              })()}
             </button>
             <button
               onClick={clearSelection}
+              className="px-3 py-1.5 text-xs rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {/* Play blind card confirmation */}
+        {selectedBlindCard && gameState.phase === 'playing' && (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={handlePlayBlindCard}
+              className="px-4 py-1.5 text-xs rounded bg-amber-700 text-amber-100 hover:bg-amber-600 transition-colors"
+            >
+              Flip &amp; Play
+            </button>
+            <button
+              onClick={() => setSelectedBlindCard(null)}
               className="px-3 py-1.5 text-xs rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
             >
               Cancel
@@ -713,15 +958,25 @@ export default function Shalas() {
       {/* Wild value chooser */}
       {gameState.phase === 'choose_wild' && (
         <div className="flex flex-wrap justify-center gap-1.5 mb-3 px-2">
-          {WILD_CHOICES.map(rank => (
-            <button
-              key={rank}
-              onClick={() => handleWildChoice(rank)}
-              className="px-2 py-1 text-xs rounded bg-cyan-700 text-cyan-100 hover:bg-cyan-600 transition-colors min-w-[2rem]"
-            >
-              {getRankDisplay(rank)}
-            </button>
-          ))}
+          {WILD_CHOICES.map(rank => {
+            const isSelector = rank === 7
+            const isDestroyer = rank === 10
+            const special = isSelector || isDestroyer
+            return (
+              <button
+                key={rank}
+                onClick={() => handleWildChoice(rank)}
+                className={`px-2 py-1 text-xs rounded transition-colors min-w-[2rem] ${
+                  isSelector ? 'bg-emerald-700 text-emerald-100 hover:bg-emerald-600 ring-1 ring-emerald-400/50'
+                    : isDestroyer ? 'bg-red-700 text-red-100 hover:bg-red-600 ring-1 ring-red-400/50'
+                    : 'bg-cyan-700 text-cyan-100 hover:bg-cyan-600'
+                }`}
+                title={isSelector ? 'Also triggers Selector!' : isDestroyer ? 'Also triggers Destroyer!' : undefined}
+              >
+                {getRankDisplay(rank)}{special ? '*' : ''}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -734,10 +989,20 @@ export default function Shalas() {
 
       {/* ── Mobile layout: two columns ──────────────────────────────── */}
       <div className="flex sm:hidden w-full gap-3">
-        <div className="flex flex-col items-center gap-6 pt-2">
+        <div className="flex flex-col items-center gap-4 pt-2">
           {renderDrawStack()}
           {renderSpecialInfo()}
           {renderDiscardPile()}
+          {/* Timer */}
+          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-2 text-center w-full">
+            <span className="text-[0.55rem] text-slate-500 uppercase tracking-wider block mb-0.5">Time</span>
+            <span className="text-base font-mono font-bold text-white">{timer.formatted}</span>
+          </div>
+          {/* Leaderboard */}
+          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-2 text-center w-full">
+            <span className="text-[0.55rem] text-slate-500 uppercase tracking-wider block mb-1">Best Times</span>
+            <LeaderboardTable entries={leaderboard} />
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center space-y-4">
           {renderTable('gap-4', 'gap-3')}
@@ -746,9 +1011,19 @@ export default function Shalas() {
 
       {/* ── Desktop: three-column layout ────────────────────────────── */}
       <div className="hidden sm:flex w-full max-w-2xl gap-4">
-        <div className="flex flex-col items-center pt-2">
+        <div className="flex flex-col items-center pt-2 gap-4">
           {renderDrawStack()}
           {renderSpecialInfo()}
+          {/* Timer */}
+          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-3 text-center w-full">
+            <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-0.5">Time</span>
+            <span className="text-lg font-mono font-bold text-white">{timer.formatted}</span>
+          </div>
+          {/* Leaderboard */}
+          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-3 text-center w-full">
+            <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-1">Best Times</span>
+            <LeaderboardTable entries={leaderboard} />
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center space-y-4">
           {renderTable('gap-6 sm:gap-8', 'gap-4 sm:gap-6')}
@@ -758,11 +1033,25 @@ export default function Shalas() {
         </div>
       </div>
 
-      {/* Win overlay */}
-      {gameState.phase === 'won' && (
+      {/* Initials entry — shown when player qualifies for top 3 */}
+      {showInitialsEntry && gameState.phase === 'won' && (() => {
+        const lb = leaderboard
+        const rank = lb.length < 3 ? lb.length + 1 : lb.findIndex(e => lastWinSeconds < e.seconds) + 1 || lb.length + 1
+        return (
+          <InitialsEntry
+            seconds={lastWinSeconds}
+            rank={Math.min(rank, 3)}
+            leaderboard={lb}
+            onSubmit={handleInitialsSubmit}
+          />
+        )
+      })()}
+
+      {/* Win overlay — shown after initials entry or if not qualified */}
+      {gameState.phase === 'won' && !showInitialsEntry && (
         <GameOverModal
           status="won"
-          message="All cards cleared!"
+          message={`All cards cleared in ${formatTime(lastWinSeconds)}!`}
           onPlayAgain={handleNewGame}
           music={music}
           sfx={sfx}
