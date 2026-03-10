@@ -5,19 +5,17 @@
  * Responsive: mobile (2-col) and desktop (3-col) layouts.
  */
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE_COMPACT } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
-import { useGameTimer } from '../../../hooks/useGameTimer'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay } from '../../../utils/cardUtils'
-import { getStoragePrefix } from '../../../constants'
 import {
   createShalasGame,
   playFromHand,
@@ -39,143 +37,6 @@ import type { ShalasState } from './shalasEngine'
 
 interface SavedState {
   gameState: ShalasState
-  elapsedSeconds?: number
-}
-
-// ── Leaderboard ─────────────────────────────────────────────────────
-
-interface LeaderboardEntry {
-  initials: string   // 3 uppercase letters
-  seconds: number    // solve time
-}
-
-const LB_KEY = `${getStoragePrefix()}shalas-lb`
-
-function loadLeaderboard(): LeaderboardEntry[] {
-  try {
-    const raw = localStorage.getItem(LB_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return []
-}
-
-function saveLeaderboardData(lb: LeaderboardEntry[]): void {
-  try {
-    localStorage.setItem(LB_KEY, JSON.stringify(lb))
-  } catch { /* quota exceeded */ }
-}
-
-function qualifiesForLeaderboard(lb: LeaderboardEntry[], seconds: number): boolean {
-  if (lb.length < 3) return true
-  return seconds < lb[lb.length - 1].seconds
-}
-
-function insertIntoLeaderboard(lb: LeaderboardEntry[], entry: LeaderboardEntry): LeaderboardEntry[] {
-  return [...lb, entry].sort((a, b) => a.seconds - b.seconds).slice(0, 3)
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-// ── Initials Entry Modal ────────────────────────────────────────────
-
-function InitialsEntry({
-  seconds,
-  rank,
-  leaderboard,
-  onSubmit,
-}: {
-  seconds: number
-  rank: number
-  leaderboard: LeaderboardEntry[]
-  onSubmit: (initials: string) => void
-}) {
-  const [chars, setChars] = useState(['A', 'A', 'A'])
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
-
-  const handleChange = (index: number, value: string) => {
-    const letter = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(-1)
-    if (!letter) return
-    const next = [...chars]
-    next[index] = letter
-    setChars(next)
-    if (index < 2) inputRefs.current[index + 1]?.focus()
-  }
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && index > 0 && chars[index] === 'A') {
-      inputRefs.current[index - 1]?.focus()
-    }
-    if (e.key === 'Enter') {
-      onSubmit(chars.join(''))
-    }
-  }
-
-  useEffect(() => {
-    inputRefs.current[0]?.focus()
-  }, [])
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] animate-fade-in">
-      <div className="bg-slate-800 border border-yellow-600/50 rounded-xl p-6 text-center max-w-xs w-full mx-4 animate-scale-in">
-        <div className="text-yellow-400 text-3xl mb-2">&#9733;</div>
-        <h2 className="text-xl font-bold text-yellow-400 mb-1">Top {rank}!</h2>
-        <p className="text-slate-400 text-sm mb-1">Time: {formatTime(seconds)}</p>
-        <p className="text-slate-300 text-sm mb-4">Enter your initials</p>
-
-        <div className="flex justify-center gap-2 mb-4">
-          {[0, 1, 2].map(i => (
-            <input
-              key={i}
-              ref={el => { inputRefs.current[i] = el }}
-              type="text"
-              maxLength={1}
-              value={chars[i]}
-              onChange={e => handleChange(i, e.target.value)}
-              onKeyDown={e => handleKeyDown(i, e)}
-              onFocus={e => e.target.select()}
-              className="w-12 h-14 text-center text-2xl font-bold font-mono bg-slate-900 border-2 border-yellow-600/60
-                text-yellow-400 rounded-lg focus:border-yellow-400 focus:outline-none uppercase caret-transparent"
-            />
-          ))}
-        </div>
-
-        <div className="mb-4 text-xs">
-          <LeaderboardTable entries={leaderboard} />
-        </div>
-
-        <button
-          onClick={() => onSubmit(chars.join(''))}
-          className="px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          Submit
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Leaderboard Display ─────────────────────────────────────────────
-
-function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
-  if (entries.length === 0) return <p className="text-slate-500 text-[0.6rem]">No times yet</p>
-  const medals = ['🥇', '🥈', '🥉']
-  return (
-    <table className="w-full text-center">
-      <tbody>
-        {entries.map((e, i) => (
-          <tr key={i} className="text-slate-400">
-            <td className="py-0.5 w-6 text-sm">{medals[i] ?? ''}</td>
-            <td className="py-0.5 font-mono font-bold tracking-widest text-xs">{e.initials}</td>
-            <td className="py-0.5 font-mono text-xs">{formatTime(e.seconds)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
 }
 
 // ── Wild value choices ───────────────────────────────────────────────
@@ -395,41 +256,21 @@ export default function Shalas() {
   // Help modal
   const [showHelp, setShowHelp] = useState(false)
 
-  // Timer & leaderboard
-  const timer = useGameTimer(load()?.elapsedSeconds ?? 0)
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(loadLeaderboard)
-  const [showInitialsEntry, setShowInitialsEntry] = useState(false)
-  const [lastWinSeconds, setLastWinSeconds] = useState(0)
-
   // Undo support — store previous state
   const [prevState, setPrevState] = useState<ShalasState | null>(null)
 
   // Persist on changes
   const updateState = useCallback((newState: ShalasState) => {
-    // Start timer on first play action
-    if (!timer.isRunning && newState.phase !== 'won' && newState.phase !== 'lost') {
-      timer.start()
-    }
     setGameState(prev => {
       setPrevState(prev)
       return newState
     })
     if (newState.phase !== 'won' && newState.phase !== 'lost') {
-      save({ gameState: newState, elapsedSeconds: timer.seconds })
+      save({ gameState: newState })
     } else {
-      // Win — stop timer, check leaderboard
-      timer.stop()
-      if (newState.phase === 'won') {
-        const seconds = timer.seconds
-        setLastWinSeconds(seconds)
-        const lb = loadLeaderboard()
-        if (qualifiesForLeaderboard(lb, seconds)) {
-          setShowInitialsEntry(true)
-        }
-      }
       clear()
     }
-  }, [save, clear, timer])
+  }, [save, clear])
 
   const handleUndo = useCallback(() => {
     if (!prevState) return
@@ -443,10 +284,8 @@ export default function Shalas() {
     setGameState(createShalasGame())
     setSelectedHandIndices([])
     setPrevState(null)
-    timer.reset()
-    setShowInitialsEntry(false)
     clear()
-  }, [clear, timer])
+  }, [clear])
 
   // ── Hand selection state ────────────────────────────────────────
 
@@ -602,14 +441,6 @@ export default function Shalas() {
     sfx.play('flip')
     updateState(cantPlay(gameState))
   }, [gameState, updateState, sfx])
-
-  const handleInitialsSubmit = useCallback((initials: string) => {
-    const lb = loadLeaderboard()
-    const updated = insertIntoLeaderboard(lb, { initials, seconds: lastWinSeconds })
-    saveLeaderboardData(updated)
-    setLeaderboard(updated)
-    setShowInitialsEntry(false)
-  }, [lastWinSeconds])
 
   // ── Derived state ────────────────────────────────────────────────
 
@@ -838,7 +669,7 @@ export default function Shalas() {
                 onClick={() => handleHandClick(i)}
                 onDoubleClick={() => handleHandDoubleClick(i)}
               >
-                <CardFace card={card} selected={isSelected} />
+                <CardFace card={card} />
                 {isHandActive && !isSelected && (
                   <div className="absolute inset-0 rounded-md ring-0 group-hover:ring-2 group-hover:ring-yellow-400 pointer-events-none z-10" />
                 )}
@@ -893,6 +724,7 @@ export default function Shalas() {
           </div>
         )}
       </div>
+
     </>
   )
 
@@ -945,16 +777,7 @@ export default function Shalas() {
       controls={controls}
       subtitle={<span className="text-[0.5rem] text-slate-600">&copy; 2026 David Damir Greene</span>}
     >
-      {/* Status message */}
-      <div className="text-center mb-3">
-        <span className="text-xs text-slate-300">{gameState.message}</span>
-        {gameState.effectiveRank > 0 && gameState.phase !== 'choose_wild' && (
-          <span className="text-xs text-amber-400 ml-2">
-            (min: {rankName(gameState.effectiveRank)})
-          </span>
-        )}
-      </div>
-
+      <div className="flex flex-col items-center w-full">
       {/* Wild value chooser */}
       {gameState.phase === 'choose_wild' && (
         <div className="flex flex-wrap justify-center gap-1.5 mb-3 px-2">
@@ -989,20 +812,10 @@ export default function Shalas() {
 
       {/* ── Mobile layout: two columns ──────────────────────────────── */}
       <div className="flex sm:hidden w-full gap-3">
-        <div className="flex flex-col items-center gap-4 pt-2">
+        <div className="flex flex-col items-center gap-6 pt-2">
           {renderDrawStack()}
           {renderSpecialInfo()}
           {renderDiscardPile()}
-          {/* Timer */}
-          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-2 text-center w-full">
-            <span className="text-[0.55rem] text-slate-500 uppercase tracking-wider block mb-0.5">Time</span>
-            <span className="text-base font-mono font-bold text-white">{timer.formatted}</span>
-          </div>
-          {/* Leaderboard */}
-          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-2 text-center w-full">
-            <span className="text-[0.55rem] text-slate-500 uppercase tracking-wider block mb-1">Best Times</span>
-            <LeaderboardTable entries={leaderboard} />
-          </div>
         </div>
         <div className="flex-1 flex flex-col items-center space-y-4">
           {renderTable('gap-4', 'gap-3')}
@@ -1014,16 +827,6 @@ export default function Shalas() {
         <div className="flex flex-col items-center pt-2 gap-4">
           {renderDrawStack()}
           {renderSpecialInfo()}
-          {/* Timer */}
-          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-3 text-center w-full">
-            <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-0.5">Time</span>
-            <span className="text-lg font-mono font-bold text-white">{timer.formatted}</span>
-          </div>
-          {/* Leaderboard */}
-          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-3 text-center w-full">
-            <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-1">Best Times</span>
-            <LeaderboardTable entries={leaderboard} />
-          </div>
         </div>
         <div className="flex-1 flex flex-col items-center space-y-4">
           {renderTable('gap-6 sm:gap-8', 'gap-4 sm:gap-6')}
@@ -1033,25 +836,21 @@ export default function Shalas() {
         </div>
       </div>
 
-      {/* Initials entry — shown when player qualifies for top 3 */}
-      {showInitialsEntry && gameState.phase === 'won' && (() => {
-        const lb = leaderboard
-        const rank = lb.length < 3 ? lb.length + 1 : lb.findIndex(e => lastWinSeconds < e.seconds) + 1 || lb.length + 1
-        return (
-          <InitialsEntry
-            seconds={lastWinSeconds}
-            rank={Math.min(rank, 3)}
-            leaderboard={lb}
-            onSubmit={handleInitialsSubmit}
-          />
-        )
-      })()}
+      {/* Status message */}
+      <div className="text-center mt-3 px-2">
+        <span className="text-xs text-slate-300 break-words">{gameState.message}</span>
+        {gameState.effectiveRank > 0 && gameState.phase !== 'choose_wild' && (
+          <span className="text-[0.65rem] sm:text-xs text-amber-400 ml-1">
+            (min: {rankName(gameState.effectiveRank)})
+          </span>
+        )}
+      </div>
 
-      {/* Win overlay — shown after initials entry or if not qualified */}
-      {gameState.phase === 'won' && !showInitialsEntry && (
+      {/* Win overlay */}
+      {gameState.phase === 'won' && (
         <GameOverModal
           status="won"
-          message={`All cards cleared in ${formatTime(lastWinSeconds)}!`}
+          message="All cards cleared!"
           onPlayAgain={handleNewGame}
           music={music}
           sfx={sfx}
@@ -1060,6 +859,7 @@ export default function Shalas() {
 
       {/* Help modal */}
       {showHelp && <ShalasHelp onClose={() => setShowHelp(false)} />}
+      </div>
     </GameLayout>
   )
 }

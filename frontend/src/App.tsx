@@ -394,11 +394,11 @@ function AppContent() {
         {/* Navigation */}
         <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex space-x-1 min-w-max sm:min-w-0">
+          <div className="flex justify-around sm:justify-start sm:space-x-1 sm:min-w-0">
             {/* Account-Specific Pages */}
             <Link
               to="/"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -411,7 +411,7 @@ function AppContent() {
             </Link>
             <Link
               to="/bots"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/bots'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -424,7 +424,7 @@ function AppContent() {
             </Link>
             <Link
               to="/positions"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/positions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -437,7 +437,7 @@ function AppContent() {
             </Link>
             <Link
               to="/history"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base relative ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base relative ${
                 location.pathname === '/history'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -455,7 +455,7 @@ function AppContent() {
             </Link>
             <Link
               to="/portfolio"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/portfolio'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -475,7 +475,7 @@ function AppContent() {
             {/* General Pages */}
             <Link
               to="/news"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/news'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -488,7 +488,7 @@ function AppContent() {
             </Link>
             <Link
               to="/charts"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/charts'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -501,7 +501,7 @@ function AppContent() {
             </Link>
             <Link
               to="/reports"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/reports'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -514,7 +514,7 @@ function AppContent() {
             </Link>
             <Link
               to="/games"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname.startsWith('/games')
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -527,7 +527,7 @@ function AppContent() {
             </Link>
             <Link
               to="/settings"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/settings'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -541,7 +541,7 @@ function AppContent() {
             {isAdmin && (
               <Link
                 to="/admin"
-                className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                   location.pathname === '/admin'
                     ? 'text-yellow-400 border-b-2 border-yellow-400'
                     : 'text-slate-400 hover:text-yellow-300'

@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.98.1] - 2026-03-10
+
+### Changed
+- **Mobile nav icons**: Navigation icons now distribute evenly across the screen instead of overflowing
+- **Shalas status message**: Game instructions moved to bottom of play area for cleaner layout
+
+### Removed
+- **Shalas timer & leaderboard**: Removed due to mobile layout issues — may revisit in a future release
+
+### Fixed
+- **Shalas card selection double outline**: Fixed duplicate ring effect when selecting cards from hand
+- **Shalas mobile layout**: Wrapped game content in vertical flex container to prevent horizontal overflow
+
 ## [v2.98.0] - 2026-03-10
 
 ### Added
