@@ -43,13 +43,20 @@ async def get_coin_icon(symbol: str) -> Response:
     # Normalize symbol
     symbol_lower = symbol.lower().strip()
     cache_file = CACHE_DIR / f"{symbol_lower}.png"
+    fallback_cache = CACHE_DIR / f"{symbol_lower}.svg"
 
-    # Check cache first
+    # Check cache first (real icon or cached fallback)
     if cache_file.exists():
         return FileResponse(
             cache_file,
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=86400"},  # Cache for 24h
+        )
+    if fallback_cache.exists():
+        return FileResponse(
+            fallback_cache,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     # Fetch from CoinCap
@@ -74,6 +81,7 @@ async def get_coin_icon(symbol: str) -> Response:
         logger.debug(f"Failed to fetch icon for {symbol}: {e}")
 
     # Return fallback SVG with first letter (already validated as alphanumeric)
+    # Cache it on disk so we don't keep hitting CoinCap for unknown symbols
     letter = symbol[0].upper() if symbol else "?"
     fallback_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="30" fill="#3b82f6" opacity="0.2"/>
@@ -81,8 +89,10 @@ async def get_coin_icon(symbol: str) -> Response:
               fill="#3b82f6" text-anchor="middle">{letter}</text>
     </svg>'''
 
+    fallback_cache.write_text(fallback_svg)
+
     return Response(
         content=fallback_svg,
         media_type="image/svg+xml",
-        headers={"Cache-Control": "public, max-age=3600"},  # Cache fallback for 1h
+        headers={"Cache-Control": "public, max-age=86400"},
     )
