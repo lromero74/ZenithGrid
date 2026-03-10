@@ -239,9 +239,14 @@ function B({ children }: { children: React.ReactNode }) {
   return <span className="text-white font-medium">{children}</span>
 }
 
+// ── Multiplayer imports ──────────────────────────────────────────────
+
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { ShalasMultiplayer } from './ShalasMultiplayer'
+
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Shalas() {
+function ShalasSinglePlayer() {
   const { load, save, clear } = useGameState<SavedState>('shalas')
 
   const [gameState, setGameState] = useState<ShalasState>(
@@ -861,5 +866,28 @@ export default function Shalas() {
       {showHelp && <ShalasHelp onClose={() => setShowHelp(false)} />}
       </div>
     </GameLayout>
+  )
+}
+
+// ── Default export with multiplayer wrapper ──────────────────────────
+
+export default function Shalas() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'shalas',
+        gameName: 'Shalas',
+        modes: ['vs'],
+        maxPlayers: 2,
+      }}
+      renderSinglePlayer={() => <ShalasSinglePlayer />}
+      renderMultiplayer={(roomId, players, playerNames) => (
+        <ShalasMultiplayer
+          roomId={roomId}
+          players={players}
+          playerNames={playerNames}
+        />
+      )}
+    />
   )
 }
