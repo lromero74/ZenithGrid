@@ -735,6 +735,7 @@ async def get_bot_stats(
         max_concurrent_deals=max_concurrent_deals,
         total_profit_btc=total_profit,
         total_profit_quote=total_profit,  # Same value, field name frontend expects
+        quote_currency=bot.get_quote_currency(),
         win_rate=win_rate,
         insufficient_funds=insufficient_funds,
         budget_utilization_percentage=budget_utilization_percentage,

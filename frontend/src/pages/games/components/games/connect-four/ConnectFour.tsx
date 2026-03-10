@@ -319,6 +319,7 @@ export default function ConnectFour() {
           hoverCol={hoverCol}
           currentPlayer={currentPlayer}
           droppingDisc={droppingDisc}
+          onDropComplete={() => setDroppingDisc(null)}
         />
 
         {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && (
