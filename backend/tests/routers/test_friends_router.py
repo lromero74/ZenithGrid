@@ -315,6 +315,145 @@ class TestUserSearch:
         matches = result.scalars().all()
         assert len(matches) == 1
 
+    @pytest.mark.asyncio
+    async def test_search_excludes_blocked_users(self, db_session):
+        """Users blocked by searcher or who blocked searcher are excluded."""
+        me = await create_user(db_session, "me@test.com", "Searcher")
+        visible = await create_user(db_session, "visible@test.com", "VisibleUser")
+        i_blocked = await create_user(db_session, "blocked@test.com", "IBlockedThem")
+        blocked_me = await create_user(db_session, "blocker@test.com", "TheyBlockedMe")
+        await db_session.flush()
+
+        # I blocked one user, another blocked me
+        db_session.add(BlockedUser(blocker_id=me.id, blocked_id=i_blocked.id))
+        db_session.add(BlockedUser(blocker_id=blocked_me.id, blocked_id=me.id))
+        await db_session.flush()
+
+        # Build the same query the router uses
+        blocked_ids = select(BlockedUser.blocked_id).where(
+            BlockedUser.blocker_id == me.id
+        ).union(
+            select(BlockedUser.blocker_id).where(
+                BlockedUser.blocked_id == me.id
+            )
+        ).subquery()
+
+        result = await db_session.execute(
+            select(User).where(
+                User.display_name.ilike("%User%") | User.display_name.ilike("%Blocked%")
+                | User.display_name.ilike("%They%"),
+                User.is_active.is_(True),
+                User.id != me.id,
+                User.id.not_in(select(blocked_ids)),
+            )
+        )
+        matches = result.scalars().all()
+        names = {u.display_name for u in matches}
+        assert "VisibleUser" in names
+        assert "IBlockedThem" not in names
+        assert "TheyBlockedMe" not in names
+
+    @pytest.mark.asyncio
+    async def test_search_without_blocks_shows_all(self, db_session):
+        """With no blocks, all active non-self users appear."""
+        me = await create_user(db_session, "me@test.com", "MePlayer")
+        other = await create_user(db_session, "other@test.com", "OtherPlayer")
+        await db_session.flush()
+
+        blocked_ids = select(BlockedUser.blocked_id).where(
+            BlockedUser.blocker_id == me.id
+        ).union(
+            select(BlockedUser.blocker_id).where(
+                BlockedUser.blocked_id == me.id
+            )
+        ).subquery()
+
+        result = await db_session.execute(
+            select(User).where(
+                User.display_name.ilike("%Player%"),
+                User.is_active.is_(True),
+                User.id != me.id,
+                User.id.not_in(select(blocked_ids)),
+            )
+        )
+        matches = result.scalars().all()
+        assert len(matches) == 1
+        assert matches[0].display_name == "OtherPlayer"
+
+
+# =============================================================================
+# Sent Friend Requests
+# =============================================================================
+
+
+class TestSentFriendRequests:
+    """Tests for listing and cancelling sent friend requests."""
+
+    @pytest.mark.asyncio
+    async def test_list_sent_requests(self, db_session):
+        """Sent requests query returns outgoing requests for a user."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        carol = await create_user(db_session, "carol@test.com", "Carol")
+
+        # Alice sends requests to Bob and Carol
+        db_session.add(FriendRequest(from_user_id=alice.id, to_user_id=bob.id))
+        db_session.add(FriendRequest(from_user_id=alice.id, to_user_id=carol.id))
+        # Bob sends request to Carol (should NOT appear in Alice's sent list)
+        db_session.add(FriendRequest(from_user_id=bob.id, to_user_id=carol.id))
+        await db_session.flush()
+
+        result = await db_session.execute(
+            select(FriendRequest).where(
+                FriendRequest.from_user_id == alice.id
+            )
+        )
+        sent = result.scalars().all()
+        assert len(sent) == 2
+        to_ids = {r.to_user_id for r in sent}
+        assert to_ids == {bob.id, carol.id}
+
+    @pytest.mark.asyncio
+    async def test_cancel_sent_request(self, db_session):
+        """Cancelling a sent request removes it."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+
+        req = FriendRequest(from_user_id=alice.id, to_user_id=bob.id)
+        db_session.add(req)
+        await db_session.flush()
+
+        # Cancel (delete) the request
+        await db_session.delete(req)
+        await db_session.flush()
+
+        result = await db_session.execute(
+            select(FriendRequest).where(
+                FriendRequest.from_user_id == alice.id,
+                FriendRequest.to_user_id == bob.id,
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.asyncio
+    async def test_cannot_cancel_other_users_request(self, db_session):
+        """Only the sender can cancel their own request."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+
+        req = FriendRequest(from_user_id=alice.id, to_user_id=bob.id)
+        db_session.add(req)
+        await db_session.flush()
+
+        # Query as Bob (should NOT find Alice's outgoing request)
+        result = await db_session.execute(
+            select(FriendRequest).where(
+                FriendRequest.id == req.id,
+                FriendRequest.from_user_id == bob.id,
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
 
 # =============================================================================
 # Display Name Uniqueness

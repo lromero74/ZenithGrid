@@ -94,6 +94,10 @@ class GameSocketClient {
     this.send({ type: 'game:join', roomId })
   }
 
+  midJoinRoom(roomId: string): void {
+    this.send({ type: 'game:mid_join', roomId })
+  }
+
   leaveRoom(roomId: string): void {
     this.send({ type: 'game:leave', roomId })
   }

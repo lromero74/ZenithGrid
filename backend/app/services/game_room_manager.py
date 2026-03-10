@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_PLAYERS = 2
+ROOM_TTL_SECONDS = 3600  # 1 hour — rooms older than this are cleaned up
 
 
 @dataclass
@@ -26,6 +27,7 @@ class GameRoom:
     host_user_id: int
     config: Dict[str, Any] = field(default_factory=dict)
     players: Set[int] = field(default_factory=set)
+    player_names: Dict[int, str] = field(default_factory=dict)
     ready_players: Set[int] = field(default_factory=set)
     state: Dict[str, Any] = field(default_factory=dict)
     sequence: int = 0
@@ -61,7 +63,7 @@ class GameRoomManager:
         if host_user_id in self._user_rooms:
             raise ValueError("User is already in a room")
 
-        room_id = str(uuid.uuid4())[:8]
+        room_id = uuid.uuid4().hex[:16]
         room = GameRoom(
             room_id=room_id,
             game_id=game_id,
@@ -96,6 +98,23 @@ class GameRoomManager:
         room.players.add(user_id)
         self._user_rooms[user_id] = room_id
         logger.info(f"User {user_id} joined room {room_id}")
+        return room
+
+    def mid_join_room(self, room_id: str, user_id: int) -> GameRoom:
+        """Join a room that is already playing (mid-game join to replace AI)."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+        if room.status != "playing":
+            raise ValueError("Room is not in progress — use regular join")
+        if user_id in self._user_rooms:
+            raise ValueError("User is already in a room")
+        if len(room.players) >= room.max_players:
+            raise ValueError("Room is full")
+
+        room.players.add(user_id)
+        self._user_rooms[user_id] = room_id
+        logger.info(f"User {user_id} mid-game joined room {room_id}")
         return room
 
     def leave_room(self, room_id: str, user_id: int) -> None:
@@ -188,6 +207,19 @@ class GameRoomManager:
         if game_id:
             rooms = [r for r in rooms if r.game_id == game_id]
         return rooms
+
+    def cleanup_stale_rooms(self) -> int:
+        """Remove rooms older than ROOM_TTL_SECONDS. Returns count of cleaned rooms."""
+        now = datetime.utcnow()
+        stale_ids = [
+            room_id for room_id, room in self._rooms.items()
+            if (now - room.created_at).total_seconds() > ROOM_TTL_SECONDS
+        ]
+        for room_id in stale_ids:
+            self.close_room(room_id)
+        if stale_ids:
+            logger.info(f"Cleaned up {len(stale_ids)} stale game rooms")
+        return len(stale_ids)
 
 
 # Global singleton

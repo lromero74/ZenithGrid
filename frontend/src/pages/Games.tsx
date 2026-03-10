@@ -10,6 +10,8 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { GameHub } from './games/components/GameHub'
+import { GameInviteNotification } from './games/components/multiplayer/GameInviteNotification'
+import { FloatingSocialButton } from './games/components/social/FloatingSocialButton'
 
 // Phase 1: Easy Games
 const TicTacToe = lazy(() => import('./games/components/games/tic-tac-toe/TicTacToe'))
@@ -69,11 +71,14 @@ const DinoRunner = lazy(() => import('./games/components/games/dino-runner/DinoR
 
 export default function Games() {
   return (
+    <>
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-[300px]">
         <LoadingSpinner size="lg" text="Loading game..." />
       </div>
     }>
+      <GameInviteNotification />
+      <FloatingSocialButton />
       <Routes>
         <Route index element={<GameHub />} />
         {/* Phase 1: Easy Games */}
@@ -126,5 +131,6 @@ export default function Games() {
         <Route path="dino-runner" element={<DinoRunner />} />
       </Routes>
     </Suspense>
+    </>
   )
 }

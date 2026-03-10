@@ -2,13 +2,15 @@
 Tests for backend/app/services/game_room_manager.py
 
 Covers room lifecycle, player management, message routing,
-and game state management.
+game state management, TTL cleanup, and room ID format.
 """
+
+from datetime import datetime, timedelta
 
 import pytest
 from unittest.mock import AsyncMock
 
-from app.services.game_room_manager import GameRoomManager, GameRoom
+from app.services.game_room_manager import GameRoomManager, GameRoom, ROOM_TTL_SECONDS
 
 
 # =============================================================================
@@ -255,3 +257,175 @@ class TestRoomCleanup:
         rooms = manager.list_rooms(game_id="chess")
         assert len(rooms) == 1
         assert rooms[0].game_id == "chess"
+
+
+# =============================================================================
+# W16: Room ID length
+# =============================================================================
+
+
+class TestRoomIdFormat:
+    """W16: Room IDs should be 16 hex characters."""
+
+    def test_room_id_is_16_hex_chars(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        assert len(room.room_id) == 16
+        # Should be valid hexadecimal
+        int(room.room_id, 16)
+
+    def test_room_ids_are_unique(self, manager):
+        ids = set()
+        for i in range(10):
+            room = manager.create_room(host_user_id=i + 1, game_id="chess", mode="vs")
+            ids.add(room.room_id)
+        assert len(ids) == 10
+
+
+# =============================================================================
+# Mid-game join
+# =============================================================================
+
+
+class TestMidGameJoin:
+    """Tests for mid_join_room — joining an already-playing game."""
+
+    def test_mid_join_playing_room(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 4})
+        manager.join_room(room.room_id, user_id=2)
+        manager.set_ready(room.room_id, user_id=1)
+        manager.set_ready(room.room_id, user_id=2)
+        manager.start_game(room.room_id, user_id=1)
+
+        room = manager.mid_join_room(room.room_id, user_id=3)
+        assert 3 in room.players
+        assert manager.get_user_room(3) == room.room_id
+
+    def test_mid_join_waiting_room_raises(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 4})
+        with pytest.raises(ValueError, match="not in progress"):
+            manager.mid_join_room(room.room_id, user_id=2)
+
+    def test_mid_join_nonexistent_room_raises(self, manager):
+        with pytest.raises(ValueError, match="not found"):
+            manager.mid_join_room("fake-room", user_id=1)
+
+    def test_mid_join_full_room_raises(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 2})
+        manager.join_room(room.room_id, user_id=2)
+        manager.set_ready(room.room_id, user_id=1)
+        manager.set_ready(room.room_id, user_id=2)
+        manager.start_game(room.room_id, user_id=1)
+
+        with pytest.raises(ValueError, match="full"):
+            manager.mid_join_room(room.room_id, user_id=3)
+
+    def test_mid_join_user_already_in_room_raises(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 4})
+        manager.join_room(room.room_id, user_id=2)
+        manager.set_ready(room.room_id, user_id=1)
+        manager.set_ready(room.room_id, user_id=2)
+        manager.start_game(room.room_id, user_id=1)
+
+        with pytest.raises(ValueError, match="already in a room"):
+            manager.mid_join_room(room.room_id, user_id=2)
+
+    def test_mid_join_preserves_game_status(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 4})
+        manager.join_room(room.room_id, user_id=2)
+        manager.set_ready(room.room_id, user_id=1)
+        manager.set_ready(room.room_id, user_id=2)
+        manager.start_game(room.room_id, user_id=1)
+
+        manager.mid_join_room(room.room_id, user_id=3)
+        assert room.status == "playing"
+
+
+# =============================================================================
+# W11: TTL cleanup for stale rooms
+# =============================================================================
+
+
+class TestStaleRoomCleanup:
+    """W11: Cleanup rooms older than TTL."""
+
+    def test_fresh_rooms_not_cleaned(self, manager):
+        manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        cleaned = manager.cleanup_stale_rooms()
+        assert cleaned == 0
+        assert len(manager.list_rooms()) == 1
+
+    def test_stale_room_cleaned_up(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        room.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+
+        cleaned = manager.cleanup_stale_rooms()
+        assert cleaned == 1
+        assert len(manager.list_rooms()) == 0
+        assert manager.get_user_room(1) is None
+
+    def test_cleanup_preserves_fresh_rooms(self, manager):
+        stale = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        stale.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+        manager.create_room(host_user_id=2, game_id="chess", mode="vs")  # fresh
+
+        cleaned = manager.cleanup_stale_rooms()
+        assert cleaned == 1
+        rooms = manager.list_rooms()
+        assert len(rooms) == 1
+        assert manager.get_user_room(2) is not None
+
+    def test_cleanup_frees_all_players_in_stale_room(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        manager.join_room(room.room_id, 2)
+        room.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+
+        manager.cleanup_stale_rooms()
+        assert manager.get_user_room(1) is None
+        assert manager.get_user_room(2) is None
+
+
+# =============================================================================
+# Player names tracking
+# =============================================================================
+
+
+class TestPlayerNames:
+    """Room tracks display names for each player."""
+
+    def test_player_names_dict_exists(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        assert isinstance(room.player_names, dict)
+
+    def test_player_names_set_externally(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        room.player_names[1] = "Alice"
+        manager.join_room(room.room_id, user_id=2)
+        room.player_names[2] = "Bob"
+        assert room.player_names == {1: "Alice", 2: "Bob"}
+
+    def test_mid_join_updates_player_names(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="holdem", mode="vs",
+                                   config={"max_players": 4})
+        manager.join_room(room.room_id, user_id=2)
+        room.player_names[1] = "Alice"
+        room.player_names[2] = "Bob"
+        manager.set_ready(room.room_id, user_id=1)
+        manager.set_ready(room.room_id, user_id=2)
+        manager.start_game(room.room_id, user_id=1)
+        # Mid-game join
+        manager.mid_join_room(room.room_id, user_id=3)
+        room.player_names[3] = "Charlie"
+        assert room.player_names == {1: "Alice", 2: "Bob", 3: "Charlie"}
+        assert 3 in room.players
+
+    def test_close_room_cleans_player_names(self, manager):
+        room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
+        room.player_names[1] = "Alice"
+        room_id = room.room_id
+        manager.close_room(room_id)
+        assert manager.get_room(room_id) is None

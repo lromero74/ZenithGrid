@@ -2,21 +2,21 @@
  * Game Lobby — pre-game room for multiplayer games.
  *
  * Handles room creation, joining, readying up, and game start.
- * Shown before the actual game begins.
+ * Includes friend invite functionality.
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Copy, Check, Play, Loader2 } from 'lucide-react'
+import { Users, Copy, Check, Play, Loader2, UserPlus } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
-// useFriends will be used for invite UI in a future phase
+import { useFriends } from '../../hooks/useFriends'
 
 export interface LobbyProps {
   gameId: string
   gameName: string
   mode: 'vs' | 'race'
   maxPlayers?: number
-  onGameStart: (roomId: string, players: number[]) => void
+  onGameStart: (roomId: string, players: number[], playerNames: Record<number, string>) => void
   onBack: () => void
 }
 
@@ -27,12 +27,14 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
   const [lobbyState, setLobbyState] = useState<LobbyState>('idle')
   const [roomId, setRoomId] = useState<string | null>(null)
   const [players, setPlayers] = useState<number[]>([])
+  const [playerNames, setPlayerNames] = useState<Record<number, string>>({})
   const [readyPlayers, setReadyPlayers] = useState<number[]>([])
   const [isReady, setIsReady] = useState(false)
   const [isHost, setIsHost] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showInvite, setShowInvite] = useState(false)
 
   // Connect WebSocket
   useEffect(() => {
@@ -48,25 +50,29 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
       gameSocket.on('game:created', (msg) => {
         setRoomId(msg.roomId)
         setPlayers(msg.players)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
         setLobbyState('waiting')
         setIsHost(true)
       }),
       gameSocket.on('game:joined', (msg) => {
         setRoomId(msg.roomId)
         setPlayers(msg.players)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
         setLobbyState('waiting')
       }),
       gameSocket.on('game:player_joined', (msg) => {
         setPlayers(msg.players)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
       }),
       gameSocket.on('game:player_left', (msg) => {
         setPlayers(msg.players)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
       }),
       gameSocket.on('game:player_ready', (msg) => {
         setReadyPlayers(msg.readyPlayers)
       }),
       gameSocket.on('game:started', (msg) => {
-        onGameStart(msg.roomId, msg.players)
+        onGameStart(msg.roomId, msg.players, msg.playerNames || {})
       }),
       gameSocket.on('game:room_closed', () => {
         setLobbyState('idle')
@@ -116,10 +122,16 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
     setLobbyState('idle')
     setRoomId(null)
     setPlayers([])
+    setPlayerNames({})
     setReadyPlayers([])
     setIsReady(false)
     setIsHost(false)
   }, [roomId])
+
+  const getDisplayName = (pid: number) => {
+    if (pid === user?.id) return 'You'
+    return playerNames[pid] || `Player ${pid}`
+  }
 
   const allReady = players.length >= 2 && readyPlayers.length === players.length
 
@@ -202,7 +214,7 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
           {players.map(pid => (
             <div key={pid} className="flex items-center justify-between px-3 py-1.5 bg-slate-700/30 rounded">
               <span className="text-sm text-slate-200">
-                {pid === user?.id ? 'You' : `Player ${pid}`}
+                {getDisplayName(pid)}
                 {pid === players[0] && <span className="text-xs text-yellow-400 ml-1">(Host)</span>}
               </span>
               {readyPlayers.includes(pid) ? (
@@ -238,6 +250,14 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
             <Play className="w-4 h-4" /> Start Game
           </button>
         )}
+        {isHost && players.length < maxPlayers && roomId && (
+          <button
+            onClick={() => setShowInvite(!showInvite)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <UserPlus className="w-4 h-4" /> Invite Friend
+          </button>
+        )}
         <button
           onClick={leaveRoom}
           className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors"
@@ -246,9 +266,66 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, onGameStart,
         </button>
       </div>
 
+      {/* Friend invite panel */}
+      {showInvite && roomId && (
+        <FriendInvitePanel roomId={roomId} onClose={() => setShowInvite(false)} />
+      )}
+
       {lobbyState === 'creating' && !roomId && (
         <div className="flex items-center gap-2 text-slate-400 text-sm">
           <Loader2 className="w-4 h-4 animate-spin" /> Creating room...
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ----- Friend Invite Panel -----
+
+function FriendInvitePanel({ roomId, onClose }: { roomId: string; onClose: () => void }) {
+  const { data: friends = [], isLoading } = useFriends()
+  const [invited, setInvited] = useState<Set<number>>(new Set())
+
+  const handleInvite = (friendId: number) => {
+    gameSocket.send({
+      type: 'game:invite',
+      roomId,
+      targetUserId: friendId,
+    })
+    setInvited(prev => new Set(prev).add(friendId))
+  }
+
+  return (
+    <div className="bg-slate-800/80 rounded-lg border border-slate-600 p-3 w-full max-w-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-300">Invite a Friend</span>
+        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-300">Close</button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-xs text-slate-500 py-2">Loading friends...</p>
+      ) : friends.length === 0 ? (
+        <div className="text-xs text-slate-500 py-2">
+          <p>No friends yet.</p>
+          <p className="mt-1">Share the room code: <span className="font-mono text-blue-400">{roomId}</span></p>
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-32 overflow-y-auto">
+          {friends.map(f => (
+            <div key={f.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-slate-700/30">
+              <span className="text-sm text-slate-200">{f.display_name}</span>
+              {invited.has(f.id) ? (
+                <span className="text-[10px] text-green-400">Invited</span>
+              ) : (
+                <button
+                  onClick={() => handleInvite(f.id)}
+                  className="px-2 py-0.5 rounded text-[10px] bg-purple-600/20 text-purple-400 hover:bg-purple-600/40"
+                >
+                  Invite
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

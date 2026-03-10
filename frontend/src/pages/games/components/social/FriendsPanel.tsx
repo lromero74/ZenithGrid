@@ -7,12 +7,14 @@
 
 import { useState } from 'react'
 import {
-  Users, UserPlus, Search, Shield, X, Check,
+  Users, UserPlus, Search, Shield, X, Check, Send,
   ChevronDown, ChevronUp, UserMinus, Ban, Unlock,
 } from 'lucide-react'
 import {
   useFriends,
   useFriendRequests,
+  useSentFriendRequests,
+  useCancelSentRequest,
   useSendFriendRequest,
   useAcceptFriendRequest,
   useRejectFriendRequest,
@@ -23,16 +25,17 @@ import {
   useUserSearch,
 } from '../../hooks/useFriends'
 
-type Tab = 'friends' | 'requests' | 'search' | 'blocked'
+type Tab = 'friends' | 'requests' | 'sent' | 'search' | 'blocked'
 
-export function FriendsPanel() {
+export function FriendsPanel(props: { defaultOpen?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>('friends')
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false)
   const { data: requests = [] } = useFriendRequests()
 
   const tabs: { key: Tab; label: string; icon: typeof Users; badge?: number }[] = [
     { key: 'friends', label: 'Friends', icon: Users },
     { key: 'requests', label: 'Requests', icon: UserPlus, badge: requests.length },
+    { key: 'sent', label: 'Sent', icon: Send },
     { key: 'search', label: 'Search', icon: Search },
     { key: 'blocked', label: 'Blocked', icon: Shield },
   ]
@@ -88,6 +91,7 @@ export function FriendsPanel() {
           {/* Tab content */}
           {activeTab === 'friends' && <FriendsList />}
           {activeTab === 'requests' && <RequestsList />}
+          {activeTab === 'sent' && <SentRequestsList />}
           {activeTab === 'search' && <UserSearchTab />}
           {activeTab === 'blocked' && <BlockedList />}
         </div>
@@ -186,6 +190,37 @@ function RequestsList() {
               <X className="w-3 h-3" />
             </button>
           </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ----- Sent Requests -----
+
+function SentRequestsList() {
+  const { data: sentRequests = [], isLoading } = useSentFriendRequests()
+  const cancelRequest = useCancelSentRequest()
+
+  if (isLoading) return <p className="text-xs text-slate-500 py-2">Loading...</p>
+  if (!sentRequests.length) return <p className="text-xs text-slate-500 py-2">No pending sent requests</p>
+
+  return (
+    <div className="space-y-1 max-h-48 overflow-y-auto">
+      {sentRequests.map(r => (
+        <div key={r.id} className="flex items-center justify-between py-1.5 px-2 rounded bg-slate-700/20">
+          <div className="min-w-0">
+            <span className="text-sm text-slate-200">{r.to_display_name}</span>
+            <p className="text-[10px] text-slate-500">Pending</p>
+          </div>
+          <button
+            onClick={() => cancelRequest.mutate(r.id)}
+            className="p-1 rounded bg-red-600/20 text-red-400 hover:bg-red-600/40"
+            title="Cancel request"
+            disabled={cancelRequest.isPending}
+          >
+            <X className="w-3 h-3" />
+          </button>
         </div>
       ))}
     </div>

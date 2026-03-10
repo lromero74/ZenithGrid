@@ -23,7 +23,7 @@ interface MultiplayerWrapperProps {
   /** Render the single-player game */
   renderSinglePlayer: () => React.ReactNode
   /** Render the multiplayer game with room context */
-  renderMultiplayer: (roomId: string, players: number[]) => React.ReactNode
+  renderMultiplayer: (roomId: string, players: number[], playerNames: Record<number, string>, mode: 'vs' | 'race') => React.ReactNode
 }
 
 export function MultiplayerWrapper({
@@ -35,10 +35,12 @@ export function MultiplayerWrapper({
   const [selectedMode, setSelectedMode] = useState<'vs' | 'race'>(config.modes[0])
   const [roomId, setRoomId] = useState<string | null>(null)
   const [players, setPlayers] = useState<number[]>([])
+  const [playerNames, setPlayerNames] = useState<Record<number, string>>({})
 
-  const handleGameStart = useCallback((rid: string, pids: number[]) => {
+  const handleGameStart = useCallback((rid: string, pids: number[], names: Record<number, string>) => {
     setRoomId(rid)
     setPlayers(pids)
+    setPlayerNames(names)
     setGameMode('playing')
   }, [])
 
@@ -46,6 +48,7 @@ export function MultiplayerWrapper({
     setGameMode('select')
     setRoomId(null)
     setPlayers([])
+    setPlayerNames({})
   }, [])
 
   // Mode selection screen
@@ -108,7 +111,7 @@ export function MultiplayerWrapper({
 
   // Playing — render multiplayer game
   if (gameMode === 'playing' && roomId) {
-    return <>{renderMultiplayer(roomId, players)}</>
+    return <>{renderMultiplayer(roomId, players, playerNames, selectedMode)}</>
   }
 
   return null

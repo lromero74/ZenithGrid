@@ -161,6 +161,52 @@ async def list_friend_requests(
     ]
 
 
+@router.get("/requests/sent")
+async def list_sent_friend_requests(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[dict]:
+    """List pending outgoing friend requests sent by the current user."""
+    result = await db.execute(
+        select(FriendRequest, User)
+        .join(User, FriendRequest.to_user_id == User.id)
+        .where(FriendRequest.from_user_id == current_user.id)
+        .order_by(FriendRequest.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        {
+            "id": req.id,
+            "to_user_id": req.to_user_id,
+            "to_display_name": user.display_name,
+            "created_at": req.created_at.isoformat() if req.created_at else None,
+        }
+        for req, user in rows
+    ]
+
+
+@router.delete("/requests/sent/{request_id}")
+async def cancel_sent_friend_request(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Cancel a friend request you sent."""
+    result = await db.execute(
+        select(FriendRequest).where(
+            FriendRequest.id == request_id,
+            FriendRequest.from_user_id == current_user.id,
+        )
+    )
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=404, detail="Sent request not found")
+
+    await db.delete(req)
+    await db.flush()
+    return {"status": "cancelled"}
+
+
 @router.post("/requests/{request_id}/accept")
 async def accept_friend_request(
     request_id: int,
@@ -332,13 +378,26 @@ async def search_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[dict]:
-    """Search for users by display name. Excludes inactive users and self."""
+    """Search for users by display name. Excludes inactive, self, and blocked users."""
+    # Escape LIKE wildcards to prevent pattern injection
+    q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    # Subquery: user IDs blocked by me or who blocked me
+    blocked_ids = select(BlockedUser.blocked_id).where(
+        BlockedUser.blocker_id == current_user.id
+    ).union(
+        select(BlockedUser.blocker_id).where(
+            BlockedUser.blocked_id == current_user.id
+        )
+    ).subquery()
+
     result = await db.execute(
         select(User)
         .where(
-            User.display_name.ilike(f"%{q}%"),
+            User.display_name.ilike(f"%{q_safe}%"),
             User.is_active.is_(True),
             User.id != current_user.id,
+            User.id.not_in(select(blocked_ids)),
         )
         .limit(20)
     )

@@ -4,6 +4,7 @@
  * Uses React Query for caching and the api service for HTTP requests.
  */
 
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../services/api'
 
@@ -64,6 +65,38 @@ export function useSendFriendRequest() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['friend-requests'] })
+      qc.invalidateQueries({ queryKey: ['sent-friend-requests'] })
+    },
+  })
+}
+
+export interface SentRequestItem {
+  id: number
+  to_user_id: number
+  to_display_name: string
+  created_at: string | null
+}
+
+export function useSentFriendRequests() {
+  return useQuery<SentRequestItem[]>({
+    queryKey: ['sent-friend-requests'],
+    queryFn: async () => {
+      const { data } = await api.get('/friends/requests/sent')
+      return data
+    },
+    staleTime: 15_000,
+  })
+}
+
+export function useCancelSentRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (requestId: number) => {
+      const { data } = await api.delete(`/friends/requests/sent/${requestId}`)
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sent-friend-requests'] })
     },
   })
 }
@@ -151,17 +184,27 @@ export function useBlockedUsers() {
   })
 }
 
-// ----- User Search -----
+// ----- User Search (debounced) -----
+
+function useDebouncedValue(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
+}
 
 export function useUserSearch(query: string) {
+  const debouncedQuery = useDebouncedValue(query, 300)
   return useQuery<UserSearchResult[]>({
-    queryKey: ['user-search', query],
+    queryKey: ['user-search', debouncedQuery],
     queryFn: async () => {
-      if (!query || query.length < 1) return []
-      const { data } = await api.get('/users/search', { params: { q: query } })
+      if (!debouncedQuery || debouncedQuery.length < 1) return []
+      const { data } = await api.get('/users/search', { params: { q: debouncedQuery } })
       return data
     },
-    enabled: query.length >= 1,
+    enabled: debouncedQuery.length >= 1,
     staleTime: 10_000,
   })
 }
