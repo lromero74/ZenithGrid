@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.106.1] - 2026-03-11
+
+### Added
+- **Dedicated Chat page**: Chat now has its own top-level page in the navigation with a MessageSquare icon and unread badge, separate from the Social page
+
+### Changed
+- Social page now focuses on friends, game history, and tournaments — chat has been moved to its own page
+
 ## [v2.106.0] - 2026-03-11
 
 ### Added
