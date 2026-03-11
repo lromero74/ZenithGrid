@@ -25,6 +25,7 @@ import { EmailVerificationPending } from './components/EmailVerificationPending'
 import { MFAEncouragement, MFA_DISMISSED_KEY } from './components/MFAEncouragement'
 import { SessionLimitsNotice } from './components/SessionLimitsNotice'
 import { DemoLogin } from './components/DemoLogin'
+import { useUnreadCounts } from './pages/games/hooks/useChat'
 import { VerifyEmail } from './components/VerifyEmail'
 import { ResetPassword } from './components/ResetPassword'
 import MFAEmailVerify from './components/MFAEmailVerify'
@@ -75,6 +76,12 @@ function AppContent() {
 
   // Get market season for header display
   const { seasonInfo, headerGradient } = useMarketSeason()
+
+  // Chat unread badge for Social nav
+  const { data: chatUnreadCounts } = useUnreadCounts()
+  const totalChatUnread = chatUnreadCounts
+    ? Object.values(chatUnreadCounts).reduce((sum, n) => sum + n, 0)
+    : 0
 
   // Fetch version from backend root endpoint (runs once on app load)
   // Periodic version checking + toast is handled by NotificationContext
@@ -534,9 +541,14 @@ function AppContent() {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2 relative">
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">Social</span>
+                {totalChatUnread > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-blue-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                    {totalChatUnread > 99 ? '99+' : totalChatUnread}
+                  </span>
+                )}
               </div>
             </Link>
             <Link
