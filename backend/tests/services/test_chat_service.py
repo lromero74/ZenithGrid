@@ -169,12 +169,18 @@ class TestCreateGroup:
             await chat_service.create_group(db_session, alice.id, "   ", [1])
 
     @pytest.mark.asyncio
-    async def test_create_group_no_members_raises(self, db_session):
-        """At least one other member is required."""
+    async def test_create_group_no_members_creates_group_of_one(self, db_session):
+        """A group with no additional members creates a group of one (just the creator)."""
         alice = await create_user(db_session, "alice@test.com", "Alice")
 
-        with pytest.raises(ValueError, match="At least one other member"):
-            await chat_service.create_group(db_session, alice.id, "Lonely", [])
+        channel = await chat_service.create_group(db_session, alice.id, "Solo Group", [])
+        assert channel.type == "group"
+        assert channel.name == "Solo Group"
+
+        members = await chat_service.get_channel_members(db_session, channel.id)
+        assert len(members) == 1
+        assert members[0]["user_id"] == alice.id
+        assert members[0]["role"] == "owner"
 
     @pytest.mark.asyncio
     async def test_create_group_non_friend_member_raises(self, db_session):

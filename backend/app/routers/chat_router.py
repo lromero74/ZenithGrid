@@ -43,6 +43,11 @@ class AddMemberRequest(BaseModel):
     user_id: int
 
 
+class UpdateRoleRequest(BaseModel):
+    user_id: int
+    role: str = Field(..., pattern="^(admin|member)$")
+
+
 class RenameChannelRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
 
@@ -107,6 +112,36 @@ async def rename_channel(
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"status": "renamed"}
+
+
+@router.delete("/channels/{channel_id}")
+async def delete_channel(
+    channel_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> dict:
+    """Delete a group or channel. Only the owner can delete."""
+    try:
+        await chat_service.delete_channel(db, channel_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"status": "deleted"}
+
+
+@router.patch("/channels/{channel_id}/roles")
+async def update_member_role(
+    channel_id: int,
+    body: UpdateRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> dict:
+    """Promote or demote a channel member. Only the owner can change roles."""
+    try:
+        return await chat_service.update_member_role(
+            db, channel_id, current_user.id, body.user_id, body.role
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ----- Message Endpoints -----

@@ -18,6 +18,7 @@ import {
   useChatChannels, useChatMessages, useSendMessage,
   useEditMessage, useDeleteMessage, useMarkRead,
   useCreateChannel, useChannelMembers, useAddMember, useRemoveMember,
+  useDeleteChannel, useUpdateMemberRole,
 } from '../../hooks/useChat'
 import { useChatSocket } from '../../hooks/useChatSocket'
 import type { ChatChannel, ChatMessage } from '../../hooks/useChat'
@@ -73,7 +74,7 @@ function NewChatDialog({ onClose, onCreated }: {
           friend_id: selectedFriends[0],
         })
       } else {
-        if (!groupName.trim() || selectedFriends.length === 0) return
+        if (!groupName.trim()) return
         result = await createChannel.mutateAsync({
           type: 'group',
           name: groupName.trim(),
@@ -157,7 +158,7 @@ function NewChatDialog({ onClose, onCreated }: {
         disabled={
           createChannel.isPending ||
           (mode === 'dm' && selectedFriends.length !== 1) ||
-          (mode === 'group' && (!groupName.trim() || selectedFriends.length === 0))
+          (mode === 'group' && !groupName.trim())
         }
         className="w-full py-1.5 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
@@ -377,22 +378,36 @@ function ChannelHeader({ channel, onBack, onShowMembers }: {
 
 // ----- Members Panel -----
 
-function MembersPanel({ channelId, channel, onClose }: {
+function MembersPanel({ channelId, channel, onClose, onDeleted }: {
   channelId: number
   channel: ChatChannel
   onClose: () => void
+  onDeleted: () => void
 }) {
   const { user } = useAuth()
   const { data: members = [] } = useChannelMembers(channelId)
   const { data: friends = [] } = useFriends()
   const addMember = useAddMember()
   const removeMember = useRemoveMember()
+  const deleteChannel = useDeleteChannel()
+  const updateRole = useUpdateMemberRole()
   const [showAdd, setShowAdd] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const canManage = channel.my_role === 'owner' || channel.my_role === 'admin'
+  const isOwner = channel.my_role === 'owner'
+  const canManage = isOwner || channel.my_role === 'admin'
   const memberIds = new Set(members.map(m => m.user_id))
 
   const availableFriends = friends.filter((f: { id: number }) => !memberIds.has(f.id))
+
+  const handleDelete = async () => {
+    try {
+      await deleteChannel.mutateAsync(channelId)
+      onDeleted()
+    } catch {
+      // error handled by mutation
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -413,27 +428,76 @@ function MembersPanel({ channelId, channel, onClose }: {
                 <span className="text-[9px] text-slate-600">(you)</span>
               )}
             </div>
-            {canManage && m.user_id !== user?.id && (
-              <button
-                onClick={() => removeMember.mutate({ channelId, userId: m.user_id })}
-                className="text-slate-500 hover:text-red-400 p-0.5"
-                title="Remove"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {/* Role toggle — owner only, not on self */}
+              {isOwner && m.user_id !== user?.id && (
+                <button
+                  onClick={() => updateRole.mutate({
+                    channelId,
+                    userId: m.user_id,
+                    role: m.role === 'admin' ? 'member' : 'admin',
+                  })}
+                  className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${
+                    m.role === 'admin'
+                      ? 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40'
+                      : 'bg-slate-700/40 text-slate-500 hover:bg-slate-600/40 hover:text-slate-300'
+                  }`}
+                  title={m.role === 'admin' ? 'Demote to member' : 'Promote to admin'}
+                >
+                  {m.role === 'admin' ? 'Admin' : 'Make Admin'}
+                </button>
+              )}
+              {canManage && m.user_id !== user?.id && (
+                <button
+                  onClick={() => removeMember.mutate({ channelId, userId: m.user_id })}
+                  className="text-slate-500 hover:text-red-400 p-0.5"
+                  title="Remove"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Leave button */}
-      {channel.type !== 'dm' && (
+      {/* Leave button (non-owners) */}
+      {channel.type !== 'dm' && !isOwner && (
         <button
           onClick={() => removeMember.mutate({ channelId, userId: user!.id })}
           className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40"
         >
           <LogOut className="w-3 h-3" /> Leave
         </button>
+      )}
+
+      {/* Delete group — owner only */}
+      {isOwner && channel.type !== 'dm' && (
+        !confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40"
+          >
+            <Trash2 className="w-3 h-3" /> Delete Group
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-red-400">Delete this group?</span>
+            <button
+              onClick={handleDelete}
+              disabled={deleteChannel.isPending}
+              className="px-2 py-0.5 rounded text-[10px] bg-red-600 text-white hover:bg-red-500 disabled:opacity-40"
+            >
+              {deleteChannel.isPending ? '...' : 'Yes'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 hover:bg-slate-600"
+            >
+              No
+            </button>
+          </div>
+        )
       )}
 
       {/* Add member */}
@@ -598,6 +662,10 @@ export function ChatPanel() {
                       channelId={activeChannelId}
                       channel={activeChannel}
                       onClose={() => setShowMembers(false)}
+                      onDeleted={() => {
+                        setActiveChannelId(null)
+                        setShowMembers(false)
+                      }}
                     />
                   </div>
                 ) : (

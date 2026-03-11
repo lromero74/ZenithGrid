@@ -93,8 +93,6 @@ async def create_group(
     """Create a group chat. All members must be friends of the creator."""
     if not name or not name.strip():
         raise ValueError("Group name is required")
-    if len(member_ids) < 1:
-        raise ValueError("At least one other member is required")
 
     # Validate all members are friends
     for mid in member_ids:
@@ -576,6 +574,77 @@ async def rename_channel(
     channel.name = new_name
     channel.updated_at = datetime.utcnow()
     await db.commit()
+
+
+async def delete_channel(db: AsyncSession, channel_id: int, user_id: int) -> None:
+    """Delete a group/channel entirely. Only the owner can delete."""
+    channel = await db.get(ChatChannel, channel_id)
+    if not channel:
+        raise ValueError("Channel not found")
+    if channel.type == "dm":
+        raise ValueError("Cannot delete a DM")
+
+    membership = await db.execute(
+        select(ChatChannelMember).where(
+            ChatChannelMember.channel_id == channel_id,
+            ChatChannelMember.user_id == user_id,
+        )
+    )
+    member = membership.scalar_one_or_none()
+    if not member or member.role != "owner":
+        raise ValueError("Only the owner can delete a group")
+
+    await db.delete(channel)  # cascades to members and messages
+    await db.commit()
+
+
+async def update_member_role(
+    db: AsyncSession, channel_id: int, user_id: int, target_id: int, new_role: str
+) -> dict:
+    """Promote or demote a channel member. Only the owner can change roles."""
+    if new_role not in ("admin", "member"):
+        raise ValueError("Role must be 'admin' or 'member'")
+
+    channel = await db.get(ChatChannel, channel_id)
+    if not channel:
+        raise ValueError("Channel not found")
+    if channel.type == "dm":
+        raise ValueError("Cannot change roles in a DM")
+
+    # Only owner can change roles
+    requester = await db.execute(
+        select(ChatChannelMember).where(
+            ChatChannelMember.channel_id == channel_id,
+            ChatChannelMember.user_id == user_id,
+        )
+    )
+    req_member = requester.scalar_one_or_none()
+    if not req_member or req_member.role != "owner":
+        raise ValueError("Only the owner can change member roles")
+
+    if target_id == user_id:
+        raise ValueError("Cannot change your own role")
+
+    # Find target membership
+    target_q = await db.execute(
+        select(ChatChannelMember).where(
+            ChatChannelMember.channel_id == channel_id,
+            ChatChannelMember.user_id == target_id,
+        )
+    )
+    target_member = target_q.scalar_one_or_none()
+    if not target_member:
+        raise ValueError("User is not a member of this channel")
+
+    target_member.role = new_role
+    await db.commit()
+
+    target_user = await db.get(User, target_id)
+    return {
+        "user_id": target_id,
+        "display_name": target_user.display_name if target_user else f"User {target_id}",
+        "role": new_role,
+    }
 
 
 async def get_unread_counts(db: AsyncSession, user_id: int) -> dict[int, int]:
