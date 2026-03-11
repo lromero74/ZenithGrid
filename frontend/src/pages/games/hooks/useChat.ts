@@ -90,6 +90,32 @@ export function useRenameChannel() {
   })
 }
 
+export function useDeleteChannel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (channelId: number) => {
+      const { data } = await api.delete(`/chat/channels/${channelId}`)
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chat-channels'] })
+    },
+  })
+}
+
+export function useUpdateMemberRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ channelId, userId, role }: { channelId: number; userId: number; role: 'admin' | 'member' }) => {
+      const { data } = await api.patch(`/chat/channels/${channelId}/roles`, { user_id: userId, role })
+      return data
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['chat-members', variables.channelId] })
+    },
+  })
+}
+
 // ----- Message Hooks -----
 
 export function useChatMessages(channelId: number | null) {

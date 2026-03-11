@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.105.1] - 2026-03-11
+
+### Added
+- **Group of one**: Create group chats with no additional members — add friends later when ready
+- **Delete group**: Group owners can permanently delete a group chat with confirmation dialog
+- **Role delegation**: Group owners can promote members to admin or demote admins back to member
+- **Self-leave**: Group members can leave a group chat at any time
+
 ## [v2.105.0] - 2026-03-11
 
 ### Added
