@@ -212,6 +212,7 @@ class Perm(StrEnum):
     ADMIN_PERMISSIONS = "admin:permissions"
     GAMES_PLAY = "games:play"
     GAMES_MULTIPLAYER = "games:multiplayer"
+    SOCIAL_CHAT = "social:chat"
 
 
 def _get_user_permissions(user: User) -> set[str]:

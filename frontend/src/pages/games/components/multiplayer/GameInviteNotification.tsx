@@ -34,7 +34,7 @@ export function GameInviteNotification() {
       if (token && !gameSocket.connected) {
         gameSocket.connect(token)
       }
-    } catch { /* auth not ready */ }
+    } catch (err) { console.debug('GameInviteNotification: WS connect skipped', err) }
   }, [auth])
 
   // Listen for incoming invites

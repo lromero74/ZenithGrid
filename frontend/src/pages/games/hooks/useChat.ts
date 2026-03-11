@@ -99,19 +99,6 @@ export function useCreateChannel() {
   })
 }
 
-export function useRenameChannel() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ channelId, name }: { channelId: number; name: string }) => {
-      const { data } = await api.patch(`/chat/channels/${channelId}`, { name })
-      return data
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['chat-channels'] })
-    },
-  })
-}
-
 export function useDeleteChannel() {
   const qc = useQueryClient()
   return useMutation({

@@ -13,6 +13,11 @@ import { gameSocket } from '../../../services/gameSocket'
 import { useAuth } from '../../../contexts/AuthContext'
 import type { ChatMessage } from './useChat'
 
+const TOAST_MIN_MS = 3000
+const TOAST_MAX_MS = 10000
+const TOAST_MS_PER_WORD = 200
+const MAX_TOASTS = 4
+
 interface ChatToast {
   id: number
   senderName: string
@@ -53,7 +58,7 @@ export function useChatSocket(activeChannelId: number | null) {
       // Toast if not from self and not viewing this channel
       if (msg.sender_id !== userId && msg.channel_id !== activeChannelRef.current) {
         const wordCount = (msg.content || '').split(/\s+/).length
-        const duration = Math.max(3000, Math.min(10000, wordCount * 200))
+        const duration = Math.max(TOAST_MIN_MS, Math.min(TOAST_MAX_MS, wordCount * TOAST_MS_PER_WORD))
         const toast: ChatToast = {
           id: msg.id,
           senderName: msg.sender_name,
@@ -61,7 +66,7 @@ export function useChatSocket(activeChannelId: number | null) {
           channelId: msg.channel_id,
           duration,
         }
-        setToasts(prev => [...prev.slice(-4), toast])
+        setToasts(prev => [...prev.slice(-MAX_TOASTS), toast])
       }
     })
     return unsub

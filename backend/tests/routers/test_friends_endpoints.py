@@ -43,7 +43,10 @@ def override_current_user():
 
 @pytest.fixture
 async def alice(db_session):
-    user = User(email="alice@test.com", hashed_password="fake", display_name="Alice", is_active=True)
+    user = User(
+        email="alice@test.com", hashed_password="fake", display_name="Alice",
+        is_active=True, is_superuser=True,
+    )
     db_session.add(user)
     await db_session.flush()
     return user
@@ -51,7 +54,10 @@ async def alice(db_session):
 
 @pytest.fixture
 async def bob(db_session):
-    user = User(email="bob@test.com", hashed_password="fake", display_name="Bob", is_active=True)
+    user = User(
+        email="bob@test.com", hashed_password="fake", display_name="Bob",
+        is_active=True, is_superuser=True,
+    )
     db_session.add(user)
     await db_session.flush()
     return user
@@ -59,7 +65,10 @@ async def bob(db_session):
 
 @pytest.fixture
 async def carol(db_session):
-    user = User(email="carol@test.com", hashed_password="fake", display_name="Carol", is_active=True)
+    user = User(
+        email="carol@test.com", hashed_password="fake", display_name="Carol",
+        is_active=True, is_superuser=True,
+    )
     db_session.add(user)
     await db_session.flush()
     return user

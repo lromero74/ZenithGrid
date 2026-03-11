@@ -18,6 +18,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Trophy, Skull, Clock, Wifi, TrendingUp, Eye, WifiOff, Pause, ChevronLeft, ChevronRight } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
 
+// Fallback value — server sends authoritative `reconnectWindowSeconds` in disconnect message
 const RECONNECT_WINDOW_SECONDS = 60
 
 interface OpponentStatus {
@@ -283,7 +284,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
   // List of active player IDs that can be spectated (have sent state recently)
   const spectatablePlayers = useMemo(() => {
-    return Object.keys(playerStates).map(Number).filter(id => id !== spectateTarget || true)
+    return Object.keys(playerStates).map(Number)
   }, [playerStates, spectateTarget])
 
   /** Page to the next spectate target. */
@@ -373,15 +374,18 @@ export function SpectatorBar({
 }
 
 export function RaceOverlay({
+  // Core race state
   raceResult,
   opponentScore,
   opponentFinished,
   opponentLevelUp,
+  opponentName,
   onDismiss,
+  // Play-on props
   playOnActive,
   isLoser,
-  opponentName,
   onDismissPlayOn,
+  // Connection props
   opponentDisconnected,
   reconnectCountdown,
   selfDisconnected,
@@ -393,38 +397,28 @@ export function RaceOverlay({
   onSpectatePrev,
   onSpectateNext,
 }: {
+  // -- Core race state --
   raceResult: 'won' | 'lost' | 'tied' | null
   opponentScore?: number
   opponentFinished: boolean
   opponentLevelUp?: LevelAnnouncement | null
-  onDismiss?: () => void
-  /** Whether play-on mode is active (race ended but loser still playing). */
-  playOnActive?: boolean
-  /** Whether the local player is the loser (still playing in play-on mode). */
-  isLoser?: boolean
-  /** Opponent display name for spectator banners. */
   opponentName?: string
-  /** Dismiss play-on mode and show final results. */
+  onDismiss?: () => void
+  // -- Play-on props --
+  playOnActive?: boolean
+  isLoser?: boolean
   onDismissPlayOn?: () => void
-  /** Whether the opponent disconnected (abend — not a loss). */
+  // -- Connection props --
   opponentDisconnected?: boolean
-  /** Called when the local player forfeits. */
   onForfeit?: () => void
-  /** Seconds remaining for opponent to reconnect (null = not paused). */
   reconnectCountdown?: number | null
-  /** Whether the local player is currently disconnected (reconnecting). */
   selfDisconnected?: boolean
-  /** Whether the local player has finished (for spectator flow). */
+  // -- Spectator props --
   localFinished?: boolean
-  /** Players available for spectating (their IDs). */
   spectatablePlayers?: number[]
-  /** Currently spectated player ID. */
   spectateTarget?: number | null
-  /** Player display names for spectator bar. */
   playerNames?: Record<number, string>
-  /** Navigate to previous spectate target. */
   onSpectatePrev?: () => void
-  /** Navigate to next spectate target. */
   onSpectateNext?: () => void
 }) {
   const [spectateMode, setSpectateMode] = useState(false)

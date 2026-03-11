@@ -8,7 +8,7 @@ Connections are scoped by user_id so notifications only reach the owning user.
 import logging
 import asyncio
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional
 from datetime import datetime
 
 from fastapi import WebSocket
@@ -41,16 +41,31 @@ class OrderFillEvent:
 
 
 class WebSocketManager:
-    """Manages WebSocket connections and broadcasts messages to clients"""
+    """Manages WebSocket connections and broadcasts messages to clients.
+
+    Uses Dict[int, Set[WebSocket]] for O(1) user lookups instead of
+    scanning a flat list on every operation.
+    """
 
     def __init__(self):
-        # Store (websocket, user_id) tuples
-        self.active_connections: List[Tuple[WebSocket, int]] = []
+        # user_id → set of WebSocket connections
+        self._user_connections: dict[int, set[WebSocket]] = {}
+        # WebSocket → user_id (reverse lookup for disconnect)
+        self._socket_owners: dict[WebSocket, int] = {}
         self._lock = asyncio.Lock()
 
+    @property
+    def active_connections(self) -> list[tuple[WebSocket, int]]:
+        """Backward-compat property — returns flat list of (ws, uid) tuples."""
+        return [
+            (ws, uid)
+            for uid, sockets in self._user_connections.items()
+            for ws in sockets
+        ]
+
     def _count_user_connections(self, user_id: int) -> int:
-        """Count active connections for a specific user (must be called under lock)."""
-        return sum(1 for _, uid in self.active_connections if uid == user_id)
+        """Count active connections for a specific user. O(1)."""
+        return len(self._user_connections.get(user_id, ()))
 
     async def connect(self, websocket: WebSocket, user_id: int) -> bool:
         """
@@ -70,56 +85,74 @@ class WebSocketManager:
                 return False
 
             await websocket.accept()
-            self.active_connections.append((websocket, user_id))
+            self._user_connections.setdefault(user_id, set()).add(websocket)
+            self._socket_owners[websocket] = user_id
 
+        total = sum(len(s) for s in self._user_connections.values())
         logger.info(
             f"WebSocket connected for user {user_id}. "
-            f"Total connections: {len(self.active_connections)}"
+            f"Total connections: {total}"
         )
         return True
 
     async def disconnect(self, websocket: WebSocket):
-        """Remove a WebSocket connection"""
+        """Remove a WebSocket connection. O(1) via reverse lookup."""
         async with self._lock:
-            self.active_connections = [
-                (ws, uid) for ws, uid in self.active_connections if ws is not websocket
-            ]
-        logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
+            user_id = self._socket_owners.pop(websocket, None)
+            if user_id is not None:
+                sockets = self._user_connections.get(user_id)
+                if sockets:
+                    sockets.discard(websocket)
+                    if not sockets:
+                        del self._user_connections[user_id]
+
+        total = sum(len(s) for s in self._user_connections.values())
+        logger.info(f"WebSocket disconnected. Total connections: {total}")
 
     async def broadcast(self, message: dict, user_id: Optional[int] = None):
         """
         Broadcast a message to connected clients.
 
-        If user_id is provided, only send to that user's connections.
-        If user_id is None, send to all (for system-wide messages).
+        If user_id is provided, only send to that user's connections — O(Cu).
+        If user_id is None, send to all (for system-wide messages) — O(C).
         """
         async with self._lock:
             if user_id is not None:
-                connections = [(ws, uid) for ws, uid in self.active_connections if uid == user_id]
+                sockets = list(self._user_connections.get(user_id, ()))
             else:
-                connections = list(self.active_connections)
+                sockets = [
+                    ws
+                    for s in self._user_connections.values()
+                    for ws in s
+                ]
 
-        if not connections:
+        if not sockets:
             return
 
         disconnected = []
-        for ws, uid in connections:
+        for ws in sockets:
             try:
                 await ws.send_json(message)
             except Exception as e:
+                uid = self._socket_owners.get(ws, "?")
                 logger.warning(f"Failed to send message to user {uid}: {e}")
                 disconnected.append(ws)
 
         # Clean up disconnected clients
         if disconnected:
             async with self._lock:
-                self.active_connections = [
-                    (ws, uid) for ws, uid in self.active_connections if ws not in disconnected
-                ]
+                for ws in disconnected:
+                    uid = self._socket_owners.pop(ws, None)
+                    if uid is not None:
+                        s = self._user_connections.get(uid)
+                        if s:
+                            s.discard(ws)
+                            if not s:
+                                del self._user_connections[uid]
 
     def get_connected_user_ids(self) -> set[int]:
-        """Return the set of user IDs that have active WebSocket connections."""
-        return {uid for _, uid in self.active_connections}
+        """Return the set of user IDs that have active WebSocket connections. O(1)."""
+        return set(self._user_connections.keys())
 
     async def send_to_user(self, user_id: int, message: dict):
         """Send a message to a specific user's connections."""
