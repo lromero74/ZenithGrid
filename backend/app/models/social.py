@@ -1,4 +1,4 @@
-"""Social models: friendships, friend requests, blocked users, game results, tournaments."""
+"""Social models: friendships, friend requests, blocked users, game results, tournaments, chat."""
 
 from datetime import datetime
 
@@ -7,6 +7,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -190,4 +191,62 @@ class TournamentDeleteVote(Base):
 
     __table_args__ = (
         UniqueConstraint("tournament_id", "user_id", name="uq_tournament_delete_vote"),
+    )
+
+
+# ---------- Chat ----------
+
+
+class ChatChannel(Base):
+    """Chat channel: DM (2 users), group (N users), or channel (open/admin-created)."""
+    __tablename__ = "chat_channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, nullable=False)  # "dm", "group", "channel"
+    name = Column(String, nullable=True)   # null for DMs, required for group/channel
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    members = relationship("ChatChannelMember", back_populates="channel", cascade="all, delete-orphan")
+    messages = relationship("ChatMessage", back_populates="channel", cascade="all, delete-orphan")
+
+
+class ChatChannelMember(Base):
+    """Membership in a chat channel with role and read tracking."""
+    __tablename__ = "chat_channel_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, default="member")  # "owner", "admin", "member"
+    last_read_at = Column(DateTime, nullable=True)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    channel = relationship("ChatChannel", back_populates="members")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("channel_id", "user_id", name="uq_chat_channel_member"),
+    )
+
+
+class ChatMessage(Base):
+    """A message in a chat channel. Supports edit and soft delete."""
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(String(2000), nullable=False)
+    edited_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    channel = relationship("ChatChannel", back_populates="messages")
+    sender = relationship("User", foreign_keys=[sender_id])
+
+    __table_args__ = (
+        Index("ix_chat_messages_channel_created", "channel_id", "created_at"),
     )

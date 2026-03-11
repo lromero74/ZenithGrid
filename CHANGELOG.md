@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.105.0] - 2026-03-11
+
+### Added
+- **Chat system**: Full real-time chat with DMs, group chats, and channels — send messages to friends, create group conversations, edit and delete messages, with typing indicators and read tracking
+- **Toast notifications for chat**: Incoming messages show a notification with sender name and message preview, displayed for a duration proportional to message length
+- **Unread badges**: Social nav icon shows total unread message count; individual channels show their own unread counts
+- **Channel management**: Create/rename groups, add/remove members, leave channels — with owner/admin role-based permissions
+- **Chat message history**: Infinite scroll to load older messages, with 2000-character message limit (Discord standard)
+- **Admin chat retention setting**: Configurable message retention period (default: keep forever)
+
+### Changed
+- Social page now features Chat panel at the top, above friends, game history, and tournaments
+
 ## [v2.104.0] - 2026-03-11
 
 ### Added

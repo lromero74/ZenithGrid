@@ -54,6 +54,7 @@ from app.routers import game_history_router  # Game history & privacy
 from app.routers import tournament_router  # Multiplayer tournaments
 from app.routers import display_name_router  # Display name management
 from app.routers import sessions_router  # Session management for multiplayer
+from app.routers import chat_router  # Chat (DMs, groups, channels)
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
@@ -180,6 +181,7 @@ app.include_router(game_history_router.router)  # Game history & privacy
 app.include_router(tournament_router.router)  # Multiplayer tournaments
 app.include_router(display_name_router.router)  # Display name management
 app.include_router(sessions_router.router)  # Session management for multiplayer
+app.include_router(chat_router.router)  # Chat (DMs, groups, channels)
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -753,6 +755,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                 await handle_game_message(
                     ws_manager, websocket, user_id, msg,
                     user_permissions, display_name,
+                )
+            elif msg_type.startswith("chat:"):
+                from app.services.chat_ws_handler import handle_chat_message
+                await handle_chat_message(
+                    ws_manager, websocket, user_id, msg, display_name,
                 )
             else:
                 await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
