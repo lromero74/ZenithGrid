@@ -1,7 +1,8 @@
 /**
  * React Query hooks for the chat API.
  *
- * Provides hooks for channels, messages, membership, and unread counts.
+ * Provides hooks for channels, messages, membership, reactions,
+ * pinned messages, search, and unread counts.
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
@@ -28,6 +29,19 @@ export interface ChatChannel {
   updated_at: string | null
 }
 
+export interface ChatReaction {
+  emoji: string
+  count: number
+  user_ids: number[]
+}
+
+export interface ChatReplyTo {
+  id: number
+  sender_name: string
+  content: string | null
+  is_deleted: boolean
+}
+
 export interface ChatMessage {
   id: number
   channel_id: number
@@ -37,6 +51,9 @@ export interface ChatMessage {
   is_deleted: boolean
   edited_at: string | null
   created_at: string | null
+  is_pinned: boolean
+  reply_to: ChatReplyTo | null
+  reactions: ChatReaction[]
 }
 
 export interface ChatMember {
@@ -44,6 +61,11 @@ export interface ChatMember {
   display_name: string
   role: 'owner' | 'admin' | 'member'
   joined_at: string | null
+}
+
+export interface ChatSearchResult extends ChatMessage {
+  channel_name: string | null
+  channel_type: string | null
 }
 
 // ----- Channel Hooks -----
@@ -106,7 +128,9 @@ export function useDeleteChannel() {
 export function useUpdateMemberRole() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ channelId, userId, role }: { channelId: number; userId: number; role: 'admin' | 'member' }) => {
+    mutationFn: async ({ channelId, userId, role }: {
+      channelId: number; userId: number; role: 'admin' | 'member'
+    }) => {
       const { data } = await api.patch(`/chat/channels/${channelId}/roles`, { user_id: userId, role })
       return data
     },
@@ -129,7 +153,6 @@ export function useChatMessages(channelId: number | null) {
     },
     initialPageParam: null as number | null,
     getNextPageParam: (lastPage) => {
-      // Load older messages — the first message in the page is the oldest
       if (lastPage.length < 50) return undefined
       return lastPage[0]?.id ?? undefined
     },
@@ -141,8 +164,13 @@ export function useChatMessages(channelId: number | null) {
 export function useSendMessage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ channelId, content }: { channelId: number; content: string }) => {
-      const { data } = await api.post(`/chat/channels/${channelId}/messages`, { content })
+    mutationFn: async ({ channelId, content, replyToId }: {
+      channelId: number; content: string; replyToId?: number
+    }) => {
+      const { data } = await api.post(`/chat/channels/${channelId}/messages`, {
+        content,
+        reply_to_id: replyToId ?? null,
+      })
       return data
     },
     onSuccess: (_data, variables) => {
@@ -246,5 +274,64 @@ export function useRemoveMember() {
       qc.invalidateQueries({ queryKey: ['chat-members', variables.channelId] })
       qc.invalidateQueries({ queryKey: ['chat-channels'] })
     },
+  })
+}
+
+// ----- Reactions -----
+
+export function useToggleReaction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: number; emoji: string }) => {
+      const { data } = await api.post(`/chat/messages/${messageId}/reactions`, { emoji })
+      return data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['chat-messages', data.channel_id] })
+    },
+  })
+}
+
+// ----- Pinned Messages -----
+
+export function useTogglePin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (messageId: number) => {
+      const { data } = await api.post(`/chat/messages/${messageId}/pin`)
+      return data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['chat-messages', data.channel_id] })
+      qc.invalidateQueries({ queryKey: ['chat-pinned', data.channel_id] })
+    },
+  })
+}
+
+export function usePinnedMessages(channelId: number | null) {
+  return useQuery<ChatMessage[]>({
+    queryKey: ['chat-pinned', channelId],
+    queryFn: async () => {
+      const { data } = await api.get(`/chat/channels/${channelId}/pinned`)
+      return data
+    },
+    enabled: channelId !== null,
+    staleTime: 30_000,
+  })
+}
+
+// ----- Search -----
+
+export function useChatSearch(query: string, channelId?: number | null) {
+  return useQuery<ChatSearchResult[]>({
+    queryKey: ['chat-search', query, channelId],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { q: query }
+      if (channelId) params.channel_id = channelId
+      const { data } = await api.get('/chat/search', { params })
+      return data
+    },
+    enabled: query.length >= 2,
+    staleTime: 10_000,
   })
 }

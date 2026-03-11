@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from app.models import User
 from app.models.social import (
-    BlockedUser, ChatChannelMember, ChatMessage, Friendship,
+    BlockedUser, ChatChannelMember, ChatMessage, ChatMessageReaction, Friendship,
 )
 from app.services import chat_service
 
@@ -1066,3 +1066,385 @@ class TestCleanupOldMessages:
         """Negative retention days does nothing."""
         deleted = await chat_service.cleanup_old_messages(db_session, -5)
         assert deleted == 0
+
+
+# =============================================================================
+# Emoji Reactions — toggle_reaction
+# =============================================================================
+
+
+class TestToggleReaction:
+    """Tests for toggle_reaction()"""
+
+    @pytest.mark.asyncio
+    async def test_add_reaction_happy_path(self, db_session):
+        """Happy path: add a reaction to a message."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+
+        result = await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "👍")
+        assert result["action"] == "added"
+        assert result["emoji"] == "👍"
+        assert len(result["reactions"]) == 1
+        assert result["reactions"][0]["count"] == 1
+        assert bob.id in result["reactions"][0]["user_ids"]
+
+    @pytest.mark.asyncio
+    async def test_remove_reaction(self, db_session):
+        """Toggling an existing reaction removes it."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+
+        await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "👍")
+        result = await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "👍")
+        assert result["action"] == "removed"
+        assert len(result["reactions"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_reaction_invalid_emoji_raises(self, db_session):
+        """Invalid emojis are rejected."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+
+        with pytest.raises(ValueError, match="Invalid emoji"):
+            await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "NOTANEMOJI")
+
+    @pytest.mark.asyncio
+    async def test_reaction_nonmember_raises(self, db_session):
+        """Non-members cannot react."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        charlie = await create_user(db_session, "charlie@test.com", "Charlie")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+
+        with pytest.raises(ValueError, match="not a member"):
+            await chat_service.toggle_reaction(db_session, msg["id"], charlie.id, "👍")
+
+    @pytest.mark.asyncio
+    async def test_reaction_on_deleted_message_raises(self, db_session):
+        """Cannot react to a deleted message."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+        await chat_service.delete_message(db_session, msg["id"], alice.id)
+
+        with pytest.raises(ValueError, match="deleted"):
+            await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "👍")
+
+    @pytest.mark.asyncio
+    async def test_multiple_users_same_emoji(self, db_session):
+        """Multiple users can react with the same emoji."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Hello!")
+
+        await chat_service.toggle_reaction(db_session, msg["id"], alice.id, "❤️")
+        result = await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "❤️")
+        assert result["reactions"][0]["count"] == 2
+        assert set(result["reactions"][0]["user_ids"]) == {alice.id, bob.id}
+
+
+# =============================================================================
+# Reply-to Messages
+# =============================================================================
+
+
+class TestReplyTo:
+    """Tests for reply_to_id in send_message()"""
+
+    @pytest.mark.asyncio
+    async def test_reply_to_message(self, db_session):
+        """Happy path: reply to a specific message."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        original = await chat_service.send_message(db_session, channel.id, alice.id, "Hi Bob!")
+
+        reply = await chat_service.send_message(
+            db_session, channel.id, bob.id, "Hi Alice!",
+            reply_to_id=original["id"]
+        )
+        assert reply["reply_to"] is not None
+        assert reply["reply_to"]["id"] == original["id"]
+        assert reply["reply_to"]["sender_name"] == "Alice"
+        assert reply["reply_to"]["content"] == "Hi Bob!"
+
+    @pytest.mark.asyncio
+    async def test_reply_to_invalid_message_raises(self, db_session):
+        """Reply to a message in a different channel raises error."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        charlie = await create_user(db_session, "charlie@test.com", "Charlie")
+        await make_friends(db_session, alice, bob)
+        await make_friends(db_session, alice, charlie)
+
+        ch1 = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        ch2 = await chat_service.get_or_create_dm(db_session, alice.id, charlie.id)
+        msg_in_ch1 = await chat_service.send_message(db_session, ch1.id, alice.id, "In ch1")
+
+        with pytest.raises(ValueError, match="Invalid reply target"):
+            await chat_service.send_message(
+                db_session, ch2.id, alice.id, "Reply",
+                reply_to_id=msg_in_ch1["id"]
+            )
+
+    @pytest.mark.asyncio
+    async def test_reply_to_nonexistent_message_raises(self, db_session):
+        """Reply to a nonexistent message raises error."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+
+        with pytest.raises(ValueError, match="Invalid reply target"):
+            await chat_service.send_message(
+                db_session, channel.id, alice.id, "Reply",
+                reply_to_id=99999
+            )
+
+    @pytest.mark.asyncio
+    async def test_messages_include_reply_to_data(self, db_session):
+        """get_messages returns reply_to data in message dicts."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        original = await chat_service.send_message(db_session, channel.id, alice.id, "Original")
+        await chat_service.send_message(
+            db_session, channel.id, bob.id, "Reply",
+            reply_to_id=original["id"]
+        )
+
+        messages = await chat_service.get_messages(db_session, channel.id, alice.id)
+        reply_msg = [m for m in messages if m["content"] == "Reply"][0]
+        assert reply_msg["reply_to"]["id"] == original["id"]
+        assert reply_msg["reply_to"]["sender_name"] == "Alice"
+
+
+# =============================================================================
+# Pinned Messages — toggle_pin, get_pinned_messages
+# =============================================================================
+
+
+class TestPinnedMessages:
+    """Tests for toggle_pin() and get_pinned_messages()"""
+
+    @pytest.mark.asyncio
+    async def test_pin_message_happy_path(self, db_session):
+        """Owner can pin a message."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Important!")
+
+        result = await chat_service.toggle_pin(db_session, msg["id"], alice.id)
+        assert result["is_pinned"] is True
+        assert result["message_id"] == msg["id"]
+
+    @pytest.mark.asyncio
+    async def test_unpin_message(self, db_session):
+        """Toggling pin again unpins."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Pin me")
+
+        await chat_service.toggle_pin(db_session, msg["id"], alice.id)
+        result = await chat_service.toggle_pin(db_session, msg["id"], alice.id)
+        assert result["is_pinned"] is False
+
+    @pytest.mark.asyncio
+    async def test_pin_member_cannot_pin(self, db_session):
+        """Regular members cannot pin messages."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Pin?")
+
+        with pytest.raises(ValueError, match="admins and owners"):
+            await chat_service.toggle_pin(db_session, msg["id"], bob.id)
+
+    @pytest.mark.asyncio
+    async def test_get_pinned_messages(self, db_session):
+        """get_pinned_messages returns only pinned messages."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+
+        msg1 = await chat_service.send_message(db_session, channel.id, alice.id, "Pinned!")
+        await chat_service.send_message(db_session, channel.id, alice.id, "Not pinned")
+        await chat_service.toggle_pin(db_session, msg1["id"], alice.id)
+
+        pinned = await chat_service.get_pinned_messages(db_session, channel.id, alice.id)
+        assert len(pinned) == 1
+        assert pinned[0]["id"] == msg1["id"]
+        assert pinned[0]["is_pinned"] is True
+
+    @pytest.mark.asyncio
+    async def test_pin_deleted_message_raises(self, db_session):
+        """Cannot pin a deleted message."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Delete me")
+        await chat_service.delete_message(db_session, msg["id"], alice.id)
+
+        with pytest.raises(ValueError, match="deleted"):
+            await chat_service.toggle_pin(db_session, msg["id"], alice.id)
+
+
+# =============================================================================
+# Message Search — search_messages
+# =============================================================================
+
+
+class TestSearchMessages:
+    """Tests for search_messages()"""
+
+    @pytest.mark.asyncio
+    async def test_search_happy_path(self, db_session):
+        """Happy path: search finds matching messages."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        await chat_service.send_message(db_session, channel.id, alice.id, "Hello world")
+        await chat_service.send_message(db_session, channel.id, alice.id, "Goodbye universe")
+        await chat_service.send_message(db_session, channel.id, bob.id, "Hello again")
+
+        results = await chat_service.search_messages(db_session, alice.id, "Hello")
+        assert len(results) == 2
+        assert all("Hello" in r["content"] for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_specific_channel(self, db_session):
+        """Search within a specific channel."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        charlie = await create_user(db_session, "charlie@test.com", "Charlie")
+        await make_friends(db_session, alice, bob)
+        await make_friends(db_session, alice, charlie)
+
+        ch1 = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        ch2 = await chat_service.get_or_create_dm(db_session, alice.id, charlie.id)
+        await chat_service.send_message(db_session, ch1.id, alice.id, "Hello Bob")
+        await chat_service.send_message(db_session, ch2.id, alice.id, "Hello Charlie")
+
+        results = await chat_service.search_messages(
+            db_session, alice.id, "Hello", channel_id=ch1.id
+        )
+        assert len(results) == 1
+        assert "Bob" in results[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_search_excludes_deleted_messages(self, db_session):
+        """Search excludes soft-deleted messages."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Delete me hello")
+        await chat_service.delete_message(db_session, msg["id"], alice.id)
+        await chat_service.send_message(db_session, channel.id, alice.id, "Keep me hello")
+
+        results = await chat_service.search_messages(db_session, alice.id, "hello")
+        assert len(results) == 1
+        assert results[0]["content"] == "Keep me hello"
+
+    @pytest.mark.asyncio
+    async def test_search_too_short_raises(self, db_session):
+        """Search query too short raises error."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+
+        with pytest.raises(ValueError, match="at least 2"):
+            await chat_service.search_messages(db_session, alice.id, "a")
+
+    @pytest.mark.asyncio
+    async def test_search_nonmember_channel_raises(self, db_session):
+        """Cannot search a channel you're not a member of."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        charlie = await create_user(db_session, "charlie@test.com", "Charlie")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+
+        with pytest.raises(ValueError, match="not a member"):
+            await chat_service.search_messages(
+                db_session, charlie.id, "hello", channel_id=channel.id
+            )
+
+
+# =============================================================================
+# Message Format — reactions and reply_to in get_messages
+# =============================================================================
+
+
+class TestMessageFormat:
+    """Tests that messages include reactions, reply_to, and is_pinned fields."""
+
+    @pytest.mark.asyncio
+    async def test_messages_include_reactions(self, db_session):
+        """get_messages returns reactions on messages."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "React!")
+        await chat_service.toggle_reaction(db_session, msg["id"], bob.id, "👍")
+
+        messages = await chat_service.get_messages(db_session, channel.id, alice.id)
+        assert len(messages) == 1
+        assert len(messages[0]["reactions"]) == 1
+        assert messages[0]["reactions"][0]["emoji"] == "👍"
+        assert messages[0]["reactions"][0]["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_messages_include_pin_status(self, db_session):
+        """get_messages includes is_pinned field."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.create_group(db_session, alice.id, "Test", [bob.id])
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Pin me!")
+        await chat_service.toggle_pin(db_session, msg["id"], alice.id)
+
+        messages = await chat_service.get_messages(db_session, channel.id, alice.id)
+        pinned = [m for m in messages if m["content"] == "Pin me!"][0]
+        assert pinned["is_pinned"] is True
+
+    @pytest.mark.asyncio
+    async def test_send_message_returns_full_format(self, db_session):
+        """send_message returns reactions, reply_to, and is_pinned fields."""
+        alice = await create_user(db_session, "alice@test.com", "Alice")
+        bob = await create_user(db_session, "bob@test.com", "Bob")
+        await make_friends(db_session, alice, bob)
+        channel = await chat_service.get_or_create_dm(db_session, alice.id, bob.id)
+
+        msg = await chat_service.send_message(db_session, channel.id, alice.id, "Full format")
+        assert "reactions" in msg
+        assert "reply_to" in msg
+        assert "is_pinned" in msg
+        assert msg["reactions"] == []
+        assert msg["reply_to"] is None
+        assert msg["is_pinned"] is False

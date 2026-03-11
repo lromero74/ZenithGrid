@@ -750,3 +750,176 @@ class TestRenameChannelEndpoint:
             )
 
         assert resp.status_code == 422
+
+
+# =============================================================================
+# POST /api/chat/messages/{id}/reactions — Toggle Reaction
+# =============================================================================
+
+
+class TestReactions:
+    """POST /api/chat/messages/{id}/reactions"""
+
+    @pytest.mark.asyncio
+    async def test_add_reaction_happy_path(self, app, override_current_user, alice, bob, db_session):
+        """Adding a reaction returns updated reactions."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={"type": "dm", "friend_id": bob.id})
+            channel_id = ch.json()["id"]
+            msg = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                    json={"content": "React to me!"})
+            msg_id = msg.json()["id"]
+
+            resp = await client.post(f"/api/chat/messages/{msg_id}/reactions",
+                                     json={"emoji": "👍"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["action"] == "added"
+        assert data["emoji"] == "👍"
+        assert len(data["reactions"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_invalid_emoji_returns_400(self, app, override_current_user, alice, bob, db_session):
+        """Invalid emoji returns 400."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={"type": "dm", "friend_id": bob.id})
+            channel_id = ch.json()["id"]
+            msg = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                    json={"content": "React!"})
+            msg_id = msg.json()["id"]
+
+            resp = await client.post(f"/api/chat/messages/{msg_id}/reactions",
+                                     json={"emoji": "INVALID"})
+
+        assert resp.status_code == 400
+
+
+# =============================================================================
+# POST /api/chat/messages/{id}/pin — Toggle Pin
+# =============================================================================
+
+
+class TestPinMessages:
+    """POST /api/chat/messages/{id}/pin"""
+
+    @pytest.mark.asyncio
+    async def test_pin_message_happy_path(self, app, override_current_user, alice, bob, db_session):
+        """Owner can pin a message."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={
+                "type": "group", "name": "Test", "member_ids": [bob.id]
+            })
+            channel_id = ch.json()["id"]
+            msg = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                    json={"content": "Pin me!"})
+            msg_id = msg.json()["id"]
+
+            resp = await client.post(f"/api/chat/messages/{msg_id}/pin")
+
+        assert resp.status_code == 200
+        assert resp.json()["is_pinned"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_pinned_messages(self, app, override_current_user, alice, bob, db_session):
+        """GET pinned messages returns only pinned."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={
+                "type": "group", "name": "Test", "member_ids": [bob.id]
+            })
+            channel_id = ch.json()["id"]
+            msg = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                    json={"content": "Pin!"})
+            await client.post(f"/api/chat/channels/{channel_id}/messages",
+                              json={"content": "No pin"})
+            await client.post(f"/api/chat/messages/{msg.json()['id']}/pin")
+
+            resp = await client.get(f"/api/chat/channels/{channel_id}/pinned")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["content"] == "Pin!"
+
+
+# =============================================================================
+# GET /api/chat/search — Search Messages
+# =============================================================================
+
+
+class TestSearchEndpoint:
+    """GET /api/chat/search"""
+
+    @pytest.mark.asyncio
+    async def test_search_happy_path(self, app, override_current_user, alice, bob, db_session):
+        """Search finds matching messages."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={"type": "dm", "friend_id": bob.id})
+            channel_id = ch.json()["id"]
+            await client.post(f"/api/chat/channels/{channel_id}/messages",
+                              json={"content": "Hello world"})
+            await client.post(f"/api/chat/channels/{channel_id}/messages",
+                              json={"content": "Goodbye moon"})
+
+            resp = await client.get("/api/chat/search", params={"q": "Hello"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert "Hello" in data[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_search_query_too_short_returns_422(self, app, override_current_user, alice):
+        """Query shorter than 2 chars returns 422 (validation)."""
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/chat/search", params={"q": "a"})
+
+        assert resp.status_code == 422
+
+
+# =============================================================================
+# POST /api/chat/channels/{id}/messages — Reply-to
+# =============================================================================
+
+
+class TestReplyTo:
+    """Send message with reply_to_id"""
+
+    @pytest.mark.asyncio
+    async def test_reply_to_message(self, app, override_current_user, alice, bob, db_session):
+        """Replying to a message includes reply_to in response."""
+        await make_friends(db_session, alice, bob)
+        override_current_user(app, alice)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            ch = await client.post("/api/chat/channels", json={"type": "dm", "friend_id": bob.id})
+            channel_id = ch.json()["id"]
+            original = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                         json={"content": "Original"})
+            orig_id = original.json()["id"]
+
+            resp = await client.post(f"/api/chat/channels/{channel_id}/messages",
+                                     json={"content": "Reply", "reply_to_id": orig_id})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["reply_to"] is not None
+        assert data["reply_to"]["id"] == orig_id
+        assert data["reply_to"]["content"] == "Original"

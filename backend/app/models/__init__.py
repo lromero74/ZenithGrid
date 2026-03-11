@@ -29,7 +29,7 @@ from app.models.social import (
     Friendship, FriendRequest, BlockedUser,
     GameResult, GameResultPlayer, GameHistoryVisibility,
     Tournament, TournamentPlayer, TournamentDeleteVote,
-    ChatChannel, ChatChannelMember, ChatMessage,
+    ChatChannel, ChatChannelMember, ChatMessage, ChatMessageReaction,
 )
 from app.models.system import (
     Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog,
@@ -56,7 +56,7 @@ __all__ = [
     "Friendship", "FriendRequest", "BlockedUser",
     "GameResult", "GameResultPlayer", "GameHistoryVisibility",
     "Tournament", "TournamentPlayer", "TournamentDeleteVote",
-    "ChatChannel", "ChatChannelMember", "ChatMessage",
+    "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatMessageReaction",
     # System
     "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog",
 ]

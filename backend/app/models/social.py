@@ -233,20 +233,42 @@ class ChatChannelMember(Base):
 
 
 class ChatMessage(Base):
-    """A message in a chat channel. Supports edit and soft delete."""
+    """A message in a chat channel. Supports edit, soft delete, reply, and pin."""
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(String(2000), nullable=False)
+    reply_to_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    is_pinned = Column(Boolean, default=False)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     channel = relationship("ChatChannel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
+    reply_to = relationship("ChatMessage", remote_side="ChatMessage.id", uselist=False)
+    reactions = relationship("ChatMessageReaction", back_populates="message", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_chat_messages_channel_created", "channel_id", "created_at"),
+    )
+
+
+class ChatMessageReaction(Base):
+    """Emoji reaction on a chat message."""
+    __tablename__ = "chat_message_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    emoji = Column(String(32), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    message = relationship("ChatMessage", back_populates="reactions")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", "emoji", name="uq_chat_reaction"),
     )
