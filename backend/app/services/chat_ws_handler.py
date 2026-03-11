@@ -32,6 +32,8 @@ async def handle_chat_message(
         "chat:read": _handle_read,
         "chat:edit": _handle_edit,
         "chat:delete": _handle_delete,
+        "chat:react": _handle_react,
+        "chat:pin": _handle_pin,
     }
 
     handler = handlers.get(msg_type)
@@ -55,13 +57,16 @@ async def _handle_send(ws_manager, websocket, user_id, msg, display_name):
     """Handle chat:send — persist message and broadcast to channel members."""
     channel_id = msg.get("channelId")
     content = msg.get("content", "")
+    reply_to_id = msg.get("replyToId")
 
     if not channel_id:
         await websocket.send_json({"type": "chat:error", "error": "channelId required"})
         return
 
     async with async_session_maker() as db:
-        message_data = await chat_service.send_message(db, channel_id, user_id, content)
+        message_data = await chat_service.send_message(
+            db, channel_id, user_id, content, reply_to_id=reply_to_id
+        )
         member_ids = await chat_service.get_channel_member_ids(db, channel_id)
 
     # Broadcast to all channel members (including sender for confirmation)
@@ -157,6 +162,51 @@ async def _handle_delete(ws_manager, websocket, user_id, msg, display_name):
         "type": "chat:message_deleted",
         "messageId": result["id"],
         "channelId": result["channel_id"],
+    }
+    for mid in member_ids:
+        await ws_manager.send_to_user(mid, broadcast)
+
+
+async def _handle_react(ws_manager, websocket, user_id, msg, display_name):
+    """Handle chat:react — toggle reaction and broadcast update."""
+    message_id = msg.get("messageId")
+    emoji = msg.get("emoji", "")
+
+    if not message_id or not emoji:
+        await websocket.send_json({"type": "chat:error", "error": "messageId and emoji required"})
+        return
+
+    async with async_session_maker() as db:
+        result = await chat_service.toggle_reaction(db, message_id, user_id, emoji)
+        member_ids = await chat_service.get_channel_member_ids(db, result["channel_id"])
+
+    broadcast = {
+        "type": "chat:reaction_updated",
+        "messageId": result["message_id"],
+        "channelId": result["channel_id"],
+        "reactions": result["reactions"],
+    }
+    for mid in member_ids:
+        await ws_manager.send_to_user(mid, broadcast)
+
+
+async def _handle_pin(ws_manager, websocket, user_id, msg, display_name):
+    """Handle chat:pin — toggle pin and broadcast update."""
+    message_id = msg.get("messageId")
+
+    if not message_id:
+        await websocket.send_json({"type": "chat:error", "error": "messageId required"})
+        return
+
+    async with async_session_maker() as db:
+        result = await chat_service.toggle_pin(db, message_id, user_id)
+        member_ids = await chat_service.get_channel_member_ids(db, result["channel_id"])
+
+    broadcast = {
+        "type": "chat:pin_updated",
+        "messageId": result["message_id"],
+        "channelId": result["channel_id"],
+        "isPinned": result["is_pinned"],
     }
     for mid in member_ids:
         await ws_manager.send_to_user(mid, broadcast)

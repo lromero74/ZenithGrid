@@ -2,7 +2,8 @@
  * WebSocket listener for real-time chat events.
  *
  * Registers listeners on gameSocket for chat:message, chat:typing,
- * chat:read_receipt, chat:message_edited, and chat:message_deleted.
+ * chat:read_receipt, chat:message_edited, chat:message_deleted,
+ * chat:reaction_updated, and chat:pin_updated.
  * Invalidates React Query caches and fires toast notifications.
  */
 
@@ -38,7 +39,6 @@ export function useChatSocket(activeChannelId: number | null) {
   // Incoming message
   useEffect(() => {
     const unsub = gameSocket.on('chat:message', (msg: ChatMessage) => {
-      // Invalidate caches
       qc.invalidateQueries({ queryKey: ['chat-messages', msg.channel_id] })
       qc.invalidateQueries({ queryKey: ['chat-channels'] })
       qc.invalidateQueries({ queryKey: ['chat-unread'] })
@@ -61,7 +61,7 @@ export function useChatSocket(activeChannelId: number | null) {
           channelId: msg.channel_id,
           duration,
         }
-        setToasts(prev => [...prev.slice(-4), toast]) // keep max 5
+        setToasts(prev => [...prev.slice(-4), toast])
       }
     })
     return unsub
@@ -124,6 +124,23 @@ export function useChatSocket(activeChannelId: number | null) {
     return unsub
   }, [qc])
 
+  // Reaction updated
+  useEffect(() => {
+    const unsub = gameSocket.on('chat:reaction_updated', (msg: { channelId: number }) => {
+      qc.invalidateQueries({ queryKey: ['chat-messages', msg.channelId] })
+    })
+    return unsub
+  }, [qc])
+
+  // Pin updated
+  useEffect(() => {
+    const unsub = gameSocket.on('chat:pin_updated', (msg: { channelId: number }) => {
+      qc.invalidateQueries({ queryKey: ['chat-messages', msg.channelId] })
+      qc.invalidateQueries({ queryKey: ['chat-pinned', msg.channelId] })
+    })
+    return unsub
+  }, [qc])
+
   // Auto-dismiss toasts
   useEffect(() => {
     if (toasts.length === 0) return
@@ -140,9 +157,7 @@ export function useChatSocket(activeChannelId: number | null) {
 
   // Get typing names for the active channel
   const typingNames = activeChannelId
-    ? Array.from(typingUsers.values())
-        .filter(() => true) // all typing users shown (server only sends for same channel)
-        .map(t => t.name)
+    ? Array.from(typingUsers.values()).map(t => t.name)
     : []
 
   // Send typing indicator

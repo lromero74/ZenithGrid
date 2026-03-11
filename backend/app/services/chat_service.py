@@ -13,12 +13,69 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from app.models.social import (
-    BlockedUser, ChatChannel, ChatChannelMember, ChatMessage, Friendship,
+    BlockedUser, ChatChannel, ChatChannelMember, ChatMessage,
+    ChatMessageReaction, Friendship,
 )
 
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 2000
+
+# Common emojis allowed for reactions
+ALLOWED_EMOJIS = {
+    "👍", "👎", "❤️", "😂", "😮", "😢", "😡", "🎉",
+    "🔥", "👀", "💯", "🙏", "👏", "🤔", "😍", "🎮",
+}
+
+
+async def _build_message_dict(
+    db: AsyncSession, msg: ChatMessage, sender_name: str
+) -> dict:
+    """Build the full message response dict including reactions and reply-to."""
+    result = {
+        "id": msg.id,
+        "channel_id": msg.channel_id,
+        "sender_id": msg.sender_id,
+        "sender_name": sender_name,
+        "content": msg.content if msg.deleted_at is None else None,
+        "is_deleted": msg.deleted_at is not None,
+        "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "is_pinned": bool(msg.is_pinned),
+        "reply_to": None,
+        "reactions": [],
+    }
+
+    # Load reply-to preview
+    if msg.reply_to_id and msg.deleted_at is None:
+        reply_msg = await db.get(ChatMessage, msg.reply_to_id)
+        if reply_msg:
+            reply_sender = await db.get(User, reply_msg.sender_id)
+            result["reply_to"] = {
+                "id": reply_msg.id,
+                "sender_name": reply_sender.display_name if reply_sender else "Unknown",
+                "content": (reply_msg.content[:100] if reply_msg.deleted_at is None
+                            else None),
+                "is_deleted": reply_msg.deleted_at is not None,
+            }
+
+    # Load reactions (aggregated)
+    if msg.deleted_at is None:
+        reactions_q = await db.execute(
+            select(ChatMessageReaction).where(
+                ChatMessageReaction.message_id == msg.id
+            )
+        )
+        all_reactions = reactions_q.scalars().all()
+        emoji_map: dict[str, list[int]] = {}
+        for r in all_reactions:
+            emoji_map.setdefault(r.emoji, []).append(r.user_id)
+        result["reactions"] = [
+            {"emoji": emoji, "count": len(uids), "user_ids": uids}
+            for emoji, uids in emoji_map.items()
+        ]
+
+    return result
 
 
 async def get_or_create_dm(
@@ -260,22 +317,14 @@ async def get_messages(
 
     messages = []
     for msg, sender in reversed(rows):  # reverse to get chronological order
-        messages.append({
-            "id": msg.id,
-            "channel_id": msg.channel_id,
-            "sender_id": msg.sender_id,
-            "sender_name": sender.display_name,
-            "content": msg.content if msg.deleted_at is None else None,
-            "is_deleted": msg.deleted_at is not None,
-            "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
-            "created_at": msg.created_at.isoformat() if msg.created_at else None,
-        })
+        messages.append(await _build_message_dict(db, msg, sender.display_name))
 
     return messages
 
 
 async def send_message(
-    db: AsyncSession, channel_id: int, user_id: int, content: str
+    db: AsyncSession, channel_id: int, user_id: int, content: str,
+    reply_to_id: int | None = None,
 ) -> dict:
     """Send a message to a channel. Validates membership and friends-only for DMs."""
     content = content.strip()
@@ -314,8 +363,15 @@ async def send_message(
             if friendship.scalar_one_or_none() is None:
                 raise ValueError("You can only message accepted friends")
 
+    # Validate reply_to_id if provided
+    if reply_to_id is not None:
+        reply_msg = await db.get(ChatMessage, reply_to_id)
+        if not reply_msg or reply_msg.channel_id != channel_id:
+            raise ValueError("Invalid reply target")
+
     msg = ChatMessage(
-        channel_id=channel_id, sender_id=user_id, content=content
+        channel_id=channel_id, sender_id=user_id, content=content,
+        reply_to_id=reply_to_id,
     )
     db.add(msg)
 
@@ -330,16 +386,7 @@ async def send_message(
     sender = await db.get(User, user_id)
     sender_name = sender.display_name if sender else f"User {user_id}"
 
-    return {
-        "id": msg.id,
-        "channel_id": msg.channel_id,
-        "sender_id": msg.sender_id,
-        "sender_name": sender_name,
-        "content": msg.content,
-        "is_deleted": False,
-        "edited_at": None,
-        "created_at": msg.created_at.isoformat() if msg.created_at else None,
-    }
+    return await _build_message_dict(db, msg, sender_name)
 
 
 async def edit_message(
@@ -368,16 +415,7 @@ async def edit_message(
     sender = await db.get(User, user_id)
     sender_name = sender.display_name if sender else f"User {user_id}"
 
-    return {
-        "id": msg.id,
-        "channel_id": msg.channel_id,
-        "sender_id": msg.sender_id,
-        "sender_name": sender_name,
-        "content": msg.content,
-        "is_deleted": False,
-        "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
-        "created_at": msg.created_at.isoformat() if msg.created_at else None,
-    }
+    return await _build_message_dict(db, msg, sender_name)
 
 
 async def delete_message(
@@ -670,6 +708,193 @@ async def get_unread_counts(db: AsyncSession, user_id: int) -> dict[int, int]:
             counts[m.channel_id] = count
 
     return counts
+
+
+async def toggle_reaction(
+    db: AsyncSession, message_id: int, user_id: int, emoji: str
+) -> dict:
+    """Toggle an emoji reaction on a message. Returns action taken and updated reactions."""
+    if emoji not in ALLOWED_EMOJIS:
+        raise ValueError("Invalid emoji")
+
+    msg = await db.get(ChatMessage, message_id)
+    if not msg:
+        raise ValueError("Message not found")
+    if msg.deleted_at is not None:
+        raise ValueError("Cannot react to a deleted message")
+
+    # Check membership
+    membership = await db.execute(
+        select(ChatChannelMember.id).where(
+            ChatChannelMember.channel_id == msg.channel_id,
+            ChatChannelMember.user_id == user_id,
+        )
+    )
+    if membership.scalar_one_or_none() is None:
+        raise ValueError("You are not a member of this channel")
+
+    # Check if already reacted with this emoji
+    existing = await db.execute(
+        select(ChatMessageReaction).where(
+            ChatMessageReaction.message_id == message_id,
+            ChatMessageReaction.user_id == user_id,
+            ChatMessageReaction.emoji == emoji,
+        )
+    )
+    reaction = existing.scalar_one_or_none()
+
+    if reaction:
+        await db.delete(reaction)
+        action = "removed"
+    else:
+        db.add(ChatMessageReaction(
+            message_id=message_id, user_id=user_id, emoji=emoji
+        ))
+        action = "added"
+
+    await db.commit()
+
+    # Return updated reactions for this message
+    reactions_q = await db.execute(
+        select(ChatMessageReaction).where(
+            ChatMessageReaction.message_id == message_id
+        )
+    )
+    all_reactions = reactions_q.scalars().all()
+    emoji_map: dict[str, list[int]] = {}
+    for r in all_reactions:
+        emoji_map.setdefault(r.emoji, []).append(r.user_id)
+
+    return {
+        "message_id": message_id,
+        "channel_id": msg.channel_id,
+        "action": action,
+        "emoji": emoji,
+        "user_id": user_id,
+        "reactions": [
+            {"emoji": e, "count": len(uids), "user_ids": uids}
+            for e, uids in emoji_map.items()
+        ],
+    }
+
+
+async def toggle_pin(
+    db: AsyncSession, message_id: int, user_id: int
+) -> dict:
+    """Toggle pin on a message. Only admin/owner can pin."""
+    msg = await db.get(ChatMessage, message_id)
+    if not msg:
+        raise ValueError("Message not found")
+    if msg.deleted_at is not None:
+        raise ValueError("Cannot pin a deleted message")
+
+    # Check requester is admin/owner
+    membership = await db.execute(
+        select(ChatChannelMember).where(
+            ChatChannelMember.channel_id == msg.channel_id,
+            ChatChannelMember.user_id == user_id,
+        )
+    )
+    member = membership.scalar_one_or_none()
+    if not member or member.role not in ("owner", "admin"):
+        raise ValueError("Only admins and owners can pin messages")
+
+    msg.is_pinned = not msg.is_pinned
+    await db.commit()
+
+    return {
+        "message_id": message_id,
+        "channel_id": msg.channel_id,
+        "is_pinned": msg.is_pinned,
+    }
+
+
+async def get_pinned_messages(
+    db: AsyncSession, channel_id: int, user_id: int
+) -> list[dict]:
+    """Get all pinned messages in a channel."""
+    # Validate membership
+    membership = await db.execute(
+        select(ChatChannelMember.id).where(
+            ChatChannelMember.channel_id == channel_id,
+            ChatChannelMember.user_id == user_id,
+        )
+    )
+    if membership.scalar_one_or_none() is None:
+        raise ValueError("You are not a member of this channel")
+
+    result = await db.execute(
+        select(ChatMessage, User)
+        .join(User, ChatMessage.sender_id == User.id)
+        .where(
+            ChatMessage.channel_id == channel_id,
+            ChatMessage.is_pinned.is_(True),
+            ChatMessage.deleted_at.is_(None),
+        )
+        .order_by(ChatMessage.created_at.desc())
+    )
+    rows = result.all()
+    return [await _build_message_dict(db, msg, sender.display_name)
+            for msg, sender in rows]
+
+
+async def search_messages(
+    db: AsyncSession, user_id: int, query: str,
+    channel_id: int | None = None, limit: int = 30
+) -> list[dict]:
+    """Search messages across user's channels (or a specific channel)."""
+    query_text = query.strip()
+    if not query_text or len(query_text) < 2:
+        raise ValueError("Search query must be at least 2 characters")
+
+    # Get user's channel IDs
+    if channel_id:
+        # Validate membership
+        membership = await db.execute(
+            select(ChatChannelMember.id).where(
+                ChatChannelMember.channel_id == channel_id,
+                ChatChannelMember.user_id == user_id,
+            )
+        )
+        if membership.scalar_one_or_none() is None:
+            raise ValueError("You are not a member of this channel")
+        channel_ids = [channel_id]
+    else:
+        memberships = await db.execute(
+            select(ChatChannelMember.channel_id).where(
+                ChatChannelMember.user_id == user_id
+            )
+        )
+        channel_ids = [row[0] for row in memberships.all()]
+
+    if not channel_ids:
+        return []
+
+    # Search using ILIKE (works for both PostgreSQL and SQLite)
+    stmt = (
+        select(ChatMessage, User)
+        .join(User, ChatMessage.sender_id == User.id)
+        .where(
+            ChatMessage.channel_id.in_(channel_ids),
+            ChatMessage.deleted_at.is_(None),
+            ChatMessage.content.ilike(f"%{query_text}%"),
+        )
+        .order_by(ChatMessage.created_at.desc())
+        .limit(min(limit, 50))
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    messages = []
+    for msg, sender in rows:
+        msg_dict = await _build_message_dict(db, msg, sender.display_name)
+        # Include channel name for cross-channel search
+        channel = await db.get(ChatChannel, msg.channel_id)
+        msg_dict["channel_name"] = channel.name if channel else None
+        msg_dict["channel_type"] = channel.type if channel else None
+        messages.append(msg_dict)
+
+    return messages
 
 
 async def cleanup_old_messages(db: AsyncSession, retention_days: int) -> int:

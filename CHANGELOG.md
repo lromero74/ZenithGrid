@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.106.0] - 2026-03-11
+
+### Added
+- **Emoji reactions**: React to messages with 16 common emojis — see who reacted, toggle your own reactions on/off
+- **Reply/quote messages**: Reply to a specific message with a quoted preview, keeping group conversations organized
+- **Message search**: Search messages across all your channels or within a specific channel
+- **@Mentions**: Type @ in the compose box for autocomplete of channel members — mentioned names are highlighted in blue
+- **Pinned messages**: Admins and owners can pin important messages — view all pinned messages from the pin icon in the channel header
+- **Online presence in chat**: Green dot next to online members in the members panel
+
 ## [v2.105.1] - 2026-03-11
 
 ### Added

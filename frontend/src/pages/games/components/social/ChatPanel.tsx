@@ -3,25 +3,31 @@
  *
  * Two-pane layout: channel list on the left, message area on the right.
  * Supports creating DMs/groups, sending/editing/deleting messages,
- * typing indicators, unread badges, and infinite scroll for history.
+ * typing indicators, unread badges, infinite scroll for history,
+ * emoji reactions, reply/quote, pinned messages, search, @mentions,
+ * and online presence indicators.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   MessageSquare, Plus, Send, ArrowLeft, Users, Hash,
   ChevronDown, ChevronUp, Pencil, Trash2, X,
-  UserPlus, LogOut,
+  UserPlus, LogOut, Search, Pin, Reply, Smile,
 } from 'lucide-react'
 import { useAuth } from '../../../../contexts/AuthContext'
-import { useFriends } from '../../hooks/useFriends'
+import { useFriends, useOnlineFriends } from '../../hooks/useFriends'
 import {
   useChatChannels, useChatMessages, useSendMessage,
   useEditMessage, useDeleteMessage, useMarkRead,
   useCreateChannel, useChannelMembers, useAddMember, useRemoveMember,
-  useDeleteChannel, useUpdateMemberRole,
+  useDeleteChannel, useUpdateMemberRole, useToggleReaction,
+  useTogglePin, usePinnedMessages, useChatSearch,
 } from '../../hooks/useChat'
 import { useChatSocket } from '../../hooks/useChatSocket'
-import type { ChatChannel, ChatMessage } from '../../hooks/useChat'
+import type { ChatChannel, ChatMessage, ChatMember } from '../../hooks/useChat'
+
+// Common emojis for the quick picker
+const EMOJI_LIST = ['👍', '👎', '❤️', '😂', '😮', '😢', '😡', '🎉', '🔥', '👀', '💯', '🙏', '👏', '🤔', '😍', '🎮']
 
 // ----- Chat Toast Overlay -----
 
@@ -43,6 +49,48 @@ function ChatToastOverlay({ toasts, onDismiss }: {
         </div>
       ))}
     </div>
+  )
+}
+
+// ----- Emoji Picker -----
+
+function EmojiPicker({ onSelect, onClose }: {
+  onSelect: (emoji: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="absolute bottom-full right-0 mb-1 bg-slate-800 border border-slate-600/50 rounded-lg p-2 shadow-xl z-10">
+      <div className="grid grid-cols-8 gap-0.5">
+        {EMOJI_LIST.map(emoji => (
+          <button
+            key={emoji}
+            onClick={() => { onSelect(emoji); onClose() }}
+            className="w-7 h-7 flex items-center justify-center text-sm hover:bg-slate-700 rounded transition-colors"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ----- @Mention Renderer -----
+
+function renderContent(content: string, members: ChatMember[]) {
+  if (!content) return null
+  const memberNames = members.map(m => m.display_name)
+  // Match @Name patterns
+  const regex = new RegExp(`@(${memberNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g')
+  const parts = content.split(regex)
+  const nameSet = new Set(memberNames)
+
+  return parts.map((part, i) =>
+    nameSet.has(part) ? (
+      <span key={i} className="text-blue-400 font-medium">@{part}</span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
   )
 }
 
@@ -94,7 +142,6 @@ function NewChatDialog({ onClose, onCreated }: {
         <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xs">Cancel</button>
       </div>
 
-      {/* Mode toggle */}
       <div className="flex gap-2">
         <button
           onClick={() => { setMode('dm'); setSelectedFriends([]) }}
@@ -110,7 +157,6 @@ function NewChatDialog({ onClose, onCreated }: {
         </button>
       </div>
 
-      {/* Group name */}
       {mode === 'group' && (
         <input
           type="text"
@@ -122,7 +168,6 @@ function NewChatDialog({ onClose, onCreated }: {
         />
       )}
 
-      {/* Friend selection */}
       <div>
         <p className="text-[10px] text-slate-500 mb-1">
           {mode === 'dm' ? 'Select a friend:' : 'Select friends:'}
@@ -132,11 +177,8 @@ function NewChatDialog({ onClose, onCreated }: {
             <button
               key={f.id}
               onClick={() => {
-                if (mode === 'dm') {
-                  setSelectedFriends([f.id])
-                } else {
-                  toggleFriend(f.id)
-                }
+                if (mode === 'dm') setSelectedFriends([f.id])
+                else toggleFriend(f.id)
               }}
               className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
                 selectedFriends.includes(f.id)
@@ -197,13 +239,20 @@ function ChannelListItem({ channel, isActive, onClick }: {
 
 // ----- Message Bubble -----
 
-function MessageBubble({ msg, isOwn, onEdit, onDelete, myRole }: {
+function MessageBubble({ msg, isOwn, onEdit, onDelete, onReply, onReact, onPin, myRole, members }: {
   msg: ChatMessage
   isOwn: boolean
   onEdit: (id: number, content: string) => void
   onDelete: (id: number) => void
+  onReply: (msg: ChatMessage) => void
+  onReact: (messageId: number, emoji: string) => void
+  onPin: (messageId: number) => void
   myRole: string
+  members: ChatMember[]
 }) {
+  const { user } = useAuth()
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+
   if (msg.is_deleted) {
     return (
       <div className="py-1 px-2">
@@ -213,12 +262,31 @@ function MessageBubble({ msg, isOwn, onEdit, onDelete, myRole }: {
   }
 
   const canDelete = isOwn || myRole === 'owner' || myRole === 'admin'
+  const canPin = myRole === 'owner' || myRole === 'admin'
   const time = msg.created_at
     ? new Date(msg.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : ''
 
   return (
-    <div className={`group py-1 px-2 rounded hover:bg-slate-700/20 ${isOwn ? '' : ''}`}>
+    <div className="group py-1 px-2 rounded hover:bg-slate-700/20 relative">
+      {/* Reply-to quote */}
+      {msg.reply_to && (
+        <div className="flex items-center gap-1 mb-0.5 pl-2 border-l-2 border-blue-500/40">
+          <span className="text-[10px] text-blue-400/70">{msg.reply_to.sender_name}</span>
+          <span className="text-[10px] text-slate-500 truncate max-w-[200px]">
+            {msg.reply_to.is_deleted ? 'Message deleted' : msg.reply_to.content}
+          </span>
+        </div>
+      )}
+
+      {/* Pin indicator */}
+      {msg.is_pinned && (
+        <div className="flex items-center gap-0.5 mb-0.5">
+          <Pin className="w-2.5 h-2.5 text-yellow-500" />
+          <span className="text-[9px] text-yellow-500/70">Pinned</span>
+        </div>
+      )}
+
       <div className="flex items-baseline gap-2">
         <span className={`text-xs font-medium ${isOwn ? 'text-blue-400' : 'text-slate-300'}`}>
           {msg.sender_name}
@@ -227,7 +295,38 @@ function MessageBubble({ msg, isOwn, onEdit, onDelete, myRole }: {
         {msg.edited_at && <span className="text-[9px] text-slate-600">(edited)</span>}
 
         {/* Actions */}
-        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+          <button
+            onClick={() => onReply(msg)}
+            className="p-0.5 text-slate-500 hover:text-slate-300"
+            title="Reply"
+          >
+            <Reply className="w-3 h-3" />
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="p-0.5 text-slate-500 hover:text-slate-300"
+              title="React"
+            >
+              <Smile className="w-3 h-3" />
+            </button>
+            {showEmojiPicker && (
+              <EmojiPicker
+                onSelect={(emoji) => onReact(msg.id, emoji)}
+                onClose={() => setShowEmojiPicker(false)}
+              />
+            )}
+          </div>
+          {canPin && (
+            <button
+              onClick={() => onPin(msg.id)}
+              className={`p-0.5 ${msg.is_pinned ? 'text-yellow-500' : 'text-slate-500 hover:text-yellow-500'}`}
+              title={msg.is_pinned ? 'Unpin' : 'Pin'}
+            >
+              <Pin className="w-3 h-3" />
+            </button>
+          )}
           {isOwn && (
             <button
               onClick={() => onEdit(msg.id, msg.content || '')}
@@ -249,32 +348,77 @@ function MessageBubble({ msg, isOwn, onEdit, onDelete, myRole }: {
         </div>
       </div>
       <p className="text-xs text-slate-200 whitespace-pre-wrap break-words mt-0.5">
-        {msg.content}
+        {renderContent(msg.content || '', members)}
       </p>
+
+      {/* Reaction pills */}
+      {msg.reactions.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {msg.reactions.map(r => (
+            <button
+              key={r.emoji}
+              onClick={() => onReact(msg.id, r.emoji)}
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] transition-colors ${
+                r.user_ids.includes(user?.id || 0)
+                  ? 'bg-blue-600/30 border border-blue-500/50 text-blue-300'
+                  : 'bg-slate-700/50 border border-slate-600/30 text-slate-400 hover:bg-slate-600/50'
+              }`}
+            >
+              <span>{r.emoji}</span>
+              <span>{r.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-// ----- Message Input -----
+// ----- Message Input with @mention autocomplete -----
 
-function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
+function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, replyingTo, onCancelReply, members }: {
   channelId: number
   onTyping: () => void
   editingMessage: { id: number; content: string } | null
   onCancelEdit: () => void
+  replyingTo: ChatMessage | null
+  onCancelReply: () => void
+  members: ChatMember[]
 }) {
   const [text, setText] = useState('')
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const sendMessage = useSendMessage()
   const editMessage = useEditMessage()
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Populate edit content
   useEffect(() => {
     if (editingMessage) {
       setText(editingMessage.content)
       inputRef.current?.focus()
     }
   }, [editingMessage])
+
+  // Filter members for @mention autocomplete
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null) return []
+    return members
+      .filter(m => m.display_name.toLowerCase().includes(mentionQuery.toLowerCase()))
+      .slice(0, 5)
+  }, [mentionQuery, members])
+
+  const insertMention = (name: string) => {
+    if (!inputRef.current) return
+    const cursor = inputRef.current.selectionStart
+    const beforeCursor = text.slice(0, cursor)
+    const atIndex = beforeCursor.lastIndexOf('@')
+    if (atIndex === -1) return
+    const after = text.slice(cursor)
+    const newText = beforeCursor.slice(0, atIndex) + `@${name} ` + after
+    setText(newText)
+    setMentionQuery(null)
+    inputRef.current.focus()
+  }
 
   const handleSend = async () => {
     const content = text.trim()
@@ -285,7 +429,12 @@ function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
         await editMessage.mutateAsync({ messageId: editingMessage.id, content })
         onCancelEdit()
       } else {
-        await sendMessage.mutateAsync({ channelId, content })
+        await sendMessage.mutateAsync({
+          channelId,
+          content,
+          replyToId: replyingTo?.id,
+        })
+        onCancelReply()
       }
       setText('')
     } catch {
@@ -294,19 +443,56 @@ function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle mention autocomplete navigation
+    if (mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex(i => Math.min(i + 1, mentionSuggestions.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex(i => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        if (mentionSuggestions[mentionIndex]) {
+          e.preventDefault()
+          insertMention(mentionSuggestions[mentionIndex].display_name)
+          return
+        }
+      }
+      if (e.key === 'Escape') {
+        setMentionQuery(null)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
-    if (e.key === 'Escape' && editingMessage) {
-      onCancelEdit()
-      setText('')
+    if (e.key === 'Escape') {
+      if (editingMessage) { onCancelEdit(); setText('') }
+      else if (replyingTo) onCancelReply()
     }
   }
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value)
+    const val = e.target.value
+    setText(val)
     onTyping()
+
+    // Detect @mention trigger
+    const cursor = e.target.selectionStart
+    const beforeCursor = val.slice(0, cursor)
+    const atMatch = beforeCursor.match(/@(\w*)$/)
+    if (atMatch) {
+      setMentionQuery(atMatch[1])
+      setMentionIndex(0)
+    } else {
+      setMentionQuery(null)
+    }
   }
 
   const charCount = text.length
@@ -314,6 +500,23 @@ function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
 
   return (
     <div className="border-t border-slate-700/50 p-2">
+      {/* Reply preview */}
+      {replyingTo && (
+        <div className="flex items-center justify-between mb-1 px-1 py-0.5 bg-slate-700/30 rounded">
+          <div className="flex items-center gap-1 min-w-0">
+            <Reply className="w-3 h-3 text-blue-400 shrink-0" />
+            <span className="text-[10px] text-blue-400 shrink-0">{replyingTo.sender_name}</span>
+            <span className="text-[10px] text-slate-500 truncate">
+              {(replyingTo.content || '').slice(0, 60)}
+            </span>
+          </div>
+          <button onClick={onCancelReply} className="text-slate-500 hover:text-slate-300 shrink-0 ml-1">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Edit indicator */}
       {editingMessage && (
         <div className="flex items-center justify-between mb-1 px-1">
           <span className="text-[10px] text-blue-400">Editing message</span>
@@ -322,25 +525,45 @@ function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
           </button>
         </div>
       )}
-      <div className="flex items-end gap-2">
-        <textarea
-          ref={inputRef}
-          value={text}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          maxLength={2000}
-          rows={1}
-          className="flex-1 bg-slate-900/50 border border-slate-600/50 rounded text-xs text-slate-200 py-1.5 px-2 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 resize-none max-h-20 overflow-y-auto"
-          style={{ minHeight: '32px' }}
-        />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() || isOverLimit || sendMessage.isPending || editMessage.isPending}
-          className="p-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
+
+      <div className="relative">
+        {/* @Mention autocomplete dropdown */}
+        {mentionSuggestions.length > 0 && (
+          <div className="absolute bottom-full left-0 mb-1 bg-slate-800 border border-slate-600/50 rounded-lg shadow-xl z-10 w-48">
+            {mentionSuggestions.map((m, i) => (
+              <button
+                key={m.user_id}
+                onClick={() => insertMention(m.display_name)}
+                className={`w-full text-left px-2 py-1 text-xs transition-colors ${
+                  i === mentionIndex ? 'bg-blue-600/30 text-blue-300' : 'text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                @{m.display_name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            value={text}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message... (@ to mention)"
+            maxLength={2000}
+            rows={1}
+            className="flex-1 bg-slate-900/50 border border-slate-600/50 rounded text-xs text-slate-200 py-1.5 px-2 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 resize-none max-h-20 overflow-y-auto"
+            style={{ minHeight: '32px' }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!text.trim() || isOverLimit || sendMessage.isPending || editMessage.isPending}
+            className="p-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
       {charCount > 1800 && (
         <p className={`text-[9px] mt-0.5 text-right ${isOverLimit ? 'text-red-400' : 'text-slate-500'}`}>
@@ -353,10 +576,13 @@ function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit }: {
 
 // ----- Channel Header -----
 
-function ChannelHeader({ channel, onBack, onShowMembers }: {
+function ChannelHeader({ channel, onBack, onShowMembers, onShowSearch, onShowPinned, pinnedCount }: {
   channel: ChatChannel
   onBack: () => void
   onShowMembers: () => void
+  onShowSearch: () => void
+  onShowPinned: () => void
+  pinnedCount: number
 }) {
   const Icon = channel.type === 'dm' ? MessageSquare : channel.type === 'group' ? Users : Hash
 
@@ -367,11 +593,117 @@ function ChannelHeader({ channel, onBack, onShowMembers }: {
       </button>
       <Icon className="w-4 h-4 text-slate-400 shrink-0" />
       <h3 className="text-sm font-medium text-slate-200 truncate flex-1">{channel.name || 'Chat'}</h3>
-      {channel.type !== 'dm' && (
-        <button onClick={onShowMembers} className="p-1 text-slate-400 hover:text-slate-200" title="Members">
-          <Users className="w-3.5 h-3.5" />
+      <div className="flex items-center gap-1">
+        <button onClick={onShowSearch} className="p-1 text-slate-400 hover:text-slate-200" title="Search">
+          <Search className="w-3.5 h-3.5" />
         </button>
+        {pinnedCount > 0 && (
+          <button onClick={onShowPinned} className="p-1 text-yellow-500/70 hover:text-yellow-500 relative" title="Pinned">
+            <Pin className="w-3.5 h-3.5" />
+            <span className="absolute -top-0.5 -right-0.5 bg-yellow-500 text-black text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              {pinnedCount}
+            </span>
+          </button>
+        )}
+        {channel.type !== 'dm' && (
+          <button onClick={onShowMembers} className="p-1 text-slate-400 hover:text-slate-200" title="Members">
+            <Users className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ----- Search Panel -----
+
+function SearchPanel({ channelId, onClose, onJumpTo }: {
+  channelId: number
+  onClose: () => void
+  onJumpTo: (messageId: number) => void
+}) {
+  const [query, setQuery] = useState('')
+  const { data: results = [], isLoading } = useChatSearch(query, channelId)
+
+  return (
+    <div className="p-2 space-y-2 border-b border-slate-700/50">
+      <div className="flex items-center gap-2">
+        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search messages..."
+          autoFocus
+          className="flex-1 bg-slate-900/50 border border-slate-600/50 rounded text-xs text-slate-200 py-1 px-2 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50"
+        />
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {query.length >= 2 && (
+        <div className="max-h-32 overflow-y-auto space-y-0.5">
+          {isLoading ? (
+            <p className="text-[10px] text-slate-500 py-1">Searching...</p>
+          ) : results.length === 0 ? (
+            <p className="text-[10px] text-slate-500 py-1">No results found</p>
+          ) : (
+            results.map(r => (
+              <button
+                key={r.id}
+                onClick={() => onJumpTo(r.id)}
+                className="w-full text-left px-2 py-1 rounded hover:bg-slate-700/30 transition-colors"
+              >
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[10px] font-medium text-slate-300">{r.sender_name}</span>
+                  <span className="text-[9px] text-slate-600">
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate">{r.content}</p>
+              </button>
+            ))
+          )}
+        </div>
       )}
+    </div>
+  )
+}
+
+// ----- Pinned Messages Panel -----
+
+function PinnedPanel({ channelId, onClose }: {
+  channelId: number
+  onClose: () => void
+}) {
+  const { data: pinned = [] } = usePinnedMessages(channelId)
+
+  return (
+    <div className="p-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <Pin className="w-3.5 h-3.5 text-yellow-500" />
+          <h4 className="text-xs font-medium text-slate-300">Pinned Messages ({pinned.length})</h4>
+        </div>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xs">Close</button>
+      </div>
+      <div className="max-h-48 overflow-y-auto space-y-1">
+        {pinned.length === 0 ? (
+          <p className="text-[10px] text-slate-500 py-2">No pinned messages</p>
+        ) : (
+          pinned.map(msg => (
+            <div key={msg.id} className="px-2 py-1 bg-slate-700/20 rounded">
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10px] font-medium text-slate-300">{msg.sender_name}</span>
+                <span className="text-[9px] text-slate-600">
+                  {msg.created_at ? new Date(msg.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400">{msg.content}</p>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }
@@ -387,6 +719,7 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
   const { user } = useAuth()
   const { data: members = [] } = useChannelMembers(channelId)
   const { data: friends = [] } = useFriends()
+  const { data: onlineFriends = [] } = useOnlineFriends()
   const addMember = useAddMember()
   const removeMember = useRemoveMember()
   const deleteChannel = useDeleteChannel()
@@ -397,6 +730,7 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
   const isOwner = channel.my_role === 'owner'
   const canManage = isOwner || channel.my_role === 'admin'
   const memberIds = new Set(members.map(m => m.user_id))
+  const onlineIds = new Set(onlineFriends.map((f: { id: number }) => f.id))
 
   const availableFriends = friends.filter((f: { id: number }) => !memberIds.has(f.id))
 
@@ -420,6 +754,11 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
         {members.map(m => (
           <div key={m.user_id} className="flex items-center justify-between py-0.5 px-1">
             <div className="flex items-center gap-1">
+              {/* Online presence dot */}
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                onlineIds.has(m.user_id) || m.user_id === user?.id
+                  ? 'bg-green-500' : 'bg-slate-600'
+              }`} />
               <span className="text-xs text-slate-300">{m.display_name}</span>
               {m.role !== 'member' && (
                 <span className="text-[9px] text-slate-500">({m.role})</span>
@@ -429,7 +768,6 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
               )}
             </div>
             <div className="flex items-center gap-1">
-              {/* Role toggle — owner only, not on self */}
               {isOwner && m.user_id !== user?.id && (
                 <button
                   onClick={() => updateRole.mutate({
@@ -461,7 +799,6 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
         ))}
       </div>
 
-      {/* Leave button (non-owners) */}
       {channel.type !== 'dm' && !isOwner && (
         <button
           onClick={() => removeMember.mutate({ channelId, userId: user!.id })}
@@ -471,7 +808,6 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
         </button>
       )}
 
-      {/* Delete group — owner only */}
       {isOwner && channel.type !== 'dm' && (
         !confirmDelete ? (
           <button
@@ -500,7 +836,6 @@ function MembersPanel({ channelId, channel, onClose, onDeleted }: {
         )
       )}
 
-      {/* Add member */}
       {canManage && channel.type !== 'dm' && (
         <>
           {!showAdd ? (
@@ -546,12 +881,17 @@ export function ChatPanel() {
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null)
   const [showNewChat, setShowNewChat] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [showPinned, setShowPinned] = useState(false)
   const [editingMessage, setEditingMessage] = useState<{ id: number; content: string } | null>(null)
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null)
   const [isOpen, setIsOpen] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   const { typingNames, sendTyping, toasts, dismissToast } = useChatSocket(activeChannelId)
+  const toggleReaction = useToggleReaction()
+  const togglePin = useTogglePin()
 
   const activeChannel = useMemo(
     () => channels.find(c => c.id === activeChannelId) || null,
@@ -569,6 +909,9 @@ export function ChatPanel() {
     () => messagePages?.pages.flat() ?? [],
     [messagePages]
   )
+
+  const { data: members = [] } = useChannelMembers(activeChannelId)
+  const { data: pinnedMessages = [] } = usePinnedMessages(activeChannelId)
 
   const markRead = useMarkRead()
   const deleteMessage = useDeleteMessage()
@@ -606,6 +949,14 @@ export function ChatPanel() {
     () => channels.reduce((sum, c) => sum + c.unread_count, 0),
     [channels]
   )
+
+  const handleReact = useCallback((messageId: number, emoji: string) => {
+    toggleReaction.mutate({ messageId, emoji })
+  }, [toggleReaction])
+
+  const handlePin = useCallback((messageId: number) => {
+    togglePin.mutate(messageId)
+  }, [togglePin])
 
   return (
     <>
@@ -651,12 +1002,45 @@ export function ChatPanel() {
                   onBack={() => {
                     setActiveChannelId(null)
                     setShowMembers(false)
+                    setShowSearch(false)
+                    setShowPinned(false)
                     setEditingMessage(null)
+                    setReplyingTo(null)
                   }}
-                  onShowMembers={() => setShowMembers(!showMembers)}
+                  onShowMembers={() => {
+                    setShowMembers(!showMembers)
+                    setShowSearch(false)
+                    setShowPinned(false)
+                  }}
+                  onShowSearch={() => {
+                    setShowSearch(!showSearch)
+                    setShowMembers(false)
+                    setShowPinned(false)
+                  }}
+                  onShowPinned={() => {
+                    setShowPinned(!showPinned)
+                    setShowMembers(false)
+                    setShowSearch(false)
+                  }}
+                  pinnedCount={pinnedMessages.length}
                 />
 
-                {showMembers ? (
+                {/* Search panel */}
+                {showSearch && (
+                  <SearchPanel
+                    channelId={activeChannelId}
+                    onClose={() => setShowSearch(false)}
+                    onJumpTo={() => setShowSearch(false)}
+                  />
+                )}
+
+                {/* Pinned messages panel */}
+                {showPinned ? (
+                  <PinnedPanel
+                    channelId={activeChannelId}
+                    onClose={() => setShowPinned(false)}
+                  />
+                ) : showMembers ? (
                   <div className="p-2">
                     <MembersPanel
                       channelId={activeChannelId}
@@ -690,8 +1074,12 @@ export function ChatPanel() {
                             msg={msg}
                             isOwn={msg.sender_id === user?.id}
                             myRole={activeChannel.my_role}
+                            members={members}
                             onEdit={(id, content) => setEditingMessage({ id, content })}
                             onDelete={(id) => deleteMessage.mutate(id)}
+                            onReply={(m) => setReplyingTo(m)}
+                            onReact={handleReact}
+                            onPin={handlePin}
                           />
                         ))
                       )}
@@ -711,6 +1099,9 @@ export function ChatPanel() {
                       onTyping={handleTyping}
                       editingMessage={editingMessage}
                       onCancelEdit={() => setEditingMessage(null)}
+                      replyingTo={replyingTo}
+                      onCancelReply={() => setReplyingTo(null)}
+                      members={members}
                     />
                   </>
                 )}

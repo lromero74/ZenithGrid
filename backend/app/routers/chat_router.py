@@ -33,6 +33,7 @@ class CreateChannelRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+    reply_to_id: Optional[int] = None
 
 
 class EditMessageRequest(BaseModel):
@@ -50,6 +51,10 @@ class UpdateRoleRequest(BaseModel):
 
 class RenameChannelRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
+
+
+class ReactionRequest(BaseModel):
+    emoji: str = Field(..., min_length=1, max_length=32)
 
 
 # ----- Channel Endpoints -----
@@ -173,7 +178,8 @@ async def send_message(
     """Send a message to a channel. Also broadcasts via WebSocket."""
     try:
         return await chat_service.send_message(
-            db, channel_id, current_user.id, body.content
+            db, channel_id, current_user.id, body.content,
+            reply_to_id=body.reply_to_id,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -283,3 +289,68 @@ async def remove_member(
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"status": "removed"}
+
+
+# ----- Reactions -----
+
+@router.post("/messages/{message_id}/reactions")
+async def toggle_reaction(
+    message_id: int,
+    body: ReactionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> dict:
+    """Toggle an emoji reaction on a message."""
+    try:
+        return await chat_service.toggle_reaction(
+            db, message_id, current_user.id, body.emoji
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ----- Pinned Messages -----
+
+@router.post("/messages/{message_id}/pin")
+async def toggle_pin(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> dict:
+    """Toggle pin on a message. Only admins/owners can pin."""
+    try:
+        return await chat_service.toggle_pin(db, message_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/channels/{channel_id}/pinned")
+async def get_pinned_messages(
+    channel_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> list[dict]:
+    """Get all pinned messages in a channel."""
+    try:
+        return await chat_service.get_pinned_messages(db, channel_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(403, str(e))
+
+
+# ----- Search -----
+
+@router.get("/search")
+async def search_messages(
+    q: str = Query(..., min_length=2, max_length=200),
+    channel_id: Optional[int] = Query(None),
+    limit: int = Query(30, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> list[dict]:
+    """Search messages across user's channels or a specific channel."""
+    try:
+        return await chat_service.search_messages(
+            db, current_user.id, q, channel_id, limit
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
