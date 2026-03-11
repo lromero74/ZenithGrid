@@ -325,7 +325,7 @@ const AI_DELAY = 800
 
 // ── Main component ───────────────────────────────────────────────────
 
-function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('canasta')
   const saved = useRef(load()).current
 
@@ -727,7 +727,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
         )}
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.teamScores[0]}
@@ -747,7 +747,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
 
 // ── Race wrapper (first-to-meld-out against AI) ─────────────────────
 
-function CanastaRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function CanastaRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -764,8 +764,9 @@ function CanastaRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: strin
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <CanastaSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <CanastaSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -776,14 +777,14 @@ export default function Canasta() {
       config={{
         gameId: 'canasta',
         gameName: 'Canasta',
-        modes: ['race'],
+        modes: ['first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to meld out wins',
+        modeDescriptions: { first_to_win: 'First to meld out wins' },
       }}
       renderSinglePlayer={() => <CanastaSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <CanastaRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <CanastaRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

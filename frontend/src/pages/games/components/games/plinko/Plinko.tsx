@@ -21,6 +21,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ──────────────────────────────────────────────────────
 function PlinkoHelp({ onClose }: { onClose: () => void }) {
@@ -133,7 +135,9 @@ function getScaleForContainer(containerWidth: number): number {
   return Math.min(1, widthScale, heightScale)
 }
 
-export default function Plinko() {
+function PlinkoSinglePlayer({ onGameEnd }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void
+} = {}) {
   const { load, save, clear } = useGameState<PlinkoState>('plinko')
   const saved = useRef(load()).current
 
@@ -404,6 +408,8 @@ export default function Plinko() {
       if (lastMultiplier >= 1) {
         sfx.play('win')
       }
+      // Report current balance as score for race mode
+      onGameEnd?.('win', balanceRef.current)
     }
 
     drawBoard()
@@ -648,5 +654,65 @@ export default function Plinko() {
       </div>
       {showHelp && <PlinkoHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper ──────────────────────────────────────────────────
+
+function PlinkoRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish } =
+    useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+  const bestScoreRef = useRef(0)
+
+  const handleGameEnd = useCallback((_result: 'win' | 'loss' | 'draw', score?: number) => {
+    const currentScore = score ?? 0
+    if (currentScore > bestScoreRef.current) {
+      bestScoreRef.current = currentScore
+      reportScore(currentScore)
+    }
+  }, [reportScore])
+
+  // Report finish when component unmounts (user leaves) or on explicit end
+  useEffect(() => {
+    return () => {
+      if (!finishedRef.current) {
+        finishedRef.current = true
+        reportFinish('win', bestScoreRef.current)
+      }
+    }
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <PlinkoSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+export default function Plinko() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'plinko',
+        gameName: 'Plinko',
+        modes: ['best_score'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { best_score: 'Highest balance wins' },
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <PlinkoSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <PlinkoRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

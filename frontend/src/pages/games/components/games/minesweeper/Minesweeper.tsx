@@ -119,7 +119,7 @@ interface MinesweeperSaved {
   firstClick: boolean
 }
 
-function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
+function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<MinesweeperSaved>('minesweeper')
   const saved = useRef(load()).current
 
@@ -284,7 +284,7 @@ function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
           Left-click to reveal. Right-click to flag.
         </p>
 
-        {isGameOver && (
+        {isGameOver && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             message={gameStatus === 'won' ? `Cleared in ${timer.formatted}` : undefined}
@@ -301,7 +301,7 @@ function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
 
 // ── Race wrapper (best_score — fastest clear time wins) ─────────────
 
-function MinesweeperRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+function MinesweeperRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
@@ -320,8 +320,9 @@ function MinesweeperRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: s
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <MinesweeperSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <MinesweeperSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -334,14 +335,14 @@ export default function Minesweeper() {
       config={{
         gameId: 'minesweeper',
         gameName: 'Minesweeper',
-        modes: ['race'],
+        modes: ['best_score'],
         hasDifficulty: true,
-        raceDescription: 'Fastest to clear the board wins',
+        modeDescriptions: { best_score: 'Fastest to clear the board wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <MinesweeperSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <MinesweeperRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <MinesweeperRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

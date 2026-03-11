@@ -22,7 +22,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay, type RaceType } from '../../multiplayer/RaceOverlay'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -314,7 +314,7 @@ function SpaceInvadersHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
+function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   // Music
   const song = useMemo(() => getSongForGame('space-invaders'), [])
   const music = useGameMusic(song)
@@ -725,7 +725,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }:
         )}
 
         {/* Game over modal */}
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={score}
@@ -747,7 +747,8 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }:
   )
 }
 
-function SpaceInvadersRaceWrapper({ roomId, raceType }: { roomId: string; raceType: RaceType }) {
+function SpaceInvadersRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
+  const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
 
@@ -764,8 +765,9 @@ function SpaceInvadersRaceWrapper({ roomId, raceType }: { roomId: string; raceTy
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <SpaceInvadersSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+      <SpaceInvadersSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
     </div>
   )
 }
@@ -776,16 +778,15 @@ export default function SpaceInvaders() {
       config={{
         gameId: 'space-invaders',
         gameName: 'Space Invaders',
-        modes: ['race'],
+        modes: ['survival', 'best_score'],
         maxPlayers: 2,
         hasDifficulty: false,
-        raceDescription: 'Last alive or highest score wins',
+        modeDescriptions: { survival: 'Last player alive wins', best_score: 'Highest score wins' },
       }}
       renderSinglePlayer={() => <SpaceInvadersSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => {
-        const raceType: RaceType = (roomConfig as RoomConfig & { raceType?: RaceType }).raceType || 'survival'
-        return <SpaceInvadersRaceWrapper roomId={roomId} raceType={raceType} />
-      }}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
+        <SpaceInvadersRaceWrapper roomId={roomId} roomConfig={roomConfig} onLeave={onLeave} />
+      )}
     />
   )
 }

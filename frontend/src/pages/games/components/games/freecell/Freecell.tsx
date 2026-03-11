@@ -14,6 +14,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   dealFreecell,
   moveToFreecell,
@@ -211,7 +213,9 @@ function B({ children }: { children: React.ReactNode }) {
 
 const FOUNDATION_SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades']
 
-export default function Freecell() {
+function FreecellSinglePlayer({ onGameEnd }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw', moveCount?: number) => void
+} = {}) {
   const { load, save, clear } = useGameState<SavedState>('freecell')
   const saved = useRef(load()).current
 
@@ -244,8 +248,9 @@ export default function Freecell() {
       setGameStatus('won')
       setSelection(null)
       clear()
+      onGameEnd?.('win', gameState.moves)
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   useEffect(() => { setActiveHint(null) }, [gameState])
 
@@ -510,5 +515,53 @@ export default function Freecell() {
 
       {showHelp && <FreecellHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper ──────────────────────────────────────────────────
+
+function FreecellRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish } =
+    useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', moveCount?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportScore(moveCount ?? 0)
+    reportFinish(result === 'draw' ? 'loss' : result, moveCount)
+  }, [reportScore, reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <FreecellSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+export default function Freecell() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'freecell',
+        gameName: 'Freecell',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { first_to_win: 'First to complete wins' },
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <FreecellSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <FreecellRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

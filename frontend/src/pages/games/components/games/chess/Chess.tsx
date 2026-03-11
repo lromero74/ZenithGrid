@@ -25,6 +25,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { ChessMultiplayer } from './ChessMultiplayer'
 
 // ── Help modal ───────────────────────────────────────────────────────
 
@@ -483,7 +484,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
 }
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
-function ChessRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function ChessRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -500,6 +501,7 @@ function ChessRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string;
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <ChessSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>
@@ -512,15 +514,19 @@ export default function Chess() {
       config={{
         gameId: 'chess',
         gameName: 'Chess',
-        modes: ['race'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to beat the AI wins',
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
       }}
       renderSinglePlayer={() => <ChessSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <ChessRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <ChessMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <ChessRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
+      }
     />
   )
 }

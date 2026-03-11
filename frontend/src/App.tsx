@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2, Shield } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2, Users, Shield } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
 import { useIsAdmin } from './hooks/usePermission'
 import { positionsApi, authFetch } from './services/api'
@@ -55,6 +55,7 @@ const Portfolio = lazyWithReload(() => import('./pages/Portfolio'))
 const News = lazyWithReload(() => import('./pages/News'))
 const Reports = lazyWithReload(() => import('./pages/Reports'))
 const Games = lazyWithReload(() => import('./pages/Games'))
+const Social = lazyWithReload(() => import('./pages/Social'))
 const Admin = lazyWithReload(() => import('./pages/Admin'))
 
 // Main App content (shown when authenticated)
@@ -526,6 +527,19 @@ function AppContent() {
               </div>
             </Link>
             <Link
+              to="/social"
+              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                location.pathname === '/social'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Users className="w-4 h-4" />
+                <span className="hidden sm:inline">Social</span>
+              </div>
+            </Link>
+            <Link
               to="/settings"
               className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/settings'
@@ -576,6 +590,7 @@ function AppContent() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/games/*" element={<Games />} />
+            <Route path="/social" element={<Social />} />
             <Route path="/admin" element={<Admin />} />
             {/* Redirect unknown routes to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />

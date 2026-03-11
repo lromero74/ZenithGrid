@@ -305,7 +305,7 @@ function SudokuSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (fastest solve time wins) ──────────────────────────
 
-function SudokuRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function SudokuRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
@@ -324,6 +324,7 @@ function SudokuRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <SudokuSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>
@@ -336,14 +337,14 @@ export default function Sudoku() {
       config={{
         gameId: 'sudoku',
         gameName: 'Sudoku',
-        modes: ['race'],
+        modes: ['best_score'],
         hasDifficulty: true,
-        raceDescription: 'Fastest to solve the puzzle wins',
+        modeDescriptions: { best_score: 'Fastest to solve the puzzle wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <SudokuSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <SudokuRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <SudokuRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

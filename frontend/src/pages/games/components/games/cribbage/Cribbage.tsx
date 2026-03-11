@@ -220,7 +220,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('cribbage')
   const saved = useRef(load()).current
 
@@ -557,7 +557,7 @@ function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
         )}
 
         {/* Game Over Modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.scores[0]}
@@ -577,7 +577,7 @@ function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function CribbageRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function CribbageRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -594,8 +594,9 @@ function CribbageRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: stri
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <CribbageSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <CribbageSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -606,13 +607,13 @@ export default function Cribbage() {
       config={{
         gameId: 'cribbage',
         gameName: 'Cribbage',
-        modes: ['race'],
+        modes: ['first_to_win'],
         hasDifficulty: true,
-        raceDescription: 'First to 121 points wins',
+        modeDescriptions: { first_to_win: 'First to 121 points wins' },
       }}
       renderSinglePlayer={() => <CribbageSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <CribbageRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <CribbageRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

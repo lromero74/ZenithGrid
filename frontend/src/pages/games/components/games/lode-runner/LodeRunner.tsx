@@ -830,7 +830,7 @@ const emptyInput: Input = {
   digLeft: false, digRight: false,
 }
 
-function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
+function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('lode-runner') ?? 0
   const { load: loadSaved, save: saveState, clear: clearSaved } = useGameState<GameState>('lode-runner')
@@ -1252,7 +1252,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
         )}
 
         {/* Game over */}
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={score}
@@ -1290,7 +1290,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
 
 // ── Race wrapper (highest level reached wins) ─────────────────────────
 
-function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportScore, reportFinish } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
@@ -1309,8 +1309,9 @@ function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: st
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <LodeRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+      <LodeRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
     </div>
   )
 }
@@ -1321,14 +1322,14 @@ export default function LodeRunner() {
       config={{
         gameId: 'lode-runner',
         gameName: 'Lode Runner',
-        modes: ['race'],
+        modes: ['best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'Highest level reached wins',
+        modeDescriptions: { best_score: 'Highest level reached wins' },
       }}
       renderSinglePlayer={() => <LodeRunnerSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <LodeRunnerRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <LodeRunnerRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

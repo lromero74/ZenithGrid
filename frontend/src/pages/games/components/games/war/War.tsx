@@ -62,7 +62,7 @@ function WarHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('war')
   const saved = useRef(load()).current
 
@@ -283,7 +283,7 @@ function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameE
         </div>
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && (
+        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.playerDeck.length}
@@ -301,7 +301,7 @@ function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameE
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function WarRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function WarRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -318,8 +318,9 @@ function WarRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; d
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <WarSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <WarSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -330,14 +331,14 @@ export default function War() {
       config={{
         gameId: 'war',
         gameName: 'War',
-        modes: ['race'],
+        modes: ['first_to_win'],
         maxPlayers: 2,
         hasDifficulty: false,
-        raceDescription: 'First to win the war wins',
+        modeDescriptions: { first_to_win: 'First to win the war wins' },
       }}
       renderSinglePlayer={() => <WarSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <WarRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <WarRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

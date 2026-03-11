@@ -13,6 +13,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createVideoPokerGame,
   deal,
@@ -74,7 +76,12 @@ function VideoPokerHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function VideoPoker() {
+function VideoPokerSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange, isMultiplayer }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw') => void
+  onScoreChange?: (credits: number) => void
+  onStateChange?: (state: object) => void
+  isMultiplayer?: boolean
+} = {}) {
   const { load, save, clear } = useGameState<SavedState>('video-poker')
   const saved = useRef(load()).current
 
@@ -98,9 +105,15 @@ export default function VideoPoker() {
   useEffect(() => {
     if (isGameOver(gameState)) {
       setGameStatus('lost')
+      onGameEnd?.('loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
+
+  // Report score changes for race mode
+  useEffect(() => {
+    onScoreChange?.(gameState.credits)
+  }, [gameState.credits, onScoreChange])
 
   // SFX on result
   useEffect(() => {
@@ -250,7 +263,7 @@ export default function VideoPoker() {
           )}
         </div>
 
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             message="You're out of credits!"
@@ -262,5 +275,57 @@ export default function VideoPoker() {
       </div>
       {showHelp && <VideoPokerHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (best_score — highest credits wins) ─────────────────
+
+function VideoPokerRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore } =
+    useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+  const latestCredits = useRef(100)
+
+  const handleScoreChange = useCallback((credits: number) => {
+    latestCredits.current = credits
+    reportScore(credits)
+  }, [reportScore])
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, latestCredits.current)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <VideoPokerSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} isMultiplayer />
+    </div>
+  )
+}
+
+export default function VideoPoker() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'video-poker',
+        gameName: 'Video Poker',
+        modes: ['best_score'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { best_score: 'Highest credits wins' },
+      }}
+      renderSinglePlayer={() => <VideoPokerSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <VideoPokerRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

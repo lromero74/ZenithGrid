@@ -206,7 +206,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('gin-rummy')
   const saved = useRef(load()).current
 
@@ -365,7 +365,7 @@ function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
           </div>
         )}
 
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.playerScore}
@@ -385,7 +385,7 @@ function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function GinRummyRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+function GinRummyRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -402,8 +402,9 @@ function GinRummyRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: stri
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <GinRummySinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <GinRummySinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -414,13 +415,13 @@ export default function GinRummy() {
       config={{
         gameId: 'gin-rummy',
         gameName: 'Gin Rummy',
-        modes: ['race'],
+        modes: ['first_to_win'],
         hasDifficulty: true,
-        raceDescription: 'First to gin wins',
+        modeDescriptions: { first_to_win: 'First to gin wins' },
       }}
       renderSinglePlayer={() => <GinRummySinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <GinRummyRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <GinRummyRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

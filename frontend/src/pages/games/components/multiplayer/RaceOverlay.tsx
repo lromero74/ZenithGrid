@@ -14,8 +14,8 @@
  * - Spectator State: games can broadcast visual state for spectators
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Trophy, Skull, Clock, Wifi, X, TrendingUp, Eye, WifiOff, Pause } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Trophy, Skull, Clock, Wifi, TrendingUp, Eye, WifiOff, Pause, ChevronLeft, ChevronRight } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
 
 const RECONNECT_WINDOW_SECONDS = 60
@@ -50,7 +50,10 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   const [localFinished, setLocalFinished] = useState(false)
   const [opponentLevelUp, setOpponentLevelUp] = useState<LevelAnnouncement | null>(null)
   const [playOnActive, setPlayOnActive] = useState(false)
-  const [spectatorState, setSpectatorState] = useState<any>(null)
+  /** Per-player visual state for spectating (keyed by playerId). */
+  const [playerStates, setPlayerStates] = useState<Record<number, any>>({})
+  /** Which player the spectator is currently watching (playerId). */
+  const [spectateTarget, setSpectateTarget] = useState<number | null>(null)
   const [opponentDisconnected, setOpponentDisconnected] = useState(false)
   /** Countdown seconds remaining for opponent to reconnect (null = not paused). */
   const [reconnectCountdown, setReconnectCountdown] = useState<number | null>(null)
@@ -162,11 +165,13 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     return unsub
   }, [])
 
-  // Listen for spectator state from opponent
+  // Listen for spectator state from all players
   useEffect(() => {
     const unsub = gameSocket.on('game:player_state', (msg) => {
-      if (msg.state) {
-        setSpectatorState(msg.state)
+      if (msg.state && msg.playerId) {
+        setPlayerStates(prev => ({ ...prev, [msg.playerId]: msg.state }))
+        // Auto-select first available spectate target
+        setSpectateTarget(prev => prev ?? msg.playerId)
       }
     })
     return unsub
@@ -270,8 +275,32 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     setPlayOnActive(false)
   }, [])
 
-  // isSpectating: local player finished but play-on is active (winner watching loser)
-  const isSpectating = localFinished && playOnActive
+  // isSpectating: local player finished but race isn't over yet (others still playing)
+  const isSpectating = localFinished && (playOnActive || (raceResult === 'lost' && !opponentStatus.finished))
+
+  // Backwards-compat: spectatorState = state of the currently-watched player
+  const spectatorState = spectateTarget !== null ? playerStates[spectateTarget] ?? null : null
+
+  // List of active player IDs that can be spectated (have sent state recently)
+  const spectatablePlayers = useMemo(() => {
+    return Object.keys(playerStates).map(Number).filter(id => id !== spectateTarget || true)
+  }, [playerStates, spectateTarget])
+
+  /** Page to the next spectate target. */
+  const spectateNext = useCallback(() => {
+    if (spectatablePlayers.length <= 1) return
+    const idx = spectatablePlayers.indexOf(spectateTarget ?? 0)
+    const next = (idx + 1) % spectatablePlayers.length
+    setSpectateTarget(spectatablePlayers[next])
+  }, [spectatablePlayers, spectateTarget])
+
+  /** Page to the previous spectate target. */
+  const spectatePrev = useCallback(() => {
+    if (spectatablePlayers.length <= 1) return
+    const idx = spectatablePlayers.indexOf(spectateTarget ?? 0)
+    const prev = (idx - 1 + spectatablePlayers.length) % spectatablePlayers.length
+    setSpectateTarget(spectatablePlayers[prev])
+  }, [spectatablePlayers, spectateTarget])
 
   // Track active room for auto-rejoin on reconnect
   useEffect(() => {
@@ -283,8 +312,64 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     opponentStatus, raceResult, localFinished, opponentLevelUp, opponentDisconnected,
     reconnectCountdown, selfDisconnected,
     reportFinish, reportScore, reportLevel, forfeit,
-    playOnActive, isSpectating, spectatorState, broadcastState, throttledBroadcast, dismissPlayOn,
+    playOnActive, isSpectating, spectatorState, playerStates, spectateTarget, spectatablePlayers,
+    spectateNext, spectatePrev, broadcastState, throttledBroadcast, dismissPlayOn,
   }
+}
+
+/** Spectator bar — shown when the local player is eliminated and others are still playing. */
+export function SpectatorBar({
+  spectateTarget,
+  spectatablePlayers,
+  playerNames,
+  onPrev,
+  onNext,
+  onDismiss,
+}: {
+  spectateTarget: number | null
+  spectatablePlayers: number[]
+  playerNames?: Record<number, string>
+  onPrev: () => void
+  onNext: () => void
+  onDismiss?: () => void
+}) {
+  if (spectatablePlayers.length === 0) return null
+
+  const targetName = spectateTarget !== null
+    ? (playerNames?.[spectateTarget] ?? `Player ${spectateTarget}`)
+    : 'Unknown'
+  const idx = spectatablePlayers.indexOf(spectateTarget ?? 0)
+  const showPaging = spectatablePlayers.length > 1
+
+  return (
+    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-2 bg-indigo-900/90 border border-indigo-500/50 rounded-lg text-sm">
+      <Eye className="w-4 h-4 text-indigo-300 shrink-0" />
+      {showPaging && (
+        <button onClick={onPrev} className="p-0.5 hover:bg-indigo-700 rounded transition-colors">
+          <ChevronLeft className="w-4 h-4 text-indigo-300" />
+        </button>
+      )}
+      <span className="text-indigo-200">
+        Spectating: <span className="font-medium text-white">{targetName}</span>
+        {showPaging && (
+          <span className="text-indigo-400 ml-1 text-xs">({idx + 1}/{spectatablePlayers.length})</span>
+        )}
+      </span>
+      {showPaging && (
+        <button onClick={onNext} className="p-0.5 hover:bg-indigo-700 rounded transition-colors">
+          <ChevronRight className="w-4 h-4 text-indigo-300" />
+        </button>
+      )}
+      {onDismiss && (
+        <button
+          onClick={onDismiss}
+          className="ml-2 px-2.5 py-1 text-xs bg-indigo-700 hover:bg-indigo-600 text-white rounded transition-colors"
+        >
+          Leave
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function RaceOverlay({
@@ -300,6 +385,13 @@ export function RaceOverlay({
   opponentDisconnected,
   reconnectCountdown,
   selfDisconnected,
+  // Spectator props — pass these to enable spectate-or-leave on elimination
+  localFinished,
+  spectatablePlayers,
+  spectateTarget,
+  playerNames,
+  onSpectatePrev,
+  onSpectateNext,
 }: {
   raceResult: 'won' | 'lost' | 'tied' | null
   opponentScore?: number
@@ -322,7 +414,27 @@ export function RaceOverlay({
   reconnectCountdown?: number | null
   /** Whether the local player is currently disconnected (reconnecting). */
   selfDisconnected?: boolean
+  /** Whether the local player has finished (for spectator flow). */
+  localFinished?: boolean
+  /** Players available for spectating (their IDs). */
+  spectatablePlayers?: number[]
+  /** Currently spectated player ID. */
+  spectateTarget?: number | null
+  /** Player display names for spectator bar. */
+  playerNames?: Record<number, string>
+  /** Navigate to previous spectate target. */
+  onSpectatePrev?: () => void
+  /** Navigate to next spectate target. */
+  onSpectateNext?: () => void
 }) {
+  const [spectateMode, setSpectateMode] = useState(false)
+  /** Whether the initial skull/loss overlay has been dismissed (transitions to spectate choice). */
+  const [skullDismissed, setSkullDismissed] = useState(false)
+
+  // Reset spectate mode and skull when race result arrives
+  useEffect(() => {
+    if (raceResult) { setSpectateMode(false); setSkullDismissed(false) }
+  }, [raceResult])
   // Self-disconnected overlay — shown when we lose connection
   if (selfDisconnected) {
     return (
@@ -383,6 +495,72 @@ export function RaceOverlay({
           )}
         </div>
       </div>
+    )
+  }
+
+  // Elimination spectator flow: player finished, race not over yet, spectator props provided
+  const hasSpectatorProps = spectatablePlayers !== undefined && spectatablePlayers.length > 0
+  const showSkullOverlay = localFinished && !raceResult && !skullDismissed && hasSpectatorProps
+  const showEliminationChoice = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
+  const showSpectatorBar = spectateMode && !raceResult && hasSpectatorProps
+
+  // Step 1: Skull result — "You Lost!" with a dismiss button
+  if (showSkullOverlay) {
+    return (
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
+        <div className="flex flex-col items-center gap-3 px-8 py-6 bg-red-900/90 border border-red-500/50 rounded-xl max-w-sm text-center">
+          <Skull className="w-10 h-10 text-red-400" />
+          <span className="text-2xl font-bold text-red-300">You Lost!</span>
+          <button
+            onClick={() => setSkullDismissed(true)}
+            className="mt-2 px-5 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Step 2: Spectate or return choice — after skull dismissed
+  if (showEliminationChoice) {
+    return (
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
+        <div className="flex flex-col items-center gap-4 px-8 py-6 bg-slate-800/95 border border-slate-600/50 rounded-xl max-w-sm text-center">
+          <Eye className="w-10 h-10 text-indigo-400" />
+          <span className="text-lg font-bold text-white">Other players are still going</span>
+          <span className="text-sm text-slate-300">What would you like to do?</span>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setSpectateMode(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+            >
+              <Eye className="w-4 h-4" /> Spectate
+            </button>
+            {onDismiss && (
+              <button
+                onClick={onDismiss}
+                className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Return to Games
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (showSpectatorBar) {
+    return (
+      <SpectatorBar
+        spectateTarget={spectateTarget ?? null}
+        spectatablePlayers={spectatablePlayers!}
+        playerNames={playerNames}
+        onPrev={onSpectatePrev ?? (() => {})}
+        onNext={onSpectateNext ?? (() => {})}
+        onDismiss={onDismiss}
+      />
     )
   }
 
@@ -456,7 +634,7 @@ export function RaceOverlay({
     const isWin = raceResult === 'won'
     const isTie = raceResult === 'tied'
     return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
         <div className={`relative flex flex-col items-center gap-3 px-8 py-6 rounded-xl border ${
           isWin
             ? 'bg-green-900/90 border-green-500/50'
@@ -464,14 +642,6 @@ export function RaceOverlay({
               ? 'bg-yellow-900/90 border-yellow-500/50'
               : 'bg-red-900/90 border-red-500/50'
         }`}>
-          {onDismiss && (
-            <button
-              onClick={onDismiss}
-              className="absolute top-2 right-2 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
           {isWin ? (
             <Trophy className="w-10 h-10 text-yellow-400" />
           ) : isTie ? (
@@ -484,6 +654,14 @@ export function RaceOverlay({
           }`}>
             {isWin ? 'You Win the Race!' : isTie ? 'It\'s a Tie!' : 'You Lost the Race!'}
           </span>
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="mt-2 px-5 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            >
+              Return to Games
+            </button>
+          )}
         </div>
       </div>
     )

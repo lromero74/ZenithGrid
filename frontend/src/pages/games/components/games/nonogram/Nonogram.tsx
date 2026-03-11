@@ -23,6 +23,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ── Help modal ──────────────────────────────────────────────────────
 function NonogramHelp({ onClose }: { onClose: () => void }) {
@@ -98,7 +100,7 @@ interface NonogramState {
   elapsed: number
 }
 
-export default function Nonogram() {
+function NonogramSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void } = {}) {
   const { load, save, clear } = useGameState<NonogramState>('nonogram')
   const saved = useRef(load()).current
 
@@ -157,8 +159,9 @@ export default function Nonogram() {
       sfx.play('win')
       setGameStatus('won')
       timer.stop()
+      onGameEnd?.('win')
     }
-  }, [grid, gameStatus, clues, timer])
+  }, [grid, gameStatus, clues, timer, onGameEnd])
 
   const handleCellRightClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing') return
@@ -270,5 +273,52 @@ export default function Nonogram() {
       </div>
       {showHelp && <NonogramHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first_to_win — first to solve wins) ────────────────
+
+function NonogramRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <NonogramSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer wrapper ──────────────────────────
+
+export default function Nonogram() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'nonogram',
+        gameName: 'Nonogram',
+        modes: ['first_to_win'],
+        hasDifficulty: true,
+        maxPlayers: 2,
+        modeDescriptions: { first_to_win: 'First to solve the puzzle wins' },
+      }}
+      renderSinglePlayer={() => <NonogramSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <NonogramRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

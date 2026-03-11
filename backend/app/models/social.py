@@ -119,6 +119,23 @@ class GameHistoryVisibility(Base):
     user = relationship("User", foreign_keys=[user_id])
 
 
+class GameHighScore(Base):
+    """Per-user best score for each game."""
+    __tablename__ = "game_high_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    game_id = Column(String, nullable=False)
+    score = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'game_id', name='uq_user_game_score'),
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class Tournament(Base):
     """Multi-game tournament among friends."""
     __tablename__ = "tournaments"

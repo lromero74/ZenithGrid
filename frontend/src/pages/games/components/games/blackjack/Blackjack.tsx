@@ -240,10 +240,11 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange }: {
+function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange, isMultiplayer }: {
   onGameEnd?: (result: 'win' | 'loss' | 'draw') => void
   onScoreChange?: (chips: number) => void
   onStateChange?: (state: object) => void
+  isMultiplayer?: boolean
 } = {}) {
   const { load, save, clear } = useGameState<SavedState>('blackjack')
   const saved = useRef(load()).current
@@ -598,7 +599,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
         )}
 
         {/* Game over */}
-        {(gameStatus === 'lost' || gameStatus === 'won') && (
+        {(gameStatus === 'lost' || gameStatus === 'won') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             message={gameStatus === 'won' ? 'You broke the bank!' : "You're out of chips!"}
@@ -617,7 +618,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
 
 // ── Race wrapper (best_score — highest chip count wins) ─────────────
 
-function BlackjackRaceWrapper({ roomId }: { roomId: string; difficulty?: string }) {
+function BlackjackRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore } =
     useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
@@ -641,8 +642,9 @@ function BlackjackRaceWrapper({ roomId }: { roomId: string; difficulty?: string 
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <BlackjackSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} />
+      <BlackjackSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -653,14 +655,14 @@ export default function Blackjack() {
       config={{
         gameId: 'blackjack',
         gameName: 'Blackjack',
-        modes: ['race'],
+        modes: ['best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'Highest chip count wins',
+        modeDescriptions: { best_score: 'Highest chip count wins' },
       }}
       renderSinglePlayer={() => <BlackjackSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <BlackjackRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <BlackjackRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

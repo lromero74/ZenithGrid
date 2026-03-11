@@ -22,6 +22,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { UltimateTicTacToeMultiplayer } from './UltimateTicTacToeMultiplayer'
 
 interface UTTTGameState {
   boards: SubBoardType[]
@@ -249,7 +250,7 @@ function UltimateTicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChang
 }
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
-function UltimateTicTacToeRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function UltimateTicTacToeRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -266,6 +267,7 @@ function UltimateTicTacToeRaceWrapper({ roomId, difficulty: _difficulty }: { roo
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <UltimateTicTacToeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>
@@ -278,15 +280,19 @@ export default function UltimateTicTacToe() {
       config={{
         gameId: 'ultimate-tic-tac-toe',
         gameName: 'Ultimate Tic Tac Toe',
-        modes: ['race'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to beat the AI wins',
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
       }}
       renderSinglePlayer={() => <UltimateTicTacToeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <UltimateTicTacToeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <UltimateTicTacToeMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <UltimateTicTacToeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
+      }
     />
   )
 }

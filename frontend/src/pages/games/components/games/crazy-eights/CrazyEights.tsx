@@ -175,7 +175,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('crazy-eights')
   const saved = useRef(load()).current
 
@@ -360,7 +360,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
           </button>
         )}
 
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.scores[0]}
@@ -380,7 +380,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -397,8 +397,9 @@ function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: s
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <CrazyEightsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <CrazyEightsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -409,13 +410,13 @@ export default function CrazyEights() {
       config={{
         gameId: 'crazy-eights',
         gameName: 'Crazy Eights',
-        modes: ['race'],
+        modes: ['first_to_win'],
         hasDifficulty: true,
-        raceDescription: 'First to empty their hand wins',
+        modeDescriptions: { first_to_win: 'First to empty their hand wins' },
       }}
       renderSinglePlayer={() => <CrazyEightsSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <CrazyEightsRaceWrapper roomId={roomId} difficulty={roomConfig?.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
+        <CrazyEightsRaceWrapper roomId={roomId} difficulty={roomConfig?.difficulty} onLeave={onLeave} />
       )}
     />
   )

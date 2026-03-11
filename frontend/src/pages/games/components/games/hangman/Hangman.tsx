@@ -164,7 +164,7 @@ interface HangmanSaved {
   streak: number
 }
 
-function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<HangmanSaved>('hangman')
   const saved = useRef(load()).current
 
@@ -306,7 +306,7 @@ function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
           />
         </div>
 
-        {gameStatus !== 'playing' && gameStatus !== 'idle' && (
+        {gameStatus !== 'playing' && gameStatus !== 'idle' && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             message={
@@ -327,7 +327,7 @@ function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
 
 // ── Race wrapper (first-to-solve against opponent) ──────────────────
 
-function HangmanRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function HangmanRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -344,8 +344,9 @@ function HangmanRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: strin
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <HangmanSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <HangmanSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -356,15 +357,15 @@ export default function Hangman() {
       config={{
         gameId: 'hangman',
         gameName: 'Hangman',
-        modes: ['race'],
+        modes: ['first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to solve the word wins',
+        modeDescriptions: { first_to_win: 'First to solve the word wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <HangmanSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <HangmanRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <HangmanRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

@@ -56,7 +56,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '1-2 min',
     category: 'strategy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'connect-four',
@@ -78,6 +78,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '5-15 min',
     category: 'puzzle',
+    multiplayer: ['best_score'],
   },
   {
     id: 'minesweeper',
@@ -132,6 +133,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'word',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'snake',
@@ -153,7 +155,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '10-20 min',
     category: 'strategy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'mahjong',
@@ -175,6 +177,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'puzzle',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'checkers',
@@ -185,7 +188,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '10-20 min',
     category: 'strategy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'plinko',
@@ -196,6 +199,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-5 min',
     category: 'arcade',
+    multiplayer: ['best_score'],
   },
   {
     id: 'memory',
@@ -206,7 +210,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-5 min',
     category: 'puzzle',
-    multiplayer: ['best_score'],
+    multiplayer: ['first_to_win', 'best_score'],
   },
   {
     id: 'solitaire',
@@ -218,6 +222,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
     subcategory: 'Solitaire',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'backgammon',
@@ -228,7 +233,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '15-30 min',
     category: 'strategy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'chess',
@@ -239,7 +244,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'hard',
     sessionLength: '10-30 min',
     category: 'strategy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   // Phase 6: Card Games
   {
@@ -264,6 +269,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'cards',
     subcategory: 'Casino',
+    multiplayer: ['best_score'],
   },
   {
     id: 'hearts',
@@ -323,6 +329,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
     subcategory: 'Solitaire',
+    multiplayer: ['first_to_win'],
   },
   // Phase 8: New Card Games
   {
@@ -359,6 +366,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '3-5 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'spoons',
@@ -370,6 +378,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-15 min',
     category: 'cards',
     subcategory: 'Classic',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'rummy-500',
@@ -381,6 +390,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Rummy',
+    multiplayer: ['first_to_win'],
   },
   {
     id: 'cribbage',

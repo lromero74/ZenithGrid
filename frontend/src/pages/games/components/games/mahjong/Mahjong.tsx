@@ -159,7 +159,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
+function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<MahjongSaved>('mahjong')
   const saved = useRef(load()).current
 
@@ -346,7 +346,7 @@ function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
           Click two matching free tiles to remove them.
         </p>
 
-        {gameStatus !== 'playing' && gameStatus !== 'idle' && (
+        {gameStatus !== 'playing' && gameStatus !== 'idle' && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             message={gameStatus === 'won' ? `Cleared in ${timer.formatted}` : 'No more moves available'}
@@ -363,7 +363,7 @@ function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onG
 
 // ── Race wrapper (fastest to clear all tiles) ───────────────────────
 
-function MahjongRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function MahjongRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
@@ -380,8 +380,9 @@ function MahjongRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: strin
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <MahjongSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <MahjongSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -392,15 +393,15 @@ export default function Mahjong() {
       config={{
         gameId: 'mahjong',
         gameName: 'Mahjong Solitaire',
-        modes: ['race'],
+        modes: ['best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'Fastest to clear all tiles wins',
+        modeDescriptions: { best_score: 'Fastest to clear all tiles wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <MahjongSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <MahjongRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <MahjongRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

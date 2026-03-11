@@ -23,7 +23,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
-import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
@@ -359,7 +359,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
+function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -1090,7 +1090,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
             Tap to jump. Swipe down to duck.
           </p>
         )}
-        {gameStatus === 'lost' && !autoPlay && (
+        {gameStatus === 'lost' && !autoPlay && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={displayScore}
@@ -1107,18 +1107,22 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
   )
 }
 
-function DinoRunnerRaceWrapper({ roomId }: { roomId: string }) {
-  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, 'survival')
+function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void; playerNames?: Record<number, string> }) {
+  const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
+  const {
+    opponentStatus, raceResult, localFinished, opponentLevelUp,
+    opponentDisconnected, reconnectCountdown, selfDisconnected,
+    throttledBroadcast, reportFinish, reportScore,
+    spectatablePlayers, spectateTarget, spectateNext, spectatePrev,
+  } = useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((score: number) => {
     if (finishedRef.current) return
     finishedRef.current = true
     reportFinish('loss', score)
-  }, [reportFinish])
-
-  // Report score periodically via a polling effect in the parent
-  // (the single player component handles its own game loop)
+    reportScore(score)
+  }, [reportFinish, reportScore])
 
   return (
     <div className="relative">
@@ -1127,8 +1131,18 @@ function DinoRunnerRaceWrapper({ roomId }: { roomId: string }) {
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        opponentDisconnected={opponentDisconnected}
+        reconnectCountdown={reconnectCountdown}
+        selfDisconnected={selfDisconnected}
+        onDismiss={onLeave}
+        localFinished={localFinished}
+        spectatablePlayers={spectatablePlayers}
+        spectateTarget={spectateTarget}
+        playerNames={playerNames}
+        onSpectatePrev={spectatePrev}
+        onSpectateNext={spectateNext}
       />
-      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
     </div>
   )
 }
@@ -1139,13 +1153,13 @@ export default function DinoRunner() {
       config={{
         gameId: 'dino-runner',
         gameName: 'Dino Runner',
-        modes: ['race'],
+        modes: ['survival', 'best_score'],
         maxPlayers: 2,
-        raceDescription: 'Last dino standing wins',
+        modeDescriptions: { survival: 'Last dino standing wins', best_score: 'Highest score wins' },
       }}
       renderSinglePlayer={() => <DinoRunnerSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
-        <DinoRunnerRaceWrapper roomId={roomId} />
+      renderMultiplayer={(roomId, _players, playerNames, _mode, roomConfig, onLeave) => (
+        <DinoRunnerRaceWrapper roomId={roomId} roomConfig={roomConfig} onLeave={onLeave} playerNames={playerNames} />
       )}
     />
   )

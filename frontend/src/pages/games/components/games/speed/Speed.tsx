@@ -15,6 +15,8 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createSpeedGame,
   playCard,
@@ -143,7 +145,7 @@ function SpeedHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Speed() {
+function SpeedSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('speed')
   const saved = useRef(load()).current
 
@@ -181,12 +183,19 @@ export default function Speed() {
     if (gameState.phase === 'gameOver') {
       const pLeft = gameState.playerHand.length + gameState.playerDrawPile.length
       const aLeft = gameState.aiHand.length + gameState.aiDrawPile.length
-      if (pLeft < aLeft) setGameStatus('won')
-      else if (aLeft < pLeft) setGameStatus('lost')
-      else setGameStatus('draw')
+      if (pLeft < aLeft) {
+        setGameStatus('won')
+        onGameEnd?.('win')
+      } else if (aLeft < pLeft) {
+        setGameStatus('lost')
+        onGameEnd?.('loss')
+      } else {
+        setGameStatus('draw')
+        onGameEnd?.('draw')
+      }
       clear()
     }
-  }, [gameState, clear, showDifficultySelect])
+  }, [gameState, clear, showDifficultySelect, onGameEnd])
 
   // AI play loop — human-modeled reaction timing
   const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -499,7 +508,7 @@ export default function Speed() {
         )}
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && (
+        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={26 - playerCardsLeft}
@@ -512,5 +521,51 @@ export default function Speed() {
       </div>
       {showHelp && <SpeedHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against opponent) ──────────────────
+
+function SpeedRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <SpeedSinglePlayer onGameEnd={handleGameEnd} isMultiplayer />
+    </div>
+  )
+}
+
+export default function Speed() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'speed',
+        gameName: 'Speed',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <SpeedSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <SpeedRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

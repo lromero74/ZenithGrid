@@ -27,10 +27,14 @@ import {
   drawOneCard,
   chooseWildValue,
   chooseSelectorTarget,
+  chooseSevenAction,
+  blockPush,
+  acceptPush,
   cantPlay,
   getActiveSource,
   hasValidPlay,
   isConsecutiveRun,
+  getFourOfAKindRanks,
   rankName,
   applyAsPlayer,
 } from './shalasEngine'
@@ -57,7 +61,10 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
           <p>Both players share the same board and take turns playing cards.</p>
           <p>Each player has their own hand — you cannot see your opponent&apos;s cards.</p>
           <p>When your hand drops below 3 cards, it auto-refills to 5 from the shared draw stack.</p>
-          <p>The <span className="text-emerald-400 font-medium">7 (Selector)</span> penalty in multiplayer: your opponent takes 10 cards from the discard pile (unless they block with a 3).</p>
+          <p><span className="text-emerald-400 font-medium">7 (Selector)</span> — choose to pick a table card <em>or</em> push the entire discard pile to your opponent&apos;s hand.</p>
+          <p><span className="text-blue-400 font-medium">3 (Blocker)</span> — blocks the 7&apos;s discard pile push. The pile stays where it is.</p>
+          <p><span className="text-cyan-400 font-medium">2 (Wildcard)</span> — can also act as a 7 (push) or 3 (block).</p>
+          <p><span className="text-purple-400 font-medium">4-of-a-kind</span> — can also act as a 7 (push) or 3 (block).</p>
           <p>If you can&apos;t play, your turn is skipped.</p>
           <p>First player to clear all their cards wins!</p>
         </div>
@@ -212,6 +219,20 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
       }
       case 'shalas_cant_play': {
         applyAction(s => cantPlay(s), fromPlayer)
+        break
+      }
+      case 'shalas_seven_action': {
+        const sevenChoice = action.action as 'pick_table' | 'push_discard'
+        applyAction(s => chooseSevenAction(s, sevenChoice), fromPlayer)
+        break
+      }
+      case 'shalas_block': {
+        const blockIndices = action.indices as number[]
+        applyAction(s => blockPush(s, blockIndices), fromPlayer)
+        break
+      }
+      case 'shalas_accept_push': {
+        applyAction(s => acceptPush(s), fromPlayer)
         break
       }
     }
@@ -386,6 +407,26 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     doAction({ type: 'shalas_cant_play' })
   }, [isMyTurn, sfx, doAction])
 
+  const handleSevenAction = useCallback((choice: 'pick_table' | 'push_discard') => {
+    if (!isMyTurn) return
+    sfx.play('place')
+    doAction({ type: 'shalas_seven_action', action: choice })
+  }, [isMyTurn, sfx, doAction])
+
+  const handleBlock = useCallback((indices: number[]) => {
+    if (!isMyTurn) return
+    sfx.play('place')
+    doAction({ type: 'shalas_block', indices })
+    clearSelection()
+  }, [isMyTurn, sfx, doAction, clearSelection])
+
+  const handleAcceptPush = useCallback(() => {
+    if (!isMyTurn) return
+    sfx.play('flip')
+    doAction({ type: 'shalas_accept_push' })
+    clearSelection()
+  }, [isMyTurn, sfx, doAction, clearSelection])
+
   // Clear selection on turn change
   useEffect(() => { clearSelection() }, [gameState?.currentPlayer, clearSelection])
 
@@ -416,7 +457,7 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     }
     if (rank === 10) return { label: 'Destroyer', desc: 'Removes discard pile from game.', color: 'text-red-400' }
     if (rank === 2) return { label: 'Wildcard', desc: 'Choose any value.', color: 'text-cyan-400' }
-    if (rank === 7) return { label: 'Selector', desc: 'Pick a table card. Opponent takes 10.', color: 'text-emerald-400' }
+    if (rank === 7) return { label: 'Selector', desc: 'Pick a table card OR push discard pile.', color: 'text-emerald-400' }
     if (rank === 1) return { label: 'Ace', desc: 'Highest & lowest.', color: 'text-amber-400' }
     return null
   })()
@@ -703,10 +744,12 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     }`}>
       {gameState.phase === 'choose_wild'
         ? (isMyTurn ? 'Choose the reset value' : `${opponentName} is choosing a value...`)
+        : gameState.phase === 'choose_seven_action'
+        ? (isMyTurn ? 'Pick table card or push discard pile' : `${opponentName} is choosing...`)
         : gameState.phase === 'choose_selector'
         ? (isMyTurn ? 'Pick a table card to discard' : `${opponentName} is picking a card...`)
         : gameState.phase === 'block_chance'
-        ? (isMyTurn ? 'Opponent can block with a 3...' : 'You can play a 3 to block!')
+        ? (isMyTurn ? 'Block or accept the discard pile' : `${opponentName} deciding whether to block...`)
         : isMyTurn ? 'Your turn' : `${opponentName}'s turn`
       }
     </div>
@@ -788,10 +831,68 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
           </div>
         )}
 
+        {/* 7 Selector: choose action (2-player) */}
+        {isMyTurn && gameState.phase === 'choose_seven_action' && (
+          <div className="flex gap-3 mb-3 justify-center">
+            <button
+              onClick={() => handleSevenAction('pick_table')}
+              className="px-4 py-2 text-xs rounded bg-emerald-700 text-emerald-100 hover:bg-emerald-600 transition-colors"
+            >
+              Pick Table Card
+            </button>
+            <button
+              onClick={() => handleSevenAction('push_discard')}
+              className="px-4 py-2 text-xs rounded bg-red-700 text-red-100 hover:bg-red-600 transition-colors"
+            >
+              Push Discard Pile ({gameState.discardPile.length} cards)
+            </button>
+          </div>
+        )}
+
         {/* Selector prompt */}
         {isMyTurn && gameState.phase === 'choose_selector' && (
           <div className="text-center mb-3">
             <span className="text-xs text-cyan-400">Click any card on the table to move it to discard</span>
+          </div>
+        )}
+
+        {/* Block chance: defender chooses to block or accept */}
+        {isMyTurn && gameState.phase === 'block_chance' && (
+          <div className="flex flex-wrap gap-2 mb-3 justify-center">
+            {myHand.some(c => c.rank === 3) && (
+              <button
+                onClick={() => handleBlock([myHand.findIndex(c => c.rank === 3)])}
+                className="px-4 py-2 text-xs rounded bg-blue-700 text-blue-100 hover:bg-blue-600 transition-colors"
+              >
+                Block with 3
+              </button>
+            )}
+            {myHand.some(c => c.rank === 2) && (
+              <button
+                onClick={() => handleBlock([myHand.findIndex(c => c.rank === 2)])}
+                className="px-4 py-2 text-xs rounded bg-cyan-700 text-cyan-100 hover:bg-cyan-600 transition-colors"
+              >
+                Block with 2
+              </button>
+            )}
+            {getFourOfAKindRanks(myHand).map(rank => {
+              const indices = myHand.map((c, i) => c.rank === rank ? i : -1).filter(i => i !== -1).slice(0, 4)
+              return (
+                <button
+                  key={rank}
+                  onClick={() => handleBlock(indices)}
+                  className="px-4 py-2 text-xs rounded bg-purple-700 text-purple-100 hover:bg-purple-600 transition-colors"
+                >
+                  Block with 4&times;{rankName(rank)}
+                </button>
+              )
+            })}
+            <button
+              onClick={handleAcceptPush}
+              className="px-4 py-2 text-xs rounded bg-red-700/80 text-red-100 hover:bg-red-600 transition-colors"
+            >
+              Accept Pile ({gameState.discardPile.length} cards)
+            </button>
           </div>
         )}
 

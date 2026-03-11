@@ -5,7 +5,7 @@ Endpoints for managing user login sessions (view active, terminate).
 Used by multiplayer games to ensure single session before joining,
 and by Settings page for session management.
 
-Permission: settings:write — observers cannot see or manage sessions.
+Auth: any authenticated user can view and manage their own sessions.
 """
 
 import logging
@@ -17,9 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import (
-    Perm,
     decode_token,
-    require_permission,
+    get_current_user,
     security,
 )
 from app.database import get_db
@@ -64,7 +63,7 @@ class TerminateRequest(BaseModel):
 @router.get("/active")
 async def list_other_active_sessions(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
+    current_user: User = Depends(get_current_user),
     current_sid: Optional[str] = Depends(get_current_session_id),
 ) -> list[dict]:
     """
@@ -72,7 +71,7 @@ async def list_other_active_sessions(
 
     Excludes the caller's own session (identified by the 'sid' JWT claim).
     Cleans up expired sessions first.
-    Requires settings:write — observers cannot access this.
+    Any authenticated user can view their own sessions.
     """
     await expire_stale_sessions_for_user(current_user.id, db)
     await db.flush()
@@ -95,7 +94,7 @@ async def list_other_active_sessions(
 async def terminate_sessions(
     body: TerminateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
+    current_user: User = Depends(get_current_user),
     current_sid: Optional[str] = Depends(get_current_session_id),
 ) -> dict:
     """
@@ -103,7 +102,7 @@ async def terminate_sessions(
 
     Supports individual, multi-select, or bulk termination.
     The caller's own session cannot be terminated (silently skipped).
-    Requires settings:write — observers cannot manage sessions.
+    Any authenticated user can manage their own sessions.
     """
     terminated = 0
     for sid in body.session_ids:
@@ -123,14 +122,14 @@ async def terminate_sessions(
 @router.post("/terminate-others")
 async def terminate_other_sessions(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
+    current_user: User = Depends(get_current_user),
     current_sid: Optional[str] = Depends(get_current_session_id),
 ) -> dict:
     """
     Terminate ALL other active sessions for the current user.
 
     The caller's own session (identified by 'sid') is preserved.
-    Requires settings:write — observers cannot manage sessions.
+    Any authenticated user can manage their own sessions.
     """
     await expire_stale_sessions_for_user(current_user.id, db)
     await db.flush()

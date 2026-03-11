@@ -21,6 +21,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
 interface TFESaved {
   board: Board
@@ -69,7 +71,7 @@ function TwentyFortyEightHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function TwentyFortyEight() {
+function TwentyFortyEightSinglePlayer({ onGameEnd, onScoreUpdate, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onScoreUpdate?: (score: number) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<TFESaved>('2048')
   const saved = useRef(load()).current
 
@@ -111,11 +113,14 @@ export default function TwentyFortyEight() {
     setBoard(withTile)
     setScore(newScore)
 
+    onScoreUpdate?.(newScore)
+
     if (isGameWon(withTile) && !hasWon) {
       setHasWon(true)
       sfx.play('win')
       setGameStatus('won')
       saveScore('2048', newScore)
+      onGameEnd?.('win', newScore)
       return
     }
 
@@ -123,8 +128,9 @@ export default function TwentyFortyEight() {
       sfx.play('lose')
       setGameStatus('lost')
       saveScore('2048', newScore)
+      onGameEnd?.('loss', newScore)
     }
-  }, [board, score, gameStatus, hasWon, saveScore])
+  }, [board, score, gameStatus, hasWon, saveScore, onGameEnd, onScoreUpdate])
 
   const handleContinue = useCallback(() => {
     setGameStatus('playing')
@@ -233,7 +239,7 @@ export default function TwentyFortyEight() {
           />
         )}
 
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={score}
@@ -246,5 +252,55 @@ export default function TwentyFortyEight() {
       </div>
       {showHelp && <TwentyFortyEightHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (best_score — highest score wins) ───────────────────
+
+function TwentyFortyEightRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportScore, reportFinish } = useRaceMode(roomId, 'best_score')
+  const finishedRef = useRef(false)
+
+  const handleScoreUpdate = useCallback((score: number) => {
+    reportScore(score)
+  }, [reportScore])
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result, score)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <TwentyFortyEightSinglePlayer onGameEnd={handleGameEnd} onScoreUpdate={handleScoreUpdate} isMultiplayer />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer wrapper ──────────────────────────
+
+export default function TwentyFortyEight() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: '2048',
+        gameName: '2048',
+        modes: ['best_score'],
+        maxPlayers: 2,
+        modeDescriptions: { best_score: 'Highest score wins' },
+      }}
+      renderSinglePlayer={() => <TwentyFortyEightSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <TwentyFortyEightRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

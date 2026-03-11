@@ -16,6 +16,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import type { Difficulty as SharedDifficulty, GameStatus } from '../../../types'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import { getThemeBackground } from './crosswordBackgrounds'
 import {
   generatePuzzle,
@@ -215,7 +217,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ───────────────────────────────────────────────────────
 
-export default function Crossword() {
+function CrosswordSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void } = {}) {
   const { load, save, clear } = useGameState<CrosswordSaved>('crossword')
   const savedRef = useRef(load())
   const saved = savedRef.current
@@ -355,8 +357,9 @@ export default function Crossword() {
       })
       clear()
       setGameStatus('won')
+      onGameEnd?.('win')
     }
-  }, [puzzle, timer, today, difficulty, save, clear])
+  }, [puzzle, timer, today, difficulty, save, clear, onGameEnd])
 
   const handleLetterInput = useCallback((letter: string) => {
     if (!puzzle || !selectedCell || gameStatus !== 'playing') return
@@ -747,5 +750,51 @@ export default function Crossword() {
 
       {showHelp && <CrosswordHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first_to_win — first to complete wins) ─────────────
+
+function CrosswordRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <CrosswordSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+// ── Default export with multiplayer wrapper ──────────────────────────
+
+export default function Crossword() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'crossword',
+        gameName: 'Crossword',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        modeDescriptions: { first_to_win: 'First to complete the crossword wins' },
+      }}
+      renderSinglePlayer={() => <CrosswordSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <CrosswordRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

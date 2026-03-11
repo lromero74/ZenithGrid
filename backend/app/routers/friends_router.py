@@ -416,13 +416,21 @@ async def search_users(
     return [{"id": u.id, "display_name": u.display_name} for u in users]
 
 
+class OnlineFriendInfo(BaseModel):
+    id: int
+    game_id: str | None = None
+    room_id: str | None = None
+    room_status: str | None = None  # "waiting" or "playing"
+
+
 @router.get("/online")
 async def get_online_friends(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
-) -> list[int]:
-    """Return IDs of friends who have active WebSocket connections (online)."""
+) -> list[OnlineFriendInfo]:
+    """Return online friends with optional game room info (game they're in)."""
     from app.services.websocket_manager import ws_manager
+    from app.services.game_room_manager import game_room_manager
 
     # Get friend IDs
     result = await db.execute(
@@ -440,4 +448,21 @@ async def get_online_friends(
 
     # Intersect with connected users
     connected = ws_manager.get_connected_user_ids()
-    return sorted(friend_ids & connected)
+    online_ids = sorted(friend_ids & connected)
+
+    # Enrich with game room info
+    out: list[OnlineFriendInfo] = []
+    for fid in online_ids:
+        room_id = game_room_manager.get_user_room(fid)
+        if room_id:
+            room = game_room_manager.get_room(room_id)
+            if room and room.status in ("waiting", "playing"):
+                out.append(OnlineFriendInfo(
+                    id=fid,
+                    game_id=room.game_id,
+                    room_id=room.room_id,
+                    room_status=room.status,
+                ))
+                continue
+        out.append(OnlineFriendInfo(id=fid))
+    return out

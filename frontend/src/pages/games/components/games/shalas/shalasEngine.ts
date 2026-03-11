@@ -7,9 +7,11 @@
  * Special cards:
  *   10 — Destroyer: removes itself + entire discard pile from game
  *    2 — Wildcard:  player picks reset value (A or 3+), 2 stays on discard
- *    7 — Selector:  pick any table card → discard; 2-player: opponent takes 10 cards
- *    3 — Blocker:   (2-player only) played in response to block 7's penalty
- *    4-of-a-kind — Wild Set: resets discard to Ace, all 4 stay on discard
+ *    7 — Selector:  pick any table card → discard
+ *                   2-player: ALSO can push entire discard pile to opponent's hand
+ *    3 — Blocker:   (2-player only) blocks the 7's discard pile push
+ *    2 — also acts as 3 (blocker) or 7 (pusher) in 2-player
+ *    4-of-a-kind — Wild Set: resets discard; also acts as 3 or 7 in 2-player
  *
  * Play rules:
  *   - Cards played must be equal or higher rank than top of discard
@@ -31,10 +33,11 @@ export interface PairStack {
 }
 
 export type GamePhase =
-  | 'playing'        // normal turn
-  | 'choose_wild'    // player must pick reset value for a 2 wildcard
-  | 'choose_selector'// player must pick a table card for a 7
-  | 'block_chance'   // opponent can play a 3 to block 7 penalty (2-player)
+  | 'playing'          // normal turn
+  | 'choose_wild'      // player must pick reset value for a 2 wildcard
+  | 'choose_selector'  // player must pick a table card for a 7
+  | 'choose_seven_action' // 2-player: player chooses pick-table vs push-discard after 7
+  | 'block_chance'     // opponent can play a 3/2/4oak to block discard push (2-player)
   | 'won'
   | 'lost'
 
@@ -81,7 +84,6 @@ export interface ShalasState {
 
 const REFILL_THRESHOLD = 3
 const REFILL_TARGET = 5
-const SELECTOR_PENALTY_COUNT = 10
 
 // ── Game creation ────────────────────────────────────────────────────
 
@@ -569,7 +571,7 @@ function resolvePlay(state: ShalasState, card: Card, extraCards: Card[] = []): S
     return next
   }
 
-  // ── 7: Selector — enter choose_selector phase ──────────────────
+  // ── 7: Selector — in 2-player, choose between table pick or discard push
   if (card.rank === 7) {
     const discardPile = [...state.discardPile, ...allPlayed]
     let next: ShalasState = {
@@ -577,8 +579,10 @@ function resolvePlay(state: ShalasState, card: Card, extraCards: Card[] = []): S
       discardPile,
       effectiveRank: 7,
       aceOnTop: false,
-      phase: 'choose_selector',
-      message: 'Selector! Pick any card from the table to discard',
+      phase: state.playerCount === 2 ? 'choose_seven_action' : 'choose_selector',
+      message: state.playerCount === 2
+        ? 'Selector! Pick a table card OR push the discard pile to your opponent'
+        : 'Selector! Pick any card from the table to discard',
     }
     next = refillHand(next)
     return next
@@ -627,14 +631,15 @@ export function chooseWildValue(state: ShalasState, rank: number): ShalasState {
 
   // Wildcard mimics the 7 Selector
   if (rank === 7) {
-    let next: ShalasState = {
+    return {
       ...state,
       effectiveRank: 7,
       aceOnTop: false,
-      phase: 'choose_selector',
-      message: 'Wildcard → Selector! Pick any card from the table to discard',
+      phase: state.playerCount === 2 ? 'choose_seven_action' : 'choose_selector',
+      message: state.playerCount === 2
+        ? 'Wildcard → Selector! Pick a table card OR push the discard pile'
+        : 'Wildcard → Selector! Pick any card from the table to discard',
     }
-    return next
   }
 
   let next: ShalasState = {
@@ -707,64 +712,94 @@ export function chooseSelectorTarget(state: ShalasState, source: PlaySource): Sh
   next.phase = 'playing'
   next.message = `Selector moved ${rankName(playedCard.rank)} to discard`
 
-  // 2-player: opponent takes 10 cards from discard → enter block_chance
-  if (state.playerCount === 2) {
-    next.phase = 'block_chance'
-    next.message = 'Opponent can play a 3 to block the penalty...'
-    return next
-  }
-
   next = checkEndOfTurn(next)
   return next
 }
 
-/** Opponent blocks the 7 penalty with a 3. */
-export function blockWithThree(state: ShalasState): ShalasState {
-  if (state.phase !== 'block_chance') return state
+/** Handle the 7's choice in 2-player: pick a table card or push the discard pile. */
+export function chooseSevenAction(state: ShalasState, action: 'pick_table' | 'push_discard'): ShalasState {
+  if (state.phase !== 'choose_seven_action') return state
 
-  // Find a 3 in opponent's hand
-  const threeIndex = state.opponentHand.findIndex(c => c.rank === 3)
-  if (threeIndex === -1) return { ...state, message: 'No 3 to block with' }
+  if (action === 'pick_table') {
+    return {
+      ...state,
+      phase: 'choose_selector',
+      message: 'Pick any card from the table to discard',
+    }
+  }
 
-  const opponentHand = state.opponentHand.filter((_, i) => i !== threeIndex)
-  const discardPile = [...state.discardPile, { ...state.opponentHand[threeIndex], faceUp: true }]
-
-  let next: ShalasState = {
+  // Push discard pile to opponent — switch turn to defender for blocking
+  const defender = state.currentPlayer === 0 ? 1 : 0
+  return {
     ...state,
-    opponentHand,
-    discardPile,
-    phase: 'playing',
-    message: 'Blocked! Opponent played a 3',
+    currentPlayer: defender,
+    phase: 'block_chance',
+    message: 'Discard pile push! Play a 3 to block, or accept',
   }
-  next = checkEndOfTurn(next)
-  return next
 }
 
-/** Opponent doesn't block — takes the penalty cards. */
-export function acceptSelectorPenalty(state: ShalasState): ShalasState {
+/** Block the discard pile push with a 3, 2 (wildcard), or 4-of-a-kind.
+ *  Called by the defender during block_chance phase.
+ *  cardIndices: indices in the defender's hand (state.hand after applyAsPlayer). */
+export function blockPush(state: ShalasState, cardIndices: number[]): ShalasState {
+  if (state.phase !== 'block_chance') return state
+  if (cardIndices.length === 0) return state
+
+  if (cardIndices.length === 1) {
+    const card = state.hand[cardIndices[0]]
+    if (!card || (card.rank !== 3 && card.rank !== 2)) {
+      return { ...state, message: 'Only a 3 or 2 can block' }
+    }
+  } else if (cardIndices.length >= 4) {
+    const rank = state.hand[cardIndices[0]]?.rank
+    if (!rank || !cardIndices.slice(0, 4).every(i => state.hand[i]?.rank === rank)) {
+      return { ...state, message: 'Must be 4-of-a-kind to block' }
+    }
+  } else {
+    return { ...state, message: 'Play a 3, 2, or 4-of-a-kind to block' }
+  }
+
+  const usedIndices = cardIndices.length >= 4 ? cardIndices.slice(0, 4) : cardIndices
+  const blockerCards = usedIndices.map(i => ({ ...state.hand[i], faceUp: true }))
+  const hand = state.hand.filter((_, i) => !usedIndices.includes(i))
+  const discardPile = [...state.discardPile, ...blockerCards]
+  const topRank = blockerCards[blockerCards.length - 1].rank
+
+  // Defender keeps the turn after blocking (attacker already used their turn)
+  return {
+    ...state,
+    hand,
+    discardPile,
+    effectiveRank: topRank,
+    aceOnTop: topRank === 1,
+    phase: 'playing',
+    message: blockerCards.length >= 4
+      ? 'Blocked with 4-of-a-kind!'
+      : `Blocked with a ${rankName(blockerCards[0].rank)}!`,
+  }
+}
+
+/** Defender accepts the discard pile push — entire pile goes to their hand.
+ *  Called by the defender during block_chance phase. */
+export function acceptPush(state: ShalasState): ShalasState {
   if (state.phase !== 'block_chance') return state
 
-  const cardsToTake = state.discardPile.slice(-SELECTOR_PENALTY_COUNT)
-  const discardPile = state.discardPile.slice(0, -SELECTOR_PENALTY_COUNT)
-  const opponentHand = [
-    ...state.opponentHand,
-    ...cardsToTake.map(c => ({ ...c, faceUp: true })),
+  const pileSize = state.discardPile.length
+  const hand = [
+    ...state.hand,
+    ...state.discardPile.map(c => ({ ...c, faceUp: true })),
   ]
 
-  const newTopRank = discardPile.length > 0
-    ? discardPile[discardPile.length - 1].rank
-    : 0
-  let next: ShalasState = {
+  // Defender keeps the turn after accepting (attacker already used their turn)
+  return {
     ...state,
-    opponentHand,
-    discardPile,
-    effectiveRank: newTopRank,
-    aceOnTop: newTopRank === 1,
+    hand,
+    discardPile: [],
+    effectiveRank: 0,
+    aceOnTop: false,
     phase: 'playing',
-    message: `Opponent takes ${cardsToTake.length} cards`,
+    message: `Took ${pileSize} cards from the discard pile`,
   }
-  next = checkEndOfTurn(next)
-  return next
 }
 
 /** Handle "can't play" scenario. */

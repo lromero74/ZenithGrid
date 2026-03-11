@@ -5,6 +5,27 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.104.0] - 2026-03-11
+
+### Added
+- **Spectator framework**: Eliminated players in race mode can now choose to spectate remaining players or return to the lobby — with left/right paging through multiple active players
+- **Loser result flow**: Losers see a skull "You Lost!" overlay first, then choose between spectating or leaving — more satisfying UX
+- **Friend lobby joining without invite**: See what game your friends are in and join their lobby directly from the Social page or floating friends panel — no invite needed. Lobby host gets a non-blocking toast notification
+- **Social page**: New dedicated page (between Games and Settings in the nav bar) for friends, game history, and tournaments — all expanded by default
+- **Shalas 2-player card powers**: 7 now offers a choice between picking a table card or pushing the entire discard pile to the opponent; 3 blocks the push; wildcards (2) and four-of-a-kind can act as either 7 or 3 in multiplayer — contributed by David Greene
+- **Multiplayer race support for all games**: Every game with race mode now properly suppresses the game-over modal in multiplayer and passes leave/dismiss callbacks through the race overlay
+
+### Changed
+- Friends online endpoint now returns game room info (game ID, room status) so the UI can show what friends are playing
+- Race overlay upgraded from z-40 to z-[110] to always render above game-over modals
+- Social panels (friends, history, tournaments) moved from Games hub to dedicated Social page
+
+### Fixed
+- Invite acceptance race condition: accepting a game invite now reliably brings you to the friend's lobby even when the join response arrives before the lobby component mounts
+- Sessions router crash on startup: fixed incorrect import (`get_current_active_user` → `get_current_user`)
+
+*Thanks to David Greene for alpha testing the social gaming features and Shalas refinements.*
+
 ## [v2.103.0] - 2026-03-10
 
 ### Added

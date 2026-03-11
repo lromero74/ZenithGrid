@@ -283,8 +283,8 @@ function TournamentDetailView({ id, onBack }: { id: number; onBack: () => void }
 
 // ----- Main Tournaments Panel -----
 
-export function Tournaments() {
-  const [isOpen, setIsOpen] = useState(false)
+export function Tournaments(props: { defaultOpen?: boolean }) {
+  const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false)
   const [showCreate, setShowCreate] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const { data: rawTournaments, isLoading } = useTournaments()

@@ -11,11 +11,13 @@ import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
-import type { GameStatus } from '../../../types'
+import type { GameStatus, Difficulty } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createRummy500Game,
   drawFromStock,
@@ -99,7 +101,7 @@ function Rummy500Help({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Rummy500() {
+function Rummy500SinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('rummy-500')
   const saved = useRef(load()).current
 
@@ -124,10 +126,12 @@ export default function Rummy500() {
   useEffect(() => {
     if (gameState.phase === 'gameOver') {
       if (gameState.scores[0] >= 500) sfx.play('gin')
-      setGameStatus(gameState.scores[0] >= 500 ? 'won' : 'lost')
+      const result = gameState.scores[0] >= 500 ? 'won' : 'lost'
+      setGameStatus(result)
+      onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleDrawStock = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromStock(prev)) }, [])
   const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
@@ -391,7 +395,7 @@ export default function Rummy500() {
           </div>
         )}
 
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.scores[0]}
@@ -404,5 +408,50 @@ export default function Rummy500() {
       </div>
       {showHelp && <Rummy500Help onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first_to_win — first to reach 500 points) ─────────
+
+function Rummy500RaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result === 'draw' ? 'loss' : result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <Rummy500SinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
+    </div>
+  )
+}
+
+export default function Rummy500() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'rummy-500',
+        gameName: 'Rummy 500',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        hasDifficulty: true,
+        modeDescriptions: { first_to_win: 'First to reach 500 points wins' },
+      }}
+      renderSinglePlayer={() => <Rummy500SinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <Rummy500RaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      }
+    />
   )
 }

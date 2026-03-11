@@ -596,15 +596,15 @@ export default function TexasHoldem() {
       config={{
         gameId: 'texas-holdem',
         gameName: 'Texas Hold\'em',
-        modes: ['vs', 'race'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 4,
-        raceDescription: 'First to win a hand wins',
+        modeDescriptions: { first_to_win: 'First to win a hand wins' },
       }}
       renderSinglePlayer={() => <TexasHoldemSinglePlayer />}
-      renderMultiplayer={(roomId, players, playerNames, mode, _roomConfig) => (
-        mode === 'race'
-          ? <TexasHoldemRace roomId={roomId} players={players} />
-          : <TexasHoldemMultiplayer roomId={roomId} players={players} playerNames={playerNames} />
+      renderMultiplayer={(roomId, players, playerNames, mode, _roomConfig, onLeave) => (
+        mode === 'first_to_win'
+          ? <TexasHoldemRace roomId={roomId} players={players} onLeave={onLeave} />
+          : <TexasHoldemMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
       )}
     />
   )

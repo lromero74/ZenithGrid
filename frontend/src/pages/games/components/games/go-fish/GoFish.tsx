@@ -183,7 +183,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('go-fish')
   const saved = useRef(load()).current
 
@@ -349,7 +349,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
           })}
         </div>
 
-        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && (
+        {(gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'draw') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.books[0].length}
@@ -367,7 +367,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function GoFishRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function GoFishRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -384,8 +384,9 @@ function GoFishRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <GoFishSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <GoFishSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -396,14 +397,14 @@ export default function GoFish() {
       config={{
         gameId: 'go-fish',
         gameName: 'Go Fish',
-        modes: ['race'],
+        modes: ['first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to collect the most sets wins',
+        modeDescriptions: { first_to_win: 'First to collect the most sets wins' },
       }}
       renderSinglePlayer={() => <GoFishSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <GoFishRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <GoFishRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect, useMemo, useRef} from 'react'
 import { HelpCircle, X } from 'lucide-react'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { TicTacToeMultiplayer } from './TicTacToeMultiplayer'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
 import { TicTacToeBoard } from './TicTacToeBoard'
@@ -242,7 +243,7 @@ function TicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { o
 }
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
-function TicTacToeRaceWrapper({ roomId }: { roomId: string }) {
+function TicTacToeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -259,6 +260,7 @@ function TicTacToeRaceWrapper({ roomId }: { roomId: string }) {
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <TicTacToeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>
@@ -271,14 +273,16 @@ export default function TicTacToe() {
       config={{
         gameId: 'tic-tac-toe',
         gameName: 'Tic Tac Toe',
-        modes: ['race'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
-        raceDescription: 'First to beat the AI wins',
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
       }}
       renderSinglePlayer={() => <TicTacToeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
-        <TicTacToeRaceWrapper roomId={roomId} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, _roomConfig, onLeave) =>
+        mode === 'vs'
+          ? <TicTacToeMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+          : <TicTacToeRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
     />
   )
 }

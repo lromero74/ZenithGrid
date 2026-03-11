@@ -35,6 +35,7 @@ async def handle_game_message(
         "game:action": _handle_action,
         "game:state": _handle_state_update,
         "game:invite": _handle_invite,
+        "game:join_friend": _handle_join_friend,
     }
 
     handler = handlers.get(msg_type)
@@ -43,7 +44,7 @@ async def handle_game_message(
         return
 
     # RBAC: create/join/mid_join require games:multiplayer permission
-    if msg_type in ("game:create", "game:join", "game:mid_join", "game:rejoin"):
+    if msg_type in ("game:create", "game:join", "game:mid_join", "game:rejoin", "game:join_friend"):
         perms = user_permissions or set()
         if MULTIPLAYER_PERMISSION not in perms:
             await websocket.send_json({
@@ -440,3 +441,90 @@ async def _handle_invite(ws_manager, websocket, user_id, msg, display_name):
         "roomId": room_id,
         "targetUserId": target_user_id,
     })
+
+
+async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name):
+    """Join a friend's game room without an invite.
+
+    The user specifies the friend's user ID. Backend looks up their room,
+    validates friendship, and joins them. Host gets a toast notification.
+    """
+    from app.database import async_session_maker
+    from app.models.social import Friendship
+    from sqlalchemy import or_, and_, select
+
+    friend_user_id = msg.get("friendUserId")
+    if not friend_user_id:
+        await websocket.send_json({"type": "game:error", "error": "Missing friendUserId"})
+        return
+
+    # Validate friendship
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(Friendship).where(
+                or_(
+                    and_(Friendship.user_id == user_id, Friendship.friend_id == friend_user_id),
+                    and_(Friendship.user_id == friend_user_id, Friendship.friend_id == user_id),
+                )
+            )
+        )
+        if not result.scalar_one_or_none():
+            await websocket.send_json({"type": "game:error", "error": "You can only join a friend's game"})
+            return
+
+    # Find friend's room
+    room_id = game_room_manager.get_user_room(friend_user_id)
+    if not room_id:
+        await websocket.send_json({"type": "game:error", "error": "Friend is not in a game room"})
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room:
+        await websocket.send_json({"type": "game:error", "error": "Room not found"})
+        return
+
+    if room.status == "finished":
+        await websocket.send_json({"type": "game:error", "error": "Game has already finished"})
+        return
+
+    if len(room.players) >= room.max_players:
+        await websocket.send_json({"type": "game:error", "error": "Room is full"})
+        return
+
+    # Join the room (waiting or mid-game)
+    if room.status == "playing":
+        room = game_room_manager.mid_join_room(room_id, user_id)
+    else:
+        room = game_room_manager.join_room(room_id, user_id)
+
+    room.player_names[user_id] = display_name
+
+    # Notify the joiner
+    await websocket.send_json({
+        "type": "game:joined",
+        "roomId": room_id,
+        "players": sorted(room.players),
+        "playerNames": room.player_names,
+        "config": room.config,
+    })
+
+    # Notify other players in the room
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:player_joined",
+            "roomId": room_id,
+            "players": sorted(room.players),
+            "playerNames": room.player_names,
+        },
+        exclude_user=user_id,
+    )
+
+    # Send toast notification to the host
+    await ws_manager.send_to_user(room.host_user_id, {
+        "type": "game:friend_joined",
+        "roomId": room_id,
+        "userId": user_id,
+        "displayName": display_name,
+    })
+    logger.info(f"User {user_id} ({display_name}) joined friend {friend_user_id}'s room {room_id}")

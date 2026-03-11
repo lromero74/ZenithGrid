@@ -5,10 +5,11 @@
  * Integrates with the friends API hooks.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Users, UserPlus, Search, Shield, X, Check, Send,
-  ChevronDown, ChevronUp, UserMinus, Ban, Unlock,
+  ChevronDown, ChevronUp, UserMinus, Ban, Unlock, Gamepad2,
 } from 'lucide-react'
 import {
   useFriends,
@@ -24,7 +25,10 @@ import {
   useBlockedUsers,
   useUserSearch,
   useOnlineFriends,
+  type OnlineFriendInfo,
 } from '../../hooks/useFriends'
+import { GAMES } from '../../constants'
+import { gameSocket } from '../../../../services/gameSocket'
 
 type Tab = 'friends' | 'requests' | 'sent' | 'search' | 'blocked'
 
@@ -32,7 +36,8 @@ export function FriendsPanel(props: { defaultOpen?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>('friends')
   const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false)
   const { data: requests = [] } = useFriendRequests()
-  const { data: onlineIds = [] } = useOnlineFriends()
+  const { data: onlineFriends = [] } = useOnlineFriends()
+  const onlineIds = useMemo(() => onlineFriends.map(f => f.id), [onlineFriends])
 
   const tabs: { key: Tab; label: string; icon: typeof Users; badge?: number }[] = [
     { key: 'friends', label: 'Friends', icon: Users },
@@ -110,74 +115,119 @@ export function FriendsPanel(props: { defaultOpen?: boolean }) {
 
 // ----- Friends List -----
 
+/** Lookup map: game ID → game name */
+const GAME_NAME_MAP = Object.fromEntries(GAMES.map(g => [g.id, g.name]))
+
 function FriendsList() {
   const { data: friends = [], isLoading } = useFriends()
-  const { data: onlineIds = [] } = useOnlineFriends()
+  const { data: onlineFriends = [] } = useOnlineFriends()
   const removeFriend = useRemoveFriend()
   const blockUser = useBlockUser()
+  const navigate = useNavigate()
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
 
-  const onlineSet = new Set(onlineIds)
+  const onlineSet = new Set(onlineFriends.map(f => f.id))
+  const onlineMap = useMemo(() => {
+    const m = new Map<number, OnlineFriendInfo>()
+    for (const f of onlineFriends) m.set(f.id, f)
+    return m
+  }, [onlineFriends])
 
   if (isLoading) return <p className="text-xs text-slate-500 py-2">Loading...</p>
   if (!friends.length) return <p className="text-xs text-slate-500 py-2">No friends yet. Search for players to add!</p>
 
-  // Sort online friends first
+  // Sort online friends first, then those in games
   const sorted = [...friends].sort((a, b) => {
     const aOnline = onlineSet.has(a.id) ? 0 : 1
     const bOnline = onlineSet.has(b.id) ? 0 : 1
-    return aOnline - bOnline
+    if (aOnline !== bOnline) return aOnline - bOnline
+    // Among online friends, prioritize those in games
+    const aInGame = onlineMap.get(a.id)?.game_id ? 0 : 1
+    const bInGame = onlineMap.get(b.id)?.game_id ? 0 : 1
+    return aInGame - bInGame
   })
+
+  const handleJoinFriend = (friendId: number, gameId: string) => {
+    gameSocket.send({ type: 'game:join_friend', friendUserId: friendId })
+    // Navigate to the game page — the game:joined response will be caught by MultiplayerWrapper
+    const game = GAMES.find(g => g.id === gameId)
+    if (game) navigate(game.path)
+  }
 
   return (
     <div className="space-y-1 max-h-48 overflow-y-auto">
-      {sorted.map(f => (
-        <div key={f.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-slate-700/30 group">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${
-              onlineSet.has(f.id) ? 'bg-green-400' : 'bg-slate-600'
-            }`} title={onlineSet.has(f.id) ? 'Online' : 'Offline'} />
-            <span className="text-sm text-slate-200">{f.display_name}</span>
+      {sorted.map(f => {
+        const info = onlineMap.get(f.id)
+        const inGame = info?.game_id
+        const gameName = inGame ? GAME_NAME_MAP[inGame] ?? inGame : null
+
+        return (
+          <div key={f.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-slate-700/30 group">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                onlineSet.has(f.id) ? 'bg-green-400' : 'bg-slate-600'
+              }`} title={onlineSet.has(f.id) ? 'Online' : 'Offline'} />
+              <div className="min-w-0">
+                <span className="text-sm text-slate-200">{f.display_name}</span>
+                {inGame && (
+                  <p className="text-[10px] text-blue-400 truncate">
+                    {info?.room_status === 'playing' ? 'Playing' : 'In lobby'}: {gameName}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-1 items-center">
+              {/* Join button — visible when friend is in a joinable game */}
+              {inGame && (
+                <button
+                  onClick={() => handleJoinFriend(f.id, inGame)}
+                  className="p-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/40"
+                  title={`Join ${f.display_name}'s game`}
+                >
+                  <Gamepad2 className="w-3 h-3" />
+                </button>
+              )}
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {confirmRemove === f.id ? (
+                  <>
+                    <button
+                      onClick={() => { removeFriend.mutate(f.id); setConfirmRemove(null) }}
+                      className="p-0.5 text-red-400 hover:text-red-300"
+                      title="Confirm remove"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemove(null)}
+                      className="p-0.5 text-slate-400 hover:text-slate-300"
+                      title="Cancel"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setConfirmRemove(f.id)}
+                      className="p-0.5 text-slate-500 hover:text-red-400"
+                      title="Remove friend"
+                    >
+                      <UserMinus className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => blockUser.mutate(f.id)}
+                      className="p-0.5 text-slate-500 hover:text-red-400"
+                      title="Block"
+                    >
+                      <Ban className="w-3 h-3" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {confirmRemove === f.id ? (
-              <>
-                <button
-                  onClick={() => { removeFriend.mutate(f.id); setConfirmRemove(null) }}
-                  className="p-0.5 text-red-400 hover:text-red-300"
-                  title="Confirm remove"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => setConfirmRemove(null)}
-                  className="p-0.5 text-slate-400 hover:text-slate-300"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setConfirmRemove(f.id)}
-                  className="p-0.5 text-slate-500 hover:text-red-400"
-                  title="Remove friend"
-                >
-                  <UserMinus className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => blockUser.mutate(f.id)}
-                  className="p-0.5 text-slate-500 hover:text-red-400"
-                  title="Block"
-                >
-                  <Ban className="w-3 h-3" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

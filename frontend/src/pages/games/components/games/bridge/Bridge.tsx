@@ -246,7 +246,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('bridge')
   const saved = useRef(load()).current
 
@@ -625,7 +625,7 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
         )}
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.teamScores[0]}
@@ -645,7 +645,7 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function BridgeRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function BridgeRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -662,8 +662,9 @@ function BridgeRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <BridgeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <BridgeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -674,14 +675,14 @@ export default function Bridge() {
       config={{
         gameId: 'bridge',
         gameName: 'Bridge',
-        modes: ['race'],
+        modes: ['first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to make contract wins',
+        modeDescriptions: { first_to_win: 'First to make contract wins' },
       }}
       renderSinglePlayer={() => <BridgeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <BridgeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <BridgeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

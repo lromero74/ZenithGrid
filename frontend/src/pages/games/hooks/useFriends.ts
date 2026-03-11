@@ -223,9 +223,16 @@ export function useCheckDisplayName(name: string) {
   })
 }
 
-/** Get IDs of friends currently online (active WebSocket connection). Polls every 30s. */
+export interface OnlineFriendInfo {
+  id: number
+  game_id?: string | null
+  room_id?: string | null
+  room_status?: string | null  // "waiting" or "playing"
+}
+
+/** Get online friends with game room info. Polls every 30s. */
 export function useOnlineFriends() {
-  return useQuery<number[]>({
+  return useQuery<OnlineFriendInfo[]>({
     queryKey: ['online-friends'],
     queryFn: async () => {
       const { data } = await api.get('/friends/online')

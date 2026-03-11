@@ -417,7 +417,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
+export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('centipede') ?? 0
 
@@ -799,7 +799,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
         )}
 
         {/* Game over modal */}
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={score}
@@ -828,7 +828,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
 // Race wrapper (survival or best_score — last alive or highest score wins)
 // ---------------------------------------------------------------------------
 
-function CentipedeRaceWrapper({ roomId, roomConfig }: { roomId: string; roomConfig: RoomConfig }) {
+function CentipedeRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
@@ -846,8 +846,9 @@ function CentipedeRaceWrapper({ roomId, roomConfig }: { roomId: string; roomConf
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} />
+      <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
     </div>
   )
 }
@@ -862,14 +863,14 @@ export default function Centipede() {
       config={{
         gameId: 'centipede',
         gameName: 'Centipede',
-        modes: ['race'],
+        modes: ['survival', 'best_score'],
         maxPlayers: 2,
         hasDifficulty: false,
-        raceDescription: 'Last alive or highest score wins',
+        modeDescriptions: { survival: 'Last player alive wins', best_score: 'Highest score wins' },
       }}
       renderSinglePlayer={() => <CentipedeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <CentipedeRaceWrapper roomId={roomId} roomConfig={roomConfig} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
+        <CentipedeRaceWrapper roomId={roomId} roomConfig={roomConfig} onLeave={onLeave} />
       )}
     />
   )

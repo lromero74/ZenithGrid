@@ -94,7 +94,7 @@ function SnakeHelp({ onClose }: { onClose: () => void }) {
 
 interface SnakeSaved { wallsMode: boolean }
 
-function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange }: { onGameEnd?: (score: number) => void; onScoreChange?: (score: number, level: number) => void; onStateChange?: (state: object, intervalMs?: number) => void } = {}) {
+function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (score: number) => void; onScoreChange?: (score: number, level: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const { load, save } = useGameState<SnakeSaved>('snake')
   const saved = useRef(load()).current
 
@@ -388,7 +388,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
           Arrow keys or WASD to move. Space to pause.
         </p>
 
-        {gameStatus === 'lost' && (
+        {gameStatus === 'lost' && !isMultiplayer && (
           <GameOverModal
             status="lost"
             score={score}
@@ -405,7 +405,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
 }
 
 // ── Multiplayer race wrapper ──────────────────────────────────────────
-function SnakeRaceWrapper({ roomId }: { roomId: string }) {
+function SnakeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, reportScore, reportLevel } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
   const lastLevelRef = useRef(1)
@@ -431,8 +431,9 @@ function SnakeRaceWrapper({ roomId }: { roomId: string }) {
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <SnakeSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={throttledBroadcast} />
+      <SnakeSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={throttledBroadcast} isMultiplayer />
     </div>
   )
 }
@@ -444,13 +445,13 @@ export default function Snake() {
       config={{
         gameId: 'snake',
         gameName: 'Snake',
-        modes: ['race'],
+        modes: ['best_score'],
         maxPlayers: 2,
-        raceDescription: 'Longest snake wins',
+        modeDescriptions: { best_score: 'Longest snake wins' },
       }}
       renderSinglePlayer={() => <SnakeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig) => (
-        <SnakeRaceWrapper roomId={roomId} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) => (
+        <SnakeRaceWrapper roomId={roomId} onLeave={onLeave} />
       )}
     />
   )

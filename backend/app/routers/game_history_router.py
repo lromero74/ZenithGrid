@@ -6,6 +6,7 @@ game history visibility/privacy settings.
 """
 
 import logging
+from datetime import datetime
 from enum import StrEnum
 from typing import Optional
 
@@ -14,11 +15,12 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import require_permission, Perm
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.database import get_db
 from app.models import User
 from app.models.social import (
     Friendship,
+    GameHighScore,
     GameHistoryVisibility,
     GameResult,
     GameResultPlayer,
@@ -313,3 +315,58 @@ async def update_visibility(
         "default_visibility": vis.default_visibility,
         "game_overrides": vis.game_overrides,
     }
+
+
+# ----- Game High Scores -----
+
+
+@router.get("/scores")
+async def get_game_scores(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all high scores for the current user."""
+    result = await db.execute(
+        select(GameHighScore).where(GameHighScore.user_id == current_user.id)
+    )
+    scores = result.scalars().all()
+    return {row.game_id: row.score for row in scores}
+
+
+@router.put("/scores/{game_id}")
+async def update_game_score(
+    game_id: str,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update high score for a game (only if higher than current)."""
+    score = body.get("score")
+    if score is None or not isinstance(score, (int, float)):
+        raise HTTPException(400, "score required")
+    score = int(score)
+
+    result = await db.execute(
+        select(GameHighScore).where(
+            GameHighScore.user_id == current_user.id,
+            GameHighScore.game_id == game_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        if score > existing.score:
+            existing.score = score
+            existing.updated_at = datetime.utcnow()
+            await db.commit()
+            return {"game_id": game_id, "score": score, "updated": True}
+        return {"game_id": game_id, "score": existing.score, "updated": False}
+    else:
+        new_score = GameHighScore(
+            user_id=current_user.id,
+            game_id=game_id,
+            score=score,
+        )
+        db.add(new_score)
+        await db.commit()
+        return {"game_id": game_id, "score": score, "updated": True}

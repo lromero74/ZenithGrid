@@ -214,7 +214,7 @@ function B({ children }: { children: React.ReactNode }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('euchre')
   const saved = useRef(load()).current
 
@@ -548,7 +548,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
         )}
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.teamScores[0]}
@@ -568,7 +568,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function EuchreRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function EuchreRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -585,8 +585,9 @@ function EuchreRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <EuchreSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <EuchreSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -597,13 +598,13 @@ export default function Euchre() {
       config={{
         gameId: 'euchre',
         gameName: 'Euchre',
-        modes: ['race'],
+        modes: ['first_to_win'],
         hasDifficulty: true,
-        raceDescription: 'First to win a round wins',
+        modeDescriptions: { first_to_win: 'First to win a round wins' },
       }}
       renderSinglePlayer={() => <EuchreSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <EuchreRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <EuchreRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

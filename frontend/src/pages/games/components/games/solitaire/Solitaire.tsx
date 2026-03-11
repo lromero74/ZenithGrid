@@ -16,6 +16,8 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createDeck,
   shuffleDeck,
@@ -119,7 +121,9 @@ function SolitaireHelp({ onClose }: { onClose: () => void }) {
 
 // ── Component ────────────────────────────────────────────────────────
 
-export default function Solitaire() {
+function SolitaireSinglePlayer({ onGameEnd }: {
+  onGameEnd?: (result: 'win' | 'loss' | 'draw', moveCount?: number) => void
+} = {}) {
   const { load, save, clear } = useGameState<SavedSolitaireState>('solitaire')
   const saved = useRef(load()).current
 
@@ -153,8 +157,9 @@ export default function Solitaire() {
       setGameStatus('won')
       setSelection(null)
       clear()
+      onGameEnd?.('win', gameState.moves)
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   // Clear hint when user makes a move (gameState changes)
   useEffect(() => {
@@ -619,6 +624,54 @@ export default function Solitaire() {
       `}</style>
       {showHelp && <SolitaireHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper ──────────────────────────────────────────────────
+
+function SolitaireRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish } =
+    useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', moveCount?: number) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportScore(moveCount ?? 0)
+    reportFinish(result === 'draw' ? 'loss' : result, moveCount)
+  }, [reportScore, reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <SolitaireSinglePlayer onGameEnd={handleGameEnd} />
+    </div>
+  )
+}
+
+export default function Solitaire() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'solitaire',
+        gameName: 'Solitaire',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { first_to_win: 'First to complete wins' },
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <SolitaireSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <SolitaireRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }
 

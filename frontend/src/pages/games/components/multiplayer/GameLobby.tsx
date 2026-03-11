@@ -17,11 +17,20 @@ export interface LobbyProps {
   gameId: string
   gameName: string
   mode: 'vs' | 'race'
+  /** Specific race type for race mode (survival, best_score, first_to_win). Included in room config. */
+  raceType?: 'first_to_win' | 'survival' | 'best_score'
   maxPlayers?: number
   /** Show difficulty selector (for race mode games with difficulty) */
   hasDifficulty?: boolean
   onGameStart: (roomId: string, players: number[], playerNames: Record<number, string>, config: RoomConfig) => void
   onBack: () => void
+  /** Pre-joined room state (from invite acceptance before lobby mounted) */
+  initialRoom?: {
+    roomId: string
+    players: number[]
+    playerNames: Record<number, string>
+    config: RoomConfig
+  }
 }
 
 type LobbyState = 'idle' | 'creating' | 'waiting' | 'joining' | 'ready'
@@ -32,12 +41,12 @@ const DIFFICULTY_OPTIONS: { value: Difficulty; label: string; color: string }[] 
   { value: 'hard', label: 'Hard', color: 'bg-red-900/50 text-red-400 border-red-700/50' },
 ]
 
-export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, hasDifficulty, onGameStart, onBack }: LobbyProps) {
+export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, hasDifficulty, onGameStart, onBack, initialRoom }: LobbyProps) {
   const { user, getAccessToken } = useAuth()
-  const [lobbyState, setLobbyState] = useState<LobbyState>('idle')
-  const [roomId, setRoomId] = useState<string | null>(null)
-  const [players, setPlayers] = useState<number[]>([])
-  const [playerNames, setPlayerNames] = useState<Record<number, string>>({})
+  const [lobbyState, setLobbyState] = useState<LobbyState>(initialRoom ? 'waiting' : 'idle')
+  const [roomId, setRoomId] = useState<string | null>(initialRoom?.roomId ?? null)
+  const [players, setPlayers] = useState<number[]>(initialRoom?.players ?? [])
+  const [playerNames, setPlayerNames] = useState<Record<number, string>>(initialRoom?.playerNames ?? {})
   const [readyPlayers, setReadyPlayers] = useState<number[]>([])
   const [isReady, setIsReady] = useState(false)
   const [isHost, setIsHost] = useState(false)
@@ -45,8 +54,8 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, hasDifficult
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium')
-  const [roomConfig, setRoomConfig] = useState<RoomConfig>({})
+  const [difficulty, setDifficulty] = useState<Difficulty>(initialRoom?.config?.difficulty as Difficulty ?? 'medium')
+  const [roomConfig, setRoomConfig] = useState<RoomConfig>(initialRoom?.config ?? {})
 
   // Connect WebSocket
   useEffect(() => {
@@ -109,9 +118,10 @@ export function GameLobby({ gameId, gameName, mode, maxPlayers = 2, hasDifficult
     setLobbyState('creating')
     const config: RoomConfig = { max_players: maxPlayers }
     if (hasDifficulty) config.difficulty = difficulty
+    if (raceType) config.race_type = raceType
     setRoomConfig(config)
     gameSocket.createRoom(gameId, mode, config)
-  }, [gameId, mode, maxPlayers, hasDifficulty, difficulty])
+  }, [gameId, mode, raceType, maxPlayers, hasDifficulty, difficulty])
 
   const joinRoom = useCallback(() => {
     if (!joinCode.trim()) return

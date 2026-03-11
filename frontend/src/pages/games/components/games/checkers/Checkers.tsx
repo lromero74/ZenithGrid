@@ -18,6 +18,7 @@ import {
   type Board, type Move,
 } from './checkersEngine'
 import { CheckersBoard } from './CheckersBoard'
+import { CheckersMultiplayer } from './CheckersMultiplayer'
 import { useGameState } from '../../../hooks/useGameState'
 import type { GameStatus, Difficulty } from '../../../types'
 import { useGameMusic } from '../../../audio/useGameMusic'
@@ -406,7 +407,7 @@ function CheckersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
 }
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
-function CheckersRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function CheckersRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -423,6 +424,7 @@ function CheckersRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: stri
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <CheckersSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>
@@ -435,14 +437,16 @@ export default function Checkers() {
       config={{
         gameId: 'checkers',
         gameName: 'Checkers',
-        modes: ['race'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'First to beat the AI wins',
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
       }}
       renderSinglePlayer={() => <CheckersSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <CheckersRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) => (
+        mode === 'vs'
+          ? <CheckersMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+          : <CheckersRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       )}
     />
   )

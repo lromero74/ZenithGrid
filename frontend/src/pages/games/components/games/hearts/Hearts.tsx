@@ -188,7 +188,7 @@ interface SavedState {
   gameStatus: GameStatus
 }
 
-function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void } = {}) {
+function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw') => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('hearts')
   const saved = useRef(load()).current
 
@@ -388,7 +388,7 @@ function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
           </button>
         )}
 
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.scores[0]}
@@ -406,7 +406,7 @@ function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
-function HeartsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: Difficulty }) {
+function HeartsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -423,8 +423,9 @@ function HeartsRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <HeartsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <HeartsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -435,13 +436,13 @@ export default function Hearts() {
       config={{
         gameId: 'hearts',
         gameName: 'Hearts',
-        modes: ['race'],
+        modes: ['first_to_win'],
         hasDifficulty: true,
-        raceDescription: 'First to win a hand wins',
+        modeDescriptions: { first_to_win: 'First to win a hand wins' },
       }}
       renderSinglePlayer={() => <HeartsSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) => (
-        <HeartsRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
+        <HeartsRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       )}
     />
   )

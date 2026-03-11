@@ -390,11 +390,11 @@ function MemorySinglePlayer({ onGameEnd, onMove, onStateChange: _onStateChange }
   )
 }
 
-// ── Race wrapper (fewest moves wins) ──────────────────────────────
+// ── Race wrapper ──────────────────────────────────────────────────
 
-function MemoryRaceWrapper({ roomId }: { roomId: string; difficulty?: string }) {
+function MemoryRaceWrapper({ roomId, raceType = 'best_score', onLeave }: { roomId: string; difficulty?: string; raceType?: 'first_to_win' | 'best_score'; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportScore, reportFinish } =
-    useRaceMode(roomId, 'best_score')
+    useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
 
   const handleMove = useCallback((moveCount: number) => {
@@ -414,6 +414,7 @@ function MemoryRaceWrapper({ roomId }: { roomId: string; difficulty?: string }) 
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
       <MemorySinglePlayer onGameEnd={handleGameEnd} onMove={handleMove} onStateChange={broadcastState} />
     </div>
@@ -426,15 +427,15 @@ export default function Memory() {
       config={{
         gameId: 'memory',
         gameName: 'Memory',
-        modes: ['race'],
+        modes: ['first_to_win', 'best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        raceDescription: 'Fewest moves wins',
+        modeDescriptions: { first_to_win: 'First to finish wins', best_score: 'Fewest moves wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <MemorySinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <MemoryRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <MemoryRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} raceType={(roomConfig.race_type as 'first_to_win' | 'best_score') || 'best_score'} onLeave={onLeave} />
       }
     />
   )

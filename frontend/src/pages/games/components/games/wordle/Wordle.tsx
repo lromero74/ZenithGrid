@@ -82,7 +82,7 @@ function WordleHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void } = {}) {
+function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object) => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<WordleSaved>('wordle')
   const saved = useRef(load()).current
 
@@ -312,7 +312,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
           disabled={gameStatus !== 'playing'}
         />
 
-        {gameStatus !== 'playing' && gameStatus !== 'idle' && (
+        {gameStatus !== 'playing' && gameStatus !== 'idle' && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             message={
@@ -333,7 +333,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
 
 // ── Race wrapper (fewest guesses wins) ──────────────────────────────
 
-function WordleRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string; difficulty?: string }) {
+function WordleRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
   const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
@@ -352,8 +352,9 @@ function WordleRaceWrapper({ roomId, difficulty: _difficulty }: { roomId: string
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
       />
-      <WordleSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
+      <WordleSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
   )
 }
@@ -364,14 +365,14 @@ export default function Wordle() {
       config={{
         gameId: 'wordle',
         gameName: 'Wordle',
-        modes: ['race'],
+        modes: ['best_score'],
         hasDifficulty: false,
-        raceDescription: 'Fewest guesses wins',
+        modeDescriptions: { best_score: 'Fewest guesses wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <WordleSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig) =>
-        <WordleRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty as string | undefined} />
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
+        <WordleRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty as string | undefined} onLeave={onLeave} />
       }
     />
   )

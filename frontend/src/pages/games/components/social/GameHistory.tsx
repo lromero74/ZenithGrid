@@ -82,8 +82,8 @@ function GameHistoryRow({ item }: { item: GameHistoryItem }) {
   )
 }
 
-export function GameHistory() {
-  const [isOpen, setIsOpen] = useState(false)
+export function GameHistory(props: { defaultOpen?: boolean }) {
+  const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false)
   const [gameFilter, setGameFilter] = useState<string>('')
   const [page, setPage] = useState(1)
   const pageSize = 15

@@ -22,6 +22,8 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { HelpCircle, X } from 'lucide-react'
 import { MusicToggle } from '../../MusicToggle'
+import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createSpoonsGame,
   drawCard,
@@ -179,7 +181,7 @@ function SpoonsHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Spoons() {
+function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss') => void; isMultiplayer?: boolean } = {}) {
   const { load, save, clear } = useGameState<SavedState>('spoons')
   const saved = useRef(load()).current
 
@@ -215,10 +217,12 @@ export default function Spoons() {
     if (showModeSelect) return
     if (gameState.phase === 'gameOver') {
       const human = gameState.players[0]
-      setGameStatus(human.eliminated ? 'lost' : 'won')
+      const result = human.eliminated ? 'lost' : 'won'
+      setGameStatus(result)
+      onGameEnd?.(human.eliminated ? 'loss' : 'win')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   // ── Turn-based AI: draw + discard ─────────────────────────────────
   useEffect(() => {
@@ -522,7 +526,7 @@ export default function Spoons() {
         </div>
 
         {/* Game over modal */}
-        {(gameStatus === 'won' || gameStatus === 'lost') && (
+        {(gameStatus === 'won' || gameStatus === 'lost') && !isMultiplayer && (
           <GameOverModal
             status={gameStatus}
             score={gameState.roundNumber}
@@ -536,5 +540,51 @@ export default function Spoons() {
       </div>
       {showHelp && <SpoonsHelp onClose={() => setShowHelp(false)} />}
     </GameLayout>
+  )
+}
+
+// ── Race wrapper (first-to-win against opponent) ──────────────────
+
+function SpoonsRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const finishedRef = useRef(false)
+
+  const handleGameEnd = useCallback((result: 'win' | 'loss') => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    reportFinish(result)
+  }, [reportFinish])
+
+  return (
+    <div className="relative">
+      <RaceOverlay
+        raceResult={raceResult}
+        opponentScore={opponentStatus.score}
+        opponentFinished={opponentStatus.finished}
+        opponentLevelUp={opponentLevelUp}
+        onDismiss={onLeave}
+      />
+      <SpoonsSinglePlayer onGameEnd={handleGameEnd} isMultiplayer />
+    </div>
+  )
+}
+
+export default function Spoons() {
+  return (
+    <MultiplayerWrapper
+      config={{
+        gameId: 'spoons',
+        gameName: 'Spoons',
+        modes: ['first_to_win'],
+        maxPlayers: 2,
+        hasDifficulty: false,
+        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
+        allowPlayOn: true,
+      }}
+      renderSinglePlayer={() => <SpoonsSinglePlayer />}
+      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
+        <SpoonsRaceWrapper roomId={roomId} onLeave={onLeave} />
+      }
+    />
   )
 }

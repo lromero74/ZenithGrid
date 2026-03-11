@@ -37,6 +37,7 @@ const RACE_TARGET = 2000 // double starting chips
 interface TexasHoldemRaceProps {
   roomId: string
   players: number[]
+  onLeave?: () => void
 }
 
 /** Format a lastAction string to use "P2/P3/P4" instead of "Player 1/2/3". */
@@ -44,7 +45,7 @@ function formatAction(action: string): string {
   return action.replace(/Player (\d+)/g, (_, n) => `P${Number(n) + 1}`)
 }
 
-export function TexasHoldemRace({ roomId }: TexasHoldemRaceProps) {
+export function TexasHoldemRace({ roomId, onLeave }: TexasHoldemRaceProps) {
   const { opponentStatus, raceResult, localFinished, opponentLevelUp, reportFinish, reportScore } = useRaceMode(roomId, 'first_to_win')
 
   const song = useMemo(() => getSongForGame('texas-holdem'), [])
@@ -169,6 +170,7 @@ export function TexasHoldemRace({ roomId }: TexasHoldemRaceProps) {
           opponentScore={opponentStatus.score}
           opponentFinished={opponentStatus.finished}
           opponentLevelUp={opponentLevelUp}
+          onDismiss={onLeave}
         />
 
         {/* Community cards */}
