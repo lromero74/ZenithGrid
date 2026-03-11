@@ -3,14 +3,20 @@
  *
  * Opens a slide-out panel with the FriendsPanel (always expanded).
  * Renders as a fixed button in the bottom-left corner.
+ * Hidden for users without social:chat permission.
  */
 
 import { useState } from 'react'
 import { Users, X } from 'lucide-react'
 import { FriendsPanel } from './FriendsPanel'
+import { useHasPermission } from '../../../../hooks/usePermission'
 
 export function FloatingSocialButton() {
   const [open, setOpen] = useState(false)
+  const canChat = useHasPermission('social:chat')
+
+  // Don't render for observers / users without social permission
+  if (!canChat) return null
 
   return (
     <>

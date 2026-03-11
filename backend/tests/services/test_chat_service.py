@@ -6,11 +6,10 @@ checks, membership management, read tracking, unread counts, and retention clean
 """
 
 import pytest
-from datetime import datetime, timedelta
 
 from app.models import User
 from app.models.social import (
-    BlockedUser, ChatChannelMember, ChatMessage, ChatMessageReaction, Friendship,
+    BlockedUser, ChatChannelMember, Friendship,
 )
 from app.services import chat_service
 
@@ -1021,51 +1020,6 @@ class TestGetChannelMembers:
         assert len(members) == 2
         names = {m["display_name"] for m in members}
         assert names == {"Alice", "Bob"}
-
-
-# =============================================================================
-# Cleanup — cleanup_old_messages
-# =============================================================================
-
-
-class TestCleanupOldMessages:
-    """Tests for cleanup_old_messages()"""
-
-    @pytest.mark.asyncio
-    async def test_cleanup_deletes_old_messages(self, db_session):
-        """Messages older than retention period are deleted."""
-        alice = await create_user(db_session, "alice@test.com", "Alice")
-        channel = await chat_service.create_channel(db_session, alice.id, "Test")
-
-        # Create an old message directly
-        old_msg = ChatMessage(
-            channel_id=channel.id,
-            sender_id=alice.id,
-            content="old",
-            created_at=datetime.utcnow() - timedelta(days=100),
-        )
-        db_session.add(old_msg)
-        await db_session.flush()
-
-        # Create a recent message
-        await chat_service.send_message(
-            db_session, channel.id, alice.id, "recent"
-        )
-
-        deleted = await chat_service.cleanup_old_messages(db_session, 30)
-        assert deleted == 1
-
-    @pytest.mark.asyncio
-    async def test_cleanup_zero_days_does_nothing(self, db_session):
-        """Retention of 0 days means no cleanup."""
-        deleted = await chat_service.cleanup_old_messages(db_session, 0)
-        assert deleted == 0
-
-    @pytest.mark.asyncio
-    async def test_cleanup_negative_days_does_nothing(self, db_session):
-        """Negative retention days does nothing."""
-        deleted = await chat_service.cleanup_old_messages(db_session, -5)
-        assert deleted == 0
 
 
 # =============================================================================

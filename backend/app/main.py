@@ -718,6 +718,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
         return
 
     from app.services.websocket_manager import MAX_MESSAGE_SIZE, RECEIVE_TIMEOUT_SECONDS
+    import json as _json
 
     connected = await ws_manager.connect(websocket, user_id)
     if not connected:
@@ -740,7 +741,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                 await websocket.close(code=4009, reason="Message too large")
                 break
 
-            import json as _json
             try:
                 msg = _json.loads(data)
             except _json.JSONDecodeError:
@@ -759,7 +759,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
             elif msg_type.startswith("chat:"):
                 from app.services.chat_ws_handler import handle_chat_message
                 await handle_chat_message(
-                    ws_manager, websocket, user_id, msg, display_name,
+                    ws_manager, websocket, user_id, msg,
+                    user_permissions, display_name,
                 )
             else:
                 await websocket.send_json({"type": "echo", "message": f"Received: {data}"})

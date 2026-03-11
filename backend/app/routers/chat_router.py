@@ -62,7 +62,7 @@ class ReactionRequest(BaseModel):
 @router.get("/channels")
 async def list_channels(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """List all chat channels the user belongs to."""
     return await chat_service.get_user_channels(db, current_user.id)
@@ -72,7 +72,7 @@ async def list_channels(
 async def create_channel(
     body: CreateChannelRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Create a new chat channel (DM, group, or channel)."""
     try:
@@ -109,7 +109,7 @@ async def rename_channel(
     channel_id: int,
     body: RenameChannelRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Rename a group or channel."""
     try:
@@ -123,7 +123,7 @@ async def rename_channel(
 async def delete_channel(
     channel_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Delete a group or channel. Only the owner can delete."""
     try:
@@ -138,7 +138,7 @@ async def update_member_role(
     channel_id: int,
     body: UpdateRoleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Promote or demote a channel member. Only the owner can change roles."""
     try:
@@ -157,7 +157,7 @@ async def get_messages(
     before: Optional[int] = Query(None, description="Load messages before this ID"),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """Get paginated messages for a channel."""
     try:
@@ -173,7 +173,7 @@ async def send_message(
     channel_id: int,
     body: SendMessageRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Send a message to a channel. Also broadcasts via WebSocket."""
     try:
@@ -190,7 +190,7 @@ async def edit_message(
     message_id: int,
     body: EditMessageRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Edit a message. Only the sender can edit."""
     try:
@@ -205,7 +205,7 @@ async def edit_message(
 async def delete_message(
     message_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Soft-delete a message."""
     try:
@@ -222,7 +222,7 @@ async def delete_message(
 async def mark_read(
     channel_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Mark all messages in a channel as read."""
     try:
@@ -235,7 +235,7 @@ async def mark_read(
 @router.get("/unread")
 async def get_unread_counts(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Get unread message counts per channel."""
     counts = await chat_service.get_unread_counts(db, current_user.id)
@@ -248,7 +248,7 @@ async def get_unread_counts(
 async def get_members(
     channel_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """Get members of a channel."""
     # Validate membership first
@@ -263,7 +263,7 @@ async def add_member(
     channel_id: int,
     body: AddMemberRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Add a friend to a group/channel."""
     try:
@@ -279,7 +279,7 @@ async def remove_member(
     channel_id: int,
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Remove a member from a group/channel, or leave."""
     try:
@@ -298,7 +298,7 @@ async def toggle_reaction(
     message_id: int,
     body: ReactionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Toggle an emoji reaction on a message."""
     try:
@@ -315,7 +315,7 @@ async def toggle_reaction(
 async def toggle_pin(
     message_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Toggle pin on a message. Only admins/owners can pin."""
     try:
@@ -328,7 +328,7 @@ async def toggle_pin(
 async def get_pinned_messages(
     channel_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """Get all pinned messages in a channel."""
     try:
@@ -345,7 +345,7 @@ async def search_messages(
     channel_id: Optional[int] = Query(None),
     limit: int = Query(30, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """Search messages across user's channels or a specific channel."""
     try:

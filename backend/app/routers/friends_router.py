@@ -6,10 +6,12 @@ All social interactions are scoped by authenticated user.
 """
 
 import logging
+import time
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, or_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_permission, Perm
@@ -21,6 +23,25 @@ from app.models.social import BlockedUser, FriendRequest, Friendship
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/friends", tags=["friends"])
+
+# Friend request rate limiting (W10) — per-user, in-memory
+_friend_request_attempts: dict[int, list[float]] = defaultdict(list)
+_FR_RATE_LIMIT_MAX = 20   # max friend requests
+_FR_RATE_LIMIT_WINDOW = 3600  # per hour (seconds)
+
+
+def _check_friend_request_rate(user_id: int) -> None:
+    """Raise HTTPException 429 if user has exceeded friend request rate limit."""
+    now = time.monotonic()
+    attempts = _friend_request_attempts[user_id]
+    cutoff = now - _FR_RATE_LIMIT_WINDOW
+    attempts[:] = [t for t in attempts if t > cutoff]
+    if len(attempts) >= _FR_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many friend requests. Please try again later.",
+        )
+    attempts.append(now)
 
 
 # ----- Pydantic Schemas -----
@@ -60,7 +81,7 @@ class UserSearchResult(BaseModel):
 @router.get("")
 async def list_friends(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """List all friends of the current user."""
     result = await db.execute(
@@ -80,9 +101,11 @@ async def list_friends(
 async def send_friend_request(
     body: FriendRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Send a friend request by display name."""
+    _check_friend_request_rate(current_user.id)
+
     # Find target user
     result = await db.execute(
         select(User).where(
@@ -141,7 +164,7 @@ async def send_friend_request(
 @router.get("/requests")
 async def list_friend_requests(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """List pending incoming friend requests."""
     result = await db.execute(
@@ -165,7 +188,7 @@ async def list_friend_requests(
 @router.get("/requests/sent")
 async def list_sent_friend_requests(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """List pending outgoing friend requests sent by the current user."""
     result = await db.execute(
@@ -190,7 +213,7 @@ async def list_sent_friend_requests(
 async def cancel_sent_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Cancel a friend request you sent."""
     result = await db.execute(
@@ -212,7 +235,7 @@ async def cancel_sent_friend_request(
 async def accept_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Accept a pending friend request — creates bidirectional friendship."""
     result = await db.execute(
@@ -239,7 +262,7 @@ async def accept_friend_request(
 async def reject_friend_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Reject/dismiss a friend request (silent — no block)."""
     result = await db.execute(
@@ -261,7 +284,7 @@ async def reject_friend_request(
 async def remove_friend(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Remove a friend — deletes both direction rows."""
     # Delete both directions
@@ -281,7 +304,7 @@ async def remove_friend(
 async def block_user(
     body: BlockUserRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Block a user. Also removes any existing friendship."""
     if body.user_id == current_user.id:
@@ -331,7 +354,7 @@ async def block_user(
 async def unblock_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> dict:
     """Unblock a user."""
     result = await db.execute(
@@ -352,7 +375,7 @@ async def unblock_user(
 @router.get("/blocked")
 async def list_blocked_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """List all blocked users."""
     result = await db.execute(
@@ -377,7 +400,7 @@ search_router = APIRouter(prefix="/api/users", tags=["users"])
 async def search_users(
     q: str = Query(..., min_length=1, max_length=50),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[dict]:
     """Search for users by display name. Excludes inactive, self, and blocked users."""
     # Escape LIKE wildcards to prevent pattern injection
@@ -392,14 +415,17 @@ async def search_users(
         )
     ).subquery()
 
-    # Subquery: user IDs that have games:multiplayer permission via RBAC chain
-    multiplayer_user_ids = (
+    # Subquery: user IDs that have social:chat permission via RBAC chain
+    # Also include superusers (they bypass all permission checks)
+    rbac_user_ids = (
         select(user_groups.c.user_id)
         .join(group_roles, user_groups.c.group_id == group_roles.c.group_id)
         .join(role_permissions, group_roles.c.role_id == role_permissions.c.role_id)
         .join(Permission, role_permissions.c.permission_id == Permission.id)
-        .where(Permission.name == Perm.GAMES_MULTIPLAYER)
-    ).subquery()
+        .where(Permission.name == Perm.SOCIAL_CHAT)
+    )
+    superuser_ids = select(User.id).where(User.is_superuser.is_(True))
+    multiplayer_user_ids = union(rbac_user_ids, superuser_ids).subquery()
 
     result = await db.execute(
         select(User)
@@ -426,7 +452,7 @@ class OnlineFriendInfo(BaseModel):
 @router.get("/online")
 async def get_online_friends(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+    current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ) -> list[OnlineFriendInfo]:
     """Return online friends with optional game room info (game they're in)."""
     from app.services.websocket_manager import ws_manager

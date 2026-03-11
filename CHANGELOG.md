@@ -5,6 +5,32 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.107.0] - 2026-03-11
+
+### Added
+- **Social:chat permission**: Chat and friends features now use a dedicated `social:chat` permission, separate from `games:multiplayer` — users can message friends without needing game permissions
+- **WebSocket RBAC enforcement**: Chat WebSocket messages now require `social:chat` permission, closing a bypass where observers could send messages via WebSocket
+- **Chat send rate limiting**: WebSocket message sends are throttled (10 per 5 seconds) to prevent flooding
+- **Friend request rate limiting**: Limited to 20 friend requests per hour to prevent spam
+- **Blocked user message filtering**: Messages from blocked users are no longer delivered in group channels
+
+### Changed
+- **ChatPanel modularized**: Split from 1142-line monolith into 5 focused components (MessageBubble, ChatInput, MembersPanel, NewChatDialog, ChatPanel) — net reduction of ~300 lines
+- **WebSocket manager optimized**: Replaced list-based connection tracking with dict-based O(1) lookups for connect, disconnect, and broadcast operations
+- **Chat queries optimized**: Batch reaction loading, single-query DM lookup, joined unread counts — eliminates N+1 query patterns across 5 hot paths
+- **User search includes superusers**: Superusers now appear in friend search results regardless of RBAC chain
+
+### Fixed
+- **Observer lock modals**: Chat and Social pages show proper "account required" lock modal for unauthorized users; floating social button is hidden entirely
+- **WebSocket input validation**: All channelId/messageId fields are now type-validated to prevent type confusion attacks
+- **Friends endpoint tests**: Fixed 23 pre-existing test failures caused by detached SQLAlchemy instances in RBAC dependency chain
+
+### Security
+- Chat WebSocket handler validates `social:chat` permission on every message (was previously unchecked)
+- WebSocket message fields are coerced to expected types before processing
+- Content validation added to WebSocket send/edit paths (defense-in-depth)
+- ILIKE wildcards properly escaped in chat message search
+
 ## [v2.106.1] - 2026-03-11
 
 ### Added
