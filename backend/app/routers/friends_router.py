@@ -444,9 +444,13 @@ async def search_users(
 
 class OnlineFriendInfo(BaseModel):
     id: int
+    display_name: str | None = None
     game_id: str | None = None
     room_id: str | None = None
     room_status: str | None = None  # "waiting" or "playing"
+    player_count: int | None = None
+    max_players: int | None = None
+    mode: str | None = None  # "vs" or "race"
 
 
 @router.get("/online")
@@ -476,19 +480,39 @@ async def get_online_friends(
     connected = ws_manager.get_connected_user_ids()
     online_ids = sorted(friend_ids & connected)
 
+    # Batch-fetch display names
+    name_map: dict[int, str] = {}
+    if online_ids:
+        name_result = await db.execute(
+            select(User.id, User.display_name).where(User.id.in_(online_ids))
+        )
+        for uid, dname in name_result.all():
+            name_map[uid] = dname or f"Player {uid}"
+
     # Enrich with game room info
     out: list[OnlineFriendInfo] = []
     for fid in online_ids:
+        dname = name_map.get(fid, f"Player {fid}")
         room_id = game_room_manager.get_user_room(fid)
         if room_id:
             room = game_room_manager.get_room(room_id)
             if room and room.status in ("waiting", "playing"):
                 out.append(OnlineFriendInfo(
                     id=fid,
+                    display_name=dname,
                     game_id=room.game_id,
                     room_id=room.room_id,
                     room_status=room.status,
+                    player_count=len(room.players),
+                    max_players=room.config.get("max_players", 2),
+                    mode=room.mode,
                 ))
                 continue
-        out.append(OnlineFriendInfo(id=fid))
+            elif room and room.status == "finished":
+                # Stale finished room — clean up mapping
+                game_room_manager._user_rooms.pop(fid, None)
+            elif not room:
+                # Room was cleaned up but mapping remained — clean up
+                game_room_manager._user_rooms.pop(fid, None)
+        out.append(OnlineFriendInfo(id=fid, display_name=dname))
     return out

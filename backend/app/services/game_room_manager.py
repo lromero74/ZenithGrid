@@ -277,6 +277,24 @@ class GameRoomManager:
             raise ValueError("Room not found")
         room.state = state
 
+    def reset_to_lobby(self, room_id: str) -> GameRoom:
+        """Reset a room back to lobby (waiting) state for another round."""
+        room = self._rooms.get(room_id)
+        if not room:
+            raise ValueError("Room not found")
+
+        room.status = "waiting"
+        room.ready_players.clear()
+        room.disconnected_players.clear()
+        room.disconnect_times.clear()
+        room.state.clear()
+        room.sequence = 0
+        room.started_at = None
+        room.finished_at = None
+        room.result = None
+        logger.info(f"Room {room_id} reset to lobby")
+        return room
+
     def finish_game(self, room_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
         """Mark a game as finished with results."""
         room = self._rooms.get(room_id)

@@ -257,7 +257,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'cards',
     subcategory: 'Casino',
-    multiplayer: ['best_score'],
+    multiplayer: ['vs', 'best_score'],
   },
   {
     id: 'video-poker',

@@ -5,6 +5,25 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.108.0] - 2026-03-12
+
+### Added
+- **Blackjack VS Mode**: Two human players sit at the same table with a shared dealer and shoe — host-authoritative turn-based play with simultaneous betting, split, double down, and real-time state sync
+- **Friends' Lobbies**: Game Hub now shows friends' open lobbies at the top — one click to join their game
+- **Room reconnection**: Navigating away from a game and returning automatically rejoins your active room
+- **Back to Lobby**: After a multiplayer game ends, players can return to the lobby together for a rematch without recreating the room
+- **Room check on mount**: Multiplayer games detect and restore existing room state on page load
+
+### Changed
+- **Multiplayer infrastructure**: Stale room cleanup, auto-leave when switching games, buffered join results that survive page navigation
+- **WebSocket hardening**: Duplicate connection prevention, stale socket cleanup, oversized message type logging
+- **RaceOverlay**: Debounced disconnect overlay (1.5s delay prevents flash), survival spectator timing fixes
+- **Game history endpoint**: Moved detail endpoint after `/scores` and `/visibility` to prevent path capture conflicts
+
+### Fixed
+- **Survival spectator race condition**: Guard prevents 'won' result from being overwritten by near-simultaneous opponent death
+- **WebSocket reconnect**: Stale socket handlers no longer fire after a new connection replaces them
+
 ## [v2.107.0] - 2026-03-11
 
 ### Added

@@ -5,6 +5,7 @@ Routes game:* messages from the WebSocket endpoint to the GameRoomManager
 and broadcasts state changes to room participants.
 """
 
+import asyncio
 import logging
 
 from fastapi import WebSocket
@@ -36,6 +37,8 @@ async def handle_game_message(
         "game:state": _handle_state_update,
         "game:invite": _handle_invite,
         "game:join_friend": _handle_join_friend,
+        "game:check_room": _handle_check_room,
+        "game:back_to_lobby": _handle_back_to_lobby,
     }
 
     handler = handlers.get(msg_type)
@@ -67,6 +70,55 @@ def _build_player_names(room) -> dict[int, str]:
     return {pid: room.player_names.get(pid, f"Player {pid}") for pid in room.players}
 
 
+async def _send_existing_room(websocket, user_id, room):
+    """Send existing room info when user is already in a room."""
+    is_host = user_id == room.host_user_id
+    await websocket.send_json({
+        "type": "game:already_in_room",
+        "roomId": room.room_id,
+        "gameId": room.game_id,
+        "mode": room.mode,
+        "status": room.status,
+        "players": sorted(room.players),
+        "playerNames": _build_player_names(room),
+        "config": room.config,
+        "hostUserId": room.host_user_id,
+        "isHost": is_host,
+        "readyPlayers": sorted(room.ready_players),
+    })
+
+
+def _clean_stale_user_room(user_id: int, target_game_id: str | None = None) -> bool:
+    """Remove stale/finished/different-game room reference. Returns True if cleaned.
+
+    If target_game_id is provided and the user is in a *waiting* room for a
+    different game, auto-leave that room so they can join the new one.
+    """
+    existing_room_id = game_room_manager.get_user_room(user_id)
+    if not existing_room_id:
+        return False
+    existing_room = game_room_manager.get_room(existing_room_id)
+    if existing_room is None:
+        # Stale reference — room was cleaned up but user mapping remained
+        game_room_manager._user_rooms.pop(user_id, None)
+        return True
+    if existing_room.status == "finished":
+        # Game is over — clean up so user can join/create a new room
+        game_room_manager.leave_room(existing_room_id, user_id)
+        return True
+    # If user is in a room for a different game, auto-leave it.
+    # They've navigated away and are trying to start something new.
+    if (target_game_id and existing_room.game_id != target_game_id):
+        game_room_manager.leave_room(existing_room_id, user_id)
+        logger.info(
+            f"Auto-left room {existing_room_id} ({existing_room.game_id}, "
+            f"status={existing_room.status}) for user {user_id} "
+            f"switching to {target_game_id}"
+        )
+        return True
+    return False
+
+
 async def _handle_create(ws_manager, websocket, user_id, msg, display_name):
     game_id = msg.get("gameId")
     mode = msg.get("mode", "vs")
@@ -75,6 +127,16 @@ async def _handle_create(ws_manager, websocket, user_id, msg, display_name):
     if not game_id:
         await websocket.send_json({"type": "game:error", "error": "gameId required"})
         return
+
+    # If user is already in a room, handle gracefully
+    existing_room_id = game_room_manager.get_user_room(user_id)
+    if existing_room_id:
+        if not _clean_stale_user_room(user_id, target_game_id=game_id):
+            # Room is still active (waiting/playing) — show it
+            existing_room = game_room_manager.get_room(existing_room_id)
+            if existing_room:
+                await _send_existing_room(websocket, user_id, existing_room)
+                return
 
     room = game_room_manager.create_room(
         host_user_id=user_id,
@@ -98,6 +160,19 @@ async def _handle_join(ws_manager, websocket, user_id, msg, display_name):
     if not room_id:
         await websocket.send_json({"type": "game:error", "error": "roomId required"})
         return
+
+    # Look up target room's game_id for stale room cleanup
+    target_room = game_room_manager.get_room(room_id)
+    target_game_id = target_room.game_id if target_room else None
+
+    # If user is already in a room, handle gracefully
+    existing_room_id = game_room_manager.get_user_room(user_id)
+    if existing_room_id:
+        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+            existing_room = game_room_manager.get_room(existing_room_id)
+            if existing_room:
+                await _send_existing_room(websocket, user_id, existing_room)
+                return
 
     room = game_room_manager.join_room(room_id, user_id)
     room.player_names[user_id] = display_name
@@ -133,6 +208,19 @@ async def _handle_mid_join(ws_manager, websocket, user_id, msg, display_name):
     if not room_id:
         await websocket.send_json({"type": "game:error", "error": "roomId required"})
         return
+
+    # Look up target room's game_id for stale room cleanup
+    target_room = game_room_manager.get_room(room_id)
+    target_game_id = target_room.game_id if target_room else None
+
+    # If user is already in a room, handle gracefully
+    existing_room_id = game_room_manager.get_user_room(user_id)
+    if existing_room_id:
+        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+            existing_room = game_room_manager.get_room(existing_room_id)
+            if existing_room:
+                await _send_existing_room(websocket, user_id, existing_room)
+                return
 
     room = game_room_manager.mid_join_room(room_id, user_id)
     room.player_names[user_id] = display_name
@@ -214,14 +302,38 @@ async def _handle_leave(ws_manager, websocket, user_id, msg, display_name):
 
     players_before = set(room.players)
     is_host = user_id == room.host_user_id
-    game_room_manager.leave_room(room_id, user_id)
+    remaining = players_before - {user_id}
 
+    # If host leaves during an active game with remaining players,
+    # transfer host instead of closing the room (avoids disrupting
+    # a still-playing opponent in spectator/survival mode).
+    if is_host and room.status == "playing" and remaining:
+        new_host = min(remaining)  # deterministic pick
+        room.host_user_id = new_host
+        room.players.discard(user_id)
+        room.ready_players.discard(user_id)
+        game_room_manager._user_rooms.pop(user_id, None)
+        await websocket.send_json({"type": "game:left", "roomId": room_id})
+        await ws_manager.send_to_room(
+            room.players,
+            {
+                "type": "game:player_left",
+                "roomId": room_id,
+                "playerId": user_id,
+                "players": list(room.players),
+                "playerNames": _build_player_names(room),
+                "hostUserId": new_host,
+            },
+        )
+        return
+
+    game_room_manager.leave_room(room_id, user_id)
     await websocket.send_json({"type": "game:left", "roomId": room_id})
 
     if is_host:
         # Room was closed — notify all remaining players
         await ws_manager.send_to_room(
-            players_before - {user_id},
+            remaining,
             {"type": "game:room_closed", "roomId": room_id, "reason": "Host left"},
         )
     else:
@@ -380,11 +492,17 @@ async def _handle_state_update(ws_manager, websocket, user_id, msg, display_name
     room_id = msg.get("roomId")
     state = msg.get("state", {})
     if not room_id:
+        logger.debug(f"game:state from user {user_id}: no roomId")
         return
 
     room = game_room_manager.get_room(room_id)
     if not room or room.status != "playing":
+        status = room.status if room else "N/A"
+        logger.debug(f"game:state from user {user_id}: room={room_id} not playing (status={status})")
         return
+
+    targets = room.players - {user_id}
+    logger.info(f"game:state relay: user {user_id} → {targets} (room {room_id}, {len(str(state))} chars)")
 
     # In race mode, broadcast player's state to others
     await ws_manager.send_to_room(
@@ -458,6 +576,20 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
         await websocket.send_json({"type": "game:error", "error": "Missing friendUserId"})
         return
 
+    # Look up target game from friend's room for stale room cleanup
+    friend_room_id = game_room_manager.get_user_room(friend_user_id)
+    friend_room = game_room_manager.get_room(friend_room_id) if friend_room_id else None
+    target_game_id = friend_room.game_id if friend_room else None
+
+    # If user is already in a room, handle gracefully
+    existing_room_id = game_room_manager.get_user_room(user_id)
+    if existing_room_id:
+        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+            existing_room = game_room_manager.get_room(existing_room_id)
+            if existing_room:
+                await _send_existing_room(websocket, user_id, existing_room)
+                return
+
     # Validate friendship
     async with async_session_maker() as db:
         result = await db.execute(
@@ -528,3 +660,66 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
         "displayName": display_name,
     })
     logger.info(f"User {user_id} ({display_name}) joined friend {friend_user_id}'s room {room_id}")
+
+
+async def _handle_check_room(ws_manager, websocket, user_id, msg, display_name):
+    """Check if the user is currently in a game room (lobby or playing).
+
+    Returns room info so the frontend can restore lobby state after navigation.
+    No permission check needed — this is a read-only query about the user's own state.
+    """
+    room_id = game_room_manager.get_user_room(user_id)
+    if not room_id:
+        await websocket.send_json({"type": "game:no_room"})
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room:
+        await websocket.send_json({"type": "game:no_room"})
+        return
+
+    await websocket.send_json({
+        "type": "game:room_info",
+        "roomId": room.room_id,
+        "gameId": room.game_id,
+        "status": room.status,
+        "mode": room.mode,
+        "players": sorted(room.players),
+        "playerNames": _build_player_names(room),
+        "config": room.config,
+    })
+
+
+async def _handle_back_to_lobby(ws_manager, websocket, user_id, msg, display_name):
+    """Reset the room back to lobby state so players can play again.
+
+    Any player in the room can trigger this. All players are notified
+    so their frontends transition from 'playing' back to 'lobby'.
+    """
+    room_id = game_room_manager.get_user_room(user_id)
+    if not room_id:
+        await websocket.send_json({"type": "game:error", "error": "Not in a room"})
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room:
+        await websocket.send_json({"type": "game:error", "error": "Room not found"})
+        return
+
+    try:
+        game_room_manager.reset_to_lobby(room_id)
+    except ValueError as e:
+        await websocket.send_json({"type": "game:error", "error": str(e)})
+        return
+
+    broadcast = {
+        "type": "game:lobby_reset",
+        "roomId": room.room_id,
+        "hostUserId": room.host_user_id,
+        "players": sorted(room.players),
+        "playerNames": _build_player_names(room),
+        "config": room.config,
+    }
+    await asyncio.gather(*(
+        ws_manager.send_to_user(pid, broadcast) for pid in room.players
+    ))

@@ -25,6 +25,7 @@ import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { gameSocket } from '../../../../../services/gameSocket'
 
 // ---------------------------------------------------------------------------
 // Render helpers
@@ -161,6 +162,290 @@ function drawSprite(
       ctx.fillStyle = palette[color] || '#ff00ff'
       ctx.fillRect(sx + col * ps, sy + row * ps, ps, ps)
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone render — draws a GameState onto a canvas context.
+// Used by both the game loop and spectator view.
+// ---------------------------------------------------------------------------
+
+function renderDinoState(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const { nightTransition: nt, weather } = state
+
+  // --- Night desaturation (scotopic vision) ---
+  const baseDesat = nt * 0.7
+  let flashReduction = 0
+  if (weather.type === 'meteor-shower' && weather.particles.length > 0) {
+    flashReduction = weather.intensity * 0.5
+  }
+  if (weather.lightning > 0) {
+    flashReduction = Math.max(flashReduction, weather.lightning / 18)
+  }
+  const desat = Math.max(0, baseDesat - flashReduction)
+  const framePalette = buildFramePalette(desat)
+
+  // --- Background ---
+  let skyColor = getSkyColor(nt)
+  if (weather.type !== 'none' && weather.intensity > 0) {
+    const wi = weather.intensity
+    if (weather.type === 'rain') {
+      skyColor = lerpColor(skyColor, lerpColor('#8899aa', '#3a3a50', nt), wi * 0.35)
+    } else if (weather.type === 'thunderstorm') {
+      skyColor = lerpColor(skyColor, lerpColor('#4a4a5a', '#1a1a28', nt), wi * 0.5)
+    } else if (weather.type === 'sandstorm') {
+      skyColor = lerpColor(skyColor, lerpColor('#c8a860', '#5a4020', nt), wi * 0.4)
+    } else if (weather.type === 'snowstorm') {
+      skyColor = lerpColor(skyColor, lerpColor('#b0c0d0', '#404858', nt), wi * 0.3)
+    }
+  }
+  ctx.fillStyle = desaturateHex(skyColor, desat * 0.3)
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+  // --- Stars ---
+  if (nt > 0.4) {
+    const starAlpha = Math.min(1, (nt - 0.4) / 0.3)
+    ctx.fillStyle = '#ffffff'
+    for (const star of state.stars) {
+      if (star.x < -2 || star.x > CANVAS_WIDTH + 2 || star.y < -2 || star.y > GROUND_Y - 38) continue
+      ctx.globalAlpha = starAlpha * (star.size > 1 ? 1 : 0.6)
+      ctx.fillRect(star.x, star.y, star.size, star.size)
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // --- Parallax landscape ---
+  const { parallax } = state
+  const biome = BIOMES[parallax.biomeIndex]
+  const prevBiome = BIOMES[parallax.prevBiomeIndex]
+  const bt = parallax.transitionProgress
+  const desatSky = desaturateHex(skyColor, desat * 0.3)
+  const atmosBlend: Record<string, number> = { far: 0.4, mid: 0.15, near: 0 }
+  const layerColor = (b: typeof biome, layer: 'far' | 'mid' | 'near') => {
+    const col = desaturateHex(lerpColor(b[layer].dayColor, b[layer].nightColor, nt), desat)
+    return lerpColor(col, desatSky, atmosBlend[layer])
+  }
+  const bLerp = (dayA: string, nightA: string, dayB: string, nightB: string) => {
+    const a = lerpColor(dayA, nightA, nt)
+    const b = lerpColor(dayB, nightB, nt)
+    return desaturateHex(bt < 1 ? lerpColor(a, b, bt) : b, desat)
+  }
+
+  const obsPalette: Record<number, string> = {
+    ...framePalette,
+    6: bLerp(prevBiome.obsOutlineDay, prevBiome.obsOutlineNight, biome.obsOutlineDay, biome.obsOutlineNight),
+    7: bLerp(prevBiome.obsFillDay, prevBiome.obsFillNight, biome.obsFillDay, biome.obsFillNight),
+  }
+
+  // Far layer
+  if (bt < 1) {
+    ctx.globalAlpha = 1 - bt
+    drawParallaxLayer(ctx, prevBiome.far.heights, parallax.farOffset, prevBiome.far.step, layerColor(prevBiome, 'far'))
+    ctx.globalAlpha = 1
+  }
+  ctx.globalAlpha = bt < 1 ? bt : 1
+  drawParallaxLayer(ctx, biome.far.heights, parallax.farOffset, biome.far.step, layerColor(biome, 'far'))
+  ctx.globalAlpha = 1
+
+  // --- Weather clouds ---
+  if ((weather.type === 'rain' || weather.type === 'thunderstorm' || weather.type === 'snowstorm')
+    && weather.stormClouds.length > 0) {
+    const cloudAlpha = weather.intensity * (weather.type === 'rain' ? 0.45 : 0.6)
+    const isStorm = weather.type === 'thunderstorm' || weather.type === 'snowstorm'
+    const sprites = isStorm ? STORM_CLOUD_SPRITES : RAIN_CLOUD_SPRITES
+    let cloudPalette: Record<number, string>
+    if (weather.type === 'rain') {
+      cloudPalette = { 0: 'transparent', 1: lerpColor('#9098a8', '#384050', nt), 2: lerpColor('#687080', '#283040', nt) }
+    } else if (weather.type === 'snowstorm') {
+      cloudPalette = { 0: 'transparent', 1: lerpColor('#8890a0', '#303848', nt), 2: lerpColor('#687080', '#202030', nt), 3: lerpColor('#485060', '#101020', nt) }
+    } else {
+      cloudPalette = { 0: 'transparent', 1: lerpColor('#606878', '#282838', nt), 2: lerpColor('#3e4450', '#181828', nt), 3: lerpColor('#252830', '#0c0c18', nt) }
+    }
+    ctx.globalAlpha = cloudAlpha
+    for (const sc of weather.stormClouds) {
+      const sprite = sprites[sc.spriteIndex % sprites.length]
+      const scScale = sprite[0].length > 0 ? Math.round(sc.w / sprite[0].length) : WEATHER_CLOUD_SCALE
+      drawSprite(ctx, sprite, sc.x, sc.y, scScale, cloudPalette)
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // --- Clouds ---
+  const cloudTint = getCloudTint(nt)
+  const cloudPaletteDay: Record<number, string> = { ...framePalette, 4: cloudTint }
+  ctx.globalAlpha = 1
+  for (const cloud of state.clouds) {
+    drawSprite(ctx, CLOUD_SPRITES[cloud.spriteIndex % CLOUD_SPRITES.length], cloud.x, cloud.y, cloud.scale, cloudPaletteDay)
+  }
+
+  // Mid + near layers
+  if (bt < 1) {
+    ctx.globalAlpha = 1 - bt
+    drawParallaxLayer(ctx, prevBiome.mid.heights, parallax.midOffset, prevBiome.mid.step, layerColor(prevBiome, 'mid'))
+    drawParallaxLayer(ctx, prevBiome.near.heights, parallax.nearOffset, prevBiome.near.step, layerColor(prevBiome, 'near'))
+    ctx.globalAlpha = bt
+  }
+  drawParallaxLayer(ctx, biome.mid.heights, parallax.midOffset, biome.mid.step, layerColor(biome, 'mid'))
+  drawParallaxLayer(ctx, biome.near.heights, parallax.nearOffset, biome.near.step, layerColor(biome, 'near'))
+  ctx.globalAlpha = 1
+
+  const camShift = getCameraShift(state.speed)
+
+  // --- Ground ---
+  const groundColor = bLerp(prevBiome.groundDay, prevBiome.groundNight, biome.groundDay, biome.groundNight)
+  const groundHighlight = bLerp(prevBiome.accentDay, prevBiome.accentNight, biome.accentDay, biome.accentNight)
+  ctx.fillStyle = groundColor
+  ctx.fillRect(0, GROUND_Y + PIXEL_SCALE, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y)
+  ctx.fillStyle = groundHighlight
+  for (let x = -state.ground.offset; x < CANVAS_WIDTH; x += 24) {
+    ctx.fillRect(x, GROUND_Y + PIXEL_SCALE, 3, 2)
+  }
+  const dirtColors = GROUND_LAYER_SPEEDS.map((_, i) => lerpColor(groundColor, groundHighlight, 0.4 - i * 0.12))
+  const brightColor = lerpColor(groundHighlight, '#ffffff', 0.5)
+  for (const p of state.ground.particles) {
+    if (p.x < 0 || p.x > CANVAS_WIDTH) continue
+    ctx.fillStyle = p.bright ? brightColor : dirtColors[p.layer]
+    ctx.fillRect(Math.floor(p.x), GROUND_Y + PIXEL_SCALE + p.y, p.size, p.size)
+  }
+  const lineColor = bLerp(prevBiome.lineDay, prevBiome.lineNight, biome.lineDay, biome.lineNight)
+  ctx.fillStyle = lineColor
+  ctx.fillRect(0, GROUND_Y + PIXEL_SCALE - 1, CANVAS_WIDTH, 1)
+
+  // --- Obstacles ---
+  for (const obs of state.obstacles) {
+    const sprite = getObstacleSprite(obs)
+    const size = getSpriteSize(sprite)
+    drawSprite(ctx, sprite, obs.x - camShift, obs.y - size.h * PIXEL_SCALE, PIXEL_SCALE,
+      obs.type === 'pterodactyl' ? framePalette : obsPalette)
+  }
+
+  // --- Dino ---
+  const dinoSprite = getDinoSprite(state.dino)
+  const dinoSize = getSpriteSize(dinoSprite)
+  const dinoDrawX = DINO_X - camShift
+  const dinoDrawY = state.dino.y - dinoSize.h * PIXEL_SCALE + PIXEL_SCALE
+  const windPush = weather.windStrength * weather.intensity
+  if (windPush > 0.05) {
+    const lean = windPush * 0.08
+    const sprW = dinoSize.w * PIXEL_SCALE
+    const sprH = dinoSize.h * PIXEL_SCALE
+    const offscreen = document.createElement('canvas')
+    offscreen.width = sprW
+    offscreen.height = sprH
+    const offCtx = offscreen.getContext('2d')!
+    drawSprite(offCtx, dinoSprite, 0, 0, PIXEL_SCALE, framePalette)
+    const footX = dinoDrawX + sprW / 2
+    const footY = dinoDrawY + sprH
+    ctx.save()
+    ctx.imageSmoothingEnabled = false
+    ctx.translate(footX, footY)
+    ctx.rotate(-lean)
+    ctx.translate(-footX, -footY)
+    ctx.drawImage(offscreen, dinoDrawX, dinoDrawY)
+    ctx.restore()
+  } else {
+    drawSprite(ctx, dinoSprite, dinoDrawX, dinoDrawY, PIXEL_SCALE, framePalette)
+  }
+
+  // --- Weather effects ---
+  if (weather.type !== 'none' && weather.intensity > 0) {
+    if (weather.type === 'sandstorm') { ctx.globalAlpha = weather.intensity * 0.15; ctx.fillStyle = '#8b6914'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); ctx.globalAlpha = 1 }
+    if (weather.type === 'thunderstorm') { ctx.globalAlpha = weather.intensity * 0.18; ctx.fillStyle = '#1a1a2a'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); ctx.globalAlpha = 1 }
+    if (weather.type === 'snowstorm') { ctx.globalAlpha = weather.intensity * 0.1; ctx.fillStyle = '#c0d0e8'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); ctx.globalAlpha = 1 }
+
+    for (const p of weather.particles) {
+      const d = p.depth
+      if (weather.type === 'rain' || weather.type === 'thunderstorm') {
+        ctx.globalAlpha = weather.intensity * (0.3 + d * 0.5)
+        ctx.strokeStyle = nt > 0.5 ? '#6688bb' : '#4477aa'
+        ctx.lineWidth = (weather.type === 'thunderstorm' ? 1.5 : 1) * d
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx * 2, p.y + p.vy * 2); ctx.stroke()
+      } else if (weather.type === 'sandstorm') {
+        ctx.globalAlpha = weather.intensity * 0.8
+        ctx.fillStyle = `rgba(180, 140, 60, ${0.3 + p.size * 0.15})`
+        ctx.fillRect(p.x, p.y, p.size * 2, p.size)
+      } else if (weather.type === 'meteor-shower') {
+        ctx.globalAlpha = weather.intensity * (0.3 + d * 0.5)
+        const trail = 4 + d * 4
+        const gradient = ctx.createLinearGradient(p.x, p.y, p.x - p.vx * trail, p.y - p.vy * trail)
+        gradient.addColorStop(0, d > 0.7 ? '#ffffff' : '#ffcc66')
+        gradient.addColorStop(0.3, d > 0.7 ? '#ffaa33' : '#cc7722')
+        gradient.addColorStop(1, 'transparent')
+        ctx.strokeStyle = gradient; ctx.lineWidth = p.size
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * trail, p.y - p.vy * trail); ctx.stroke()
+        if (d > 0.6) { ctx.fillStyle = '#ffffff'; const hs = Math.round(1 + d * 2); ctx.fillRect(p.x - 1, p.y - 1, hs, hs) }
+      } else if (weather.type === 'snowstorm') {
+        ctx.globalAlpha = weather.intensity * (0.4 + d * 0.4)
+        ctx.fillStyle = '#e8eef8'; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill()
+      }
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // --- Meteor ground impacts ---
+  if (weather.impacts.length > 0) {
+    for (const imp of weather.impacts) {
+      const t = imp.age / imp.maxAge
+      const radius = imp.size * (0.3 + t * 0.7)
+      const alpha = (1 - t) * 0.7
+      if (alpha <= 0 || radius <= 0) continue
+      ctx.globalAlpha = alpha
+      const grad = ctx.createRadialGradient(imp.x - camShift, imp.y, 0, imp.x - camShift, imp.y, radius)
+      grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.3, '#ffaa33'); grad.addColorStop(0.7, '#ff4400'); grad.addColorStop(1, 'transparent')
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(imp.x - camShift, imp.y, radius, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // --- Lightning flash ---
+  if (weather.lightning > 0) {
+    ctx.globalAlpha = (weather.lightning / 18) * 0.35; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); ctx.globalAlpha = 1
+  }
+
+  // --- Score popups ---
+  const camShiftScore = getCameraShift(state.speed)
+  for (const pop of state.scorePopups) {
+    const t = pop.age / pop.maxAge
+    const alpha = Math.min(1, (1 - t) * 1.5)
+    const rise = t * 30
+    if (alpha <= 0) continue
+    ctx.globalAlpha = alpha; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center'
+    const px = pop.x - camShiftScore; const py = pop.y - rise
+    ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.strokeText(pop.text, px, py)
+    ctx.fillStyle = '#ffee55'; ctx.fillText(pop.text, px, py)
+  }
+  ctx.globalAlpha = 1
+
+  // --- Score ---
+  const scoreColor = lerpColor('#535353', '#cccccc', nt)
+  ctx.fillStyle = scoreColor; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'right'
+  const scoreText = String(Math.floor(state.score)).padStart(5, '0')
+  const hiText = `HI ${String(Math.floor(state.highScore)).padStart(5, '0')}`
+  if (state.milestoneFlash > 0 && state.milestoneFlash % 4 < 2) ctx.fillStyle = 'transparent'
+  ctx.fillText(scoreText, CANVAS_WIDTH - 10, 24)
+  ctx.fillStyle = lerpColor('#757575', '#999999', nt)
+  ctx.fillText(hiText, CANVAS_WIDTH - 80, 24)
+
+  const mult = getWeatherMultiplier(state.weather)
+  if (mult > 1.01 && state.phase === 'playing') {
+    ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#ffdd44'
+    ctx.globalAlpha = Math.min(1, state.weather.intensity * 1.5)
+    ctx.fillText(`\u00d7${mult.toFixed(1)}`, CANVAS_WIDTH - 10, 38); ctx.globalAlpha = 1
+  }
+
+  // --- Waiting overlay ---
+  if (state.phase === 'waiting') {
+    ctx.fillStyle = lerpColor('#535353', '#cccccc', nt); ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'
+    ctx.fillText('Press SPACE to Start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10)
+    ctx.font = '12px monospace'; ctx.fillText('SPACE / Tap = Jump  |  DOWN = Duck', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 15)
+  }
+
+  // --- Game over overlay ---
+  if (state.phase === 'dead') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'
+    ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10)
+    ctx.font = '13px monospace'; ctx.fillText('Press SPACE to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 15)
   }
 }
 
@@ -359,7 +644,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
+function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -377,6 +662,8 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const autoPlayRef = useRef(false)
   const [autoPlay, setAutoPlay] = useState(false)
+  const onStateChangeRef = useRef(onStateChange)
+  onStateChangeRef.current = onStateChange
 
   // Music engine
   const dinoSong = useMemo(() => getSongForGame('dino-runner'), [])
@@ -406,393 +693,8 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    const { nightTransition: nt, weather } = state
-
-    // --- Night desaturation (scotopic vision) ---
-    // Meteors and lightning temporarily restore color
-    const baseDesat = nt * 0.7
-    let flashReduction = 0
-    if (weather.type === 'meteor-shower' && weather.particles.length > 0) {
-      flashReduction = weather.intensity * 0.5
-    }
-    if (weather.lightning > 0) {
-      flashReduction = Math.max(flashReduction, weather.lightning / 18)
-    }
-    const desat = Math.max(0, baseDesat - flashReduction)
-    const framePalette = buildFramePalette(desat)
-
-    // --- Background (multi-stop sky: blue → sunset → night, tinted by weather) ---
-    let skyColor = getSkyColor(nt)
-    // Weather tints the sky appropriately
-    if (weather.type !== 'none' && weather.intensity > 0) {
-      const wi = weather.intensity
-      if (weather.type === 'rain') {
-        skyColor = lerpColor(skyColor, lerpColor('#8899aa', '#3a3a50', nt), wi * 0.35)
-      } else if (weather.type === 'thunderstorm') {
-        skyColor = lerpColor(skyColor, lerpColor('#4a4a5a', '#1a1a28', nt), wi * 0.5)
-      } else if (weather.type === 'sandstorm') {
-        skyColor = lerpColor(skyColor, lerpColor('#c8a860', '#5a4020', nt), wi * 0.4)
-      } else if (weather.type === 'snowstorm') {
-        skyColor = lerpColor(skyColor, lerpColor('#b0c0d0', '#404858', nt), wi * 0.3)
-      }
-    }
-    ctx.fillStyle = desaturateHex(skyColor, desat * 0.3)
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    // --- Stars (fade in after dusk, nt > 0.4, varying sizes) ---
-    if (nt > 0.4) {
-      const starAlpha = Math.min(1, (nt - 0.4) / 0.3)
-      ctx.fillStyle = '#ffffff'
-      for (const star of state.stars) {
-        if (star.x < -2 || star.x > CANVAS_WIDTH + 2 || star.y < -2 || star.y > GROUND_Y - 38) continue
-        ctx.globalAlpha = starAlpha * (star.size > 1 ? 1 : 0.6)
-        ctx.fillRect(star.x, star.y, star.size, star.size)
-      }
-      ctx.globalAlpha = 1
-    }
-
-    // --- Parallax landscape ---
-    const { parallax } = state
-    const biome = BIOMES[parallax.biomeIndex]
-    const prevBiome = BIOMES[parallax.prevBiomeIndex]
-    const bt = parallax.transitionProgress
-    const desatSky = desaturateHex(skyColor, desat * 0.3)
-    // Atmospheric perspective: far=40% sky blend, mid=15%, near=0%
-    const atmosBlend: Record<string, number> = { far: 0.4, mid: 0.15, near: 0 }
-    const layerColor = (b: typeof biome, layer: 'far' | 'mid' | 'near') => {
-      const col = desaturateHex(lerpColor(b[layer].dayColor, b[layer].nightColor, nt), desat)
-      return lerpColor(col, desatSky, atmosBlend[layer])
-    }
-
-    // Biome-aware color lerp: blends prev/current biome colors with night & desaturation
-    const bLerp = (dayA: string, nightA: string, dayB: string, nightB: string) => {
-      const a = lerpColor(dayA, nightA, nt)
-      const b = lerpColor(dayB, nightB, nt)
-      return desaturateHex(bt < 1 ? lerpColor(a, b, bt) : b, desat)
-    }
-
-    // Build biome-aware obstacle palette (override indices 6 & 7 per biome)
-    const obsPalette: Record<number, string> = {
-      ...framePalette,
-      6: bLerp(prevBiome.obsOutlineDay, prevBiome.obsOutlineNight, biome.obsOutlineDay, biome.obsOutlineNight),
-      7: bLerp(prevBiome.obsFillDay, prevBiome.obsFillNight, biome.obsFillDay, biome.obsFillNight),
-    }
-
-    // Far layer — draw both biomes during transition for crossfade
-    if (bt < 1) {
-      ctx.globalAlpha = 1 - bt
-      drawParallaxLayer(ctx, prevBiome.far.heights, parallax.farOffset, prevBiome.far.step, layerColor(prevBiome, 'far'))
-      ctx.globalAlpha = 1
-    }
-    ctx.globalAlpha = bt < 1 ? bt : 1
-    drawParallaxLayer(ctx, biome.far.heights, parallax.farOffset, biome.far.step, layerColor(biome, 'far'))
-    ctx.globalAlpha = 1
-
-    // --- Weather clouds (pixel art) ---
-    if ((weather.type === 'rain' || weather.type === 'thunderstorm' || weather.type === 'snowstorm')
-      && weather.stormClouds.length > 0) {
-      const cloudAlpha = weather.intensity * (weather.type === 'rain' ? 0.45 : 0.6)
-      const isStorm = weather.type === 'thunderstorm' || weather.type === 'snowstorm'
-      const sprites = isStorm ? STORM_CLOUD_SPRITES : RAIN_CLOUD_SPRITES
-      // Build pixel-art cloud palette: rain=2-tone(1,2), storm=3-tone(1,2,3)
-      let cloudPalette: Record<number, string>
-      if (weather.type === 'rain') {
-        cloudPalette = {
-          0: 'transparent',
-          1: lerpColor('#9098a8', '#384050', nt),
-          2: lerpColor('#687080', '#283040', nt),
-        }
-      } else if (weather.type === 'snowstorm') {
-        cloudPalette = {
-          0: 'transparent',
-          1: lerpColor('#8890a0', '#303848', nt),
-          2: lerpColor('#687080', '#202030', nt),
-          3: lerpColor('#485060', '#101020', nt),
-        }
-      } else {
-        // thunderstorm — dark and menacing
-        cloudPalette = {
-          0: 'transparent',
-          1: lerpColor('#606878', '#282838', nt),
-          2: lerpColor('#3e4450', '#181828', nt),
-          3: lerpColor('#252830', '#0c0c18', nt),
-        }
-      }
-      ctx.globalAlpha = cloudAlpha
-      for (const sc of weather.stormClouds) {
-        const sprite = sprites[sc.spriteIndex % sprites.length]
-        // Derive scale from stored width (supports multi-layer sizing)
-        const scScale = sprite[0].length > 0 ? Math.round(sc.w / sprite[0].length) : WEATHER_CLOUD_SCALE
-        drawSprite(ctx, sprite, sc.x, sc.y, scScale, cloudPalette)
-      }
-      ctx.globalAlpha = 1
-    }
-
-    // --- Clouds (tinted by time of day: white → sunset gold/pink → dim night) ---
-    const cloudTint = getCloudTint(nt)
-    const cloudPaletteDay: Record<number, string> = { ...framePalette, 4: cloudTint }
-    ctx.globalAlpha = 1
-    for (const cloud of state.clouds) {
-      drawSprite(ctx, CLOUD_SPRITES[cloud.spriteIndex % CLOUD_SPRITES.length], cloud.x, cloud.y, cloud.scale, cloudPaletteDay)
-    }
-
-    // Mid + near layers (in front of clouds) — crossfade during transition
-    if (bt < 1) {
-      ctx.globalAlpha = 1 - bt
-      drawParallaxLayer(ctx, prevBiome.mid.heights, parallax.midOffset, prevBiome.mid.step, layerColor(prevBiome, 'mid'))
-      drawParallaxLayer(ctx, prevBiome.near.heights, parallax.nearOffset, prevBiome.near.step, layerColor(prevBiome, 'near'))
-      ctx.globalAlpha = bt
-    }
-    drawParallaxLayer(ctx, biome.mid.heights, parallax.midOffset, biome.mid.step, layerColor(biome, 'mid'))
-    drawParallaxLayer(ctx, biome.near.heights, parallax.nearOffset, biome.near.step, layerColor(biome, 'near'))
-    ctx.globalAlpha = 1
-
-    // --- Camera shift (dino moves left at higher speeds, showing more ahead) ---
-    const camShift = getCameraShift(state.speed)
-
-    // --- Ground (biome-colored with crossfade) ---
-    const groundColor = bLerp(prevBiome.groundDay, prevBiome.groundNight, biome.groundDay, biome.groundNight)
-    const groundHighlight = bLerp(prevBiome.accentDay, prevBiome.accentNight, biome.accentDay, biome.accentNight)
-    ctx.fillStyle = groundColor
-    ctx.fillRect(0, GROUND_Y + PIXEL_SCALE, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y)
-
-    // Ground texture — sparse static bumps (most texture now via parallax particles)
-    ctx.fillStyle = groundHighlight
-    for (let x = -state.ground.offset; x < CANVAS_WIDTH; x += 24) {
-      ctx.fillRect(x, GROUND_Y + PIXEL_SCALE, 3, 2)
-    }
-
-    // Dirt particles — 3 parallax layers with bright specks
-    const dirtColors = GROUND_LAYER_SPEEDS.map((_, i) =>
-      lerpColor(groundColor, groundHighlight, 0.4 - i * 0.12)
-    )
-    const brightColor = lerpColor(groundHighlight, '#ffffff', 0.5)
-    for (const p of state.ground.particles) {
-      if (p.x < 0 || p.x > CANVAS_WIDTH) continue
-      ctx.fillStyle = p.bright ? brightColor : dirtColors[p.layer]
-      ctx.fillRect(Math.floor(p.x), GROUND_Y + PIXEL_SCALE + p.y, p.size, p.size)
-    }
-
-    // Ground line
-    const lineColor = bLerp(prevBiome.lineDay, prevBiome.lineNight, biome.lineDay, biome.lineNight)
-    ctx.fillStyle = lineColor
-    ctx.fillRect(0, GROUND_Y + PIXEL_SCALE - 1, CANVAS_WIDTH, 1)
-
-    // --- Obstacles (shifted by camera, biome-colored) ---
-    for (const obs of state.obstacles) {
-      const sprite = getObstacleSprite(obs)
-      const size = getSpriteSize(sprite)
-      drawSprite(ctx, sprite, obs.x - camShift, obs.y - size.h * PIXEL_SCALE, PIXEL_SCALE,
-        obs.type === 'pterodactyl' ? framePalette : obsPalette)
-    }
-
-    // --- Dino (shifted by camera, pushed by wind) ---
-    const dinoSprite = getDinoSprite(state.dino)
-    const dinoSize = getSpriteSize(dinoSprite)
-    const dinoDrawX = DINO_X - camShift
-    const dinoDrawY = state.dino.y - dinoSize.h * PIXEL_SCALE + PIXEL_SCALE
-    const windPush = weather.windStrength * weather.intensity
-    if (windPush > 0.05) {
-      // Wind lean: render dino to an offscreen canvas first, then drawImage
-      // with rotation + imageSmoothingEnabled=false to avoid anti-aliased
-      // pixel edges that make the sprite look semi-transparent.
-      const lean = windPush * 0.08 // up to ~4.6° lean at max wind
-      const sprW = dinoSize.w * PIXEL_SCALE
-      const sprH = dinoSize.h * PIXEL_SCALE
-      const offscreen = document.createElement('canvas')
-      offscreen.width = sprW
-      offscreen.height = sprH
-      const offCtx = offscreen.getContext('2d')!
-      drawSprite(offCtx, dinoSprite, 0, 0, PIXEL_SCALE, framePalette)
-      // Rotate around dino's feet (bottom-center)
-      const footX = dinoDrawX + sprW / 2
-      const footY = dinoDrawY + sprH
-      ctx.save()
-      ctx.imageSmoothingEnabled = false
-      ctx.translate(footX, footY)
-      ctx.rotate(-lean)
-      ctx.translate(-footX, -footY)
-      ctx.drawImage(offscreen, dinoDrawX, dinoDrawY)
-      ctx.restore()
-    } else {
-      drawSprite(ctx, dinoSprite, dinoDrawX, dinoDrawY, PIXEL_SCALE, framePalette)
-    }
-
-    // --- Weather effects ---
-    if (weather.type !== 'none' && weather.intensity > 0) {
-      // Sandstorm: brownish overlay tint
-      if (weather.type === 'sandstorm') {
-        ctx.globalAlpha = weather.intensity * 0.15
-        ctx.fillStyle = '#8b6914'
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-        ctx.globalAlpha = 1
-      }
-      // Thunderstorm: dark overcast tint
-      if (weather.type === 'thunderstorm') {
-        ctx.globalAlpha = weather.intensity * 0.18
-        ctx.fillStyle = '#1a1a2a'
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-        ctx.globalAlpha = 1
-      }
-      // Snowstorm: slight white-blue overlay
-      if (weather.type === 'snowstorm') {
-        ctx.globalAlpha = weather.intensity * 0.1
-        ctx.fillStyle = '#c0d0e8'
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-        ctx.globalAlpha = 1
-      }
-
-      // Draw particles (depth affects opacity and line width for rain/snow)
-      for (const p of weather.particles) {
-        const d = p.depth
-        if (weather.type === 'rain' || weather.type === 'thunderstorm') {
-          ctx.globalAlpha = weather.intensity * (0.3 + d * 0.5)
-          ctx.strokeStyle = nt > 0.5 ? '#6688bb' : '#4477aa'
-          ctx.lineWidth = (weather.type === 'thunderstorm' ? 1.5 : 1) * d
-          ctx.beginPath()
-          ctx.moveTo(p.x, p.y)
-          ctx.lineTo(p.x + p.vx * 2, p.y + p.vy * 2)
-          ctx.stroke()
-        } else if (weather.type === 'sandstorm') {
-          ctx.globalAlpha = weather.intensity * 0.8
-          ctx.fillStyle = `rgba(180, 140, 60, ${0.3 + p.size * 0.15})`
-          ctx.fillRect(p.x, p.y, p.size * 2, p.size)
-        } else if (weather.type === 'meteor-shower') {
-          ctx.globalAlpha = weather.intensity * (0.3 + d * 0.5)
-          // Trail length and brightness scale with depth
-          const trail = 4 + d * 4
-          const gradient = ctx.createLinearGradient(
-            p.x, p.y, p.x - p.vx * trail, p.y - p.vy * trail,
-          )
-          gradient.addColorStop(0, d > 0.7 ? '#ffffff' : '#ffcc66')
-          gradient.addColorStop(0.3, d > 0.7 ? '#ffaa33' : '#cc7722')
-          gradient.addColorStop(1, 'transparent')
-          ctx.strokeStyle = gradient
-          ctx.lineWidth = p.size
-          ctx.beginPath()
-          ctx.moveTo(p.x, p.y)
-          ctx.lineTo(p.x - p.vx * trail, p.y - p.vy * trail)
-          ctx.stroke()
-          // Bright head only on close/intense meteors
-          if (d > 0.6) {
-            ctx.fillStyle = '#ffffff'
-            const hs = Math.round(1 + d * 2)
-            ctx.fillRect(p.x - 1, p.y - 1, hs, hs)
-          }
-        } else if (weather.type === 'snowstorm') {
-          ctx.globalAlpha = weather.intensity * (0.4 + d * 0.4)
-          ctx.fillStyle = '#e8eef8'
-          ctx.beginPath()
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      }
-      ctx.globalAlpha = 1
-    }
-
-    // --- Meteor ground impacts ---
-    if (weather.impacts.length > 0) {
-      for (const imp of weather.impacts) {
-        const t = imp.age / imp.maxAge
-        const radius = imp.size * (0.3 + t * 0.7)
-        const alpha = (1 - t) * 0.7
-        if (alpha <= 0 || radius <= 0) continue
-        ctx.globalAlpha = alpha
-        const grad = ctx.createRadialGradient(imp.x - camShift, imp.y, 0, imp.x - camShift, imp.y, radius)
-        grad.addColorStop(0, '#ffffff')
-        grad.addColorStop(0.3, '#ffaa33')
-        grad.addColorStop(0.7, '#ff4400')
-        grad.addColorStop(1, 'transparent')
-        ctx.fillStyle = grad
-        ctx.beginPath()
-        ctx.arc(imp.x - camShift, imp.y, radius, 0, Math.PI * 2)
-        ctx.fill()
-      }
-      ctx.globalAlpha = 1
-    }
-
-    // --- Lightning flash ---
-    if (weather.lightning > 0) {
-      ctx.globalAlpha = (weather.lightning / 18) * 0.35
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-      ctx.globalAlpha = 1
-    }
-
-    // --- Score popups (floating +XX) ---
-    const camShiftScore = getCameraShift(state.speed)
-    for (const pop of state.scorePopups) {
-      const t = pop.age / pop.maxAge
-      const alpha = Math.min(1, (1 - t) * 1.5)
-      const rise = t * 30
-      if (alpha <= 0) continue
-      ctx.globalAlpha = alpha
-      ctx.font = 'bold 15px monospace'
-      ctx.textAlign = 'center'
-      const px = pop.x - camShiftScore
-      const py = pop.y - rise
-      // Dark outline for contrast
-      ctx.strokeStyle = '#000000'
-      ctx.lineWidth = 3
-      ctx.strokeText(pop.text, px, py)
-      ctx.fillStyle = '#ffee55'
-      ctx.fillText(pop.text, px, py)
-    }
-    ctx.globalAlpha = 1
-
-    // --- Score ---
-    const scoreColor = lerpColor('#535353', '#cccccc', nt)
-    ctx.fillStyle = scoreColor
-    ctx.font = 'bold 14px monospace'
-    ctx.textAlign = 'right'
-    const scoreText = String(Math.floor(state.score)).padStart(5, '0')
-    const hiText = `HI ${String(Math.floor(state.highScore)).padStart(5, '0')}`
-
-    // Milestone flash
-    if (state.milestoneFlash > 0 && state.milestoneFlash % 4 < 2) {
-      ctx.fillStyle = 'transparent'
-    }
-    ctx.fillText(scoreText, CANVAS_WIDTH - 10, 24)
-    ctx.fillStyle = lerpColor('#757575', '#999999', nt)
-    ctx.fillText(hiText, CANVAS_WIDTH - 80, 24)
-
-    // Weather multiplier badge
-    const mult = getWeatherMultiplier(state.weather)
-    if (mult > 1.01 && state.phase === 'playing') {
-      ctx.font = 'bold 11px monospace'
-      ctx.fillStyle = '#ffdd44'
-      ctx.globalAlpha = Math.min(1, state.weather.intensity * 1.5)
-      ctx.fillText(`×${mult.toFixed(1)}`, CANVAS_WIDTH - 10, 38)
-      ctx.globalAlpha = 1
-    }
-
-    // --- Waiting overlay ---
-    if (state.phase === 'waiting') {
-      ctx.fillStyle = lerpColor('#535353', '#cccccc', nt)
-      ctx.font = 'bold 16px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText('Press SPACE to Start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10)
-      ctx.font = '12px monospace'
-      ctx.fillText('SPACE / Tap = Jump  |  DOWN = Duck', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 15)
-    }
-
-    // --- Game over overlay ---
-    if (state.phase === 'dead') {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 20px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10)
-      ctx.font = '13px monospace'
-      ctx.fillText('Press SPACE to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 15)
-    }
+    renderDinoState(ctx, state)
   }, [])
-
-  // -----------------------------------------------------------------------
-  // Game loop
-  // -----------------------------------------------------------------------
 
   const gameLoop = useCallback(() => {
     const state = stateRef.current
@@ -844,6 +746,12 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
     }
 
     render(next)
+
+    // Broadcast game state for spectators (throttled by the caller)
+    if (onStateChangeRef.current && next.phase === 'playing') {
+      onStateChangeRef.current(next, 200)
+    }
+
     rafRef.current = requestAnimationFrame(gameLoop)
   }, [render, saveScore])
 
@@ -1107,12 +1015,48 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
   )
 }
 
+/** Spectator canvas — renders the opponent's Dino Runner game state in real time. */
+function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState | null }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    if (!spectatorState || !canvasRef.current) return
+    const ctx = canvasRef.current.getContext('2d')
+    if (!ctx) return
+    renderDinoState(ctx, spectatorState)
+  }, [spectatorState])
+
+  if (!spectatorState) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <Eye className="w-8 h-8 mb-2 animate-pulse" />
+        <span className="text-sm">Waiting for opponent's game data...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="border border-indigo-500/30 rounded-lg"
+        style={{ imageRendering: 'pixelated', maxWidth: '100%' }}
+      />
+      <div className="mt-2 text-xs text-indigo-300/70">
+        Score: {String(Math.floor(spectatorState.score)).padStart(5, '0')}
+      </div>
+    </div>
+  )
+}
+
 function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void; playerNames?: Record<number, string> }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const {
     opponentStatus, raceResult, localFinished, opponentLevelUp,
     opponentDisconnected, reconnectCountdown, selfDisconnected,
-    throttledBroadcast, reportFinish, reportScore,
+    throttledBroadcast, reportFinish, reportScore, spectatorState, leaveRoom,
     spectatablePlayers, spectateTarget, spectateNext, spectatePrev,
   } = useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
@@ -1124,8 +1068,48 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
     reportScore(score)
   }, [reportFinish, reportScore])
 
+  // Cap large arrays to stay under WebSocket size limits while keeping full visual fidelity.
+  const broadcastCountRef = useRef(0)
+  const slimBroadcast = useCallback((state: object, intervalMs?: number) => {
+    const s = state as GameState
+    const slim = {
+      ...s,
+      weather: {
+        ...s.weather,
+        particles: s.weather.particles.slice(0, 50),
+        impacts: s.weather.impacts.slice(0, 10),
+        stormClouds: s.weather.stormClouds.slice(0, 5),
+      },
+      ground: { offset: s.ground.offset, particles: s.ground.particles.slice(0, 40) },
+      stars: s.stars.slice(0, 25),
+      scorePopups: s.scorePopups.slice(0, 5),
+      nextObstacleDistance: 0,
+      nextWeatherCheck: 0,
+      rhythmQueue: [],
+    }
+    broadcastCountRef.current++
+    throttledBroadcast(slim, intervalMs)
+  }, [throttledBroadcast])
+
+  // Show spectator view when local player is dead and race isn't decided yet
+  const showSpectator = localFinished && !raceResult && spectatablePlayers.length > 0
+
+  // DEBUG: force re-render every second to show live broadcast count
+  const [, forceUpdate] = useState(0)
+  useEffect(() => {
+    const iv = setInterval(() => forceUpdate(n => n + 1), 1000)
+    return () => clearInterval(iv)
+  }, [])
+
   return (
     <div className="relative">
+      {/* DEBUG: broadcast diagnostics */}
+      <div className="fixed top-10 left-2 z-[200] bg-black/90 text-green-400 text-[10px] p-2 rounded font-mono leading-tight">
+        <div>BC:{broadcastCountRef.current} WS:{gameSocket.connected ? 'Y' : 'N'}</div>
+        <div>Fin:{localFinished ? 'Y' : 'N'} Res:{raceResult ?? 'null'}</div>
+        <div>Spec:{spectatablePlayers.length} Tgt:{spectateTarget ?? 'null'}</div>
+        <div>OppFin:{opponentStatus.finished ? 'Y' : 'N'}</div>
+      </div>
       <RaceOverlay
         raceResult={raceResult}
         opponentScore={opponentStatus.score}
@@ -1141,8 +1125,14 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
         playerNames={playerNames}
         onSpectatePrev={spectatePrev}
         onSpectateNext={spectateNext}
+        onLeaveGame={leaveRoom}
       />
-      <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
+      {showSpectator && (
+        <DinoRunnerSpectatorView spectatorState={spectatorState as GameState | null} />
+      )}
+      <div style={showSpectator ? { display: 'none' } : undefined}>
+        <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={slimBroadcast} isMultiplayer />
+      </div>
     </div>
   )
 }

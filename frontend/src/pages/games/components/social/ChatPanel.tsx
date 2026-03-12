@@ -240,7 +240,7 @@ export function ChatPanel() {
   } = useChatMessages(activeChannelId)
 
   const messages = useMemo(
-    () => messagePages?.pages.flat() ?? [],
+    () => (messagePages?.pages.flat() ?? []).sort((a, b) => a.id - b.id),
     [messagePages]
   )
 
@@ -250,12 +250,12 @@ export function ChatPanel() {
   const markRead = useMarkRead()
   const deleteMessage = useDeleteMessage()
 
-  // Mark as read when viewing a channel
+  // Mark as read when viewing a channel or when new messages arrive while viewing
   useEffect(() => {
     if (activeChannelId && activeChannel && activeChannel.unread_count > 0) {
       markRead.mutate(activeChannelId)
     }
-  }, [activeChannelId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeChannelId, activeChannel?.unread_count]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll to bottom on new messages
   const prevMessageCount = useRef(0)

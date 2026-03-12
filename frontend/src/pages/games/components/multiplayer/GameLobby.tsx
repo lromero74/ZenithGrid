@@ -30,6 +30,7 @@ export interface LobbyProps {
     players: number[]
     playerNames: Record<number, string>
     config: RoomConfig
+    hostUserId?: number
   }
 }
 
@@ -49,7 +50,9 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
   const [playerNames, setPlayerNames] = useState<Record<number, string>>(initialRoom?.playerNames ?? {})
   const [readyPlayers, setReadyPlayers] = useState<number[]>([])
   const [isReady, setIsReady] = useState(false)
-  const [isHost, setIsHost] = useState(false)
+  const [isHost, setIsHost] = useState(
+    initialRoom ? (initialRoom.hostUserId != null ? initialRoom.hostUserId === user?.id : initialRoom.players[0] === user?.id) : false
+  )
   const [joinCode, setJoinCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,10 +104,35 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
         const cfg = msg.config || roomConfig
         onGameStart(msg.roomId, msg.players, msg.playerNames || {}, cfg)
       }),
+      gameSocket.on('game:lobby_reset', (msg) => {
+        // Game ended — room reset to lobby for rematch
+        setRoomId(msg.roomId)
+        setPlayers(msg.players || [])
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
+        if (msg.config) setRoomConfig(msg.config)
+        setReadyPlayers([])
+        setIsReady(false)
+        setIsHost(msg.hostUserId === user?.id)
+        setLobbyState('waiting')
+      }),
       gameSocket.on('game:room_closed', () => {
         setLobbyState('idle')
         setRoomId(null)
         setError('Room was closed by the host')
+      }),
+      gameSocket.on('game:already_in_room', (msg) => {
+        // User was already in a room — show that lobby instead of erroring
+        setRoomId(msg.roomId)
+        setPlayers(msg.players)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
+        if (msg.config) {
+          setRoomConfig(msg.config)
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+        }
+        setIsHost(msg.isHost ?? false)
+        setReadyPlayers(msg.readyPlayers ?? [])
+        setLobbyState('waiting')
+        setError(null)
       }),
       gameSocket.on('game:error', (msg) => {
         setError(msg.error)
