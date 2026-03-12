@@ -148,10 +148,12 @@ function FriendsList() {
   })
 
   const handleJoinFriend = (friendId: number, gameId: string) => {
+    // Capture the join response before sending — it may arrive before the game page mounts
+    gameSocket.captureJoinResult()
     gameSocket.send({ type: 'game:join_friend', friendUserId: friendId })
-    // Navigate to the game page — the game:joined response will be caught by MultiplayerWrapper
+    // Navigate to the game page with state flag so MultiplayerWrapper shows a loading screen
     const game = GAMES.find(g => g.id === gameId)
-    if (game) navigate(game.path)
+    if (game) navigate(game.path, { state: { joiningFriend: true } })
   }
 
   return (

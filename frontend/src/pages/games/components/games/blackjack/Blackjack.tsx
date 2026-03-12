@@ -35,6 +35,7 @@ import {
 } from './blackjackEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { BlackjackMultiplayer } from './BlackjackMultiplayer'
 
 interface SavedState {
   gameState: BlackjackState
@@ -655,14 +656,27 @@ export default function Blackjack() {
       config={{
         gameId: 'blackjack',
         gameName: 'Blackjack',
-        modes: ['best_score'],
+        modes: ['vs', 'best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { best_score: 'Highest chip count wins' },
+        modeDescriptions: {
+          vs: 'Same table, same dealer',
+          best_score: 'Highest chip count wins',
+        },
       }}
       renderSinglePlayer={() => <BlackjackSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <BlackjackRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <BlackjackMultiplayer
+            roomId={roomId}
+            players={players}
+            playerNames={playerNames}
+            difficulty={roomConfig.difficulty as string}
+            onLeave={onLeave}
+          />
+        ) : (
+          <BlackjackRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
       }
     />
   )

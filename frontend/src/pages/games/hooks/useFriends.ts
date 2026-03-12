@@ -225,9 +225,13 @@ export function useCheckDisplayName(name: string) {
 
 export interface OnlineFriendInfo {
   id: number
+  display_name?: string | null
   game_id?: string | null
   room_id?: string | null
   room_status?: string | null  // "waiting" or "playing"
+  player_count?: number | null
+  max_players?: number | null
+  mode?: string | null  // "vs" or "race"
 }
 
 /** Get online friends with game room info. Polls every 30s. */

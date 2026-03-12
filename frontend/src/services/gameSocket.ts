@@ -15,6 +15,8 @@ class GameSocketClient {
   private _connected = false
   /** Room ID of an active game — used for auto-rejoin on reconnect. */
   private _activeRoomId: string | null = null
+  /** Buffered game:joined response — survives navigation between pages. */
+  private _pendingJoinResult: any = null
 
   get connected(): boolean {
     return this._connected
@@ -30,15 +32,25 @@ class GameSocketClient {
   }
 
   connect(token: string): void {
-    if (this.ws && this._connected) return
+    // Prevent duplicate connections — guard covers both OPEN and CONNECTING states
+    if (this.ws && (this._connected || this.ws.readyState === WebSocket.CONNECTING)) return
     this._token = token
+
+    // Close any stale socket before opening a new one
+    if (this.ws) {
+      this.ws.onclose = null // prevent reconnect/event from stale socket
+      this.ws.close()
+      this.ws = null
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${protocol}//${window.location.host}/ws?token=${token}`
 
-    this.ws = new WebSocket(url)
+    const ws = new WebSocket(url)
+    this.ws = ws
 
-    this.ws.onopen = () => {
+    ws.onopen = () => {
+      if (this.ws !== ws) return // stale socket — ignore
       this._connected = true
       this._emit('connection', { connected: true })
       // Auto-rejoin if we were in a game when we disconnected
@@ -47,17 +59,19 @@ class GameSocketClient {
       }
     }
 
-    this.ws.onclose = () => {
+    ws.onclose = () => {
+      if (this.ws !== ws) return // stale socket — ignore
       this._connected = false
       this._emit('connection', { connected: false })
       this._scheduleReconnect()
     }
 
-    this.ws.onerror = () => {
+    ws.onerror = () => {
       // onclose will fire after this
     }
 
-    this.ws.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      if (this.ws !== ws) return // stale socket — ignore
       try {
         const msg = JSON.parse(event.data)
         const type = msg.type || 'unknown'
@@ -85,7 +99,14 @@ class GameSocketClient {
 
   send(message: object): void {
     if (this.ws && this._connected) {
-      this.ws.send(JSON.stringify(message))
+      const data = JSON.stringify(message)
+      // DEBUG: log game:state sends
+      if ((message as any).type === 'game:state') {
+        console.log(`[GS] sending game:state, ${data.length} bytes`)
+      }
+      this.ws.send(data)
+    } else if ((message as any).type === 'game:state') {
+      console.warn(`[GS] DROPPED game:state — ws=${!!this.ws}, connected=${this._connected}`)
     }
   }
 
@@ -137,6 +158,27 @@ class GameSocketClient {
 
   sendState(roomId: string, state: object): void {
     this.send({ type: 'game:state', roomId, state })
+  }
+
+  /**
+   * Buffer the next game:joined response so it survives page navigation.
+   * Call before sending game:join_friend and navigating away.
+   */
+  captureJoinResult(): void {
+    this._pendingJoinResult = null
+    const unsub = this.on('game:joined', (msg) => {
+      this._pendingJoinResult = msg
+      unsub()
+    })
+    // Auto-cleanup if no response within 10s
+    setTimeout(() => { unsub(); }, 10000)
+  }
+
+  /** Consume the buffered game:joined result (returns null if none). */
+  consumeJoinResult(): any {
+    const result = this._pendingJoinResult
+    this._pendingJoinResult = null
+    return result
   }
 
   // ----- Internal -----

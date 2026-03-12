@@ -53,8 +53,8 @@ export interface HandScore {
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const SHOE_DECKS = 6
-const RESHUFFLE_THRESHOLD = 0.25
+export const SHOE_DECKS = 6
+export const RESHUFFLE_THRESHOLD = 0.25
 export const BET_SIZES = [10, 25, 50, 100, 500]
 export const STARTING_CHIPS = 1000
 
@@ -90,14 +90,14 @@ export function scoreHand(cards: Card[]): HandScore {
 
 // ── Shoe management ──────────────────────────────────────────────────
 
-function ensureShoe(shoe: Card[]): Card[] {
+export function ensureShoe(shoe: Card[]): Card[] {
   if (shoe.length < SHOE_DECKS * 52 * RESHUFFLE_THRESHOLD) {
     return createShoe(SHOE_DECKS)
   }
   return [...shoe]
 }
 
-function drawCard(shoe: Card[]): [Card, Card[]] {
+export function drawCard(shoe: Card[]): [Card, Card[]] {
   const remaining = [...shoe]
   const card = { ...remaining.pop()!, faceUp: true }
   return [card, remaining]

@@ -41,12 +41,26 @@ export function useChatSocket(activeChannelId: number | null) {
   const activeChannelRef = useRef(activeChannelId)
   activeChannelRef.current = activeChannelId
 
-  // Incoming message
+  // Incoming message — optimistically update cache for instant display
   useEffect(() => {
     const unsub = gameSocket.on('chat:message', (msg: ChatMessage) => {
-      qc.invalidateQueries({ queryKey: ['chat-messages', msg.channel_id] })
+      // Optimistically prepend message to the infinite query cache
+      qc.setQueryData(['chat-messages', msg.channel_id], (old: any) => {
+        if (!old?.pages?.length) return old
+        const firstPage = old.pages[0] as ChatMessage[]
+        // Deduplicate: skip if message already in cache
+        if (firstPage.some((m: ChatMessage) => m.id === msg.id)) return old
+        return {
+          ...old,
+          pages: [[...firstPage, msg], ...old.pages.slice(1)],
+        }
+      })
+      // Refresh channel list (last_message, unread_count for non-active channels)
       qc.invalidateQueries({ queryKey: ['chat-channels'] })
-      qc.invalidateQueries({ queryKey: ['chat-unread'] })
+      // Only bump unread counts for channels we're NOT viewing
+      if (msg.channel_id !== activeChannelRef.current) {
+        qc.invalidateQueries({ queryKey: ['chat-unread'] })
+      }
 
       // Clear typing indicator for this sender
       setTypingUsers(prev => {

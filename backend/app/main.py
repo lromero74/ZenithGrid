@@ -738,6 +738,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 
             # Enforce message size limit
             if len(data) > MAX_MESSAGE_SIZE:
+                msg_type = "unknown"
+                try:
+                    msg_type = _json.loads(data).get("type", "unknown")
+                except Exception:
+                    pass
+                logger.warning(
+                    f"WebSocket message too large from user {user_id}: "
+                    f"{len(data)} bytes (limit {MAX_MESSAGE_SIZE}), type={msg_type}"
+                )
                 await websocket.close(code=4009, reason="Message too large")
                 break
 

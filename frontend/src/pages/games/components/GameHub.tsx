@@ -7,13 +7,71 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, LayoutList, Swords, Flag, Shield, TrendingUp } from 'lucide-react'
-import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS } from '../constants'
+import { Search, LayoutList, Swords, Flag, Shield, TrendingUp, Users, LogIn } from 'lucide-react'
+import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS, GAME_ICONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
+import { useOnlineFriends, type OnlineFriendInfo } from '../hooks/useFriends'
+import { gameSocket } from '../../../services/gameSocket'
 import { groupGames } from '../groupGames'
 import { GameCard } from './GameCard'
 import type { GameCategory, GameGroupOption, GameInfo, MultiplayerMode } from '../types'
+
+const GAME_MAP = Object.fromEntries(GAMES.map(g => [g.id, g]))
+
+/** Friends' open lobbies — shown at the top of the Games hub. */
+function FriendsLobbies({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
+  const { data: onlineFriends = [] } = useOnlineFriends()
+  const lobbies = useMemo(
+    () => onlineFriends.filter((f): f is OnlineFriendInfo & { game_id: string; room_id: string } =>
+      f.room_status === 'waiting' && !!f.game_id && !!f.room_id
+    ),
+    [onlineFriends],
+  )
+
+  if (lobbies.length === 0) return null
+
+  const handleJoin = (friend: typeof lobbies[0]) => {
+    gameSocket.captureJoinResult()
+    gameSocket.send({ type: 'game:join_friend', friendUserId: friend.id })
+    const game = GAME_MAP[friend.game_id]
+    if (game) navigate(game.path, { state: { joiningFriend: true } })
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <Users className="w-4 h-4 text-green-400" />
+        <h2 className="text-sm font-semibold text-green-300">Friends' Lobbies</h2>
+        <div className="flex-1 border-t border-green-800/40" />
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {lobbies.map(lobby => {
+          const game = GAME_MAP[lobby.game_id]
+          const Icon = game ? GAME_ICONS[game.icon] : null
+          return (
+            <button
+              key={lobby.room_id}
+              onClick={() => handleJoin(lobby)}
+              className="flex items-center gap-3 px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-green-600/30 hover:border-green-500/50 rounded-xl transition-all group"
+            >
+              {Icon && <Icon className="w-6 h-6 text-green-400 group-hover:text-green-300 shrink-0" />}
+              <div className="text-left">
+                <div className="text-sm font-medium text-white">{game?.name ?? lobby.game_id}</div>
+                <div className="text-xs text-slate-400">
+                  {lobby.display_name ?? `Player ${lobby.id}`}
+                  <span className="text-slate-500"> &middot; </span>
+                  {lobby.player_count ?? 1}/{lobby.max_players ?? 2} players
+                </div>
+              </div>
+              <LogIn className="w-4 h-4 text-green-400 group-hover:text-green-300 ml-2 shrink-0" />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 const LAST_GAME_KEY = 'zenith-games-last-path'
 const CATEGORY_KEY = 'zenith-games-category'
@@ -216,6 +274,9 @@ export function GameHub() {
           ))}
         </div>
       )}
+
+      {/* Friends' open lobbies */}
+      <FriendsLobbies navigate={navigate} />
 
       {/* Grouped game cards */}
       {displayedGroups.map(group => (

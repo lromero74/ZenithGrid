@@ -59,12 +59,17 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   /** Countdown seconds remaining for opponent to reconnect (null = not paused). */
   const [reconnectCountdown, setReconnectCountdown] = useState<number | null>(null)
   /** Whether we (the local player) are currently disconnected. */
-  const [selfDisconnected, setSelfDisconnected] = useState(false)
+  const [selfDisconnected, setSelfDisconnected] = useState(!gameSocket.connected)
+
+  /** Deferred result — set when local player finishes but we want spectator flow first. */
+  const [pendingResult, setPendingResult] = useState<'won' | 'lost' | 'tied' | null>(null)
 
   // Refs to avoid stale closures in reportFinish
   const opponentStatusRef = useRef(opponentStatus)
   opponentStatusRef.current = opponentStatus
   const localFinishedRef = useRef(localFinished)
+  const raceResultRef = useRef(raceResult)
+  raceResultRef.current = raceResult
   localFinishedRef.current = localFinished
   const localScoreRef = useRef<number | undefined>(undefined)
   const allowPlayOnRef = useRef(allowPlayOn)
@@ -109,6 +114,14 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
         if (raceType === 'survival' && oppResult === 'loss' && !localFinishedRef.current) {
           // Opponent died while we're still alive — we win
           setRaceResultWithPlayOn('won')
+        }
+        if (raceType === 'survival' && oppResult === 'loss' && localFinishedRef.current) {
+          // We were spectating (died first), opponent just died too — finalize our loss.
+          // Guard: don't overwrite a 'won' result (near-simultaneous deaths can race).
+          if (raceResultRef.current !== 'won') {
+            setRaceResult('lost')
+            setPendingResult(null)
+          }
         }
         if (raceType === 'best_score' && localFinishedRef.current) {
           // Both done now — compare scores
@@ -158,18 +171,35 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     return () => clearTimeout(timer)
   }, [reconnectCountdown])
 
-  // Track own connection state
+  // Track own connection state — debounce disconnect to avoid flash
+  // during brief reconnection cycles
   useEffect(() => {
+    let disconnectTimer: ReturnType<typeof setTimeout> | null = null
     const unsub = gameSocket.on('connection', (msg) => {
-      setSelfDisconnected(!msg.connected)
+      if (msg.connected) {
+        // Reconnected — clear any pending disconnect and immediately show connected
+        if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null }
+        setSelfDisconnected(false)
+      } else {
+        // Disconnected — wait 1.5s before showing overlay to avoid flash
+        disconnectTimer = setTimeout(() => {
+          setSelfDisconnected(true)
+          disconnectTimer = null
+        }, 1500)
+      }
     })
-    return unsub
+    return () => { unsub(); if (disconnectTimer) clearTimeout(disconnectTimer) }
   }, [])
 
   // Listen for spectator state from all players
+  const receivedStateCountRef = useRef(0)
   useEffect(() => {
     const unsub = gameSocket.on('game:player_state', (msg) => {
       if (msg.state && msg.playerId) {
+        receivedStateCountRef.current++
+        if (receivedStateCountRef.current % 10 === 1) {
+          console.log(`[PS] received player_state #${receivedStateCountRef.current} from player ${msg.playerId}`)
+        }
         setPlayerStates(prev => ({ ...prev, [msg.playerId]: msg.state }))
         // Auto-select first available spectate target
         setSpectateTarget(prev => prev ?? msg.playerId)
@@ -214,8 +244,8 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
     if (raceType === 'survival' && result === 'loss') {
       if (!opp.finished) {
-        // I died first — I lose
-        setRaceResultWithPlayOn('lost')
+        // I died first, opponent still playing — defer result for spectator flow
+        setPendingResult('lost')
       } else if (opp.result === 'loss') {
         // Both dead — whoever died second wins (that's me, since opp already finished)
         setRaceResultWithPlayOn('won')
@@ -252,6 +282,11 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     setRaceResult('lost')
   }, [roomId])
 
+  /** Leave the room individually (e.g. spectating loser exits mid-game without disrupting opponent). */
+  const leaveRoom = useCallback(() => {
+    gameSocket.send({ type: 'game:leave', roomId })
+  }, [roomId])
+
   /** Broadcast visual game state for spectators. Sends immediately. */
   const broadcastState = useCallback((state: object) => {
     gameSocket.sendState(roomId, state)
@@ -263,11 +298,20 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
    * Event-driven games should use `broadcastState` directly instead.
    */
   const lastBroadcastRef = useRef(0)
+  const throttleSendCountRef = useRef(0)
+  const throttleDropCountRef = useRef(0)
   const throttledBroadcast = useCallback((state: object, intervalMs = 500) => {
     const now = Date.now()
     if (now - lastBroadcastRef.current >= intervalMs) {
       lastBroadcastRef.current = now
+      throttleSendCountRef.current++
+      // DEBUG: log every 10th send to avoid console spam
+      if (throttleSendCountRef.current % 10 === 1) {
+        console.log(`[TB] sending #${throttleSendCountRef.current} (dropped ${throttleDropCountRef.current}), roomId=${roomId}`)
+      }
       gameSocket.sendState(roomId, state)
+    } else {
+      throttleDropCountRef.current++
     }
   }, [roomId])
 
@@ -275,6 +319,14 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   const dismissPlayOn = useCallback(() => {
     setPlayOnActive(false)
   }, [])
+
+  /** Finalize a pending/deferred result (e.g., after spectating). */
+  const finalizeResult = useCallback(() => {
+    if (pendingResult) {
+      setRaceResult(pendingResult)
+      setPendingResult(null)
+    }
+  }, [pendingResult])
 
   // isSpectating: local player finished but race isn't over yet (others still playing)
   const isSpectating = localFinished && (playOnActive || (raceResult === 'lost' && !opponentStatus.finished))
@@ -311,8 +363,8 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
   return {
     opponentStatus, raceResult, localFinished, opponentLevelUp, opponentDisconnected,
-    reconnectCountdown, selfDisconnected,
-    reportFinish, reportScore, reportLevel, forfeit,
+    reconnectCountdown, selfDisconnected, pendingResult,
+    reportFinish, reportScore, reportLevel, forfeit, finalizeResult, leaveRoom,
     playOnActive, isSpectating, spectatorState, playerStates, spectateTarget, spectatablePlayers,
     spectateNext, spectatePrev, broadcastState, throttledBroadcast, dismissPlayOn,
   }
@@ -396,6 +448,7 @@ export function RaceOverlay({
   playerNames,
   onSpectatePrev,
   onSpectateNext,
+  onLeaveGame,
 }: {
   // -- Core race state --
   raceResult: 'won' | 'lost' | 'tied' | null
@@ -420,15 +473,25 @@ export function RaceOverlay({
   playerNames?: Record<number, string>
   onSpectatePrev?: () => void
   onSpectateNext?: () => void
+  /** Called when a spectating player wants to leave mid-game (individual leave, doesn't reset room). */
+  onLeaveGame?: () => void
 }) {
   const [spectateMode, setSpectateMode] = useState(false)
   /** Whether the initial skull/loss overlay has been dismissed (transitions to spectate choice). */
   const [skullDismissed, setSkullDismissed] = useState(false)
+  /** Brief win toast shown to winner who is still playing — auto-dismisses */
+  const [winToastVisible, setWinToastVisible] = useState(false)
 
   // Reset spectate mode and skull when race result arrives
   useEffect(() => {
     if (raceResult) { setSpectateMode(false); setSkullDismissed(false) }
-  }, [raceResult])
+    // Show auto-dismiss toast for winner still playing
+    if (raceResult === 'won' && !localFinished) {
+      setWinToastVisible(true)
+      const timer = setTimeout(() => setWinToastVisible(false), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [raceResult, localFinished])
   // Self-disconnected overlay — shown when we lose connection
   if (selfDisconnected) {
     return (
@@ -468,7 +531,7 @@ export function RaceOverlay({
                   onClick={onDismiss}
                   className="px-4 py-2 text-sm bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
                 >
-                  Return to Games
+                  Back to Lobby
                 </button>
               )}
             </>
@@ -492,11 +555,26 @@ export function RaceOverlay({
     )
   }
 
-  // Elimination spectator flow: player finished, race not over yet, spectator props provided
+  // Elimination spectator flow: player finished, race not over yet
+  // Show skull immediately — don't gate on hasSpectatorProps
   const hasSpectatorProps = spectatablePlayers !== undefined && spectatablePlayers.length > 0
-  const showSkullOverlay = localFinished && !raceResult && !skullDismissed && hasSpectatorProps
-  const showEliminationChoice = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
-  const showSpectatorBar = spectateMode && !raceResult && hasSpectatorProps
+  const showSkullOverlay = localFinished && !raceResult && !skullDismissed
+  // After skull dismissed, auto-enter spectate mode once data arrives
+  const readyToSpectate = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
+  const showSpectatorBar = spectateMode && !raceResult
+
+  // DEBUG: log spectator state machine on every render where localFinished is true
+  if (localFinished) {
+    console.log(`[RO] localFinished=${localFinished} raceResult=${raceResult} skullDismissed=${skullDismissed} spectateMode=${spectateMode} hasSpec=${hasSpectatorProps} specLen=${spectatablePlayers?.length} readyToSpectate=${readyToSpectate} showSkull=${showSkullOverlay} showBar=${showSpectatorBar}`)
+  }
+
+  // Auto-enter spectate mode once spectator data is available after skull dismissal
+  useEffect(() => {
+    if (readyToSpectate) {
+      console.log('[RO] readyToSpectate=true → setting spectateMode')
+      setSpectateMode(true)
+    }
+  }, [readyToSpectate])
 
   // Step 1: Skull result — "You Lost!" with a dismiss button
   if (showSkullOverlay) {
@@ -516,30 +594,22 @@ export function RaceOverlay({
     )
   }
 
-  // Step 2: Spectate or return choice — after skull dismissed
-  if (showEliminationChoice) {
+  // Step 2: Waiting for spectator data after skull dismissed (before spectateMode kicks in)
+  if (localFinished && !raceResult && skullDismissed && !spectateMode) {
     return (
       <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
         <div className="flex flex-col items-center gap-4 px-8 py-6 bg-slate-800/95 border border-slate-600/50 rounded-xl max-w-sm text-center">
           <Eye className="w-10 h-10 text-indigo-400" />
           <span className="text-lg font-bold text-white">Other players are still going</span>
-          <span className="text-sm text-slate-300">What would you like to do?</span>
-          <div className="flex gap-3">
+          <span className="text-sm text-slate-300">Loading spectator view...</span>
+          {onLeaveGame && (
             <button
-              onClick={() => setSpectateMode(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+              onClick={onLeaveGame}
+              className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
             >
-              <Eye className="w-4 h-4" /> Spectate
+              Leave
             </button>
-            {onDismiss && (
-              <button
-                onClick={onDismiss}
-                className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-              >
-                Return to Games
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
     )
@@ -549,11 +619,11 @@ export function RaceOverlay({
     return (
       <SpectatorBar
         spectateTarget={spectateTarget ?? null}
-        spectatablePlayers={spectatablePlayers!}
+        spectatablePlayers={spectatablePlayers ?? []}
         playerNames={playerNames}
         onPrev={onSpectatePrev ?? (() => {})}
         onNext={onSpectateNext ?? (() => {})}
-        onDismiss={onDismiss}
+        onDismiss={onLeaveGame ?? onDismiss}
       />
     )
   }
@@ -623,10 +693,35 @@ export function RaceOverlay({
     )
   }
 
-  // Full-screen race result overlay (standard behavior when play-on is not active)
+  // Winner still playing — show non-blocking toast, don't interrupt gameplay
+  if (raceResult === 'won' && !localFinished && !playOnActive) {
+    return (
+      <>
+        {winToastVisible && (
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-green-900/90 border border-green-500/50 rounded-lg text-sm animate-fade-in">
+            <Trophy className="w-5 h-5 text-yellow-400" />
+            <span className="text-green-200 font-medium">
+              You won! {opponentName || 'Opponent'} is out.
+            </span>
+          </div>
+        )}
+        {/* Still show opponent status bar */}
+        <div className="fixed top-2 right-2 z-30 flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 border border-slate-600/50 rounded-lg text-xs">
+          <Trophy className="w-3 h-3 text-yellow-400" />
+          <span className="text-green-400">You won the race!</span>
+        </div>
+      </>
+    )
+  }
+
+  // Full-screen race result overlay (shown when player has finished playing)
   if (raceResult && !playOnActive) {
     const isWin = raceResult === 'won'
     const isTie = raceResult === 'tied'
+    // If opponent is still playing, use individual leave instead of back_to_lobby
+    // to avoid resetting the opponent's active game
+    const bothDone = opponentFinished && localFinished
+    const handleDismiss = bothDone ? onDismiss : (onLeaveGame ?? onDismiss)
     return (
       <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
         <div className={`relative flex flex-col items-center gap-3 px-8 py-6 rounded-xl border ${
@@ -648,12 +743,12 @@ export function RaceOverlay({
           }`}>
             {isWin ? 'You Win the Race!' : isTie ? 'It\'s a Tie!' : 'You Lost the Race!'}
           </span>
-          {onDismiss && (
+          {handleDismiss && (
             <button
-              onClick={onDismiss}
+              onClick={handleDismiss}
               className="mt-2 px-5 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
             >
-              Return to Games
+              {bothDone ? 'Back to Lobby' : 'Leave'}
             </button>
           )}
         </div>

@@ -9,8 +9,8 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Monitor, ArrowLeft, Swords, Timer, Trophy, Skull, Lock, X } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { Monitor, ArrowLeft, Swords, Timer, Trophy, Skull, Lock, X, Loader2, DoorOpen } from 'lucide-react'
 import { GameLobby } from './GameLobby'
 import { SessionGate } from './SessionGate'
 import { clearLastGamePath } from '../GameHub'
@@ -61,9 +61,13 @@ export function MultiplayerWrapper({
   renderMultiplayer,
 }: MultiplayerWrapperProps) {
   const { user } = useAuth()
+  const location = useLocation()
   const canMultiplayer = user?.permissions?.includes('games:multiplayer') ?? false
+  const joiningFriend = (location.state as any)?.joiningFriend === true
 
-  const [gameMode, setGameMode] = useState<'select' | 'single' | 'session-check' | 'lobby' | 'playing'>('select')
+  const [gameMode, setGameMode] = useState<'select' | 'single' | 'session-check' | 'lobby' | 'playing' | 'joining'>(
+    joiningFriend ? 'joining' : 'select'
+  )
   const [showLockedModal, setShowLockedModal] = useState(false)
   const [selectedMultiplayerMode, setSelectedMultiplayerMode] = useState<MultiplayerMode>(config.modes[0])
   // Derived: lobby/backend uses 'vs' | 'race'; race subtypes go into roomConfig.race_type
@@ -72,6 +76,7 @@ export function MultiplayerWrapper({
   const [players, setPlayers] = useState<number[]>([])
   const [playerNames, setPlayerNames] = useState<Record<number, string>>({})
   const [roomConfig, setRoomConfig] = useState<RoomConfig>({})
+  const [hostUserId, setHostUserId] = useState<number | undefined>(undefined)
 
   const handleGameStart = useCallback((rid: string, pids: number[], names: Record<number, string>, cfg: RoomConfig) => {
     setRoomId(rid)
@@ -81,6 +86,54 @@ export function MultiplayerWrapper({
     setGameMode('playing')
     gameSocket.setActiveRoom(rid)
   }, [])
+
+  // When joining a friend's game, check for a buffered join result first
+  // (the game:joined response may have arrived before this component mounted)
+  useEffect(() => {
+    if (gameMode !== 'joining') return
+    const pending = gameSocket.consumeJoinResult()
+    if (pending) {
+      setRoomId(pending.roomId)
+      setPlayers(pending.players || [])
+      setPlayerNames(pending.playerNames || {})
+      setRoomConfig(pending.config || {})
+      const mode = pending.config?.mode === 'vs' ? 'vs' : (pending.config?.race_type || 'first_to_win')
+      setSelectedMultiplayerMode(mode as MultiplayerMode)
+      setGameMode('lobby')
+      gameSocket.setActiveRoom(pending.roomId)
+      return
+    }
+    // No buffered result yet — fall back to select after 5s if game:joined never arrives
+    const timer = setTimeout(() => setGameMode('select'), 5000)
+    return () => clearTimeout(timer)
+  }, [gameMode])
+
+  // On mount, check if we're already in a room (e.g. navigated away and back)
+  useEffect(() => {
+    if (gameMode !== 'select') return
+    const unsubInfo = gameSocket.on('game:room_info', (msg) => {
+      // Only restore if this room is for our game
+      if (msg.gameId !== config.gameId) return
+      setRoomId(msg.roomId)
+      setPlayers(msg.players || [])
+      setPlayerNames(msg.playerNames || {})
+      setRoomConfig(msg.config || {})
+      setHostUserId(msg.hostUserId)
+      const mode = msg.config?.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')
+      setSelectedMultiplayerMode(mode as MultiplayerMode)
+      if (msg.status === 'playing') {
+        setGameMode('playing')
+      } else {
+        setGameMode('lobby')
+      }
+      gameSocket.setActiveRoom(msg.roomId)
+    })
+    // Ask the backend if we're in a room
+    if (gameSocket.connected) {
+      gameSocket.send({ type: 'game:check_room' })
+    }
+    return unsubInfo
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for rejoin success/failure (auto-rejoin after reconnect)
   // Also listen for game:joined — when accepting an invite, the join response
@@ -99,8 +152,17 @@ export function MultiplayerWrapper({
       gameSocket.setActiveRoom(null)
       setGameMode('select')
     })
+    const unsubLobbyReset = gameSocket.on('game:lobby_reset', (msg) => {
+      // Other player (or self) triggered back-to-lobby — transition to lobby
+      setRoomId(msg.roomId)
+      setPlayers(msg.players || [])
+      setPlayerNames(msg.playerNames || {})
+      setRoomConfig(msg.config || {})
+      setHostUserId(msg.hostUserId)
+      setGameMode('lobby')
+    })
     const unsubJoined = gameSocket.on('game:joined', (msg) => {
-      // Invite acceptance: join response arrived before lobby mounted
+      // Invite acceptance or join_friend: join response arrived before lobby mounted
       if (gameMode !== 'lobby') {
         setRoomId(msg.roomId)
         setPlayers(msg.players || [])
@@ -109,9 +171,49 @@ export function MultiplayerWrapper({
         const mode = msg.config?.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')
         setSelectedMultiplayerMode(mode as MultiplayerMode)
         setGameMode('lobby')
+        // Track room for reconnection if user navigates away and comes back
+        gameSocket.setActiveRoom(msg.roomId)
       }
     })
-    return () => { unsubSuccess(); unsubFailed(); unsubJoined() }
+    // Handle "already in a room" — backend sends existing room info instead of error
+    const unsubAlready = gameSocket.on('game:already_in_room', (msg) => {
+      // Only restore if this room is for our game
+      if (msg.gameId !== config.gameId) return
+      setRoomId(msg.roomId)
+      setPlayers(msg.players || [])
+      setPlayerNames(msg.playerNames || {})
+      setRoomConfig(msg.config || {})
+      setHostUserId(msg.hostUserId)
+      const mode = msg.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')
+      setSelectedMultiplayerMode(mode as MultiplayerMode)
+      if (msg.status === 'playing') {
+        setGameMode('playing')
+      } else {
+        setGameMode('lobby')
+      }
+      gameSocket.setActiveRoom(msg.roomId)
+    })
+    // Listen for individual leave confirmation (e.g. leaving mid-game while opponent plays)
+    const unsubLeft = gameSocket.on('game:left', (_msg) => {
+      gameSocket.setActiveRoom(null)
+      setGameMode('select')
+      setRoomId(null)
+      setPlayers([])
+      setPlayerNames({})
+      setRoomConfig({})
+      setHostUserId(undefined)
+    })
+    // Listen for room closed (host left)
+    const unsubClosed = gameSocket.on('game:room_closed', (_msg) => {
+      gameSocket.setActiveRoom(null)
+      setGameMode('select')
+      setRoomId(null)
+      setPlayers([])
+      setPlayerNames({})
+      setRoomConfig({})
+      setHostUserId(undefined)
+    })
+    return () => { unsubSuccess(); unsubFailed(); unsubLobbyReset(); unsubJoined(); unsubAlready(); unsubLeft(); unsubClosed() }
   }, [gameMode])
 
   const navigate = useNavigate()
@@ -123,6 +225,13 @@ export function MultiplayerWrapper({
     setPlayers([])
     setPlayerNames({})
     setRoomConfig({})
+    setHostUserId(undefined)
+  }, [])
+
+  // Return to lobby after a game ends (keeps room intact for rematch)
+  const handleBackToLobby = useCallback(() => {
+    gameSocket.send({ type: 'game:back_to_lobby' })
+    setGameMode('lobby')
   }, [])
 
   const handleBackToHub = useCallback(() => {
@@ -217,6 +326,16 @@ export function MultiplayerWrapper({
     )
   }
 
+  // Joining friend's game — waiting for game:joined response
+  if (gameMode === 'joining') {
+    return (
+      <div className="flex flex-col items-center gap-4 py-20">
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+        <p className="text-sm text-slate-300">Joining game...</p>
+      </div>
+    )
+  }
+
   // Single player — render the original game
   if (gameMode === 'single') {
     return <>{renderSinglePlayer()}</>
@@ -244,14 +363,34 @@ export function MultiplayerWrapper({
         hasDifficulty={config.hasDifficulty && selectedMode === 'race'}
         onGameStart={handleGameStart}
         onBack={handleBackToSelect}
-        initialRoom={roomId ? { roomId, players, playerNames, config: roomConfig } : undefined}
+        initialRoom={roomId ? { roomId, players, playerNames, config: roomConfig, hostUserId } : undefined}
       />
     )
   }
 
   // Playing — render multiplayer game
   if (gameMode === 'playing' && roomId) {
-    return <>{renderMultiplayer(roomId, players, playerNames, selectedMultiplayerMode, roomConfig, handleBackToSelect)}</>
+    return (
+      <div className="relative">
+        {renderMultiplayer(roomId, players, playerNames, selectedMultiplayerMode, roomConfig, handleBackToLobby)}
+        <button
+          onClick={() => {
+            gameSocket.leaveRoom(roomId)
+            gameSocket.setActiveRoom(null)
+            setGameMode('select')
+            setRoomId(null)
+            setPlayers([])
+            setPlayerNames({})
+            setRoomConfig({})
+          }}
+          className="fixed top-2 right-2 z-40 flex items-center gap-1 px-2 py-1 text-xs bg-slate-800/80 hover:bg-red-900/80 border border-slate-600/50 hover:border-red-500/50 text-slate-400 hover:text-red-300 rounded-lg backdrop-blur-sm transition-all opacity-40 hover:opacity-100"
+          title="Leave game"
+        >
+          <DoorOpen className="w-3.5 h-3.5" />
+          Leave
+        </button>
+      </div>
+    )
   }
 
   return null

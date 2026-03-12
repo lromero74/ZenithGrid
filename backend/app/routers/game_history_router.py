@@ -228,62 +228,6 @@ async def view_user_game_history(
     return await _build_game_history_response(db, user_id, game_id, limit, offset)
 
 
-@router.get("/{game_result_id}")
-async def get_game_result_detail(
-    game_result_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
-) -> dict:
-    """Get detailed game result. Only participants can view."""
-    result = await db.execute(
-        select(GameResult).where(GameResult.id == game_result_id)
-    )
-    game = result.scalar_one_or_none()
-    if not game:
-        raise HTTPException(status_code=404, detail="Game result not found")
-
-    # Check that current user was a participant
-    participant_check = await db.execute(
-        select(GameResultPlayer.id).where(
-            GameResultPlayer.game_result_id == game_result_id,
-            GameResultPlayer.user_id == current_user.id,
-        )
-    )
-    if participant_check.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Game result not found")
-
-    # Fetch players
-    players_q = await db.execute(
-        select(GameResultPlayer, User)
-        .join(User, GameResultPlayer.user_id == User.id)
-        .where(GameResultPlayer.game_result_id == game_result_id)
-        .order_by(GameResultPlayer.placement)
-    )
-    players = [
-        {
-            "user_id": player.user_id,
-            "display_name": user.display_name,
-            "placement": player.placement,
-            "score": player.score,
-            "is_winner": player.is_winner,
-            "stats": player.stats,
-        }
-        for player, user in players_q.all()
-    ]
-
-    return {
-        "id": game.id,
-        "room_id": game.room_id,
-        "game_id": game.game_id,
-        "mode": game.mode,
-        "started_at": game.started_at.isoformat() if game.started_at else None,
-        "finished_at": game.finished_at.isoformat() if game.finished_at else None,
-        "result_data": game.result_data,
-        "tournament_id": game.tournament_id,
-        "players": players,
-    }
-
-
 @router.put("/visibility")
 async def update_visibility(
     body: VisibilityUpdate,
@@ -370,3 +314,62 @@ async def update_game_score(
         db.add(new_score)
         await db.commit()
         return {"game_id": game_id, "score": score, "updated": True}
+
+
+# ----- Game Result Detail (must be AFTER /scores and /visibility to avoid path capture) -----
+
+
+@router.get("/{game_result_id}")
+async def get_game_result_detail(
+    game_result_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.GAMES_MULTIPLAYER)),
+) -> dict:
+    """Get detailed game result. Only participants can view."""
+    result = await db.execute(
+        select(GameResult).where(GameResult.id == game_result_id)
+    )
+    game = result.scalar_one_or_none()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game result not found")
+
+    # Check that current user was a participant
+    participant_check = await db.execute(
+        select(GameResultPlayer.id).where(
+            GameResultPlayer.game_result_id == game_result_id,
+            GameResultPlayer.user_id == current_user.id,
+        )
+    )
+    if participant_check.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Game result not found")
+
+    # Fetch players
+    players_q = await db.execute(
+        select(GameResultPlayer, User)
+        .join(User, GameResultPlayer.user_id == User.id)
+        .where(GameResultPlayer.game_result_id == game_result_id)
+        .order_by(GameResultPlayer.placement)
+    )
+    players = [
+        {
+            "user_id": player.user_id,
+            "display_name": user.display_name,
+            "placement": player.placement,
+            "score": player.score,
+            "is_winner": player.is_winner,
+            "stats": player.stats,
+        }
+        for player, user in players_q.all()
+    ]
+
+    return {
+        "id": game.id,
+        "room_id": game.room_id,
+        "game_id": game.game_id,
+        "mode": game.mode,
+        "started_at": game.started_at.isoformat() if game.started_at else None,
+        "finished_at": game.finished_at.isoformat() if game.finished_at else None,
+        "result_data": game.result_data,
+        "tournament_id": game.tournament_id,
+        "players": players,
+    }

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Limits
 MAX_CONNECTIONS_PER_USER = 5
-MAX_MESSAGE_SIZE = 4096  # 4 KB
+MAX_MESSAGE_SIZE = 32768  # 32 KB — game state broadcasts (spectator view) need headroom
 RECEIVE_TIMEOUT_SECONDS = 300  # 5 minutes
 
 
