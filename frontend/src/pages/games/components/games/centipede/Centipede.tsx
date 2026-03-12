@@ -24,7 +24,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -417,7 +417,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
+export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer, inputBlocked, autoStart }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean; inputBlocked?: boolean; autoStart?: boolean } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('centipede') ?? 0
 
@@ -444,6 +444,10 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
   // Keyboard held-key tracking
   const keysRef = useRef<Set<string>>(new Set())
   const fireTimerRef = useRef(0)
+
+  // Input blocking for sync-start multiplayer
+  const inputBlockedRef = useRef(!!inputBlocked)
+  inputBlockedRef.current = !!inputBlocked
 
   // Touch/pointer tracking
   const pointerDownRef = useRef(false)
@@ -529,36 +533,38 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
 
     let gs = gsRef.current
 
-    // Handle held keys for movement
-    const keys = keysRef.current
-    const moveSpeed = 200 // pixels/second
-    let dx = 0
-    let dy = 0
-    if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) dx -= 1
-    if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) dx += 1
-    if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) dy -= 1
-    if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) dy += 1
-    if (dx !== 0 || dy !== 0) {
-      gs = movePlayer(
-        gs,
-        gs.player.x + dx * moveSpeed * dt,
-        gs.player.y + dy * moveSpeed * dt
-      )
-    }
+    // Handle held keys for movement (suppressed when input is blocked)
+    if (!inputBlockedRef.current) {
+      const keys = keysRef.current
+      const moveSpeed = 200 // pixels/second
+      let dx = 0
+      let dy = 0
+      if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) dx -= 1
+      if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) dx += 1
+      if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) dy -= 1
+      if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) dy += 1
+      if (dx !== 0 || dy !== 0) {
+        gs = movePlayer(
+          gs,
+          gs.player.x + dx * moveSpeed * dt,
+          gs.player.y + dy * moveSpeed * dt
+        )
+      }
 
-    // Handle pointer-based movement (touch / mouse drag)
-    if (pointerDownRef.current && pointerPosRef.current) {
-      gs = movePlayer(gs, pointerPosRef.current.x, pointerPosRef.current.y)
-    }
+      // Handle pointer-based movement (touch / mouse drag)
+      if (pointerDownRef.current && pointerPosRef.current) {
+        gs = movePlayer(gs, pointerPosRef.current.x, pointerPosRef.current.y)
+      }
 
-    // Auto-fire
-    fireTimerRef.current -= dt
-    const shouldFire =
-      keys.has(' ') || keys.has('Space') || pointerDownRef.current
-    if (shouldFire && fireTimerRef.current <= 0) {
-      sfx.play('fire')
-      gs = fireBullet(gs)
-      fireTimerRef.current = FIRE_COOLDOWN
+      // Auto-fire
+      fireTimerRef.current -= dt
+      const shouldFire =
+        keys.has(' ') || keys.has('Space') || pointerDownRef.current
+      if (shouldFire && fireTimerRef.current <= 0) {
+        sfx.play('fire')
+        gs = fireBullet(gs)
+        fireTimerRef.current = FIRE_COOLDOWN
+      }
     }
 
     // Update game logic
@@ -617,12 +623,20 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
     animFrameRef.current = requestAnimationFrame(tick)
   }, [draw, tick, music])
 
+  // Auto-start when countdown finishes (multiplayer sync-start)
+  useEffect(() => {
+    if (autoStart && gameStatusRef.current === 'idle') {
+      startGame()
+    }
+  }, [autoStart, startGame])
+
   // -------------------------------------------------------------------------
   // Keyboard controls
   // -------------------------------------------------------------------------
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (inputBlockedRef.current) return
       const gameKeys = [
         'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
         'w', 'a', 's', 'd', 'W', 'A', 'S', 'D', ' ',
@@ -660,6 +674,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       e.preventDefault()
+      if (inputBlockedRef.current) return
       const pos = canvasToGame(e.clientX, e.clientY)
       if (!pos) return
       pointerDownRef.current = true
@@ -830,7 +845,10 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
 
 function CentipedeRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
-  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, raceType)
+  const {
+    opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish,
+    gameStarted, countdownValue, localReady, sendReady,
+  } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((_result: 'win' | 'loss' | 'draw', score?: number) => {
@@ -848,7 +866,10 @@ function CentipedeRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string;
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
       />
-      <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
+      {!gameStarted && (
+        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} />
+      )}
+      <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer inputBlocked={!gameStarted} autoStart={gameStarted} />
     </div>
   )
 }

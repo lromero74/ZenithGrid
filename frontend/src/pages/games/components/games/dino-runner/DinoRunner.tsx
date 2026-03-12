@@ -24,8 +24,9 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
+import { setGameRng, resetGameRng } from './dinoRunnerEngine'
+import { createSeededRandom } from '../../../utils/seededRandom'
 
 // ---------------------------------------------------------------------------
 // Render helpers
@@ -644,7 +645,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
+function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, inputBlocked }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean; inputBlocked?: boolean } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -662,6 +663,8 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const autoPlayRef = useRef(false)
   const [autoPlay, setAutoPlay] = useState(false)
+  const inputBlockedRef = useRef(!!inputBlocked)
+  inputBlockedRef.current = !!inputBlocked
   const onStateChangeRef = useRef(onStateChange)
   onStateChangeRef.current = onStateChange
 
@@ -698,7 +701,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
 
   const gameLoop = useCallback(() => {
     const state = stateRef.current
-    const input = autoPlayRef.current ? computeAutoInput(state) : inputRef.current
+    const input = autoPlayRef.current ? computeAutoInput(state) : (inputBlockedRef.current ? { jump: false, duck: false } : inputRef.current)
     const next = update(state, input)
     stateRef.current = next
 
@@ -772,6 +775,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ' || e.key === 'ArrowUp') {
         e.preventDefault()
+        if (inputBlockedRef.current) return
         music.init() // safe to call repeatedly; only inits once
         sfx.init()
         if (gameStatusRef.current === 'lost') {
@@ -783,6 +787,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        if (inputBlockedRef.current) return
         inputRef.current.duck = true
       }
     }
@@ -814,6 +819,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
 
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault()
+      if (inputBlockedRef.current) return
       music.init() // safe to call repeatedly; only inits once
       sfx.init()
       const t = e.touches[0]
@@ -1058,8 +1064,17 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
     opponentDisconnected, reconnectCountdown, selfDisconnected,
     throttledBroadcast, reportFinish, reportScore, spectatorState, leaveRoom,
     spectatablePlayers, spectateTarget, spectateNext, spectatePrev,
-  } = useRaceMode(roomId, raceType)
+    gameStarted, countdownValue, gameSeed, localReady, sendReady,
+  } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
+
+  // Seed the shared PRNG when multiplayer seed arrives
+  useEffect(() => {
+    if (gameSeed != null) {
+      setGameRng(createSeededRandom(gameSeed))
+    }
+    return () => resetGameRng()
+  }, [gameSeed])
 
   const handleGameEnd = useCallback((score: number) => {
     if (finishedRef.current) return
@@ -1069,7 +1084,6 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
   }, [reportFinish, reportScore])
 
   // Cap large arrays to stay under WebSocket size limits while keeping full visual fidelity.
-  const broadcastCountRef = useRef(0)
   const slimBroadcast = useCallback((state: object, intervalMs?: number) => {
     const s = state as GameState
     const slim = {
@@ -1087,29 +1101,14 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
       nextWeatherCheck: 0,
       rhythmQueue: [],
     }
-    broadcastCountRef.current++
     throttledBroadcast(slim, intervalMs)
   }, [throttledBroadcast])
 
   // Show spectator view when local player is dead and race isn't decided yet
   const showSpectator = localFinished && !raceResult && spectatablePlayers.length > 0
 
-  // DEBUG: force re-render every second to show live broadcast count
-  const [, forceUpdate] = useState(0)
-  useEffect(() => {
-    const iv = setInterval(() => forceUpdate(n => n + 1), 1000)
-    return () => clearInterval(iv)
-  }, [])
-
   return (
     <div className="relative">
-      {/* DEBUG: broadcast diagnostics */}
-      <div className="fixed top-10 left-2 z-[200] bg-black/90 text-green-400 text-[10px] p-2 rounded font-mono leading-tight">
-        <div>BC:{broadcastCountRef.current} WS:{gameSocket.connected ? 'Y' : 'N'}</div>
-        <div>Fin:{localFinished ? 'Y' : 'N'} Res:{raceResult ?? 'null'}</div>
-        <div>Spec:{spectatablePlayers.length} Tgt:{spectateTarget ?? 'null'}</div>
-        <div>OppFin:{opponentStatus.finished ? 'Y' : 'N'}</div>
-      </div>
       <RaceOverlay
         raceResult={raceResult}
         opponentScore={opponentStatus.score}
@@ -1127,11 +1126,14 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
         onSpectateNext={spectateNext}
         onLeaveGame={leaveRoom}
       />
+      {!gameStarted && (
+        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} />
+      )}
       {showSpectator && (
         <DinoRunnerSpectatorView spectatorState={spectatorState as GameState | null} />
       )}
       <div style={showSpectator ? { display: 'none' } : undefined}>
-        <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={slimBroadcast} isMultiplayer />
+        <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={slimBroadcast} isMultiplayer inputBlocked={!gameStarted} />
       </div>
     </div>
   )

@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.109.0] - 2026-03-12
+
+### Added
+- **Simultaneous start**: Multiplayer race/survival games now require both players to ready up before a 3-2-1 countdown begins — prevents one player from gaining an advantage by starting early
+- **Shared seed for identical courses**: Dino Runner multiplayer uses a seeded PRNG so both players face the same procedurally-generated obstacles, weather, and biomes
+- **Countdown overlay**: Animated Ready/Waiting/3-2-1-GO! overlay for multiplayer sync-start games
+
+### Fixed
+- **Dino Runner spectator bug**: Loser can now properly spectate the winner in survival mode — self-echo of `race_finished` message no longer bypasses the skull dismiss flow
+
+### Changed
+- **Framework-level sync-start**: Dino Runner, Centipede, and Space Invaders all use the new `syncStart` option from `useRaceMode` — any future race/survival game gets it automatically
+- **Dino Runner engine**: All randomness now routes through a pluggable RNG function, enabling deterministic replay and shared multiplayer courses
+
 ## [v2.108.0] - 2026-03-12
 
 ### Added
