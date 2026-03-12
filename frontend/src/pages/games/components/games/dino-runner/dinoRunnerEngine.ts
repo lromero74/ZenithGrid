@@ -168,6 +168,18 @@ export interface GameState {
 }
 
 // ---------------------------------------------------------------------------
+// Pluggable RNG — defaults to Math.random, swapped to seeded PRNG in multiplayer
+// ---------------------------------------------------------------------------
+
+let _rng: () => number = Math.random
+
+/** Set the RNG function used by the engine. Call before createGame/update. */
+export function setGameRng(rng: () => number): void { _rng = rng }
+
+/** Reset to default Math.random. */
+export function resetGameRng(): void { _rng = Math.random }
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -745,13 +757,13 @@ export function checkCollision(dino: DinoState, obstacle: Obstacle): boolean {
 
 function randomObstacleGap(speed: number): number {
   // ~8% chance of a long "breather" gap (4-10 seconds of clear running)
-  if (Math.random() < 0.08) {
+  if (_rng() < 0.08) {
     const minPx = speed * 240   // ~4 seconds worth at current speed
     const maxPx = speed * 600   // ~10 seconds worth at current speed
-    return minPx + Math.random() * (maxPx - minPx)
+    return minPx + _rng() * (maxPx - minPx)
   }
   const base = Math.max(MIN_OBSTACLE_GAP, 500 - speed * 15)
-  return base + Math.random() * 200
+  return base + _rng() * 200
 }
 
 /** BPM scaling: mirrors useGameMusic.ts formula so beat gaps stay in sync with music. */
@@ -793,15 +805,15 @@ function generateRhythmPhrase(score: number): number[] {
   let breather: number
   if (score < 300) {
     pool = CALM_PHRASES
-    breather = 10 + Math.floor(Math.random() * 3) * 2 // 10, 12, or 14 beats
+    breather = 10 + Math.floor(_rng() * 3) * 2 // 10, 12, or 14 beats
   } else if (score < 1500) {
     pool = MODERATE_PHRASES
-    breather = 8 + Math.floor(Math.random() * 3) * 2  // 8, 10, or 12 beats
+    breather = 8 + Math.floor(_rng() * 3) * 2  // 8, 10, or 12 beats
   } else {
     pool = ENERGETIC_PHRASES
-    breather = 6 + Math.floor(Math.random() * 3) * 2  // 6, 8, or 10 beats
+    breather = 6 + Math.floor(_rng() * 3) * 2  // 6, 8, or 10 beats
   }
-  const phrase = pool[Math.floor(Math.random() * pool.length)]
+  const phrase = pool[Math.floor(_rng() * pool.length)]
   return [...phrase, breather]
 }
 
@@ -834,13 +846,13 @@ function nextRhythmGap(queue: number[], speed: number, score: number): { gap: nu
 function randomObstacleType(score: number): ObstacleType {
   const types: ObstacleType[] = ['cactus-small', 'cactus-tall', 'cactus-group']
   if (score >= PTERO_MIN_SCORE) types.push('pterodactyl')
-  return types[Math.floor(Math.random() * types.length)]
+  return types[Math.floor(_rng() * types.length)]
 }
 
 function getObstacleY(type: ObstacleType): number {
   if (type === 'pterodactyl') {
     // Weighted heights: 40% head height (must duck), 30% mid, 30% high (run under)
-    const r = Math.random()
+    const r = _rng()
     if (r < 0.4) return GROUND_Y - 20       // head height — duck!
     if (r < 0.7) return GROUND_Y - 40       // mid height — jump
     return GROUND_Y - 70                     // high — run under safely
@@ -856,67 +868,67 @@ function pickWeatherType(nightMode: boolean, biomeName: string): WeatherType {
   const types: WeatherType[] = ['rain', 'thunderstorm', 'sandstorm']
   if (nightMode) types.push('meteor-shower')
   if (biomeName === 'snow') types.push('snowstorm')
-  return types[Math.floor(Math.random() * types.length)]
+  return types[Math.floor(_rng() * types.length)]
 }
 
 function spawnWeatherParticle(type: WeatherType): WeatherParticle {
   switch (type) {
     case 'rain': {
       // depth: 0.3 (distant, small, slow) → 1.0 (close, big, fast)
-      const d = 0.3 + Math.random() * 0.7
+      const d = 0.3 + _rng() * 0.7
       // Spread spawn x wider — distant drops bias further right (ahead of dino)
       const spread = CANVAS_WIDTH + 60 + (1 - d) * CANVAS_WIDTH * 0.6
       return {
-        x: Math.random() * spread - 30,
+        x: _rng() * spread - 30,
         y: -5,
-        vx: (-0.5 - Math.random() * 0.5) * d,
-        vy: (3 + Math.random() * 2) * d + 1,
-        size: (0.5 + Math.random()) * d + 0.3,
+        vx: (-0.5 - _rng() * 0.5) * d,
+        vy: (3 + _rng() * 2) * d + 1,
+        size: (0.5 + _rng()) * d + 0.3,
         depth: d,
       }
     }
     case 'thunderstorm': {
-      const d = 0.4 + Math.random() * 0.6
+      const d = 0.4 + _rng() * 0.6
       const spread = CANVAS_WIDTH + 100 + (1 - d) * CANVAS_WIDTH * 0.6
       return {
-        x: Math.random() * spread - 50,
+        x: _rng() * spread - 50,
         y: -5,
-        vx: (-3 - Math.random() * 2) * d,
-        vy: (6 + Math.random() * 4) * d + 2,
-        size: (1 + Math.random()) * d + 0.5,
+        vx: (-3 - _rng() * 2) * d,
+        vy: (6 + _rng() * 4) * d + 2,
+        size: (1 + _rng()) * d + 0.5,
         depth: d,
       }
     }
     case 'sandstorm':
       return {
         x: CANVAS_WIDTH + 10,
-        y: Math.random() * GROUND_Y,
-        vx: -4 - Math.random() * 4,
-        vy: -1 + Math.random() * 2,
-        size: 1 + Math.random() * 2,
+        y: _rng() * GROUND_Y,
+        vx: -4 - _rng() * 4,
+        vy: -1 + _rng() * 2,
+        size: 1 + _rng() * 2,
         depth: 1,
       }
     case 'meteor-shower': {
       // Varying intensity: dim distant streaks to bright fireballs
-      const d = 0.3 + Math.random() * 0.7
+      const d = 0.3 + _rng() * 0.7
       return {
-        x: Math.random() * CANVAS_WIDTH * 0.8 + CANVAS_WIDTH * 0.1,
+        x: _rng() * CANVAS_WIDTH * 0.8 + CANVAS_WIDTH * 0.1,
         y: -10,
-        vx: (-1.5 - Math.random() * 2) * d,
-        vy: (3 + Math.random() * 3) * d + 1,
-        size: (1 + Math.random() * 2) * d + 0.5,
+        vx: (-1.5 - _rng() * 2) * d,
+        vy: (3 + _rng() * 3) * d + 1,
+        size: (1 + _rng() * 2) * d + 0.5,
         depth: d,
       }
     }
     case 'snowstorm': {
-      const d = 0.3 + Math.random() * 0.7
+      const d = 0.3 + _rng() * 0.7
       const spread = CANVAS_WIDTH + 40 + (1 - d) * CANVAS_WIDTH * 0.6
       return {
-        x: Math.random() * spread - 20,
+        x: _rng() * spread - 20,
         y: -5,
-        vx: (-0.5 + Math.random() * 1) * d,
-        vy: (1 + Math.random() * 1.5) * d + 0.5,
-        size: (1 + Math.random() * 1.5) * d + 0.5,
+        vx: (-0.5 + _rng() * 1) * d,
+        vy: (1 + _rng() * 1.5) * d + 0.5,
+        size: (1 + _rng() * 1.5) * d + 0.5,
         depth: d,
       }
     }
@@ -942,47 +954,47 @@ const WEATHER_TARGET_CLOUDS: Record<WeatherType, number> = {
 function spawnSingleWeatherCloud(type: WeatherType): StormCloud {
   const isStorm = type === 'thunderstorm' || type === 'snowstorm'
   const sprites = isStorm ? STORM_CLOUD_SPRITES : RAIN_CLOUD_SPRITES
-  const spriteIndex = Math.floor(Math.random() * sprites.length)
+  const spriteIndex = Math.floor(_rng() * sprites.length)
   const sprite = sprites[spriteIndex]
 
   if (type === 'thunderstorm') {
     // Pick a random layer: top (large), mid, or low (small, fast)
-    const layer = Math.random()
+    const layer = _rng()
     if (layer < 0.4) {
       // Top layer — large, slow
-      const scale = WEATHER_CLOUD_SCALE + 1 + Math.random() * 2
+      const scale = WEATHER_CLOUD_SCALE + 1 + _rng() * 2
       return {
-        x: CANVAS_WIDTH + Math.random() * 100,
-        y: Math.random() * 12,
+        x: CANVAS_WIDTH + _rng() * 100,
+        y: _rng() * 12,
         w: sprite[0].length * scale, h: sprite.length * scale,
-        speed: 0.2 + Math.random() * 0.3, spriteIndex,
+        speed: 0.2 + _rng() * 0.3, spriteIndex,
       }
     } else if (layer < 0.75) {
       // Mid layer — standard
       return {
-        x: CANVAS_WIDTH + Math.random() * 80,
-        y: 20 + Math.random() * 25,
+        x: CANVAS_WIDTH + _rng() * 80,
+        y: 20 + _rng() * 25,
         w: sprite[0].length * WEATHER_CLOUD_SCALE, h: sprite.length * WEATHER_CLOUD_SCALE,
-        speed: 0.4 + Math.random() * 0.4, spriteIndex,
+        speed: 0.4 + _rng() * 0.4, spriteIndex,
       }
     } else {
       // Low layer — smaller, faster
       const scale = WEATHER_CLOUD_SCALE - 1
       return {
-        x: CANVAS_WIDTH + Math.random() * 60,
-        y: 45 + Math.random() * 30,
+        x: CANVAS_WIDTH + _rng() * 60,
+        y: 45 + _rng() * 30,
         w: sprite[0].length * scale, h: sprite.length * scale,
-        speed: 0.6 + Math.random() * 0.5, spriteIndex,
+        speed: 0.6 + _rng() * 0.5, spriteIndex,
       }
     }
   }
 
   // Rain / snowstorm — standard layer
   return {
-    x: CANVAS_WIDTH + Math.random() * 80,
-    y: 3 + Math.random() * 20,
+    x: CANVAS_WIDTH + _rng() * 80,
+    y: 3 + _rng() * 20,
     w: sprite[0].length * WEATHER_CLOUD_SCALE, h: sprite.length * WEATHER_CLOUD_SCALE,
-    speed: 0.3 + Math.random() * 0.4, spriteIndex,
+    speed: 0.3 + _rng() * 0.4, spriteIndex,
   }
 }
 
@@ -1005,10 +1017,10 @@ function updateWeather(weather: WeatherState, score: number,
     if (score >= WEATHER_MIN_SCORE) {
       nextWeatherCheck--
       if (nextWeatherCheck <= 0) {
-        if (Math.random() < WEATHER_CHANCE) {
+        if (_rng() < WEATHER_CHANCE) {
           type = pickWeatherType(nightMode, biomeName)
           // Skew toward shorter durations (min of two random rolls)
-          const roll = Math.min(Math.random(), Math.random())
+          const roll = Math.min(_rng(), _rng())
           timer = WEATHER_DURATION_MIN +
             Math.floor(roll * (WEATHER_DURATION_MAX - WEATHER_DURATION_MIN))
           intensity = 0
@@ -1021,7 +1033,7 @@ function updateWeather(weather: WeatherState, score: number,
             'sandstorm': [0.6, 1.0], 'meteor-shower': [0, 0], 'snowstorm': [0.15, 0.5],
           }
           const [wMin, wMax] = windBase[type]
-          windStrength = wMin + Math.random() * (wMax - wMin)
+          windStrength = wMin + _rng() * (wMax - wMin)
         }
         nextWeatherCheck = WEATHER_CHECK_INTERVAL
       }
@@ -1066,8 +1078,8 @@ function updateWeather(weather: WeatherState, score: number,
           x: p.x,
           y: GROUND_Y,
           age: 0,
-          maxAge: 25 + Math.floor(Math.random() * 35),
-          size: p.size * 4 + Math.random() * 8,
+          maxAge: 25 + Math.floor(_rng() * 35),
+          size: p.size * 4 + _rng() * 8,
         })
         return false
       }
@@ -1088,7 +1100,7 @@ function updateWeather(weather: WeatherState, score: number,
   })
 
   // Lightning during thunderstorms (~0.8% chance per frame when at full intensity)
-  if (type === 'thunderstorm' && lightning <= 0 && Math.random() < 0.008 * intensity) {
+  if (type === 'thunderstorm' && lightning <= 0 && _rng() < 0.008 * intensity) {
     lightning = 18
   }
 
@@ -1334,13 +1346,13 @@ export function createGame(highScore: number, rhythmMode: boolean = false): Game
     weather: { type: 'none', timer: 0, intensity: 0, particles: [], lightning: 0, stormClouds: [], impacts: [], windStrength: 0 },
     nextWeatherCheck: WEATHER_CHECK_INTERVAL,
     parallax: {
-      biomeIndex: Math.floor(Math.random() * BIOMES.length),
+      biomeIndex: Math.floor(_rng() * BIOMES.length),
       prevBiomeIndex: 0,
       transitionProgress: 1,
       farOffset: 0,
       midOffset: 0,
       nearOffset: 0,
-      nextBiomeScore: BIOME_CHANGE_MIN + Math.random() * (BIOME_CHANGE_MAX - BIOME_CHANGE_MIN),
+      nextBiomeScore: BIOME_CHANGE_MIN + _rng() * (BIOME_CHANGE_MAX - BIOME_CHANGE_MIN),
     },
     scorePopups: [],
     rhythmMode,
@@ -1357,10 +1369,10 @@ function generateStars(): Star[] {
   const stars: Star[] = []
   for (let i = 0; i < 120; i++) {
     stars.push({
-      x: Math.random() * STAR_FIELD_W - STAR_FIELD_W * 0.3,
-      y: Math.random() * STAR_FIELD_H - STAR_FIELD_H * 0.3,
-      speed: 0.4 + Math.random() * 0.6,
-      size: Math.random() < 0.15 ? 3 : Math.random() < 0.35 ? 2 : 1,
+      x: _rng() * STAR_FIELD_W - STAR_FIELD_W * 0.3,
+      y: _rng() * STAR_FIELD_H - STAR_FIELD_H * 0.3,
+      speed: 0.4 + _rng() * 0.6,
+      size: _rng() < 0.15 ? 3 : _rng() < 0.35 ? 2 : 1,
     })
   }
   return stars
@@ -1371,16 +1383,16 @@ function generateGroundParticles(): GroundParticle[] {
   const groundDepth = CANVAS_HEIGHT - GROUND_Y - 4 // usable depth below ground line
   for (let i = 0; i < GROUND_PARTICLE_COUNT; i++) {
     // Distribute particles across 3 layers based on depth
-    const y = 4 + Math.random() * groundDepth
+    const y = 4 + _rng() * groundDepth
     const layer = y < groundDepth * 0.33 ? 0 : y < groundDepth * 0.66 ? 1 : 2
     // Surface layer has more bright specks (~40%), deeper layers fewer (~15%)
     const brightChance = layer === 0 ? 0.4 : layer === 1 ? 0.2 : 0.15
     particles.push({
-      x: Math.random() * (CANVAS_WIDTH + 200), // spread beyond canvas for seamless wrap
+      x: _rng() * (CANVAS_WIDTH + 200), // spread beyond canvas for seamless wrap
       y,
-      size: 1 + Math.floor(Math.random() * 3), // 1–3 px
+      size: 1 + Math.floor(_rng() * 3), // 1–3 px
       layer,
-      bright: Math.random() < brightChance,
+      bright: _rng() < brightChance,
     })
   }
   return particles
@@ -1572,7 +1584,7 @@ export function update(state: GameState, input: InputState): GameState {
   const maxClouds = Math.floor(1 + cloudPhase * 13) // 1–14 (overcast peak)
   const spawnInterval = Math.floor(30 + (1 - cloudPhase) * 270) // 30–300 frames
   if (frameCount % spawnInterval === 0 && clouds.length < maxClouds) {
-    const cy = 15 + Math.random() * 65
+    const cy = 15 + _rng() * 65
     // Higher clouds (lower y) → closer to viewer → bigger + faster + spaced further apart
     const depthT = 1 - (cy - 15) / 65 // 1 = highest (y=15), 0 = lowest (y=80)
     const scale = 1.5 + depthT * 2     // 1.5× at bottom, 3.5× at top
@@ -1580,7 +1592,7 @@ export function update(state: GameState, input: InputState): GameState {
       x: CANVAS_WIDTH + 20 + depthT * 60, // bigger clouds start further off-screen
       y: cy,
       speed: 0.5 + depthT * 2.5,          // higher → faster (parallax depth)
-      spriteIndex: Math.floor(Math.random() * CLOUD_SPRITES.length),
+      spriteIndex: Math.floor(_rng() * CLOUD_SPRITES.length),
       scale,
     })
   }
@@ -1591,7 +1603,7 @@ export function update(state: GameState, input: InputState): GameState {
     let nx = p.x - effectiveSpeed * GROUND_LAYER_SPEEDS[p.layer]
     if (nx < -10) {
       // Re-enter from the right at a random offset — prevents repeating patterns
-      nx = CANVAS_WIDTH + Math.random() * 200
+      nx = CANVAS_WIDTH + _rng() * 200
     }
     return { ...p, x: nx }
   })
@@ -1608,11 +1620,11 @@ export function update(state: GameState, input: InputState): GameState {
   // Biome change
   if (score >= parallax.nextBiomeScore) {
     parallax.prevBiomeIndex = parallax.biomeIndex
-    let next = Math.floor(Math.random() * BIOMES.length)
+    let next = Math.floor(_rng() * BIOMES.length)
     if (next === parallax.biomeIndex) next = (next + 1) % BIOMES.length
     parallax.biomeIndex = next
     parallax.transitionProgress = 0
-    parallax.nextBiomeScore = score + BIOME_CHANGE_MIN + Math.random() * (BIOME_CHANGE_MAX - BIOME_CHANGE_MIN)
+    parallax.nextBiomeScore = score + BIOME_CHANGE_MIN + _rng() * (BIOME_CHANGE_MAX - BIOME_CHANGE_MIN)
   }
 
   // --- Stars (drift up-right at ~80° from horizontal) ---
@@ -1623,8 +1635,8 @@ export function update(state: GameState, input: InputState): GameState {
     let nx = s.x + 0.174 * STAR_DRIFT
     let ny = s.y - 0.985 * STAR_DRIFT
     // Wrap around the extended starfield
-    if (ny < -STAR_FIELD_H * 0.3) { ny += STAR_FIELD_H; nx = Math.random() * STAR_FIELD_W - STAR_FIELD_W * 0.3 }
-    if (nx > STAR_FIELD_W * 0.7) { nx -= STAR_FIELD_W; ny = Math.random() * STAR_FIELD_H - STAR_FIELD_H * 0.3 }
+    if (ny < -STAR_FIELD_H * 0.3) { ny += STAR_FIELD_H; nx = _rng() * STAR_FIELD_W - STAR_FIELD_W * 0.3 }
+    if (nx > STAR_FIELD_W * 0.7) { nx -= STAR_FIELD_W; ny = _rng() * STAR_FIELD_H - STAR_FIELD_H * 0.3 }
     return { ...s, x: nx, y: ny }
   })
 

@@ -99,14 +99,7 @@ class GameSocketClient {
 
   send(message: object): void {
     if (this.ws && this._connected) {
-      const data = JSON.stringify(message)
-      // DEBUG: log game:state sends
-      if ((message as any).type === 'game:state') {
-        console.log(`[GS] sending game:state, ${data.length} bytes`)
-      }
-      this.ws.send(data)
-    } else if ((message as any).type === 'game:state') {
-      console.warn(`[GS] DROPPED game:state — ws=${!!this.ws}, connected=${this._connected}`)
+      this.ws.send(JSON.stringify(message))
     }
   }
 

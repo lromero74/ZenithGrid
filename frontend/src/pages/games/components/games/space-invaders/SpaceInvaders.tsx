@@ -22,7 +22,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -314,7 +314,7 @@ function SpaceInvadersHelp({ onClose }: { onClose: () => void }) {
   )
 }
 
-function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
+function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer, inputBlocked, autoStart }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean; inputBlocked?: boolean; autoStart?: boolean } = {}) {
   // Music
   const song = useMemo(() => getSongForGame('space-invaders'), [])
   const music = useGameMusic(song)
@@ -335,6 +335,10 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
   const animFrameRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
   const scaleRef = useRef(1)
+
+  // Input blocking for sync-start multiplayer
+  const inputBlockedRef = useRef(!!inputBlocked)
+  inputBlockedRef.current = !!inputBlocked
 
   // Key tracking for continuous movement
   const keysRef = useRef<Set<string>>(new Set())
@@ -443,22 +447,24 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
     const dt = Math.min((timestamp - lastTimeRef.current) / 1000, 0.05)
     lastTimeRef.current = timestamp
 
-    // Determine player movement direction from held keys or pointer
+    // Determine player movement direction from held keys or pointer (suppressed when input blocked)
     let playerDx = 0
-    if (pointerActiveRef.current) {
-      // Move toward pointer X
-      const gs = stateRef.current
-      const targetX = pointerXRef.current - gs.player.width / 2
-      const diff = targetX - gs.player.x
-      if (Math.abs(diff) > 2) {
-        playerDx = diff > 0 ? 1 : -1
-      }
-    } else {
-      if (keysRef.current.has('ArrowLeft') || keysRef.current.has('a') || keysRef.current.has('A')) {
-        playerDx -= 1
-      }
-      if (keysRef.current.has('ArrowRight') || keysRef.current.has('d') || keysRef.current.has('D')) {
-        playerDx += 1
+    if (!inputBlockedRef.current) {
+      if (pointerActiveRef.current) {
+        // Move toward pointer X
+        const gs = stateRef.current
+        const targetX = pointerXRef.current - gs.player.width / 2
+        const diff = targetX - gs.player.x
+        if (Math.abs(diff) > 2) {
+          playerDx = diff > 0 ? 1 : -1
+        }
+      } else {
+        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('a') || keysRef.current.has('A')) {
+          playerDx -= 1
+        }
+        if (keysRef.current.has('ArrowRight') || keysRef.current.has('d') || keysRef.current.has('D')) {
+          playerDx += 1
+        }
       }
     }
 
@@ -552,6 +558,13 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
     animFrameRef.current = requestAnimationFrame(tick)
   }, [draw, tick, music])
 
+  // Auto-start when countdown finishes (multiplayer sync-start)
+  useEffect(() => {
+    if (autoStart && gameStatusRef.current === 'idle') {
+      startGame()
+    }
+  }, [autoStart, startGame])
+
   // -----------------------------------------------------------------------
   // Keyboard controls
   // -----------------------------------------------------------------------
@@ -563,6 +576,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
       if (movementKeys.includes(e.key)) {
         e.preventDefault()
       }
+      if (inputBlockedRef.current) return
 
       keysRef.current.add(e.key)
 
@@ -589,6 +603,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
   // -----------------------------------------------------------------------
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
+    if (inputBlockedRef.current) return
     if (gameStatusRef.current !== 'playing') return
 
     const canvas = canvasRef.current
@@ -749,7 +764,10 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
 
 function SpaceInvadersRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
-  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish } = useRaceMode(roomId, raceType)
+  const {
+    opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish,
+    gameStarted, countdownValue, localReady, sendReady,
+  } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((_result: 'win' | 'loss' | 'draw', score?: number) => {
@@ -767,7 +785,10 @@ function SpaceInvadersRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: str
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
       />
-      <SpaceInvadersSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
+      {!gameStarted && (
+        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} />
+      )}
+      <SpaceInvadersSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer inputBlocked={!gameStarted} autoStart={gameStarted} />
     </div>
   )
 }

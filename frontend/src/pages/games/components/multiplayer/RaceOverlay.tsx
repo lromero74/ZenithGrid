@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Trophy, Skull, Clock, Wifi, TrendingUp, Eye, WifiOff, Pause, ChevronLeft, ChevronRight } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
+import { useAuth } from '../../../../contexts/AuthContext'
 
 // Fallback value — server sends authoritative `reconnectWindowSeconds` in disconnect message
 const RECONNECT_WINDOW_SECONDS = 60
@@ -41,10 +42,14 @@ export type RaceType = 'first_to_win' | 'survival' | 'best_score'
 
 interface RaceModeOptions {
   allowPlayOn?: boolean
+  /** Require both players to ready up, then 3-2-1 countdown before game starts. */
+  syncStart?: boolean
 }
 
 export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceModeOptions) {
+  const { user } = useAuth()
   const allowPlayOn = options?.allowPlayOn ?? false
+  const syncStart = options?.syncStart ?? false
 
   const [opponentStatus, setOpponentStatus] = useState<OpponentStatus>({ finished: false })
   const [raceResult, setRaceResult] = useState<'won' | 'lost' | 'tied' | null>(null)
@@ -63,6 +68,14 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
   /** Deferred result — set when local player finishes but we want spectator flow first. */
   const [pendingResult, setPendingResult] = useState<'won' | 'lost' | 'tied' | null>(null)
+
+  // Sync-start state
+  const [localReady, setLocalReady] = useState(false)
+  const [opponentReady, setOpponentReady] = useState(false)
+  const [countdownValue, setCountdownValue] = useState<number | null>(null)
+  const [gameSeed, setGameSeed] = useState<number | null>(null)
+  /** True when the game can begin accepting input (immediately if no syncStart). */
+  const [gameStarted, setGameStarted] = useState(!syncStart)
 
   // Refs to avoid stale closures in reportFinish
   const opponentStatusRef = useRef(opponentStatus)
@@ -87,6 +100,19 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     const unsub = gameSocket.on('game:action', (msg) => {
       const action = msg.action
       if (!action) return
+      // Filter self-echoes — the backend broadcasts game:action to all players
+      // including the sender. Without this, our own race_finished message gets
+      // re-processed as if the opponent sent it.
+      if (msg.playerId === user?.id) return
+
+      // Sync-start actions
+      if (action.type === 'race_ready') {
+        setOpponentReady(true)
+      }
+      if (action.type === 'race_countdown') {
+        setGameSeed(action.seed as number)
+        setCountdownValue(3)
+      }
 
       if (action.type === 'race_status') {
         setOpponentStatus({ finished: false, score: action.score })
@@ -131,7 +157,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     })
     return unsub
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, raceType, setRaceResultWithPlayOn])
+  }, [roomId, raceType, setRaceResultWithPlayOn, user?.id])
 
   // Listen for forfeit, disconnect, and reconnect events
   useEffect(() => {
@@ -192,14 +218,9 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   }, [])
 
   // Listen for spectator state from all players
-  const receivedStateCountRef = useRef(0)
   useEffect(() => {
     const unsub = gameSocket.on('game:player_state', (msg) => {
       if (msg.state && msg.playerId) {
-        receivedStateCountRef.current++
-        if (receivedStateCountRef.current % 10 === 1) {
-          console.log(`[PS] received player_state #${receivedStateCountRef.current} from player ${msg.playerId}`)
-        }
         setPlayerStates(prev => ({ ...prev, [msg.playerId]: msg.state }))
         // Auto-select first available spectate target
         setSpectateTarget(prev => prev ?? msg.playerId)
@@ -298,20 +319,11 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
    * Event-driven games should use `broadcastState` directly instead.
    */
   const lastBroadcastRef = useRef(0)
-  const throttleSendCountRef = useRef(0)
-  const throttleDropCountRef = useRef(0)
   const throttledBroadcast = useCallback((state: object, intervalMs = 500) => {
     const now = Date.now()
     if (now - lastBroadcastRef.current >= intervalMs) {
       lastBroadcastRef.current = now
-      throttleSendCountRef.current++
-      // DEBUG: log every 10th send to avoid console spam
-      if (throttleSendCountRef.current % 10 === 1) {
-        console.log(`[TB] sending #${throttleSendCountRef.current} (dropped ${throttleDropCountRef.current}), roomId=${roomId}`)
-      }
       gameSocket.sendState(roomId, state)
-    } else {
-      throttleDropCountRef.current++
     }
   }, [roomId])
 
@@ -355,6 +367,49 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     setSpectateTarget(spectatablePlayers[prev])
   }, [spectatablePlayers, spectateTarget])
 
+  // ── Sync-start: ready-up and countdown ──────────────────────────────
+
+  /** Signal that the local player is ready. Host triggers countdown when both ready. */
+  const sendReady = useCallback(() => {
+    setLocalReady(true)
+    gameSocket.sendAction(roomId, { type: 'race_ready' })
+  }, [roomId])
+
+  // Host: when both players are ready, generate seed and broadcast countdown
+  useEffect(() => {
+    if (!syncStart || !localReady || !opponentReady) return
+    // Only host triggers — host is always players[0], but we don't have players here.
+    // Instead, use a tie-breaker: lower user ID triggers. Both will get the countdown.
+    // Actually, simpler: both set opponentReady, but only the one who RECEIVES
+    // race_ready (i.e., the other player was already ready) triggers.
+    // The cleanest approach: check if countdownValue is already set (from receiving race_countdown).
+    if (countdownValue !== null) return
+    // Generate seed and broadcast countdown
+    const seed = Math.floor(Math.random() * 0xFFFFFFFF)
+    setGameSeed(seed)
+    setCountdownValue(3)
+    gameSocket.sendAction(roomId, { type: 'race_countdown', seed })
+  }, [syncStart, localReady, opponentReady, countdownValue, roomId])
+
+  // Countdown timer: 3 → 2 → 1 → 0 (game starts)
+  useEffect(() => {
+    if (countdownValue === null || countdownValue <= 0) return
+    const timer = setTimeout(() => {
+      setCountdownValue(prev => (prev !== null && prev > 0) ? prev - 1 : null)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [countdownValue])
+
+  // When countdown reaches 0, start the game
+  useEffect(() => {
+    if (countdownValue === 0 && !gameStarted) {
+      setGameStarted(true)
+      // Clear countdown display after a brief "GO!" moment
+      const timer = setTimeout(() => setCountdownValue(null), 600)
+      return () => clearTimeout(timer)
+    }
+  }, [countdownValue, gameStarted])
+
   // Track active room for auto-rejoin on reconnect
   useEffect(() => {
     gameSocket.setActiveRoom(roomId)
@@ -367,6 +422,8 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     reportFinish, reportScore, reportLevel, forfeit, finalizeResult, leaveRoom,
     playOnActive, isSpectating, spectatorState, playerStates, spectateTarget, spectatablePlayers,
     spectateNext, spectatePrev, broadcastState, throttledBroadcast, dismissPlayOn,
+    // Sync-start
+    gameStarted, countdownValue, gameSeed, localReady, sendReady,
   }
 }
 
@@ -421,6 +478,61 @@ export function SpectatorBar({
           Leave
         </button>
       )}
+    </div>
+  )
+}
+
+/** Countdown overlay — 3-2-1-GO! shown during sync start. */
+export function CountdownOverlay({
+  countdownValue,
+  localReady,
+  onReady,
+}: {
+  countdownValue: number | null
+  localReady: boolean
+  onReady: () => void
+}) {
+  // Before ready: show Ready button
+  if (!localReady) {
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={onReady}
+            className="px-10 py-4 text-2xl font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all animate-pulse shadow-lg shadow-emerald-900/50"
+          >
+            Ready!
+          </button>
+          <span className="text-sm text-slate-400">Press when you're ready to start</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Ready but waiting for opponent
+  if (countdownValue === null) {
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+        <div className="flex flex-col items-center gap-3">
+          <Clock className="w-8 h-8 text-amber-400 animate-spin" />
+          <span className="text-lg font-medium text-white">Waiting for opponent...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Countdown: 3, 2, 1, GO!
+  const label = countdownValue > 0 ? String(countdownValue) : 'GO!'
+  const color = countdownValue > 0 ? 'text-white' : 'text-emerald-400'
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+      <span
+        key={countdownValue}
+        className={`text-8xl font-black ${color} animate-ping`}
+        style={{ animationDuration: '0.6s', animationIterationCount: 1 }}
+      >
+        {label}
+      </span>
     </div>
   )
 }
@@ -563,15 +675,9 @@ export function RaceOverlay({
   const readyToSpectate = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
   const showSpectatorBar = spectateMode && !raceResult
 
-  // DEBUG: log spectator state machine on every render where localFinished is true
-  if (localFinished) {
-    console.log(`[RO] localFinished=${localFinished} raceResult=${raceResult} skullDismissed=${skullDismissed} spectateMode=${spectateMode} hasSpec=${hasSpectatorProps} specLen=${spectatablePlayers?.length} readyToSpectate=${readyToSpectate} showSkull=${showSkullOverlay} showBar=${showSpectatorBar}`)
-  }
-
   // Auto-enter spectate mode once spectator data is available after skull dismissal
   useEffect(() => {
     if (readyToSpectate) {
-      console.log('[RO] readyToSpectate=true → setting spectateMode')
       setSpectateMode(true)
     }
   }, [readyToSpectate])
