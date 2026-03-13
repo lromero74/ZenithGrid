@@ -42,6 +42,7 @@ import {
   Building2,
   Boxes,
   Grid2X2,
+  Eye,
 } from 'lucide-react'
 import { createElement, type ComponentType } from 'react'
 import type { GameInfo } from './types'
@@ -509,6 +510,18 @@ export const GAMES: GameInfo[] = [
     subcategory: 'Classic',
     multiplayer: ['vs'],
   },
+  {
+    id: 'cheat',
+    name: 'Cheat (aka BS)',
+    description: 'Bluff your way to victory or call out the liars',
+    icon: 'Eye',
+    path: '/games/cheat',
+    difficulty: 'medium',
+    sessionLength: '10-20 min',
+    category: 'cards',
+    subcategory: 'Classic',
+    multiplayer: ['vs', 'first_to_win'],
+  },
 ]
 
 /** Icon component map — maps icon string names to actual Lucide components */
@@ -565,6 +578,7 @@ export const GAME_ICONS: Record<string, ComponentType<{ className?: string }>> =
   Boxes,
   Grid2X2,
   Peace,
+  Eye,
 }
 
 /** Category filter options for the hub page */

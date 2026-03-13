@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.113.0] - 2026-03-13
+
+### Added
+- **Cheat (aka BS) card game** — Classic bluffing card game with 1 human vs 3 AI opponents, full challenge/reveal system, and strategic AI that bluffs and calls BS based on hand analysis
+- **Cheat multiplayer VS mode** — 2-4 player real-time matches via WebSocket with host-authoritative game state, plus first-to-win race mode
+- **Cheat engine test suite** — 21 unit tests covering game creation, card play, BS calls, challenge resolution, AI behavior, and win conditions
+
 ## [v2.112.0] - 2026-03-13
 
 ### Added
