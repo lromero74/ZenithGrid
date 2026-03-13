@@ -83,6 +83,7 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
               <B> equal or higher rank</B> than the current top card.</Li>
             <Li>Click a card to select it, then click <B>Play</B>. Or double-click to play instantly.</Li>
             <Li>You may select <B>multiple cards of the same rank</B> and play them together in one move.</Li>
+            <Li>You can also play <B>consecutive runs</B> (e.g., 3-4-5) as a single play, as long as the lowest card in the run beats the current top.</Li>
             <Li>When your hand drops below 3 cards, it <B>auto-refills to 5</B> from the draw stack.</Li>
             <Li>You can also click the draw stack at any time to draw an extra card.</Li>
           </ul>
@@ -128,8 +129,10 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
             </SpecialCard>
             <SpecialCard color="text-amber-400" name="Ace — Dual Rank">
               Always playable (highest card). After played, effective rank
-              becomes 1. <B>Kings cannot be played on top of an Ace</B> —
-              only lower cards or special cards (2, 7, 10) can follow.
+              becomes 1. <B>Kings cannot be played on top of an Ace</B> unless
+              using a special card (<B>2</B>, <B>7</B>, or <B>10</B>) or
+              completing a <B>4-of-a-kind</B>. Any other card (3 through Queen)
+              can follow normally.
             </SpecialCard>
             <SpecialCard color="text-purple-400" name="4-of-a-Kind — Wild Set">
               If you play cards that complete a set of 4 matching the same
@@ -137,9 +140,11 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
               your hand at once, <B>or</B> by playing cards that match the
               top of the discard pile to reach 4. For example, if a 6 is on
               top of the discard and you play three 6s, that&apos;s a
-              4-of-a-kind. Works just like the <B>2 Wildcard</B> — you
-              choose the new rank (A, or 3–K), and choosing 7 or 10
-              triggers their special abilities too.
+              4-of-a-kind. When a 4-of-a-kind is completed, the <B>entire
+              discard pile is cleared</B> (burned) and you choose the new
+              effective rank (A, or 3–K). Choosing 7 or 10 triggers their
+              special abilities too. A 4-of-a-kind can even follow an Ace,
+              bypassing the King block.
             </SpecialCard>
           </div>
         </Section>
@@ -176,6 +181,16 @@ function ShalasHelp({ onClose }: { onClose: () => void }) {
           If you play a card that <B>doesn&apos;t meet the rank requirement</B>,
           you pick up the played card plus the entire discard pile into your hand.
           The discard resets to empty.
+        </Section>
+
+        {/* Multiplayer mechanics */}
+        <Section title="Multiplayer Mechanics">
+          In multiplayer games, some cards have additional effects:
+          <ul className="mt-1.5 space-y-1 text-slate-300">
+            <Li><B>7 — Push</B>: Playing a 7 pushes the discard pile to your opponent. They must take it into their hand.</Li>
+            <Li><B>3 — Block</B>: If your opponent plays a 7 to push the pile to you, playing a 3 blocks the push and sends it back.</Li>
+            <Li><B>4-of-a-Kind — Block &amp; Burn</B>: Completing a 4-of-a-kind also blocks a push — the pile is burned instead of being received.</Li>
+          </ul>
         </Section>
 
         {/* Strategy tips */}

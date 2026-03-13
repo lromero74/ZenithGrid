@@ -237,3 +237,19 @@ class ActiveSession(Base):
     is_active = Column(Boolean, default=True, index=True)
 
     user = relationship("User", backref="active_sessions")
+
+
+class RateLimitAttempt(Base):
+    """
+    Persistent rate-limit tracking.
+
+    Stores individual failed attempts (login, signup, forgot-password, MFA,
+    resend-verification) so that rate-limit state survives application restarts.
+    A periodic cleanup job prunes rows older than their window.
+    """
+    __tablename__ = "rate_limit_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(30), nullable=False, index=True)   # login, signup, forgot_pw, mfa, resend
+    key = Column(String(255), nullable=False, index=True)       # IP address, email, or mfa_token
+    attempted_at = Column(DateTime, default=datetime.utcnow, nullable=False)

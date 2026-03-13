@@ -150,6 +150,23 @@ class WebSocketManager:
                             if not s:
                                 del self._user_connections[uid]
 
+    async def sweep_stale_connections(self) -> int:
+        """Remove WebSocket connections that are no longer open. Returns count removed."""
+        from starlette.websockets import WebSocketState
+        stale = []
+        async with self._lock:
+            for ws in list(self._socket_owners.keys()):
+                try:
+                    if ws.client_state != WebSocketState.CONNECTED:
+                        stale.append(ws)
+                except Exception:
+                    stale.append(ws)
+
+        for ws in stale:
+            await self.disconnect(ws)
+
+        return len(stale)
+
     def get_connected_user_ids(self) -> set[int]:
         """Return the set of user IDs that have active WebSocket connections. O(1)."""
         return set(self._user_connections.keys())

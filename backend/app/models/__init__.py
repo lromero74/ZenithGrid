@@ -10,6 +10,7 @@ from app.models.auth import (
     user_groups, group_roles, role_permissions,
     User, Group, Role, Permission,
     TrustedDevice, EmailVerificationToken, RevokedToken, ActiveSession,
+    RateLimitAttempt,
 )
 from app.models.trading import (
     Account, Bot, BotProduct, BotTemplate, BotTemplateProduct,
@@ -41,6 +42,7 @@ __all__ = [
     "user_groups", "group_roles", "role_permissions",
     "User", "Group", "Role", "Permission",
     "TrustedDevice", "EmailVerificationToken", "RevokedToken", "ActiveSession",
+    "RateLimitAttempt",
     # Trading
     "Account", "Bot", "BotProduct", "BotTemplate", "BotTemplateProduct",
     "Position", "Trade", "Signal", "PendingOrder", "OrderHistory", "BlacklistedCoin",

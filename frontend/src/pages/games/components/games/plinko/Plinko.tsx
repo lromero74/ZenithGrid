@@ -11,6 +11,7 @@ import { GameLayout } from '../../GameLayout'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
   checkPegCollision, resolveCollision, checkBallCollision, resolveBallCollision,
+  checkRailCollision, resolveRailCollision, isRailPeg,
   getSlotIndex,
   type Ball, type Peg, type RiskLevel, type PegLayout,
   PEG_RADIUS, BALL_RADIUS, BOARD_WIDTH, BOARD_HEIGHT, SLOT_COUNT,
@@ -66,8 +67,7 @@ function PlinkoHelp({ onClose }: { onClose: () => void }) {
         <Sec title="Board Layouts">
           <ul className="space-y-1">
             <Li><B>Classic</B> — Slot-aligned pegs, natural stagger for even distribution.</Li>
-            <Li><B>Pyramid</B> — Fewer pegs at top, expanding toward bottom.</Li>
-            <Li><B>Diamond</B> — Wide in the middle, narrow at top and bottom.</Li>
+            <Li><B>Pyramid</B> — Fewer pegs at top, expanding toward bottom with edge rails.</Li>
           </ul>
         </Sec>
 
@@ -98,7 +98,6 @@ const SLOT_HEIGHT = 30
 const PEG_LAYOUTS: { value: PegLayout; label: string }[] = [
   { value: 'classic', label: 'Classic' },
   { value: 'pyramid', label: 'Pyramid' },
-  { value: 'diamond', label: 'Diamond' },
 ]
 
 interface PegFlash {
@@ -207,13 +206,24 @@ function PlinkoSinglePlayer({ onGameEnd }: {
     ctx.fill()
     ctx.globalAlpha = 1
 
-    // Pegs
+    // Pegs (circular) and rails (angled deflectors)
     const flashSet = new Set(flashesRef.current.map(f => f.pegIdx))
     pegsRef.current.forEach((peg, idx) => {
-      ctx.beginPath()
-      ctx.arc(peg.x, peg.y, PEG_RADIUS, 0, Math.PI * 2)
-      ctx.fillStyle = flashSet.has(idx) ? '#fbbf24' : '#64748b'
-      ctx.fill()
+      const flashing = flashSet.has(idx)
+      if (isRailPeg(peg)) {
+        ctx.beginPath()
+        ctx.moveTo(peg.x, peg.y)
+        ctx.lineTo(peg.railEndX!, peg.railEndY!)
+        ctx.strokeStyle = flashing ? '#fbbf24' : '#94a3b8'
+        ctx.lineWidth = PEG_RADIUS * 2
+        ctx.lineCap = 'round'
+        ctx.stroke()
+      } else {
+        ctx.beginPath()
+        ctx.arc(peg.x, peg.y, PEG_RADIUS, 0, Math.PI * 2)
+        ctx.fillStyle = flashing ? '#fbbf24' : '#64748b'
+        ctx.fill()
+      }
     })
 
     // Slot separator pegs — small pegs at slot boundaries to guide balls
@@ -325,12 +335,18 @@ function PlinkoSinglePlayer({ onGameEnd }: {
     for (let ball of ballsRef.current) {
       ball = stepPhysics(ball)
 
-      // Collision with pegs
+      // Collision with pegs and rails
       const currentPegs = pegsRef.current
       for (let pi = 0; pi < currentPegs.length; pi++) {
-        if (checkPegCollision(ball, currentPegs[pi])) {
-          ball = resolveCollision(ball, currentPegs[pi])
-          // Flash peg
+        const p = currentPegs[pi]
+        const hit = isRailPeg(p)
+          ? checkRailCollision(ball, p)
+          : checkPegCollision(ball, p)
+        if (hit) {
+          ball = isRailPeg(p)
+            ? resolveRailCollision(ball, p)
+            : resolveCollision(ball, p)
+          // Flash peg/rail
           if (!flashesRef.current.some(f => f.pegIdx === pi)) {
             flashesRef.current.push({ pegIdx: pi, frame: 8 })
             sfx.play('bounce')
@@ -419,6 +435,11 @@ function PlinkoSinglePlayer({ onGameEnd }: {
       animFrameRef.current = requestAnimationFrame(tick)
     } else {
       setBallsActive(false)
+      // Auto-adjust bet down if balance dropped below current bet but is still playable
+      if (balanceRef.current < betRef.current && balanceRef.current >= MIN_BET) {
+        betRef.current = balanceRef.current
+        setBet(balanceRef.current)
+      }
     }
   }, [drawBoard])
 
@@ -632,8 +653,8 @@ function PlinkoSinglePlayer({ onGameEnd }: {
           </div>
         )}
 
-        {/* Out of funds */}
-        {balance < bet && ballsRef.current.length === 0 && gameStatus === 'playing' && (
+        {/* Out of funds — only when balance is truly below minimum bet */}
+        {balance < MIN_BET && ballsRef.current.length === 0 && gameStatus === 'playing' && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/70 rounded-lg">
             <div className="text-center space-y-3">
               <p className="text-white font-semibold">Out of funds!</p>

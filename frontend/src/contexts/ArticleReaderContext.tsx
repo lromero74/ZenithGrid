@@ -156,6 +156,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const prefetchAbortRef = useRef<AbortController | null>(null)
   const retriedArticlesRef = useRef<Set<string>>(new Set())  // Track articles that already got a retry
   const retryBrokenRef = useRef(false)  // When true, don't skip has_issue articles during auto-advance
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Use TTS hook
   const tts = useTTSSync()
@@ -213,6 +214,15 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Save voice cache to localStorage
   const saveVoiceCache = useCallback((cache: ArticleVoiceCache) => {
+    // Cap voice cache at 200 entries to prevent unbounded growth
+    const keys = Object.keys(cache)
+    if (keys.length > 200) {
+      const trimmed: ArticleVoiceCache = {}
+      for (const k of keys.slice(-200)) {
+        trimmed[k] = cache[k]
+      }
+      cache = trimmed
+    }
     setVoiceCache(cache)
     try {
       localStorage.setItem(VOICE_CACHE_KEY, JSON.stringify(cache))
@@ -275,7 +285,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // When retryBrokenRef is true (e.g., "Read All" from Broken filter), try them instead of skipping.
     if (article.has_issue && !userInitiated && !retryBrokenRef.current) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
-      setTimeout(() => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        autoAdvanceTimerRef.current = null
         if (articleIndex < playlistRef.current.length - 1) {
           if (loadAndPlayRef.current) {
             const nextIdx = articleIndex + 1
@@ -320,7 +332,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       console.log(`[TTS] No content or summary for article: ${article.title}`)
       flagArticleIssue(article.id)
       article.has_issue = true
-      setTimeout(() => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        autoAdvanceTimerRef.current = null
         if (articleIndex < playlistRef.current.length - 1) {
           if (loadAndPlayRef.current) {
             const nextIdx = articleIndex + 1
@@ -600,6 +614,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Stop playlist
   const stopPlaylist = useCallback(() => {
+    // Cancel any pending auto-advance timer
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
     // Cancel any in-flight prefetch
     if (prefetchAbortRef.current) {
       prefetchAbortRef.current.abort()

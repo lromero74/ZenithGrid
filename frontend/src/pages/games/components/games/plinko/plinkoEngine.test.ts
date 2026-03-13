@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import {
   generatePegLayout, getMultipliers, createBall, stepPhysics,
   checkPegCollision, resolveCollision, checkBallCollision, resolveBallCollision,
+  checkRailCollision, resolveRailCollision, isRailPeg,
   getSlotIndex, getDropPositions,
   type Peg, type Ball, type RiskLevel,
   PEG_RADIUS, BALL_RADIUS, GRAVITY, RESTITUTION, DAMPING,
   BOARD_WIDTH, BOARD_HEIGHT, SLOT_COUNT, PEG_ROWS,
+  WALL_RAIL_THRESHOLD,
 } from './plinkoEngine'
 
 describe('generatePegLayout', () => {
@@ -32,30 +34,78 @@ describe('generatePegLayout', () => {
     expect(row0[0].x).not.toBeCloseTo(row1[0].x, 1)
   })
 
-  test('pyramid layout has row n with n+3 pegs', () => {
+  test('pyramid layout has row n with n+3 circular pegs', () => {
     const pegs = generatePegLayout('pyramid')
     for (let row = 0; row < 10; row++) {
-      const rowPegs = pegs.filter(p => p.row === row)
-      expect(rowPegs.length).toBe(row + 3)
+      const circularPegs = pegs.filter(p => p.row === row && !isRailPeg(p))
+      expect(circularPegs.length).toBe(row + 3)
     }
   })
 
-  test('diamond layout is symmetric (starts/ends narrow)', () => {
-    const pegs = generatePegLayout('diamond')
-    const row0 = pegs.filter(p => p.row === 0)
-    const row4 = pegs.filter(p => p.row === 4)
-    const row9 = pegs.filter(p => p.row === 9)
-    expect(row0.length).toBe(row9.length) // symmetric
-    expect(row4.length).toBeGreaterThan(row0.length) // wider in middle
-  })
-
   test('all layouts have non-negative coordinates', () => {
-    for (const layout of ['classic', 'pyramid', 'diamond'] as const) {
+    for (const layout of ['classic', 'pyramid'] as const) {
       const pegs = generatePegLayout(layout)
       for (const peg of pegs) {
         expect(peg.x).toBeGreaterThanOrEqual(0)
         expect(peg.y).toBeGreaterThan(0)
+        // Rail endpoints should also be non-negative
+        if (isRailPeg(peg)) {
+          expect(peg.railEndX!).toBeGreaterThanOrEqual(0)
+          expect(peg.railEndY!).toBeGreaterThan(0)
+        }
       }
+    }
+  })
+
+  test('classic layout converts near-wall pegs (not on-wall pegs) to rails', () => {
+    const pegs = generatePegLayout('classic')
+    const rails = pegs.filter(p => isRailPeg(p))
+    // Should have rails on both left and right sides
+    expect(rails.length).toBeGreaterThan(0)
+    const leftRails = rails.filter(p => p.railEndX === 0)
+    const rightRails = rails.filter(p => p.railEndX === BOARD_WIDTH)
+    expect(leftRails.length).toBeGreaterThan(0)
+    expect(rightRails.length).toBeGreaterThan(0)
+    // Pegs exactly on the wall (x=0 or x=BOARD_WIDTH) stay as circular pegs
+    const onWall = pegs.filter(p => (p.x === 0 || p.x === BOARD_WIDTH) && !isRailPeg(p))
+    expect(onWall.length).toBeGreaterThan(0)
+  })
+
+  test('left rails extend upward from inward origin to wall at x=0', () => {
+    const pegs = generatePegLayout('classic')
+    const leftRails = pegs.filter(p => isRailPeg(p) && p.railEndX === 0)
+    for (const rail of leftRails) {
+      expect(rail.x).toBeGreaterThan(PEG_RADIUS) // origin is away from wall
+      expect(rail.railEndX).toBe(0) // touches left wall
+      expect(rail.railEndY!).toBeLessThan(rail.y) // goes upward
+    }
+  })
+
+  test('right rails extend upward from inward origin to wall at x=BOARD_WIDTH', () => {
+    const pegs = generatePegLayout('classic')
+    const rightRails = pegs.filter(p => isRailPeg(p) && p.railEndX === BOARD_WIDTH)
+    for (const rail of rightRails) {
+      expect(rail.x).toBeLessThan(BOARD_WIDTH - PEG_RADIUS) // origin is away from wall
+      expect(rail.railEndX).toBe(BOARD_WIDTH) // touches right wall
+      expect(rail.railEndY!).toBeLessThan(rail.y) // goes upward
+    }
+  })
+
+  test('pyramid layout has separate edge rails on both sides', () => {
+    const pegs = generatePegLayout('pyramid')
+    const rails = pegs.filter(p => isRailPeg(p))
+    // Top 8 rows contribute 2 edge rails each (bottom 2 rows skipped)
+    expect(rails.length).toBe((PEG_ROWS - 2) * 2)
+    // All original circular pegs are preserved (not converted to rails)
+    const circular = pegs.filter(p => !isRailPeg(p))
+    let expectedCircular = 0
+    for (let r = 0; r < PEG_ROWS; r++) expectedCircular += 3 + r
+    expect(circular.length).toBe(expectedCircular)
+    // Left rails are offset outward (lower x than leftmost circular peg)
+    const centerX = BOARD_WIDTH / 2
+    const leftRails = rails.filter(p => p.x < centerX)
+    for (const r of leftRails) {
+      expect(r.railEndY!).toBeLessThan(r.y) // end is above
     }
   })
 
@@ -421,6 +471,77 @@ describe('getDropPositions', () => {
     for (const d of diffs) {
       expect(d).toBeCloseTo(diffs[0], 1)
     }
+  })
+})
+
+describe('isRailPeg', () => {
+  test('returns false for normal pegs', () => {
+    expect(isRailPeg({ x: 100, y: 100, row: 0 })).toBe(false)
+  })
+
+  test('returns true for rail pegs', () => {
+    expect(isRailPeg({ x: 10, y: 100, row: 0, railEndX: 0, railEndY: 88 })).toBe(true)
+  })
+})
+
+describe('checkRailCollision', () => {
+  const rail: Peg = { x: 15, y: 100, row: 0, railEndX: 0, railEndY: 82 }
+
+  test('detects collision with ball near rail midpoint', () => {
+    // Ball close to the midpoint of the rail
+    const ball: Ball = { id: 1, x: 12, y: 91, vx: 0, vy: 1 }
+    expect(checkRailCollision(ball, rail)).toBe(true)
+  })
+
+  test('returns false for ball far from rail', () => {
+    const ball: Ball = { id: 1, x: 100, y: 100, vx: 0, vy: 0 }
+    expect(checkRailCollision(ball, rail)).toBe(false)
+  })
+
+  test('falls back to peg collision for non-rail pegs', () => {
+    const peg: Peg = { x: 100, y: 100, row: 0 }
+    const ball: Ball = { id: 1, x: 105, y: 100, vx: 0, vy: 0 }
+    expect(checkRailCollision(ball, peg)).toBe(checkPegCollision(ball, peg))
+  })
+})
+
+describe('resolveRailCollision', () => {
+  const leftRail: Peg = { x: 15, y: 100, row: 0, railEndX: 0, railEndY: 82 }
+
+  test('pushes ball away from rail', () => {
+    const ball: Ball = { id: 1, x: 12, y: 91, vx: -1, vy: 2 }
+    const resolved = resolveRailCollision(ball, leftRail)
+    // Ball should be pushed to the right (inward, away from wall)
+    expect(resolved.x).toBeGreaterThan(ball.x)
+  })
+
+  test('reflects velocity off rail surface', () => {
+    const ball: Ball = { id: 1, x: 12, y: 91, vx: -2, vy: 1 }
+    const resolved = resolveRailCollision(ball, leftRail)
+    expect(resolved.vx !== ball.vx || resolved.vy !== ball.vy).toBe(true)
+  })
+
+  test('falls back to peg collision for non-rail pegs', () => {
+    const peg: Peg = { x: 100, y: 100, row: 0 }
+    const ball: Ball = { id: 1, x: 105, y: 100, vx: 2, vy: 3 }
+    const resolved = resolveRailCollision(ball, peg)
+    // Should behave like regular resolveCollision
+    expect(resolved.id).toBe(ball.id)
+    expect(resolved.x !== ball.x || resolved.y !== ball.y).toBe(true)
+  })
+
+  test('energy is reduced by restitution and damping', () => {
+    const ball: Ball = { id: 1, x: 12, y: 91, vx: -2, vy: 3 }
+    const impactSpeed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2)
+    const resolved = resolveRailCollision(ball, leftRail)
+    const postSpeed = Math.sqrt(resolved.vx ** 2 + resolved.vy ** 2)
+    expect(postSpeed).toBeLessThan(impactSpeed)
+  })
+})
+
+describe('WALL_RAIL_THRESHOLD', () => {
+  test('equals PEG_RADIUS + 2 * BALL_RADIUS', () => {
+    expect(WALL_RAIL_THRESHOLD).toBe(PEG_RADIUS + BALL_RADIUS * 2)
   })
 })
 

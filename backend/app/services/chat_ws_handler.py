@@ -73,6 +73,12 @@ def _prune_send_timestamps() -> None:
         del _send_timestamps[uid]
 
 
+def prune_all_stale() -> None:
+    """Prune all stale rate-limiting entries. Called periodically by cleanup job."""
+    _prune_typing_cooldowns()
+    _prune_send_timestamps()
+
+
 def _parse_int_field(msg: dict, field: str) -> int | None:
     """Safely extract an integer field from a WS message dict. Returns None on invalid type."""
     val = msg.get(field)

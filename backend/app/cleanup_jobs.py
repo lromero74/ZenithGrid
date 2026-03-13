@@ -331,3 +331,87 @@ async def get_log_retention_days(db: AsyncSession) -> int:
     except Exception as e:
         logger.error(f"Error getting log retention setting: {e}")
         return 14  # Default fallback
+
+
+async def cleanup_old_rate_limit_attempts():
+    """
+    Periodically remove expired rate limit attempts.
+
+    Rows older than 1 hour are no longer relevant to any rate-limit window.
+    Runs every hour.
+    """
+    # Wait 10 minutes after startup
+    await asyncio.sleep(600)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                cutoff = datetime.utcnow() - timedelta(hours=1)
+                from app.models import RateLimitAttempt
+                result = await db.execute(
+                    delete(RateLimitAttempt).where(
+                        RateLimitAttempt.attempted_at < cutoff
+                    )
+                )
+                await db.commit()
+                deleted = result.rowcount
+                if deleted:
+                    logger.info(f'Cleaned up {deleted} expired rate limit attempts')
+        except Exception as e:
+            logger.error(f'Rate limit cleanup error: {e}')
+
+        await asyncio.sleep(3600)  # Run every hour
+
+
+async def cleanup_in_memory_caches():
+    """
+    Periodically sweep all in-memory caches to prevent unbounded growth.
+
+    On a 1GB t2.micro, unchecked caches (price data, candle data, WebSocket tracking,
+    chat rate-limit dicts, game rooms) can exhaust RAM within hours.
+    Runs every 5 minutes.
+    """
+    import resource
+    # Let the app warm up before first sweep
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            # --- Price cache (dex_wallet_service) ---
+            from app.services.dex_wallet_service import prune_price_cache, _price_cache
+            price_evicted = prune_price_cache()
+
+            # --- Chat rate-limit dicts ---
+            from app.services.chat_ws_handler import prune_all_stale
+            prune_all_stale()
+
+            # --- Game rooms (already has cleanup_stale_rooms) ---
+            from app.services.game_room_manager import game_room_manager
+            rooms_cleaned = game_room_manager.cleanup_stale_rooms()
+
+            # --- Multi-bot monitor caches ---
+            from app.multi_bot_monitor import MultiBotMonitor
+            # Access the singleton via the main module (avoid circular import)
+            from app import main as main_module
+            monitor = getattr(main_module, 'price_monitor', None)
+            monitor_stats = {}
+            if monitor and isinstance(monitor, MultiBotMonitor):
+                monitor_stats = monitor.cleanup_caches()
+
+            # --- WebSocket stale connections ---
+            from app.services.websocket_manager import ws_manager
+            ws_stale = await ws_manager.sweep_stale_connections()
+
+            # Log RSS and cache stats
+            rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+            logger.info(
+                f"Memory sweep: RSS={rss_mb:.0f}MB | "
+                f"price_cache={len(_price_cache)}(-{price_evicted}) | "
+                f"rooms_cleaned={rooms_cleaned} | "
+                f"monitor={monitor_stats} | "
+                f"ws_stale={ws_stale}"
+            )
+        except Exception as e:
+            logger.error(f"In-memory cache cleanup error: {e}", exc_info=True)
+
+        await asyncio.sleep(300)  # Run every 5 minutes

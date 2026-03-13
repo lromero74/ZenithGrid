@@ -5,6 +5,32 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.111.0] - 2026-03-13
+
+### Added
+- **Blackjack insurance and even money**: When the dealer shows an Ace, players can take insurance (half bet, pays 2:1 if dealer has blackjack) or even money (guaranteed 1:1 payout on natural blackjack)
+- **Blackjack dealer peek**: Dealer checks for blackjack before players act on 10-value or Ace up cards, preventing splits/doubles into dealer blackjack
+- **Plinko physics improvements**: Enhanced ball physics with variable bounce behavior, realistic pin interactions, and configurable risk levels
+
+### Changed
+- **Euchre multiplayer**: Improved trick evaluation logic and multiplayer state sync for more reliable 4-player games
+- **Canasta multiplayer**: Better meld validation and multiplayer hand synchronization
+- **Spades multiplayer**: Improved bid tracking and score display in VS mode
+
+### Fixed
+- **Memory leak: unbounded in-memory caches** — Added periodic 5-minute sweep of all in-memory caches (token prices, candle data, indicator history, game rooms, chat rate-limit tracking) to prevent RAM exhaustion on the 1GB server
+- **Memory leak: stale WebSocket connections** — Added automatic detection and cleanup of WebSocket connections that silently disconnected without triggering cleanup handlers
+- **Memory leak: frontend timer leaks** — Fixed uncancelled setTimeout chains in article reader auto-advance and version check notifications that accumulated on navigation
+- **Memory leak: unbounded voice cache** — Capped article voice preference cache at 200 entries to prevent unbounded localStorage and state growth
+
+### Security
+- **Rate limiting hardened**: Authentication rate limiter rewritten with hybrid in-memory + database persistence — failed login tracking now survives app restarts
+- **API docs disabled**: Swagger/ReDoc/OpenAPI endpoints removed from production
+- **Backend bound to localhost**: uvicorn now listens on 127.0.0.1 only (nginx handles external traffic)
+- **Error sanitization**: Trading endpoint no longer leaks raw exception details to clients
+- **fail2ban protection**: Automated brute-force detection with incremental bans (1h → 4h → 24h → 2 years)
+- **Journal log cap**: systemd journal capped at 200MB to prevent disk exhaustion
+
 ## [v2.110.0] - 2026-03-13
 
 ### Added

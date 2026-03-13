@@ -208,6 +208,35 @@ class MultiBotMonitor:
         # Bots check only when their fastest indicator timeframe closes
         self._bot_next_check: Dict[int, int] = {}
 
+    def cleanup_caches(self) -> dict:
+        """Evict expired/stale entries from all in-memory caches. Returns counts."""
+        now = datetime.utcnow().timestamp()
+
+        # Candle cache — remove expired entries
+        stale_candles = [
+            k for k, (ts, _) in self._candle_cache.items()
+            if now - ts > CANDLE_CACHE_DEFAULT_TTL
+        ]
+        for k in stale_candles:
+            del self._candle_cache[k]
+
+        # Previous indicators — remove entries for bots not in _bot_next_check
+        active_bot_ids = set(self._bot_next_check.keys())
+        stale_indicators = [
+            k for k in self._previous_indicators_cache
+            if k[0] not in active_bot_ids
+        ] if active_bot_ids else []
+        for k in stale_indicators:
+            del self._previous_indicators_cache[k]
+
+        return {
+            "candles_evicted": len(stale_candles),
+            "candles_remaining": len(self._candle_cache),
+            "indicators_evicted": len(stale_indicators),
+            "indicators_remaining": len(self._previous_indicators_cache),
+            "bot_next_check": len(self._bot_next_check),
+        }
+
     async def get_exchange_for_bot(self, db: AsyncSession, bot: Bot) -> Optional[ExchangeClient]:
         """
         Get the exchange client for a specific bot based on its account.

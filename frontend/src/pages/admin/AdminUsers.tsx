@@ -95,12 +95,12 @@ export function AdminUsers() {
     setOverridePolicy(user.session_policy_override || {})
     setSessionLoading(true)
     try {
-      const [policy, sessions] = await Promise.all([
+      const [policyResp, sessionsResp] = await Promise.all([
         adminApi.getEffectiveSessionPolicy(user.id),
         adminApi.getUserSessions(user.id),
       ])
-      setEffectivePolicy(policy)
-      setActiveSessions(sessions)
+      setEffectivePolicy(policyResp.effective_policy ?? policyResp)
+      setActiveSessions(sessionsResp.sessions ?? sessionsResp)
     } catch (err: any) {
       setError(
         err.response?.data?.detail
@@ -123,11 +123,11 @@ export function AdminUsers() {
       await adminApi.updateUserSessionPolicy(
         sessionUser.id, overridePolicy
       )
-      const policy =
+      const policyResp =
         await adminApi.getEffectiveSessionPolicy(
           sessionUser.id
         )
-      setEffectivePolicy(policy)
+      setEffectivePolicy(policyResp.effective_policy ?? policyResp)
       await fetchData()
     } catch (err: any) {
       setError(
@@ -150,10 +150,10 @@ export function AdminUsers() {
       await adminApi.forceEndSession(
         sessionUser.id, sessionId
       )
-      const sessions = await adminApi.getUserSessions(
+      const sessionsResp = await adminApi.getUserSessions(
         sessionUser.id
       )
-      setActiveSessions(sessions)
+      setActiveSessions(sessionsResp.sessions ?? sessionsResp)
     } catch (err: any) {
       setError(
         err.response?.data?.detail
