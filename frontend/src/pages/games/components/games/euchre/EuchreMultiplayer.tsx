@@ -26,6 +26,7 @@ import {
   pass,
   nameTrump,
   dealerDiscard,
+  setGoingAlone,
   playCard,
   aiTrumpSelection,
   aiDealerDiscard,
@@ -127,14 +128,7 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
       if (isHost) {
         if (action.type === 'order_up') {
-          hostApply(s => {
-            let next = orderUp(s)
-            // If dealer is AI and needs to discard
-            if (next.phase === 'dealerDiscard' && next.currentPlayer !== 0 && next.currentPlayer !== 1) {
-              next = aiDealerDiscard(next)
-            }
-            return next
-          })
+          hostApply(s => orderUp(s))
         } else if (action.type === 'pass') {
           hostApply(s => {
             let next = pass(s)
@@ -147,6 +141,14 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
           })
         } else if (action.type === 'name_trump') {
           hostApply(s => nameTrump(s, action.suit as Suit))
+        } else if (action.type === 'go_alone') {
+          hostApply(s => {
+            let next = setGoingAlone(s, action.alone as boolean)
+            if (next.phase === 'dealerDiscard' && next.currentPlayer !== 0 && next.currentPlayer !== 1) {
+              next = aiDealerDiscard(next)
+            }
+            return next
+          })
         } else if (action.type === 'dealer_discard') {
           hostApply(s => dealerDiscard(s, action.cardIndex as number))
         } else if (action.type === 'play_card') {
@@ -174,8 +176,8 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
         let current = prev
 
-        // Trump selection phases
-        if (current.phase === 'trumpRound1' || current.phase === 'trumpRound2') {
+        // Trump selection phases (including goAlonePrompt)
+        if (current.phase === 'trumpRound1' || current.phase === 'trumpRound2' || current.phase === 'goAlonePrompt') {
           current = aiTrumpSelection(current)
           if (current.phase === 'dealerDiscard' && current.currentPlayer !== 0 && current.currentPlayer !== 1) {
             current = aiDealerDiscard(current)
@@ -193,14 +195,9 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
         // Playing
         if (current.phase === 'playing') {
-          current = playCard(current, 0) // advanceAi is internal, we use playCard with AI index
-          // Actually, the engine's playCard needs the current player index check
-          // The EuchreEngine.playCard plays for currentPlayer. Let's just call it
-          // with a valid card index
           const hand = prev.hands[prev.currentPlayer]
           const playable = getPlayableCards(hand, prev.ledSuit, prev.trumpSuit!)
           if (playable.length > 0) {
-            // Simple AI: play first valid card (the engine has smarter logic internally)
             current = playCard(prev, playable[0])
           }
 
@@ -241,17 +238,26 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     music.init(); sfx.init(); music.start()
     sfx.play('place')
     if (isHost) {
+      hostApply(s => orderUp(s))
+    } else {
+      gameSocket.sendAction(roomId, { type: 'order_up' })
+    }
+  }, [isHost, roomId, hostApply, music, sfx])
+
+  const handleGoAlone = useCallback((alone: boolean) => {
+    sfx.play('place')
+    if (isHost) {
       hostApply(s => {
-        let next = orderUp(s)
+        let next = setGoingAlone(s, alone)
         if (next.phase === 'dealerDiscard' && next.currentPlayer !== 0 && next.currentPlayer !== 1) {
           next = aiDealerDiscard(next)
         }
         return next
       })
     } else {
-      gameSocket.sendAction(roomId, { type: 'order_up' })
+      gameSocket.sendAction(roomId, { type: 'go_alone', alone })
     }
-  }, [isHost, roomId, hostApply, music, sfx])
+  }, [isHost, roomId, hostApply, sfx])
 
   const handlePass = useCallback(() => {
     music.init(); sfx.init(); music.start()
@@ -311,6 +317,7 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
   const isPlaying = gameState.phase === 'playing' && isHumanTurn
   const isTrumpRound1 = gameState.phase === 'trumpRound1' && isHumanTurn
   const isTrumpRound2 = gameState.phase === 'trumpRound2' && isHumanTurn
+  const isGoAlonePrompt = gameState.phase === 'goAlonePrompt' && isHumanTurn
   const isDealerDiscard = gameState.phase === 'dealerDiscard' && isHumanTurn
 
   const myHand = gameState.hands[myPlayerIndex]
@@ -375,8 +382,8 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
           </div>
 
           <div className="flex-1 relative h-36 sm:h-48">
-            {/* Flipped card during trump selection */}
-            {(gameState.phase === 'trumpRound1' || gameState.phase === 'trumpRound2') && (
+            {/* Flipped card during trump selection / go-alone prompt */}
+            {(gameState.phase === 'trumpRound1' || gameState.phase === 'trumpRound2' || gameState.phase === 'goAlonePrompt') && (
               <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${CARD_SIZE_COMPACT}`}>
                 {gameState.phase === 'trumpRound1' ? (
                   <CardFace card={gameState.flippedCard} />
@@ -408,6 +415,11 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
                 <span className="text-2xl">{getSuitSymbol(gameState.trumpSuit)}</span>
                 <p className="text-[0.6rem] text-slate-500 mt-0.5">Trump</p>
+                {gameState.goingAlone !== null && (
+                  <p className="text-[0.6rem] text-amber-400 mt-0.5 font-medium">
+                    {_PNAMES[gameState.goingAlone]} alone
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -462,6 +474,29 @@ export function EuchreMultiplayer({ roomId, players, playerNames, onLeave }: Pro
                 Pass
               </button>
             )}
+          </div>
+        )}
+
+        {/* Go Alone prompt */}
+        {isGoAlonePrompt && (
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-slate-400">
+              You called {getSuitSymbol(gameState.trumpSuit!)} as trump. Go alone?
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleGoAlone(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Go Alone
+              </button>
+              <button
+                onClick={() => handleGoAlone(false)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+              >
+                Play with Partner
+              </button>
+            </div>
           </div>
         )}
 

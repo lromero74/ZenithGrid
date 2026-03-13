@@ -602,7 +602,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                   )}
 
                   {/* Check Interval & Order Type */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">
                         <Clock size={14} className="inline mr-1" />
@@ -725,7 +725,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                   </div>
 
                   {/* Settings row */}
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">
                         <Clock size={14} className="inline mr-1" />
@@ -793,7 +793,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                     <p className="text-xs text-slate-500 mt-2 mb-3">
                       Maintain a minimum free balance per currency. The rebalancer will top up from other currencies if needed.
                     </p>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {CURRENCIES.map(c => {
                         const cfg = MIN_BALANCE_CONFIG[c.label]
                         if (!cfg) return null
@@ -997,7 +997,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                           </p>
 
                           {/* Controls row */}
-                          <div className="flex items-center gap-4">
+                          <div className="flex flex-wrap items-center gap-4">
                             <label className={`flex items-center gap-2 ${!canWrite ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                               <input
                                 type="checkbox"

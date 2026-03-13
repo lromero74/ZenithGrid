@@ -40,6 +40,7 @@ interface SpadesVsState {
   leadPlayer: number
   spadesBroken: boolean
   roundNumber: number
+  blindNilBids: boolean[]   // which players bid blind nil
   bidsSubmitted: boolean[]  // which human players have submitted bids
   message: string
 }
@@ -47,10 +48,10 @@ interface SpadesVsState {
 // ── Constants ────────────────────────────────────────────────────────
 
 const WINNING_SCORE = 500
-const LOSING_SCORE = -200
 const BAG_PENALTY_THRESHOLD = 10
 const BAG_PENALTY = -100
 const NIL_BONUS = 100
+const BLIND_NIL_BONUS = 200
 const AI_DELAY = 800
 const SEAT_NAMES = ['South', 'North', 'East', 'West']
 const TEAM_NAMES = ['Humans', 'AI Team']
@@ -99,6 +100,7 @@ function createVsSpadesGame(): SpadesVsState {
     leadPlayer: 0,
     spadesBroken: false,
     roundNumber: 0,
+    blindNilBids: [false, false, false, false],
     bidsSubmitted: [false, false],
     message: '',
   })
@@ -119,6 +121,7 @@ function dealRound(state: SpadesVsState): SpadesVsState {
     tricksTaken: [0, 0, 0, 0],
     phase: 'bidding',
     spadesBroken: false,
+    blindNilBids: [false, false, false, false],
     bidsSubmitted: [false, false],
     currentPlayer: 0,
     message: 'Place your bid',
@@ -139,12 +142,14 @@ function aiBid(hand: Card[]): number {
   return Math.max(1, Math.min(bid, 7))
 }
 
-function submitBid(state: SpadesVsState, player: number, bid: number): SpadesVsState {
+function submitBid(state: SpadesVsState, player: number, bid: number, blindNil?: boolean): SpadesVsState {
   if (state.phase !== 'bidding') return state
   if (player > 1) return state // only humans bid via this
 
   const bids = [...state.bids] as (number | null)[]
   bids[player] = bid
+  const blindNilBids = [...state.blindNilBids]
+  blindNilBids[player] = bid === 0 && !!blindNil
   const bidsSubmitted = [...state.bidsSubmitted]
   bidsSubmitted[player] = true
 
@@ -159,6 +164,7 @@ function submitBid(state: SpadesVsState, player: number, bid: number): SpadesVsS
     return {
       ...state,
       bids: bids as number[],
+      blindNilBids,
       bidsSubmitted,
       phase: 'playing',
       currentPlayer: leadPlayer,
@@ -170,6 +176,7 @@ function submitBid(state: SpadesVsState, player: number, bid: number): SpadesVsS
   return {
     ...state,
     bids,
+    blindNilBids,
     bidsSubmitted,
     message: `Waiting for ${bidsSubmitted[0] ? SEAT_NAMES[1] : SEAT_NAMES[0]} to bid...`,
   }
@@ -248,8 +255,9 @@ function resolveRound(state: SpadesVsState): SpadesVsState {
     let nilBonus = 0
     for (const p of [p1, p2]) {
       if (bids[p] === 0) {
-        if (state.tricksTaken[p] === 0) nilBonus += NIL_BONUS
-        else nilBonus -= NIL_BONUS
+        const bonus = state.blindNilBids[p] ? BLIND_NIL_BONUS : NIL_BONUS
+        if (state.tricksTaken[p] === 0) nilBonus += bonus
+        else nilBonus -= bonus
       }
     }
 
@@ -270,8 +278,7 @@ function resolveRound(state: SpadesVsState): SpadesVsState {
     teamScores[team as 0 | 1] += nilBonus
   }
 
-  const gameOver = teamScores[0] >= WINNING_SCORE || teamScores[1] >= WINNING_SCORE ||
-                   teamScores[0] <= LOSING_SCORE || teamScores[1] <= LOSING_SCORE
+  const gameOver = teamScores[0] >= WINNING_SCORE || teamScores[1] >= WINNING_SCORE
 
   if (gameOver) {
     const humanWin = teamScores[0] > teamScores[1]
@@ -356,6 +363,7 @@ export function SpadesMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
   const [gameStatus, setGameStatus] = useState<GameStatus>('playing')
   const [selectedBid, setSelectedBid] = useState(3)
+  const [blindNil, setBlindNil] = useState(false)
 
   const myName = playerNames[user?.id ?? 0] ?? 'You'
   const opponentName = playerNames[players[isHost ? 1 : 0]] ?? 'Partner'
@@ -410,7 +418,7 @@ export function SpadesMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
       if (isHost) {
         if (action.type === 'submit_bid') {
-          hostApply(s => submitBid(s, 1, action.bid as number))
+          hostApply(s => submitBid(s, 1, action.bid as number, action.blindNil as boolean | undefined))
         } else if (action.type === 'play_card') {
           hostApply(s => playCardInState(s, 1, action.cardIndex as number))
         } else if (action.type === 'next_round') {
@@ -458,12 +466,13 @@ export function SpadesMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     music.init(); sfx.init(); music.start()
     sfx.play('deal')
     if (isHost) {
-      hostApply(s => submitBid(s, 0, selectedBid))
+      hostApply(s => submitBid(s, 0, selectedBid, blindNil))
     } else {
-      gameSocket.sendAction(roomId, { type: 'submit_bid', bid: selectedBid })
-      setGameState(prev => submitBid(prev, 1, selectedBid))
+      gameSocket.sendAction(roomId, { type: 'submit_bid', bid: selectedBid, blindNil })
+      setGameState(prev => submitBid(prev, 1, selectedBid, blindNil))
     }
-  }, [isHost, roomId, hostApply, selectedBid, music, sfx])
+    setBlindNil(false)
+  }, [isHost, roomId, hostApply, selectedBid, blindNil, music, sfx])
 
   const handlePlayCard = useCallback((cardIndex: number) => {
     sfx.play('place')
@@ -603,11 +612,22 @@ export function SpadesMultiplayer({ roomId, players, playerNames, onLeave }: Pro
                 </button>
               ))}
             </div>
+            {selectedBid === 0 && (
+              <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={blindNil}
+                  onChange={e => setBlindNil(e.target.checked)}
+                  className="rounded"
+                />
+                Blind Nil (+/-200 instead of +/-100)
+              </label>
+            )}
             <button
               onClick={handleBid}
               className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Bid {selectedBid === 0 ? 'Nil' : selectedBid}
+              Bid {selectedBid === 0 ? (blindNil ? 'Blind Nil' : 'Nil') : selectedBid}
             </button>
           </div>
         )}

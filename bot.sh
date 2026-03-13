@@ -382,7 +382,7 @@ start_backend() {
 
         cd "$BACKEND_DIR"
         nohup ./venv/bin/python -m uvicorn app.main:app \
-            --host 0.0.0.0 --port $BACKEND_PORT --reload \
+            --host 127.0.0.1 --port $BACKEND_PORT --reload \
             > "$BACKEND_LOG" 2>&1 &
         local backend_pid=$!
         echo $backend_pid > "$BACKEND_PID_FILE"

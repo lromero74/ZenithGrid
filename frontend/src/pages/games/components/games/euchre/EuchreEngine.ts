@@ -22,6 +22,7 @@ export const createEuchreDeck = _createEuchreDeck
 export type Phase =
   | 'trumpRound1'
   | 'trumpRound2'
+  | 'goAlonePrompt'
   | 'dealerDiscard'
   | 'playing'
   | 'trickComplete'
@@ -217,7 +218,8 @@ export function orderUp(state: EuchreState): EuchreState {
   if (state.phase !== 'trumpRound1') return state
 
   const trumpSuit = state.flippedCard.suit
-  const makerTeam = teamOf(state.currentPlayer)
+  const caller = state.currentPlayer
+  const makerTeam = teamOf(caller)
 
   // Dealer picks up the flipped card
   const newHands = state.hands.map(h => [...h])
@@ -228,9 +230,9 @@ export function orderUp(state: EuchreState): EuchreState {
     hands: newHands,
     trumpSuit,
     makerTeam,
-    phase: 'dealerDiscard',
-    currentPlayer: state.dealer,
-    message: `${PLAYER_NAMES[state.currentPlayer]} ordered up ${trumpSuit}. ${PLAYER_NAMES[state.dealer]} must discard.`,
+    phase: 'goAlonePrompt',
+    currentPlayer: caller,
+    message: `${PLAYER_NAMES[caller]} ordered up ${trumpSuit}. Go alone?`,
   }
 }
 
@@ -273,9 +275,9 @@ export function pass(state: EuchreState): EuchreState {
       ...state,
       trumpSuit: chosen,
       makerTeam: teamOf(state.dealer),
-      phase: 'playing',
-      currentPlayer: leftOfDealer,
-      message: `${PLAYER_NAMES[state.dealer]} was stuck and named ${chosen} as trump.`,
+      phase: 'goAlonePrompt',
+      currentPlayer: state.dealer,
+      message: `${PLAYER_NAMES[state.dealer]} was stuck and named ${chosen} as trump. Go alone?`,
     }
   }
 
@@ -295,15 +297,15 @@ export function nameTrump(state: EuchreState, suit: Suit): EuchreState {
   if (state.phase !== 'trumpRound2') return state
   if (suit === state.flippedCard.suit) return state // rejected
 
-  const leftOfDealer = (state.dealer + 1) % 4
+  const caller = state.currentPlayer
 
   return {
     ...state,
     trumpSuit: suit,
-    makerTeam: teamOf(state.currentPlayer),
-    phase: 'playing',
-    currentPlayer: leftOfDealer,
-    message: `${PLAYER_NAMES[state.currentPlayer]} named ${suit} as trump.`,
+    makerTeam: teamOf(caller),
+    phase: 'goAlonePrompt',
+    currentPlayer: caller,
+    message: `${PLAYER_NAMES[caller]} named ${suit} as trump. Go alone?`,
   }
 }
 
@@ -330,20 +332,124 @@ export function dealerDiscard(state: EuchreState, cardIndex: number): EuchreStat
     newHands[p] = sortEuchreHand(newHands[p], state.trumpSuit)
   }
 
-  const leftOfDealer = (state.dealer + 1) % 4
+  // Find first player to lead (left of dealer, skipping partner if going alone)
+  let leader = (state.dealer + 1) % 4
+  if (state.goingAlone !== null && partnerOf(state.goingAlone) === leader) {
+    leader = (leader + 1) % 4
+  }
 
   return {
     ...state,
     hands: newHands,
     phase: 'playing',
-    currentPlayer: leftOfDealer,
-    message: `${PLAYER_NAMES[leftOfDealer]} leads.`,
+    currentPlayer: leader,
+    message: `${PLAYER_NAMES[leader]} leads.`,
     ledSuit: null,
     currentTrick: [],
   }
 }
 
+// ── Going alone decision ─────────────────────────────────────────────
+
+/**
+ * After trump is called, the caller decides whether to go alone.
+ * If going alone, their partner sits out the hand.
+ * Transitions to dealerDiscard (if round 1) or playing (if round 2).
+ */
+export function setGoingAlone(state: EuchreState, alone: boolean): EuchreState {
+  if (state.phase !== 'goAlonePrompt') return state
+
+  const caller = state.currentPlayer
+  const goingAlone = alone ? caller : null
+
+  // Determine if we came from round 1 (dealer needs to discard) or round 2
+  // If dealer has 6 cards, we came from round 1 (orderUp added a card)
+  const dealerNeedsDiscard = state.hands[state.dealer].length === 6
+  const leftOfDealer = (state.dealer + 1) % 4
+
+  if (dealerNeedsDiscard) {
+    return {
+      ...state,
+      goingAlone,
+      phase: 'dealerDiscard',
+      currentPlayer: state.dealer,
+      message: alone
+        ? `${PLAYER_NAMES[caller]} is going alone! ${PLAYER_NAMES[state.dealer]} must discard.`
+        : `${PLAYER_NAMES[state.dealer]} must discard.`,
+    }
+  }
+
+  // Round 2 — go straight to playing
+  // Sort all hands now that trump is known
+  const newHands = state.hands.map(h => [...h])
+  for (let p = 0; p < 4; p++) {
+    newHands[p] = sortEuchreHand(newHands[p], state.trumpSuit)
+  }
+
+  // Find first player to lead (left of dealer, skipping partner if going alone)
+  let leader = leftOfDealer
+  if (goingAlone !== null && partnerOf(goingAlone) === leader) {
+    leader = (leader + 1) % 4
+  }
+
+  return {
+    ...state,
+    hands: newHands,
+    goingAlone,
+    phase: 'playing',
+    currentPlayer: leader,
+    message: alone
+      ? `${PLAYER_NAMES[caller]} is going alone! ${PLAYER_NAMES[leader]} leads.`
+      : `${PLAYER_NAMES[leader]} leads.`,
+    ledSuit: null,
+    currentTrick: [],
+  }
+}
+
+/**
+ * Returns the partner of a given player.
+ */
+export function partnerOf(player: number): number {
+  return (player + 2) % 4
+}
+
+/**
+ * AI decides whether to go alone. Goes alone with both bowers + at least one other trump.
+ */
+export function aiShouldGoAlone(hand: Card[], trumpSuit: Suit): boolean {
+  const hasRight = hand.some(c => isRightBower(c, trumpSuit))
+  const hasLeft = hand.some(c => isLeftBower(c, trumpSuit))
+  if (!hasRight || !hasLeft) return false
+
+  // Count total trump (including bowers)
+  let trumpCount = 0
+  for (const c of hand) {
+    if (getEffectiveSuit(c, trumpSuit) === trumpSuit) trumpCount++
+  }
+
+  // Go alone with both bowers + at least one more trump (3+ trump total)
+  return trumpCount >= 3
+}
+
 // ── Playing cards ────────────────────────────────────────────────────
+
+/**
+ * Returns the next player, skipping the sitting-out partner if going alone.
+ */
+function nextPlayer(current: number, goingAlone: number | null): number {
+  let next = (current + 1) % 4
+  if (goingAlone !== null && next === partnerOf(goingAlone)) {
+    next = (next + 1) % 4
+  }
+  return next
+}
+
+/**
+ * Returns how many players are active in a trick (3 if going alone, 4 otherwise).
+ */
+function trickSize(goingAlone: number | null): number {
+  return goingAlone !== null ? 3 : 4
+}
 
 /**
  * Play a card at the given hand index for the current player.
@@ -380,21 +486,24 @@ export function playCard(state: EuchreState, cardIndex: number): EuchreState {
     ledSuit,
   }
 
-  // If trick is complete (4 cards), resolve it
-  if (newTrick.length === 4) {
+  // If trick is complete (3 cards if going alone, 4 otherwise), resolve it
+  if (newTrick.length === trickSize(state.goingAlone)) {
     return completeTrick(next)
   }
 
-  // Advance to next player
-  return { ...next, currentPlayer: (player + 1) % 4 }
+  // Advance to next player (skipping sitting-out partner)
+  return { ...next, currentPlayer: nextPlayer(player, state.goingAlone) }
 }
 
 /**
  * Advance one AI turn. Returns updated state.
  * Called repeatedly by the React component with timeouts.
+ * Skips partner if going alone.
  */
 export function advanceAi(state: EuchreState): EuchreState {
   if (state.phase !== 'playing' || state.currentPlayer === 0) return state
+  // Skip sitting-out partner
+  if (state.goingAlone !== null && state.currentPlayer === partnerOf(state.goingAlone)) return state
 
   const player = state.currentPlayer
   const hand = state.hands[player]
@@ -524,6 +633,13 @@ function runAiTurns(state: EuchreState): EuchreState {
 
   while (current.currentPlayer !== 0 && current.phase === 'playing') {
     const player = current.currentPlayer
+
+    // Skip sitting-out partner
+    if (current.goingAlone !== null && player === partnerOf(current.goingAlone)) {
+      current = { ...current, currentPlayer: nextPlayer(player, current.goingAlone) }
+      continue
+    }
+
     const hand = current.hands[player]
     if (hand.length === 0) break
 
@@ -547,14 +663,14 @@ function runAiTurns(state: EuchreState): EuchreState {
       ledSuit,
     }
 
-    if (newTrick.length === 4) {
+    if (newTrick.length === trickSize(current.goingAlone)) {
       current = completeTrick(current)
       if (current.phase !== 'playing') break
       // After trick completion, winner leads next — if it's AI, continue
       continue
     }
 
-    current = { ...current, currentPlayer: (player + 1) % 4 }
+    current = { ...current, currentPlayer: nextPlayer(player, current.goingAlone) }
   }
 
   if (current.phase === 'playing' && current.currentPlayer === 0) {
@@ -692,18 +808,26 @@ export function aiTrumpSelection(state: EuchreState): EuchreState {
   let current = { ...state }
 
   while (current.currentPlayer !== 0 &&
-         (current.phase === 'trumpRound1' || current.phase === 'trumpRound2')) {
+         (current.phase === 'trumpRound1' || current.phase === 'trumpRound2' || current.phase === 'goAlonePrompt')) {
     const player = current.currentPlayer
     const hand = current.hands[player]
+
+    if (current.phase === 'goAlonePrompt') {
+      // AI decides whether to go alone
+      const alone = current.trumpSuit ? aiShouldGoAlone(hand, current.trumpSuit) : false
+      current = setGoingAlone(current, alone)
+      // If dealer needs to discard and is AI
+      if (current.phase === 'dealerDiscard' && current.currentPlayer !== 0) {
+        current = aiDealerDiscard(current)
+      }
+      return current
+    }
 
     if (current.phase === 'trumpRound1') {
       if (aiShouldOrderUp(hand, current.flippedCard.suit)) {
         current = orderUp(current)
-        // If current player is now dealer (for discard) and dealer is AI
-        if (current.phase === 'dealerDiscard' && current.currentPlayer !== 0) {
-          current = aiDealerDiscard(current)
-        }
-        return current
+        // orderUp now goes to goAlonePrompt, handle it if AI
+        continue
       } else {
         current = pass(current)
       }
@@ -712,7 +836,8 @@ export function aiTrumpSelection(state: EuchreState): EuchreState {
       const suit = aiPickTrumpSuit(hand, current.flippedCard.suit)
       if (suit) {
         current = nameTrump(current, suit)
-        return current
+        // nameTrump now goes to goAlonePrompt, handle it if AI
+        continue
       } else {
         current = pass(current)
       }

@@ -34,6 +34,7 @@ export interface CanastaState {
   selectedCards: number[]
   teamHasInitialMeld: boolean[]
   pileFrozen: boolean
+  meldError?: string
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export function cardPoints(card: Card): number {
 export function getInitialMeldReq(teamScore: number): number {
   if (teamScore >= 3000) return 120
   if (teamScore >= 1500) return 90
+  if (teamScore < 0) return 15
   return 50
 }
 
@@ -188,24 +190,25 @@ export function createCanastaGame(): CanastaState {
   // Auto-play red 3s from all hands
   const redThrees: Card[][] = [[], [], [], []]
   for (let p = 0; p < 4; p++) {
-    let replaced = true
-    while (replaced) {
-      replaced = false
+    let found = true
+    while (found) {
+      found = false
       const red3Idx = hands[p].findIndex(c => isRed3(c))
       if (red3Idx >= 0) {
         redThrees[p].push(hands[p][red3Idx])
         hands[p].splice(red3Idx, 1)
-        // Draw replacement from stock
-        if (stock.length > 0) {
+        // Draw replacements until we get a non-red-3 card
+        while (stock.length > 0) {
           const replacement = stock.pop()!
           if (isRed3(replacement)) {
             redThrees[p].push(replacement)
-            // Need another replacement — continue the loop
+            // Keep drawing — need a non-red-3 replacement
           } else {
             hands[p].push(replacement)
+            break
           }
         }
-        replaced = true
+        found = true
       }
     }
     hands[p] = sortHand(hands[p])
@@ -245,25 +248,14 @@ export function drawFromStock(state: CanastaState): CanastaState {
   const newRedThrees = state.redThrees.map(r => [...r])
   const player = state.currentPlayer
 
-  // Draw 2 cards, handling red 3s
+  // Draw 2 cards, handling red 3s (auto-play and draw replacements)
   let cardsDrawn = 0
   while (cardsDrawn < 2 && newStock.length > 0) {
     const card = newStock.pop()!
     if (isRed3(card)) {
       newRedThrees[player].push(card)
-      // Draw replacement (don't count toward the 2)
-      if (newStock.length > 0) {
-        const replacement = newStock.pop()!
-        if (isRed3(replacement)) {
-          newRedThrees[player].push(replacement)
-          // Still need to draw, continue
-        } else {
-          newHands[player].push(replacement)
-          cardsDrawn++
-        }
-      } else {
-        cardsDrawn++ // No more cards to draw
-      }
+      // Keep drawing replacements until we get a non-red-3 or stock empties
+      // (don't count toward the 2 draws)
     } else {
       newHands[player].push(card)
       cardsDrawn++
@@ -286,6 +278,7 @@ export function drawFromStock(state: CanastaState): CanastaState {
     phase: nextPhase,
     hasDrawn: true,
     message: msg,
+    meldError: undefined,
   }
 }
 
@@ -298,7 +291,7 @@ export function pickupDiscardPile(state: CanastaState, meldCardIndices: number[]
   const topCard = state.discardPile[state.discardPile.length - 1]
 
   // Cannot pick up pile if top card is a black 3
-  if (isBlack3(topCard)) return state
+  if (isBlack3(topCard)) return { ...state, meldError: 'Cannot pick up pile — top card is a black 3' }
 
   const player = state.currentPlayer
   const team = teamOf(player)
@@ -311,21 +304,25 @@ export function pickupDiscardPile(state: CanastaState, meldCardIndices: number[]
   const needNaturalPair = state.pileFrozen || !state.teamHasInitialMeld[team]
   if (needNaturalPair) {
     const naturalMatches = meldCards.filter(c => !isWild(c) && c.rank === topCard.rank)
-    if (naturalMatches.length < 2) return state
+    if (naturalMatches.length < 2) {
+      const reason = state.pileFrozen ? 'Pile is frozen' : 'First meld'
+      return { ...state, meldError: `${reason} — need 2 natural cards matching the top card (no wilds)` }
+    }
   } else {
     // Normal pile: need 2 cards that can form a meld with the top card
     const combined = [...meldCards, topCard]
-    if (combined.length < 3) return state
-    if (!isValidNewMeld(combined)) return state
+    if (combined.length < 3) return { ...state, meldError: 'Need at least 2 cards to pick up the pile' }
+    if (!isValidNewMeld(combined)) return { ...state, meldError: 'Selected cards do not form a valid meld with the top card' }
   }
 
   // Check initial meld requirement if team hasn't melded yet
   if (!state.teamHasInitialMeld[team]) {
     const combined = [...meldCards, topCard]
     const meldPts = totalPoints(combined)
-    // Also count points from rest of pile that could form melds? No, just the initial meld
     const req = getInitialMeldReq(state.teamScores[team])
-    if (meldPts < req) return state
+    if (meldPts < req) {
+      return { ...state, meldError: `Initial meld needs ${req}+ points (you have ${meldPts})` }
+    }
   }
 
   // Pick up the pile
@@ -378,6 +375,7 @@ export function pickupDiscardPile(state: CanastaState, meldCardIndices: number[]
     teamHasInitialMeld: newInitialMeld,
     message: player === 0 ? 'Picked up pile — meld cards or discard' : `${PLAYER_NAMES[player]} picked up the pile`,
     selectedCards: [],
+    meldError: undefined,
   }
 }
 
@@ -403,8 +401,8 @@ export function meldCards(
   if (targetMeldIdx !== undefined) {
     // Adding to existing meld
     const meld = state.teamMelds[targetMeldIdx]
-    if (!meld || meld.team !== team) return state
-    if (!isValidMeldAddition(meld, cards)) return state
+    if (!meld || meld.team !== team) return { ...state, meldError: 'Cannot add to that meld' }
+    if (!isValidMeldAddition(meld, cards)) return { ...state, meldError: 'Invalid meld addition — need more naturals than wilds' }
 
     newTeamMelds = state.teamMelds.map((m, i) => {
       if (i !== targetMeldIdx) return m
@@ -415,14 +413,16 @@ export function meldCards(
     })
   } else {
     // New meld
-    if (!isValidNewMeld(cards)) return state
+    if (!isValidNewMeld(cards)) return { ...state, meldError: 'Invalid meld — need 3+ same-rank cards with more naturals than wilds' }
 
     // Check initial meld requirement
     if (!state.teamHasInitialMeld[team]) {
       const req = getInitialMeldReq(state.teamScores[team])
       // Calculate total points of this meld
       const meldPts = totalPoints(cards)
-      if (meldPts < req) return state
+      if (meldPts < req) {
+        return { ...state, meldError: `Initial meld needs ${req}+ points (you have ${meldPts})` }
+      }
       newInitialMeld[team] = true
     }
 
@@ -431,7 +431,9 @@ export function meldCards(
     const existingIdx = state.teamMelds.findIndex(m => m.team === team && m.rank === rank)
     if (existingIdx >= 0) {
       // Add to existing
-      if (!isValidMeldAddition(state.teamMelds[existingIdx], cards)) return state
+      if (!isValidMeldAddition(state.teamMelds[existingIdx], cards)) {
+        return { ...state, meldError: 'Invalid meld addition — need more naturals than wilds' }
+      }
       newTeamMelds = state.teamMelds.map((m, i) => {
         if (i !== existingIdx) return m
         return updateMeldStatus({
@@ -463,6 +465,7 @@ export function meldCards(
     teamHasInitialMeld: newInitialMeld,
     message: player === 0 ? 'Melded! Meld more or discard' : `${PLAYER_NAMES[player]} melded`,
     selectedCards: [],
+    meldError: undefined,
   }
 }
 

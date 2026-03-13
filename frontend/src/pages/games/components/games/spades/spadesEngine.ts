@@ -39,7 +39,6 @@ export interface SpadesState {
 // ── Constants ────────────────────────────────────────────────────────
 
 export const WINNING_SCORE = 500
-export const LOSING_SCORE = -200
 export const BAG_PENALTY_THRESHOLD = 10
 export const BAG_PENALTY = -100
 export const NIL_BONUS = 100
@@ -406,8 +405,7 @@ function resolveRound(state: SpadesState): SpadesState {
   }
 
   // Check game over
-  const gameOver = teamScores[0] >= WINNING_SCORE || teamScores[1] >= WINNING_SCORE ||
-                   teamScores[0] <= LOSING_SCORE || teamScores[1] <= LOSING_SCORE
+  const gameOver = teamScores[0] >= WINNING_SCORE || teamScores[1] >= WINNING_SCORE
 
   if (gameOver) {
     const humanWin = teamScores[0] > teamScores[1]

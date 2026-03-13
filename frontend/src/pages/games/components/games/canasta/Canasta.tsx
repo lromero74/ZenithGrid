@@ -31,6 +31,7 @@ import {
   aiTurn,
   newRound,
   isWild,
+  getInitialMeldReq,
   TEAM_NAMES,
   type CanastaState,
   type CanastaMeld,
@@ -185,7 +186,8 @@ function CanastaHelp({ onClose }: { onClose: () => void }) {
           Your team&apos;s <B>first meld</B> of each round must meet a minimum point
           threshold based on your team&apos;s total score:
           <ul className="mt-1.5 space-y-1 text-slate-300">
-            <Li>Score under 1,500 — first meld needs <B>50+ points</B>.</Li>
+            <Li>Negative score — first meld needs <B>15+ points</B>.</Li>
+            <Li>Score 0 to 1,499 — first meld needs <B>50+ points</B>.</Li>
             <Li>Score 1,500 to 2,999 — first meld needs <B>90+ points</B>.</Li>
             <Li>Score 3,000+ — first meld needs <B>120+ points</B>.</Li>
           </ul>
@@ -402,7 +404,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
     music.init()
     sfx.init()
     music.start()
-    setGameState(prev => drawFromStock(prev))
+    setGameState(prev => drawFromStock({ ...prev, meldError: undefined }))
     setSelectedCards([])
   }, [])
 
@@ -640,6 +642,18 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
 
         {/* Message */}
         <p className="text-sm text-white font-medium text-center">{gameState.message}</p>
+
+        {/* Meld error feedback */}
+        {gameState.meldError && (
+          <p className="text-xs text-red-400 text-center">{gameState.meldError}</p>
+        )}
+
+        {/* Initial meld requirement indicator */}
+        {isHumanTurn && !gameState.teamHasInitialMeld[0] && gameState.phase !== 'roundOver' && gameState.phase !== 'gameOver' && (
+          <p className="text-xs text-amber-400 text-center">
+            Initial meld requires {getInitialMeldReq(gameState.teamScores[0])}+ points
+          </p>
+        )}
 
         {/* Red 3s for player 0 */}
         {gameState.redThrees[0].length > 0 && (

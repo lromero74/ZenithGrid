@@ -28,6 +28,26 @@ COINGECKO_PLATFORM_IDS = {
 # Cache for token prices (simple in-memory cache)
 _price_cache: Dict[str, tuple] = {}  # {address: (price, timestamp)}
 PRICE_CACHE_TTL = 60  # seconds
+MAX_PRICE_CACHE_SIZE = 500  # Evict oldest entries beyond this
+
+
+def prune_price_cache() -> int:
+    """Remove expired entries from the token price cache. Returns count removed."""
+    if not _price_cache:
+        return 0
+    import time
+    now = time.time()
+    stale = [k for k, (_, ts) in _price_cache.items() if now - ts > PRICE_CACHE_TTL]
+    for k in stale:
+        del _price_cache[k]
+    # Hard cap: evict oldest if still over limit
+    if len(_price_cache) > MAX_PRICE_CACHE_SIZE:
+        sorted_keys = sorted(_price_cache, key=lambda k: _price_cache[k][1])
+        for k in sorted_keys[:len(_price_cache) - MAX_PRICE_CACHE_SIZE]:
+            del _price_cache[k]
+            stale.append(k)
+    return len(stale)
+
 
 # Legacy token address mappings (old token -> current token for pricing)
 # NOTE: We intentionally DON'T map deprecated tokens to current prices because

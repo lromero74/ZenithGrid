@@ -251,22 +251,24 @@ function createVsCanastaGame(prevScores?: number[]): CanastaVsState {
 
   const redThrees: Card[][] = [[], [], [], []]
   for (let p = 0; p < 4; p++) {
-    let replaced = true
-    while (replaced) {
-      replaced = false
+    let found = true
+    while (found) {
+      found = false
       const red3Idx = hands[p].findIndex(c => isRed3(c))
       if (red3Idx >= 0) {
         redThrees[p].push(hands[p][red3Idx])
         hands[p].splice(red3Idx, 1)
-        if (stock.length > 0) {
+        // Draw replacements until we get a non-red-3 card
+        while (stock.length > 0) {
           const replacement = stock.pop()!
           if (isRed3(replacement)) {
             redThrees[p].push(replacement)
           } else {
             hands[p].push(replacement)
+            break
           }
         }
-        replaced = true
+        found = true
       }
     }
     hands[p] = sortHand(hands[p])
@@ -306,22 +308,13 @@ function vsDrawFromStock(state: CanastaVsState): CanastaVsState {
   const newRedThrees = state.redThrees.map(r => [...r])
   const player = state.currentPlayer
 
+  // Draw 2 cards, handling red 3s (auto-play and draw replacements)
   let cardsDrawn = 0
   while (cardsDrawn < 2 && newStock.length > 0) {
     const card = newStock.pop()!
     if (isRed3(card)) {
       newRedThrees[player].push(card)
-      if (newStock.length > 0) {
-        const replacement = newStock.pop()!
-        if (isRed3(replacement)) {
-          newRedThrees[player].push(replacement)
-        } else {
-          newHands[player].push(replacement)
-          cardsDrawn++
-        }
-      } else {
-        cardsDrawn++
-      }
+      // Keep drawing — red 3s don't count toward the 2 draws
     } else {
       newHands[player].push(card)
       cardsDrawn++

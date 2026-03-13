@@ -16,7 +16,7 @@ export interface Hand {
   result: string  // '', 'win', 'lose', 'push', 'bust', 'blackjack'
 }
 
-export type Phase = 'betting' | 'playerTurn' | 'aiTurn' | 'dealerTurn' | 'payout'
+export type Phase = 'betting' | 'insurance' | 'playerTurn' | 'aiTurn' | 'dealerTurn' | 'payout'
 export type Difficulty = 'easy' | 'hard'
 
 export interface AiPlayer {
@@ -42,6 +42,8 @@ export interface BlackjackState {
   phase: Phase
   difficulty: Difficulty
   message: string
+  insuranceBet: number        // amount wagered on insurance (0 = none)
+  playerHasEvenMoney: boolean // true when player has BJ and dealer shows Ace
 }
 
 export interface HandScore {
@@ -121,7 +123,19 @@ export function createBlackjackGame(difficulty: Difficulty = 'easy', numOpponent
     phase: 'betting',
     difficulty,
     message: 'Place your bet',
+    insuranceBet: 0,
+    playerHasEvenMoney: false,
   }
+}
+
+// ── Helper: check if a card is a 10-value card ──────────────────────
+
+function isTenValue(card: Card): boolean {
+  return card.rank >= 10 // rank 10, 11(J), 12(Q), 13(K)
+}
+
+function isAce(card: Card): boolean {
+  return card.rank === 1
 }
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -166,21 +180,62 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
 
   const playerScore = scoreHand(playerCards)
   const dealerScore = scoreHand(dealerCards.map(c => ({ ...c, faceUp: true })))
+  const dealerUpCard = dealerCards[0] // first card is face-up
+  const dealerShowsAce = isAce(dealerUpCard)
+  const dealerShowsTen = isTenValue(dealerUpCard)
 
-  // Check for blackjacks
-  if (playerScore.isBlackjack && dealerScore.isBlackjack) {
+  // ── Dealer shows Ace → offer insurance/even money before anything else ──
+  if (dealerShowsAce) {
+    const hasEvenMoney = playerScore.isBlackjack
     return {
       ...state,
       shoe,
-      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: 'push' }],
-      dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+      playerHands: [{ cards: playerCards, bet, stood: false, doubled: false, result: '' }],
+      dealerHand: dealerCards,
       aiPlayers,
       activeHandIndex: 0,
-      phase: 'payout',
-      message: 'Push — both Blackjack!',
+      activeAiIndex: 0,
+      currentBet: bet,
+      phase: 'insurance',
+      insuranceBet: 0,
+      playerHasEvenMoney: hasEvenMoney,
+      message: hasEvenMoney ? 'Even Money?' : 'Insurance?',
     }
   }
 
+  // ── Dealer shows 10-value → peek for blackjack ──
+  if (dealerShowsTen && dealerScore.isBlackjack) {
+    // Dealer has blackjack — reveal and resolve immediately
+    if (playerScore.isBlackjack) {
+      return {
+        ...state,
+        shoe,
+        playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: 'push' }],
+        dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+        aiPlayers,
+        activeHandIndex: 0,
+        insuranceBet: 0,
+        playerHasEvenMoney: false,
+        phase: 'payout',
+        message: 'Push — both Blackjack!',
+      }
+    }
+    return {
+      ...state,
+      shoe,
+      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: 'lose' }],
+      dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
+      aiPlayers,
+      activeHandIndex: 0,
+      chips: state.chips - bet,
+      insuranceBet: 0,
+      playerHasEvenMoney: false,
+      phase: 'payout',
+      message: `Dealer Blackjack! You lose ${bet} chips.`,
+    }
+  }
+
+  // ── No Ace, no 10-value BJ → normal blackjack checks ──
   if (playerScore.isBlackjack) {
     return {
       ...state,
@@ -190,22 +245,10 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
       aiPlayers,
       activeHandIndex: 0,
       chips: state.chips + Math.floor(bet * 1.5),
+      insuranceBet: 0,
+      playerHasEvenMoney: false,
       phase: 'payout',
       message: 'Blackjack! You win 3:2!',
-    }
-  }
-
-  if (dealerScore.isBlackjack) {
-    return {
-      ...state,
-      shoe,
-      playerHands: [{ cards: playerCards, bet, stood: true, doubled: false, result: '' }],
-      dealerHand: dealerCards.map(c => ({ ...c, faceUp: true })),
-      aiPlayers,
-      activeHandIndex: 0,
-      chips: state.chips - bet,
-      phase: 'payout',
-      message: `Dealer Blackjack! You lose ${bet} chips.`,
     }
   }
 
@@ -218,6 +261,149 @@ export function placeBet(state: BlackjackState, bet: number): BlackjackState {
     activeHandIndex: 0,
     activeAiIndex: 0,
     currentBet: bet,
+    insuranceBet: 0,
+    playerHasEvenMoney: false,
+    phase: 'playerTurn',
+    message: `Your hand: ${playerScore.total}${playerScore.isSoft ? ' (soft)' : ''}`,
+  }
+}
+
+// ── Insurance / Even Money actions ──────────────────────────────────
+
+/** Player takes even money (has blackjack, dealer shows Ace). Pays 1:1 immediately. */
+export function takeEvenMoney(state: BlackjackState): BlackjackState {
+  if (state.phase !== 'insurance' || !state.playerHasEvenMoney) return state
+
+  const bet = state.playerHands[0].bet
+  return {
+    ...state,
+    playerHands: [{ ...state.playerHands[0], stood: true, result: 'win' }],
+    dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+    chips: state.chips + bet, // 1:1 payout (guaranteed)
+    insuranceBet: 0,
+    playerHasEvenMoney: false,
+    phase: 'payout',
+    message: `Even Money! You win ${bet} chips.`,
+  }
+}
+
+/** Player takes insurance (half the original bet). */
+export function takeInsurance(state: BlackjackState): BlackjackState {
+  if (state.phase !== 'insurance') return state
+
+  const bet = state.playerHands[0].bet
+  const insuranceCost = Math.floor(bet / 2)
+  if (insuranceCost > state.chips) return state // can't afford insurance
+
+  const dealerScore = scoreHand(state.dealerHand.map(c => ({ ...c, faceUp: true })))
+
+  if (dealerScore.isBlackjack) {
+    // Insurance wins: pays 2:1 on the insurance bet
+    const playerScore = scoreHand(state.playerHands[0].cards)
+    if (playerScore.isBlackjack) {
+      // Player also has BJ → push on main bet, insurance pays 2:1
+      return {
+        ...state,
+        playerHands: [{ ...state.playerHands[0], stood: true, result: 'push' }],
+        dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+        chips: state.chips + insuranceCost * 2, // net: -insuranceCost + 2*insuranceCost = +insuranceCost
+        insuranceBet: insuranceCost,
+        playerHasEvenMoney: false,
+        phase: 'payout',
+        message: `Dealer Blackjack! Insurance pays 2:1. Push on main bet.`,
+      }
+    }
+    // Player loses main bet but insurance pays 2:1
+    return {
+      ...state,
+      playerHands: [{ ...state.playerHands[0], stood: true, result: 'lose' }],
+      dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+      chips: state.chips - bet - insuranceCost + insuranceCost * 2, // net: -bet + insuranceCost
+      insuranceBet: insuranceCost,
+      playerHasEvenMoney: false,
+      phase: 'payout',
+      message: `Dealer Blackjack! Insurance pays 2:1. You lose the main bet.`,
+    }
+  }
+
+  // Dealer does NOT have blackjack — insurance bet is lost, play continues
+  const playerScore = scoreHand(state.playerHands[0].cards)
+  if (playerScore.isBlackjack) {
+    // Player has BJ, dealer doesn't → pay 3:2
+    return {
+      ...state,
+      playerHands: [{ ...state.playerHands[0], stood: true, result: 'blackjack' }],
+      dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+      chips: state.chips - insuranceCost + Math.floor(bet * 1.5),
+      insuranceBet: insuranceCost,
+      playerHasEvenMoney: false,
+      phase: 'payout',
+      message: `No dealer Blackjack. Insurance lost. Blackjack pays 3:2!`,
+    }
+  }
+
+  return {
+    ...state,
+    chips: state.chips - insuranceCost,
+    insuranceBet: insuranceCost,
+    playerHasEvenMoney: false,
+    phase: 'playerTurn',
+    message: `No dealer Blackjack. Insurance lost. Your hand: ${playerScore.total}${playerScore.isSoft ? ' (soft)' : ''}`,
+  }
+}
+
+/** Player declines insurance — dealer peeks (if Ace), then normal play. */
+export function declineInsurance(state: BlackjackState): BlackjackState {
+  if (state.phase !== 'insurance') return state
+
+  const dealerScore = scoreHand(state.dealerHand.map(c => ({ ...c, faceUp: true })))
+  const playerScore = scoreHand(state.playerHands[0].cards)
+  const bet = state.playerHands[0].bet
+
+  // Dealer peek: check for blackjack
+  if (dealerScore.isBlackjack) {
+    if (playerScore.isBlackjack) {
+      return {
+        ...state,
+        playerHands: [{ ...state.playerHands[0], stood: true, result: 'push' }],
+        dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+        insuranceBet: 0,
+        playerHasEvenMoney: false,
+        phase: 'payout',
+        message: 'Push — both Blackjack!',
+      }
+    }
+    return {
+      ...state,
+      playerHands: [{ ...state.playerHands[0], stood: true, result: 'lose' }],
+      dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+      chips: state.chips - bet,
+      insuranceBet: 0,
+      playerHasEvenMoney: false,
+      phase: 'payout',
+      message: `Dealer Blackjack! You lose ${bet} chips.`,
+    }
+  }
+
+  // No dealer blackjack — if player has blackjack, pay 3:2
+  if (playerScore.isBlackjack) {
+    return {
+      ...state,
+      playerHands: [{ ...state.playerHands[0], stood: true, result: 'blackjack' }],
+      dealerHand: state.dealerHand.map(c => ({ ...c, faceUp: true })),
+      chips: state.chips + Math.floor(bet * 1.5),
+      insuranceBet: 0,
+      playerHasEvenMoney: false,
+      phase: 'payout',
+      message: 'Blackjack! You win 3:2!',
+    }
+  }
+
+  // Normal play continues
+  return {
+    ...state,
+    insuranceBet: 0,
+    playerHasEvenMoney: false,
     phase: 'playerTurn',
     message: `Your hand: ${playerScore.total}${playerScore.isSoft ? ' (soft)' : ''}`,
   }
@@ -558,5 +744,7 @@ export function newRound(state: BlackjackState): BlackjackState {
     ...state,
     phase: 'betting',
     message: 'Place your bet',
+    insuranceBet: 0,
+    playerHasEvenMoney: false,
   }
 }

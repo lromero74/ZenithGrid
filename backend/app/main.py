@@ -11,6 +11,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.cleanup_jobs import (
+    cleanup_in_memory_caches,
+    cleanup_old_rate_limit_attempts,
     cleanup_expired_revoked_tokens,
     cleanup_expired_sessions,
     cleanup_failed_condition_logs,
@@ -73,7 +75,7 @@ from app.services.websocket_manager import ws_manager
 logger = logging.getLogger(__name__)
 
 _brand = get_brand()
-app = FastAPI(title=f"{_brand['shortName']} Trading Platform")
+app = FastAPI(title=f"{_brand['shortName']} Trading Platform", docs_url=None, redoc_url=None, openapi_url=None)
 
 # CORS middleware
 app.add_middleware(
@@ -141,6 +143,8 @@ revoked_token_cleanup_task = None
 report_scheduler_task = None
 report_cleanup_task = None
 session_cleanup_task = None
+rate_limit_cleanup_task = None
+memory_cache_cleanup_task = None
 transfer_sync_task = None
 
 
@@ -485,7 +489,8 @@ async def startup_event():
     global failed_condition_cleanup_task, failed_order_cleanup_task
     global account_snapshot_task, revoked_token_cleanup_task
     global report_scheduler_task, report_cleanup_task
-    global session_cleanup_task, transfer_sync_task
+    global session_cleanup_task, rate_limit_cleanup_task, memory_cache_cleanup_task
+    global transfer_sync_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -606,7 +611,10 @@ async def startup_event():
 
     logger.info("Starting session cleanup job...")
     session_cleanup_task = asyncio.create_task(cleanup_expired_sessions())
+    rate_limit_cleanup_task = asyncio.create_task(cleanup_old_rate_limit_attempts())
+    memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
     logger.info("Session cleanup job started - expiring stale sessions daily")
+    logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
 
     logger.info("Starting transfer sync job...")
     transfer_sync_task = asyncio.create_task(run_transfer_sync())
@@ -657,7 +665,7 @@ async def shutdown_event():
         failed_condition_cleanup_task, failed_order_cleanup_task,
         account_snapshot_task, revoked_token_cleanup_task,
         report_scheduler_task, report_cleanup_task,
-        session_cleanup_task, transfer_sync_task,
+        session_cleanup_task, memory_cache_cleanup_task, transfer_sync_task,
     ]:
         await _cancel_task(task)
 
@@ -835,4 +843,4 @@ if _frontend_dist.exists():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8100)
+    uvicorn.run(app, host="127.0.0.1", port=8100)

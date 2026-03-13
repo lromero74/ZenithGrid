@@ -137,5 +137,5 @@ async def market_sell(
         logger.error(f"Market sell failed for {request.product_id}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to execute market sell: {e}",
+            detail="Failed to execute market sell. Please try again.",
         )

@@ -30,6 +30,9 @@ import {
   dealerStep,
   dealerMustHit,
   aiStep,
+  takeInsurance,
+  declineInsurance,
+  takeEvenMoney,
   type BlackjackState,
   type Difficulty,
 } from './blackjackEngine'
@@ -138,6 +141,30 @@ function BlackjackHelp({ onClose }: { onClose: () => void }) {
           and your bet is returned.
         </Sec>
 
+        {/* Insurance & Even Money */}
+        <Sec title="Insurance &amp; Even Money">
+          <ul className="space-y-1 text-slate-300">
+            <Li>When the dealer&apos;s face-up card is an <B>Ace</B>, you are
+              offered <B>Insurance</B> before play continues.</Li>
+            <Li>Insurance costs <B>half your original bet</B>. If the dealer has
+              Blackjack, insurance pays <B>2:1</B>. If not, the insurance bet is
+              lost and play continues normally.</Li>
+            <Li>If you have a <B>natural Blackjack</B> and the dealer shows an
+              Ace, you are offered <B>Even Money</B> instead — a guaranteed
+              <B> 1:1 payout</B> on your bet, avoiding the risk of a push if the
+              dealer also has Blackjack.</Li>
+          </ul>
+        </Sec>
+
+        {/* Dealer Peek */}
+        <Sec title="Dealer Peek">
+          When the dealer&apos;s face-up card is an <B>Ace</B> or a <B>10-value
+          card</B>, the dealer peeks at their hole card to check for Blackjack
+          before you act. If the dealer has Blackjack, the hand ends immediately
+          — you lose unless you also have Blackjack (push). This prevents you
+          from splitting or doubling into a dealer Blackjack.
+        </Sec>
+
         {/* Dealer Rules */}
         <Sec title="Dealer Rules">
           <ul className="space-y-1 text-slate-300">
@@ -157,6 +184,10 @@ function BlackjackHelp({ onClose }: { onClose: () => void }) {
             <Li><B>Regular win</B> — pays <B>1:1</B> (bet 100, win 100).</Li>
             <Li><B>Push (tie)</B> — your bet is returned, no gain or loss.</Li>
             <Li><B>Lose / Bust</B> — you lose your bet.</Li>
+            <Li><B>Insurance</B> — pays <B>2:1</B> if the dealer has Blackjack
+              (bet 50 insurance, win 100).</Li>
+            <Li><B>Even Money</B> — pays <B>1:1</B> guaranteed when you have
+              Blackjack and dealer shows an Ace.</Li>
             <Li><B>Split bonus</B> — win <B>both</B> hands after a split and
               earn an extra <B>+100 chip bonus</B>.</Li>
           </ul>
@@ -269,6 +300,8 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
           numOpponents: s.numOpponents ?? 0,
           activeAiIndex: s.activeAiIndex ?? 0,
           dealerChips: s.dealerChips ?? 5000,
+          insuranceBet: s.insuranceBet ?? 0,
+          playerHasEvenMoney: s.playerHasEvenMoney ?? false,
         }
       }
       return createBlackjackGame()
@@ -349,6 +382,10 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
   const handleStand = useCallback(() => setGameState(prev => stand(prev)), [])
   const handleDouble = useCallback(() => setGameState(prev => doubleDown(prev)), [])
   const handleSplit = useCallback(() => setGameState(prev => split(prev)), [])
+
+  const handleInsurance = useCallback(() => { setGameState(prev => takeInsurance(prev)) }, [])
+  const handleNoInsurance = useCallback(() => { setGameState(prev => declineInsurance(prev)) }, [])
+  const handleEvenMoney = useCallback(() => { setGameState(prev => takeEvenMoney(prev)) }, [])
 
   const handleNextRound = useCallback(() => {
     setGameState(prev => newRound(prev))
@@ -492,6 +529,35 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
                 >
                   Deal ({selectedBet} chips)
                 </button>
+              </div>
+            )}
+
+            {/* Insurance / Even Money phase */}
+            {gameState.phase === 'insurance' && (
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {gameState.playerHasEvenMoney ? (
+                  <>
+                    <button onClick={handleEvenMoney} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm transition-colors">
+                      Even Money
+                    </button>
+                    <button onClick={handleNoInsurance} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors">
+                      No Thanks
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleInsurance}
+                      disabled={Math.floor(gameState.playerHands[0]?.bet / 2) > gameState.chips}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Insurance ({Math.floor((gameState.playerHands[0]?.bet ?? 0) / 2)})
+                    </button>
+                    <button onClick={handleNoInsurance} className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors">
+                      No Insurance
+                    </button>
+                  </>
+                )}
               </div>
             )}
 

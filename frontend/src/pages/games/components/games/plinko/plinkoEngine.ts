@@ -16,12 +16,15 @@ export const BOARD_HEIGHT = 500
 export const SLOT_COUNT = 13
 
 export type RiskLevel = 'low' | 'medium' | 'high'
-export type PegLayout = 'classic' | 'pyramid' | 'diamond'
+export type PegLayout = 'classic' | 'pyramid'
 
 export interface Peg {
   x: number
   y: number
   row: number
+  /** If present, peg is an angled rail from (x,y) to (railEndX,railEndY) */
+  railEndX?: number
+  railEndY?: number
 }
 
 export interface Ball {
@@ -51,8 +54,7 @@ const MULTIPLIERS: Record<RiskLevel, number[]> = {
  *   at slot centers, odd rows have SLOT_COUNT+1 pegs at slot boundaries
  *   (including edges at x=0 and x=BOARD_WIDTH to prevent edge sticking).
  *   Bottom row (row 9, odd) has boundary pegs; row 8 (even) has center pegs.
- * - pyramid: Fewer pegs at top, expanding toward bottom
- * - diamond: Wide in the middle, narrow at top and bottom
+ * - pyramid: Fewer pegs at top, expanding toward bottom, with edge rails
  */
 export function generatePegLayout(layout: PegLayout = 'classic'): Peg[] {
   const pegs: Peg[] = []
@@ -102,30 +104,54 @@ export function generatePegLayout(layout: PegLayout = 'classic'): Peg[] {
         pegs.push({ x, y, row })
       }
     }
-  } else if (layout === 'diamond') {
-    // Diamond: narrow top, wide middle, narrow bottom, centered.
-    // +2 pegs per row doesn't create natural stagger, so odd rows
-    // are offset by half a spacing (same technique as classic).
-    const counts = [4, 6, 8, 10, 12, 12, 10, 8, 6, 4]
-    const maxPegs = 12
-    const usableWidth = BOARD_WIDTH - margin * 2
-    const spacing = usableWidth / (maxPegs - 1)
-    const centerX = BOARD_WIDTH / 2
 
-    for (let row = 0; row < PEG_ROWS; row++) {
-      const pegCount = counts[row]
-      const isOffset = row % 2 === 1
-      const offset = isOffset ? spacing / 2 : 0
-      const y = startY + row * rowSpacing
+    // Add separate edge rails just outside the pyramid boundary.
+    // Offset matches the peg spacing so rails sit a full peg-gap away
+    // from the outermost pegs. Skip the bottom 2 rows — those are wide
+    // enough that the board walls handle containment.
+    const railOffset = spacing
+    const railRows = PEG_ROWS - 2 // stop before the last 2 rows
+    const byRow: Peg[][] = Array.from({ length: PEG_ROWS }, () => [])
+    for (const peg of pegs) byRow[peg.row].push(peg)
+    for (const row of byRow) row.sort((a, b) => a.x - b.x)
 
-      for (let col = 0; col < pegCount; col++) {
-        const x = centerX + (col - (pegCount - 1) / 2) * spacing + offset
-        pegs.push({ x, y, row })
-      }
+    // Compute offset edge positions for each row (only rows with rails)
+    const leftEdge: { x: number; y: number }[] = []
+    const rightEdge: { x: number; y: number }[] = []
+    for (let r = 0; r < railRows; r++) {
+      const left = byRow[r][0]
+      const right = byRow[r][byRow[r].length - 1]
+      leftEdge.push({ x: left.x - railOffset, y: left.y })
+      rightEdge.push({ x: right.x + railOffset, y: right.y })
     }
+
+    // Add rail pegs connecting consecutive rows' offset positions
+    for (let r = 1; r < railRows; r++) {
+      pegs.push({
+        x: leftEdge[r].x, y: leftEdge[r].y, row: r,
+        railEndX: leftEdge[r - 1].x, railEndY: leftEdge[r - 1].y,
+      })
+      pegs.push({
+        x: rightEdge[r].x, y: rightEdge[r].y, row: r,
+        railEndX: rightEdge[r - 1].x, railEndY: rightEdge[r - 1].y,
+      })
+    }
+
+    // Top row: extend rails upward along the same slope
+    const ldx = leftEdge[0].x - leftEdge[1].x
+    const rdx = rightEdge[0].x - rightEdge[1].x
+    const dy = leftEdge[0].y - leftEdge[1].y
+    pegs.push({
+      x: leftEdge[0].x, y: leftEdge[0].y, row: 0,
+      railEndX: leftEdge[0].x + ldx, railEndY: leftEdge[0].y + dy,
+    })
+    pegs.push({
+      x: rightEdge[0].x, y: rightEdge[0].y, row: 0,
+      railEndX: rightEdge[0].x + rdx, railEndY: rightEdge[0].y + dy,
+    })
   }
 
-  return pegs
+  return addWallRails(pegs)
 }
 
 /**
@@ -316,6 +342,112 @@ export function resolveBallCollision(a: Ball, b: Ball): [Ball, Ball] {
       vy: (b.vy + impulse * ny) * RESTITUTION,
     },
   ]
+}
+
+// ── Wall rail helpers ───────────────────────────────────────────────
+
+/**
+ * Minimum clearance for a ball to pass between a peg and the wall.
+ * Any peg closer than this to a wall becomes an angled rail deflector.
+ */
+export const WALL_RAIL_THRESHOLD = PEG_RADIUS + BALL_RADIUS * 2 // 21px
+
+/** True if this peg is an angled rail (line segment) rather than a circle. */
+export function isRailPeg(peg: Peg): boolean {
+  return peg.railEndX !== undefined && peg.railEndY !== undefined
+}
+
+/**
+ * Convert near-wall pegs into angled rail deflectors.
+ *
+ * Only affects pegs that are away from the wall but too close for a ball
+ * to pass between them and the wall. Pegs already on the wall (x=0 or
+ * x=BOARD_WIDTH) stay as normal circular pegs — they act as wall anchors.
+ */
+function addWallRails(pegs: Peg[]): Peg[] {
+  return pegs.map(peg => {
+    // Left side: peg is near (but not on) the wall
+    if (peg.x > PEG_RADIUS && peg.x < WALL_RAIL_THRESHOLD) {
+      return {
+        ...peg,
+        railEndX: 0,
+        railEndY: peg.y - peg.x * 1.2,
+      }
+    }
+    // Right side: peg is near (but not on) the wall
+    const distRight = BOARD_WIDTH - peg.x
+    if (distRight > PEG_RADIUS && distRight < WALL_RAIL_THRESHOLD) {
+      return {
+        ...peg,
+        railEndX: BOARD_WIDTH,
+        railEndY: peg.y - distRight * 1.2,
+      }
+    }
+    return peg
+  })
+}
+
+/**
+ * Check if a ball collides with a rail peg (line segment).
+ * Finds the closest point on the segment and checks distance.
+ */
+export function checkRailCollision(ball: Ball, peg: Peg): boolean {
+  if (!isRailPeg(peg)) return checkPegCollision(ball, peg)
+
+  const ax = peg.x, ay = peg.y
+  const bx = peg.railEndX!, by = peg.railEndY!
+  const dx = bx - ax, dy = by - ay
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return checkPegCollision(ball, peg)
+
+  const t = Math.max(0, Math.min(1,
+    ((ball.x - ax) * dx + (ball.y - ay) * dy) / lenSq
+  ))
+  const cx = ax + t * dx
+  const cy = ay + t * dy
+  const distX = ball.x - cx
+  const distY = ball.y - cy
+  return Math.sqrt(distX * distX + distY * distY) <= BALL_RADIUS + PEG_RADIUS
+}
+
+/**
+ * Resolve collision with a rail peg — reflect velocity along the
+ * rail's surface normal and push the ball clear.
+ */
+export function resolveRailCollision(ball: Ball, peg: Peg): Ball {
+  if (!isRailPeg(peg)) return resolveCollision(ball, peg)
+
+  const ax = peg.x, ay = peg.y
+  const bx = peg.railEndX!, by = peg.railEndY!
+  const sdx = bx - ax, sdy = by - ay
+  const lenSq = sdx * sdx + sdy * sdy
+  if (lenSq === 0) return resolveCollision(ball, peg)
+
+  const t = Math.max(0, Math.min(1,
+    ((ball.x - ax) * sdx + (ball.y - ay) * sdy) / lenSq
+  ))
+  const cx = ax + t * sdx
+  const cy = ay + t * sdy
+
+  const dx = ball.x - cx
+  const dy = ball.y - cy
+  const dist = Math.sqrt(dx * dx + dy * dy) || 0.01
+  const minDist = BALL_RADIUS + PEG_RADIUS
+
+  // Normal from closest rail point toward ball
+  const nx = dx / dist
+  const ny = dy / dist
+
+  // Push ball outside rail
+  const newX = cx + nx * (minDist + 1)
+  const newY = cy + ny * (minDist + 1)
+
+  // Reflect velocity along normal, apply energy loss
+  const dot = ball.vx * nx + ball.vy * ny
+  const vx = (ball.vx - 2 * dot * nx) * RESTITUTION * DAMPING
+  const vy = (ball.vy - 2 * dot * ny) * RESTITUTION * DAMPING
+
+  return { id: ball.id, x: newX, y: newY, vx, vy }
 }
 
 /**

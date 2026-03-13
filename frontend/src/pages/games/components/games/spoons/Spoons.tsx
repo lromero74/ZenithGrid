@@ -147,11 +147,12 @@ function SpoonsHelp({ onClose }: { onClose: () => void }) {
 
         <Sec title="Gameplay">
           <ul className="space-y-1">
-            <Li>Each player holds <B>4 cards</B>. Cards are passed around the table.</Li>
-            <Li>Draw a card, decide to keep or discard. You must always have exactly 4.</Li>
+            <Li>Each player starts with <B>4 cards</B> in hand.</Li>
+            <Li>On your turn, you pick up a card (drawn or passed to you) to hold <B>5 cards</B>, then discard one to get back to <B>4</B>.</Li>
+            <Li>Cards pass <B>to the left</B> (clockwise) around the table. The last player in the circle discards to a <B>discard pile</B> instead of passing.</Li>
             <Li>When someone gets <B>four of a kind</B>, they grab a spoon.</Li>
             <Li>Once any spoon is grabbed, everyone races to grab the remaining spoons.</Li>
-            <Li>There's always one fewer spoon than players — someone gets a letter!</Li>
+            <Li>There&apos;s always one fewer spoon than players — someone gets a letter!</Li>
           </ul>
         </Sec>
 

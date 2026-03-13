@@ -15,7 +15,7 @@ class Base(DeclarativeBase):
 
 # Build engine kwargs based on database backend
 _engine_kwargs = {
-    "echo": True,
+    "echo": False,
     "pool_pre_ping": True,
     "pool_recycle": 3600,
 }

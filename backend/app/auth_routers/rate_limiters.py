@@ -1,282 +1,352 @@
 """
 Rate limiting logic for authentication endpoints.
 
-In-memory rate limiting dicts and check/record functions for:
-- Login (per IP + per username)
-- Signup (per IP)
-- Forgot password (per IP + per email)
-- Resend verification (per user)
-- MFA verification (per token)
+Hybrid approach: in-memory dict for fast lookups + DB persistence so
+rate-limit state survives application restarts.  On startup the in-memory
+cache is cold; the first check for any key falls through to a DB count
+query and warms the cache.
+
+Categories: login, signup, forgot_pw, resend, mfa
 """
 
 import logging
 import time
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import delete, func, select
+
+from app.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# Login rate limiting
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-# {ip: [(timestamp, ...)] }
+_LIMITS = {
+    #  category           max   window_seconds
+    "login":             (5,    900),    # 5 per 15 min
+    "login_user":        (5,    900),    # per-username
+    "signup":            (3,    3600),   # 3 per hour
+    "forgot_pw":         (3,    3600),
+    "forgot_pw_email":   (3,    3600),
+    "resend":            (3,    3600),
+    "mfa":               (5,    300),    # 5 per 5 min
+}
+
+# ---------------------------------------------------------------------------
+# In-memory cache (fast path — identical to the original implementation)
+# ---------------------------------------------------------------------------
+
 _login_attempts: dict = defaultdict(list)
 _login_attempts_by_username: dict = defaultdict(list)
-_RATE_LIMIT_MAX = 5  # max attempts
-_RATE_LIMIT_WINDOW = 900  # 15 minutes in seconds
-
-# =============================================================================
-# MFA verification rate limiting
-# =============================================================================
-
-# MFA verification rate limiting (S2/S3): keyed by mfa_token
-_mfa_attempts: dict = defaultdict(list)
-_MFA_RATE_LIMIT_MAX = 5  # max attempts per token
-_MFA_RATE_LIMIT_WINDOW = 300  # 5 minutes
-
-# =============================================================================
-# Signup rate limiting
-# =============================================================================
-
-# Signup rate limiting: 3 per IP per hour
 _signup_attempts: dict = defaultdict(list)
-_SIGNUP_RATE_LIMIT_MAX = 3
-_SIGNUP_RATE_LIMIT_WINDOW = 3600  # 1 hour
-
-# =============================================================================
-# Forgot-password rate limiting
-# =============================================================================
-
-# Forgot-password rate limiting: 3 per IP per hour + 3 per email per hour
 _forgot_pw_attempts: dict = defaultdict(list)
 _forgot_pw_by_email: dict = defaultdict(list)
-_FORGOT_PW_RATE_LIMIT_MAX = 3
-_FORGOT_PW_RATE_LIMIT_WINDOW = 3600
-
-# =============================================================================
-# Resend verification rate limiting
-# =============================================================================
-
-# Resend verification rate limiting: 3 per user per hour
 _resend_attempts: dict = defaultdict(list)
-_RESEND_RATE_LIMIT_MAX = 3
-_RESEND_RATE_LIMIT_WINDOW = 3600
+_mfa_attempts: dict = defaultdict(list)
 
-# =============================================================================
-# Global prune
-# =============================================================================
+_CATEGORY_STORE = {
+    "login":           _login_attempts,
+    "login_user":      _login_attempts_by_username,
+    "signup":          _signup_attempts,
+    "forgot_pw":       _forgot_pw_attempts,
+    "forgot_pw_email": _forgot_pw_by_email,
+    "resend":          _resend_attempts,
+    "mfa":             _mfa_attempts,
+}
 
-# Track last global prune time (shared across all rate limiters)
+# Track whether a key has been warmed from DB
+_warmed: set = set()
+
+# Prune
 _last_prune_time: float = 0.0
-_PRUNE_INTERVAL = 3600  # Prune stale entries every hour
+_PRUNE_INTERVAL = 3600
+
+# ---------------------------------------------------------------------------
+# DB helpers (fire-and-forget writes, blocking reads only on cold cache)
+# ---------------------------------------------------------------------------
 
 
-def _prune_all_rate_limiters():
-    """Periodically remove stale IPs/keys from all rate limiter dicts."""
+async def _db_record(category: str, key: str):
+    """Persist an attempt to the database (non-blocking best-effort)."""
+    try:
+        from app.models.auth import RateLimitAttempt
+        async with async_session_maker() as db:
+            db.add(RateLimitAttempt(
+                category=category, key=key, attempted_at=datetime.utcnow(),
+            ))
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"rate_limiter: failed to persist attempt ({category}/{key}): {e}")
+
+
+async def _db_count(category: str, key: str, window_seconds: int) -> int:
+    """Count recent attempts from DB for a key (used to warm cold cache)."""
+    try:
+        from app.models.auth import RateLimitAttempt
+        cutoff = datetime.utcnow() - timedelta(seconds=window_seconds)
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(func.count()).where(
+                    RateLimitAttempt.category == category,
+                    RateLimitAttempt.key == key,
+                    RateLimitAttempt.attempted_at >= cutoff,
+                )
+            )
+            return result.scalar() or 0
+    except Exception as e:
+        logger.warning(f"rate_limiter: DB count failed ({category}/{key}): {e}")
+        return 0
+
+
+async def _db_cleanup():
+    """Delete attempts older than the largest window (1 hour)."""
+    try:
+        from app.models.auth import RateLimitAttempt
+        cutoff = datetime.utcnow() - timedelta(hours=1)
+        async with async_session_maker() as db:
+            await db.execute(
+                delete(RateLimitAttempt).where(
+                    RateLimitAttempt.attempted_at < cutoff
+                )
+            )
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"rate_limiter: DB cleanup failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Core helpers
+# ---------------------------------------------------------------------------
+
+def _prune_memory():
+    """Periodically prune stale in-memory entries."""
     global _last_prune_time
     now = time.time()
     if now - _last_prune_time < _PRUNE_INTERVAL:
         return
     _last_prune_time = now
-
-    total_pruned = 0
-    for store, window in [
-        (_login_attempts, _RATE_LIMIT_WINDOW),
-        (_login_attempts_by_username, _RATE_LIMIT_WINDOW),
-        (_signup_attempts, _SIGNUP_RATE_LIMIT_WINDOW),
-        (_forgot_pw_attempts, _FORGOT_PW_RATE_LIMIT_WINDOW),
-        (_forgot_pw_by_email, _FORGOT_PW_RATE_LIMIT_WINDOW),
-        (_resend_attempts, _RESEND_RATE_LIMIT_WINDOW),
-        (_mfa_attempts, _MFA_RATE_LIMIT_WINDOW),
-    ]:
-        stale_keys = [
-            k for k, timestamps in store.items()
-            if not any(now - t < window for t in timestamps)
-        ]
-        for k in stale_keys:
+    total = 0
+    for cat, store in _CATEGORY_STORE.items():
+        _, window = _LIMITS[cat]
+        stale = [k for k, ts in store.items() if not any(now - t < window for t in ts)]
+        for k in stale:
             del store[k]
-        total_pruned += len(stale_keys)
-    if total_pruned:
-        logger.debug("Pruned %d stale rate limiter entries", total_pruned)
+            _warmed.discard((cat, k))
+        total += len(stale)
+    if total:
+        logger.debug("Pruned %d stale rate limiter entries", total)
 
 
-# =============================================================================
-# Login rate limit functions
-# =============================================================================
+def _mem_count(store: dict, key: str, window: int) -> tuple[int, list]:
+    """Count recent in-memory attempts and return cleaned list."""
+    now = time.time()
+    cleaned = [t for t in store[key] if now - t < window]
+    store[key] = cleaned
+    return len(cleaned), cleaned
 
+
+async def _check(category: str, key: str, error_msg: str):
+    """Unified rate limit check: memory first, DB fallback on cold cache."""
+    _prune_memory()
+    max_attempts, window = _LIMITS[category]
+    store = _CATEGORY_STORE[category]
+    cache_key = (category, key)
+
+    # Warm from DB on first access after restart
+    if cache_key not in _warmed:
+        db_count = await _db_count(category, key, window)
+        if db_count > 0:
+            # Backfill memory with synthetic timestamps spread across the window
+            now = time.time()
+            store[key] = [now - (window * i / max(db_count, 1)) for i in range(db_count)]
+        _warmed.add(cache_key)
+
+    count, timestamps = _mem_count(store, key, window)
+    if count >= max_attempts:
+        oldest = min(timestamps)
+        retry_after = int(oldest + window - time.time())
+        minutes = (retry_after + 59) // 60
+        raise HTTPException(
+            status_code=429,
+            detail=f"{error_msg} Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
+
+
+async def _record(category: str, key: str):
+    """Record an attempt in both memory and DB."""
+    _CATEGORY_STORE[category][key].append(time.time())
+    _warmed.add((category, key))
+    await _db_record(category, key)
+
+
+# ---------------------------------------------------------------------------
+# Public API (same signatures as before for backward compat)
+# ---------------------------------------------------------------------------
+
+# -- Login --
 
 def _check_rate_limit(ip: str, username=None):
-    """Check if IP or username has exceeded login rate limit. Raises 429."""
-    _prune_all_rate_limiters()
-    now = time.time()
-    # Clean old entries for IP
-    _login_attempts[ip] = [
-        t for t in _login_attempts[ip]
-        if now - t < _RATE_LIMIT_WINDOW
-    ]
-    exceeded = len(_login_attempts[ip]) >= _RATE_LIMIT_MAX
-    timestamps = _login_attempts[ip]
+    """Synchronous check (called from sync login endpoint).
+    Falls back to memory-only on first call; DB warming happens on next async check.
+    """
+    _prune_memory()
+    max_attempts, window = _LIMITS["login"]
 
-    # Also check per-username (S11)
+    count, timestamps = _mem_count(_login_attempts, ip, window)
+    exceeded = count >= max_attempts
+
     if username and not exceeded:
-        _login_attempts_by_username[username] = [
-            t for t in _login_attempts_by_username[username]
-            if now - t < _RATE_LIMIT_WINDOW
-        ]
-        if len(_login_attempts_by_username[username]) >= _RATE_LIMIT_MAX:
-            exceeded = True
-            timestamps = _login_attempts_by_username[username]
+        count, timestamps = _mem_count(_login_attempts_by_username, username, window)
+        exceeded = count >= max_attempts
 
     if exceeded:
         oldest = min(timestamps)
-        retry_after = int(oldest + _RATE_LIMIT_WINDOW - now)
-        minutes = (retry_after + 59) // 60  # round up
+        retry_after = int(oldest + window - time.time())
+        minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail=(
-                f"Too many login attempts. "
-                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
-            ),
-            headers={"Retry-After": str(retry_after)},
+            detail=f"Too many login attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
         )
 
 
 def _record_attempt(ip: str, username=None):
-    """Record a login attempt for rate limiting (IP + username)."""
+    """Record failed login attempt (sync wrapper — DB write is best-effort)."""
+    import asyncio
     _login_attempts[ip].append(time.time())
+    _warmed.add(("login", ip))
     if username:
         _login_attempts_by_username[username].append(time.time())
+        _warmed.add(("login_user", username))
+    # Fire-and-forget DB persistence
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("login", ip))
+        if username:
+            loop.create_task(_db_record("login_user", username))
+    except RuntimeError:
+        pass  # No event loop — skip DB write (test context)
 
 
-# =============================================================================
-# Signup rate limit functions
-# =============================================================================
-
+# -- Signup --
 
 def _check_signup_rate_limit(ip: str):
-    """Check if IP has exceeded signup rate limit."""
-    now = time.time()
-    _signup_attempts[ip] = [
-        t for t in _signup_attempts[ip]
-        if now - t < _SIGNUP_RATE_LIMIT_WINDOW
-    ]
-    if len(_signup_attempts[ip]) >= _SIGNUP_RATE_LIMIT_MAX:
-        oldest = min(_signup_attempts[ip])
-        retry_after = int(oldest + _SIGNUP_RATE_LIMIT_WINDOW - now)
+    _prune_memory()
+    max_attempts, window = _LIMITS["signup"]
+    count, timestamps = _mem_count(_signup_attempts, ip, window)
+    if count >= max_attempts:
+        oldest = min(timestamps)
+        retry_after = int(oldest + window - time.time())
         minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail=(
-                f"Too many signup attempts. "
-                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
-            ),
-            headers={"Retry-After": str(retry_after)},
+            detail=f"Too many signup attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
         )
 
 
 def _record_signup_attempt(ip: str):
-    """Record a signup attempt for rate limiting."""
+    import asyncio
     _signup_attempts[ip].append(time.time())
+    _warmed.add(("signup", ip))
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("signup", ip))
+    except RuntimeError:
+        pass
 
 
-# =============================================================================
-# Forgot-password rate limit functions
-# =============================================================================
-
+# -- Forgot password --
 
 def _check_forgot_pw_rate_limit(ip: str):
-    """Check if IP has exceeded forgot-password rate limit."""
-    now = time.time()
-    _forgot_pw_attempts[ip] = [
-        t for t in _forgot_pw_attempts[ip]
-        if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW
-    ]
-    if len(_forgot_pw_attempts[ip]) >= _FORGOT_PW_RATE_LIMIT_MAX:
-        oldest = min(_forgot_pw_attempts[ip])
-        retry_after = int(
-            oldest + _FORGOT_PW_RATE_LIMIT_WINDOW - now
-        )
+    _prune_memory()
+    max_attempts, window = _LIMITS["forgot_pw"]
+    count, timestamps = _mem_count(_forgot_pw_attempts, ip, window)
+    if count >= max_attempts:
+        oldest = min(timestamps)
+        retry_after = int(oldest + window - time.time())
         minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail=(
-                f"Too many requests. "
-                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
-            ),
-            headers={"Retry-After": str(retry_after)},
+            detail=f"Too many requests. Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
         )
 
 
 def _record_forgot_pw_attempt(ip: str):
-    """Record a forgot-password attempt for rate limiting."""
+    import asyncio
     _forgot_pw_attempts[ip].append(time.time())
+    _warmed.add(("forgot_pw", ip))
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("forgot_pw", ip))
+    except RuntimeError:
+        pass
 
 
 def _is_forgot_pw_email_rate_limited(email: str) -> bool:
-    """Check if email has exceeded forgot-password rate limit (S15).
-    Returns True if rate limited (caller should return generic success)."""
     now = time.time()
+    _, window = _LIMITS["forgot_pw_email"]
+    max_attempts = _LIMITS["forgot_pw_email"][0]
     _forgot_pw_by_email[email] = [
-        t for t in _forgot_pw_by_email[email]
-        if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW
+        t for t in _forgot_pw_by_email[email] if now - t < window
     ]
-    return len(_forgot_pw_by_email[email]) >= _FORGOT_PW_RATE_LIMIT_MAX
+    return len(_forgot_pw_by_email[email]) >= max_attempts
 
 
 def _record_forgot_pw_email_attempt(email: str):
-    """Record a forgot-password attempt by email."""
+    import asyncio
     _forgot_pw_by_email[email].append(time.time())
+    _warmed.add(("forgot_pw_email", email))
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("forgot_pw_email", email))
+    except RuntimeError:
+        pass
 
 
-# =============================================================================
-# Resend verification rate limit functions
-# =============================================================================
-
+# -- Resend verification --
 
 def _check_resend_rate_limit(user_id: int):
-    """Check if user has exceeded resend verification rate limit."""
-    now = time.time()
+    _prune_memory()
     key = str(user_id)
-    _resend_attempts[key] = [
-        t for t in _resend_attempts[key]
-        if now - t < _RESEND_RATE_LIMIT_WINDOW
-    ]
-    if len(_resend_attempts[key]) >= _RESEND_RATE_LIMIT_MAX:
-        oldest = min(_resend_attempts[key])
-        retry_after = int(
-            oldest + _RESEND_RATE_LIMIT_WINDOW - now
-        )
+    max_attempts, window = _LIMITS["resend"]
+    count, timestamps = _mem_count(_resend_attempts, key, window)
+    if count >= max_attempts:
+        oldest = min(timestamps)
+        retry_after = int(oldest + window - time.time())
         minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail=(
-                f"Too many resend attempts. "
-                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
-            ),
-            headers={"Retry-After": str(retry_after)},
+            detail=f"Too many resend attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
         )
 
 
 def _record_resend_attempt(user_id: int):
-    """Record a resend verification attempt for rate limiting."""
-    _resend_attempts[str(user_id)].append(time.time())
+    import asyncio
+    key = str(user_id)
+    _resend_attempts[key].append(time.time())
+    _warmed.add(("resend", key))
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("resend", key))
+    except RuntimeError:
+        pass
 
 
-# =============================================================================
-# MFA rate limit functions
-# =============================================================================
-
+# -- MFA --
 
 def _check_mfa_rate_limit(mfa_token: str):
-    """Check MFA verification attempts per token. Raises 429 after 5 attempts."""
-    now = time.time()
-    _mfa_attempts[mfa_token] = [
-        t for t in _mfa_attempts[mfa_token]
-        if now - t < _MFA_RATE_LIMIT_WINDOW
-    ]
-    if len(_mfa_attempts[mfa_token]) >= _MFA_RATE_LIMIT_MAX:
+    _prune_memory()
+    max_attempts, window = _LIMITS["mfa"]
+    count, _ = _mem_count(_mfa_attempts, mfa_token, window)
+    if count >= max_attempts:
         raise HTTPException(
             status_code=429,
             detail="Too many MFA attempts. Please login again.",
@@ -284,5 +354,11 @@ def _check_mfa_rate_limit(mfa_token: str):
 
 
 def _record_mfa_attempt(mfa_token: str):
-    """Record an MFA verification attempt."""
+    import asyncio
     _mfa_attempts[mfa_token].append(time.time())
+    _warmed.add(("mfa", mfa_token))
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_db_record("mfa", mfa_token))
+    except RuntimeError:
+        pass

@@ -63,6 +63,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const loadedStartupTimeRef = useRef<string | null>(null)
   const updateToastShownForRef = useRef<string | null>(null)
   const versionCheckIntervalRef = useRef<number | null>(null)
+  const versionVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { playOrderSound, setAudioEnabled: setAudioHookEnabled } = useAudio()
 
   // Add a new toast
@@ -132,7 +133,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                 if (data.version !== serverVersion) return  // Version changed mid-check, abort
                 if (updateToastShownForRef.current === serverVersion) return  // Already shown
                 if (checksRemaining > 1) {
-                  setTimeout(() => verifyVersion(checksRemaining - 1), 5000)
+                  versionVerifyTimerRef.current = setTimeout(() => verifyVersion(checksRemaining - 1), 5000)
                 } else {
                   // All checks passed — server is stable
                   updateToastShownForRef.current = serverVersion
@@ -149,7 +150,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               })
               .catch(() => {})  // Server not responding — don't notify yet
           }
-          setTimeout(() => verifyVersion(3), 5000)  // Start after 5s, then 3 checks × 5s = 20s total
+          versionVerifyTimerRef.current = setTimeout(() => verifyVersion(3), 5000)  // Start after 5s, then 3 checks × 5s = 20s total
         }
       })
       .catch(() => {
@@ -304,6 +305,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       if (versionCheckIntervalRef.current) {
         clearInterval(versionCheckIntervalRef.current)
         versionCheckIntervalRef.current = null
+      }
+      if (versionVerifyTimerRef.current) {
+        clearTimeout(versionVerifyTimerRef.current)
+        versionVerifyTimerRef.current = null
       }
     }
   }, [connect, checkForNewVersion])

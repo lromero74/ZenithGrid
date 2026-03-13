@@ -27,6 +27,7 @@ import {
   pass,
   nameTrump,
   dealerDiscard,
+  setGoingAlone,
   playCard,
   advanceAi,
   getPlayableCards,
@@ -255,7 +256,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     }
   }, [gameState, clear, onGameEnd])
 
-  // AI auto-advance: trump selection, dealer discard, and playing
+  // AI auto-advance: trump selection, go-alone decision, dealer discard, and playing
   useEffect(() => {
     if (gameState.phase === 'gameOver' || gameState.phase === 'handOver') return
     if (gameState.currentPlayer === 0) return
@@ -265,7 +266,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       setGameState(prev => {
         if (prev.currentPlayer === 0) return prev
 
-        if (prev.phase === 'trumpRound1' || prev.phase === 'trumpRound2') {
+        if (prev.phase === 'trumpRound1' || prev.phase === 'trumpRound2' || prev.phase === 'goAlonePrompt') {
           return aiTrumpSelection(prev)
         }
 
@@ -325,6 +326,10 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     setGameState(prev => nextHand(prev))
   }, [])
 
+  const handleGoAlone = useCallback((alone: boolean) => {
+    setGameState(prev => setGoingAlone(prev, alone))
+  }, [])
+
   const handleNewGame = useCallback(() => {
     setGameState(createEuchreGame())
     setGameStatus('playing')
@@ -335,6 +340,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   const isPlaying = gameState.phase === 'playing' && isHumanTurn
   const isTrumpRound1 = gameState.phase === 'trumpRound1' && isHumanTurn
   const isTrumpRound2 = gameState.phase === 'trumpRound2' && isHumanTurn
+  const isGoAlonePrompt = gameState.phase === 'goAlonePrompt' && isHumanTurn
   const isDealerDiscard = gameState.phase === 'dealerDiscard' && isHumanTurn
 
   const playableIndices = isPlaying
@@ -376,8 +382,11 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       <div className="relative flex flex-col items-center w-full max-w-lg space-y-3">
         {/* North (Partner) */}
         <div className="text-center">
-          <span className="text-xs text-blue-400">North (Partner) ({gameState.hands[2].length})</span>
-          <div className="flex gap-0.5 justify-center mt-0.5">
+          <span className="text-xs text-blue-400">
+            North (Partner) ({gameState.hands[2].length})
+            {gameState.goingAlone === 0 && <span className="ml-1 text-yellow-400">(sitting out)</span>}
+          </span>
+          <div className={`flex gap-0.5 justify-center mt-0.5 ${gameState.goingAlone === 0 ? 'opacity-30' : ''}`}>
             {gameState.hands[2].map((_, i) => (
               <div key={i} className={CARD_SLOT_V}><CardBack /></div>
             ))}
@@ -388,8 +397,11 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
         <div className="flex w-full items-center gap-2">
           {/* West (Opponent) */}
           <div className="text-center w-16 flex-shrink-0">
-            <span className="text-[0.6rem] text-red-400">West ({gameState.hands[3].length})</span>
-            <div className="flex flex-col items-center gap-0.5 mt-0.5">
+            <span className="text-[0.6rem] text-red-400">
+              West ({gameState.hands[3].length})
+              {gameState.goingAlone === 1 && <span className="ml-0.5 text-yellow-400">*</span>}
+            </span>
+            <div className={`flex flex-col items-center gap-0.5 mt-0.5 ${gameState.goingAlone === 1 ? 'opacity-30' : ''}`}>
               {gameState.hands[3].map((_, i) => (
                 <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
@@ -398,8 +410,8 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 
           {/* Trick area + flipped card */}
           <div className="flex-1 relative h-36 sm:h-48">
-            {/* Flipped card during trump selection */}
-            {(gameState.phase === 'trumpRound1' || gameState.phase === 'trumpRound2') && (
+            {/* Flipped card during trump selection / go-alone prompt */}
+            {(gameState.phase === 'trumpRound1' || gameState.phase === 'trumpRound2' || gameState.phase === 'goAlonePrompt') && (
               <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${CARD_SIZE}`}>
                 {gameState.phase === 'trumpRound1' ? (
                   <CardFace card={gameState.flippedCard} />
@@ -433,6 +445,11 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
                   {getSuitSymbol(gameState.trumpSuit)}
                 </span>
                 <p className="text-[0.6rem] text-slate-500 mt-0.5">Trump</p>
+                {gameState.goingAlone !== null && (
+                  <p className="text-[0.6rem] text-amber-400 mt-0.5 font-medium">
+                    {PLAYER_NAMES[gameState.goingAlone]} alone
+                  </p>
+                )}
               </div>
             )}
 
@@ -448,8 +465,11 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 
           {/* East (Opponent) */}
           <div className="text-center w-16 flex-shrink-0">
-            <span className="text-[0.6rem] text-red-400">East ({gameState.hands[1].length})</span>
-            <div className="flex flex-col items-center gap-0.5 mt-0.5">
+            <span className="text-[0.6rem] text-red-400">
+              East ({gameState.hands[1].length})
+              {gameState.goingAlone === 3 && <span className="ml-0.5 text-yellow-400">*</span>}
+            </span>
+            <div className={`flex flex-col items-center gap-0.5 mt-0.5 ${gameState.goingAlone === 3 ? 'opacity-30' : ''}`}>
               {gameState.hands[1].map((_, i) => (
                 <div key={i} className={CARD_SLOT_H}><CardBack /></div>
               ))}
@@ -507,6 +527,29 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
                 Pass
               </button>
             )}
+          </div>
+        )}
+
+        {/* Go Alone prompt */}
+        {isGoAlonePrompt && (
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-slate-400">
+              You called {getSuitSymbol(gameState.trumpSuit!)} as trump. Go alone?
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleGoAlone(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Go Alone
+              </button>
+              <button
+                onClick={() => handleGoAlone(false)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+              >
+                Play with Partner
+              </button>
+            </div>
           </div>
         )}
 
