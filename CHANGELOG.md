@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.111.1] - 2026-03-13
+
+### Fixed
+- **Memory leak: fire-and-forget async tasks** — Rate limiter and market metrics DB writes now use bounded task tracking (max 100/50 pending) with automatic backpressure, preventing task pile-up during slow database periods
+- **Memory leak: rate limiter tracking sets** — `_warmed` set capped at 10,000 entries and cleared when exceeded; stale empty dict keys now pruned during periodic cleanup
+- **Memory leak: exchange client cache** — Monitor exchange cache now capped at 20 clients with overflow eviction
+- **Memory leak: PIL image objects** — News image compression now explicitly closes PIL Image and BytesIO objects instead of relying on garbage collection
+- **Memory leak: refresh token subscribers** — Frontend token refresh subscriber array capped at 50 to prevent unbounded growth during concurrent 401 responses
+- **Periodic rate limiter pruning** — Rate limiter in-memory entries now pruned by the 5-minute cache sweep job even when no auth requests are incoming
+
 ## [v2.111.0] - 2026-03-13
 
 ### Added

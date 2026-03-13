@@ -50,6 +50,25 @@ METRIC_SNAPSHOT_PRUNE_DAYS = 90
 _last_prune_time: float = 0.0
 PRUNE_INTERVAL_SECONDS = 3600
 
+# Bounded fire-and-forget task tracking (prevents pile-up under slow DB)
+_pending_metric_tasks: set = set()
+_MAX_PENDING_METRIC_TASKS = 50
+
+
+def _fire_and_forget_metric(coro):
+    """Schedule a metric coroutine as a tracked task. Drops under backpressure."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        if len(_pending_metric_tasks) >= _MAX_PENDING_METRIC_TASKS:
+            return  # Drop under backpressure
+        task = loop.create_task(coro)
+        _pending_metric_tasks.add(task)
+        task.add_done_callback(_pending_metric_tasks.discard)
+    except RuntimeError:
+        pass
+
+
 # Shared aiohttp session (lazy-initialized, reused across requests)
 _shared_session: Optional[aiohttp.ClientSession] = None
 _SHARED_HEADERS = {"User-Agent": "ZenithGrid/1.0"}
@@ -317,7 +336,7 @@ async def fetch_fear_greed_index() -> Dict[str, Any]:
             }
 
             save_fear_greed_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("fear_greed", cache_data["data"]["value"]))
+            _fire_and_forget_metric(record_metric_snapshot("fear_greed", cache_data["data"]["value"]))
             return cache_data
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching Fear/Greed index")
@@ -355,8 +374,8 @@ async def fetch_btc_dominance() -> Dict[str, Any]:
             }
 
             save_btc_dominance_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("btc_dominance", cache_data["btc_dominance"]))
-            asyncio.create_task(record_metric_snapshot("total_market_cap", cache_data["total_market_cap"]))
+            _fire_and_forget_metric(record_metric_snapshot("btc_dominance", cache_data["btc_dominance"]))
+            _fire_and_forget_metric(record_metric_snapshot("total_market_cap", cache_data["total_market_cap"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -422,7 +441,7 @@ async def fetch_altseason_index() -> Dict[str, Any]:
             }
 
             save_altseason_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("altseason_index", cache_data["altseason_index"]))
+            _fire_and_forget_metric(record_metric_snapshot("altseason_index", cache_data["altseason_index"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -479,7 +498,7 @@ async def fetch_stablecoin_mcap() -> Dict[str, Any]:
             }
 
             save_stablecoin_mcap_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("stablecoin_mcap", cache_data["total_stablecoin_mcap"]))
+            _fire_and_forget_metric(record_metric_snapshot("stablecoin_mcap", cache_data["total_stablecoin_mcap"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -530,7 +549,7 @@ async def fetch_mempool_stats() -> Dict[str, Any]:
         }
 
         save_mempool_cache(cache_data)
-        asyncio.create_task(record_metric_snapshot("mempool_tx_count", cache_data["tx_count"]))
+        _fire_and_forget_metric(record_metric_snapshot("mempool_tx_count", cache_data["tx_count"]))
         return cache_data
 
     except asyncio.TimeoutError:
@@ -581,7 +600,7 @@ async def fetch_hash_rate() -> Dict[str, Any]:
         }
 
         save_hash_rate_cache(cache_data)
-        asyncio.create_task(record_metric_snapshot("hash_rate", cache_data["hash_rate_eh"]))
+        _fire_and_forget_metric(record_metric_snapshot("hash_rate", cache_data["hash_rate_eh"]))
         return cache_data
 
     except asyncio.TimeoutError:
@@ -620,7 +639,7 @@ async def fetch_lightning_stats() -> Dict[str, Any]:
         }
 
         save_lightning_cache(cache_data)
-        asyncio.create_task(record_metric_snapshot("lightning_capacity", cache_data["total_capacity_btc"]))
+        _fire_and_forget_metric(record_metric_snapshot("lightning_capacity", cache_data["total_capacity_btc"]))
         return cache_data
 
     except asyncio.TimeoutError:
@@ -735,7 +754,7 @@ async def fetch_btc_rsi() -> Dict[str, Any]:
             }
 
             save_btc_rsi_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("btc_rsi", rsi))
+            _fire_and_forget_metric(record_metric_snapshot("btc_rsi", rsi))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -806,7 +825,7 @@ async def get_metric_history_data(
 
     # Prune old data periodically (piggyback on reads)
     if len(rows) > 0:
-        asyncio.create_task(prune_old_snapshots())
+        _fire_and_forget_metric(prune_old_snapshots())
 
     return {
         "metric_name": metric_name,

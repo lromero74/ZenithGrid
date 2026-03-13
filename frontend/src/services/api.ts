@@ -26,6 +26,11 @@ let isRefreshing = false;
 let refreshSubscribers: ((token: string | null) => void)[] = [];
 
 function subscribeToRefresh(callback: (token: string | null) => void) {
+  // Cap subscribers to prevent unbounded growth during concurrent 401s
+  if (refreshSubscribers.length >= 50) {
+    const oldest = refreshSubscribers.shift();
+    oldest?.(null);
+  }
   refreshSubscribers.push(callback);
 }
 

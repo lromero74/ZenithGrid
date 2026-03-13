@@ -398,6 +398,12 @@ async def cleanup_in_memory_caches():
             if monitor and isinstance(monitor, MultiBotMonitor):
                 monitor_stats = monitor.cleanup_caches()
 
+            # --- Rate limiter in-memory pruning ---
+            # Force prune by resetting the timer (normally only runs on auth requests)
+            import app.auth_routers.rate_limiters as _rl
+            _rl._last_prune_time = 0.0
+            _rl._prune_memory()
+
             # --- WebSocket stale connections ---
             from app.services.websocket_manager import ws_manager
             ws_stale = await ws_manager.sweep_stale_connections()
