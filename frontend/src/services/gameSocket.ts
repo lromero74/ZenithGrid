@@ -153,6 +153,10 @@ class GameSocketClient {
     this.send({ type: 'game:state', roomId, state })
   }
 
+  updateConfig(roomId: string, config: object): void {
+    this.send({ type: 'game:update_config', roomId, config })
+  }
+
   /**
    * Buffer the next game:joined response so it survives page navigation.
    * Call before sending game:join_friend and navigating away.

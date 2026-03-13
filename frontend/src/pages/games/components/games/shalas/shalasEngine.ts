@@ -709,6 +709,16 @@ export function chooseSelectorTarget(state: ShalasState, source: PlaySource): Sh
   next.discardPile = [...next.discardPile, playedCard]
   next.effectiveRank = playedCard.rank
   next.aceOnTop = playedCard.rank === 1
+
+  // If the selected card is itself a 7, chain the selector power
+  if (playedCard.rank === 7) {
+    next.phase = state.playerCount === 2 ? 'choose_seven_action' : 'choose_selector'
+    next.message = state.playerCount === 2
+      ? 'Chained 7! Pick a table card OR push the discard pile'
+      : 'Chained 7! Pick another card from the table'
+    return next
+  }
+
   next.phase = 'playing'
   next.message = `Selector moved ${rankName(playedCard.rank)} to discard`
 

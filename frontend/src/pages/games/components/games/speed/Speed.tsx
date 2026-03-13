@@ -17,6 +17,7 @@ import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { SpeedMultiplayer } from './SpeedMultiplayer'
 import {
   createSpeedGame,
   playCard,
@@ -527,7 +528,7 @@ function SpeedSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result: 
 // ── Race wrapper (first-to-win against opponent) ──────────────────
 
 function SpeedRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -544,6 +545,8 @@ function SpeedRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () =>
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <SpeedSinglePlayer onGameEnd={handleGameEnd} isMultiplayer />
     </div>
@@ -556,15 +559,17 @@ export default function Speed() {
       config={{
         gameId: 'speed',
         gameName: 'Speed',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: false,
-        modeDescriptions: { first_to_win: 'First to beat the AI wins' },
+        modeDescriptions: { vs: 'Real-time head-to-head speed', first_to_win: 'First to beat the AI wins' },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <SpeedSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, _roomConfig, onLeave) =>
-        <SpeedRaceWrapper roomId={roomId} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, _roomConfig, onLeave) =>
+        mode === 'vs'
+          ? <SpeedMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+          : <SpeedRaceWrapper roomId={roomId} onLeave={onLeave} />
       }
     />
   )

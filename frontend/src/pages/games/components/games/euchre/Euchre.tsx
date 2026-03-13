@@ -19,6 +19,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { EuchreMultiplayer } from './EuchreMultiplayer'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createEuchreGame,
@@ -569,7 +570,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function EuchreRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -586,6 +587,8 @@ function EuchreRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomI
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <EuchreSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -598,13 +601,20 @@ export default function Euchre() {
       config={{
         gameId: 'euchre',
         gameName: 'Euchre',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to win a round wins' },
+        modeDescriptions: {
+          vs: '2 humans + 2 AI partnerships',
+          first_to_win: 'First to win a round wins',
+        },
       }}
       renderSinglePlayer={() => <EuchreSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <EuchreRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <EuchreMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <EuchreRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
       }
     />
   )

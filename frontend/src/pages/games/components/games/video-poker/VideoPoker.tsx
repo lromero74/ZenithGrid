@@ -281,7 +281,7 @@ function VideoPokerSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSt
 // ── Race wrapper (best_score — highest credits wins) ─────────────────
 
 function VideoPokerRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore } =
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore, leaveRoom } =
     useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
   const latestCredits = useRef(100)
@@ -305,6 +305,8 @@ function VideoPokerRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <VideoPokerSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} isMultiplayer />
     </div>

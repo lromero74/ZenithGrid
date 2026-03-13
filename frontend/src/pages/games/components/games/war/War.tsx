@@ -22,6 +22,7 @@ import {
 } from './WarEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { WarMultiplayer } from './WarMultiplayer'
 
 interface SavedState {
   gameState: WarState
@@ -302,7 +303,7 @@ function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplay
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function WarRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -319,6 +320,8 @@ function WarRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: 
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <WarSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -331,14 +334,16 @@ export default function War() {
       config={{
         gameId: 'war',
         gameName: 'War',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: false,
-        modeDescriptions: { first_to_win: 'First to win the war wins' },
+        modeDescriptions: { vs: 'Head-to-head card war', first_to_win: 'First to win the war wins' },
       }}
       renderSinglePlayer={() => <WarSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <WarRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs'
+          ? <WarMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+          : <WarRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

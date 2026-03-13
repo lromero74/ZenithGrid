@@ -16,6 +16,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { CribbageMultiplayer } from './CribbageMultiplayer'
 import {
   createCribbageGame,
   toggleCribSelection,
@@ -578,7 +579,7 @@ function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function CribbageRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -595,6 +596,8 @@ function CribbageRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roo
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <CribbageSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -607,13 +610,15 @@ export default function Cribbage() {
       config={{
         gameId: 'cribbage',
         gameName: 'Cribbage',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to 121 points wins' },
+        modeDescriptions: { vs: 'Head-to-head cribbage', first_to_win: 'First to 121 points wins' },
       }}
       renderSinglePlayer={() => <CribbageSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <CribbageRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs'
+          ? <CribbageMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+          : <CribbageRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
       }
     />
   )

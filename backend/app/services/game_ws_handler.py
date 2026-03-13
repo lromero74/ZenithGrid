@@ -38,6 +38,8 @@ async def handle_game_message(
         "game:invite": _handle_invite,
         "game:join_friend": _handle_join_friend,
         "game:check_room": _handle_check_room,
+        "game:update_config": _handle_update_config,
+        "game:chat": _handle_chat,
         "game:back_to_lobby": _handle_back_to_lobby,
     }
 
@@ -168,11 +170,20 @@ async def _handle_join(ws_manager, websocket, user_id, msg, display_name):
     # If user is already in a room, handle gracefully
     existing_room_id = game_room_manager.get_user_room(user_id)
     if existing_room_id:
-        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+        if existing_room_id == room_id:
+            # Already in the target room — just resend the join info
             existing_room = game_room_manager.get_room(existing_room_id)
             if existing_room:
                 await _send_existing_room(websocket, user_id, existing_room)
                 return
+        # In a different room — auto-leave it so they can join the target
+        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+            # Stale cleanup didn't help (same game, active room) — force leave
+            game_room_manager.leave_room(existing_room_id, user_id)
+            logger.info(
+                f"Force-left room {existing_room_id} for user {user_id} "
+                f"to join invited room {room_id}"
+            )
 
     room = game_room_manager.join_room(room_id, user_id)
     room.player_names[user_id] = display_name
@@ -184,7 +195,7 @@ async def _handle_join(ws_manager, websocket, user_id, msg, display_name):
         "gameId": room.game_id,
         "players": list(room.players),
         "playerNames": _build_player_names(room),
-        "config": room.config,
+        "config": {**room.config, "mode": room.mode},
     })
 
     # Notify existing players
@@ -216,11 +227,17 @@ async def _handle_mid_join(ws_manager, websocket, user_id, msg, display_name):
     # If user is already in a room, handle gracefully
     existing_room_id = game_room_manager.get_user_room(user_id)
     if existing_room_id:
-        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+        if existing_room_id == room_id:
             existing_room = game_room_manager.get_room(existing_room_id)
             if existing_room:
                 await _send_existing_room(websocket, user_id, existing_room)
                 return
+        if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
+            game_room_manager.leave_room(existing_room_id, user_id)
+            logger.info(
+                f"Force-left room {existing_room_id} for user {user_id} "
+                f"to mid-join room {room_id}"
+            )
 
     room = game_room_manager.mid_join_room(room_id, user_id)
     room.player_names[user_id] = display_name
@@ -454,9 +471,10 @@ async def _handle_start(ws_manager, websocket, user_id, msg, display_name):
             "type": "game:started",
             "roomId": room_id,
             "gameId": room.game_id,
+            "mode": room.mode,
             "players": list(room.players),
             "playerNames": _build_player_names(room),
-            "config": room.config,
+            "config": {**room.config, "mode": room.mode},
         },
     )
 
@@ -585,10 +603,20 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
     existing_room_id = game_room_manager.get_user_room(user_id)
     if existing_room_id:
         if not _clean_stale_user_room(user_id, target_game_id=target_game_id):
-            existing_room = game_room_manager.get_room(existing_room_id)
-            if existing_room:
-                await _send_existing_room(websocket, user_id, existing_room)
-                return
+            # Still in an active room — if it's the friend's room, send existing info.
+            # If it's a different room (same game), leave it to join the friend.
+            if existing_room_id == friend_room_id:
+                existing_room = game_room_manager.get_room(existing_room_id)
+                if existing_room:
+                    await _send_existing_room(websocket, user_id, existing_room)
+                    return
+            else:
+                # Leave old room so we can join the friend's room
+                game_room_manager.leave_room(existing_room_id, user_id)
+                logger.info(
+                    f"Auto-left room {existing_room_id} for user {user_id} "
+                    f"to join friend's room {friend_room_id}"
+                )
 
     # Validate friendship
     async with async_session_maker() as db:
@@ -600,7 +628,7 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
                 )
             )
         )
-        if not result.scalar_one_or_none():
+        if not result.scalars().first():
             await websocket.send_json({"type": "game:error", "error": "You can only join a friend's game"})
             return
 
@@ -637,7 +665,7 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
         "roomId": room_id,
         "players": sorted(room.players),
         "playerNames": room.player_names,
-        "config": room.config,
+        "config": {**room.config, "mode": room.mode},
     })
 
     # Notify other players in the room
@@ -686,8 +714,70 @@ async def _handle_check_room(ws_manager, websocket, user_id, msg, display_name):
         "mode": room.mode,
         "players": sorted(room.players),
         "playerNames": _build_player_names(room),
-        "config": room.config,
+        "config": {**room.config, "mode": room.mode},
     })
+
+
+async def _handle_update_config(ws_manager, websocket, user_id, msg, display_name):
+    """Host updates room config (e.g. difficulty) while in lobby."""
+    room_id = msg.get("roomId")
+    updates = msg.get("config", {})
+    if not room_id or not updates:
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room or room.status != "waiting":
+        return
+    if room.host_user_id != user_id:
+        await websocket.send_json({"type": "game:error", "error": "Only the host can change settings"})
+        return
+
+    # Handle mode change (updates room.mode + config)
+    if "mode" in updates:
+        new_mode = updates.pop("mode")
+        if new_mode in ("vs", "race"):
+            room.mode = new_mode
+    if "race_type" in updates:
+        room.config["race_type"] = updates.pop("race_type")
+
+    # Merge remaining updates into room config
+    room.config.update(updates)
+
+    # Broadcast updated config to all players
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:config_updated",
+            "roomId": room_id,
+            "config": {**room.config, "mode": room.mode},
+        },
+    )
+
+
+async def _handle_chat(ws_manager, websocket, user_id, msg, display_name):
+    """Relay a chat message to all players in the room (works in any room status)."""
+    room_id = msg.get("roomId")
+    text = msg.get("text", "").strip()
+    if not room_id or not text:
+        return
+
+    room = game_room_manager.get_room(room_id)
+    if not room or user_id not in room.players:
+        return
+
+    # Truncate to prevent abuse
+    text = text[:500]
+
+    await ws_manager.send_to_room(
+        room.players,
+        {
+            "type": "game:chat",
+            "roomId": room_id,
+            "playerId": user_id,
+            "playerName": display_name,
+            "text": text,
+        },
+    )
 
 
 async def _handle_back_to_lobby(ws_manager, websocket, user_id, msg, display_name):
@@ -718,7 +808,7 @@ async def _handle_back_to_lobby(ws_manager, websocket, user_id, msg, display_nam
         "hostUserId": room.host_user_id,
         "players": sorted(room.players),
         "playerNames": _build_player_names(room),
-        "config": room.config,
+        "config": {**room.config, "mode": room.mode},
     }
     await asyncio.gather(*(
         ws_manager.send_to_user(pid, broadcast) for pid in room.players

@@ -8,11 +8,13 @@ Real-time delivery handled separately via WebSocket chat: messages.
 import logging
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_permission, Perm
+from app.config import settings
 from app.database import get_db
 from app.models import User
 from app.services import chat_service
@@ -32,8 +34,9 @@ class CreateChannelRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    content: str = Field(..., min_length=1, max_length=2000)
+    content: str = Field("", max_length=2000)
     reply_to_id: Optional[int] = None
+    media_url: Optional[str] = Field(None, max_length=500)
 
 
 class EditMessageRequest(BaseModel):
@@ -180,6 +183,7 @@ async def send_message(
         return await chat_service.send_message(
             db, channel_id, current_user.id, body.content,
             reply_to_id=body.reply_to_id,
+            media_url=body.media_url,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -354,3 +358,44 @@ async def search_messages(
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ----- Giphy Proxy -----
+
+@router.get("/giphy/search")
+async def giphy_search(
+    q: str = Query(..., min_length=1, max_length=50),
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    _current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
+) -> dict:
+    """Proxy Giphy search API to keep API key server-side."""
+    if not settings.giphy_api_key:
+        raise HTTPException(503, "Giphy not configured")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.giphy.com/v1/gifs/search",
+            params={"api_key": settings.giphy_api_key, "q": q,
+                    "limit": limit, "offset": offset, "rating": "pg-13"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+@router.get("/giphy/trending")
+async def giphy_trending(
+    limit: int = Query(20, ge=1, le=50),
+    _current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
+) -> dict:
+    """Proxy Giphy trending API."""
+    if not settings.giphy_api_key:
+        raise HTTPException(503, "Giphy not configured")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.giphy.com/v1/gifs/trending",
+            params={"api_key": settings.giphy_api_key, "limit": limit, "rating": "pg-13"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()

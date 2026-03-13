@@ -14,6 +14,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { HeartsMultiplayer } from './HeartsMultiplayer'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createHeartsGame,
@@ -407,7 +408,7 @@ function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function HeartsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -424,6 +425,8 @@ function HeartsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomI
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <HeartsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -436,14 +439,21 @@ export default function Hearts() {
       config={{
         gameId: 'hearts',
         gameName: 'Hearts',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to win a hand wins' },
+        modeDescriptions: {
+          vs: '2 humans + 2 AI at one table',
+          first_to_win: 'First to win a hand wins',
+        },
       }}
       renderSinglePlayer={() => <HeartsSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
-        <HeartsRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <HeartsMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <HeartsRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
+      }
     />
   )
 }

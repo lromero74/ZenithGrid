@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Encryption key for API credentials at rest (Fernet key)
     encryption_key: str = ""
 
+    # Giphy API (for chat GIF support)
+    giphy_api_key: str = ""
+
     # Email / SES Configuration
     ses_region: str = "us-east-1"
     ses_sender_email: str = ""  # Must be set in .env (e.g. noreply@yourdomain.com)

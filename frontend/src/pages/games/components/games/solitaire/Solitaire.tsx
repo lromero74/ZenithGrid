@@ -630,7 +630,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
 // ── Race wrapper ──────────────────────────────────────────────────
 
 function SolitaireRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish } =
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish, leaveRoom } =
     useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -649,6 +649,8 @@ function SolitaireRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: (
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <SolitaireSinglePlayer onGameEnd={handleGameEnd} />
     </div>

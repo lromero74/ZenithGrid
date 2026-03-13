@@ -406,7 +406,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
 
 // ── Multiplayer race wrapper ──────────────────────────────────────────
 function SnakeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, reportScore, reportLevel } = useRaceMode(roomId, 'best_score')
+  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, reportScore, reportLevel, leaveRoom } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
   const lastLevelRef = useRef(1)
 
@@ -432,6 +432,8 @@ function SnakeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () =>
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <SnakeSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={throttledBroadcast} isMultiplayer />
     </div>

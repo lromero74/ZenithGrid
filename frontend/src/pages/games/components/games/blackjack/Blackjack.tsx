@@ -620,7 +620,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
 // ── Race wrapper (best_score — highest chip count wins) ─────────────
 
 function BlackjackRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore } =
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, reportScore, leaveRoom } =
     useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
   const latestChips = useRef(1000)
@@ -644,6 +644,8 @@ function BlackjackRaceWrapper({ roomId, onLeave }: { roomId: string; difficulty?
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <BlackjackSinglePlayer onGameEnd={handleGameEnd} onScoreChange={handleScoreChange} onStateChange={broadcastState} isMultiplayer />
     </div>

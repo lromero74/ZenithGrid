@@ -23,6 +23,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { MemoryMultiplayer } from './MemoryMultiplayer'
 
 interface MemoryState {
   cards: Card[]
@@ -393,7 +394,7 @@ function MemorySinglePlayer({ onGameEnd, onMove, onStateChange: _onStateChange }
 // ── Race wrapper ──────────────────────────────────────────────────
 
 function MemoryRaceWrapper({ roomId, raceType = 'best_score', onLeave }: { roomId: string; difficulty?: string; raceType?: 'first_to_win' | 'best_score'; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportScore, reportFinish } =
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportScore, reportFinish, leaveRoom } =
     useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
 
@@ -415,6 +416,8 @@ function MemoryRaceWrapper({ roomId, raceType = 'best_score', onLeave }: { roomI
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <MemorySinglePlayer onGameEnd={handleGameEnd} onMove={handleMove} onStateChange={broadcastState} />
     </div>
@@ -427,15 +430,29 @@ export default function Memory() {
       config={{
         gameId: 'memory',
         gameName: 'Memory',
-        modes: ['first_to_win', 'best_score'],
+        modes: ['vs', 'first_to_win', 'best_score'],
         maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to finish wins', best_score: 'Fewest moves wins' },
+        modeDescriptions: {
+          vs: 'Take turns finding pairs',
+          first_to_win: 'First to finish wins',
+          best_score: 'Fewest moves wins',
+        },
         allowPlayOn: true,
       }}
       renderSinglePlayer={() => <MemorySinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <MemoryRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} raceType={(roomConfig.race_type as 'first_to_win' | 'best_score') || 'best_score'} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <MemoryMultiplayer
+            roomId={roomId}
+            players={players}
+            playerNames={playerNames}
+            difficulty={roomConfig.difficulty as string}
+            onLeave={onLeave}
+          />
+        ) : (
+          <MemoryRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} raceType={(roomConfig.race_type as 'first_to_win' | 'best_score') || 'best_score'} onLeave={onLeave} />
+        )
       }
     />
   )

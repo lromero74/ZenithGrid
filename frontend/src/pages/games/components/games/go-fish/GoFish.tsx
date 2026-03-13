@@ -16,6 +16,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { GoFishMultiplayer } from './GoFishMultiplayer'
 import {
   createGoFishGame,
   askForRank,
@@ -368,7 +369,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function GoFishRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -385,6 +386,8 @@ function GoFishRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomI
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <GoFishSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -397,14 +400,18 @@ export default function GoFish() {
       config={{
         gameId: 'go-fish',
         gameName: 'Go Fish',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to collect the most sets wins' },
+        modeDescriptions: { vs: 'Head-to-head card game', first_to_win: 'First to collect the most sets wins' },
       }}
       renderSinglePlayer={() => <GoFishSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <GoFishRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <GoFishMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <GoFishRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
       }
     />
   )

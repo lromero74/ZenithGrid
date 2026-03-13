@@ -348,7 +348,7 @@ function ConnectFourSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function ConnectFourRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -365,6 +365,8 @@ function ConnectFourRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { 
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <ConnectFourSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>

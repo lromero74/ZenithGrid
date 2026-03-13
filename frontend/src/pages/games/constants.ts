@@ -210,7 +210,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 'easy',
     sessionLength: '2-5 min',
     category: 'puzzle',
-    multiplayer: ['first_to_win', 'best_score'],
+    multiplayer: ['vs', 'first_to_win', 'best_score'],
   },
   {
     id: 'solitaire',
@@ -281,7 +281,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'spades',
@@ -293,7 +293,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'crazy-eights',
@@ -305,7 +305,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'gin-rummy',
@@ -317,7 +317,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-20 min',
     category: 'cards',
     subcategory: 'Rummy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'freecell',
@@ -342,7 +342,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'go-fish',
@@ -354,7 +354,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-10 min',
     category: 'cards',
     subcategory: 'Classic',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'speed',
@@ -366,7 +366,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '3-5 min',
     category: 'cards',
     subcategory: 'Classic',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'spoons',
@@ -402,7 +402,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Classic',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'euchre',
@@ -414,7 +414,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'texas-holdem',
@@ -438,7 +438,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '20-40 min',
     category: 'cards',
     subcategory: 'Trick-Taking',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   {
     id: 'canasta',
@@ -450,7 +450,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '20-40 min',
     category: 'cards',
     subcategory: 'Rummy',
-    multiplayer: ['first_to_win'],
+    multiplayer: ['vs', 'first_to_win'],
   },
   // Phase 7: Arcade Games
   {

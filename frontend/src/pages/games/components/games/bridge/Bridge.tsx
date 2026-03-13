@@ -19,6 +19,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
+import { BridgeMultiplayer } from './BridgeMultiplayer'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 import {
   createBridgeGame,
@@ -646,7 +647,7 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function BridgeRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -663,6 +664,8 @@ function BridgeRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomI
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <BridgeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -675,14 +678,21 @@ export default function Bridge() {
       config={{
         gameId: 'bridge',
         gameName: 'Bridge',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
         maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to make contract wins' },
+        modeDescriptions: {
+          vs: '2 humans + 2 AI partnerships',
+          first_to_win: 'First to make contract wins',
+        },
       }}
       renderSinglePlayer={() => <BridgeSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <BridgeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <BridgeMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <BridgeRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
       }
     />
   )

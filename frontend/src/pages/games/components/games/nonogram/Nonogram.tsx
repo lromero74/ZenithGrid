@@ -279,7 +279,7 @@ function NonogramSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'los
 // ── Race wrapper (first_to_win — first to solve wins) ────────────────
 
 function NonogramRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -296,6 +296,8 @@ function NonogramRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: ()
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <NonogramSinglePlayer onGameEnd={handleGameEnd} />
     </div>

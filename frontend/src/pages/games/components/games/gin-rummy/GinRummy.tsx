@@ -15,6 +15,7 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { GinRummyMultiplayer } from './GinRummyMultiplayer'
 import {
   createGinRummyGame,
   drawFromPile,
@@ -386,7 +387,7 @@ function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function GinRummyRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -403,6 +404,8 @@ function GinRummyRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roo
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <GinRummySinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -415,13 +418,18 @@ export default function GinRummy() {
       config={{
         gameId: 'gin-rummy',
         gameName: 'Gin Rummy',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
+        maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to gin wins' },
+        modeDescriptions: { vs: 'Head-to-head card game', first_to_win: 'First to gin wins' },
       }}
       renderSinglePlayer={() => <GinRummySinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <GinRummyRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <GinRummyMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <GinRummyRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+        )
       }
     />
   )

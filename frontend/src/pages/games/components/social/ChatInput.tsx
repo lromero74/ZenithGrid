@@ -6,13 +6,141 @@
  * character limit indicator, and Shift+Enter for newlines.
  */
 
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Reply, X } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { Send, Reply, X, ImageIcon, Loader2, Search } from 'lucide-react'
 import { useSendMessage, useEditMessage } from '../../hooks/useChat'
 import type { ChatMessage, ChatMember } from '../../hooks/useChat'
+import { api } from '../../../../services/api'
 
 const MAX_MESSAGE_LENGTH = 2000
 const CHAR_WARN_THRESHOLD = 1800
+
+interface GiphyGif {
+  id: string
+  images: {
+    fixed_height_small: { url: string; width: string; height: string }
+    fixed_height: { url: string }
+  }
+}
+
+function GifPicker({ onSelect, onClose }: {
+  onSelect: (url: string) => void
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [gifs, setGifs] = useState<GiphyGif[]>([])
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<'trending' | 'search'>('trending')
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  const fetchGifs = useCallback(async (searchQuery?: string) => {
+    setLoading(true)
+    try {
+      const endpoint = searchQuery
+        ? `/api/chat/giphy/search?q=${encodeURIComponent(searchQuery)}&limit=20`
+        : '/api/chat/giphy/trending?limit=20'
+      const { data } = await api.get(endpoint)
+      setGifs(data.data || [])
+    } catch {
+      setGifs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchGifs()
+    searchRef.current?.focus()
+  }, [fetchGifs])
+
+  const handleSearch = useCallback(() => {
+    const q = query.trim()
+    if (q) {
+      setMode('search')
+      fetchGifs(q)
+    } else {
+      setMode('trending')
+      fetchGifs()
+    }
+  }, [query, fetchGifs])
+
+  return (
+    <div className="absolute bottom-full left-0 mb-1 bg-slate-800 border border-slate-600/50 rounded-lg shadow-xl z-20 w-72">
+      {/* Header */}
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-700/50">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-medium text-slate-300">
+            {mode === 'trending' ? 'Trending GIFs' : `Results for "${query}"`}
+          </span>
+          {mode === 'search' && (
+            <button
+              onClick={() => { setQuery(''); setMode('trending'); fetchGifs() }}
+              className="text-slate-500 hover:text-slate-300"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-slate-700/50">
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSearch(); if (e.key === 'Escape') onClose() }}
+          placeholder="Search GIFs..."
+          className="flex-1 bg-slate-900/50 border border-slate-600/50 rounded text-[11px] text-slate-200 py-1 px-2 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50"
+        />
+        <button
+          onClick={handleSearch}
+          className="p-1 text-slate-400 hover:text-slate-200"
+        >
+          <Search className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* GIF Grid */}
+      <div className="max-h-48 overflow-y-auto p-1.5">
+        {loading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+          </div>
+        ) : gifs.length === 0 ? (
+          <p className="text-[10px] text-slate-500 text-center py-4">
+            {mode === 'search' ? 'No GIFs found' : 'GIFs unavailable'}
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1">
+            {gifs.map(gif => (
+              <button
+                key={gif.id}
+                onClick={() => { onSelect(gif.images.fixed_height.url); onClose() }}
+                className="rounded overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all"
+              >
+                <img
+                  src={gif.images.fixed_height_small.url}
+                  alt="GIF"
+                  className="w-full h-16 object-cover"
+                  loading="lazy"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Giphy attribution */}
+      <div className="px-2 py-1 border-t border-slate-700/50">
+        <span className="text-[8px] text-slate-600">Powered by GIPHY</span>
+      </div>
+    </div>
+  )
+}
 
 export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, replyingTo, onCancelReply, members }: {
   channelId: number
@@ -26,6 +154,7 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
   const [text, setText] = useState('')
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [showGifPicker, setShowGifPicker] = useState(false)
   const sendMessage = useSendMessage()
   const editMessage = useEditMessage()
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -75,6 +204,20 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
         onCancelReply()
       }
       setText('')
+    } catch {
+      // error handled by mutation
+    }
+  }
+
+  const handleSendGif = async (mediaUrl: string) => {
+    try {
+      await sendMessage.mutateAsync({
+        channelId,
+        content: '',
+        replyToId: replyingTo?.id,
+        mediaUrl,
+      })
+      onCancelReply()
     } catch {
       // error handled by mutation
     }
@@ -182,7 +325,26 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
           </div>
         )}
 
-        <div className="flex items-end gap-2">
+        {/* GIF Picker */}
+        {showGifPicker && (
+          <GifPicker
+            onSelect={handleSendGif}
+            onClose={() => setShowGifPicker(false)}
+          />
+        )}
+
+        <div className="flex items-end gap-1">
+          {!editingMessage && (
+            <button
+              onClick={() => setShowGifPicker(!showGifPicker)}
+              className={`p-1.5 rounded transition-colors shrink-0 ${
+                showGifPicker ? 'text-blue-400 bg-slate-700/50' : 'text-slate-500 hover:text-slate-300'
+              }`}
+              title="Send GIF"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={text}

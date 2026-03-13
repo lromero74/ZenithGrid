@@ -46,7 +46,7 @@ function formatAction(action: string): string {
 }
 
 export function TexasHoldemRace({ roomId, onLeave }: TexasHoldemRaceProps) {
-  const { opponentStatus, raceResult, localFinished, opponentLevelUp, reportFinish, reportScore } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, localFinished, opponentLevelUp, reportFinish, reportScore, leaveRoom } = useRaceMode(roomId, 'first_to_win')
 
   const song = useMemo(() => getSongForGame('texas-holdem'), [])
   const music = useGameMusic(song)
@@ -171,6 +171,8 @@ export function TexasHoldemRace({ roomId, onLeave }: TexasHoldemRaceProps) {
           opponentFinished={opponentStatus.finished}
           opponentLevelUp={opponentLevelUp}
           onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
         />
 
         {/* Community cards */}

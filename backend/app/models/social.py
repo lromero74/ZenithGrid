@@ -240,6 +240,7 @@ class ChatMessage(Base):
     channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(String(2000), nullable=False)
+    media_url = Column(String(500), nullable=True)
     reply_to_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
     is_pinned = Column(Boolean, default=False)
     edited_at = Column(DateTime, nullable=True)

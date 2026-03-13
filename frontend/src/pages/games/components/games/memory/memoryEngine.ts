@@ -11,6 +11,7 @@ export interface Card {
   symbol: string
   flipped: boolean
   matched: boolean
+  matchedBy?: number  // Player index who matched this pair (VS mode only)
 }
 
 export type GridSize = 'easy' | 'medium' | 'hard'
@@ -81,4 +82,23 @@ export function checkGameComplete(cards: Card[]): boolean {
 /** Convert total flip count to move count (every 2 flips = 1 move). */
 export function countMoves(flippedCount: number): number {
   return Math.floor(flippedCount / 2)
+}
+
+/** Create a shuffled deck using a provided RNG function (for multiplayer sync). */
+export function createSeededDeck(pairCount: number, rng: () => number): Card[] {
+  const selectedSymbols = SYMBOLS.slice(0, pairCount)
+  const cards: Card[] = []
+  for (let i = 0; i < pairCount; i++) {
+    const symbol = selectedSymbols[i % selectedSymbols.length]
+    cards.push(
+      { id: i * 2, symbol, flipped: false, matched: false },
+      { id: i * 2 + 1, symbol, flipped: false, matched: false },
+    )
+  }
+  const a = [...cards]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }

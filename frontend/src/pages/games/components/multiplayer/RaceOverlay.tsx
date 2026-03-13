@@ -487,10 +487,16 @@ export function CountdownOverlay({
   countdownValue,
   localReady,
   onReady,
+  onLeave,
+  onBackToLobby,
 }: {
   countdownValue: number | null
   localReady: boolean
   onReady: () => void
+  /** Fully leave the game (navigate away). */
+  onLeave?: () => void
+  /** Return to room lobby without destroying the room. */
+  onBackToLobby?: () => void
 }) {
   // Before ready: show Ready button
   if (!localReady) {
@@ -504,6 +510,18 @@ export function CountdownOverlay({
             Ready!
           </button>
           <span className="text-sm text-slate-400">Press when you're ready to start</span>
+          <div className="flex items-center gap-4 mt-2">
+            {onBackToLobby && (
+              <button onClick={onBackToLobby} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                Back to Lobby
+              </button>
+            )}
+            {onLeave && (
+              <button onClick={onLeave} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                Leave game
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -516,6 +534,18 @@ export function CountdownOverlay({
         <div className="flex flex-col items-center gap-3">
           <Clock className="w-8 h-8 text-amber-400 animate-spin" />
           <span className="text-lg font-medium text-white">Waiting for opponent...</span>
+          <div className="flex items-center gap-4 mt-2">
+            {onBackToLobby && (
+              <button onClick={onBackToLobby} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                Back to Lobby
+              </button>
+            )}
+            {onLeave && (
+              <button onClick={onLeave} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                Leave game
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -561,6 +591,7 @@ export function RaceOverlay({
   onSpectatePrev,
   onSpectateNext,
   onLeaveGame,
+  onBackToLobby,
 }: {
   // -- Core race state --
   raceResult: 'won' | 'lost' | 'tied' | null
@@ -587,6 +618,8 @@ export function RaceOverlay({
   onSpectateNext?: () => void
   /** Called when a spectating player wants to leave mid-game (individual leave, doesn't reset room). */
   onLeaveGame?: () => void
+  /** Return to room lobby without destroying the room (for rematch). */
+  onBackToLobby?: () => void
 }) {
   const [spectateMode, setSpectateMode] = useState(false)
   /** Whether the initial skull/loss overlay has been dismissed (transitions to spectate choice). */
@@ -824,10 +857,6 @@ export function RaceOverlay({
   if (raceResult && !playOnActive) {
     const isWin = raceResult === 'won'
     const isTie = raceResult === 'tied'
-    // If opponent is still playing, use individual leave instead of back_to_lobby
-    // to avoid resetting the opponent's active game
-    const bothDone = opponentFinished && localFinished
-    const handleDismiss = bothDone ? onDismiss : (onLeaveGame ?? onDismiss)
     return (
       <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
         <div className={`relative flex flex-col items-center gap-3 px-8 py-6 rounded-xl border ${
@@ -849,14 +878,22 @@ export function RaceOverlay({
           }`}>
             {isWin ? 'You Win the Race!' : isTie ? 'It\'s a Tie!' : 'You Lost the Race!'}
           </span>
-          {handleDismiss && (
+          <div className="flex items-center gap-3 mt-2">
+            {onBackToLobby && (
+              <button
+                onClick={onBackToLobby}
+                className="px-5 py-2 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+              >
+                Back to Lobby
+              </button>
+            )}
             <button
-              onClick={handleDismiss}
-              className="mt-2 px-5 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+              onClick={onLeaveGame ?? onDismiss}
+              className="px-5 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
             >
-              {bothDone ? 'Back to Lobby' : 'Leave'}
+              Leave
             </button>
-          )}
+          </div>
         </div>
       </div>
     )

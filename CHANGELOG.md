@@ -5,6 +5,23 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.110.0] - 2026-03-13
+
+### Added
+- **VS mode for 11 card games**: Gin Rummy, Crazy Eights, Go Fish, War, Cribbage, Speed, Hearts, Spades, Euchre, Bridge, and Canasta now support real-time VS multiplayer — 21 games total with VS mode
+- **4-player VS with AI partners**: Hearts, Spades, Euchre, Bridge, and Canasta run as 2 humans + 2 AI opponents with host-authoritative state sync
+- **Real-time Speed VS**: Speed multiplayer runs in real-time (not turn-based) — both players play simultaneously
+- **GIF support in chat**: Send GIFs in group chat via built-in Giphy search and trending picker — GIF button next to send, with search, trending view, and inline rendering
+- **Giphy proxy endpoints**: Backend proxies Giphy API calls to keep the API key server-side (`/api/chat/giphy/search`, `/api/chat/giphy/trending`)
+- **Memory VS mode**: Host-authoritative card matching with synchronized flips and turn-based scoring
+- **Lobby chat**: Players can chat while waiting in the game lobby
+- **Lobby configuration**: Host can change game difficulty and multiplayer mode from within the lobby
+- **Ghost room cleanup**: Stale rooms from server restarts are automatically detected and cleared
+
+### Fixed
+- **Memory card flip race condition**: Rapid clicks can no longer sneak in extra card flips during match/mismatch resolution — refs update synchronously with state
+- **Mode propagation**: Multiplayer mode now correctly propagated in all room messages so guests render the right game variant
+
 ## [v2.109.0] - 2026-03-12
 
 ### Added

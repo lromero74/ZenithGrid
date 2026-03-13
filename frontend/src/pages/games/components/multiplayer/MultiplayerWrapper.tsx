@@ -45,6 +45,8 @@ export interface MultiplayerConfig {
   modeDescriptions?: Partial<Record<MultiplayerMode, string>>
   /** Whether losers can continue playing after the race winner is determined. */
   allowPlayOn?: boolean
+  /** Subtitle shown under the "Single Player" button (default: "Solo play"). */
+  singlePlayerDescription?: string
 }
 
 interface MultiplayerWrapperProps {
@@ -83,29 +85,37 @@ export function MultiplayerWrapper({
     setPlayers(pids)
     setPlayerNames(names)
     setRoomConfig(cfg)
+    // Ensure mode is synced from config (backend now always includes mode in config)
+    if (cfg.mode === 'vs') {
+      setSelectedMultiplayerMode('vs')
+    } else if (cfg.race_type) {
+      setSelectedMultiplayerMode(cfg.race_type as MultiplayerMode)
+    }
     setGameMode('playing')
     gameSocket.setActiveRoom(rid)
   }, [])
 
   // When joining a friend's game, check for a buffered join result first
-  // (the game:joined response may have arrived before this component mounted)
+  // (the game:joined response may have arrived before this component mounted).
+  // If not buffered yet, subscribe to game:joined so we catch it when it arrives.
   useEffect(() => {
     if (gameMode !== 'joining') return
-    const pending = gameSocket.consumeJoinResult()
-    if (pending) {
-      setRoomId(pending.roomId)
-      setPlayers(pending.players || [])
-      setPlayerNames(pending.playerNames || {})
-      setRoomConfig(pending.config || {})
-      const mode = pending.config?.mode === 'vs' ? 'vs' : (pending.config?.race_type || 'first_to_win')
+    const applyJoin = (msg: any) => {
+      setRoomId(msg.roomId)
+      setPlayers(msg.players || [])
+      setPlayerNames(msg.playerNames || {})
+      setRoomConfig(msg.config || {})
+      const mode = msg.config?.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')
       setSelectedMultiplayerMode(mode as MultiplayerMode)
       setGameMode('lobby')
-      gameSocket.setActiveRoom(pending.roomId)
-      return
+      gameSocket.setActiveRoom(msg.roomId)
     }
-    // No buffered result yet — fall back to select after 5s if game:joined never arrives
-    const timer = setTimeout(() => setGameMode('select'), 5000)
-    return () => clearTimeout(timer)
+    const pending = gameSocket.consumeJoinResult()
+    if (pending) { applyJoin(pending); return }
+    // Not buffered yet — listen for it live
+    const unsub = gameSocket.on('game:joined', applyJoin)
+    const timer = setTimeout(() => setGameMode('select'), 10000)
+    return () => { unsub(); clearTimeout(timer) }
   }, [gameMode])
 
   // On mount, check if we're already in a room (e.g. navigated away and back)
@@ -128,11 +138,15 @@ export function MultiplayerWrapper({
       }
       gameSocket.setActiveRoom(msg.roomId)
     })
+    // If no room exists, clear any stale active room
+    const unsubNoRoom = gameSocket.on('game:no_room', () => {
+      gameSocket.setActiveRoom(null)
+    })
     // Ask the backend if we're in a room
     if (gameSocket.connected) {
       gameSocket.send({ type: 'game:check_room' })
     }
-    return unsubInfo
+    return () => { unsubInfo(); unsubNoRoom() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for rejoin success/failure (auto-rejoin after reconnect)
@@ -271,7 +285,7 @@ export function MultiplayerWrapper({
           >
             <Monitor className="w-8 h-8 text-blue-400 group-hover:text-blue-300" />
             <span className="text-white font-medium">Single Player</span>
-            <span className="text-xs text-slate-400">Play against AI</span>
+            <span className="text-xs text-slate-400">{config.singlePlayerDescription ?? 'Solo play'}</span>
           </button>
 
           <div className="flex flex-col gap-2">
@@ -360,7 +374,12 @@ export function MultiplayerWrapper({
         mode={selectedMode}
         raceType={selectedMode === 'race' ? (selectedMultiplayerMode as 'first_to_win' | 'survival' | 'best_score') : undefined}
         maxPlayers={config.maxPlayers}
-        hasDifficulty={config.hasDifficulty && selectedMode === 'race'}
+        hasDifficulty={config.hasDifficulty ?? false}
+        availableModes={config.modes}
+        selectedMultiplayerMode={selectedMultiplayerMode}
+        onModeChange={(m) => {
+          setSelectedMultiplayerMode(m)
+        }}
         onGameStart={handleGameStart}
         onBack={handleBackToSelect}
         initialRoom={roomId ? { roomId, players, playerNames, config: roomConfig, hostUserId } : undefined}

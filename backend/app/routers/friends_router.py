@@ -509,8 +509,8 @@ async def get_online_friends(
                 ))
                 continue
             elif room and room.status == "finished":
-                # Stale finished room — clean up mapping
-                game_room_manager._user_rooms.pop(fid, None)
+                # Don't clean up — players may click "Back to Lobby"
+                pass
             elif not room:
                 # Room was cleaned up but mapping remained — clean up
                 game_room_manager._user_rooms.pop(fid, None)

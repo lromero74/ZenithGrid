@@ -502,7 +502,7 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
 
 function BackgammonRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss') => {
@@ -519,6 +519,8 @@ function BackgammonRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { r
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <BackgammonSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>

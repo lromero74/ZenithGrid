@@ -25,6 +25,7 @@ import {
 } from './crazyEightsEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { CrazyEightsMultiplayer } from './CrazyEightsMultiplayer'
 
 interface SavedState {
   gameState: CrazyEightsState
@@ -381,7 +382,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
 // ── Race wrapper (first-to-win against AI) ─────────────────────────
 
 function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: Difficulty; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -398,6 +399,8 @@ function CrazyEightsRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { 
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <CrazyEightsSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} isMultiplayer />
     </div>
@@ -410,14 +413,19 @@ export default function CrazyEights() {
       config={{
         gameId: 'crazy-eights',
         gameName: 'Crazy Eights',
-        modes: ['first_to_win'],
+        modes: ['vs', 'first_to_win'],
+        maxPlayers: 2,
         hasDifficulty: true,
-        modeDescriptions: { first_to_win: 'First to empty their hand wins' },
+        modeDescriptions: { vs: 'Head-to-head card game', first_to_win: 'First to empty their hand wins' },
       }}
       renderSinglePlayer={() => <CrazyEightsSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) => (
-        <CrazyEightsRaceWrapper roomId={roomId} difficulty={roomConfig?.difficulty} onLeave={onLeave} />
-      )}
+      renderMultiplayer={(roomId, players, playerNames, mode, roomConfig, onLeave) =>
+        mode === 'vs' ? (
+          <CrazyEightsMultiplayer roomId={roomId} players={players} playerNames={playerNames} onLeave={onLeave} />
+        ) : (
+          <CrazyEightsRaceWrapper roomId={roomId} difficulty={roomConfig?.difficulty} onLeave={onLeave} />
+        )
+      }
     />
   )
 }

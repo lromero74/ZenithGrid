@@ -25,7 +25,7 @@ import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
-import { setGameRng, resetGameRng } from './dinoRunnerEngine'
+import { setGameRngStreams, resetGameRng } from './dinoRunnerEngine'
 import { createSeededRandom } from '../../../utils/seededRandom'
 
 // ---------------------------------------------------------------------------
@@ -645,7 +645,7 @@ function B({ children }: { children: React.ReactNode }) {
 // Component
 // ---------------------------------------------------------------------------
 
-function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, inputBlocked }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean; inputBlocked?: boolean } = {}) {
+function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, inputBlocked, autoStart }: { onGameEnd?: (score: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean; inputBlocked?: boolean; autoStart?: boolean } = {}) {
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle')
   const [showHelp, setShowHelp] = useState(false)
   const [displayScore, setDisplayScore] = useState(0)
@@ -750,9 +750,15 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
 
     render(next)
 
-    // Broadcast game state for spectators (throttled by the caller)
-    if (onStateChangeRef.current && next.phase === 'playing') {
-      onStateChangeRef.current(next, 200)
+    // Broadcast game state for spectators.
+    // Key state transitions (jump/duck/land/death) send immediately (interval=0)
+    // to give the interpolation buffer crisp keyframes. Regular ticks use 200ms.
+    if (onStateChangeRef.current && (next.phase === 'playing' || next.phase === 'dead')) {
+      const dinoChanged = next.dino.ducking !== state.dino.ducking
+        || (next.dino.y < GROUND_Y && state.dino.y >= GROUND_Y)   // jump start
+        || (next.dino.y >= GROUND_Y && state.dino.y < GROUND_Y)   // landed
+        || next.dino.dead !== state.dino.dead
+      onStateChangeRef.current(next, dinoChanged ? 0 : 200)
     }
 
     rafRef.current = requestAnimationFrame(gameLoop)
@@ -885,6 +891,21 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
       canvas.removeEventListener('touchend', handleTouchEnd)
     }
   }, [restartGame, isLandscape])
+
+  // -----------------------------------------------------------------------
+  // Auto-start when countdown finishes (multiplayer sync-start)
+  // -----------------------------------------------------------------------
+
+  useEffect(() => {
+    if (autoStart && stateRef.current.phase === 'waiting') {
+      stateRef.current = { ...stateRef.current, phase: 'playing' }
+      gameStatusRef.current = 'playing'
+      setGameStatus('playing')
+      music.init()
+      sfx.init()
+      music.start()
+    }
+  }, [autoStart, music, sfx])
 
   // -----------------------------------------------------------------------
   // Animation frame loop
@@ -1021,16 +1042,193 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
   )
 }
 
-/** Spectator canvas — renders the opponent's Dino Runner game state in real time. */
+/**
+ * Spectator canvas — ultra-smooth 60fps via snapshot interpolation.
+ *
+ * Instead of predicting and correcting (which always causes micro-stutter),
+ * we buffer snapshots and always render BETWEEN two known-good states.
+ * The spectator view runs ~one snapshot interval behind real-time (~200ms)
+ * but every single frame is a mathematically perfect lerp — zero corrections,
+ * zero jitter, buttery smooth.
+ *
+ * This is the same technique used by Source Engine, Overwatch, and Rocket
+ * League for spectator/replay rendering.
+ */
+
+interface TimedSnapshot {
+  state: GameState
+  time: number // performance.now() when received
+}
+
 function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef = useRef(0)
+  /** Ring buffer of recent snapshots (oldest first). */
+  const bufferRef = useRef<TimedSnapshot[]>([])
+  /** Scratch state used for rendering (mutated each frame). */
+  const renderStateRef = useRef<GameState | null>(null)
+  const [displayScore, setDisplayScore] = useState(0)
 
+  // Buffer incoming snapshots
   useEffect(() => {
-    if (!spectatorState || !canvasRef.current) return
-    const ctx = canvasRef.current.getContext('2d')
-    if (!ctx) return
-    renderDinoState(ctx, spectatorState)
+    if (!spectatorState) return
+    const buf = bufferRef.current
+    buf.push({ state: spectatorState, time: performance.now() })
+    // Keep at most 10 snapshots (~2s at 200ms intervals)
+    if (buf.length > 10) buf.shift()
+    // Initialize render state from first snapshot
+    if (!renderStateRef.current) {
+      renderStateRef.current = structuredClone(spectatorState)
+    }
   }, [spectatorState])
+
+  // 60fps render loop — pure interpolation between buffered snapshots
+  useEffect(() => {
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+    /** Interpolate all positional fields between two snapshots. */
+    function interpolate(out: GameState, a: GameState, b: GameState, t: number) {
+      // Core numerics
+      out.score = lerp(a.score, b.score, t)
+      out.speed = lerp(a.speed, b.speed, t)
+      out.nightTransition = lerp(a.nightTransition, b.nightTransition, t)
+      out.ground.offset = lerp(a.ground.offset, b.ground.offset, t)
+      out.parallax.farOffset = lerp(a.parallax.farOffset, b.parallax.farOffset, t)
+      out.parallax.midOffset = lerp(a.parallax.midOffset, b.parallax.midOffset, t)
+      out.parallax.nearOffset = lerp(a.parallax.nearOffset, b.parallax.nearOffset, t)
+
+      // Dino
+      out.dino.y = lerp(a.dino.y, b.dino.y, t)
+      out.dino.vy = lerp(a.dino.vy, b.dino.vy, t)
+      out.dino.frame = lerp(a.dino.frame, b.dino.frame, t)
+      out.dino.ducking = t < 0.5 ? a.dino.ducking : b.dino.ducking
+      out.dino.dead = b.dino.dead
+
+      // Obstacles — match by nearest-x to avoid zipping artifacts.
+      // Objects only move left, so if B[i].x >> A[i].x it's a new object
+      // that replaced one that scrolled off — snap it, don't lerp.
+      // Build a consumed-set so each A obstacle matches at most once.
+      const usedA = new Set<number>()
+      out.obstacles.length = b.obstacles.length
+      for (let bi = 0; bi < b.obstacles.length; bi++) {
+        const bObs = b.obstacles[bi]
+        // Find closest A obstacle of the same type within reasonable range
+        let bestAi = -1, bestDist = 80 // max 80px drift between snapshots
+        for (let ai = 0; ai < a.obstacles.length; ai++) {
+          if (usedA.has(ai)) continue
+          if (a.obstacles[ai].type !== bObs.type) continue
+          const dx = Math.abs(a.obstacles[ai].x - bObs.x)
+          if (dx < bestDist) { bestDist = dx; bestAi = ai }
+        }
+        if (!out.obstacles[bi]) out.obstacles[bi] = { ...bObs }
+        if (bestAi >= 0) {
+          // Matched — interpolate smoothly
+          usedA.add(bestAi)
+          out.obstacles[bi].x = lerp(a.obstacles[bestAi].x, bObs.x, t)
+          out.obstacles[bi].y = lerp(a.obstacles[bestAi].y, bObs.y, t)
+          out.obstacles[bi].frame = lerp(a.obstacles[bestAi].frame, bObs.frame, t)
+        } else {
+          // New obstacle (just appeared on right) — snap directly
+          out.obstacles[bi].x = bObs.x
+          out.obstacles[bi].y = bObs.y
+          out.obstacles[bi].frame = bObs.frame
+        }
+        out.obstacles[bi].type = bObs.type
+      }
+
+      // Clouds — same nearest-match logic
+      out.clouds.length = b.clouds.length
+      const usedACloud = new Set<number>()
+      for (let bi = 0; bi < b.clouds.length; bi++) {
+        const bCloud = b.clouds[bi]
+        let bestAi = -1, bestDist = 60
+        for (let ai = 0; ai < a.clouds.length; ai++) {
+          if (usedACloud.has(ai)) continue
+          const dx = Math.abs(a.clouds[ai].x - bCloud.x)
+          if (dx < bestDist) { bestDist = dx; bestAi = ai }
+        }
+        if (!out.clouds[bi]) out.clouds[bi] = { ...bCloud }
+        if (bestAi >= 0) {
+          usedACloud.add(bestAi)
+          out.clouds[bi].x = lerp(a.clouds[bestAi].x, bCloud.x, t)
+          out.clouds[bi].y = a.clouds[bestAi].y
+          out.clouds[bi].speed = a.clouds[bestAi].speed
+        } else {
+          out.clouds[bi].x = bCloud.x
+          out.clouds[bi].y = bCloud.y
+          out.clouds[bi].speed = bCloud.speed
+        }
+      }
+
+      // Non-positional: snap to the later snapshot
+      out.phase = b.phase
+      out.nightMode = b.nightMode
+      out.milestoneFlash = b.milestoneFlash
+      out.frameCount = Math.round(lerp(a.frameCount, b.frameCount, t))
+      out.weather.type = b.weather.type
+      out.weather.intensity = lerp(a.weather.intensity, b.weather.intensity, t)
+      out.weather.lightning = b.weather.lightning
+      out.weather.windStrength = lerp(a.weather.windStrength, b.weather.windStrength, t)
+      out.parallax.biomeIndex = b.parallax.biomeIndex
+      out.parallax.prevBiomeIndex = b.parallax.prevBiomeIndex
+      out.parallax.transitionProgress = lerp(a.parallax.transitionProgress, b.parallax.transitionProgress, t)
+
+      // Cosmetic (particles, stars, popups): use later snapshot wholesale
+      out.weather.particles = b.weather.particles
+      out.weather.stormClouds = b.weather.stormClouds
+      out.weather.impacts = b.weather.impacts
+      out.stars = b.stars
+      out.scorePopups = b.scorePopups
+      out.ground.particles = b.ground.particles
+    }
+
+    const loop = (_now: number) => {
+      const buf = bufferRef.current
+      const out = renderStateRef.current
+
+      if (out && buf.length >= 2 && canvasRef.current) {
+        // Render time = now minus one snapshot interval (adaptive buffer delay).
+        // This ensures we almost always have two snapshots bracketing renderTime.
+        const latestTime = buf[buf.length - 1].time
+        const prevTime = buf[buf.length - 2].time
+        const interval = latestTime - prevTime
+        const renderTime = performance.now() - Math.max(interval, 50)
+
+        // Find the two snapshots that bracket renderTime
+        let aIdx = 0
+        for (let i = buf.length - 2; i >= 0; i--) {
+          if (buf[i].time <= renderTime) { aIdx = i; break }
+        }
+        const bIdx = Math.min(aIdx + 1, buf.length - 1)
+
+        const a = buf[aIdx]
+        const b = buf[bIdx]
+        const span = b.time - a.time
+        // t goes 0→1 between snapshot A and snapshot B
+        const t = span > 0 ? Math.max(0, Math.min((renderTime - a.time) / span, 1)) : 1
+
+        interpolate(out, a.state, b.state, t)
+
+        const ctx = canvasRef.current.getContext('2d')
+        if (ctx) renderDinoState(ctx, out)
+
+        if (out.frameCount % 5 === 0) {
+          setDisplayScore(Math.floor(out.score))
+        }
+      } else if (out && buf.length === 1 && canvasRef.current) {
+        // Only one snapshot so far — render it directly
+        const snap = buf[0].state
+        Object.assign(out, snap)
+        const ctx = canvasRef.current.getContext('2d')
+        if (ctx) renderDinoState(ctx, out)
+        setDisplayScore(Math.floor(out.score))
+      }
+
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    rafRef.current = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
 
   if (!spectatorState) {
     return (
@@ -1051,7 +1249,7 @@ function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState
         style={{ imageRendering: 'pixelated', maxWidth: '100%' }}
       />
       <div className="mt-2 text-xs text-indigo-300/70">
-        Score: {String(Math.floor(spectatorState.score)).padStart(5, '0')}
+        Score: {String(displayScore).padStart(5, '0')}
       </div>
     </div>
   )
@@ -1068,13 +1266,22 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
   } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
 
-  // Seed the shared PRNG when multiplayer seed arrives
+  // Seed the shared PRNG when multiplayer seed arrives.
+  // We track which seed is currently installed so we can re-key the game
+  // component — forcing a fresh createGame() with the seeded RNG active.
+  const installedSeedRef = useRef<number | null>(null)
+  if (gameSeed != null && installedSeedRef.current !== gameSeed) {
+    setGameRngStreams({
+      obstacle: createSeededRandom(gameSeed),
+      weather: createSeededRandom(gameSeed + 1),
+      cosmetic: createSeededRandom(gameSeed + 2),
+    })
+    installedSeedRef.current = gameSeed
+  }
+  // Clean up on unmount
   useEffect(() => {
-    if (gameSeed != null) {
-      setGameRng(createSeededRandom(gameSeed))
-    }
     return () => resetGameRng()
-  }, [gameSeed])
+  }, [])
 
   const handleGameEnd = useCallback((score: number) => {
     if (finishedRef.current) return
@@ -1125,15 +1332,16 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
         onSpectatePrev={spectatePrev}
         onSpectateNext={spectateNext}
         onLeaveGame={leaveRoom}
+        onBackToLobby={onLeave}
       />
       {!gameStarted && (
-        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} />
+        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} onLeave={leaveRoom} onBackToLobby={onLeave} />
       )}
       {showSpectator && (
         <DinoRunnerSpectatorView spectatorState={spectatorState as GameState | null} />
       )}
       <div style={showSpectator ? { display: 'none' } : undefined}>
-        <DinoRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={slimBroadcast} isMultiplayer inputBlocked={!gameStarted} />
+        <DinoRunnerSinglePlayer key={gameSeed ?? 'no-seed'} onGameEnd={handleGameEnd} onStateChange={slimBroadcast} isMultiplayer inputBlocked={!gameStarted} autoStart={gameStarted} />
       </div>
     </div>
   )

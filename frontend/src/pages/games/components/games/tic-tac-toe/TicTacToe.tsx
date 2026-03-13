@@ -244,7 +244,7 @@ function TicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { o
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
 function TicTacToeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -261,6 +261,8 @@ function TicTacToeRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: (
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <TicTacToeSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>

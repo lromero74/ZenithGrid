@@ -485,7 +485,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
 
 // ── Multiplayer race wrapper ─────────────────────────────────────────
 function ChessRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -502,6 +502,8 @@ function ChessRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <ChessSinglePlayer onGameEnd={handleGameEnd} onStateChange={broadcastState} />
     </div>

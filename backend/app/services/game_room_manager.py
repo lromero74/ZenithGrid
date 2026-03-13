@@ -292,6 +292,10 @@ class GameRoomManager:
         room.started_at = None
         room.finished_at = None
         room.result = None
+        # Re-register all players in _user_rooms — the mapping may have been
+        # cleaned up by /friends/online while the room was in "finished" status.
+        for pid in room.players:
+            self._user_rooms[pid] = room_id
         logger.info(f"Room {room_id} reset to lobby")
         return room
 

@@ -114,6 +114,7 @@ async def _build_message_dict(
         "sender_id": msg.sender_id,
         "sender_name": sender_name,
         "content": msg.content if msg.deleted_at is None else None,
+        "media_url": msg.media_url if msg.deleted_at is None else None,
         "is_deleted": msg.deleted_at is not None,
         "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
@@ -461,11 +462,11 @@ async def get_messages(
 
 async def send_message(
     db: AsyncSession, channel_id: int, user_id: int, content: str,
-    reply_to_id: int | None = None,
+    reply_to_id: int | None = None, media_url: str | None = None,
 ) -> dict:
     """Send a message to a channel. Validates membership and friends-only for DMs."""
     content = content.strip()
-    if not content:
+    if not content and not media_url:
         raise ValueError("Message cannot be empty")
     if len(content) > MAX_MESSAGE_LENGTH:
         raise ValueError(f"Message exceeds {MAX_MESSAGE_LENGTH} character limit")
@@ -498,8 +499,16 @@ async def send_message(
         if not reply_msg or reply_msg.channel_id != channel_id:
             raise ValueError("Invalid reply target")
 
+    # Validate media_url — only allow Giphy URLs
+    if media_url:
+        if not media_url.startswith("https://media") or "giphy.com/" not in media_url:
+            raise ValueError("Only Giphy URLs are allowed for media")
+        if len(media_url) > 500:
+            raise ValueError("Media URL too long")
+
     msg = ChatMessage(
-        channel_id=channel_id, sender_id=user_id, content=content,
+        channel_id=channel_id, sender_id=user_id,
+        content=content or "", media_url=media_url,
         reply_to_id=reply_to_id,
     )
     db.add(msg)

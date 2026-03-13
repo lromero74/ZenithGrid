@@ -165,9 +165,19 @@ export function MessageBubble({ msg, isOwn, onEdit, onDelete, onReply, onReact, 
           )}
         </div>
       </div>
-      <p className="text-xs text-slate-200 whitespace-pre-wrap break-words mt-0.5">
-        {renderContent(msg.content || '', members)}
-      </p>
+      {msg.content && (
+        <p className="text-xs text-slate-200 whitespace-pre-wrap break-words mt-0.5">
+          {renderContent(msg.content, members)}
+        </p>
+      )}
+      {msg.media_url && (
+        <img
+          src={msg.media_url}
+          alt="GIF"
+          className="mt-1 rounded-lg max-w-[200px] max-h-[150px] object-contain"
+          loading="lazy"
+        />
+      )}
 
       {/* Reaction pills */}
       {msg.reactions.length > 0 && (

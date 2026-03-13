@@ -846,7 +846,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
 function CentipedeRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const {
-    opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish,
+    opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, leaveRoom,
     gameStarted, countdownValue, localReady, sendReady,
   } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
@@ -865,9 +865,11 @@ function CentipedeRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string;
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onLeaveGame={leaveRoom}
+        onBackToLobby={onLeave}
       />
       {!gameStarted && (
-        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} />
+        <CountdownOverlay countdownValue={countdownValue} localReady={localReady} onReady={sendReady} onLeave={leaveRoom} onBackToLobby={onLeave} />
       )}
       <CentipedeSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer inputBlocked={!gameStarted} autoStart={gameStarted} />
     </div>

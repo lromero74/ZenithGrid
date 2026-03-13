@@ -62,14 +62,17 @@ export function GameInviteNotification() {
   const handleAccept = useCallback(() => {
     if (!invite) return
 
+    // Buffer the join response before sending — it may arrive before the game page mounts
+    gameSocket.captureJoinResult()
+
     if (invite.midGame) {
       gameSocket.midJoinRoom(invite.roomId)
     } else {
       gameSocket.joinRoom(invite.roomId)
     }
 
-    // Navigate to the game
-    navigate(`/games/${invite.gameId}`)
+    // Navigate to the game with joiningFriend flag so MultiplayerWrapper shows loading state
+    navigate(`/games/${invite.gameId}`, { state: { joiningFriend: true } })
     setInvite(null)
   }, [invite, navigate])
 

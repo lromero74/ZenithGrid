@@ -756,7 +756,7 @@ function CrosswordSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'lo
 // ── Race wrapper (first_to_win — first to complete wins) ─────────────
 
 function CrosswordRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw') => {
@@ -773,6 +773,8 @@ function CrosswordRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: (
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <CrosswordSinglePlayer onGameEnd={handleGameEnd} />
     </div>

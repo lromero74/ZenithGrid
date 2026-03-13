@@ -546,7 +546,7 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
 // ── Race wrapper (first-to-win against opponent) ──────────────────
 
 function SpoonsRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportFinish } = useRaceMode(roomId, 'first_to_win')
+  const { opponentStatus, raceResult, opponentLevelUp, reportFinish, leaveRoom } = useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss') => {
@@ -563,6 +563,8 @@ function SpoonsRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () =
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
+        onBackToLobby={onLeave}
+        onLeaveGame={leaveRoom}
       />
       <SpoonsSinglePlayer onGameEnd={handleGameEnd} isMultiplayer />
     </div>

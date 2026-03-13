@@ -48,6 +48,7 @@ export interface ChatMessage {
   sender_id: number
   sender_name: string
   content: string | null
+  media_url?: string | null
   is_deleted: boolean
   edited_at: string | null
   created_at: string | null
@@ -151,12 +152,13 @@ export function useChatMessages(channelId: number | null) {
 export function useSendMessage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ channelId, content, replyToId }: {
-      channelId: number; content: string; replyToId?: number
+    mutationFn: async ({ channelId, content, replyToId, mediaUrl }: {
+      channelId: number; content: string; replyToId?: number; mediaUrl?: string
     }) => {
       const { data } = await api.post(`/chat/channels/${channelId}/messages`, {
         content,
         reply_to_id: replyToId ?? null,
+        media_url: mediaUrl ?? null,
       })
       return data
     },

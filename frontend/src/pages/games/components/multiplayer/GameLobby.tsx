@@ -5,13 +5,13 @@
  * Includes friend invite functionality and difficulty selection for race mode.
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { Users, Copy, Check, Play, Loader2, UserPlus, Lock } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Users, Copy, Check, Play, Loader2, UserPlus, Lock, MessageCircle, Send } from 'lucide-react'
 import { gameSocket } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useFriends } from '../../hooks/useFriends'
 import type { Difficulty } from '../../types'
-import type { RoomConfig } from './MultiplayerWrapper'
+import type { RoomConfig, MultiplayerMode } from './MultiplayerWrapper'
 
 export interface LobbyProps {
   gameId: string
@@ -22,6 +22,10 @@ export interface LobbyProps {
   maxPlayers?: number
   /** Show difficulty selector (for race mode games with difficulty) */
   hasDifficulty?: boolean
+  /** Available multiplayer modes for this game (host can switch in lobby) */
+  availableModes?: MultiplayerMode[]
+  selectedMultiplayerMode?: MultiplayerMode
+  onModeChange?: (mode: MultiplayerMode) => void
   onGameStart: (roomId: string, players: number[], playerNames: Record<number, string>, config: RoomConfig) => void
   onBack: () => void
   /** Pre-joined room state (from invite acceptance before lobby mounted) */
@@ -42,7 +46,14 @@ const DIFFICULTY_OPTIONS: { value: Difficulty; label: string; color: string }[] 
   { value: 'hard', label: 'Hard', color: 'bg-red-900/50 text-red-400 border-red-700/50' },
 ]
 
-export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, hasDifficulty, onGameStart, onBack, initialRoom }: LobbyProps) {
+const MODE_LABELS: Record<MultiplayerMode, string> = {
+  vs: 'VS',
+  first_to_win: 'First to Win',
+  survival: 'Survival',
+  best_score: 'High Score',
+}
+
+export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, hasDifficulty, availableModes, selectedMultiplayerMode, onModeChange, onGameStart, onBack, initialRoom }: LobbyProps) {
   const { user, getAccessToken } = useAuth()
   const [lobbyState, setLobbyState] = useState<LobbyState>(initialRoom ? 'waiting' : 'idle')
   const [roomId, setRoomId] = useState<string | null>(initialRoom?.roomId ?? null)
@@ -59,6 +70,11 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
   const [showInvite, setShowInvite] = useState(false)
   const [difficulty, setDifficulty] = useState<Difficulty>(initialRoom?.config?.difficulty as Difficulty ?? 'medium')
   const [roomConfig, setRoomConfig] = useState<RoomConfig>(initialRoom?.config ?? {})
+
+  // Lobby chat
+  const [chatMessages, setChatMessages] = useState<Array<{ playerId: number; name: string; text: string }>>([])
+  const [chatInput, setChatInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Connect WebSocket
   useEffect(() => {
@@ -134,6 +150,20 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
         setLobbyState('waiting')
         setError(null)
       }),
+      gameSocket.on('game:config_updated', (msg) => {
+        if (msg.config) {
+          setRoomConfig(msg.config)
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+          // Sync mode changes from host
+          if (msg.config.mode && onModeChange) {
+            const m = msg.config.mode === 'vs' ? 'vs' : (msg.config.race_type || 'first_to_win')
+            onModeChange(m as MultiplayerMode)
+          }
+        }
+      }),
+      gameSocket.on('game:chat', (msg) => {
+        setChatMessages(prev => [...prev.slice(-49), { playerId: msg.playerId, name: msg.playerName, text: msg.text }])
+      }),
       gameSocket.on('game:error', (msg) => {
         setError(msg.error)
       }),
@@ -186,7 +216,20 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
     setIsReady(false)
     setIsHost(false)
     setRoomConfig({})
+    setChatMessages([])
   }, [roomId])
+
+  const sendChat = useCallback(() => {
+    const text = chatInput.trim()
+    if (!text || !roomId) return
+    gameSocket.send({ type: 'game:chat', roomId, text })
+    setChatInput('')
+  }, [chatInput, roomId])
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   const getDisplayName = (pid: number) => {
     if (pid === user?.id) return 'You'
@@ -194,9 +237,6 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
   }
 
   const allReady = players.length >= 2 && readyPlayers.length === players.length
-
-  // Whether difficulty is locked (joiner can't change it)
-  const difficultyLocked = !isHost && lobbyState === 'waiting'
 
   // Pre-game lobby
   if (lobbyState === 'idle') {
@@ -283,18 +323,75 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
         </div>
       )}
 
-      {/* Locked difficulty display */}
+      {/* Difficulty selector (host can change, guest sees locked) */}
       {hasDifficulty && difficulty && (
-        <div className="flex items-center gap-2 text-xs">
-          <Lock className="w-3 h-3 text-slate-400" />
-          <span className="text-slate-400">Difficulty:</span>
-          <span className={`px-2 py-0.5 rounded-full ${
-            DIFFICULTY_OPTIONS.find(o => o.value === difficulty)?.color ?? 'text-slate-300'
-          }`}>
-            {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-          </span>
-          {difficultyLocked && <span className="text-slate-500">(set by host)</span>}
-        </div>
+        isHost ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400">Difficulty:</span>
+            {DIFFICULTY_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setDifficulty(opt.value)
+                  if (roomId) gameSocket.updateConfig(roomId, { difficulty: opt.value })
+                }}
+                className={`px-2.5 py-1 rounded-full border text-xs font-medium transition-colors ${
+                  difficulty === opt.value ? opt.color : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span className="text-slate-400">Difficulty:</span>
+            <span className={`px-2 py-0.5 rounded-full ${
+              DIFFICULTY_OPTIONS.find(o => o.value === difficulty)?.color ?? 'text-slate-300'
+            }`}>
+              {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+            </span>
+            <span className="text-slate-500">(set by host)</span>
+          </div>
+        )
+      )}
+
+      {/* Mode selector (host can change, guest sees label) */}
+      {availableModes && availableModes.length > 1 && selectedMultiplayerMode && (
+        isHost ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400">Mode:</span>
+            {availableModes.map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  if (onModeChange) onModeChange(m)
+                  const modeVal = m === 'vs' ? 'vs' : 'race'
+                  const updates: Record<string, string> = { mode: modeVal }
+                  if (m !== 'vs') updates.race_type = m
+                  if (roomId) gameSocket.updateConfig(roomId, updates)
+                }}
+                className={`px-2.5 py-1 rounded-full border text-xs font-medium transition-colors ${
+                  selectedMultiplayerMode === m
+                    ? 'bg-blue-900/50 text-blue-400 border-blue-700/50'
+                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
+                }`}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span className="text-slate-400">Mode:</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-400 border border-blue-700/50">
+              {MODE_LABELS[selectedMultiplayerMode]}
+            </span>
+            <span className="text-slate-500">(set by host)</span>
+          </div>
+        )
       )}
 
       {error && (
@@ -326,6 +423,46 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
               <span className="text-xs text-slate-600">Waiting for player...</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Lobby chat */}
+      <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 w-full max-w-sm">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-700/50">
+          <MessageCircle className="w-3 h-3 text-slate-500" />
+          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Chat</span>
+        </div>
+        <div className="h-24 overflow-y-auto px-3 py-1.5 space-y-0.5">
+          {chatMessages.length === 0 && (
+            <p className="text-[10px] text-slate-600 italic pt-1">No messages yet</p>
+          )}
+          {chatMessages.map((msg, i) => (
+            <div key={i} className="text-xs">
+              <span className={`font-medium ${msg.playerId === user?.id ? 'text-blue-400' : 'text-amber-400'}`}>
+                {msg.playerId === user?.id ? 'You' : msg.name}
+              </span>
+              <span className="text-slate-400">: {msg.text}</span>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+        <div className="flex items-center gap-1 px-2 py-1.5 border-t border-slate-700/50">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') sendChat() }}
+            placeholder="Say something..."
+            maxLength={500}
+            className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-600 outline-none px-1"
+          />
+          <button
+            onClick={sendChat}
+            disabled={!chatInput.trim()}
+            className="p-1 text-slate-500 hover:text-blue-400 disabled:opacity-30 transition-colors"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
