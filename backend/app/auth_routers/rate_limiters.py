@@ -60,10 +60,15 @@ _CATEGORY_STORE = {
 
 # Track whether a key has been warmed from DB
 _warmed: set = set()
+_MAX_WARMED_SIZE = 10000  # Hard cap — rebuilds on demand if cleared
 
 # Prune
 _last_prune_time: float = 0.0
 _PRUNE_INTERVAL = 3600
+
+# Bounded fire-and-forget task tracking (prevents pile-up under slow DB)
+_pending_db_tasks: set = set()
+_MAX_PENDING_DB_TASKS = 100
 
 # ---------------------------------------------------------------------------
 # DB helpers (fire-and-forget writes, blocking reads only on cold cache)
@@ -122,6 +127,20 @@ async def _db_cleanup():
 # Core helpers
 # ---------------------------------------------------------------------------
 
+def _fire_and_forget(coro):
+    """Schedule a coroutine as a tracked task. Drops under backpressure."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        if len(_pending_db_tasks) >= _MAX_PENDING_DB_TASKS:
+            return  # Drop under backpressure — prevents unbounded task pile-up
+        task = loop.create_task(coro)
+        _pending_db_tasks.add(task)
+        task.add_done_callback(_pending_db_tasks.discard)
+    except RuntimeError:
+        pass  # No event loop (test context)
+
+
 def _prune_memory():
     """Periodically prune stale in-memory entries."""
     global _last_prune_time
@@ -137,6 +156,10 @@ def _prune_memory():
             del store[k]
             _warmed.discard((cat, k))
         total += len(stale)
+    # Cap _warmed set — it's a "have I loaded from DB" tracker that rebuilds on demand
+    if len(_warmed) > _MAX_WARMED_SIZE:
+        _warmed.clear()
+        total += 1
     if total:
         logger.debug("Pruned %d stale rate limiter entries", total)
 
@@ -217,20 +240,15 @@ def _check_rate_limit(ip: str, username=None):
 
 def _record_attempt(ip: str, username=None):
     """Record failed login attempt (sync wrapper — DB write is best-effort)."""
-    import asyncio
     _login_attempts[ip].append(time.time())
     _warmed.add(("login", ip))
     if username:
         _login_attempts_by_username[username].append(time.time())
         _warmed.add(("login_user", username))
-    # Fire-and-forget DB persistence
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("login", ip))
-        if username:
-            loop.create_task(_db_record("login_user", username))
-    except RuntimeError:
-        pass  # No event loop — skip DB write (test context)
+    # Fire-and-forget DB persistence (bounded task tracking)
+    _fire_and_forget(_db_record("login", ip))
+    if username:
+        _fire_and_forget(_db_record("login_user", username))
 
 
 # -- Signup --
@@ -251,14 +269,9 @@ def _check_signup_rate_limit(ip: str):
 
 
 def _record_signup_attempt(ip: str):
-    import asyncio
     _signup_attempts[ip].append(time.time())
     _warmed.add(("signup", ip))
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("signup", ip))
-    except RuntimeError:
-        pass
+    _fire_and_forget(_db_record("signup", ip))
 
 
 # -- Forgot password --
@@ -279,14 +292,9 @@ def _check_forgot_pw_rate_limit(ip: str):
 
 
 def _record_forgot_pw_attempt(ip: str):
-    import asyncio
     _forgot_pw_attempts[ip].append(time.time())
     _warmed.add(("forgot_pw", ip))
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("forgot_pw", ip))
-    except RuntimeError:
-        pass
+    _fire_and_forget(_db_record("forgot_pw", ip))
 
 
 def _is_forgot_pw_email_rate_limited(email: str) -> bool:
@@ -300,14 +308,9 @@ def _is_forgot_pw_email_rate_limited(email: str) -> bool:
 
 
 def _record_forgot_pw_email_attempt(email: str):
-    import asyncio
     _forgot_pw_by_email[email].append(time.time())
     _warmed.add(("forgot_pw_email", email))
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("forgot_pw_email", email))
-    except RuntimeError:
-        pass
+    _fire_and_forget(_db_record("forgot_pw_email", email))
 
 
 # -- Resend verification --
@@ -329,15 +332,10 @@ def _check_resend_rate_limit(user_id: int):
 
 
 def _record_resend_attempt(user_id: int):
-    import asyncio
     key = str(user_id)
     _resend_attempts[key].append(time.time())
     _warmed.add(("resend", key))
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("resend", key))
-    except RuntimeError:
-        pass
+    _fire_and_forget(_db_record("resend", key))
 
 
 # -- MFA --
@@ -354,11 +352,6 @@ def _check_mfa_rate_limit(mfa_token: str):
 
 
 def _record_mfa_attempt(mfa_token: str):
-    import asyncio
     _mfa_attempts[mfa_token].append(time.time())
     _warmed.add(("mfa", mfa_token))
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_db_record("mfa", mfa_token))
-    except RuntimeError:
-        pass
+    _fire_and_forget(_db_record("mfa", mfa_token))

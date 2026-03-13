@@ -120,6 +120,8 @@ def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
     Returns:
         Tuple of (compressed_bytes, 'image/webp')
     """
+    img = None
+    output = None
     try:
         # Open image from bytes
         img = Image.open(io.BytesIO(image_bytes))
@@ -131,9 +133,12 @@ def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
             if img.mode == 'P':
                 img = img.convert('RGBA')
             background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img.close()
             img = background
         elif img.mode != 'RGB':
+            old_img = img
             img = img.convert('RGB')
+            old_img.close()
 
         # Resize if image is wider than max width
         if img.width > THUMBNAIL_MAX_WIDTH:
@@ -158,6 +163,14 @@ def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
         logger.warning(f"Failed to compress image: {e}, returning original")
         # If compression fails, return original
         return (image_bytes, 'image/jpeg')
+    finally:
+        if img:
+            try:
+                img.close()
+            except Exception:
+                pass
+        if output:
+            output.close()
 
 
 async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> Optional[str]:

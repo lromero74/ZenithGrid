@@ -229,11 +229,31 @@ class MultiBotMonitor:
         for k in stale_indicators:
             del self._previous_indicators_cache[k]
 
+        # Exchange cache — remove clients for accounts with no active bots
+        stale_exchange = []
+        if active_bot_ids:
+            # Build set of account IDs with active bots (from _bot_next_check keys)
+            # We can't know account_id from bot_id without DB, so just cap the cache
+            if len(self._exchange_cache) > 20:
+                # Keep only the 10 most recently used (by insertion order)
+                excess = list(self._exchange_cache.keys())[:-10]
+                for aid in excess:
+                    client = self._exchange_cache.pop(aid)
+                    stale_exchange.append(aid)
+                    if hasattr(client, 'close'):
+                        try:
+                            import asyncio
+                            asyncio.get_running_loop().create_task(client.close())
+                        except RuntimeError:
+                            pass
+
         return {
             "candles_evicted": len(stale_candles),
             "candles_remaining": len(self._candle_cache),
             "indicators_evicted": len(stale_indicators),
             "indicators_remaining": len(self._previous_indicators_cache),
+            "exchange_evicted": len(stale_exchange),
+            "exchange_remaining": len(self._exchange_cache),
             "bot_next_check": len(self._bot_next_check),
         }
 
