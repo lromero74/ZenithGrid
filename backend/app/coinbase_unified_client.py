@@ -19,10 +19,56 @@ from app.coinbase_api import perpetuals_api
 from app.coinbase_api import convert_api
 from app.coinbase_api import transaction_api
 
+from app.exceptions import ExchangeUnavailableError
+
 logger = logging.getLogger(__name__)
 
 # Minimum interval between requests per client (150ms = ~6.6 req/sec)
 _MIN_REQUEST_INTERVAL = 0.15
+
+
+class CircuitBreaker:
+    """Simple circuit breaker for API resilience.
+
+    CLOSED  → normal operation
+    OPEN    → rejecting requests (too many consecutive failures)
+    HALF_OPEN → allow one probe request after recovery timeout
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.state = self.CLOSED
+        self._failure_count = 0
+        self._last_failure_time = 0.0
+
+    def record_success(self):
+        self._failure_count = 0
+        self.state = self.CLOSED
+
+    def record_failure(self):
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        if self._failure_count >= self.failure_threshold:
+            self.state = self.OPEN
+            logger.warning(
+                f"Circuit breaker OPEN after {self._failure_count} consecutive failures"
+            )
+
+    def can_execute(self) -> bool:
+        if self.state == self.CLOSED:
+            return True
+        if self.state == self.OPEN:
+            if time.time() - self._last_failure_time >= self.recovery_timeout:
+                self.state = self.HALF_OPEN
+                logger.info("Circuit breaker HALF_OPEN — allowing probe request")
+                return True
+            return False
+        return True  # HALF_OPEN — allow one probe
 
 
 class CoinbaseClient:
@@ -109,11 +155,18 @@ class CoinbaseClient:
         # Per-instance rate limiter (each user's API credentials have independent rate limits)
         self._last_request_time = 0
         self._rate_limit_lock = asyncio.Lock()
+        self._circuit_breaker = CircuitBreaker()
 
     async def _request(
         self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Make authenticated request with per-instance rate limiting"""
+        """Make authenticated request with per-instance rate limiting and circuit breaker."""
+
+        # Circuit breaker check
+        if not self._circuit_breaker.can_execute():
+            raise ExchangeUnavailableError(
+                "Circuit breaker open — Coinbase API unavailable, retrying shortly"
+            )
 
         # Rate limiting: ensure minimum interval between requests for this client
         async with self._rate_limit_lock:
@@ -126,17 +179,29 @@ class CoinbaseClient:
 
             self._last_request_time = time.time()
 
-        return await auth.authenticated_request(
-            method,
-            endpoint,
-            self.auth_type,
-            key_name=getattr(self, "key_name", None),
-            private_key=getattr(self, "private_key", None),
-            api_key=getattr(self, "api_key", None),
-            api_secret=getattr(self, "api_secret", None),
-            params=params,
-            data=data,
-        )
+        try:
+            result = await auth.authenticated_request(
+                method,
+                endpoint,
+                self.auth_type,
+                key_name=getattr(self, "key_name", None),
+                private_key=getattr(self, "private_key", None),
+                api_key=getattr(self, "api_key", None),
+                api_secret=getattr(self, "api_secret", None),
+                params=params,
+                data=data,
+            )
+            self._circuit_breaker.record_success()
+            return result
+        except ExchangeUnavailableError:
+            self._circuit_breaker.record_failure()
+            raise
+        except Exception as e:
+            # Only count connection/network errors, not business logic errors
+            err_msg = str(e).lower()
+            if any(kw in err_msg for kw in ("timeout", "connection", "unavailable", "503", "502")):
+                self._circuit_breaker.record_failure()
+            raise
 
     # ===== Account & Balance Methods =====
 

@@ -44,6 +44,17 @@ def _check_friend_request_rate(user_id: int) -> None:
     attempts.append(now)
 
 
+def prune_friend_request_attempts() -> int:
+    """Remove expired entries from the friend request rate limiter."""
+    now = time.monotonic()
+    cutoff = now - _FR_RATE_LIMIT_WINDOW
+    stale = [uid for uid, ts in _friend_request_attempts.items()
+             if not any(t > cutoff for t in ts)]
+    for uid in stale:
+        del _friend_request_attempts[uid]
+    return len(stale)
+
+
 # ----- Pydantic Schemas -----
 
 class FriendRequestCreate(BaseModel):

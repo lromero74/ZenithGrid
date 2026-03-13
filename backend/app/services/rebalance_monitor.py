@@ -453,6 +453,14 @@ class RebalanceMonitor:
             await self.task
         logger.info("Rebalance Monitor stopped")
 
+    def cleanup_stale_entries(self, active_account_ids: set) -> dict:
+        """Remove tracking entries for accounts that are no longer active."""
+        stale = [aid for aid in self._account_timers if aid not in active_account_ids]
+        for aid in stale:
+            del self._account_timers[aid]
+            self._processing.discard(aid)
+        return {"timers_pruned": len(stale)}
+
     async def _monitor_loop(self):
         """Main loop — checks every 30 seconds."""
         while self.running:

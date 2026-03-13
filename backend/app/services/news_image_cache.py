@@ -64,6 +64,13 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[t
         Tuple of (image_bytes, mime_type) or None if download failed.
     """
     try:
+        from app.utils.url_utils import validate_url_not_internal
+        try:
+            validate_url_not_internal(url)
+        except ValueError as e:
+            logger.warning(f"Blocked SSRF attempt in image download: {url} - {e}")
+            return None
+
         async with session.get(
             url,
             timeout=aiohttp.ClientTimeout(total=IMAGE_DOWNLOAD_TIMEOUT),

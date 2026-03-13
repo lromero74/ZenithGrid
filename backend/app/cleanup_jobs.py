@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models import (
-    ActiveSession, AIBotLog, IndicatorLog, OrderHistory, Position, Report,
-    RevokedToken, Settings,
+    Account, ActiveSession, AIBotLog, IndicatorLog, OrderHistory, Position,
+    Report, RevokedToken, Settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -403,6 +403,37 @@ async def cleanup_in_memory_caches():
             import app.auth_routers.rate_limiters as _rl
             _rl._last_prune_time = 0.0
             _rl._prune_memory()
+
+            # --- Friend request rate limiter ---
+            from app.routers.friends_router import prune_friend_request_attempts
+            prune_friend_request_attempts()
+
+            # --- Portfolio conversion tasks ---
+            from app.services.portfolio_conversion_service import cleanup_old_tasks
+            cleanup_old_tasks()
+
+            # --- Auto-buy & rebalance monitor timers ---
+            auto_buy = getattr(main_module, 'auto_buy_monitor', None)
+            rebalance = getattr(main_module, 'rebalance_monitor', None)
+            monitor_cleanup = {}
+            if auto_buy or rebalance:
+                async with async_session_maker() as _db:
+                    _res = await _db.execute(
+                        select(Account.id).where(Account.is_active.is_(True))
+                    )
+                    active_ids = {row[0] for row in _res.fetchall()}
+                if auto_buy:
+                    monitor_cleanup['auto_buy'] = auto_buy.cleanup_stale_entries(active_ids)
+                if rebalance:
+                    monitor_cleanup['rebalance'] = rebalance.cleanup_stale_entries(active_ids)
+
+            # --- Game WS rate-limit dicts ---
+            from app.services.game_ws_handler import prune_game_rate_timestamps
+            prune_game_rate_timestamps()
+
+            # --- Public endpoint rate limiter ---
+            from app.middleware.public_rate_limit import PublicEndpointRateLimiter
+            PublicEndpointRateLimiter.prune_stale()
 
             # --- WebSocket stale connections ---
             from app.services.websocket_manager import ws_manager

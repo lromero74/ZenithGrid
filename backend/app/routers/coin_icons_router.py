@@ -26,6 +26,7 @@ COINCAP_URL = "https://assets.coincap.io/assets/icons"
 
 # HTTP client timeout
 TIMEOUT = 10.0
+MAX_CACHED_ICONS = 5000  # Prevent disk fill from enumeration attacks
 
 
 @router.get("/{symbol}")
@@ -58,6 +59,20 @@ async def get_coin_icon(symbol: str) -> Response:
             media_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=86400"},
         )
+
+    # Guard against disk fill — refuse to cache beyond limit
+    try:
+        cached_count = sum(1 for _ in CACHE_DIR.iterdir())
+    except OSError:
+        cached_count = 0
+    if cached_count >= MAX_CACHED_ICONS:
+        letter = symbol[0].upper() if symbol else "?"
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+               f'<circle cx="32" cy="32" r="30" fill="#3b82f6" opacity="0.2"/>'
+               f'<text x="32" y="40" font-family="sans-serif" font-size="24" font-weight="bold"'
+               f' fill="#3b82f6" text-anchor="middle">{letter}</text></svg>')
+        return Response(content=svg, media_type="image/svg+xml",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
     # Fetch from CoinCap
     url = f"{COINCAP_URL}/{symbol_lower}@2x.png"

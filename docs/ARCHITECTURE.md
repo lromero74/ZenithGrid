@@ -6,12 +6,12 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | FastAPI + SQLAlchemy (async) + SQLite |
+| Backend | FastAPI + SQLAlchemy (async) + PostgreSQL |
 | Frontend | React 18 + TypeScript + Vite + TailwindCSS |
 | State | React Context (app) + React Query (server) |
 | Charts | TradingView Lightweight Charts |
 | Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) + Email MFA (AWS SES) |
-| Encryption | Fernet (AES-128-CBC + HMAC-SHA256) |
+| Encryption | MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation |
 | Email | AWS SES (IAM role auth, us-east-1) |
 | Deployment | AWS EC2 (Amazon Linux 2023) + Nginx + Let's Encrypt SSL + systemd |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
@@ -37,8 +37,8 @@ graph TB
     subgraph "EC2 Instance"
         NGX[Nginx<br/>:443 HTTPS<br/>Let's Encrypt SSL]
         BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
-        DB[(SQLite<br/>trading.db)]
-        BG[Background Tasks<br/>20 scheduled jobs]
+        DB[(PostgreSQL<br/>zenithgrid)]
+        BG[Background Tasks<br/>23 scheduled jobs]
         SES[AWS SES<br/>Email Service]
     end
 
@@ -74,7 +74,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "API Layer (23 routers)"
+    subgraph "API Layer (27 routers)"
         R_AUTH[auth]
         R_BOTS[bots<br/><small>crud / control / ai_logs<br/>indicator_logs / scanner_logs / validation</small>]
         R_POS[positions<br/><small>queries / actions / limit_orders<br/>manual_ops / perps</small>]
@@ -152,7 +152,7 @@ graph TB
         CACHE[Cache]
         ENC[Encryption]
         CFG[Config]
-        DB[(SQLite)]
+        DB[(PostgreSQL)]
     end
 
     subgraph "Price Feeds"
@@ -276,7 +276,7 @@ sequenceDiagram
     participant PG as PropGuard<br/>(prop firms)
     participant API as Exchange API<br/>(Coinbase / ByBit / MT5)
     participant PM as PositionManager
-    participant DB as SQLite
+    participant DB as PostgreSQL
     participant WS as WebSocketManager
 
     loop Every check interval
@@ -320,7 +320,7 @@ sequenceDiagram
 
 ## 5. Data Model
 
-The codebase has 40 SQLAlchemy models. The ERD below shows the core entities with their relationships, plus model groups for the remaining categories.
+The codebase has 55+ SQLAlchemy models. The ERD below shows the core entities with their relationships, plus model groups for the remaining categories.
 
 ```mermaid
 erDiagram
@@ -431,7 +431,7 @@ erDiagram
     }
 ```
 
-### Model Groups (40 models total)
+### Model Groups (55+ models total)
 
 | Group | Count | Models |
 |-------|-------|--------|
@@ -439,8 +439,10 @@ erDiagram
 | **Content** | 8 | NewsArticle, VideoArticle, ContentSource, UserSourceSubscription, ArticleTTS, UserVoiceSubscription, UserArticleTTSHistory, UserContentSeenStatus |
 | **Reports** | 6 | Report, ReportGoal, ReportSchedule, ReportScheduleGoal, ExpenseItem, GoalProgressSnapshot |
 | **Market/Logs** | 6 | MarketData, BlacklistedCoin, MetricSnapshot, AIBotLog, ScannerLog, IndicatorLog |
-| **Auth/Settings** | 5 | Settings, AIProviderCredential, EmailVerificationToken, RevokedToken, TrustedDevice |
+| **Auth/RBAC** | 9 | Settings, AIProviderCredential, EmailVerificationToken, RevokedToken, TrustedDevice, Group, Role, Permission, ActiveSession |
 | **Account Tracking** | 4 | AccountValueSnapshot, AccountTransfer, PropFirmState, PropFirmEquitySnapshot |
+| **Social/Games** | 10 | Friendship, FriendRequest, BlockedUser, GameResult, GameResultPlayer, GameHistoryVisibility, GameHighScore, Tournament, TournamentPlayer, TournamentDeleteVote |
+| **Chat** | 4 | ChatChannel, ChatChannelMember, ChatMessage, ChatMessageReaction |
 
 ---
 
@@ -477,7 +479,7 @@ erDiagram
 - **Email MFA**: 6-digit code sent via AWS SES to verified email
 - Disable: requires current password + verification code
 - Trusted devices: viewable and revocable from Settings (device name, location, date added)
-- TOTP secrets encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256)
+- TOTP secrets encrypted at rest with MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation support
 - Email verification required for new accounts
 - Password reset via email link (time-limited token)
 
@@ -489,7 +491,9 @@ erDiagram
 - **Signup**: 3 per IP per hour
 - **Article content fetch**: 30 per user per hour (external fetches only; cache hits are free)
 - **Nginx layer**: Auth endpoints 5 req/min per IP, API endpoints 30 req/s per IP (with burst allowance)
-- All in-memory rate limiter dicts are pruned hourly to prevent unbounded growth
+- **Public endpoints**: 120 requests per 60 seconds per IP for unauthenticated endpoints (ticker, prices, candles, coin icons, version, brand) via ASGI middleware
+- **Game WebSocket**: 30 messages per 10 seconds per user to prevent game room flooding
+- All in-memory rate limiter dicts are pruned every 5 minutes to prevent unbounded growth
 
 ### Network Security (Nginx)
 
@@ -539,5 +543,15 @@ All background tasks are launched in `main.py` during the FastAPI `startup` even
 | ReportCleanup | Weekly | `asyncio.create_task` loop |
 | CoinReviewScheduler | 7 days | `asyncio.create_task` loop |
 | TransferSync | Daily | `asyncio.create_task` loop |
+| SessionCleanup | Daily | `asyncio.create_task` loop |
+| RateLimitAttemptCleanup | Hourly | `asyncio.create_task` loop |
+| InMemoryCacheCleanup | 5min | `asyncio.create_task` loop |
 
 All tasks are cancelled gracefully during `shutdown` event. The `ShutdownManager` ensures no orders are mid-execution before allowing shutdown.
+
+### Resilience Patterns
+
+- **Circuit Breaker** (Coinbase API): After 5 consecutive failures, the circuit opens and rejects requests for 60 seconds, then allows a single probe request (half-open state) before fully recovering
+- **SSRF Protection**: All user-supplied URLs are validated against internal/private/loopback/link-local addresses and the AWS metadata endpoint before fetching
+- **Bounded fire-and-forget tasks**: Background tasks that spawn fire-and-forget coroutines track them in bounded sets to prevent unbounded memory growth
+- **Cache size caps**: Coin icon cache, price cache, and other in-memory caches enforce maximum entry counts with LRU or TTL eviction

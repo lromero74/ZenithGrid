@@ -1,16 +1,16 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.111.1",
+  "version": "v2.112.0",
   "updated": "2026-03-13",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
     "backend": {
       "framework": "FastAPI",
       "orm": "SQLAlchemy (async)",
-      "database": "SQLite (aiosqlite)",
+      "database": "PostgreSQL (asyncpg)",
       "python": "3.x (venv)",
       "auth": "JWT (python-jose) + TOTP MFA (pyotp) + Email MFA",
-      "encryption": "Fernet (cryptography)",
+      "encryption": "MultiFernet (cryptography) with key rotation support",
       "email": "AWS SES (boto3, IAM role auth)"
     },
     "frontend": {
@@ -1303,7 +1303,7 @@
           "purpose": "Public (no-auth) market data endpoints for paper trading and fallback; includes PublicMarketDataClient"
         }
       ],
-      "unified_client": "coinbase_unified_client.py (CoinbaseClient wrapper coordinating all API modules)"
+      "unified_client": "coinbase_unified_client.py (CoinbaseClient wrapper coordinating all API modules with CircuitBreaker)"
     },
     "strategies": [
       {
@@ -1362,7 +1362,7 @@
       },
       {
         "file": "cleanup_jobs.py",
-        "purpose": "Scheduled database cleanup for old decision logs, failed orders, noise logs"
+        "purpose": "Scheduled database and in-memory cleanup: old decision logs, failed orders, noise logs, expired sessions, revoked tokens, rate limit attempts, and periodic 5-minute in-memory cache sweep (price cache, chat/game rate-limit dicts, game rooms, monitor caches, WebSocket stale connections)"
       },
       {
         "file": "conditions.py",
@@ -1390,7 +1390,7 @@
       },
       {
         "file": "encryption.py",
-        "purpose": "Fernet encryption for API keys and credentials at rest"
+        "purpose": "MultiFernet encryption for API keys and credentials at rest; supports comma-separated keys for key rotation (first key encrypts, all keys decrypt)"
       },
       {
         "file": "indicator_calculator.py",
@@ -1410,7 +1410,7 @@
       },
       {
         "file": "coinbase_unified_client.py",
-        "purpose": "Unified CoinbaseClient class coordinating all Coinbase API modules with rate limiting (150ms min between requests)"
+        "purpose": "Unified CoinbaseClient class coordinating all Coinbase API modules with rate limiting (150ms min between requests) and CircuitBreaker for API resilience (5-failure threshold, 60s recovery)"
       },
       {
         "file": "database_seeds.py",
@@ -1499,6 +1499,10 @@
       {
         "file": "middleware/datetime_timezone.py",
         "purpose": "Adds 'Z' suffix to datetime fields in JSON responses"
+      },
+      {
+        "file": "middleware/public_rate_limit.py",
+        "purpose": "ASGI middleware that rate-limits public (unauthenticated) endpoints by client IP (120 req/60s); covers ticker, prices, candles, coin icons, version, and brand endpoints"
       }
     ],
     "utils": [
@@ -1512,7 +1516,7 @@
       },
       {
         "file": "utils/url_utils.py",
-        "purpose": "URL normalization and validation utilities"
+        "purpose": "URL normalization, feed deduplication, and SSRF protection (validates URLs do not target internal/private/loopback/link-local addresses or AWS metadata endpoint)"
       }
     ],
     "external_integrations": {
@@ -1691,10 +1695,35 @@
         "name": "AccountSnapshotCapture",
         "interval": "Daily (24 hours)",
         "purpose": "Capture account value snapshots for historical charts and goal progress snapshots"
+      },
+      {
+        "name": "RevokedTokenCleanup",
+        "interval": "Daily",
+        "purpose": "Remove expired entries from revoked_tokens table"
+      },
+      {
+        "name": "ReportCleanup",
+        "interval": "Weekly",
+        "purpose": "Remove generated reports older than 2 years"
+      },
+      {
+        "name": "SessionCleanup",
+        "interval": "Daily",
+        "purpose": "Expire stale active sessions and delete old inactive session records"
+      },
+      {
+        "name": "RateLimitAttemptCleanup",
+        "interval": "Hourly",
+        "purpose": "Remove expired rate limit attempt records from database"
+      },
+      {
+        "name": "InMemoryCacheCleanup",
+        "interval": "5 minutes",
+        "purpose": "Sweep all in-memory caches to prevent unbounded growth: price cache, chat/game rate-limit dicts, game rooms, monitor caches, auth rate limiters, public endpoint rate limiter, WebSocket stale connections"
       }
     ],
     "migrations": {
-      "count": 57,
+      "count": 73,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -1756,7 +1785,23 @@
         "remove_medicalxpress_source.py",
         "repair_paper_balance_from_positions.py",
         "replace_paywalled_sources.py",
-        "seed_demo_goals_and_schedules.py"
+        "seed_demo_goals_and_schedules.py",
+        "add_skip_stable_pairs_default.py",
+        "add_simulate_slippage_default.py",
+        "061_add_performance_indexes.py",
+        "062_add_rebalance_columns.py",
+        "063_add_rebalance_min_trade.py",
+        "064_add_rebalance_min_trade_pct.py",
+        "065_add_rebalance_usdc.py",
+        "066_add_min_balance_reserves.py",
+        "067_add_dust_sweep_fields.py",
+        "add_games_multiplayer_permission.py",
+        "create_social_tables.py",
+        "add_game_high_scores_table.py",
+        "create_chat_tables.py",
+        "chat_enhancements.py",
+        "add_social_chat_permission.py",
+        "add_chat_media_url.py"
       ]
     }
   },
@@ -2657,7 +2702,7 @@
     ]
   },
   "data_flow": {
-    "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> SQLite",
+    "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> PostgreSQL",
     "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient (-> PropGuard for prop firms) -> Exchange API",
     "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast(user_id) -> NotificationContext -> Toast component + Audio notification",
     "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",

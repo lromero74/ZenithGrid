@@ -60,7 +60,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Trusted Devices**: 30-day device trust with geolocation tracking
 - **Password Reset**: Secure email-based password recovery
 - **Multi-User**: Full data isolation between users with per-user encrypted credentials
-- **Encrypted at Rest**: All API keys and secrets encrypted with Fernet (AES-128-CBC + HMAC-SHA256)
+- **Encrypted at Rest**: All API keys and secrets encrypted with MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation support
 - **Token Revocation**: Server-side JWT revocation on logout; password change invalidates all sessions
 - **Rate Limiting**: Multi-layer — nginx (per-IP) + application (per-user/per-email/per-token)
 - **Timing-Safe Auth**: Constant-time login prevents username enumeration
@@ -75,7 +75,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 
 ## 🏗️ Architecture
 
-- **Backend**: Python 3.10+ + FastAPI + SQLAlchemy (async) + SQLite
+- **Backend**: Python 3.10+ + FastAPI + SQLAlchemy (async) + PostgreSQL
 - **Frontend**: React 18 + TypeScript + Vite + TanStack Query + TradingView Charts
 - **Exchanges**: Coinbase Advanced Trade (HMAC/CDP), ByBit V5 (linear perps), MT5 Bridge, DEX (Ethereum/L2s)
 - **AI**: Multi-provider support (Claude, GPT, Gemini, Grok, Groq)
@@ -109,7 +109,7 @@ The setup wizard will:
 1. **Display and require acceptance of the LICENSE**
 2. Create Python virtual environment and install all dependencies
 3. Install frontend Node.js dependencies
-4. Initialize the SQLite database
+4. Initialize the database (PostgreSQL or SQLite)
 5. Generate .env file with secure JWT secrets
 6. Prompt for optional AI provider (for coin categorization)
 7. Create your admin user account
@@ -341,13 +341,15 @@ python3 update.py --yes
 - **Slippage Guard**: Order book depth check before market orders — blocks execution if estimated slippage would erode profit below target
 - **Safety Order** ladder with configurable steps
 - **PropGuard**: Automated prop firm drawdown monitoring with daily/total limits and kill switch
-- **API Key Encryption** (Fernet AES-128-CBC + HMAC-SHA256)
+- **API Key Encryption** (MultiFernet AES-128-CBC + HMAC-SHA256 with key rotation)
 - **Multi-User Support** with full data isolation
 - **Account-Scoped Isolation**: Paper trading and live trading data kept completely separate
 - **MFA**: TOTP (authenticator app) or email-based two-factor authentication
 - **HTTPS**: Nginx + Let's Encrypt with auto-renewing certificates
 - **Security Headers**: HSTS + CSP to prevent MITM and XSS
-- **Multi-Layer Rate Limiting**: Nginx (per-IP) + app-level (per-user, per-token, per-email)
+- **Multi-Layer Rate Limiting**: Nginx (per-IP) + app-level (per-user, per-token, per-email) + public endpoint middleware (per-IP)
+- **SSRF Protection**: URL validation prevents fetching internal/private/metadata addresses
+- **Circuit Breaker**: Exchange API resilience with automatic failure detection and recovery
 - **Real-time Notifications**: WebSocket order fill alerts with audio
 
 ## 📖 Documentation

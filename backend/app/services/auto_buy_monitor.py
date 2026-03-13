@@ -67,6 +67,24 @@ class AutoBuyMonitor:
             await self.task
         logger.info("Auto-Buy Monitor stopped")
 
+    def cleanup_stale_entries(self, active_account_ids: set) -> dict:
+        """Remove tracking entries for accounts that are no longer active."""
+        import time as _time
+        now = _time.time()
+        # Prune timers for deleted/deactivated accounts
+        stale_timers = [aid for aid in self._account_timers if aid not in active_account_ids]
+        for aid in stale_timers:
+            del self._account_timers[aid]
+        # Prune orphaned pending orders (>30 min old or inactive account)
+        stale_orders = [
+            oid for oid, order in self._pending_orders.items()
+            if order.account_id not in active_account_ids
+            or (now - order.placed_at.timestamp() > 1800)
+        ]
+        for oid in stale_orders:
+            del self._pending_orders[oid]
+        return {"timers_pruned": len(stale_timers), "orders_pruned": len(stale_orders)}
+
     async def _monitor_loop(self):
         """Main monitoring loop - checks every 10 seconds"""
         while self.running:

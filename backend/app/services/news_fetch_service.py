@@ -127,6 +127,12 @@ async def fetch_og_meta(session: aiohttp.ClientSession, url: str) -> Dict[str, O
     """Fetch og:image and og:description meta tags from an article URL."""
     result = {"image": None, "description": None}
     try:
+        from app.utils.url_utils import validate_url_not_internal
+        try:
+            validate_url_not_internal(url)
+        except ValueError:
+            return result
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

@@ -7,6 +7,7 @@ and broadcasts state changes to room participants.
 
 import asyncio
 import logging
+import time
 
 from fastapi import WebSocket
 
@@ -15,6 +16,35 @@ from app.services.game_room_manager import game_room_manager
 logger = logging.getLogger(__name__)
 
 MULTIPLAYER_PERMISSION = "games:multiplayer"
+
+# Per-user game message rate limiting (mirrors chat_ws_handler pattern)
+_game_msg_timestamps: dict[int, list[float]] = {}
+_GAME_RATE_MAX = 30       # 30 messages per window
+_GAME_RATE_WINDOW = 5.0   # 5-second sliding window
+_GAME_STALE_SECONDS = 30.0
+
+
+def _check_game_rate(user_id: int) -> bool:
+    """Return True if the user is within the rate limit, False if throttled."""
+    now = time.time()
+    cutoff = now - _GAME_RATE_WINDOW
+    timestamps = _game_msg_timestamps.get(user_id, [])
+    timestamps = [t for t in timestamps if t > cutoff]
+    if len(timestamps) >= _GAME_RATE_MAX:
+        _game_msg_timestamps[user_id] = timestamps
+        return False
+    timestamps.append(now)
+    _game_msg_timestamps[user_id] = timestamps
+    return True
+
+
+def prune_game_rate_timestamps() -> None:
+    """Remove stale entries from the game rate-limit dict."""
+    now = time.time()
+    stale = [uid for uid, ts in _game_msg_timestamps.items()
+             if not ts or (now - max(ts)) > _GAME_STALE_SECONDS]
+    for uid in stale:
+        del _game_msg_timestamps[uid]
 
 
 async def handle_game_message(
@@ -46,6 +76,11 @@ async def handle_game_message(
     handler = handlers.get(msg_type)
     if not handler:
         await websocket.send_json({"type": "game:error", "error": f"Unknown message type: {msg_type}"})
+        return
+
+    # Per-user message rate limiting
+    if not _check_game_rate(user_id):
+        await websocket.send_json({"type": "game:error", "error": "Rate limited — slow down"})
         return
 
     # RBAC: create/join/mid_join require games:multiplayer permission

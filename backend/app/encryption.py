@@ -7,7 +7,7 @@ to encrypt API keys and other credentials stored in the database.
 
 import logging
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 
 from app.config import settings
 
@@ -16,8 +16,13 @@ logger = logging.getLogger(__name__)
 _fernet = None
 
 
-def _get_fernet() -> Fernet:
-    """Get or create the Fernet instance from the configured encryption key."""
+def _get_fernet() -> MultiFernet:
+    """Get or create the MultiFernet instance from the configured encryption key(s).
+
+    Supports comma-separated keys for key rotation. The first key is used for
+    encryption; all keys are tried for decryption (oldest values still readable).
+    Single-key setups work identically to before.
+    """
     global _fernet
     if _fernet is None:
         key = settings.encryption_key
@@ -26,7 +31,9 @@ def _get_fernet() -> Fernet:
                 "ENCRYPTION_KEY not set in .env. "
                 "Run setup.py to generate one, or set ENCRYPTION_KEY manually."
             )
-        _fernet = Fernet(key.encode() if isinstance(key, str) else key)
+        keys = [k.strip() for k in key.split(",") if k.strip()]
+        fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in keys]
+        _fernet = MultiFernet(fernets)
     return _fernet
 
 

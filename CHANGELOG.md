@@ -5,6 +5,25 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.112.0] - 2026-03-13
+
+### Added
+- **SSRF protection** — URL fetching for news images and article content now validates targets, blocking internal IPs, localhost, and AWS metadata endpoints
+- **Exchange API circuit breaker** — Coinbase API calls now use a circuit breaker pattern (5-failure threshold, 60s recovery) to stop hammering the API during outages
+- **Public endpoint rate limiting** — Unauthenticated API endpoints (ticker, candles, coin icons, brand, etc.) are now rate-limited to 120 requests/min per IP
+- **Game WebSocket rate limiting** — Game message handler now enforces per-user rate limiting (30 msgs/5 sec), mirroring existing chat rate limiting
+- **Encryption key rotation** — Switched from Fernet to MultiFernet, supporting comma-separated keys in ENCRYPTION_KEY for zero-downtime key rotation
+- **Coin icon cache protection** — Disk cache capped at 5,000 icons to prevent fill attacks from symbol enumeration
+
+### Fixed
+- **Memory leak: monitor account timers** — Auto-buy and rebalance monitors now prune `_account_timers` entries for deleted/deactivated accounts during the 5-minute sweep
+- **Memory leak: orphaned pending orders** — Auto-buy monitor pending orders older than 30 minutes are now cleaned up automatically
+- **Memory leak: friend request rate limiter** — Expired entries from the friend request rate limiter dict are now pruned by the periodic sweep
+- **Memory leak: portfolio conversion tasks** — `cleanup_old_tasks()` is now called by the periodic sweep (was defined but never invoked)
+
+### Changed
+- Documentation updated to reflect PostgreSQL migration, new middleware, resilience patterns, and current model/migration counts
+
 ## [v2.111.1] - 2026-03-13
 
 ### Fixed
