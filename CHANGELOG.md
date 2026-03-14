@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.119.0] - 2026-03-14
+
+### Added
+- **Lode Runner spectator mode** — watch your opponent's game live after being eliminated in race mode, with full canvas rendering and spectate navigation
+- **Lode Runner state broadcasting** — game state now broadcasts to opponents during multiplayer (was declared but never called)
+
+### Fixed
+- **Giphy search returning no results** — chat GIF search was hitting `/api/api/chat/giphy/` (double prefix); fixed to use correct path
+- **Lode Runner mobile controls too tight** — wider spacing between d-pad buttons and dig controls to prevent accidental presses
+
 ## [v2.118.0] - 2026-03-14
 
 ### Added
