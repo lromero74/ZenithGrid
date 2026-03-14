@@ -35,6 +35,7 @@ from app.models.social import (
 from app.models.system import (
     Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog,
 )
+from app.models.donations import Donation
 
 __all__ = [
     "Base",
@@ -61,4 +62,6 @@ __all__ = [
     "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatMessageReaction",
     # System
     "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog",
+    # Donations
+    "Donation",
 ]

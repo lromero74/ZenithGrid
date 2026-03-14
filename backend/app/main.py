@@ -56,6 +56,7 @@ from app.routers import friends_router  # Friends & social
 from app.routers import game_history_router  # Game history & privacy
 from app.routers import tournament_router  # Multiplayer tournaments
 from app.routers import display_name_router  # Display name management
+from app.routers import donations_router  # Donation tracking and goals
 from app.routers import sessions_router  # Session management for multiplayer
 from app.routers import chat_router  # Chat (DMs, groups, channels)
 from app.routers.bots import router as bots_router
@@ -186,6 +187,7 @@ app.include_router(friends_router.search_router)  # User search
 app.include_router(game_history_router.router)  # Game history & privacy
 app.include_router(tournament_router.router)  # Multiplayer tournaments
 app.include_router(display_name_router.router)  # Display name management
+app.include_router(donations_router.router)  # Donation tracking and goals
 app.include_router(sessions_router.router)  # Session management for multiplayer
 app.include_router(chat_router.router)  # Chat (DMs, groups, channels)
 

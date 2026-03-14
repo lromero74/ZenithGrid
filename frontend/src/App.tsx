@@ -21,6 +21,7 @@ import { MiniPlayer } from './components/MiniPlayer'
 import { ArticleReaderMiniPlayer } from './components/ArticleReaderMiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import { AboutModal } from './components/AboutModal'
+import { DonationModal, shouldShowDonationModal } from './components/DonationModal'
 import { EmailVerificationPending } from './components/EmailVerificationPending'
 import { MFAEncouragement, MFA_DISMISSED_KEY } from './components/MFAEncouragement'
 import { SessionLimitsNotice } from './components/SessionLimitsNotice'
@@ -71,6 +72,7 @@ function AppContent() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showAboutModal, setShowAboutModal] = useState(false)
+  const [showDonationModal, setShowDonationModal] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('...')
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -95,6 +97,13 @@ function AppContent() {
         setUpdateAvailable(data.update_available || false)
       })
       .catch(() => setAppVersion('dev'))
+  }, [])
+
+  // Auto-show donation modal once per month (after 5s delay)
+  useEffect(() => {
+    if (!shouldShowDonationModal()) return
+    const timer = setTimeout(() => setShowDonationModal(true), 5000)
+    return () => clearTimeout(timer)
   }, [])
 
   // Track last seen count for closed positions - from user profile (no extra API call)
@@ -647,6 +656,12 @@ function AppContent() {
       <AboutModal
         isOpen={showAboutModal}
         onClose={() => setShowAboutModal(false)}
+      />
+
+      {/* Donation Modal */}
+      <DonationModal
+        isOpen={showDonationModal}
+        onClose={() => setShowDonationModal(false)}
       />
 
       {/* Logout Confirmation Modal */}
