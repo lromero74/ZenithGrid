@@ -7,9 +7,14 @@
  */
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { Send, Reply, X, ImageIcon, Loader2, Search } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Send, Reply, X, ImageIcon, Loader2, Search, Gamepad2 } from 'lucide-react'
 import { useSendMessage, useEditMessage } from '../../hooks/useChat'
 import type { ChatMessage, ChatMember } from '../../hooks/useChat'
+import { useAuth } from '../../../../contexts/AuthContext'
+import { gameSocket } from '../../../../services/gameSocket'
+import type { GameInfo } from '../../types'
+import { GamePicker } from './GamePicker'
 import { api } from '../../../../services/api'
 
 const MAX_MESSAGE_LENGTH = 2000
@@ -155,8 +160,30 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const [showGifPicker, setShowGifPicker] = useState(false)
+  const [showGamePicker, setShowGamePicker] = useState(false)
   const sendMessage = useSendMessage()
   const editMessage = useEditMessage()
+  const { user } = useAuth()
+  const navigate = useNavigate()
+
+  const handleGameSelect = useCallback((game: GameInfo) => {
+    setShowGamePicker(false)
+    const mode = game.multiplayer![0]
+    gameSocket.createRoom(game.id, mode, { max_players: Math.max(members.length, 2) })
+
+    const unsub = gameSocket.on('game:created', (msg: any) => {
+      unsub()
+      const roomId = msg.roomId
+      // Invite all channel members except self
+      for (const member of members) {
+        if (member.user_id !== user?.id) {
+          gameSocket.send({ type: 'game:invite', roomId, targetUserId: member.user_id })
+        }
+      }
+      // Navigate host to the game
+      navigate(game.path, { state: { joiningFriend: false } })
+    })
+  }, [members, user?.id, navigate])
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -333,17 +360,37 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
           />
         )}
 
+        {/* Game Picker */}
+        {showGamePicker && (
+          <GamePicker
+            memberCount={members.length}
+            onSelect={handleGameSelect}
+            onClose={() => setShowGamePicker(false)}
+          />
+        )}
+
         <div className="flex items-end gap-1">
           {!editingMessage && (
-            <button
-              onClick={() => setShowGifPicker(!showGifPicker)}
-              className={`p-1.5 rounded transition-colors shrink-0 ${
-                showGifPicker ? 'text-blue-400 bg-slate-700/50' : 'text-slate-500 hover:text-slate-300'
-              }`}
-              title="Send GIF"
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button
+                onClick={() => { setShowGifPicker(!showGifPicker); setShowGamePicker(false) }}
+                className={`p-1.5 rounded transition-colors shrink-0 ${
+                  showGifPicker ? 'text-blue-400 bg-slate-700/50' : 'text-slate-500 hover:text-slate-300'
+                }`}
+                title="Send GIF"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => { setShowGamePicker(!showGamePicker); setShowGifPicker(false) }}
+                className={`p-1.5 rounded transition-colors shrink-0 ${
+                  showGamePicker ? 'text-emerald-400 bg-slate-700/50' : 'text-slate-500 hover:text-slate-300'
+                }`}
+                title="Start a game with everyone"
+              >
+                <Gamepad2 className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           <textarea
             ref={inputRef}
