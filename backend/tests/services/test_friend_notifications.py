@@ -6,9 +6,11 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import User
+from app.models.auth import Group, Role, Permission, user_groups, group_roles, role_permissions
 from app.models.social import Friendship
 from app.services.friend_notifications import (
     broadcast_friend_online,
+    broadcast_user_presence,
     notify_friend_request_accepted,
 )
 
@@ -161,3 +163,108 @@ class TestNotifyFriendRequestAccepted:
 
         # Should not raise
         await notify_friend_request_accepted(mock_ws_manager, db_session, acceptor_id=8, requester_id=99)
+
+
+# ── broadcast_user_presence ──────────────────────────────────────────
+
+
+class TestBroadcastUserPresence:
+    """Tests for the admin-scoped user presence broadcast."""
+
+    @pytest.mark.asyncio
+    async def test_notifies_superuser_only(self, db_session, mock_ws_manager):
+        """Only superusers receive presence broadcasts."""
+        admin = User(id=1, email="admin@test.com", display_name="Admin", hashed_password="x",
+                     is_active=True, is_superuser=True)
+        regular = User(id=2, email="user@test.com", display_name="User", hashed_password="x",
+                       is_active=True, is_superuser=False)
+        target = User(id=3, email="target@test.com", display_name="Target", hashed_password="x",
+                      is_active=True)
+        db_session.add_all([admin, regular, target])
+        await db_session.commit()
+
+        mock_ws_manager.get_connected_user_ids.return_value = {1, 2}  # Both online
+
+        await broadcast_user_presence(mock_ws_manager, db_session, user_id=3, is_online=True)
+
+        # Only admin (superuser) should be notified
+        mock_ws_manager.send_to_user.assert_called_once_with(1, {
+            "type": "admin:user_presence",
+            "user_id": 3,
+            "is_online": True,
+        })
+
+    @pytest.mark.asyncio
+    async def test_skips_self(self, db_session, mock_ws_manager):
+        """User doesn't get notified about their own presence."""
+        admin = User(id=1, email="admin@test.com", display_name="Admin", hashed_password="x",
+                     is_active=True, is_superuser=True)
+        db_session.add(admin)
+        await db_session.commit()
+
+        mock_ws_manager.get_connected_user_ids.return_value = {1}
+
+        await broadcast_user_presence(mock_ws_manager, db_session, user_id=1, is_online=True)
+
+        mock_ws_manager.send_to_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_offline_broadcast(self, db_session, mock_ws_manager):
+        """Sends is_online=False when user goes offline."""
+        admin = User(id=1, email="admin@test.com", display_name="Admin", hashed_password="x",
+                     is_active=True, is_superuser=True)
+        db_session.add(admin)
+        await db_session.commit()
+
+        mock_ws_manager.get_connected_user_ids.return_value = {1}
+
+        await broadcast_user_presence(mock_ws_manager, db_session, user_id=5, is_online=False)
+
+        msg = mock_ws_manager.send_to_user.call_args[0][1]
+        assert msg["is_online"] is False
+
+    @pytest.mark.asyncio
+    async def test_no_admins_online(self, db_session, mock_ws_manager):
+        """No crash when no admin users are connected."""
+        user = User(id=2, email="user@test.com", display_name="User", hashed_password="x",
+                    is_active=True, is_superuser=False)
+        db_session.add(user)
+        await db_session.commit()
+
+        mock_ws_manager.get_connected_user_ids.return_value = {2}
+
+        await broadcast_user_presence(mock_ws_manager, db_session, user_id=3, is_online=True)
+
+        mock_ws_manager.send_to_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_notifies_rbac_admin_non_superuser(self, db_session, mock_ws_manager):
+        """Non-superuser with admin:users permission via RBAC chain gets notified."""
+        # Create RBAC chain: user → group → role → permission
+        perm = Permission(id=1, name="admin:users", description="Admin users")
+        role = Role(id=1, name="admin-role", is_system=False)
+        group = Group(id=1, name="admin-group", is_system=False)
+        db_session.add_all([perm, role, group])
+        await db_session.flush()
+
+        # Wire up: role has permission, group has role
+        await db_session.execute(role_permissions.insert().values(role_id=1, permission_id=1))
+        await db_session.execute(group_roles.insert().values(group_id=1, role_id=1))
+
+        # Non-superuser in the admin group
+        rbac_admin = User(id=10, email="rbac@test.com", display_name="RBAC Admin",
+                          hashed_password="x", is_active=True, is_superuser=False)
+        db_session.add(rbac_admin)
+        await db_session.flush()
+        await db_session.execute(user_groups.insert().values(user_id=10, group_id=1))
+        await db_session.commit()
+
+        mock_ws_manager.get_connected_user_ids.return_value = {10}
+
+        await broadcast_user_presence(mock_ws_manager, db_session, user_id=5, is_online=True)
+
+        mock_ws_manager.send_to_user.assert_called_once_with(10, {
+            "type": "admin:user_presence",
+            "user_id": 5,
+            "is_online": True,
+        })
