@@ -260,6 +260,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               title: 'Friend Request Accepted',
               message: `${data.display_name} accepted your friend request!`,
             })
+          } else if (data.type === 'admin:user_presence') {
+            window.dispatchEvent(new CustomEvent('admin:user_presence', {
+              detail: { user_id: data.user_id, is_online: data.is_online },
+            }))
           }
         } catch (error) {
           console.warn('Failed to parse WebSocket message:', error)

@@ -9,6 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
+from app.models.auth import user_groups, group_roles, role_permissions, Permission
 from app.models.social import Friendship
 
 logger = logging.getLogger(__name__)
@@ -81,3 +82,47 @@ async def notify_friend_request_accepted(
         await ws_manager.send_to_user(requester_id, message)
     except Exception as e:
         logger.debug(f"Failed to notify user {requester_id} of accepted request: {e}")
+
+
+async def broadcast_user_presence(
+    ws_manager, db: AsyncSession, user_id: int, is_online: bool
+) -> None:
+    """Broadcast user online/offline status to users with admin:users permission (RBAC)."""
+    message = {
+        "type": "admin:user_presence",
+        "user_id": user_id,
+        "is_online": is_online,
+    }
+
+    connected_ids = ws_manager.get_connected_user_ids() - {user_id}
+    if not connected_ids:
+        return
+
+    # Single query: find connected users who are superuser OR have admin:users
+    # via the RBAC chain (user → groups → roles → permissions).
+    has_admin_perm = (
+        select(Permission.id)
+        .join(role_permissions, role_permissions.c.permission_id == Permission.id)
+        .join(group_roles, group_roles.c.role_id == role_permissions.c.role_id)
+        .join(user_groups, user_groups.c.group_id == group_roles.c.group_id)
+        .where(
+            user_groups.c.user_id == User.id,
+            Permission.name == "admin:users",
+        )
+        .correlate(User)
+        .exists()
+    )
+
+    result = await db.execute(
+        select(User.id).where(
+            User.id.in_(connected_ids),
+            or_(User.is_superuser.is_(True), has_admin_perm),
+        )
+    )
+    admin_ids = {row[0] for row in result.all()}
+
+    for uid in admin_ids:
+        try:
+            await ws_manager.send_to_user(uid, message)
+        except Exception:
+            pass

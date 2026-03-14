@@ -48,6 +48,18 @@ export function AdminUsers() {
 
   useEffect(() => { fetchData() }, [])
 
+  // Live presence updates from WebSocket (RBAC-scoped — only admins receive these)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { user_id, is_online } = (e as CustomEvent).detail
+      setUsers(prev => prev.map(u =>
+        u.id === user_id ? { ...u, is_online } : u
+      ))
+    }
+    window.addEventListener('admin:user_presence', handler)
+    return () => window.removeEventListener('admin:user_presence', handler)
+  }, [])
+
   const handleToggleStatus = async (user: AdminUser) => {
     const action = user.is_active ? 'disable' : 'enable'
     const confirmed = await confirm({
