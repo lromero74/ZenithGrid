@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react'
+import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, X, AlertTriangle } from 'lucide-react'
 import { adminApi, type BanSnapshot } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 
@@ -21,7 +21,23 @@ export function AdminSecurity() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [subTab, setSubTab] = useState<SubTab>('bans')
+  const [detailIp, setDetailIp] = useState<string | null>(null)
+  const [detailData, setDetailData] = useState<{ ip: string; total_hits: number; categories: Record<string, number>; sample_requests: string[] } | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const confirm = useConfirm()
+
+  const openDetail = async (ip: string) => {
+    setDetailIp(ip)
+    setDetailLoading(true)
+    setDetailData(null)
+    try {
+      setDetailData(await adminApi.getBanDetails(ip))
+    } catch {
+      // silently fail
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -185,7 +201,9 @@ export function AdminSecurity() {
                   {pagedBans.map((ban, i) => (
                     <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                       <td className="p-3">
-                        <code className="text-red-400 text-xs font-mono">{ban.ip}</code>
+                        <button onClick={() => openDetail(ban.ip)} className="text-left hover:underline">
+                          <code className="text-red-400 text-xs font-mono">{ban.ip}</code>
+                        </button>
                         {ban.hostname && (
                           <p className="text-xs text-slate-500 truncate max-w-[200px]">{ban.hostname}</p>
                         )}
@@ -223,7 +241,9 @@ export function AdminSecurity() {
                 {pagedBans.map((ban, i) => (
                   <div key={i} className="p-3 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <code className="text-red-400 text-xs font-mono">{ban.ip}</code>
+                      <button onClick={() => openDetail(ban.ip)} className="hover:underline">
+                        <code className="text-red-400 text-xs font-mono">{ban.ip}</code>
+                      </button>
                       <div className="flex items-center gap-1.5">
                         <JailBadge jail={ban.jail} />
                         <button onClick={() => handleUnban(ban.ip)} className="p-1 text-slate-500 hover:text-amber-400" title="Unban">
@@ -377,6 +397,89 @@ export function AdminSecurity() {
       <p className="text-xs text-slate-600">
         All bans are full DROP (all ports, all protocols including ICMP). Auto-detection bans new offenders automatically.
       </p>
+
+      {/* Ban Detail Modal */}
+      {detailIp && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setDetailIp(null)}>
+          <div
+            className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <h3 className="text-sm font-bold text-white">Ban Details: <code className="text-red-400">{detailIp}</code></h3>
+              </div>
+              <button onClick={() => setDetailIp(null)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {detailLoading && <p className="text-slate-400 text-sm text-center py-4">Loading...</p>}
+
+              {detailData && (
+                <>
+                  <div className="text-xs text-slate-400">
+                    <span className="text-white font-bold text-lg">{detailData.total_hits}</span> total requests logged
+                  </div>
+
+                  {/* Categories */}
+                  {Object.keys(detailData.categories).length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-300 mb-2">Attack Categories</h4>
+                      <div className="space-y-1.5">
+                        {Object.entries(detailData.categories).sort((a, b) => b[1] - a[1]).map(([cat, count]) => {
+                          const pct = detailData.total_hits > 0 ? (count / detailData.total_hits) * 100 : 0
+                          return (
+                            <div key={cat}>
+                              <div className="flex justify-between text-xs mb-0.5">
+                                <span className="text-slate-300">{cat}</span>
+                                <span className="text-slate-400 font-mono">{count} ({pct.toFixed(0)}%)</span>
+                              </div>
+                              <div className="w-full bg-slate-700 rounded-full h-1.5">
+                                <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sample requests */}
+                  {detailData.sample_requests.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-300 mb-2">
+                        Sample Requests ({Math.min(detailData.sample_requests.length, 20)} of {detailData.total_hits})
+                      </h4>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {detailData.sample_requests.map((line, i) => (
+                          <p key={i} className="text-[10px] text-slate-500 font-mono break-all bg-slate-900/50 rounded px-2 py-1">
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {detailData.total_hits === 0 && (
+                    <p className="text-sm text-slate-500 text-center py-4">
+                      No log entries found — IP may have been banned via manual action or logs were rotated.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-slate-700 shrink-0 text-right">
+              <button onClick={() => setDetailIp(null)} className="px-4 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

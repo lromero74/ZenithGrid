@@ -713,6 +713,72 @@ async def unban_ip(
     }
 
 
+@router.get("/bans/{ip}/details")
+async def get_ban_details(
+    ip: str,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+):
+    """Get attack patterns that led to an IP ban. Greps nginx + intrusion logs."""
+    import subprocess
+    import asyncio
+
+    patterns: list[dict] = []
+
+    async def _grep_log(log_path: str, source: str):
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    ["grep", ip, log_path],
+                    capture_output=True, text=True, timeout=10,
+                )
+            )
+            if result.returncode != 0:
+                return
+            for line in result.stdout.strip().split("\n")[:50]:
+                if not line.strip():
+                    continue
+                patterns.append({"source": source, "line": line.strip()[:500]})
+        except Exception:
+            pass
+
+    await asyncio.gather(
+        _grep_log("/var/log/nginx/access.log", "nginx"),
+        _grep_log("/var/log/zenithgrid/intrusion.log", "intrusion"),
+    )
+
+    # Categorize patterns
+    categories: dict[str, int] = {}
+    for p in patterns:
+        line = p["line"].lower()
+        if ".php" in line or "wp-" in line or "xmlrpc" in line:
+            cat = "WordPress/PHP scan"
+        elif ".env" in line:
+            cat = "Env file enumeration"
+        elif "cgi-bin" in line or "/bin/sh" in line or "/bin/bash" in line:
+            cat = "Shell injection"
+        elif "../" in line or "%2e" in line:
+            cat = "Path traversal"
+        elif "swagger" in line or "actuator" in line or "graphql" in line:
+            cat = "API framework scan"
+        elif "console" in line or "login" in line or "admin" in line:
+            cat = "Admin panel probe"
+        elif ".bak" in line or ".old" in line or "debug.log" in line:
+            cat = "Backup file scan"
+        elif "[INTRUSION]" in p["line"]:
+            cat = "POST body injection"
+        else:
+            cat = "Other"
+        categories[cat] = categories.get(cat, 0) + 1
+
+    return {
+        "ip": ip,
+        "total_hits": len(patterns),
+        "categories": categories,
+        "sample_requests": [p["line"] for p in patterns[:20]],
+    }
+
+
 def _format_ban_snapshot(snapshot):
     from datetime import datetime
     return {
