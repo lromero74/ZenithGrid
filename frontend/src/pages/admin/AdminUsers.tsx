@@ -5,14 +5,16 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Users, Shield, ShieldCheck, ShieldOff,
-  CheckCircle, XCircle, RefreshCw, Clock, X, Trash2,
+  CheckCircle, XCircle, RefreshCw, Clock, X, Trash2, MessageSquare,
 } from 'lucide-react'
 import {
-  adminApi, AdminUser, AdminGroup, SessionPolicyConfig,
+  adminApi, AdminUser, AdminGroup, SessionPolicyConfig, api,
 } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -29,6 +31,20 @@ export function AdminUsers() {
   const [sessionLoading, setSessionLoading] = useState(false)
   const [showOffline, setShowOffline] = useState(false)
   const confirm = useConfirm()
+  const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
+
+  const handleMessageAsAdmin = async (targetUserId: number) => {
+    try {
+      const { data } = await api.post('/chat/channels', {
+        type: 'admin_dm',
+        friend_id: targetUserId,
+      })
+      navigate('/social', { state: { openChannelId: data.id } })
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to create admin channel')
+    }
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -232,6 +248,21 @@ export function AdminUsers() {
                     <div>
                       <p className="font-medium">{user.display_name || user.email}</p>
                       {user.display_name && <p className="text-xs text-slate-400">{user.email}</p>}
+                      <p className="text-xs text-slate-500">
+                        {user.last_login_at
+                          ? `Last login: ${new Date(user.last_login_at).toLocaleDateString()} ${new Date(user.last_login_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                          : 'Never logged in'}
+                      </p>
+                      {user.login_locations && user.login_locations.length > 0 && (
+                        <div className="mt-0.5 space-y-0.5">
+                          {user.login_locations.map((loc, i) => (
+                            <p key={i} className="text-[0.65rem] text-cyan-400/70">
+                              {loc.ip} — {[loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Unknown'}
+                              {loc.org && <span className="text-slate-600 ml-1">({loc.org})</span>}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -279,6 +310,15 @@ export function AdminUsers() {
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {user.id !== currentUser?.id && user.is_online && (
+                      <button
+                        onClick={() => handleMessageAsAdmin(user.id)}
+                        className="p-1 text-cyan-400 hover:text-cyan-300 hover:bg-slate-700 rounded transition-colors"
+                        title="Message as Admin"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => openSessionModal(user)}
                       className="px-2 py-1 text-xs text-amber-400 hover:text-amber-300 hover:bg-slate-700 rounded transition-colors"
@@ -324,6 +364,11 @@ export function AdminUsers() {
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{user.display_name || user.email}</p>
                   {user.display_name && <p className="text-[0.65rem] text-slate-400 truncate">{user.email}</p>}
+                  <p className="text-[0.6rem] text-slate-500">
+                    {user.last_login_at
+                      ? `Last: ${new Date(user.last_login_at).toLocaleDateString()}`
+                      : 'Never'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">

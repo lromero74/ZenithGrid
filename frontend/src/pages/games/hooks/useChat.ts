@@ -20,7 +20,7 @@ export interface ChatChannelLastMessage {
 
 export interface ChatChannel {
   id: number
-  type: 'dm' | 'group' | 'channel'
+  type: 'dm' | 'group' | 'channel' | 'admin_dm'
   name: string | null
   member_count: number
   unread_count: number
@@ -55,6 +55,7 @@ export interface ChatMessage {
   is_pinned: boolean
   reply_to: ChatReplyTo | null
   reactions: ChatReaction[]
+  is_admin?: boolean
 }
 
 export interface ChatMember {
@@ -62,6 +63,7 @@ export interface ChatMember {
   display_name: string
   role: 'owner' | 'admin' | 'member'
   joined_at: string | null
+  is_admin?: boolean
 }
 
 export interface ChatSearchResult extends ChatMessage {
