@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.121.0] - 2026-03-14
+
+### Added
+- **Chat-to-game lobby** — game controller icon in the chat input bar lets you start a multiplayer game with everyone in the channel; pick a game from the searchable list, a lobby is created, and all channel members get an invite notification
+
 ## [v2.120.0] - 2026-03-14
 
 ### Added
