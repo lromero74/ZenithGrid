@@ -25,6 +25,7 @@ import {
   drawOneCard,
   chooseWildValue,
   chooseSelectorTarget,
+  chooseSevenAction,
   cantPlay,
   getActiveSource,
   hasValidPlay,
@@ -571,12 +572,12 @@ function ShalasSinglePlayer() {
         {pairRow.map((pair, i) => {
           const isPairBlindSelected = selectedBlindCard?.source === 'pairRow' && selectedBlindCard.stackIndex === i
           return (
-          <div key={i} className="relative" style={{ width: '4.5rem', height: '5.5rem' }}>
+          <div key={i} className="relative" style={{ width: '5rem', height: '6rem' }}>
             {pair.faceDown ? (
               <div
                 className={`${CARD_SIZE_COMPACT} absolute top-0 left-0 group ${isClickable('pairRow') && pair.faceUp === null ? 'cursor-pointer' : ''} ${
                   isPairBlindSelected && pair.faceUp === null ? 'ring-2 ring-yellow-400 rounded-md -translate-y-1' : ''
-                }`}
+                } ${pair.faceUp ? 'pointer-events-none' : ''}`}
                 onClick={() => pair.faceUp === null && handlePairClick(i, 'faceDown')}
               >
                 <CardBack />
@@ -820,6 +821,24 @@ function ShalasSinglePlayer() {
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* Seven action chooser (2-player) */}
+      {gameState.phase === 'choose_seven_action' && (
+        <div className="flex gap-2 justify-center mb-3">
+          <button
+            onClick={() => updateState(chooseSevenAction(gameState, 'pick_table'))}
+            className="px-3 py-1.5 text-xs rounded bg-emerald-700 text-emerald-100 hover:bg-emerald-600 transition-colors"
+          >
+            Pick Table Card
+          </button>
+          <button
+            onClick={() => updateState(chooseSevenAction(gameState, 'push_discard'))}
+            className="px-3 py-1.5 text-xs rounded bg-red-700 text-red-100 hover:bg-red-600 transition-colors"
+          >
+            Push Discard to Opponent
+          </button>
         </div>
       )}
 

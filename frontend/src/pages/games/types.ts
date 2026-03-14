@@ -19,6 +19,8 @@ export interface GameInfo {
   category: GameCategory
   subcategory?: string
   multiplayer?: MultiplayerMode[]
+  scoreType?: 'high_score' | 'fastest_time' | 'level_reached'
+  scoreLabel?: string
 }
 
 export interface GameScore {

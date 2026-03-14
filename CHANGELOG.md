@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.120.0] - 2026-03-14
+
+### Added
+- **Server-side game score types** — scores now support types (high_score, fastest_time, level_reached) with per-type comparison logic (fastest_time: lower wins)
+- **Score display on game cards** — hub shows formatted scores with appropriate icons (Trophy for points, Timer for time) and labels per game
+- **Shalas fastest win tracking** — game card shows fastest VS win time
+- **9 games tagged with score types** — Snake, 2048, Centipede, Dino Runner, Space Invaders, Lode Runner, Plinko (high_score); Minesweeper, Shalas (fastest_time)
+
+### Fixed
+- **Shalas 7 card not working in 2-player** — missing `choose_seven_action` UI; game would enter dead state after playing a 7
+- **Shalas top row touch targets** — overlapping card layers intercepted touch events; increased hit areas and disabled pointer events on covered cards
+
 ## [v2.119.1] - 2026-03-14
 
 ### Fixed

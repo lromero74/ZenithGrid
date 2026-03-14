@@ -80,6 +80,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'puzzle',
     multiplayer: ['best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'minesweeper',
@@ -90,6 +92,8 @@ export const GAMES: GameInfo[] = [
     difficulty: 'medium',
     sessionLength: '3-15 min',
     category: 'puzzle',
+    scoreType: 'fastest_time',
+    scoreLabel: 'Best Time',
     multiplayer: ['best_score'],
   },
   {
@@ -146,6 +150,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '2-10 min',
     category: 'arcade',
     multiplayer: ['best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'ultimate-tic-tac-toe',
@@ -201,6 +207,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '2-5 min',
     category: 'arcade',
     multiplayer: ['best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'memory',
@@ -464,6 +472,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'arcade',
     multiplayer: ['survival', 'best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'space-invaders',
@@ -475,6 +485,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'arcade',
     multiplayer: ['survival', 'best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'lode-runner',
@@ -486,6 +498,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-30 min',
     category: 'arcade',
     multiplayer: ['best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'dino-runner',
@@ -497,6 +511,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '5-15 min',
     category: 'arcade',
     multiplayer: ['survival', 'best_score'],
+    scoreType: 'high_score',
+    scoreLabel: 'Best',
   },
   {
     id: 'shalas',
@@ -509,6 +525,8 @@ export const GAMES: GameInfo[] = [
     category: 'cards',
     subcategory: 'Classic',
     multiplayer: ['vs'],
+    scoreType: 'fastest_time',
+    scoreLabel: 'Fastest Win',
   },
   {
     id: 'cheat',
