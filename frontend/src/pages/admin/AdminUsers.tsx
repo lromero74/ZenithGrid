@@ -201,6 +201,7 @@ export function AdminUsers() {
               <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                 <td className="p-3">
                   <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${user.is_online ? 'bg-green-400' : 'bg-slate-600'}`} title={user.is_online ? 'Online' : 'Offline'} />
                     {user.is_superuser && <span title="Superuser"><Shield className="w-4 h-4 text-yellow-400" /></span>}
                     <div>
                       <p className="font-medium">{user.display_name || user.email}</p>
@@ -292,6 +293,7 @@ export function AdminUsers() {
             {/* User info */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${user.is_online ? 'bg-green-400' : 'bg-slate-600'}`} title={user.is_online ? 'Online' : 'Offline'} />
                 {user.is_superuser && <Shield className="w-4 h-4 text-yellow-400 shrink-0" />}
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{user.display_name || user.email}</p>

@@ -76,7 +76,9 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
 ):
-    """List all users with group memberships and MFA status."""
+    """List all users with group memberships, MFA status, and online indicator."""
+    from app.services.websocket_manager import ws_manager
+
     query = (
         select(User)
         .options(selectinload(User.groups))
@@ -84,6 +86,8 @@ async def list_users(
     )
     result = await db.execute(query)
     users = result.scalars().all()
+
+    online_ids = ws_manager.get_connected_user_ids()
 
     return [
         {
@@ -98,6 +102,7 @@ async def list_users(
             "session_policy_override": u.session_policy_override,
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
             "created_at": u.created_at.isoformat() if u.created_at else None,
+            "is_online": u.id in online_ids,
         }
         for u in users
     ]

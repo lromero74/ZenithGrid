@@ -266,6 +266,15 @@ async def accept_friend_request(
     # Delete the request
     await db.delete(req)
     await db.commit()
+
+    # Notify the requester via WebSocket
+    try:
+        from app.services.websocket_manager import ws_manager
+        from app.services.friend_notifications import notify_friend_request_accepted
+        await notify_friend_request_accepted(ws_manager, db, current_user.id, req.from_user_id)
+    except Exception as e:
+        logger.debug(f"Friend accept notification failed: {e}")
+
     return {"friend_id": req.from_user_id, "status": "accepted"}
 
 
