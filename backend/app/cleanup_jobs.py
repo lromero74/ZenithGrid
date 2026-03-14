@@ -435,6 +435,10 @@ async def cleanup_in_memory_caches():
             from app.middleware.public_rate_limit import PublicEndpointRateLimiter
             PublicEndpointRateLimiter.prune_stale()
 
+            # --- Intrusion detection stale entries ---
+            from app.middleware.intrusion_detect import IntrusionDetector
+            IntrusionDetector.prune_stale()
+
             # --- WebSocket stale connections ---
             from app.services.websocket_manager import ws_manager
             ws_stale = await ws_manager.sweep_stale_connections()
