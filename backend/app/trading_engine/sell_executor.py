@@ -708,22 +708,25 @@ async def execute_sell(
     precision = get_base_precision(product_id)
     raw_amount = position.total_base_acquired
 
-    # For paper trading: cap at actual available balance to prevent
-    # mismatch between position tracking and simulated balances
+    # For paper trading: ensure the wallet has enough base currency.
+    # Multiple positions can share the same base currency on one account,
+    # so the wallet may temporarily be short. Top up if needed to avoid
+    # selling less than the position holds (which causes artificial losses).
     if is_paper:
         base_currency = product_id.split("-")[0]
         try:
             bal_info = await exchange.get_balance(base_currency)
             available = float(bal_info.get("available", bal_info.get("balance", 0)))
             if available < raw_amount:
-                logger.warning(
-                    f"  Paper balance mismatch: position says {raw_amount:.8f} "
-                    f"{base_currency} but only {available:.8f} available. "
-                    f"Using available balance."
+                shortfall = raw_amount - available
+                logger.info(
+                    f"  Paper balance top-up: position needs {raw_amount:.8f} "
+                    f"{base_currency} but wallet has {available:.8f}. "
+                    f"Adding {shortfall:.8f} to cover position."
                 )
-                raw_amount = available
+                await exchange.adjust_balance(base_currency, shortfall)
         except Exception as e:
-            logger.warning(f"Could not check paper balance: {e}")
+            logger.warning(f"Could not check/adjust paper balance: {e}")
 
     base_amount = math.floor(raw_amount * (10 ** precision)) / (10 ** precision)
 

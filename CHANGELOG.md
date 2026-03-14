@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.122.3] - 2026-03-14
+
+### Fixed
+- **Paper trading sell quantity drift** — multiple bots sharing an account could deplete the simulated wallet, causing sells to be capped below the position's actual holdings; the sell executor now tops up the paper wallet to ensure full position sells
+- **RSI Runner missing take-profit** — both RSI Runner bots (BTC and USD) now have a 2% minimum take-profit target to prevent conditional TP from triggering at a net loss
+
 ## [v2.122.2] - 2026-03-14
 
 ### Added
