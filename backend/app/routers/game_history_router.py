@@ -269,12 +269,20 @@ async def get_game_scores(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all high scores for the current user."""
+    """Get all high scores for the current user, keyed by game_id."""
     result = await db.execute(
         select(GameHighScore).where(GameHighScore.user_id == current_user.id)
     )
     scores = result.scalars().all()
-    return {row.game_id: row.score for row in scores}
+    # Return dict keyed by game_id with score and score_type
+    out: dict[str, dict] = {}
+    for row in scores:
+        key = row.game_id
+        out[key] = {
+            "score": row.score,
+            "score_type": row.score_type,
+        }
+    return out
 
 
 @router.put("/scores/{game_id}")
@@ -284,22 +292,31 @@ async def update_game_score(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update high score for a game (only if higher than current)."""
+    """Update high score for a game. For fastest_time, lower is better."""
     score = body.get("score")
     if score is None or not isinstance(score, (int, float)):
         raise HTTPException(400, "score required")
     score = int(score)
+    score_type = body.get("score_type", "high_score")
 
     result = await db.execute(
         select(GameHighScore).where(
             GameHighScore.user_id == current_user.id,
             GameHighScore.game_id == game_id,
+            GameHighScore.score_type == score_type,
         )
     )
     existing = result.scalar_one_or_none()
 
+    # For fastest_time, lower is better
+    is_better = (
+        score < existing.score if score_type == "fastest_time" and existing
+        else score > existing.score if existing
+        else True
+    )
+
     if existing:
-        if score > existing.score:
+        if is_better:
             existing.score = score
             existing.updated_at = datetime.utcnow()
             await db.commit()
@@ -310,6 +327,7 @@ async def update_game_score(
             user_id=current_user.id,
             game_id=game_id,
             score=score,
+            score_type=score_type,
         )
         db.add(new_score)
         await db.commit()

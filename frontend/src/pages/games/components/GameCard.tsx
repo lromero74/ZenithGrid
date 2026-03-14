@@ -6,9 +6,19 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { Trophy, Swords, Flag, Shield, TrendingUp } from 'lucide-react'
+import { Trophy, Swords, Flag, Shield, TrendingUp, Timer } from 'lucide-react'
 import { GAME_ICONS } from '../constants'
 import type { GameInfo, MultiplayerMode } from '../types'
+
+function formatScore(score: number, scoreType?: string): string {
+  if (scoreType === 'fastest_time') {
+    if (score >= 3600) return `${Math.floor(score / 3600)}h ${Math.floor((score % 3600) / 60)}m`
+    if (score >= 60) return `${Math.floor(score / 60)}m ${score % 60}s`
+    return `${score}s`
+  }
+  if (scoreType === 'level_reached') return `Lvl ${score}`
+  return score.toLocaleString()
+}
 
 const MODE_BADGE: Record<MultiplayerMode, { icon: typeof Swords; label: string; color: string }> = {
   vs:           { icon: Swords,     label: 'VS',           color: 'text-purple-400' },
@@ -84,8 +94,11 @@ export function GameCard({ game, highScore, onPlay }: GameCardProps) {
 
         {highScore !== undefined && highScore !== null && (
           <div className="flex items-center space-x-1 text-yellow-400">
-            <Trophy className="w-3 h-3" />
-            <span className="text-xs font-mono">{highScore}</span>
+            {game.scoreType === 'fastest_time' ? <Timer className="w-3 h-3" /> : <Trophy className="w-3 h-3" />}
+            <span className="text-xs font-mono">
+              {game.scoreLabel && <span className="text-slate-500 mr-0.5">{game.scoreLabel}:</span>}
+              {formatScore(highScore, game.scoreType)}
+            </span>
           </div>
         )}
       </div>
