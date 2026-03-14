@@ -77,25 +77,32 @@ async def get_donation_goal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ):
-    """Get current month's donation goal progress."""
+    """Get current quarter's donation goal progress."""
     now = datetime.utcnow()
+    quarter = (now.month - 1) // 3 + 1  # 1-4
+    quarter_start_month = (quarter - 1) * 3 + 1  # 1, 4, 7, 10
+    quarter_start = datetime(now.year, quarter_start_month, 1)
+    if quarter < 4:
+        quarter_end = datetime(now.year, quarter_start_month + 3, 1)
+    else:
+        quarter_end = datetime(now.year + 1, 1, 1)
 
     # Get target from settings
     result = await db.execute(
-        select(Settings).where(Settings.key == "donation_goal_monthly")
+        select(Settings).where(Settings.key == "donation_goal_quarterly")
     )
     setting = result.scalar_one_or_none()
-    target = float(setting.value) if setting else 100.0
+    target = float(setting.value) if setting else 300.0
 
-    # Sum confirmed donations this month
+    # Sum confirmed donations this quarter
     result = await db.execute(
         select(
             func.coalesce(func.sum(Donation.amount), 0),
             func.count(Donation.id),
         ).where(
             Donation.status == "confirmed",
-            func.extract("month", Donation.donation_date) == now.month,
-            func.extract("year", Donation.donation_date) == now.year,
+            Donation.donation_date >= quarter_start,
+            Donation.donation_date < quarter_end,
         )
     )
     row = result.one()
@@ -108,7 +115,7 @@ async def get_donation_goal(
         "target": target,
         "current": round(current, 2),
         "percentage": percentage,
-        "month": now.strftime("%Y-%m"),
+        "quarter": f"{now.year} Q{quarter}",
         "donation_count": count,
     }
 
@@ -288,7 +295,7 @@ async def update_goal(
 ):
     """Admin updates the monthly donation goal target."""
     result = await db.execute(
-        select(Settings).where(Settings.key == "donation_goal_monthly")
+        select(Settings).where(Settings.key == "donation_goal_quarterly")
     )
     setting = result.scalar_one_or_none()
 
@@ -296,7 +303,7 @@ async def update_goal(
         setting.value = str(data.target)
     else:
         db.add(Settings(
-            key="donation_goal_monthly",
+            key="donation_goal_quarterly",
             value=str(data.target),
             value_type="float",
             description="Monthly donation goal in USD",

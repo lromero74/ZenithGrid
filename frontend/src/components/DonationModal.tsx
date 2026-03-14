@@ -1,5 +1,5 @@
 /**
- * Donation Modal — polite popup with monthly meter, donation addresses,
+ * Donation Modal — polite popup with quarterly meter, donation addresses,
  * QR codes for crypto, and self-report form.
  */
 
@@ -8,7 +8,14 @@ import { Heart, X, Copy, Check, ExternalLink, ChevronDown, ChevronUp } from 'luc
 import { QRCodeSVG } from 'qrcode.react'
 import { donationsApi, type DonationGoal } from '../services/api'
 
-const DONATION_DISMISSED_MONTH_KEY = 'donation_modal_dismissed_month'
+const DONATION_DISMISSED_QUARTER_KEY = 'donation_modal_dismissed_quarter'
+
+/** Get current quarter string like "2026-Q1" */
+function getCurrentQuarter(): string {
+  const now = new Date()
+  const q = Math.ceil((now.getMonth() + 1) / 3)
+  return `${now.getFullYear()}-Q${q}`
+}
 
 const CRYPTO_METHODS = [
   {
@@ -78,8 +85,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
 
   const handleDismiss = useCallback(() => {
     if (dontRemind) {
-      const currentMonth = new Date().toISOString().slice(0, 7)
-      localStorage.setItem(DONATION_DISMISSED_MONTH_KEY, currentMonth)
+      localStorage.setItem(DONATION_DISMISSED_QUARTER_KEY, getCurrentQuarter())
     }
     onClose()
   }, [dontRemind, onClose])
@@ -97,6 +103,8 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
         tx_reference: reportRef || undefined,
       })
       setReportSuccess(true)
+      // Don't bother them again this quarter — they donated
+      localStorage.setItem(DONATION_DISMISSED_QUARTER_KEY, getCurrentQuarter())
       // Refresh goal
       donationsApi.getGoal().then(setGoal).catch(() => {})
     } catch {
@@ -131,7 +139,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
           {goal && (
             <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-300">Monthly Goal</span>
+                <span className="text-slate-300">Quarterly Goal</span>
                 <span className="text-white font-medium">
                   ${goal.current.toFixed(0)} of ${goal.target.toFixed(0)}
                 </span>
@@ -143,7 +151,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
                 />
               </div>
               <div className="flex justify-between text-xs mt-1.5">
-                <span className="text-slate-500">{goal.donation_count} donation{goal.donation_count !== 1 ? 's' : ''} this month</span>
+                <span className="text-slate-500">{goal.donation_count} donation{goal.donation_count !== 1 ? 's' : ''} this quarter</span>
                 <span className="text-emerald-400 font-medium">{goal.percentage}%</span>
               </div>
             </div>
@@ -293,7 +301,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
               onChange={e => setDontRemind(e.target.checked)}
               className="rounded border-slate-600"
             />
-            Don&apos;t remind me this month
+            Don&apos;t remind me this quarter
           </label>
           <button
             onClick={handleDismiss}
@@ -307,9 +315,9 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
   )
 }
 
-/** Check if the donation modal should auto-show this month. */
+/** Check if the donation modal should auto-show this quarter. */
 export function shouldShowDonationModal(): boolean {
-  const currentMonth = new Date().toISOString().slice(0, 7)
-  const dismissedMonth = localStorage.getItem(DONATION_DISMISSED_MONTH_KEY)
-  return dismissedMonth !== currentMonth
+  const currentQuarter = getCurrentQuarter()
+  const dismissedQuarter = localStorage.getItem(DONATION_DISMISSED_QUARTER_KEY)
+  return dismissedQuarter !== currentQuarter
 }

@@ -27,6 +27,7 @@ export function AdminUsers() {
   const [overridePolicy, setOverridePolicy] = useState<SessionPolicyConfig>({})
   const [activeSessions, setActiveSessions] = useState<any[]>([])
   const [sessionLoading, setSessionLoading] = useState(false)
+  const [showOffline, setShowOffline] = useState(false)
   const confirm = useConfirm()
 
   const fetchData = async () => {
@@ -178,15 +179,28 @@ export function AdminUsers() {
     return <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-slate-400" /></div>
   }
 
+  const filteredUsers = showOffline ? users : users.filter(u => u.is_online)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Users className="w-5 h-5" /> Users ({users.length})
+          <Users className="w-5 h-5" /> Users ({filteredUsers.length}{!showOffline && filteredUsers.length !== users.length ? ` of ${users.length}` : ''})
         </h2>
-        <button onClick={fetchData} className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition-colors">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOffline}
+              onChange={e => setShowOffline(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            Show Offline
+          </label>
+          <button onClick={fetchData} className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition-colors">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -209,7 +223,7 @@ export function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {users.map(user => (
+            {filteredUsers.map(user => (
               <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                 <td className="p-3">
                   <div className="flex items-center gap-2">
@@ -300,7 +314,7 @@ export function AdminUsers() {
 
       {/* Mobile card layout */}
       <div className="sm:hidden space-y-3">
-        {users.map(user => (
+        {filteredUsers.map(user => (
           <div key={user.id} className="bg-slate-800 rounded-lg border border-slate-700 p-3 space-y-2">
             {/* User info */}
             <div className="flex items-center justify-between">
