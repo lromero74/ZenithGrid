@@ -972,6 +972,10 @@ export const adminApi = {
     api.post<BanSnapshot>('/admin/bans/refresh').then(r => r.data),
   unbanIp: (ip: string) =>
     api.post('/admin/bans/unban', { ip }).then(r => r.data),
+  getBanDetails: (ip: string) =>
+    api.get<{ ip: string; total_hits: number; categories: Record<string, number>; sample_requests: string[] }>(
+      `/admin/bans/${encodeURIComponent(ip)}/details`
+    ).then(r => r.data),
 };
 
 // ── Donations ──────────────────────────────────────────────────────
