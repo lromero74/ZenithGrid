@@ -329,7 +329,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
       .filter(sl => sl.frame > 0)
 
     // Update each ball
-    const landed: { slotIdx: number }[] = []
+    const landed: { slotIdx: number; bet: number }[] = []
     const activeBalls: Ball[] = []
 
     for (let ball of ballsRef.current) {
@@ -379,7 +379,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
       if (ball.y >= BOARD_HEIGHT - 10) {
         const slotIdx = getSlotIndex(ball.x, BOARD_WIDTH)
         sfx.play('land')
-        landed.push({ slotIdx })
+        landed.push({ slotIdx, bet: ball.bet })
       } else {
         activeBalls.push(ball)
       }
@@ -403,9 +403,9 @@ function PlinkoSinglePlayer({ onGameEnd }: {
       const multipliers = getMultipliers(riskRef.current)
       let totalWin = 0
       let lastMultiplier = 0
-      for (const { slotIdx } of landed) {
+      for (const { slotIdx, bet: ballBet } of landed) {
         const m = multipliers[slotIdx]
-        const win = Math.round(betRef.current * m)
+        const win = Math.round(ballBet * m)
         totalWin += win
         lastMultiplier = m
         // Trigger slot landing spring animation
@@ -462,7 +462,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
     setBallsActive(true)
 
     sfx.play('drop')
-    const ball = createBall(dropX)
+    const ball = createBall(dropX, betRef.current)
     ballsRef.current.push(ball)
 
     // Start animation if not already running

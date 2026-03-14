@@ -33,6 +33,7 @@ export interface Ball {
   y: number
   vx: number
   vy: number
+  bet: number  // bet amount locked at drop time
 }
 
 let nextBallId = 1
@@ -166,13 +167,14 @@ export function getMultipliers(risk: RiskLevel): number[] {
  * the visible board with no velocity.  Gravity alone accelerates it down
  * into the pegs.
  */
-export function createBall(dropX: number): Ball {
+export function createBall(dropX: number, bet: number = 0): Ball {
   return {
     id: nextBallId++,
     x: dropX,
     y: -BALL_RADIUS,
     vx: 0,
     vy: 0,
+    bet,
   }
 }
 
@@ -183,7 +185,7 @@ export function createBall(dropX: number): Ball {
 export function stepPhysics(ball: Ball): Ball {
   const vy = ball.vy + GRAVITY
   return {
-    id: ball.id,
+    ...ball,
     x: ball.x + ball.vx,
     y: ball.y + vy,
     vx: ball.vx,
@@ -268,13 +270,7 @@ export function resolveCollision(ball: Ball, peg: Peg): Ball {
     vy = 0
   }
 
-  return {
-    id: ball.id,
-    x: newX,
-    y: newY,
-    vx,
-    vy,
-  }
+  return { ...ball, x: newX, y: newY, vx, vy }
 }
 
 /**
@@ -327,20 +323,8 @@ export function resolveBallCollision(a: Ball, b: Ball): [Ball, Ball] {
   const pushY = (ny * overlap) / 2
 
   return [
-    {
-      id: a.id,
-      x: a.x + pushX,
-      y: a.y + pushY,
-      vx: (a.vx - impulse * nx) * RESTITUTION,
-      vy: (a.vy - impulse * ny) * RESTITUTION,
-    },
-    {
-      id: b.id,
-      x: b.x - pushX,
-      y: b.y - pushY,
-      vx: (b.vx + impulse * nx) * RESTITUTION,
-      vy: (b.vy + impulse * ny) * RESTITUTION,
-    },
+    { ...a, x: a.x + pushX, y: a.y + pushY, vx: (a.vx - impulse * nx) * RESTITUTION, vy: (a.vy - impulse * ny) * RESTITUTION },
+    { ...b, x: b.x - pushX, y: b.y - pushY, vx: (b.vx + impulse * nx) * RESTITUTION, vy: (b.vy + impulse * ny) * RESTITUTION },
   ]
 }
 
@@ -447,7 +431,7 @@ export function resolveRailCollision(ball: Ball, peg: Peg): Ball {
   const vx = (ball.vx - 2 * dot * nx) * RESTITUTION * DAMPING
   const vy = (ball.vy - 2 * dot * ny) * RESTITUTION * DAMPING
 
-  return { id: ball.id, x: newX, y: newY, vx, vy }
+  return { ...ball, x: newX, y: newY, vx, vy }
 }
 
 /**
