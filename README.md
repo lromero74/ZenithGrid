@@ -490,8 +490,10 @@ For commercial licensing options that don't require open-sourcing your modificat
 If you find Zenith Grid useful, consider supporting continued development:
 
 - **Bitcoin (BTC):** 3LehBoma3aeDwdgMYK3hyr2TGfxkJs55MV
-- **PayPal:** @farolito74
-- **USDC:** 0x8B7Ff39C772c90AB58A3d74dCd17F1425b4001c0
+- **USDC (ERC-20):** 0x8B7Ff39C772c90AB58A3d74dCd17F1425b4001c0
+- **PayPal:** [@farolito74](https://paypal.me/farolito74)
+- **Venmo:** [@Louis-Romero-5](https://venmo.com/Louis-Romero-5)
+- **CashApp:** [$Farolito74](https://cash.app/$Farolito74)
 
 Every contribution helps maintain and improve this project!
 

@@ -965,3 +965,52 @@ export const adminApi = {
     api.delete(`/admin/users/${userId}/sessions/${sessionId}`)
       .then(r => r.data),
 };
+
+// ── Donations ──────────────────────────────────────────────────────
+
+export interface DonationGoal {
+  target: number
+  current: number
+  percentage: number
+  month: string
+  donation_count: number
+}
+
+export interface DonationRecord {
+  id: number
+  user_id: number | null
+  user_name: string | null
+  amount: number
+  currency: string
+  payment_method: string
+  tx_reference: string | null
+  donor_name: string | null
+  notes: string | null
+  status: 'pending' | 'confirmed' | 'rejected'
+  confirmed_by: number | null
+  donation_date: string | null
+  created_at: string | null
+}
+
+export const donationsApi = {
+  getGoal: () =>
+    api.get<DonationGoal>('/donations/goal').then(r => r.data),
+  reportDonation: (data: {
+    amount: number; currency: string;
+    payment_method: string; tx_reference?: string; donor_name?: string
+  }) => api.post('/donations/report', data).then(r => r.data),
+  // Admin
+  list: (params?: { status?: string; month?: string }) =>
+    api.get<DonationRecord[]>('/donations', { params }).then(r => r.data),
+  add: (data: {
+    amount: number; currency: string; payment_method: string;
+    tx_reference?: string; donor_name?: string; notes?: string;
+    donation_date?: string
+  }) => api.post('/donations', data).then(r => r.data),
+  confirm: (id: number) =>
+    api.put(`/donations/${id}/confirm`).then(r => r.data),
+  reject: (id: number) =>
+    api.put(`/donations/${id}/reject`).then(r => r.data),
+  updateGoal: (target: number) =>
+    api.put('/donations/goal', { target }).then(r => r.data),
+};

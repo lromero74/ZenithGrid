@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.115.0] - 2026-03-14
+
+### Added
+- **Donation support system** — monthly donation goal meter with progress bar, self-report workflow (user reports → admin confirms), and admin management tab
+- **Donation modal** — polite popup for logged-in users showing crypto addresses with QR codes (BTC, USDC), payment app links (PayPal, Venmo, CashApp), and self-report form
+- **Admin donations tab** — manage monthly goal target, confirm/reject self-reported donations, manually add donations, filter by status
+- **QR codes for crypto donations** — Bitcoin and USDC addresses render scannable QR codes in the donation modal
+- **Venmo and CashApp** donation options added alongside existing BTC, USDC, and PayPal
+
 ## [v2.114.1] - 2026-03-14
 
 ### Added
