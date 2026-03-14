@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   MessageSquare, Plus, ArrowLeft, Users, Hash, ShieldCheck,
   ChevronDown, ChevronUp, Search, Pin, X,
@@ -211,8 +212,19 @@ function PinnedPanel({ channelId, onClose }: {
 
 export function ChatPanel() {
   const { user } = useAuth()
+  const location = useLocation()
   const { data: channels = [], isLoading } = useChatChannels()
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null)
+
+  // Auto-open channel if navigated with openChannelId state (e.g., from admin messaging)
+  useEffect(() => {
+    const state = location.state as { openChannelId?: number } | null
+    if (state?.openChannelId) {
+      setActiveChannelId(state.openChannelId)
+      // Clear the state so it doesn't re-trigger on re-renders
+      window.history.replaceState({}, '')
+    }
+  }, [location.state])
   const [showNewChat, setShowNewChat] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [showSearch, setShowSearch] = useState(false)

@@ -521,7 +521,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
 // ── Race wrapper ──────────────────────────────────────────────────
 
 function FreecellRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish, leaveRoom } =
+  const { opponentStatus, raceResult, localScore, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish, leaveRoom } =
     useRaceMode(roomId, 'first_to_win')
   const finishedRef = useRef(false)
 
@@ -536,6 +536,7 @@ function FreecellRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: ()
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

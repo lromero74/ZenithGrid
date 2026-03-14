@@ -1291,7 +1291,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
 // ── Race wrapper (highest level reached wins) ─────────────────────────
 
 function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportScore, reportFinish, leaveRoom } = useRaceMode(roomId, 'best_score')
+  const { opponentStatus, raceResult, localScore, opponentLevelUp, throttledBroadcast, reportScore, reportFinish, leaveRoom } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
@@ -1306,6 +1306,7 @@ function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { r
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

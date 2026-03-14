@@ -422,6 +422,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
     reportFinish, reportScore, reportLevel, forfeit, finalizeResult, leaveRoom,
     playOnActive, isSpectating, spectatorState, playerStates, spectateTarget, spectatablePlayers,
     spectateNext, spectatePrev, broadcastState, throttledBroadcast, dismissPlayOn,
+    localScore: localScoreRef.current,
     // Sync-start
     gameStarted, countdownValue, gameSeed, localReady, sendReady,
   }
@@ -570,6 +571,7 @@ export function CountdownOverlay({
 export function RaceOverlay({
   // Core race state
   raceResult,
+  localScore,
   opponentScore,
   opponentFinished,
   opponentLevelUp,
@@ -595,6 +597,7 @@ export function RaceOverlay({
 }: {
   // -- Core race state --
   raceResult: 'won' | 'lost' | 'tied' | null
+  localScore?: number
   opponentScore?: number
   opponentFinished: boolean
   opponentLevelUp?: LevelAnnouncement | null
@@ -878,6 +881,23 @@ export function RaceOverlay({
           }`}>
             {isWin ? 'You Win the Race!' : isTie ? 'It\'s a Tie!' : 'You Lost the Race!'}
           </span>
+          {(localScore !== undefined || opponentScore !== undefined) && (
+            <div className="flex items-center gap-6 mt-1 text-sm">
+              <div className="text-center">
+                <p className="text-slate-400 text-xs">You</p>
+                <p className={`font-bold text-lg font-mono ${isWin ? 'text-green-300' : isTie ? 'text-yellow-300' : 'text-red-300'}`}>
+                  {localScore !== undefined ? localScore.toLocaleString() : '—'}
+                </p>
+              </div>
+              <span className="text-slate-500 text-xs">vs</span>
+              <div className="text-center">
+                <p className="text-slate-400 text-xs">{opponentName || 'Opponent'}</p>
+                <p className={`font-bold text-lg font-mono ${!isWin && !isTie ? 'text-green-300' : isTie ? 'text-yellow-300' : 'text-red-300'}`}>
+                  {opponentScore !== undefined ? opponentScore.toLocaleString() : '—'}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 mt-2">
             {onBackToLobby && (
               <button

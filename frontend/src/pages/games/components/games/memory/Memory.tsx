@@ -394,7 +394,7 @@ function MemorySinglePlayer({ onGameEnd, onMove, onStateChange: _onStateChange }
 // ── Race wrapper ──────────────────────────────────────────────────
 
 function MemoryRaceWrapper({ roomId, raceType = 'best_score', onLeave }: { roomId: string; difficulty?: string; raceType?: 'first_to_win' | 'best_score'; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState, reportScore, reportFinish, leaveRoom } =
+  const { opponentStatus, raceResult, localScore, opponentLevelUp, broadcastState, reportScore, reportFinish, leaveRoom } =
     useRaceMode(roomId, raceType)
   const finishedRef = useRef(false)
 
@@ -412,6 +412,7 @@ function MemoryRaceWrapper({ roomId, raceType = 'best_score', onLeave }: { roomI
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
