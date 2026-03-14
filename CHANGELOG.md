@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.116.0] - 2026-03-14
+
+### Added
+- **Admin Security tab** — view all fail2ban banned IPs with full geolocation (city, region, country, ISP, hostname) sourced from ipinfo.io
+- **Ban monitor background job** — queries fail2ban daily and caches results; admin can force-refresh anytime
+- **Admin unban** — unban individual IPs directly from the Security tab with confirmation dialog
+- **Admin user filter** — "Show Offline" toggle on the Users tab (off by default, showing only online users)
+- **Responsive admin tabs** — icons-only on mobile, labels on larger screens
+
+### Changed
+- **Donation goal is now quarterly** ($300/quarter instead of $100/month) — popup shows once per quarter
+- **Donation self-report auto-dismisses** — submitting a donation report suppresses the popup for the rest of the quarter
+
 ## [v2.115.0] - 2026-03-14
 
 ### Added

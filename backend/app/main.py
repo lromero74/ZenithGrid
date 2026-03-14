@@ -617,8 +617,11 @@ async def startup_event():
     session_cleanup_task = asyncio.create_task(cleanup_expired_sessions())
     rate_limit_cleanup_task = asyncio.create_task(cleanup_old_rate_limit_attempts())
     memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
+    from app.services.ban_monitor import ban_monitor_loop
+    asyncio.create_task(ban_monitor_loop())
     logger.info("Session cleanup job started - expiring stale sessions daily")
     logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
+    logger.info("Ban monitor started - querying fail2ban daily (admin can force-refresh)")
 
     logger.info("Starting transfer sync job...")
     transfer_sync_task = asyncio.create_task(run_transfer_sync())

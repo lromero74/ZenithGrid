@@ -583,3 +583,112 @@ async def force_end_session(
 
     await db.commit()
     return {"message": f"Session {session_id} ended"}
+
+
+# ---------------------------------------------------------------------------
+# Security / Bans
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bans")
+async def get_banned_ips(
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+):
+    """Return cached fail2ban ban snapshot (updated daily)."""
+    from app.services.ban_monitor import get_ban_snapshot
+
+    snapshot = get_ban_snapshot()
+    return _format_ban_snapshot(snapshot)
+
+
+@router.post("/bans/refresh")
+async def refresh_bans(
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+):
+    """Force-refresh the fail2ban ban snapshot (queries fail2ban now)."""
+    from app.services.ban_monitor import refresh_ban_snapshot
+
+    snapshot = await refresh_ban_snapshot()
+    return _format_ban_snapshot(snapshot)
+
+
+class UnbanRequest(BaseModel):
+    ip: str
+
+
+@router.post("/bans/unban")
+async def unban_ip(
+    data: UnbanRequest,
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+):
+    """Unban an IP from all fail2ban jails and firewalld."""
+    import subprocess
+
+    ip = data.ip.strip()
+    unbanned_jails = []
+
+    # Get jail list
+    try:
+        result = subprocess.run(
+            ["sudo", "fail2ban-client", "status"],
+            capture_output=True, text=True, timeout=10,
+        )
+        jails = []
+        for line in result.stdout.splitlines():
+            if "Jail list:" in line:
+                jails = [j.strip() for j in line.split(":", 1)[1].split(",") if j.strip()]
+
+        for jail in jails:
+            unban_result = subprocess.run(
+                ["sudo", "fail2ban-client", "set", jail, "unbanip", ip],
+                capture_output=True, text=True, timeout=10,
+            )
+            if unban_result.returncode == 0:
+                unbanned_jails.append(jail)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unban failed: {e}")
+
+    # Also remove firewalld rich rule if present
+    try:
+        subprocess.run(
+            ["sudo", "firewall-cmd",
+             f"--remove-rich-rule=rule family='ipv4' source address='{ip}' drop"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        pass
+
+    # Refresh the cached snapshot
+    from app.services.ban_monitor import refresh_ban_snapshot
+    await refresh_ban_snapshot()
+
+    logger.info(f"Admin {current_user.email} unbanned IP {ip} from jails: {unbanned_jails}")
+
+    return {
+        "ip": ip,
+        "unbanned_from": unbanned_jails,
+        "message": f"IP {ip} unbanned" if unbanned_jails else f"IP {ip} was not found in any jail",
+    }
+
+
+def _format_ban_snapshot(snapshot):
+    from datetime import datetime
+    return {
+        "currently_banned": snapshot.currently_banned,
+        "total_banned": snapshot.total_banned,
+        "total_failed": snapshot.total_failed,
+        "last_updated": datetime.utcfromtimestamp(snapshot.last_updated).isoformat()
+        if snapshot.last_updated > 0 else None,
+        "banned_ips": [
+            {
+                "ip": b.ip,
+                "jail": b.jail,
+                "city": b.city,
+                "region": b.region,
+                "country": b.country,
+                "org": b.org,
+                "hostname": b.hostname,
+            }
+            for b in snapshot.banned_ips
+        ],
+    }

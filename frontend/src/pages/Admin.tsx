@@ -10,20 +10,22 @@
  */
 
 import { useState } from 'react'
-import { Shield, Users, FolderOpen, KeyRound, Heart } from 'lucide-react'
+import { Shield, Users, FolderOpen, KeyRound, Heart, ShieldBan } from 'lucide-react'
 import { useIsAdmin } from '../hooks/usePermission'
 import { AdminUsers } from './admin/AdminUsers'
 import { AdminGroups } from './admin/AdminGroups'
 import { AdminRoles } from './admin/AdminRoles'
 import { AdminDonations } from './admin/AdminDonations'
+import { AdminSecurity } from './admin/AdminSecurity'
 
-type AdminTab = 'users' | 'groups' | 'roles' | 'donations'
+type AdminTab = 'users' | 'groups' | 'roles' | 'donations' | 'security'
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'groups', label: 'Groups', icon: FolderOpen },
   { id: 'roles', label: 'Roles', icon: KeyRound },
   { id: 'donations', label: 'Donations', icon: Heart },
+  { id: 'security', label: 'Security', icon: ShieldBan },
 ]
 
 export default function Admin() {
@@ -48,21 +50,21 @@ export default function Admin() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-slate-800 rounded-lg p-1 border border-slate-700 w-fit">
+      <div className="flex flex-wrap gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700 w-fit max-w-full">
         {TABS.map(tab => {
           const Icon = tab.icon
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >
               <Icon className="w-4 h-4" />
-              {tab.label}
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           )
         })}
@@ -73,6 +75,7 @@ export default function Admin() {
       {activeTab === 'groups' && <AdminGroups />}
       {activeTab === 'roles' && <AdminRoles />}
       {activeTab === 'donations' && <AdminDonations />}
+      {activeTab === 'security' && <AdminSecurity />}
     </div>
   )
 }

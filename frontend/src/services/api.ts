@@ -964,6 +964,12 @@ export const adminApi = {
   ) =>
     api.delete(`/admin/users/${userId}/sessions/${sessionId}`)
       .then(r => r.data),
+  getBans: () =>
+    api.get<BanSnapshot>('/admin/bans').then(r => r.data),
+  refreshBans: () =>
+    api.post<BanSnapshot>('/admin/bans/refresh').then(r => r.data),
+  unbanIp: (ip: string) =>
+    api.post('/admin/bans/unban', { ip }).then(r => r.data),
 };
 
 // ── Donations ──────────────────────────────────────────────────────
@@ -972,7 +978,7 @@ export interface DonationGoal {
   target: number
   current: number
   percentage: number
-  month: string
+  quarter: string
   donation_count: number
 }
 
@@ -990,6 +996,24 @@ export interface DonationRecord {
   confirmed_by: number | null
   donation_date: string | null
   created_at: string | null
+}
+
+export interface BanInfo {
+  ip: string
+  jail: string
+  city: string | null
+  region: string | null
+  country: string | null
+  org: string | null
+  hostname: string | null
+}
+
+export interface BanSnapshot {
+  currently_banned: number
+  total_banned: number
+  total_failed: number
+  last_updated: string | null
+  banned_ips: BanInfo[]
 }
 
 export const donationsApi = {

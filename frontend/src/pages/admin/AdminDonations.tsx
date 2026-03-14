@@ -142,7 +142,7 @@ export function AdminDonations() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
             <Heart className="w-4 h-4 text-rose-400" />
-            Monthly Goal
+            Quarterly Goal
           </h3>
           <div className="flex items-center gap-2">
             {editingGoal ? (
@@ -176,7 +176,7 @@ export function AdminDonations() {
         {goal && (
           <>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-400">{goal.month}</span>
+              <span className="text-slate-400">{goal.quarter}</span>
               <span className="text-white font-medium">
                 ${goal.current.toFixed(2)} / ${goal.target.toFixed(0)}
               </span>
@@ -188,7 +188,7 @@ export function AdminDonations() {
               />
             </div>
             <div className="flex justify-between text-xs mt-1.5 text-slate-500">
-              <span>{goal.donation_count} confirmed donation{goal.donation_count !== 1 ? 's' : ''}</span>
+              <span>{goal.donation_count} confirmed donation{goal.donation_count !== 1 ? 's' : ''} this quarter</span>
               <span className="text-emerald-400">{goal.percentage}%</span>
             </div>
           </>
