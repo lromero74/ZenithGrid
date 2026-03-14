@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.middleware.public_rate_limit import PublicEndpointRateLimiter
+from app.middleware.intrusion_detect import IntrusionDetector
 from app.cleanup_jobs import (
     cleanup_in_memory_caches,
     cleanup_old_rate_limit_attempts,
@@ -102,6 +103,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(PublicEndpointRateLimiter)
+app.add_middleware(IntrusionDetector)
 
 
 # Global exception handler for domain exceptions raised by service layer

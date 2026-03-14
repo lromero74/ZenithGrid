@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.122.0] - 2026-03-14
+
+### Security
+- **Application-level intrusion detection** — new ASGI middleware scans POST/PUT/PATCH request bodies for injection attacks (SQL, XSS, NoSQL, LDAP, SSRF, template injection, XXE, shell commands, encoded variants); 2 attempts in 1 hour triggers automatic 2-year IP ban via fail2ban
+- **Expanded nginx exploit filter** — added detection for .env file enumeration, WordPress deep scans, backup file probes, admin panel discovery, API framework scanners, Docker registry access
+- **24 malicious IPs banned** — SSH brute-force (8), web exploit scanning (16), including Azure/DigitalOcean/Contabo-hosted botnets
+
 ## [v2.121.0] - 2026-03-14
 
 ### Added
