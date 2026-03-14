@@ -21,7 +21,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
-import { HelpCircle, X } from 'lucide-react'
+import { HelpCircle, X, Eye } from 'lucide-react'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
 
@@ -830,7 +830,7 @@ const emptyInput: Input = {
   digLeft: false, digRight: false,
 }
 
-function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
+function LodeRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { onGameEnd?: (result: 'win' | 'loss' | 'draw', score?: number) => void; onStateChange?: (state: object, intervalMs?: number) => void; isMultiplayer?: boolean } = {}) {
   const { getHighScore, saveScore } = useGameScores()
   const bestScore = getHighScore('lode-runner') ?? 0
   const { load: loadSaved, save: saveState, clear: clearSaved } = useGameState<GameState>('lode-runner')
@@ -1009,8 +1009,9 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
     if (gs.player.alive) saveState(gs)
 
     draw()
+    onStateChange?.(gsRef.current, 200)
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore, saveState, clearSaved])
+  }, [draw, saveScore, saveState, clearSaved, onStateChange])
 
   // -------------------------------------------------------------------------
   // Start / restart
@@ -1203,7 +1204,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
 
         {/* Mobile d-pad — visible on small screens */}
         {gameStatus === 'playing' && (
-          <div className="flex sm:hidden items-center justify-between w-full max-w-xs px-2">
+          <div className="flex sm:hidden items-center justify-between w-full max-w-sm px-4 gap-4">
             {/* Dig left */}
             <div className="flex flex-col items-center space-y-1">
               {dpadBtn('DL', 'digLeft', 'w-11 h-11 text-sm bg-amber-800/60 active:bg-amber-700')}
@@ -1215,7 +1216,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
               <div className="flex justify-center">
                 {dpadBtn('\u25B2', 'up')}
               </div>
-              <div className="flex space-x-1">
+              <div className="flex space-x-2">
                 {dpadBtn('\u25C0', 'left')}
                 <div className="w-12 h-12" /> {/* spacer */}
                 {dpadBtn('\u25B6', 'right')}
@@ -1288,10 +1289,100 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMu
   )
 }
 
+// ── Spectator rendering helper ────────────────────────────────────────
+
+function renderLodeRunnerState(ctx: CanvasRenderingContext2D, gs: GameState) {
+  drawBackground(ctx)
+  drawTiles(ctx, gs)
+  drawGold(ctx, gs)
+  for (const g of gs.guards) drawGuard(ctx, g, gs.animTime)
+  drawPlayer(ctx, gs.player, gs.animTime)
+  for (const dp of gs.digProjectiles) {
+    const alpha = dp.timer / 0.25
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.strokeStyle = '#fbbf24'
+    ctx.lineWidth = 2
+    const px = gs.player.x + (dp.fromLeft ? -6 : 6)
+    const py = gs.player.y + 4
+    const tx = dp.col * CELL + CELL / 2
+    const ty = dp.row * CELL
+    ctx.beginPath()
+    ctx.moveTo(px, py)
+    ctx.lineTo(tx, ty)
+    ctx.stroke()
+    ctx.restore()
+  }
+  drawHUD(ctx, gs)
+}
+
+// ── Spectator view ───────────────────────────────────────────────────
+
+function LodeRunnerSpectatorView({ spectatorState }: { spectatorState: GameState | null }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef = useRef(0)
+  const lastStateRef = useRef<GameState | null>(null)
+  const [displayLevel, setDisplayLevel] = useState(0)
+  const lastLevelRef = useRef(0)
+
+  useEffect(() => {
+    if (!spectatorState) return
+    lastStateRef.current = spectatorState
+    const lvl = spectatorState.level
+    if (lvl !== lastLevelRef.current) {
+      lastLevelRef.current = lvl
+      setDisplayLevel(lvl)
+    }
+  }, [spectatorState])
+
+  useEffect(() => {
+    const loop = () => {
+      const gs = lastStateRef.current
+      const canvas = canvasRef.current
+      if (gs && canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          canvas.width = GAME_WIDTH
+          canvas.height = GAME_HEIGHT
+          renderLodeRunnerState(ctx, gs)
+        }
+      }
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    rafRef.current = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
+
+  if (!spectatorState) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <Eye className="w-8 h-8 mb-2 animate-pulse" />
+        <span className="text-sm">Waiting for opponent&apos;s game data...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <canvas
+        ref={canvasRef}
+        width={GAME_WIDTH}
+        height={GAME_HEIGHT}
+        className="rounded-lg border border-slate-700 max-w-full"
+      />
+      <p className="text-xs text-slate-400 mt-2">Spectating — Level {displayLevel}</p>
+    </div>
+  )
+}
+
 // ── Race wrapper (highest level reached wins) ─────────────────────────
 
-function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { roomId: string; difficulty?: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, localScore, opponentLevelUp, throttledBroadcast, reportScore, reportFinish, leaveRoom } = useRaceMode(roomId, 'best_score')
+function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave, playerNames }: { roomId: string; difficulty?: string; onLeave?: () => void; playerNames?: Record<number, string> }) {
+  const {
+    opponentStatus, raceResult, localScore, localFinished, opponentLevelUp,
+    throttledBroadcast, reportScore, reportFinish, leaveRoom,
+    spectatorState, spectatablePlayers, spectateTarget, spectateNext, spectatePrev,
+  } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
   const handleGameEnd = useCallback((result: 'win' | 'loss' | 'draw', score?: number) => {
@@ -1302,6 +1393,8 @@ function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { r
     reportFinish(result === 'draw' ? 'loss' : result, lvl)
   }, [reportScore, reportFinish])
 
+  const showSpectator = localFinished && !raceResult && spectatablePlayers.length > 0
+
   return (
     <div className="relative">
       <RaceOverlay
@@ -1311,10 +1404,21 @@ function LodeRunnerRaceWrapper({ roomId, difficulty: _difficulty, onLeave }: { r
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}
         onDismiss={onLeave}
-        onBackToLobby={onLeave}
+        localFinished={localFinished}
+        spectatablePlayers={spectatablePlayers}
+        spectateTarget={spectateTarget}
+        playerNames={playerNames}
+        onSpectatePrev={spectatePrev}
+        onSpectateNext={spectateNext}
         onLeaveGame={leaveRoom}
+        onBackToLobby={onLeave}
       />
-      <LodeRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
+      {showSpectator && (
+        <LodeRunnerSpectatorView spectatorState={spectatorState as GameState | null} />
+      )}
+      <div style={showSpectator ? { display: 'none' } : undefined}>
+        <LodeRunnerSinglePlayer onGameEnd={handleGameEnd} onStateChange={throttledBroadcast} isMultiplayer />
+      </div>
     </div>
   )
 }
@@ -1331,8 +1435,8 @@ export default function LodeRunner() {
         modeDescriptions: { best_score: 'Highest level reached wins' },
       }}
       renderSinglePlayer={() => <LodeRunnerSinglePlayer />}
-      renderMultiplayer={(roomId, _players, _playerNames, _mode, roomConfig, onLeave) =>
-        <LodeRunnerRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} />
+      renderMultiplayer={(roomId, _players, playerNames, _mode, roomConfig, onLeave) =>
+        <LodeRunnerRaceWrapper roomId={roomId} difficulty={roomConfig.difficulty} onLeave={onLeave} playerNames={playerNames} />
       }
     />
   )

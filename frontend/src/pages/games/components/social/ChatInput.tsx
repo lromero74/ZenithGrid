@@ -37,8 +37,8 @@ function GifPicker({ onSelect, onClose }: {
     setLoading(true)
     try {
       const endpoint = searchQuery
-        ? `/api/chat/giphy/search?q=${encodeURIComponent(searchQuery)}&limit=20`
-        : '/api/chat/giphy/trending?limit=20'
+        ? `/chat/giphy/search?q=${encodeURIComponent(searchQuery)}&limit=20`
+        : '/chat/giphy/trending?limit=20'
       const { data } = await api.get(endpoint)
       setGifs(data.data || [])
     } catch {
