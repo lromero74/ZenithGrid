@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 # ----- Pydantic Schemas -----
 
 class CreateChannelRequest(BaseModel):
-    type: str = Field(..., pattern="^(dm|group|channel)$")
+    type: str = Field(..., pattern="^(dm|group|channel|admin_dm)$")
     name: Optional[str] = Field(None, max_length=100)
     member_ids: list[int] = Field(default_factory=list)
     friend_id: Optional[int] = None  # for DM creation
@@ -83,6 +83,17 @@ async def create_channel(
             if body.friend_id is None:
                 raise HTTPException(400, "friend_id required for DM")
             channel = await chat_service.get_or_create_dm(
+                db, current_user.id, body.friend_id
+            )
+        elif body.type == "admin_dm":
+            if body.friend_id is None:
+                raise HTTPException(400, "friend_id (target user) required for admin DM")
+            if not current_user.is_superuser:
+                from app.auth.dependencies import _get_user_permissions
+                perms = _get_user_permissions(current_user)
+                if "admin:users" not in perms:
+                    raise HTTPException(403, "Admin permission required")
+            channel = await chat_service.get_or_create_admin_dm(
                 db, current_user.id, body.friend_id
             )
         elif body.type == "group":

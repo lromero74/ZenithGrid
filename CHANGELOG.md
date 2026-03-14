@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.117.0] - 2026-03-14
+
+### Added
+- **Admin messaging** — admins can message any user directly from the Users tab, creating official admin DM channels that don't require friendship
+- **Admin display name** — admins can set a separate display name for official communications (e.g., "Louis" instead of "Louis Romero"), configurable in Settings
+- **Admin badge** — verified shield icon on admin messages and members, server-provided and impossible to spoof via display names
+- **Observer login tracking** — admin Users tab shows active login locations (IP + city/region/country/ISP) for shared accounts (Observers group) with support for multiple simultaneous sessions
+- **Last login timestamp** — shown for all users in the admin Users tab
+
+### Fixed
+- **Dashboard chart markers** — win/loss arrows no longer disappear after portfolio PnL calculations finish loading
+
 ## [v2.116.0] - 2026-03-14
 
 ### Added

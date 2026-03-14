@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  MessageSquare, Plus, ArrowLeft, Users, Hash,
+  MessageSquare, Plus, ArrowLeft, Users, Hash, ShieldCheck,
   ChevronDown, ChevronUp, Search, Pin, X,
 } from 'lucide-react'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -53,7 +53,7 @@ function ChannelListItem({ channel, isActive, onClick }: {
   isActive: boolean
   onClick: () => void
 }) {
-  const Icon = channel.type === 'dm' ? MessageSquare : channel.type === 'group' ? Users : Hash
+  const Icon = channel.type === 'admin_dm' ? ShieldCheck : channel.type === 'dm' ? MessageSquare : channel.type === 'group' ? Users : Hash
 
   return (
     <button
@@ -83,7 +83,7 @@ function ChannelHeader({ channel, onBack, onShowMembers, onShowSearch, onShowPin
   onShowPinned: () => void
   pinnedCount: number
 }) {
-  const Icon = channel.type === 'dm' ? MessageSquare : channel.type === 'group' ? Users : Hash
+  const Icon = channel.type === 'admin_dm' ? ShieldCheck : channel.type === 'dm' ? MessageSquare : channel.type === 'group' ? Users : Hash
 
   return (
     <div className="flex items-center gap-2 p-2 border-b border-slate-700/50">
@@ -104,7 +104,7 @@ function ChannelHeader({ channel, onBack, onShowMembers, onShowSearch, onShowPin
             </span>
           </button>
         )}
-        {channel.type !== 'dm' && (
+        {channel.type !== 'dm' && channel.type !== 'admin_dm' && (
           <button onClick={onShowMembers} className="p-1 text-slate-400 hover:text-slate-200" title="Members">
             <Users className="w-3.5 h-3.5" />
           </button>

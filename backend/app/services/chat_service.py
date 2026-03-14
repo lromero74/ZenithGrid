@@ -189,14 +189,16 @@ async def _batch_build_message_dicts(
                 "is_deleted": reply_msg.deleted_at is not None,
             }
 
-    return [
-        await _build_message_dict(
+    results = []
+    for msg, sender in rows:
+        d = await _build_message_dict(
             db, msg, sender.display_name,
             reactions_cache=reactions_cache,
             reply_cache=reply_cache,
         )
-        for msg, sender in rows
-    ]
+        d["is_admin"] = bool(sender.is_superuser)
+        results.append(d)
+    return results
 
 
 # ----- Channel Creation -----
@@ -255,6 +257,46 @@ async def get_or_create_dm(
     ))
     db.add(ChatChannelMember(
         channel_id=channel.id, user_id=friend_id, role="owner",
+    ))
+    await db.commit()
+    await db.refresh(channel)
+    return channel
+
+
+async def get_or_create_admin_dm(
+    db: AsyncSession, admin_id: int, user_id: int
+) -> ChatChannel:
+    """Get or create an admin DM channel. No friendship required.
+
+    Admin gets "owner" role, user gets "member" role.
+    """
+    # Find existing admin_dm between these two users
+    admin_member = aliased(ChatChannelMember)
+    user_member = aliased(ChatChannelMember)
+    existing = await db.execute(
+        select(ChatChannel)
+        .join(admin_member, ChatChannel.id == admin_member.channel_id)
+        .join(user_member, ChatChannel.id == user_member.channel_id)
+        .where(
+            ChatChannel.type == "admin_dm",
+            admin_member.user_id == admin_id,
+            user_member.user_id == user_id,
+        )
+    )
+    dm_channel = existing.scalar_one_or_none()
+    if dm_channel:
+        return dm_channel
+
+    # Create new admin DM channel
+    channel = ChatChannel(type="admin_dm", name=None, created_by=admin_id)
+    db.add(channel)
+    await db.flush()
+
+    db.add(ChatChannelMember(
+        channel_id=channel.id, user_id=admin_id, role="owner",
+    ))
+    db.add(ChatChannelMember(
+        channel_id=channel.id, user_id=user_id, role="member",
     ))
     await db.commit()
     await db.refresh(channel)
@@ -353,20 +395,33 @@ async def get_user_channels(db: AsyncSession, user_id: int) -> list[dict]:
     )
     member_counts = dict(member_counts_q.all())
 
-    # Batch: DM partner names (for DM channels only)
-    dm_channel_ids = [ch.id for _, ch in rows if ch.type == "dm"]
+    # Batch: DM partner names (for DM and admin_dm channels)
+    dm_channel_ids = [ch.id for _, ch in rows if ch.type in ("dm", "admin_dm")]
     dm_names: dict[int, str] = {}
     if dm_channel_ids:
         dm_partners_q = await db.execute(
-            select(ChatChannelMember.channel_id, User.display_name)
+            select(
+                ChatChannelMember.channel_id,
+                User.display_name,
+                User.admin_display_name,
+                User.is_superuser,
+                ChatChannelMember.role,
+            )
             .join(User, ChatChannelMember.user_id == User.id)
             .where(
                 ChatChannelMember.channel_id.in_(dm_channel_ids),
                 ChatChannelMember.user_id != user_id,
             )
         )
-        for ch_id, name in dm_partners_q.all():
-            dm_names[ch_id] = name
+        for ch_id, dname, admin_dname, is_su, role in dm_partners_q.all():
+            # For admin_dm: if partner is admin (owner), show "Admin: <name>"
+            # If current user is admin viewing, show user's display_name
+            ch = next((c for _, c in rows if c.id == ch_id), None)
+            if ch and ch.type == "admin_dm" and is_su:
+                admin_name = admin_dname or dname or "Admin"
+                dm_names[ch_id] = f"Admin: {admin_name}"
+            else:
+                dm_names[ch_id] = dname
 
     # Batch: last message per channel (latest message ID per channel)
     latest_msg_ids_q = await db.execute(
@@ -425,7 +480,7 @@ async def get_user_channels(db: AsyncSession, user_id: int) -> list[dict]:
         channels.append({
             "id": channel.id,
             "type": channel.type,
-            "name": dm_names.get(channel.id) if channel.type == "dm" else channel.name,
+            "name": dm_names.get(channel.id) if channel.type in ("dm", "admin_dm") else channel.name,
             "member_count": member_counts.get(channel.id, 0),
             "unread_count": unread_counts.get(channel.id, 0),
             "last_message": last_messages.get(channel.id),
@@ -475,7 +530,7 @@ async def send_message(
 
     # For DMs, verify still friends
     channel = await db.get(ChatChannel, channel_id)
-    if channel and channel.type == "dm":
+    if channel and channel.type == "dm":  # admin_dm skips friendship check
         other_member = await db.execute(
             select(ChatChannelMember.user_id).where(
                 ChatChannelMember.channel_id == channel_id,
@@ -520,11 +575,19 @@ async def send_message(
     await db.commit()
     await db.refresh(msg)
 
-    # Get sender display name
+    # Get sender display name — admin_dm channels use admin identity
     sender = await db.get(User, user_id)
-    sender_name = sender.display_name if sender else f"User {user_id}"
+    if channel and channel.type == "admin_dm" and sender and sender.is_superuser:
+        base_name = sender.admin_display_name or sender.display_name or f"User {user_id}"
+        sender_name = f"{base_name} (Admin)"
+        is_admin = True
+    else:
+        sender_name = sender.display_name if sender else f"User {user_id}"
+        is_admin = bool(sender and sender.is_superuser)
 
-    return await _build_message_dict(db, msg, sender_name)
+    result = await _build_message_dict(db, msg, sender_name)
+    result["is_admin"] = is_admin
+    return result
 
 
 async def edit_message(
@@ -720,6 +783,7 @@ async def get_channel_members(db: AsyncSession, channel_id: int) -> list[dict]:
             "display_name": user.display_name,
             "role": member.role,
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "is_admin": bool(user.is_superuser),
         }
         for member, user in result.all()
     ]

@@ -879,6 +879,8 @@ export interface AdminUser {
   created_at: string | null
   session_policy_override?: SessionPolicyConfig | null
   is_online?: boolean
+  admin_display_name?: string | null
+  login_locations?: { ip: string; city?: string; region?: string; country?: string; org?: string }[] | null
 }
 
 export interface AdminGroup {

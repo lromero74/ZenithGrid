@@ -63,6 +63,7 @@ class User(Base):
 
     # Profile info
     display_name = Column(String, nullable=True)  # Optional display name
+    admin_display_name = Column(String(50), nullable=True)  # Admin alias for official messaging
 
     # UI preferences
     last_seen_history_count = Column(Integer, default=0)  # For "new items" badge in History tab (closed positions)

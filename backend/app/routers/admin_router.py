@@ -78,6 +78,9 @@ async def list_users(
 ):
     """List all users with group memberships, MFA status, and online indicator."""
     from app.services.websocket_manager import ws_manager
+    from app.models.auth import ActiveSession
+    from app.services.ban_monitor import _lookup_ip_geo
+    import asyncio
 
     query = (
         select(User)
@@ -88,6 +91,43 @@ async def list_users(
     users = result.scalars().all()
 
     online_ids = ws_manager.get_connected_user_ids()
+
+    # Get all active session IPs for Observers (shared accounts) for geo tracking
+    observer_ids = [u.id for u in users if any(g.name == "Observers" for g in u.groups)]
+    observer_locations: dict[int, list[dict]] = {}
+    if observer_ids:
+        session_result = await db.execute(
+            select(ActiveSession.user_id, ActiveSession.ip_address)
+            .where(
+                ActiveSession.user_id.in_(observer_ids),
+                ActiveSession.is_active.is_(True),
+            )
+            .order_by(ActiveSession.created_at.desc())
+        )
+        # Collect unique IPs per user
+        user_ips: dict[int, list[str]] = {}
+        for uid, ip in session_result.all():
+            if ip:
+                user_ips.setdefault(uid, [])
+                if ip not in user_ips[uid]:
+                    user_ips[uid].append(ip)
+
+        # Geo lookups in thread pool (deduplicated across all users)
+        all_unique_ips = set()
+        for ips in user_ips.values():
+            all_unique_ips.update(ips)
+
+        if all_unique_ips:
+            loop = asyncio.get_event_loop()
+            ip_geo_cache: dict[str, dict] = {}
+            for ip in all_unique_ips:
+                ip_geo_cache[ip] = await loop.run_in_executor(None, _lookup_ip_geo, ip)
+
+            for uid, ips in user_ips.items():
+                observer_locations[uid] = [
+                    {"ip": ip, **ip_geo_cache.get(ip, {})}
+                    for ip in ips
+                ]
 
     return [
         {
@@ -103,6 +143,8 @@ async def list_users(
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
             "created_at": u.created_at.isoformat() if u.created_at else None,
             "is_online": u.id in online_ids,
+            "admin_display_name": u.admin_display_name,
+            "login_locations": observer_locations.get(u.id),
         }
         for u in users
     ]

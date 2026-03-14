@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.database import get_db
 from app.models import User
 
@@ -83,3 +83,26 @@ async def check_display_name(
     )
     taken = result.scalar_one_or_none() is not None
     return {"available": not taken, "name": name}
+
+
+# ----- Admin Display Name -----
+
+
+class AdminDisplayNameUpdate(BaseModel):
+    admin_display_name: str = Field(..., min_length=2, max_length=50)
+
+
+@router.put("/admin-display-name")
+async def set_admin_display_name(
+    body: AdminDisplayNameUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
+) -> dict:
+    """Set admin display name (shown when messaging users as Admin)."""
+    name = body.admin_display_name.strip()
+    if len(name) < 2 or len(name) > 50:
+        raise HTTPException(400, "Admin display name must be 2-50 characters")
+
+    current_user.admin_display_name = name
+    await db.commit()
+    return {"admin_display_name": name}

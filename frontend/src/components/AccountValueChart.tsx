@@ -77,6 +77,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
   const chartRef = useRef<IChartApi | null>(null)
   const btcSeriesRef = useRef<any>(null)
   const usdSeriesRef = useRef<any>(null)
+  const [chartVersion, setChartVersion] = useState(0)
   const { selectedAccount } = useAccount()
 
   // Determine if we should include paper trading accounts
@@ -176,7 +177,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
 
     btcSeries.setMarkers(btcMarkers)
     usdSeries.setMarkers(usdMarkers)
-  }, [activity, visibleMarkers])
+  }, [activity, visibleMarkers, chartVersion])
 
   // Initialize chart
   useEffect(() => {
@@ -290,6 +291,9 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
 
     btcSeries.setData(btcData)
     usdSeries.setData(usdData)
+
+    // Signal markers effect to re-apply after chart recreation
+    setChartVersion(v => v + 1)
 
     // Fit content
     chart.timeScale().fitContent()

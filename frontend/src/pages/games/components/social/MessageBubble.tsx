@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { Pencil, Trash2, Pin, Reply, Smile } from 'lucide-react'
+import { Pencil, Trash2, Pin, Reply, Smile, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../../../contexts/AuthContext'
 import type { ChatMessage, ChatMember } from '../../hooks/useChat'
 
@@ -106,8 +106,9 @@ export function MessageBubble({ msg, isOwn, onEdit, onDelete, onReply, onReact, 
       )}
 
       <div className="flex items-baseline gap-2">
-        <span className={`text-xs font-medium ${isOwn ? 'text-blue-400' : 'text-slate-300'}`}>
+        <span className={`text-xs font-medium ${msg.is_admin ? 'text-amber-400' : isOwn ? 'text-blue-400' : 'text-slate-300'}`}>
           {msg.sender_name}
+          {msg.is_admin && <span title="Admin"><ShieldCheck className="w-3 h-3 text-amber-400 inline ml-0.5 -mt-0.5" /></span>}
         </span>
         <span className="text-[9px] text-slate-600">{time}</span>
         {msg.edited_at && <span className="text-[9px] text-slate-600">(edited)</span>}
