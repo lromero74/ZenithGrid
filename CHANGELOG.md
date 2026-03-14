@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.122.1] - 2026-03-14
+
+### Added
+- **Security report tab** — visual breakdown of bans by jail type (bar chart), country distribution, and top ISPs with summary stats
+- **Banned IP pagination** — 10 per page with page navigation
+
+### Changed
+- **Color-coded jail badges** — SSH (amber), nginx-exploit (red), intrusion detection (purple) throughout the Security tab
+- **Replaced misleading "Total Failed" stat** with "Jails Active" count
+
 ## [v2.122.0] - 2026-03-14
 
 ### Security
