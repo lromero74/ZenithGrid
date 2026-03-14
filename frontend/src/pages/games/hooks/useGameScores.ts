@@ -22,8 +22,6 @@ interface ScoreEntry {
 }
 
 type ScoreMap = Record<string, ScoreEntry>
-// Legacy format for backwards compat with localStorage
-type LegacyScoreMap = Record<string, number>
 
 function loadLocalScores(): ScoreMap {
   try {
