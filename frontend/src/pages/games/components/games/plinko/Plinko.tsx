@@ -681,7 +681,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
 // ── Race wrapper ──────────────────────────────────────────────────
 
 function PlinkoRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish, leaveRoom } =
+  const { opponentStatus, raceResult, localScore, opponentLevelUp, broadcastState: _broadcastState, reportScore, reportFinish, leaveRoom } =
     useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
   const bestScoreRef = useRef(0)
@@ -708,6 +708,7 @@ function PlinkoRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () =
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

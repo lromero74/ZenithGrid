@@ -765,7 +765,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
 function SpaceInvadersRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const {
-    opponentStatus, raceResult, opponentLevelUp, throttledBroadcast, reportFinish, leaveRoom,
+    opponentStatus, raceResult, localScore, opponentLevelUp, throttledBroadcast, reportFinish, leaveRoom,
     gameStarted, countdownValue, localReady, sendReady,
   } = useRaceMode(roomId, raceType, { syncStart: true })
   const finishedRef = useRef(false)
@@ -780,6 +780,7 @@ function SpaceInvadersRaceWrapper({ roomId, roomConfig, onLeave }: { roomId: str
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

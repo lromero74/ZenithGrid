@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.118.0] - 2026-03-14
+
+### Added
+- **Multiplayer final scores** — race result modal now shows both players' scores side-by-side with color-coded win/loss indicators across all 40 multiplayer games
+- **Chat auto-open** — admin messaging from the Users tab now navigates to the Chat page and automatically opens the conversation
+
+### Fixed
+- **Dino Runner spectator crash** — fixed React error #300 (max update depth exceeded) caused by `setDisplayScore` firing at 60fps inside the requestAnimationFrame loop; now only updates on actual score changes
+- **Observer login locations** — admin user list uses RBAC group membership (Observers) instead of email prefix for identifying shared accounts
+
 ## [v2.117.0] - 2026-03-14
 
 ### Added

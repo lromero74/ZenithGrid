@@ -1068,6 +1068,7 @@ function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState
   /** Scratch state used for rendering (mutated each frame). */
   const renderStateRef = useRef<GameState | null>(null)
   const [displayScore, setDisplayScore] = useState(0)
+  const lastScoreRef = useRef(0)
 
   // Buffer incoming snapshots
   useEffect(() => {
@@ -1213,7 +1214,11 @@ function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState
         if (ctx) renderDinoState(ctx, out)
 
         if (out.frameCount % 5 === 0) {
-          setDisplayScore(Math.floor(out.score))
+          const s = Math.floor(out.score)
+          if (s !== lastScoreRef.current) {
+            lastScoreRef.current = s
+            setDisplayScore(s)
+          }
         }
       } else if (out && buf.length === 1 && canvasRef.current) {
         // Only one snapshot so far — render it directly
@@ -1221,7 +1226,11 @@ function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState
         Object.assign(out, snap)
         const ctx = canvasRef.current.getContext('2d')
         if (ctx) renderDinoState(ctx, out)
-        setDisplayScore(Math.floor(out.score))
+        const s = Math.floor(out.score)
+        if (s !== lastScoreRef.current) {
+          lastScoreRef.current = s
+          setDisplayScore(s)
+        }
       }
 
       rafRef.current = requestAnimationFrame(loop)
@@ -1258,7 +1267,7 @@ function DinoRunnerSpectatorView({ spectatorState }: { spectatorState: GameState
 function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { roomId: string; roomConfig: RoomConfig; onLeave?: () => void; playerNames?: Record<number, string> }) {
   const raceType = (roomConfig.race_type as 'survival' | 'best_score') || 'survival'
   const {
-    opponentStatus, raceResult, localFinished, opponentLevelUp,
+    opponentStatus, raceResult, localScore, localFinished, opponentLevelUp,
     opponentDisconnected, reconnectCountdown, selfDisconnected,
     throttledBroadcast, reportFinish, reportScore, spectatorState, leaveRoom,
     spectatablePlayers, spectateTarget, spectateNext, spectatePrev,
@@ -1318,6 +1327,7 @@ function DinoRunnerRaceWrapper({ roomId, roomConfig, onLeave, playerNames }: { r
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

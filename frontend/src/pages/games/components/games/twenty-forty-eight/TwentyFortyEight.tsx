@@ -258,7 +258,7 @@ function TwentyFortyEightSinglePlayer({ onGameEnd, onScoreUpdate, isMultiplayer 
 // ── Race wrapper (best_score — highest score wins) ───────────────────
 
 function TwentyFortyEightRaceWrapper({ roomId, onLeave }: { roomId: string; onLeave?: () => void }) {
-  const { opponentStatus, raceResult, opponentLevelUp, reportScore, reportFinish, leaveRoom } = useRaceMode(roomId, 'best_score')
+  const { opponentStatus, raceResult, localScore, opponentLevelUp, reportScore, reportFinish, leaveRoom } = useRaceMode(roomId, 'best_score')
   const finishedRef = useRef(false)
 
   const handleScoreUpdate = useCallback((score: number) => {
@@ -275,6 +275,7 @@ function TwentyFortyEightRaceWrapper({ roomId, onLeave }: { roomId: string; onLe
     <div className="relative">
       <RaceOverlay
         raceResult={raceResult}
+        localScore={localScore}
         opponentScore={opponentStatus.score}
         opponentFinished={opponentStatus.finished}
         opponentLevelUp={opponentLevelUp}

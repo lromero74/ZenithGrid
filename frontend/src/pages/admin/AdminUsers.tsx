@@ -40,7 +40,7 @@ export function AdminUsers() {
         type: 'admin_dm',
         friend_id: targetUserId,
       })
-      navigate('/social', { state: { openChannelId: data.id } })
+      navigate('/chat', { state: { openChannelId: data.id } })
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create admin channel')
     }
