@@ -537,6 +537,15 @@ class PaperTradingClient(ExchangeClient):
             "hold": "0.00"
         }
 
+    async def adjust_balance(self, currency: str, amount: float):
+        """Add or subtract from a paper trading balance (for position reconciliation)."""
+        lock = _get_account_lock(self.account.id)
+        async with lock:
+            await self._reload_balances()
+            currency = currency.upper()
+            self.balances[currency] = self.balances.get(currency, 0.0) + amount
+            await self._save_balances()
+
     async def invalidate_balance_cache(self):
         """No-op for paper trading (balances always up-to-date in memory)."""
         pass
