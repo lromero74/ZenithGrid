@@ -734,6 +734,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
     if not connected:
         return  # rejected — too many connections (4008 already sent)
 
+    # Notify friends that this user came online (only on first connection)
+    if ws_manager._count_user_connections(user_id) == 1:
+        try:
+            from app.services.friend_notifications import broadcast_friend_online
+            async with async_session_maker() as notify_db:
+                await broadcast_friend_online(ws_manager, notify_db, user_id)
+        except Exception as e:
+            logger.debug(f"Friend online notification failed: {e}")
+
     try:
         while True:
             # Receive with timeout so idle connections get cleaned up

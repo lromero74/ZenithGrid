@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.114.0] - 2026-03-14
+
+### Added
+- **Friend online toast notifications** — real-time toast when a friend comes online, pushed via WebSocket instead of polling
+- **Friend request accepted toast** — notifies you instantly when someone accepts your friend request
+- **Admin online indicator** — user list in the admin panel now shows a green dot for online users and gray for offline
+- **Social toast type** — new cyan-themed toast style for friend/social notifications
+
 ## [v2.113.0] - 2026-03-13
 
 ### Added

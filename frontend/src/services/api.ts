@@ -878,6 +878,7 @@ export interface AdminUser {
   last_login_at: string | null
   created_at: string | null
   session_policy_override?: SessionPolicyConfig | null
+  is_online?: boolean
 }
 
 export interface AdminGroup {

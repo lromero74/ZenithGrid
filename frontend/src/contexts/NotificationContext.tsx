@@ -248,6 +248,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
           if (data.type === 'order_fill') {
             handleOrderFill(data as unknown as OrderFillEvent)
+          } else if (data.type === 'friend:online') {
+            addToast({
+              type: 'social',
+              title: 'Friend Online',
+              message: `${data.display_name} is now online`,
+            })
+          } else if (data.type === 'friend:request_accepted') {
+            addToast({
+              type: 'social',
+              title: 'Friend Request Accepted',
+              message: `${data.display_name} accepted your friend request!`,
+            })
           }
         } catch (error) {
           console.warn('Failed to parse WebSocket message:', error)
