@@ -92,6 +92,9 @@ class OrderBook:
         if remaining > 0:
             return None  # Insufficient liquidity
 
+        if quantity == 0:
+            return None
+
         return total_cost / quantity
 
 

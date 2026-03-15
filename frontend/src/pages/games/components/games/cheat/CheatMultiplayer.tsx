@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Wifi, ArrowLeft } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_MINI } from '../../PlayingCard'
 import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
@@ -336,7 +336,7 @@ export function CheatMultiplayer({ roomId, players, playerNames, onLeave }: Prop
                 </span>
                 <div className="flex gap-0.5 justify-center mt-1">
                   {Array.from({ length: Math.min(view.handCounts[p], 6) }).map((_, j) => (
-                    <div key={j} className="w-5 h-7">
+                    <div key={j} className={CARD_SIZE_MINI}>
                       <CardBack />
                     </div>
                   ))}

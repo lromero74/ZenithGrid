@@ -7,7 +7,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { HelpCircle, X } from 'lucide-react'
 import { GameLayout } from '../../GameLayout'
 import { GameOverModal } from '../../GameOverModal'
-import { CardFace, CardBack, CARD_SIZE } from '../../PlayingCard'
+import { CardFace, CardBack, CARD_SIZE, CARD_SIZE_MINI } from '../../PlayingCard'
 import { useGameState } from '../../../hooks/useGameState'
 import { getRankDisplay } from '../../../utils/cardUtils'
 import type { GameStatus } from '../../../types'
@@ -317,7 +317,7 @@ function CheatSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultipl
               </span>
               <div className="flex gap-0.5 justify-center mt-1">
                 {Array.from({ length: Math.min(gameState.hands[p].length, 6) }).map((_, j) => (
-                  <div key={j} className="w-5 h-7">
+                  <div key={j} className={CARD_SIZE_MINI}>
                     <CardBack />
                   </div>
                 ))}
