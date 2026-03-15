@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.123.0] - 2026-03-15
+
+### Added
+- **450 new unit tests** across 14 test files covering previously untested modules: auth rate limiters, auth helpers, indicator params, convert API, public rate limiting, article content service, ban monitor, chat WebSocket handler, ByBit WebSocket, price feed base/DEX, templates router, strategies router, and PDF generator
+- **Navigation bar separators** — added visual dividers between Reports/Games and Social/Settings for clearer menu grouping
+
+### Fixed
+- **BS card game facedown cards** — opponent cards now render at proper mini-card size instead of appearing as thin lines
+- **Zero-quantity order book crash** — `OrderBook.get_execution_price()` now returns `None` instead of raising `ZeroDivisionError` when called with zero quantity
+- **Strategy parameter metadata loss** — `paper_trading_only` field on `simulate_slippage` param is now preserved in the `StrategyParameter` model instead of being silently dropped
+
 ## [v2.122.3] - 2026-03-14
 
 ### Fixed

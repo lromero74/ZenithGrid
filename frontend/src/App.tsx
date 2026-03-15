@@ -530,6 +530,12 @@ function AppContent() {
                 <span className="hidden sm:inline">Reports</span>
               </div>
             </Link>
+
+            {/* Separator */}
+            <div className="hidden sm:flex items-center px-1">
+              <div className="h-6 w-px bg-slate-600" />
+            </div>
+
             <Link
               to="/games"
               className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
@@ -574,6 +580,12 @@ function AppContent() {
                 <span className="hidden sm:inline">Social</span>
               </div>
             </Link>
+
+            {/* Separator */}
+            <div className="hidden sm:flex items-center px-1">
+              <div className="h-6 w-px bg-slate-600" />
+            </div>
+
             <Link
               to="/settings"
               className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${

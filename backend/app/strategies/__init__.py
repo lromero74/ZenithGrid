@@ -25,6 +25,7 @@ class StrategyParameter(BaseModel):
     group: Optional[str] = None  # For grouping parameters in UI
     visible_when: Optional[Dict[str, Any]] = None  # Conditional visibility
     required: Optional[bool] = True  # Whether parameter is required
+    paper_trading_only: Optional[bool] = None  # Only applies in paper trading mode
 
 
 class StrategyDefinition(BaseModel):
