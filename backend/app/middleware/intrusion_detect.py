@@ -1,8 +1,9 @@
 """
 Application-level intrusion detection middleware.
 
-Scans POST/PUT/PATCH request bodies for injection patterns (SQL, XSS, shell,
-path traversal). Logs attempts and triggers fail2ban ban after threshold.
+Scans request bodies (POST/PUT/PATCH) AND GET query strings for injection
+patterns (SQL, XSS, shell, path traversal). Logs attempts and triggers
+fail2ban ban after threshold.
 
 Does NOT block requests — only logs and tracks. This avoids false positives
 on legitimate content while still catching repeat offenders.
@@ -126,13 +127,53 @@ class IntrusionDetector:
     def __init__(self, app):
         self.app = app
 
+    @staticmethod
+    def _log_and_track(ip: str, method: str, path: str, pattern_type: str, matched: str):
+        """Log an intrusion attempt and check ban threshold."""
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        safe_content = matched.replace("\n", " ").replace("\r", "")
+        log_line = (
+            f"{ts} [INTRUSION] {ip} "
+            f"{method} {path} "
+            f"pattern={pattern_type} "
+            f'content="{safe_content}"'
+        )
+        _write_log(log_line)
+        logger.warning(f"Intrusion attempt: {ip} {pattern_type} on {path}")
+
+        now = time.time()
+        cutoff = now - _BAN_WINDOW
+        attempts = _ip_attempts[ip]
+        attempts[:] = [t for t in attempts if t > cutoff]
+        attempts.append(now)
+
+        if len(attempts) >= _BAN_THRESHOLD:
+            ban_line = (
+                f"{ts} [BAN] {ip} "
+                f"threshold={_BAN_THRESHOLD} "
+                f"attempts_in_{_BAN_WINDOW}s"
+            )
+            _write_log(ban_line)
+            logger.warning(f"Intrusion ban triggered: {ip}")
+            _ip_attempts[ip] = []
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        method = scope.get("method", "GET").encode()
-        if method not in _SCAN_METHODS:
+        # Scan GET query strings for injection patterns
+        method = scope.get("method", "GET")
+        query_string = scope.get("query_string", b"").decode("utf-8", errors="ignore")
+        if query_string:
+            result = _check_body(query_string)
+            if result:
+                ip = _get_client_ip(scope)
+                pattern_type, matched = result
+                path = scope.get("path", "?")
+                self._log_and_track(ip, method, path, pattern_type, matched)
+
+        if method.encode() not in _SCAN_METHODS:
             await self.app(scope, receive, send)
             return
 
@@ -169,35 +210,7 @@ class IntrusionDetector:
                 ip = _get_client_ip(scope)
                 pattern_type, matched = result
                 path = scope.get("path", "?")
-                ts = time.strftime("%Y-%m-%d %H:%M:%S")
-
-                # Log the attempt
-                safe_content = matched.replace("\n", " ").replace("\r", "")
-                log_line = (
-                    f"{ts} [INTRUSION] {ip} "
-                    f"{method.decode()} {path} "
-                    f"pattern={pattern_type} "
-                    f'content="{safe_content}"'
-                )
-                _write_log(log_line)
-                logger.warning(f"Intrusion attempt: {ip} {pattern_type} on {path}")
-
-                # Track and check threshold
-                now = time.time()
-                cutoff = now - _BAN_WINDOW
-                attempts = _ip_attempts[ip]
-                attempts[:] = [t for t in attempts if t > cutoff]
-                attempts.append(now)
-
-                if len(attempts) >= _BAN_THRESHOLD:
-                    ban_line = (
-                        f"{ts} [BAN] {ip} "
-                        f"threshold={_BAN_THRESHOLD} "
-                        f"attempts_in_{_BAN_WINDOW}s"
-                    )
-                    _write_log(ban_line)
-                    logger.warning(f"Intrusion ban triggered: {ip}")
-                    _ip_attempts[ip] = []  # Reset after ban
+                self._log_and_track(ip, method, path, pattern_type, matched)
 
         # Replay the buffered first message
         first_sent = False

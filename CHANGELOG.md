@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.123.1] - 2026-03-15
+
+### Security
+- **Intrusion detector now scans GET query strings** — previously only POST/PUT/PATCH bodies were scanned, leaving GET-based SQL injection and XSS undetected
+- **Fail2ban nginx-exploit filter catches all HTTP methods** — HEAD, PUT, DELETE, PATCH, OPTIONS now detected (previously only GET/POST)
+- **Instant ban on first exploit probe** — lowered nginx-exploit threshold from 3 attempts to 1 (these patterns are never legitimate)
+- **New fail2ban jail for malformed requests** — repeated 400 errors (protocol abuse, host header probing) now trigger a ban
+- **Unknown hostnames rejected** — nginx default server block drops connections to unrecognized domains with no response (444)
+
+### Fixed
+- **SSRF false positive log spam** — image downloader no longer warns on `undefined` or empty URLs every 30 minutes; quietly skips them instead
+
 ## [v2.123.0] - 2026-03-15
 
 ### Added

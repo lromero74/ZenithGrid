@@ -64,6 +64,11 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[t
         Tuple of (image_bytes, mime_type) or None if download failed.
     """
     try:
+        # Skip obviously invalid URLs (e.g. "undefined" from frontend, empty strings)
+        if not url or not url.startswith(("http://", "https://")):
+            logger.debug(f"Skipping invalid image URL: {url!r}")
+            return None
+
         from app.utils.url_utils import validate_url_not_internal
         try:
             validate_url_not_internal(url)
