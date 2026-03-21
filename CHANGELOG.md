@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.3] - 2026-03-21
+
+### Fixed
+- **Bot save no longer times out when many pairs are active** — database connection pool increased from 8 to 12 connections. When the multi-pair bot monitor ran at the same time as an HTTP request, the pool would exhaust and cause a 30-second timeout. Also reduced the wait time before a connection request fails from 30s to 10s for faster error feedback.
+
 ## [v2.125.2] - 2026-03-21
 
 ### Added
