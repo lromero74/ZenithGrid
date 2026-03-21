@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v2.125.8] - 2026-03-21
 
 ### Changed
-- **Background jobs now run on a dedicated secondary event loop** — 19 of the 27 background tasks (batch cleanups, coin review, transfer sync, auto-buy, rebalancing, domain blacklist, debt ceiling, trading pair sync, and more) have been moved off the main trading event loop onto a separate secondary loop running in a daemon thread. The secondary loop has its own smaller DB connection pool (`size=3, overflow=2 = 5 max connections`), leaving the main pool's 12 connections exclusively for order fills, bot monitoring, and API request handlers. This eliminates the root cause of DB pool exhaustion during heavy batch operations. The 8 Tier 1 tasks (MultiBotMonitor, LimitOrderMonitor, OrderReconciliationMonitor, PropGuardMonitor, PerpsMonitor, MissingOrderDetector, MemoryCacheCleanup, ContentRefreshService) remain on the main loop.
+- **Batch cleanup jobs now run on a dedicated secondary event loop** — 12 background tasks (all 8 database cleanup jobs, ban monitor, report scheduler, coin review scheduler, domain blacklist, and debt ceiling monitor) have been moved off the main trading event loop onto a separate secondary loop running in a daemon thread. The secondary loop has its own smaller DB connection pool (`size=3, overflow=2 = 5 max connections`), so cleanup queries no longer compete with order fills and bot monitoring for connection slots. The remaining 15 tasks stay on the main loop because they use the shared exchange client cache (whose asyncio locks are bound to the main loop).
 
 ## [v2.125.7] - 2026-03-21
 

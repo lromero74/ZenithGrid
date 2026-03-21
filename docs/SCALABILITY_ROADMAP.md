@@ -41,29 +41,27 @@ These changes reduce resource contention and improve reliability **without any a
 **Fix:** Assign tasks to priority tiers. Tier 1 runs on the main trading event loop. Tier 2 and 3 run on a separate `asyncio` event loop in a dedicated daemon thread with its own smaller DB connection pool.
 
 ```
-Tier 1 — Real-time (main event loop, current behavior):
+Main Event Loop (real-time trading + services with shared exchange client cache):
   MultiBotMonitor          10s interval
   LimitOrderMonitor        10s interval + 5m sweep
   OrderReconciliationMon   60s interval
   PropGuardMonitor         30s interval
   PerpsMonitor             60s interval
   MissingOrderDetector     5m interval
-  MemoryCacheCleanup       5m interval  ← stays on main loop (touches shared in-memory state)
+  MemoryCacheCleanup       5m interval    ← touches shared in-memory state
+  ContentRefreshService    30m / 60m      ← uses DB via news_fetch_service (8 call sites)
+  AutoBuyMonitor           continuous     ← uses shared exchange client cache
+  RebalanceMonitor         continuous     ← uses shared exchange client cache
+  TradingPairMonitor       daily          ← uses shared exchange client cache
+  TransferSync             daily          ← uses shared exchange client cache
+  AccountSnapshotService   daily          ← uses shared exchange client cache
 
-Tier 2 — Near-real-time (secondary loop, tolerate 1–2s delay):
-  AutoBuyMonitor           continuous
-  RebalanceMonitor         continuous
-  TransferSync             daily, starts after 20m
-  AccountSnapshotService   daily, starts after 5m
-  BanMonitor               daily
+Secondary Event Loop (DB-only and HTTP-only tasks — no shared asyncio primitives):
+  BanMonitor               daily, 30s startup delay
   ReportScheduler          15m interval
-
-Tier 3 — Batch (secondary loop, can lag minutes):
-  ContentRefreshService    30m / 60m intervals (news, videos) ← MAIN LOOP: uses DB via news_fetch_service
-  DomainBlacklistService   weekly
-  DebtCeilingMonitor       weekly
-  TradingPairMonitor       daily
-  CoinReviewScheduler      7 day interval
+  CoinReviewScheduler      7 day interval   ← creates own CoinbaseClient per run (not from cache)
+  DomainBlacklistService   weekly           ← HTTP only
+  DebtCeilingMonitor       weekly           ← AI + sync DB
   DecisionLogCleanup       daily
   FailedConditionCleanup   6h interval
   FailedOrderCleanup       6h interval
@@ -71,7 +69,7 @@ Tier 3 — Batch (secondary loop, can lag minutes):
   SessionCleanup           daily
   RateLimitCleanup         hourly
   ReportCleanup            weekly
-  ChangelogCacheRebuild    startup only (synchronous, stays on main startup path — too fast to move)
+  ChangelogCacheRebuild    startup only (synchronous, on main startup path)
 ```
 
 **Implementation notes (learned during execution):**
@@ -83,6 +81,7 @@ Tier 3 — Batch (secondary loop, can lag minutes):
 - **`MemoryCacheCleanup` stays on main loop**: It touches in-memory state shared with request handlers (`auto_buy_monitor._account_timers`, `rebalance_monitor._account_timers`, rate-limit dicts). Moving it to the secondary loop would create cross-thread races.
 - **`DomainBlacklistService` and `DebtCeilingMonitor` do NOT use `async_session_maker`** (HTTP-only services) — no `set_session_maker()` needed, just `schedule(service.start())`.
 - **`ContentRefreshService` was incorrectly identified as HTTP-only** — it calls `news_fetch_service.fetch_all_news()` and `fetch_all_videos()`, which have 8 `async_session_maker()` call sites. Running it on the secondary loop caused `asyncpg: Future attached to a different loop` errors in production. **Reverted to main loop.** Properly moving it to the secondary loop requires threading `session_maker` through `news_fetch_service` (a large refactor with 8+ functions to update — tracked separately).
+- **Critical constraint discovered: shared exchange client cache** — `exchange_service.get_exchange_client_for_account()` returns cached `CoinbaseClient` instances. Each instance has an `asyncio.Lock` for rate limiting. In Python 3.10+, locks bind to the first event loop that calls `acquire()`. If the main loop (MultiBotMonitor) uses a cached client first, its lock is bound to the main loop. Any secondary loop task trying to `acquire()` the same lock gets `RuntimeError: is bound to a different event loop`. This is why `AutoBuyMonitor`, `RebalanceMonitor`, `TradingPairMonitor`, `TransferSync`, and `AccountSnapshotService` cannot move to the secondary loop. Moving them would require either (a) per-loop exchange client instances, or (b) a lock-free rate limiter implementation. The `CoinReviewScheduler` is safe because it calls `create_exchange_client()` directly (fresh instance each run, not the cache).
 - **Shutdown**: `stop_secondary_loop()` stops the loop which cancels all running Tier 2/3 coroutines. Individual `_cancel_task()` calls for Tier 2/3 removed from `shutdown_event()`. Module-level task globals reduced from 14 to 4 (Tier 1 only).
 - **`build_changelog_cache()` stays synchronous on main startup path**: It runs `git log` (< 1 second), is startup-only, and not a loop — no benefit to moving it.
 
