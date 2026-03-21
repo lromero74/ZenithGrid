@@ -6,13 +6,14 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, X, AlertTriangle } from 'lucide-react'
+import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, X, AlertTriangle } from 'lucide-react'
 import { adminApi, type BanSnapshot } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 
 const PAGE_SIZE = 10
 
 type SubTab = 'bans' | 'report'
+type ChartMode = 'bar' | 'pie'
 
 export function AdminSecurity() {
   const [data, setData] = useState<BanSnapshot | null>(null)
@@ -21,6 +22,7 @@ export function AdminSecurity() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [subTab, setSubTab] = useState<SubTab>('bans')
+  const [chartMode, setChartMode] = useState<ChartMode>('bar')
   const [detailIp, setDetailIp] = useState<string | null>(null)
   const [detailData, setDetailData] = useState<{ ip: string; total_hits: number; categories: Record<string, number>; sample_requests: string[] } | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -306,54 +308,100 @@ export function AdminSecurity() {
       {/* ── Report Tab ───────────────────────────────────────── */}
       {subTab === 'report' && data && (
         <div className="space-y-5">
+          {/* Chart mode toggle */}
+          <div className="flex justify-end">
+            <div className="flex gap-0.5 bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+              <button
+                onClick={() => setChartMode('bar')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  chartMode === 'bar' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Bar charts"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setChartMode('pie')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  chartMode === 'pie' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Pie charts"
+              >
+                <PieChartIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
           {/* Ban by Jail */}
           <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
             <h4 className="text-sm font-semibold text-slate-200 mb-3">Bans by Jail Type</h4>
-            <div className="space-y-2">
-              {Object.entries(jailCounts).sort((a, b) => b[1] - a[1]).map(([jail, count]) => {
-                const pct = data.banned_ips.length > 0 ? (count / data.banned_ips.length) * 100 : 0
-                return (
-                  <div key={jail}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <JailBadge jail={jail} />
-                      <span className="text-slate-300 font-mono">{count}</span>
+            {chartMode === 'bar' ? (
+              <div className="space-y-2">
+                {Object.entries(jailCounts).sort((a, b) => b[1] - a[1]).map(([jail, count]) => {
+                  const pct = data.banned_ips.length > 0 ? (count / data.banned_ips.length) * 100 : 0
+                  return (
+                    <div key={jail}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <JailBadge jail={jail} />
+                        <span className="text-slate-300 font-mono">{count}</span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            jail === 'sshd' ? 'bg-amber-500' : jail === 'nginx-exploit' ? 'bg-red-500' : 'bg-purple-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          jail === 'sshd' ? 'bg-amber-500' : jail === 'nginx-exploit' ? 'bg-red-500' : 'bg-purple-500'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <PieChart
+                data={Object.entries(jailCounts).sort((a, b) => b[1] - a[1])}
+                total={data.banned_ips.length}
+                colors={Object.fromEntries(
+                  Object.entries(jailCounts).map(([jail]) => [
+                    jail,
+                    jail === 'sshd' ? '#f59e0b' : jail === 'nginx-exploit' ? '#ef4444'
+                      : jail === 'nginx-bad-request' ? '#3b82f6' : '#a855f7',
+                  ])
+                )}
+                renderLabel={(label) => <JailBadge jail={label} />}
+              />
+            )}
           </div>
 
           {/* Ban by Country */}
           <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
             <h4 className="text-sm font-semibold text-slate-200 mb-3">Bans by Country</h4>
-            <div className="space-y-2">
-              {Object.entries(countryCounts).sort((a, b) => b[1] - a[1]).map(([country, count]) => {
-                const pct = data.banned_ips.length > 0 ? (count / data.banned_ips.length) * 100 : 0
-                return (
-                  <div key={country}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-300 flex items-center gap-1">
-                        <Globe className="w-3 h-3 text-slate-500" />
-                        {country}
-                      </span>
-                      <span className="text-slate-400 font-mono">{count} ({pct.toFixed(0)}%)</span>
+            {chartMode === 'bar' ? (
+              <div className="space-y-2">
+                {Object.entries(countryCounts).sort((a, b) => b[1] - a[1]).map(([country, count]) => {
+                  const pct = data.banned_ips.length > 0 ? (count / data.banned_ips.length) * 100 : 0
+                  return (
+                    <div key={country}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300 flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-slate-500" />
+                          {country}
+                        </span>
+                        <span className="text-slate-400 font-mono">{count} ({pct.toFixed(0)}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div className="h-full rounded-full bg-cyan-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
-                      <div className="h-full rounded-full bg-cyan-500 transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <PieChart
+                data={Object.entries(countryCounts).sort((a, b) => b[1] - a[1])}
+                total={data.banned_ips.length}
+              />
+            )}
           </div>
 
           {/* Ban by ISP/Org */}
@@ -502,4 +550,82 @@ const JAIL_COLORS: Record<string, string> = {
 function JailBadge({ jail }: { jail: string }) {
   const color = JAIL_COLORS[jail] || 'text-slate-400 bg-slate-700/50'
   return <span className={`text-xs px-2 py-0.5 rounded-full ${color}`}>{jail}</span>
+}
+
+const PIE_PALETTE = [
+  '#ef4444', '#f59e0b', '#a855f7', '#3b82f6', '#06b6d4', '#22c55e',
+  '#ec4899', '#f97316', '#8b5cf6', '#14b8a6', '#eab308', '#64748b',
+]
+
+function PieChart({
+  data,
+  total,
+  colors,
+  renderLabel,
+}: {
+  data: [string, number][]
+  total: number
+  colors?: Record<string, string>
+  renderLabel?: (label: string) => React.ReactNode
+}) {
+  if (total === 0) return <p className="text-xs text-slate-500 text-center py-4">No data</p>
+
+  const size = 140
+  const cx = size / 2
+  const cy = size / 2
+  const r = 55
+  let cumulative = 0
+
+  const slices = data.map(([label, count], i) => {
+    const pct = count / total
+    const startAngle = cumulative * 2 * Math.PI - Math.PI / 2
+    cumulative += pct
+    const endAngle = cumulative * 2 * Math.PI - Math.PI / 2
+    const large = pct > 0.5 ? 1 : 0
+    const x1 = cx + r * Math.cos(startAngle)
+    const y1 = cy + r * Math.sin(startAngle)
+    const x2 = cx + r * Math.cos(endAngle)
+    const y2 = cy + r * Math.sin(endAngle)
+    const fill = colors?.[label] || PIE_PALETTE[i % PIE_PALETTE.length]
+
+    // For a single 100% slice, draw a full circle
+    if (pct >= 0.9999) {
+      return (
+        <circle key={label} cx={cx} cy={cy} r={r} fill={fill} />
+      )
+    }
+
+    return (
+      <path
+        key={label}
+        d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`}
+        fill={fill}
+        stroke="#1e293b"
+        strokeWidth="1"
+      />
+    )
+  })
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-4">
+      <svg width={size} height={size} className="shrink-0">
+        {slices}
+      </svg>
+      <div className="space-y-1.5 min-w-0">
+        {data.map(([label, count], i) => {
+          const pct = ((count / total) * 100).toFixed(0)
+          const fill = colors?.[label] || PIE_PALETTE[i % PIE_PALETTE.length]
+          return (
+            <div key={label} className="flex items-center gap-2 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: fill }} />
+              <span className="text-slate-300 truncate">
+                {renderLabel ? renderLabel(label) : label}
+              </span>
+              <span className="text-slate-500 font-mono ml-auto shrink-0">{count} ({pct}%)</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
