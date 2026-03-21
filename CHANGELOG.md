@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.124.2] - 2026-03-21
+
+### Fixed
+- **Indicator logs now load correctly for all bots** — fetching logs with a time filter crashed with a timezone mismatch error, causing the indicator logs tab to show nothing even when logs existed
+
 ## [v2.124.1] - 2026-03-21
 
 ### Added

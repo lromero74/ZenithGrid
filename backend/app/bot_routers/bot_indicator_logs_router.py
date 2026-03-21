@@ -69,7 +69,8 @@ async def get_indicator_logs(
         logs_query = logs_query.where(IndicatorLog.conditions_met == conditions_met)
 
     if since:
-        logs_query = logs_query.where(IndicatorLog.timestamp >= since)
+        since_naive = since.replace(tzinfo=None)
+        logs_query = logs_query.where(IndicatorLog.timestamp >= since_naive)
 
     logs_query = logs_query.order_by(desc(IndicatorLog.timestamp)).limit(limit).offset(offset)
 
