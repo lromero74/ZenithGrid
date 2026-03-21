@@ -16,7 +16,7 @@ type SubTab = 'bans' | 'report'
 type ChartMode = 'bar' | 'pie'
 type SortField = 'ip' | 'country' | 'org' | 'jail'
 type SortDir = 'asc' | 'desc'
-type GroupBy = 'none' | 'country' | 'jail'
+type GroupBy = 'none' | 'country' | 'org' | 'jail'
 
 export function AdminSecurity() {
   const [data, setData] = useState<BanSnapshot | null>(null)
@@ -249,13 +249,13 @@ export function AdminSecurity() {
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <Layers className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Group:</span>
-              {(['none', 'country', 'jail'] as GroupBy[]).map(g => (
+              {(['none', 'country', 'org', 'jail'] as GroupBy[]).map(g => (
                 <button
                   key={g}
                   onClick={() => handleGroupBy(g)}
                   className={`px-2 py-1 rounded transition-colors ${groupBy === g ? 'bg-blue-600 text-white' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'}`}
                 >
-                  {g === 'none' ? 'None' : g === 'country' ? 'Country' : 'Jail'}
+                  {g === 'none' ? 'None' : g === 'country' ? 'Country' : g === 'org' ? 'ISP' : 'Jail'}
                 </button>
               ))}
             </div>
@@ -285,12 +285,17 @@ export function AdminSecurity() {
                 </thead>
                 <tbody>
                   {pagedBans.map((ban, i) => {
-                    const groupKey = groupBy === 'country' ? (ban.country || 'Unknown') : groupBy === 'jail' ? ban.jail : null
+                    const getKey = (b: typeof ban) =>
+                      groupBy === 'country' ? (b.country || 'Unknown')
+                      : groupBy === 'org' ? (b.org?.replace(/^AS\d+\s*/, '') || 'Unknown')
+                      : groupBy === 'jail' ? b.jail
+                      : null
+                    const groupKey = getKey(ban)
                     const prevBan = pagedBans[i - 1]
-                    const prevKey = prevBan ? (groupBy === 'country' ? (prevBan.country || 'Unknown') : groupBy === 'jail' ? prevBan.jail : null) : null
+                    const prevKey = prevBan ? getKey(prevBan) : null
                     const showHeader = groupKey !== null && groupKey !== prevKey
                     const groupCount = groupKey !== null
-                      ? filteredBans.filter(b => (groupBy === 'country' ? (b.country || 'Unknown') : b.jail) === groupKey).length
+                      ? filteredBans.filter(b => getKey(b) === groupKey).length
                       : 0
                     return <>
                       {showHeader && (

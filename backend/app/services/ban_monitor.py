@@ -38,6 +38,10 @@ class BanSnapshot:
 
 _snapshot = BanSnapshot()
 
+# Geo cache: persists across refreshes so each IP is looked up only once.
+# Avoids hammering ipinfo.io rate limits when hundreds of IPs are banned.
+_geo_cache: dict[str, dict] = {}
+
 
 def get_ban_snapshot() -> BanSnapshot:
     """Return the current cached ban snapshot."""
@@ -53,7 +57,13 @@ async def refresh_ban_snapshot() -> BanSnapshot:
 
 
 def _lookup_ip_geo(ip: str) -> dict:
-    """Look up IP geolocation via ipinfo.io (free, no key needed for basic data)."""
+    """Look up IP geolocation via ipinfo.io (free, no key needed for basic data).
+
+    Results are cached in _geo_cache so each IP is only queried once per process
+    lifetime — avoids rate-limiting when hundreds of IPs are banned.
+    """
+    if ip in _geo_cache:
+        return _geo_cache[ip]
     try:
         req = urllib.request.Request(
             f"https://ipinfo.io/{ip}/json",
@@ -61,13 +71,15 @@ def _lookup_ip_geo(ip: str) -> dict:
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
-            return {
+            result = {
                 "city": data.get("city"),
                 "region": data.get("region"),
                 "country": data.get("country"),
                 "org": data.get("org"),
                 "hostname": data.get("hostname"),
             }
+            _geo_cache[ip] = result
+            return result
     except Exception as e:
         logger.debug(f"IP geo lookup failed for {ip}: {e}")
         return {}

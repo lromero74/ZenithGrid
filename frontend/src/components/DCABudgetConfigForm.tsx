@@ -39,13 +39,25 @@ const safeParseInt = (value: string): number | undefined => {
   return isNaN(parsed) ? undefined : parsed
 }
 
-// Get a number value with fallback, handling NaN properly
-const getNumericValue = (value: any, fallback: number): number => {
-  if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
-    return fallback
-  }
-  return Number(value)
-}
+// Numeric input helper — allows the field to be empty while typing,
+// applies the default only when the user leaves the field blank.
+const numericProps = (
+  current: any,
+  fallback: number,
+  commit: (v: number) => void,
+  isInt = false,
+) => ({
+  value: current === '' || current === null || current === undefined ? '' : current,
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value === '') { commit('' as any); return }
+    const v = isInt ? safeParseInt(e.target.value) : safeParseFloat(e.target.value)
+    if (v !== undefined) commit(v)
+  },
+  onBlur: (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = isInt ? safeParseInt(e.target.value) : safeParseFloat(e.target.value)
+    commit(v !== undefined ? v : fallback)
+  },
+})
 
 // Calculate DCA budget breakdown
 interface DCABudgetBreakdown {
@@ -366,8 +378,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.max_concurrent_deals, 1)}
-              onChange={(e) => updateConfig('max_concurrent_deals', safeParseInt(e.target.value) ?? 1)}
+              {...numericProps(config.max_concurrent_deals, 1, v => updateConfig('max_concurrent_deals', v), true)}
               min="1"
               max="20"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -384,8 +395,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.min_daily_volume, 0)}
-              onChange={(e) => updateConfig('min_daily_volume', safeParseFloat(e.target.value) ?? 0)}
+              {...numericProps(config.min_daily_volume, 0, v => updateConfig('min_daily_volume', v))}
               min="0"
               step={isFiatQuote ? 1000 : 0.1}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -411,12 +421,10 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.max_simultaneous_same_pair, 1)}
-              onChange={(e) => {
-                const val = safeParseInt(e.target.value) ?? 1
+              {...numericProps(config.max_simultaneous_same_pair, 1, v => {
                 const maxDeals = config.max_concurrent_deals || 1
-                updateConfig('max_simultaneous_same_pair', Math.min(val, maxDeals))
-              }}
+                updateConfig('max_simultaneous_same_pair', typeof v === 'number' ? Math.min(v, maxDeals) : v)
+              }, true)}
               min="1"
               max={config.max_concurrent_deals || 1}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -500,9 +508,18 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.base_order_percentage, 10)}
-                onChange={(e) => updateConfig('base_order_percentage', safeParseFloat(e.target.value) ?? 10)}
-                onBlur={() => validateAndCorrectPercentage('base_order_percentage', config.base_order_percentage ?? 10, calculateMinPercentage())}
+                value={config.base_order_percentage === '' || config.base_order_percentage == null ? '' : config.base_order_percentage}
+                onChange={(e) => {
+                  if (e.target.value === '') { updateConfig('base_order_percentage', '' as any); return }
+                  const v = safeParseFloat(e.target.value)
+                  if (v !== undefined) updateConfig('base_order_percentage', v)
+                }}
+                onBlur={(e) => {
+                  const v = safeParseFloat(e.target.value)
+                  const finalV = v !== undefined ? v : 10
+                  updateConfig('base_order_percentage', finalV)
+                  validateAndCorrectPercentage('base_order_percentage', finalV, calculateMinPercentage())
+                }}
                 readOnly={useBudgetCalculator}
                 min={calculateMinPercentage()}
                 max="100"
@@ -534,11 +551,23 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(getBaseOrderSize(), isFiatQuote ? 10 : 0.001)}
+                value={getBaseOrderSize() === '' || getBaseOrderSize() == null ? '' : getBaseOrderSize()}
                 onChange={(e) => {
-                  const value = safeParseFloat(e.target.value) ?? (isFiatQuote ? 10 : 0.001)
-                  // Store both for backward compatibility and update quote_currency
-                  updateConfig(baseOrderKey, value)
+                  if (e.target.value === '') {
+                    updateConfig(baseOrderKey, '' as any)
+                    updateConfig('quote_currency', quoteCurrency)
+                    return
+                  }
+                  const v = safeParseFloat(e.target.value)
+                  if (v !== undefined) {
+                    // Store both for backward compatibility and update quote_currency
+                    updateConfig(baseOrderKey, v)
+                    updateConfig('quote_currency', quoteCurrency)
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = safeParseFloat(e.target.value)
+                  updateConfig(baseOrderKey, v !== undefined ? v : (isFiatQuote ? 10 : 0.001))
                   updateConfig('quote_currency', quoteCurrency)
                 }}
                 readOnly={useBudgetCalculator}
@@ -632,8 +661,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.max_safety_orders, 5)}
-              onChange={(e) => updateConfig('max_safety_orders', safeParseInt(e.target.value) ?? 5)}
+              {...numericProps(config.max_safety_orders, 5, v => updateConfig('max_safety_orders', v), true)}
               min="1"
               max="20"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -674,11 +702,18 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.safety_order_percentage, 50)}
-                onChange={(e) =>
-                  updateConfig('safety_order_percentage', safeParseFloat(e.target.value) ?? 50)
-                }
-                onBlur={() => validateAndCorrectPercentage('safety_order_percentage', config.safety_order_percentage ?? 50, calculateMinSafetyOrderPercentage())}
+                value={config.safety_order_percentage === '' || config.safety_order_percentage == null ? '' : config.safety_order_percentage}
+                onChange={(e) => {
+                  if (e.target.value === '') { updateConfig('safety_order_percentage', '' as any); return }
+                  const v = safeParseFloat(e.target.value)
+                  if (v !== undefined) updateConfig('safety_order_percentage', v)
+                }}
+                onBlur={(e) => {
+                  const v = safeParseFloat(e.target.value)
+                  const finalV = v !== undefined ? v : 50
+                  updateConfig('safety_order_percentage', finalV)
+                  validateAndCorrectPercentage('safety_order_percentage', finalV, calculateMinSafetyOrderPercentage())
+                }}
                 readOnly={useBudgetCalculator}
                 min={calculateMinSafetyOrderPercentage()}
                 max="500"
@@ -710,10 +745,15 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(getSafetyOrderSize(), isFiatQuote ? 5 : 0.0005)}
+                value={getSafetyOrderSize() === '' || getSafetyOrderSize() == null ? '' : getSafetyOrderSize()}
                 onChange={(e) => {
-                  const value = safeParseFloat(e.target.value) ?? (isFiatQuote ? 5 : 0.0005)
-                  updateConfig(safetyOrderKey, value)
+                  if (e.target.value === '') { updateConfig(safetyOrderKey, '' as any); return }
+                  const v = safeParseFloat(e.target.value)
+                  if (v !== undefined) updateConfig(safetyOrderKey, v)
+                }}
+                onBlur={(e) => {
+                  const v = safeParseFloat(e.target.value)
+                  updateConfig(safetyOrderKey, v !== undefined ? v : (isFiatQuote ? 5 : 0.0005))
                 }}
                 readOnly={useBudgetCalculator}
                 min={isFiatQuote ? 1 : 0.0001}
@@ -735,8 +775,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.price_deviation, 2.0)}
-              onChange={(e) => updateConfig('price_deviation', safeParseFloat(e.target.value) ?? 2.0)}
+              {...numericProps(config.price_deviation, 2.0, v => updateConfig('price_deviation', v))}
               min="0.1"
               max="20"
               step="0.01"
@@ -798,10 +837,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.safety_order_volume_scale, 1.0)}
-                onChange={(e) =>
-                  updateConfig('safety_order_volume_scale', safeParseFloat(e.target.value) ?? 1.0)
-                }
+                {...numericProps(config.safety_order_volume_scale, 1.0, v => updateConfig('safety_order_volume_scale', v))}
                 min="1.0"
                 max="10.0"
                 step="0.01"
@@ -816,10 +852,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.safety_order_step_scale, 1.0)}
-                onChange={(e) =>
-                  updateConfig('safety_order_step_scale', safeParseFloat(e.target.value) ?? 1.0)
-                }
+                {...numericProps(config.safety_order_step_scale, 1.0, v => updateConfig('safety_order_step_scale', v))}
                 min="1.0"
                 max="10.0"
                 step="0.01"
@@ -847,8 +880,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.take_profit_percentage, 3.0)}
-              onChange={(e) => updateConfig('take_profit_percentage', safeParseFloat(e.target.value) ?? 3.0)}
+              {...numericProps(config.take_profit_percentage, 3.0, v => updateConfig('take_profit_percentage', v))}
               min="0.1"
               max="50"
               step="0.01"
@@ -883,10 +915,7 @@ function DCABudgetConfigForm({
             </label>
             <input
               type="number"
-              value={getNumericValue(config.trailing_deviation, 1.0)}
-              onChange={(e) =>
-                updateConfig('trailing_deviation', safeParseFloat(e.target.value) ?? 1.0)
-              }
+              {...numericProps(config.trailing_deviation, 1.0, v => updateConfig('trailing_deviation', v))}
               min="0.1"
               max="10"
               step="0.01"
@@ -927,10 +956,7 @@ function DCABudgetConfigForm({
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    value={getNumericValue(config.stop_loss_percentage, -10)}
-                    onChange={(e) =>
-                      updateConfig('stop_loss_percentage', safeParseFloat(e.target.value) ?? -10)
-                    }
+                    {...numericProps(config.stop_loss_percentage, -10, v => updateConfig('stop_loss_percentage', v))}
                     min="-50"
                     max="-0.1"
                     step="0.01"
@@ -994,10 +1020,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.max_buy_slippage_pct, 0.5)}
-                onChange={(e) =>
-                  updateConfig('max_buy_slippage_pct', safeParseFloat(e.target.value) ?? 0.5)
-                }
+                {...numericProps(config.max_buy_slippage_pct, 0.5, v => updateConfig('max_buy_slippage_pct', v))}
                 min="0.01"
                 max="5"
                 step="0.01"
@@ -1011,10 +1034,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.max_sell_slippage_pct, 0.5)}
-                onChange={(e) =>
-                  updateConfig('max_sell_slippage_pct', safeParseFloat(e.target.value) ?? 0.5)
-                }
+                {...numericProps(config.max_sell_slippage_pct, 0.5, v => updateConfig('max_sell_slippage_pct', v))}
                 min="0.01"
                 max="5"
                 step="0.01"

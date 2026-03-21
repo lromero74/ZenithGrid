@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.4] - 2026-03-21
+
+### Fixed
+- **Bot config fields no longer auto-fill defaults when you backspace** — clearing any numeric field (Max Concurrent Deals, Safety Orders, Price Deviation, Take Profit %, Slippage Guard, etc.) now leaves the field empty so you can type the value you want. The default is only applied when you leave the field blank and move focus away. All 14 numeric inputs in the bot editing modal were updated.
+- **Banned IP country and ISP/provider data no longer shows as "Unknown"** — geo lookups (via ipinfo.io) are now cached per IP for the lifetime of the process. Previously, every monitor refresh re-queried all IPs at once, hitting ipinfo.io's rate limit and causing most entries to return empty. Data is now looked up once and reused on subsequent refreshes.
+- **Banned IP list: group by ISP/Provider** — added "ISP" as a grouping option alongside Country and Jail.
+
 ## [v2.125.3] - 2026-03-21
 
 ### Fixed
