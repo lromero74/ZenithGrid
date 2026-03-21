@@ -14,7 +14,6 @@ from typing import Dict, List, Set
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
 from app.models import Bot, Account
 from app.services.exchange_service import get_exchange_client_for_account
 from app.multi_bot_monitor import filter_pairs_by_allowed_categories
@@ -69,6 +68,16 @@ class TradingPairMonitor:
         self._usd_pairs: Set[str] = set()
         self._exchange_client = None
         self._raw_products: List[Dict] = []
+        self._session_maker = None  # injected by secondary_loop startup
+
+    def set_session_maker(self, sm):
+        """Inject a session maker (used when running on the secondary event loop)."""
+        self._session_maker = sm
+
+    def _get_sm(self):
+        """Return the injected session maker, falling back to the default."""
+        from app.database import async_session_maker as _default
+        return self._session_maker or _default
 
     async def get_available_products(self, db: AsyncSession) -> Set[str]:
         """
@@ -335,7 +344,7 @@ class TradingPairMonitor:
         }
 
         try:
-            async with async_session_maker() as db:
+            async with self._get_sm()() as db:
                 # Get available products
                 available_products = await self.get_available_products(db)
 

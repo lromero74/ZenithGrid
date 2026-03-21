@@ -18,7 +18,6 @@ from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
 from app.models import Account
 from app.precision import format_base_amount
 from app.services.exchange_service import get_exchange_client_for_account
@@ -440,6 +439,16 @@ class RebalanceMonitor:
         self.task = None
         self._account_timers: Dict[int, datetime] = {}
         self._processing: set = set()  # Account IDs currently being processed
+        self._session_maker = None  # injected by secondary_loop startup
+
+    def set_session_maker(self, sm):
+        """Inject a session maker (used when running on the secondary event loop)."""
+        self._session_maker = sm
+
+    def _get_sm(self):
+        """Return the injected session maker, falling back to the default."""
+        from app.database import async_session_maker as _default
+        return self._session_maker or _default
 
     async def start(self):
         if not self.running:
@@ -471,7 +480,7 @@ class RebalanceMonitor:
             await asyncio.sleep(30)
 
     async def _check_accounts(self):
-        async with async_session_maker() as db:
+        async with self._get_sm()() as db:
             query = select(Account).where(Account.rebalance_enabled.is_(True))
             result = await db.execute(query)
             accounts = result.scalars().all()

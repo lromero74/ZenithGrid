@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.8] - 2026-03-21
+
+### Changed
+- **Background jobs now run on a dedicated secondary event loop** — 20 of the 27 background tasks (batch cleanups, content refresh, coin review, transfer sync, auto-buy, rebalancing, and more) have been moved off the main trading event loop onto a separate secondary loop running in a daemon thread. The secondary loop has its own smaller DB connection pool (`size=3, overflow=2 = 5 max connections`), leaving the main pool's 12 connections exclusively for order fills, bot monitoring, and API request handlers. This eliminates the root cause of DB pool exhaustion during heavy batch operations. The 7 Tier 1 tasks (MultiBotMonitor, LimitOrderMonitor, OrderReconciliationMonitor, PropGuardMonitor, PerpsMonitor, MissingOrderDetector, MemoryCacheCleanup) remain on the main loop as before.
+
 ## [v2.125.7] - 2026-03-21
 
 ### Changed

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
+from app.database import async_session_maker as _default_session_maker
 from app.models import (
     Account, ActiveSession, AIBotLog, IndicatorLog, OrderHistory, Position,
     Report, RevokedToken, Settings,
@@ -18,17 +18,18 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 
-async def cleanup_old_decision_logs():
+async def cleanup_old_decision_logs(session_maker=None):
     """
     Periodically clean up old AI and indicator logs for closed positions.
     Runs daily and deletes logs older than the configured retention period.
     """
+    sm = session_maker or _default_session_maker
     # Wait 10 minutes after startup before first cleanup
     await asyncio.sleep(600)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 # Get retention period from settings
                 retention_days = await get_log_retention_days(db)
 
@@ -97,7 +98,7 @@ async def cleanup_old_decision_logs():
         await asyncio.sleep(86400)  # 24 hours
 
 
-async def cleanup_failed_condition_logs():
+async def cleanup_failed_condition_logs(session_maker=None):
     """
     Clean up indicator and AI logs where conditions didn't match.
 
@@ -107,12 +108,13 @@ async def cleanup_failed_condition_logs():
 
     Runs every 6 hours.
     """
+    sm = session_maker or _default_session_maker
     # Wait 15 minutes after startup before first cleanup
     await asyncio.sleep(900)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 cutoff_time = datetime.utcnow() - timedelta(hours=24)
 
                 # Delete indicator logs where conditions were NOT met (conditions_met = False or 0)
@@ -155,7 +157,7 @@ async def cleanup_failed_condition_logs():
         await asyncio.sleep(21600)
 
 
-async def cleanup_old_failed_orders():
+async def cleanup_old_failed_orders(session_maker=None):
     """
     Clean up failed order records older than 24 hours.
 
@@ -166,12 +168,13 @@ async def cleanup_old_failed_orders():
     Keeps successful orders indefinitely for audit trail.
     Runs every 6 hours.
     """
+    sm = session_maker or _default_session_maker
     # Wait 20 minutes after startup before first cleanup
     await asyncio.sleep(1200)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 cutoff_time = datetime.utcnow() - timedelta(hours=24)
 
                 # Delete failed orders older than 24 hours
@@ -201,7 +204,7 @@ async def cleanup_old_failed_orders():
         await asyncio.sleep(21600)
 
 
-async def cleanup_expired_revoked_tokens():
+async def cleanup_expired_revoked_tokens(session_maker=None):
     """
     Periodically remove expired entries from revoked_tokens table.
 
@@ -209,12 +212,13 @@ async def cleanup_expired_revoked_tokens():
     record is unnecessary — the token can't be used anyway.
     Runs daily.
     """
+    sm = session_maker or _default_session_maker
     # Wait 30 minutes after startup
     await asyncio.sleep(1800)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 now = datetime.utcnow()
                 result = await db.execute(
                     delete(RevokedToken).where(RevokedToken.expires_at < now)
@@ -236,19 +240,20 @@ async def cleanup_expired_revoked_tokens():
         await asyncio.sleep(86400)
 
 
-async def cleanup_old_reports():
+async def cleanup_old_reports(session_maker=None):
     """
     Clean up generated reports older than 730 days (2 years).
 
     Removes report rows including HTML and PDF content to reclaim space.
     Runs weekly.
     """
+    sm = session_maker or _default_session_maker
     # Wait 45 minutes after startup
     await asyncio.sleep(2700)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 cutoff_date = datetime.utcnow() - timedelta(days=730)
 
                 result = await db.execute(
@@ -271,7 +276,7 @@ async def cleanup_old_reports():
         await asyncio.sleep(604800)
 
 
-async def cleanup_expired_sessions():
+async def cleanup_expired_sessions(session_maker=None):
     """
     Clean up expired sessions and old inactive session records.
 
@@ -280,12 +285,13 @@ async def cleanup_expired_sessions():
 
     Runs daily.
     """
+    sm = session_maker or _default_session_maker
     # Wait 35 minutes after startup
     await asyncio.sleep(2100)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 from app.services.session_service import expire_all_stale_sessions
 
                 expired_count = await expire_all_stale_sessions(db)
@@ -333,19 +339,20 @@ async def get_log_retention_days(db: AsyncSession) -> int:
         return 14  # Default fallback
 
 
-async def cleanup_old_rate_limit_attempts():
+async def cleanup_old_rate_limit_attempts(session_maker=None):
     """
     Periodically remove expired rate limit attempts.
 
     Rows older than 1 hour are no longer relevant to any rate-limit window.
     Runs every hour.
     """
+    sm = session_maker or _default_session_maker
     # Wait 10 minutes after startup
     await asyncio.sleep(600)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 cutoff = datetime.utcnow() - timedelta(hours=1)
                 from app.models import RateLimitAttempt
                 result = await db.execute(
@@ -417,7 +424,7 @@ async def cleanup_in_memory_caches():
             rebalance = getattr(main_module, 'rebalance_monitor', None)
             monitor_cleanup = {}
             if auto_buy or rebalance:
-                async with async_session_maker() as _db:
+                async with _default_session_maker() as _db:
                     _res = await _db.execute(
                         select(Account.id).where(Account.is_active.is_(True))
                     )

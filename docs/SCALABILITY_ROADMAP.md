@@ -34,11 +34,11 @@ This document is divided into three phases:
 
 These changes reduce resource contention and improve reliability **without any architecture change**. They address the symptoms already seen (DB pool exhaustion, event loop contention under load).
 
-### 1.1 — Tier the 27 background tasks by priority
+### 1.1 — Tier the 27 background tasks by priority ✅ DONE (v2.125.8)
 
 **Problem:** All 27 tasks share the same asyncio event loop. A slow news fetch or weekly coin review competes with bot monitoring and order fills for CPU time. The 30-second DB pool timeout that appeared when saving a bot is a symptom of this.
 
-**Fix:** Assign tasks to priority tiers. Tier 1 runs on the main trading event loop. Tier 2 and 3 run on a separate `asyncio` event loop in a dedicated thread (or a `concurrent.futures.ThreadPoolExecutor` worker).
+**Fix:** Assign tasks to priority tiers. Tier 1 runs on the main trading event loop. Tier 2 and 3 run on a separate `asyncio` event loop in a dedicated daemon thread with its own smaller DB connection pool.
 
 ```
 Tier 1 — Real-time (main event loop, current behavior):
@@ -48,6 +48,7 @@ Tier 1 — Real-time (main event loop, current behavior):
   PropGuardMonitor         30s interval
   PerpsMonitor             60s interval
   MissingOrderDetector     5m interval
+  MemoryCacheCleanup       5m interval  ← stays on main loop (touches shared in-memory state)
 
 Tier 2 — Near-real-time (secondary loop, tolerate 1–2s delay):
   AutoBuyMonitor           continuous
@@ -57,23 +58,35 @@ Tier 2 — Near-real-time (secondary loop, tolerate 1–2s delay):
   BanMonitor               daily
   ReportScheduler          15m interval
 
-Tier 3 — Batch (thread pool worker, can lag minutes):
+Tier 3 — Batch (secondary loop, can lag minutes):
   ContentRefreshService    30m / 60m intervals (news, videos)
   DomainBlacklistService   weekly
   DebtCeilingMonitor       weekly
+  TradingPairMonitor       daily
   CoinReviewScheduler      7 day interval
   DecisionLogCleanup       daily
   FailedConditionCleanup   6h interval
   FailedOrderCleanup       6h interval
   RevokedTokenCleanup      daily
   SessionCleanup           daily
-  MemoryCacheCleanup       5m interval
+  RateLimitCleanup         hourly
   ReportCleanup            weekly
-  ChangelogCacheRebuild    startup only
+  ChangelogCacheRebuild    startup only (synchronous, stays on main startup path — too fast to move)
 ```
 
-**Impact:** Trading monitors get CPU/DB pool priority. Slow tasks no longer block order execution.
-**Effort:** Medium — requires restructuring the `main.py` startup block.
+**Implementation notes (learned during execution):**
+- New module `app/secondary_loop.py` owns: loop lifecycle (`start_secondary_loop`, `stop_secondary_loop`), DB engine creation bound to the secondary loop, `schedule(coro)` helper using `asyncio.run_coroutine_threadsafe`, and `get_secondary_session_maker()`.
+- **asyncpg is event-loop bound**: DB connections bind to the loop that created the engine. Secondary loop creates its own `create_async_engine` instance INSIDE the loop (via `asyncio.run_coroutine_threadsafe(_init_secondary_engine(), loop).result()`). Main and secondary engines are completely independent.
+- **Pool budget**: Main (size=8, overflow=4=12) + Read (size=4, overflow=2=6) + Secondary (size=3, overflow=2=5) = 23 max vs `max_connections=25`. Tight but within limits.
+- **Session maker injection pattern**: Coroutine-style tasks accept `session_maker=None` with `sm = session_maker or _default_session_maker` fallback. Class-based monitors get `set_session_maker(sm)` / `_get_sm()` methods. Backwards-compatible — tests and direct calls still work without injection.
+- **`coin_review_service.py` required threading session_maker through 5 layers**: `run_coin_review_scheduler` → `_get_last_review_timestamp`, `run_weekly_review` → `get_tracked_coins`, `update_coin_statuses` → `get_coinbase_client_from_db`. All now have `session_maker=None` parameter.
+- **`MemoryCacheCleanup` stays on main loop**: It touches in-memory state shared with request handlers (`auto_buy_monitor._account_timers`, `rebalance_monitor._account_timers`, rate-limit dicts). Moving it to the secondary loop would create cross-thread races.
+- **`ContentRefreshService`, `DomainBlacklistService`, `DebtCeilingMonitor` do NOT use `async_session_maker`** (HTTP-only services) — no `set_session_maker()` needed, just `schedule(service.start())`.
+- **Shutdown**: `stop_secondary_loop()` stops the loop which cancels all running Tier 2/3 coroutines. Individual `_cancel_task()` calls for Tier 2/3 removed from `shutdown_event()`. Module-level task globals reduced from 14 to 4 (Tier 1 only).
+- **`build_changelog_cache()` stays synchronous on main startup path**: It runs `git log` (< 1 second), is startup-only, and not a loop — no benefit to moving it.
+
+**Impact:** Trading monitors get CPU/DB pool priority. Slow tasks no longer block order execution. Main pool's 12 connections reserved for Tier 1 + API request handlers.
+**Effort:** Medium — 11 files changed, 14 new tests.
 
 ---
 

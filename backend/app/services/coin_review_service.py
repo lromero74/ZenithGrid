@@ -14,7 +14,7 @@ from typing import Dict, List, Any
 from sqlalchemy import select
 
 from app.config import settings
-from app.database import async_session_maker, init_db
+from app.database import async_session_maker as _default_session_maker, init_db
 from app.models import Account, BlacklistedCoin
 from app.coinbase_unified_client import CoinbaseClient
 from app.encryption import decrypt_value, is_encrypted
@@ -101,9 +101,10 @@ Respond with ONLY valid JSON in this exact format:
 Include ALL coins from the list. Be concise but specific in reasons."""
 
 
-async def get_coinbase_client_from_db() -> CoinbaseClient:
+async def get_coinbase_client_from_db(session_maker=None) -> CoinbaseClient:
     """Get Coinbase client from the first active CEX account in the database."""
-    async with async_session_maker() as session:
+    sm = session_maker or _default_session_maker
+    async with sm() as session:
         result = await session.execute(
             select(Account).where(
                 Account.type == "cex",
@@ -129,9 +130,9 @@ async def get_coinbase_client_from_db() -> CoinbaseClient:
         ))
 
 
-async def get_tracked_coins() -> List[str]:
+async def get_tracked_coins(session_maker=None) -> List[str]:
     """Get all unique coin symbols available on Coinbase across BTC, USD, USDC markets."""
-    client = await get_coinbase_client_from_db()
+    client = await get_coinbase_client_from_db(session_maker=session_maker)
     products = await client.list_products()
 
     symbols = set()
@@ -307,8 +308,9 @@ async def call_ai_for_review(coins: List[str], batch_size: int = 50) -> Dict[str
     return all_analysis
 
 
-async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str, int]:
+async def update_coin_statuses(analysis: Dict[str, Dict[str, str]], session_maker=None) -> Dict[str, int]:
     """Update blacklisted_coins table with Claude's analysis."""
+    sm = session_maker or _default_session_maker
     stats = {"added": 0, "updated": 0, "unchanged": 0}
 
     category_prefix = {
@@ -319,7 +321,7 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
         "BLACKLISTED": "",  # No prefix for blacklisted
     }
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         # Pre-fetch all existing global BlacklistedCoin entries in one query
         # instead of O(N) individual SELECT per symbol
         all_symbols = [s.upper() for s in analysis.keys()]
@@ -359,7 +361,7 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
     return stats
 
 
-async def run_coin_review_scheduler():
+async def run_coin_review_scheduler(session_maker=None):
     """
     Background task that runs a full coin review weekly.
 
@@ -375,7 +377,7 @@ async def run_coin_review_scheduler():
     while True:
         try:
             # Check when the last review ran (most recent global entry)
-            last_review = await _get_last_review_timestamp()
+            last_review = await _get_last_review_timestamp(session_maker=session_maker)
             if last_review:
                 age_seconds = (datetime.utcnow() - last_review).total_seconds()
                 if age_seconds < 6 * 24 * 3600:  # < 6 days
@@ -387,7 +389,7 @@ async def run_coin_review_scheduler():
                     continue
 
             logger.info("Coin review scheduler: starting weekly review")
-            result = await run_weekly_review()
+            result = await run_weekly_review(session_maker=session_maker)
             if result["status"] == "success":
                 logger.info(
                     f"Coin review complete: {result['coins_analyzed']} coins, "
@@ -404,10 +406,11 @@ async def run_coin_review_scheduler():
         await asyncio.sleep(interval)
 
 
-async def _get_last_review_timestamp():
+async def _get_last_review_timestamp(session_maker=None):
     """Get the timestamp of the most recent global coin review entry."""
+    sm = session_maker or _default_session_maker
     try:
-        async with async_session_maker() as db:
+        async with sm() as db:
             result = await db.execute(
                 select(BlacklistedCoin.created_at)
                 .where(BlacklistedCoin.user_id.is_(None))
@@ -420,7 +423,7 @@ async def _get_last_review_timestamp():
         return None
 
 
-async def run_weekly_review(standalone: bool = False) -> Dict[str, Any]:
+async def run_weekly_review(standalone: bool = False, session_maker=None) -> Dict[str, Any]:
     """
     Main entry point for weekly coin review.
 
@@ -440,7 +443,7 @@ async def run_weekly_review(standalone: bool = False) -> Dict[str, Any]:
             await init_db()
 
         # Get tracked coins
-        coins = await get_tracked_coins()
+        coins = await get_tracked_coins(session_maker=session_maker)
         logger.info(f"Found {len(coins)} tracked coins: {', '.join(coins)}")
 
         if not coins:
@@ -452,7 +455,7 @@ async def run_weekly_review(standalone: bool = False) -> Dict[str, Any]:
         logger.info(f"Received analysis for {len(analysis)} coins")
 
         # Update database
-        stats = await update_coin_statuses(analysis)
+        stats = await update_coin_statuses(analysis, session_maker=session_maker)
 
         # Summary
         end_time = datetime.utcnow()

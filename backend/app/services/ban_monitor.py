@@ -201,7 +201,7 @@ def _query_fail2ban() -> BanSnapshot:
     return snapshot
 
 
-async def ban_monitor_loop():
+async def ban_monitor_loop(session_maker=None):
     """Background task: query fail2ban every hour and cache the result."""
     global _snapshot
 

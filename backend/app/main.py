@@ -144,21 +144,11 @@ rebalance_monitor = RebalanceMonitor()
 # Perpetual futures position monitor - syncs open perps positions with exchange
 perps_monitor = PerpsMonitor(interval_seconds=60)
 
-# Background task handles
+# Background task handles — Tier 1 only (Tier 2/3 are managed by the secondary loop)
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
-decision_log_cleanup_task = None
-failed_condition_cleanup_task = None
-failed_order_cleanup_task = None
-account_snapshot_task = None
-revoked_token_cleanup_task = None
-report_scheduler_task = None
-report_cleanup_task = None
-session_cleanup_task = None
-rate_limit_cleanup_task = None
 memory_cache_cleanup_task = None
-transfer_sync_task = None
 
 
 def override_get_price_monitor():
@@ -414,20 +404,22 @@ async def run_missing_order_detector():
 
 
 # Background task for capturing daily account value snapshots
-async def run_account_snapshot_capture():
+async def run_account_snapshot_capture(session_maker=None):
     """Background task that captures account value snapshots once per day"""
     from sqlalchemy import select
 
-    from app.database import async_session_maker
+    from app.database import async_session_maker as _default_sm
     from app.models import User
     from app.services import account_snapshot_service
+
+    sm = session_maker or _default_sm
 
     # Wait 5 minutes after startup before first check
     await asyncio.sleep(300)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 # Get all active users
                 result = await db.execute(select(User).where(User.is_active.is_(True)))
                 users = result.scalars().all()
@@ -456,20 +448,22 @@ async def run_account_snapshot_capture():
 
 
 # Background task for syncing deposit/withdrawal transfers from Coinbase
-async def run_transfer_sync():
+async def run_transfer_sync(session_maker=None):
     """Background task that syncs transfers once per day, after snapshots."""
     from sqlalchemy import select
 
-    from app.database import async_session_maker
+    from app.database import async_session_maker as _default_sm
     from app.models import User
     from app.services.transfer_sync_service import sync_all_user_transfers
+
+    sm = session_maker or _default_sm
 
     # Wait 20 minutes after startup (run after account snapshots)
     await asyncio.sleep(1200)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 result = await db.execute(
                     select(User).where(User.is_active.is_(True))
                 )
@@ -499,12 +493,7 @@ async def run_transfer_sync():
 @app.on_event("startup")
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
-    global missing_order_detector_task, decision_log_cleanup_task
-    global failed_condition_cleanup_task, failed_order_cleanup_task
-    global account_snapshot_task, revoked_token_cleanup_task
-    global report_scheduler_task, report_cleanup_task
-    global session_cleanup_task, rate_limit_cleanup_task, memory_cache_cleanup_task
-    global transfer_sync_task
+    global missing_order_detector_task, memory_cache_cleanup_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -538,7 +527,9 @@ async def startup_event():
     await init_db()
     logger.info("Database initialized successfully")
 
-    # Start multi-bot monitor (gets exchange clients per-bot from accounts)
+    # ── TIER 1: Start on main event loop (real-time trading) ─────────────────
+    logger.info("Starting Tier 1 monitors (main event loop)...")
+
     logger.info("Starting multi-bot monitor...")
     await price_monitor.start_async()
     logger.info("Multi-bot monitor started - bot monitoring active")
@@ -555,30 +546,6 @@ async def startup_event():
     missing_order_detector_task = asyncio.create_task(run_missing_order_detector())
     logger.info("Missing order detector started - checking for unrecorded orders every 5 minutes")
 
-    logger.info("Starting trading pair monitor...")
-    await trading_pair_monitor.start()
-    logger.info("Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
-
-    logger.info("Starting content refresh service...")
-    await content_refresh_service.start()
-    logger.info("Content refresh service started - news every 30min, videos every 60min")
-
-    logger.info("Starting domain blacklist service...")
-    await domain_blacklist_service.start()
-    logger.info("Domain blacklist service started - refreshing weekly")
-
-    logger.info("Starting debt ceiling monitor...")
-    await debt_ceiling_monitor.start()
-    logger.info("Debt ceiling monitor started - checking for new legislation weekly")
-
-    logger.info("Starting auto-buy BTC monitor...")
-    await auto_buy_monitor.start()
-    logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
-
-    logger.info("Starting portfolio rebalance monitor...")
-    await rebalance_monitor.start()
-    logger.info("Rebalance monitor started - maintaining target allocations per account")
-
     logger.info("Starting perps position monitor...")
     await perps_monitor.start()
     logger.info("Perps monitor started - syncing futures positions every 60s")
@@ -587,55 +554,85 @@ async def startup_event():
     await start_prop_guard_monitor()
     logger.info("PropGuard monitor started - checking prop firm drawdowns every 30s")
 
+    # memory_cache_cleanup stays on main loop — it touches in-memory state shared with request handlers
+    memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
+    logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
+
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
 
-    logger.info("Starting decision log cleanup job...")
-    decision_log_cleanup_task = asyncio.create_task(cleanup_old_decision_logs())
-    logger.info("Decision log cleanup job started - cleaning old logs daily")
+    logger.info("Tier 1 monitors started")
 
-    logger.info("Starting failed condition log cleanup job...")
-    failed_condition_cleanup_task = asyncio.create_task(cleanup_failed_condition_logs())
-    logger.info("Failed condition log cleanup job started - removing noise logs every 6 hours")
+    # ── Start secondary event loop (Tier 2/3) ────────────────────────────────
+    from app.secondary_loop import get_secondary_session_maker, schedule, start_secondary_loop
+    start_secondary_loop()
+    sm = get_secondary_session_maker()
+    logger.info("Secondary event loop started")
 
-    logger.info("Starting failed order cleanup job...")
-    failed_order_cleanup_task = asyncio.create_task(cleanup_old_failed_orders())
-    logger.info("Failed order cleanup job started - removing old failed orders every 6 hours")
+    # ── TIER 2: Near-real-time tasks on secondary loop ────────────────────────
+    logger.info("Starting Tier 2 monitors (secondary event loop)...")
 
-    logger.info("Starting account snapshot capture job...")
-    account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
-    logger.info("Account snapshot capture job started - capturing daily account values")
+    auto_buy_monitor.set_session_maker(sm)
+    schedule(auto_buy_monitor.start())
+    logger.info("Auto-buy BTC monitor scheduled on secondary loop")
 
-    logger.info("Starting revoked token cleanup job...")
-    revoked_token_cleanup_task = asyncio.create_task(cleanup_expired_revoked_tokens())
-    logger.info("Revoked token cleanup job started - pruning expired entries daily")
+    rebalance_monitor.set_session_maker(sm)
+    schedule(rebalance_monitor.start())
+    logger.info("Rebalance monitor scheduled on secondary loop")
 
-    logger.info("Starting report scheduler...")
-    report_scheduler_task = asyncio.create_task(run_report_scheduler())
-    logger.info("Report scheduler started - checking for due reports every 15 minutes")
+    schedule(run_transfer_sync(session_maker=sm))
+    logger.info("Transfer sync scheduled on secondary loop - daily (20m startup delay)")
 
-    logger.info("Starting report cleanup job...")
-    report_cleanup_task = asyncio.create_task(cleanup_old_reports())
-    logger.info("Report cleanup job started - removing reports older than 2 years weekly")
+    schedule(run_account_snapshot_capture(session_maker=sm))
+    logger.info("Account snapshot capture scheduled on secondary loop - daily (5m startup delay)")
 
-    logger.info("Starting coin review scheduler...")
-    coin_review_task = asyncio.create_task(run_coin_review_scheduler())  # noqa: F841
-    logger.info("Coin review scheduler started - full review every 7 days")
-
-    logger.info("Starting session cleanup job...")
-    session_cleanup_task = asyncio.create_task(cleanup_expired_sessions())
-    rate_limit_cleanup_task = asyncio.create_task(cleanup_old_rate_limit_attempts())
-    memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
     from app.services.ban_monitor import ban_monitor_loop
-    asyncio.create_task(ban_monitor_loop())
-    logger.info("Session cleanup job started - expiring stale sessions daily")
-    logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
-    logger.info("Ban monitor started - querying fail2ban daily (admin can force-refresh)")
+    schedule(ban_monitor_loop())
+    logger.info("Ban monitor scheduled on secondary loop - daily (30s startup delay)")
 
-    logger.info("Starting transfer sync job...")
-    transfer_sync_task = asyncio.create_task(run_transfer_sync())
-    logger.info("Transfer sync started - syncing deposits/withdrawals daily")
+    schedule(run_report_scheduler(session_maker=sm))
+    logger.info("Report scheduler scheduled on secondary loop - every 15 minutes")
+
+    # ── TIER 3: Batch tasks on secondary loop ────────────────────────────────
+    logger.info("Starting Tier 3 batch jobs (secondary event loop)...")
+
+    schedule(content_refresh_service.start())
+    logger.info("Content refresh service scheduled on secondary loop - news 30min, videos 60min")
+
+    schedule(domain_blacklist_service.start())
+    logger.info("Domain blacklist service scheduled on secondary loop - refreshing weekly")
+
+    schedule(debt_ceiling_monitor.start())
+    logger.info("Debt ceiling monitor scheduled on secondary loop - checking weekly")
+
+    trading_pair_monitor.set_session_maker(sm)
+    schedule(trading_pair_monitor.start())
+    logger.info("Trading pair monitor scheduled on secondary loop - syncing pairs daily")
+
+    schedule(run_coin_review_scheduler(session_maker=sm))
+    logger.info("Coin review scheduler scheduled on secondary loop - full review every 7 days")
+
+    schedule(cleanup_old_decision_logs(session_maker=sm))
+    logger.info("Decision log cleanup scheduled on secondary loop - daily")
+
+    schedule(cleanup_failed_condition_logs(session_maker=sm))
+    logger.info("Failed condition log cleanup scheduled on secondary loop - every 6 hours")
+
+    schedule(cleanup_old_failed_orders(session_maker=sm))
+    logger.info("Failed order cleanup scheduled on secondary loop - every 6 hours")
+
+    schedule(cleanup_expired_revoked_tokens(session_maker=sm))
+    logger.info("Revoked token cleanup scheduled on secondary loop - daily")
+
+    schedule(cleanup_expired_sessions(session_maker=sm))
+    logger.info("Session cleanup scheduled on secondary loop - daily")
+
+    schedule(cleanup_old_rate_limit_attempts(session_maker=sm))
+    logger.info("Rate limit cleanup scheduled on secondary loop - hourly")
+
+    schedule(cleanup_old_reports(session_maker=sm))
+    logger.info("Report cleanup scheduled on secondary loop - weekly")
 
     logger.info("TTS thread pool ready (max_workers=2)")
 
@@ -665,31 +662,28 @@ async def shutdown_event():
     else:
         logger.warning(f"⚠️ {shutdown_result['message']}")
 
-    # Stop monitors that have their own .stop() method
-    logger.info("🛑 Stopping monitors...")
-    for monitor in [
-        price_monitor, content_refresh_service, domain_blacklist_service,
-        debt_ceiling_monitor, auto_buy_monitor, rebalance_monitor, perps_monitor,
-    ]:
+    # ── Stop Tier 1 monitors (main event loop) ────────────────────────────────
+    logger.info("🛑 Stopping Tier 1 monitors...")
+
+    for monitor in [price_monitor, perps_monitor]:
         if monitor:
             await monitor.stop()
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
 
-    # Cancel all background asyncio tasks
+    # Cancel Tier 1 asyncio tasks
     for task in [
         limit_order_monitor_task, order_reconciliation_monitor_task,
-        missing_order_detector_task, decision_log_cleanup_task,
-        failed_condition_cleanup_task, failed_order_cleanup_task,
-        account_snapshot_task, revoked_token_cleanup_task,
-        report_scheduler_task, report_cleanup_task,
-        session_cleanup_task, memory_cache_cleanup_task, transfer_sync_task,
+        missing_order_detector_task, memory_cache_cleanup_task,
     ]:
         await _cancel_task(task)
 
-    if trading_pair_monitor:
-        await trading_pair_monitor.stop()
+    # ── Stop secondary event loop (cancels all Tier 2/3 tasks) ───────────────
+    logger.info("🛑 Stopping secondary event loop (Tier 2/3 tasks)...")
+    from app.secondary_loop import stop_secondary_loop
+    stop_secondary_loop()
+    logger.info("🛑 Secondary event loop stopped")
 
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache

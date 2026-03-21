@@ -17,7 +17,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database import async_session_maker
+from app.database import async_session_maker as _default_session_maker
 from app.models import (
     Account,
     GoalProgressSnapshot,
@@ -32,18 +32,19 @@ logger = logging.getLogger(__name__)
 RUN_HOUR = 6  # All scheduled reports run at 06:00 UTC
 
 
-async def run_report_scheduler():
+async def run_report_scheduler(session_maker=None):
     """
     Background task that checks for due report schedules.
 
     Runs every 15 minutes after an initial 10-minute startup delay.
     """
+    sm = session_maker or _default_session_maker
     # Wait 10 minutes after startup
     await asyncio.sleep(600)
 
     while True:
         try:
-            async with async_session_maker() as db:
+            async with sm() as db:
                 now = datetime.utcnow()
 
                 # Find enabled schedules that are due

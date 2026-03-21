@@ -17,7 +17,6 @@ from typing import Dict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
 from app.models import Account, Bot, Position
 from app.services.exchange_service import get_exchange_client_for_account
 
@@ -52,6 +51,16 @@ class AutoBuyMonitor:
         self.task = None
         self._account_timers: Dict[int, datetime] = {}  # account_id -> last_check_time
         self._pending_orders: Dict[str, AutoBuyPendingOrder] = {}  # order_id -> order info
+        self._session_maker = None  # injected by secondary_loop startup
+
+    def set_session_maker(self, sm):
+        """Inject a session maker (used when running on the secondary event loop)."""
+        self._session_maker = sm
+
+    def _get_sm(self):
+        """Return the injected session maker, falling back to the default."""
+        from app.database import async_session_maker as _default
+        return self._session_maker or _default
 
     async def start(self):
         """Start the auto-buy monitor"""
@@ -98,7 +107,7 @@ class AutoBuyMonitor:
 
     async def _check_accounts(self):
         """Check which accounts need processing based on their intervals"""
-        async with async_session_maker() as db:
+        async with self._get_sm()() as db:
             # Get all accounts with auto_buy_enabled=True
             query = select(Account).where(Account.auto_buy_enabled.is_(True))
             result = await db.execute(query)
@@ -325,7 +334,7 @@ class AutoBuyMonitor:
         if not self._pending_orders:
             return
 
-        async with async_session_maker() as db:
+        async with self._get_sm()() as db:
             now = datetime.utcnow()
             orders_to_remove = []
 
