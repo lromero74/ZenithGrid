@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.124.0] - 2026-03-21
+
+### Fixed
+- **Safety order chart lines now accurate** — lines previously used wrong config fields and ignored `dca_target_reference`, causing visible SOs at wrong prices. Now mirrors backend calculation exactly: geometric step scale, correct reference price (average/base_order/last_buy), and skips already-filled SOs
+- **Portfolio Management total value includes altcoins** — paper trading accounts with altcoin balances (AMP, IOTX, SOL, etc.) now show the correct total instead of only counting USD/BTC/ETH/USDC
+- **Portfolio Management balance chart shows physical holdings** — live accounts previously showed 99% USD for users who physically hold 99% BTC (the old view showed market-deployment allocation, not actual asset holdings)
+- **Account Value Over Time BTC portion no longer shrinks** — the By Quote Currency chart previously only tracked free BTC balance, which decreases as bots deploy capital into positions. Now tracks aggregate quote value (free balance + open position values), keeping the BTC portion stable as bots work
+- **Admin nav icons corrected** — Users tab now shows a single-person icon; Groups tab shows a multi-person icon
+
 ## [v2.123.1] - 2026-03-15
 
 ### Security
