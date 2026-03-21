@@ -38,6 +38,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["news-tts"])
 
+
+def _get_tts_executor():
+    """Return the dedicated TTS ThreadPoolExecutor from app.state.
+
+    Deferred import avoids the circular import chain:
+    news_tts_router → news_router → main.py.
+    Returns None if executor not set (unit tests) — run_in_executor(None, ...)
+    safely falls back to the default thread pool.
+    """
+    from app.main import app as _app  # noqa: PLC0415 — deferred, safe at request time
+    return getattr(_app.state, "tts_executor", None)
+
+
+def _write_tts_file(article_dir, tts_cache_dir, audio_path, audio_data):
+    """Sync helper: create directory and write TTS audio file.
+
+    Named function (not lambda) so variable capture is explicit and
+    thread-safe when dispatched via run_in_executor.
+    """
+    article_dir.mkdir(parents=True, exist_ok=True)
+    (tts_cache_dir / audio_path).write_bytes(audio_data)
+
+
 # =============================================================================
 # TTS Concurrency Control
 # =============================================================================
@@ -297,7 +320,10 @@ async def _get_or_create_tts(
                 # M1: Skip file read when caller only needs words
                 if not audio_needed:
                     return None, words
-                audio_data = cache_path.read_bytes()
+                loop = asyncio.get_running_loop()
+                audio_data = await loop.run_in_executor(
+                    _get_tts_executor(), cache_path.read_bytes
+                )
                 return audio_data, words
             # File missing — regenerate below
 
@@ -307,11 +333,14 @@ async def _get_or_create_tts(
             disconnect_check=disconnect_check,
         )
 
-        # Save to filesystem
+        # Save to filesystem (offloaded to thread pool — blocking I/O)
         article_dir = TTS_CACHE_DIR / str(article_id)
-        article_dir.mkdir(parents=True, exist_ok=True)
         audio_path = f"{article_id}/{voice}.mp3"
-        (TTS_CACHE_DIR / audio_path).write_bytes(audio_data)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            _get_tts_executor(),
+            _write_tts_file, article_dir, TTS_CACHE_DIR, audio_path, audio_data,
+        )
 
         # Save to DB
         async with async_session_maker() as db:
