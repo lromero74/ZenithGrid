@@ -59,7 +59,7 @@ Tier 2 — Near-real-time (secondary loop, tolerate 1–2s delay):
   ReportScheduler          15m interval
 
 Tier 3 — Batch (secondary loop, can lag minutes):
-  ContentRefreshService    30m / 60m intervals (news, videos)
+  ContentRefreshService    30m / 60m intervals (news, videos) ← MAIN LOOP: uses DB via news_fetch_service
   DomainBlacklistService   weekly
   DebtCeilingMonitor       weekly
   TradingPairMonitor       daily
@@ -81,7 +81,8 @@ Tier 3 — Batch (secondary loop, can lag minutes):
 - **Session maker injection pattern**: Coroutine-style tasks accept `session_maker=None` with `sm = session_maker or _default_session_maker` fallback. Class-based monitors get `set_session_maker(sm)` / `_get_sm()` methods. Backwards-compatible — tests and direct calls still work without injection.
 - **`coin_review_service.py` required threading session_maker through 5 layers**: `run_coin_review_scheduler` → `_get_last_review_timestamp`, `run_weekly_review` → `get_tracked_coins`, `update_coin_statuses` → `get_coinbase_client_from_db`. All now have `session_maker=None` parameter.
 - **`MemoryCacheCleanup` stays on main loop**: It touches in-memory state shared with request handlers (`auto_buy_monitor._account_timers`, `rebalance_monitor._account_timers`, rate-limit dicts). Moving it to the secondary loop would create cross-thread races.
-- **`ContentRefreshService`, `DomainBlacklistService`, `DebtCeilingMonitor` do NOT use `async_session_maker`** (HTTP-only services) — no `set_session_maker()` needed, just `schedule(service.start())`.
+- **`DomainBlacklistService` and `DebtCeilingMonitor` do NOT use `async_session_maker`** (HTTP-only services) — no `set_session_maker()` needed, just `schedule(service.start())`.
+- **`ContentRefreshService` was incorrectly identified as HTTP-only** — it calls `news_fetch_service.fetch_all_news()` and `fetch_all_videos()`, which have 8 `async_session_maker()` call sites. Running it on the secondary loop caused `asyncpg: Future attached to a different loop` errors in production. **Reverted to main loop.** Properly moving it to the secondary loop requires threading `session_maker` through `news_fetch_service` (a large refactor with 8+ functions to update — tracked separately).
 - **Shutdown**: `stop_secondary_loop()` stops the loop which cancels all running Tier 2/3 coroutines. Individual `_cancel_task()` calls for Tier 2/3 removed from `shutdown_event()`. Module-level task globals reduced from 14 to 4 (Tier 1 only).
 - **`build_changelog_cache()` stays synchronous on main startup path**: It runs `git log` (< 1 second), is startup-only, and not a loop — no benefit to moving it.
 

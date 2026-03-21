@@ -558,6 +558,11 @@ async def startup_event():
     memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
     logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
 
+    # ContentRefreshService stays on main loop: news_fetch_service has 8 async_session_maker call
+    # sites that would require threading session_maker through (deferred to a future refactor).
+    await content_refresh_service.start()
+    logger.info("Content refresh service started - news every 30min, videos every 60min")
+
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
@@ -596,9 +601,6 @@ async def startup_event():
 
     # ── TIER 3: Batch tasks on secondary loop ────────────────────────────────
     logger.info("Starting Tier 3 batch jobs (secondary event loop)...")
-
-    schedule(content_refresh_service.start())
-    logger.info("Content refresh service scheduled on secondary loop - news 30min, videos 60min")
 
     schedule(domain_blacklist_service.start())
     logger.info("Domain blacklist service scheduled on secondary loop - refreshing weekly")
@@ -665,7 +667,7 @@ async def shutdown_event():
     # ── Stop Tier 1 monitors (main event loop) ────────────────────────────────
     logger.info("🛑 Stopping Tier 1 monitors...")
 
-    for monitor in [price_monitor, perps_monitor]:
+    for monitor in [price_monitor, content_refresh_service, perps_monitor]:
         if monitor:
             await monitor.stop()
 
