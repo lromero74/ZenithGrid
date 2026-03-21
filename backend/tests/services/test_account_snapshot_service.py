@@ -246,9 +246,12 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=125000.0)
         mock_client.get_current_price = AsyncMock(return_value=130000.0)
-        mock_client.get_all_balances = AsyncMock(return_value={
-            "USD": 50000.0, "USDC": 10000.0, "USDT": 0.0, "BTC": 0.5
-        })
+        # calculate_aggregate_quote_value drives the portions (by-quote-currency view)
+        async def quote_value_side_effect(currency, bypass_cache=False):
+            return {"BTC": 0.5, "USD": 60000.0}.get(currency, 0.0)
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
+            side_effect=quote_value_side_effect
+        )
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -268,7 +271,7 @@ class TestCaptureAccountSnapshot:
         assert len(snaps) == 1
         assert snaps[0].total_value_btc == pytest.approx(2.5)
         assert snaps[0].total_value_usd == pytest.approx(125000.0)
-        # No open positions, so portions = free balances only
+        # Portions come from calculate_aggregate_quote_value
         assert snaps[0].usd_portion_usd == pytest.approx(60000.0)
         assert snaps[0].btc_portion_btc == pytest.approx(0.5)
 
@@ -316,9 +319,9 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
         mock_client.get_current_price = AsyncMock(return_value=100000.0)
-        mock_client.get_all_balances = AsyncMock(return_value={
-            "USD": 50000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.0
-        })
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
+            side_effect=lambda c, bypass_cache=False: {"BTC": 0.0, "USD": 50000.0}.get(c, 0.0)
+        )
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -331,9 +334,9 @@ class TestCaptureAccountSnapshot:
         # Update mock values
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=100000.0)
-        mock_client.get_all_balances = AsyncMock(return_value={
-            "USD": 100000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.0
-        })
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
+            side_effect=lambda c, bypass_cache=False: {"BTC": 0.0, "USD": 100000.0}.get(c, 0.0)
+        )
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -439,6 +442,57 @@ class TestCaptureAccountSnapshot:
         assert len(snaps) == 1
         assert snaps[0].usd_portion_usd is None
         assert snaps[0].btc_portion_btc is None
+
+    @pytest.mark.asyncio
+    async def test_paper_btc_portion_includes_open_position_value(self, db_session):
+        """BTC portion must use calculate_aggregate_quote_value, not just free BTC balance.
+
+        When BTC-quote bots deploy BTC to buy altcoins, the free BTC balance
+        decreases but the open position values make up for it. btc_portion_btc
+        should reflect the aggregate (free BTC + position values), not just
+        the shrinking free balance.
+        """
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id, name="Paper", is_paper=True)
+        await db_session.commit()
+
+        mock_client = AsyncMock()
+        mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=0.5)
+        mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=40000.0)
+        mock_client.get_current_price = AsyncMock(return_value=80000.0)
+        # calculate_aggregate_quote_value returns per-market deployment values:
+        # BTC market: 0.1 free + 0.4 in open ETH-BTC positions = 0.5 BTC total
+        # USD market: $40,000 free USD (no open USD positions)
+        async def quote_value_side_effect(currency, bypass_cache=False):
+            return {"BTC": 0.5, "USD": 40000.0}.get(currency, 0.0)
+        mock_client.calculate_aggregate_quote_value = AsyncMock(
+            side_effect=quote_value_side_effect
+        )
+        # Free BTC balance is only 0.1 (rest is deployed in open positions)
+        mock_client.get_all_balances = AsyncMock(return_value={"BTC": 0.1, "USD": 40000.0})
+
+        with patch(
+            "app.services.account_snapshot_service.get_exchange_client_for_account",
+            new_callable=AsyncMock,
+            return_value=mock_client,
+        ):
+            result = await capture_account_snapshot(db_session, acct)
+
+        assert result is True
+
+        snaps = (await db_session.execute(
+            select(AccountValueSnapshot).where(
+                AccountValueSnapshot.account_id == acct.id
+            )
+        )).scalars().all()
+        assert len(snaps) == 1
+        # btc_portion must be 0.5 (aggregate), NOT 0.1 (just free BTC)
+        assert snaps[0].btc_portion_btc == pytest.approx(0.5), (
+            f"Expected btc_portion_btc=0.5 (aggregate_quote_value), "
+            f"got {snaps[0].btc_portion_btc} (just free BTC balance — bug!)"
+        )
+        # usd_portion must come from calculate_aggregate_quote_value("USD")
+        assert snaps[0].usd_portion_usd == pytest.approx(40000.0)
 
 
 # ---------------------------------------------------------------------------

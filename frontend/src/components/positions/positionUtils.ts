@@ -84,3 +84,63 @@ export const formatQuoteAmount = (amount: number, productId: string) => {
   const { symbol, decimals } = getQuoteCurrency(productId)
   return `${amount.toFixed(decimals)} ${symbol}`
 }
+
+// ─── Safety Order Level Calculation ──────────────────────────────────────────
+// Mirrors backend: indicator_based.py _get_dca_reference_price() +
+// calculate_safety_order_price(). Used by chart to draw accurate SO lines.
+
+export interface SOLevel {
+  soNumber: number      // Absolute SO number (1-based, from start of deal)
+  triggerPrice: number
+}
+
+/**
+ * Calculate remaining unfilled safety order trigger prices for a position.
+ *
+ * Uses strategy_config_snapshot so lines match the FROZEN config at deal open,
+ * not the current bot settings. Respects dca_target_reference, step_scale
+ * (geometric spacing), and skips SOs already filled (trade_count - 1).
+ */
+export function calculateSOLevels(position: Position): SOLevel[] {
+  const cfg = position.strategy_config_snapshot
+  if (!cfg) return []
+
+  const priceDeviation: number = cfg.price_deviation
+  const maxSafetyOrders: number = cfg.max_safety_orders
+  if (!priceDeviation || !maxSafetyOrders) return []
+
+  const stepScale: number = cfg.safety_order_step_scale ?? 1.0
+  const dcaReference: string = cfg.dca_target_reference ?? 'average_price'
+  const direction: string = position.direction ?? 'long'
+
+  // Pick reference price per dca_target_reference config
+  let referencePrice: number
+  if (dcaReference === 'base_order') {
+    referencePrice = position.first_buy_price ?? position.average_buy_price
+  } else if (dcaReference === 'last_buy') {
+    referencePrice = position.last_buy_price ?? position.average_buy_price
+  } else {
+    referencePrice = position.average_buy_price
+  }
+  if (!referencePrice) return []
+
+  // trade_count includes base order; remaining are SO fills
+  const safetyOrdersFilled = Math.max(0, (position.trade_count ?? 1) - 1)
+
+  const levels: SOLevel[] = []
+  for (let soNum = safetyOrdersFilled + 1; soNum <= maxSafetyOrders; soNum++) {
+    let totalDeviation: number
+    if (stepScale === 1.0) {
+      totalDeviation = priceDeviation * soNum
+    } else {
+      totalDeviation = priceDeviation * (Math.pow(stepScale, soNum) - 1) / (stepScale - 1)
+    }
+
+    const triggerPrice = direction === 'long'
+      ? referencePrice * (1 - totalDeviation / 100)
+      : referencePrice * (1 + totalDeviation / 100)
+
+    levels.push({ soNumber: soNum, triggerPrice })
+  }
+  return levels
+}

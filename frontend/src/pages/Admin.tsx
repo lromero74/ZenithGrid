@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react'
-import { Shield, Users, FolderOpen, KeyRound, Heart, ShieldBan } from 'lucide-react'
+import { Shield, User, Users, KeyRound, Heart, ShieldBan } from 'lucide-react'
 import { useIsAdmin } from '../hooks/usePermission'
 import { AdminUsers } from './admin/AdminUsers'
 import { AdminGroups } from './admin/AdminGroups'
@@ -21,8 +21,8 @@ import { AdminSecurity } from './admin/AdminSecurity'
 type AdminTab = 'users' | 'groups' | 'roles' | 'donations' | 'security'
 
 const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'groups', label: 'Groups', icon: FolderOpen },
+  { id: 'users', label: 'Users', icon: User },
+  { id: 'groups', label: 'Groups', icon: Users },
   { id: 'roles', label: 'Roles', icon: KeyRound },
   { id: 'donations', label: 'Donations', icon: Heart },
   { id: 'security', label: 'Security', icon: ShieldBan },

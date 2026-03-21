@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { SELL_FEE_RATE } from './positions/positionUtils'
+import { SELL_FEE_RATE, calculateSOLevels } from './positions/positionUtils'
 
 // Helper to calculate fee-adjusted profit target multiplier
 const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
@@ -177,15 +177,18 @@ export default function TradingViewChartModal({
                   <span className="text-slate-400">Target (+{getTakeProfitPercent(position)}%):</span>
                   <span className="text-green-400 font-semibold">{(position.average_buy_price * getFeeAdjustedProfitMultiplier(getTakeProfitPercent(position)))?.toFixed(8)}</span>
                 </div>
-                {position.bot_config?.safety_order_step_percentage && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-0.5 bg-blue-500"></div>
-                    <span className="text-slate-400">Next SO (-{position.bot_config.safety_order_step_percentage}%):</span>
-                    <span className="text-blue-400 font-semibold">
-                      {(position.average_buy_price * (1 - position.bot_config.safety_order_step_percentage / 100))?.toFixed(8)}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const nextSO = calculateSOLevels(position)[0]
+                  return nextSO ? (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-0.5 bg-blue-500"></div>
+                      <span className="text-slate-400">Next SO{nextSO.soNumber}:</span>
+                      <span className="text-blue-400 font-semibold">
+                        {nextSO.triggerPrice.toFixed(8)}
+                      </span>
+                    </div>
+                  ) : null
+                })()}
               </div>
             )}
           </div>

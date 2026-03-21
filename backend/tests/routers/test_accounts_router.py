@@ -798,11 +798,15 @@ class TestRebalanceStatus:
     async def test_live_account_uses_coinbase(
         self, db_session, test_user, test_account,
     ):
-        """Live (non-paper) accounts should still use Coinbase client."""
+        """Live (non-paper) accounts use Coinbase raw balances for physical holdings display."""
         from app.routers.accounts_router import get_rebalance_status
 
         mock_coinbase = AsyncMock()
-        mock_coinbase.calculate_aggregate_quote_value = AsyncMock(return_value=10000.0)
+        # Raw balance getters (physical holdings)
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=1000.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=0.5)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=2.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=500.0)
         mock_coinbase.get_current_price = AsyncMock(return_value=90000.0)
 
         with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
@@ -814,3 +818,109 @@ class TestRebalanceStatus:
         mock_get.assert_called_once_with(test_account)
         assert result["account_id"] == test_account.id
         assert result["total_value_usd"] > 0
+
+    @pytest.mark.asyncio
+    async def test_live_account_allocation_uses_raw_balances_not_market_deployment(
+        self, db_session, test_user, test_account,
+    ):
+        """Live account chart should show physical asset holdings, not market deployment.
+
+        A user with 2 BTC (some acquired via BTC-USD bots) should see ~100% BTC,
+        NOT 99% USD (the market-deployment view).
+        """
+        from app.routers.accounts_router import get_rebalance_status
+
+        # Simulate: user physically holds 2 BTC, $0 USD, $0 ETH, $0 USDC
+        # BTC price = $80,000 → total = $160,000, 100% BTC
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=2.0)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
+
+        async def mock_price(product_id):
+            prices = {"BTC-USD": 80000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
+            return prices.get(product_id, 0.0)
+        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price)
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=test_account.id, db=db_session, current_user=test_user,
+            )
+
+        # Should show 100% BTC (physical holdings), NOT 99% USD (market deployment)
+        assert result["total_value_usd"] == pytest.approx(160000.0)
+        assert result["current_btc_pct"] == pytest.approx(100.0)
+        assert result["current_usd_pct"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_paper_account_altcoin_total_includes_altcoins(
+        self, db_session, test_user,
+    ):
+        """Paper trading: total_value_usd must include altcoin balances, not just USD/BTC/ETH/USDC."""
+        import json
+        # USD=100, BTC=0.1 @ 50000 = 5000, SOL=10 @ 200 = 2000 → real total = 7100
+        account = Account(
+            id=12, user_id=test_user.id, name="Altcoin Paper",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 100.0, "BTC": 0.1, "SOL": 10.0}),
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        from app.routers.accounts_router import get_rebalance_status
+
+        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices, \
+             patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
+            mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
+            mock_coin_price.return_value = 200.0  # SOL-USD price
+
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        # Without fix: total = 100 + 5000 = 5100 (ignores SOL)
+        # With fix: total = 100 + 5000 + 2000 = 7100
+        assert result["total_value_usd"] == pytest.approx(7100.0), \
+            f"Expected 7100 (includes SOL), got {result['total_value_usd']}"
+        # BTC pct should be ~70.4% of 7100, not 98% of 5100
+        assert result["current_btc_pct"] == pytest.approx(round(5000 / 7100 * 100, 2))
+
+    @pytest.mark.asyncio
+    async def test_paper_account_altcoin_btc_fallback_pricing(
+        self, db_session, test_user,
+    ):
+        """Paper altcoin falls back to BTC-pair pricing when no USD pair exists."""
+        import json
+        # RUNE=100, no RUNE-USD pair but RUNE-BTC=0.000030 @ BTC=50000 → RUNE-USD=1.50
+        account = Account(
+            id=13, user_id=test_user.id, name="Altcoin BTC-pair Paper",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 0.0, "RUNE": 100.0}),
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        from app.routers.accounts_router import get_rebalance_status
+
+        async def coin_price_side_effect(product_id):
+            if product_id == "RUNE-USD":
+                raise Exception("No USD pair")
+            if product_id == "RUNE-BTC":
+                return 0.000030
+            raise Exception(f"Unexpected product: {product_id}")
+
+        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices, \
+             patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
+            mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
+            mock_coin_price.side_effect = coin_price_side_effect
+
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        # RUNE value = 100 * 0.000030 * 50000 = 150 USD
+        assert result["total_value_usd"] == pytest.approx(150.0)
