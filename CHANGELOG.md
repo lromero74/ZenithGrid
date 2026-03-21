@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.7] - 2026-03-21
+
+### Changed
+- **Report and account value reads now use a dedicated connection pool** — analytics queries (report history, goal trends, account value charts, daily activity) are routed to a separate read-only connection pool (`size=4, overflow=2 = 6 max connections`) instead of competing with trading writes for the shared pool (`size=8, overflow=4 = 12 max connections`). Market metrics history queries also use the read pool. No infrastructure change — both pools point at the same database.
+
 ## [v2.125.6] - 2026-03-21
 
 ### Changed

@@ -256,7 +256,7 @@ class TestGetMetricHistoryData:
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "app.services.market_metrics_service.async_session_maker",
+            "app.services.market_metrics_service.read_async_session_maker",
             return_value=mock_db,
         ), patch(
             "app.services.market_metrics_service.prune_old_snapshots",
@@ -288,7 +288,7 @@ class TestGetMetricHistoryData:
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "app.services.market_metrics_service.async_session_maker",
+            "app.services.market_metrics_service.read_async_session_maker",
             return_value=mock_db,
         ), patch(
             "app.services.market_metrics_service.prune_old_snapshots",
@@ -310,7 +310,7 @@ class TestGetMetricHistoryData:
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "app.services.market_metrics_service.async_session_maker",
+            "app.services.market_metrics_service.read_async_session_maker",
             return_value=mock_db,
         ):
             result = await get_metric_history_data("hash_rate", days=7, max_points=100)

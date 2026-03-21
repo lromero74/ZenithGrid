@@ -50,6 +50,31 @@ async_session_maker = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False, autoflush=False  # Disable autoflush to avoid greenlet issues
 )
 
+# Read-only connection pool for analytics queries.
+# Separate pool budget (size=4, overflow=2) so aggregate report/account-value
+# queries never compete with trading writes for connections.
+# Points at the SAME database — zero-infrastructure change.
+# Medium-term: point settings.read_database_url at a streaming replica here.
+_read_engine_kwargs = {
+    "echo": False,
+    "pool_pre_ping": True,
+    "pool_recycle": 3600,
+}
+
+if settings.is_postgres:
+    _read_engine_kwargs["pool_size"] = 4
+    _read_engine_kwargs["max_overflow"] = 2
+    _read_engine_kwargs["pool_timeout"] = 10
+    _read_engine_kwargs["execution_options"] = {"postgresql_readonly": True}
+else:
+    _read_engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+read_engine = create_async_engine(settings.database_url, **_read_engine_kwargs)
+
+read_async_session_maker = async_sessionmaker(
+    read_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+)
+
 
 # Sync engine for non-async contexts (balance API, settings lookup)
 _sync_engine = None
@@ -69,6 +94,18 @@ def get_sync_engine():
 
 async def get_db():
     async with async_session_maker() as session:
+        yield session
+
+
+async def get_read_db():
+    """Read-only DB session dependency for analytics endpoints.
+
+    Routes to the separate read connection pool (size=4, overflow=2).
+    On PostgreSQL, sessions carry the postgresql_readonly execution option,
+    preventing accidental writes. On SQLite (tests), the option is silently
+    ignored — sessions behave identically to get_db() sessions.
+    """
+    async with read_async_session_maker() as session:
         yield session
 
 

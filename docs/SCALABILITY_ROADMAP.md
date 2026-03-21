@@ -92,7 +92,7 @@ Tier 3 — Batch (thread pool worker, can lag minutes):
 
 ---
 
-### 1.3 — Add a read replica (or separate connection pool) for analytics
+### 1.3 — Add a read replica (or separate connection pool) for analytics ✅ DONE (v2.125.7)
 
 **Problem:** Report generation, goal snapshots, and market metrics do heavy aggregate queries (`SUM`, `GROUP BY`, window functions) against the same connection pool that handles order fills. On PostgreSQL this causes query queue contention.
 
@@ -100,8 +100,16 @@ Tier 3 — Batch (thread pool worker, can lag minutes):
 
 **Fix (medium term):** Set up a PostgreSQL streaming replica (pg_basebackup + replication slot). Route `ReportDataService`, `GoalSnapshotService`, `MarketMetricsService` to the replica URL.
 
-**Impact:** Trading writes no longer compete with analytics reads for connections.
-**Effort:** Low for the pool split, medium for actual replica setup.
+**Implementation notes (learned during execution):**
+- `read_engine` + `read_async_session_maker` + `get_read_db()` added to `database.py`. Write pool: `size=8, overflow=4` (12 max). Read pool: `size=4, overflow=2` (6 max). Total 18 vs `max_connections=25` — leaves 7 for sync engine, psql admin, migrations.
+- 8 GET endpoints in `reports_router.py` and 3 GET endpoints in `account_value_router.py` switched to `Depends(get_read_db)`. Write endpoints (POST/PUT/DELETE) unchanged.
+- `market_metrics_service.get_metric_history_data()` now uses `read_async_session_maker`. `record_metric_snapshot()` and `prune_old_snapshots()` correctly stay on write pool — **the PRP was wrong to classify them as reads**; they do INSERT/DELETE + commit.
+- `report_scheduler.py` NOT changed: `generate_report_for_schedule()` uses a single session for both reads (fetching goals, snapshots, trend data) AND writes (creating Report row, updating schedule timestamps). Splitting would require refactoring the entire function signature and all its callers. Deferred.
+- FastAPI's `Dependant.dependencies` returns `Dependant` objects directly (not `DependencyInfo` wrappers) in current FastAPI versions. Use `dep.call` and `dep.dependencies` for tree traversal.
+- `get_current_user` itself uses `Depends(get_db)` internally, so `get_db` appears as a transitive dependency of EVERY endpoint. Dependency tests must check only direct (top-level) dependencies to avoid false positives.
+
+**Impact:** Analytics read queries no longer compete with trading writes for the 12-connection write pool.
+**Effort:** Low — 5 files changed, 22 new tests.
 
 ---
 

@@ -23,7 +23,7 @@ import aiohttp
 from app.exceptions import ExchangeUnavailableError
 from sqlalchemy import delete, select
 
-from app.database import async_session_maker
+from app.database import async_session_maker, read_async_session_maker
 from app.indicator_calculator import IndicatorCalculator
 from app.models import MetricSnapshot
 from app.news_data import (
@@ -801,7 +801,7 @@ async def get_metric_history_data(
 ) -> Dict[str, Any]:
     """Fetch and downsample metric history for sparkline charts."""
     cutoff = datetime.utcnow() - timedelta(days=days)
-    async with async_session_maker() as db:
+    async with read_async_session_maker() as db:
         result = await db.execute(
             select(MetricSnapshot.value, MetricSnapshot.recorded_at)
             .where(MetricSnapshot.metric_name == metric_name)

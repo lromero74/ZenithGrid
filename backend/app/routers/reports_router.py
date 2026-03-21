@@ -19,7 +19,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_user, require_permission, Perm
-from app.database import get_db
+from app.database import get_db, get_read_db
 from app.models import (
     ExpenseItem,
     GoalProgressSnapshot,
@@ -407,7 +407,7 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
 @router.get("/goals")
 async def list_goals(
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all goals for the current user, optionally filtered by account."""
@@ -557,7 +557,7 @@ async def get_goal_trend(
     goal_id: int,
     from_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get trend line data for a specific goal."""
@@ -627,7 +627,7 @@ async def get_goal_trend(
 
 @router.get("/expense-categories")
 async def get_expense_categories(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Get default + user-defined expense categories."""
@@ -638,7 +638,7 @@ async def get_expense_categories(
 @router.get("/goals/{goal_id}/expenses")
 async def list_expense_items(
     goal_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all expense items for a goal."""
@@ -843,7 +843,7 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
 @router.get("/schedules")
 async def list_schedules(
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all report schedules for the current user, optionally filtered by account."""
@@ -915,7 +915,7 @@ async def list_reports(
     offset: int = Query(0, ge=0),
     schedule_id: Optional[int] = Query(None),
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """List generated reports (paginated), optionally filtered by account."""
@@ -952,7 +952,7 @@ async def list_reports(
 @router.get("/{report_id}")
 async def get_report(
     report_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get a single report with HTML content for in-app viewing."""
@@ -1019,7 +1019,7 @@ async def bulk_delete_reports(
 @router.get("/{report_id}/pdf")
 async def download_report_pdf(
     report_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ):
     """Download a report as PDF."""

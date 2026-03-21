@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError
 
-from app.database import get_db
+from app.database import get_db, get_read_db
 from app.auth.dependencies import get_current_user
 from app.models import User
 from app.services import account_snapshot_service
@@ -27,7 +27,7 @@ async def get_account_value_history(
     days: int = Query(365, ge=1, le=1825, description="Number of days to fetch (max 5 years)"),
     include_paper_trading: bool = Query(False, description="Include paper trading accounts (default: false)"),
     account_id: int = Query(None, description="Specific account ID (omit for all accounts)"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
@@ -51,7 +51,7 @@ async def get_account_value_history(
 @router.get("/latest")
 async def get_latest_snapshot(
     include_paper_trading: bool = Query(False, description="Include paper trading accounts (default: false)"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
@@ -89,7 +89,7 @@ async def get_daily_activity(
     days: int = Query(365, ge=1, le=1825, description="Number of days to fetch (max 5 years)"),
     include_paper_trading: bool = Query(False, description="Include paper trading accounts"),
     account_id: int = Query(None, description="Specific account ID (omit for all accounts)"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
