@@ -30,10 +30,12 @@ import app.services.ban_monitor as ban_mod
 
 @pytest.fixture(autouse=True)
 def reset_snapshot():
-    """Reset the global snapshot before each test."""
+    """Reset the global snapshot and geo cache before each test."""
     ban_mod._snapshot = BanSnapshot()
+    ban_mod._geo_cache.clear()
     yield
     ban_mod._snapshot = BanSnapshot()
+    ban_mod._geo_cache.clear()
 
 
 # ===========================================================================
@@ -173,6 +175,89 @@ class TestLookupIpGeo:
             result = _lookup_ip_geo("1.2.3.4")
 
         assert result == {}
+
+
+# ===========================================================================
+# _lookup_ip_geo — geo cache behaviour
+# ===========================================================================
+
+
+class TestLookupIpGeoCache:
+    """Tests for the _geo_cache caching layer in _lookup_ip_geo()."""
+
+    def _make_urlopen_mock(self, payload: dict):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(payload).encode()
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        return mock_resp
+
+    def test_second_call_uses_cache_not_network(self):
+        """Happy path: second lookup for same IP returns cached result without hitting the network."""
+        payload = {"city": "London", "country": "GB", "org": "AS5089 Virgin Media", "region": "England", "hostname": None}
+
+        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
+            result1 = _lookup_ip_geo("10.0.0.1")
+            result2 = _lookup_ip_geo("10.0.0.1")
+
+        assert mock_open.call_count == 1  # Only one HTTP call despite two lookups
+        assert result1 == result2
+        assert result1["country"] == "GB"
+
+    def test_different_ips_each_make_a_network_call(self):
+        """Edge case: distinct IPs are each looked up once via the network."""
+        payload = {"city": "X", "country": "US", "org": "AS1 Test", "region": "CA", "hostname": None}
+
+        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
+            _lookup_ip_geo("10.0.0.1")
+            _lookup_ip_geo("10.0.0.2")
+            _lookup_ip_geo("10.0.0.1")  # cache hit — no extra call
+
+        assert mock_open.call_count == 2
+
+    def test_cache_stores_geo_data_in_module_dict(self):
+        """Happy path: successful lookup is stored in the module-level _geo_cache."""
+        payload = {"city": "Paris", "country": "FR", "org": "AS3215 Orange", "region": "IDF", "hostname": "host.fr"}
+
+        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)):
+            _lookup_ip_geo("192.168.1.1")
+
+        assert "192.168.1.1" in ban_mod._geo_cache
+        assert ban_mod._geo_cache["192.168.1.1"]["country"] == "FR"
+
+    def test_failed_lookup_not_cached(self):
+        """Failure: network error returns empty dict and is NOT stored in cache (retried next time)."""
+        with patch('urllib.request.urlopen', side_effect=Exception("Rate limited")) as mock_open:
+            result1 = _lookup_ip_geo("10.0.0.5")
+            result2 = _lookup_ip_geo("10.0.0.5")
+
+        assert result1 == {}
+        assert result2 == {}
+        assert mock_open.call_count == 2  # Both calls hit the network (no cache)
+        assert "10.0.0.5" not in ban_mod._geo_cache
+
+    def test_cache_prevents_rate_limit_exhaustion_on_bulk_refresh(self):
+        """Regression: many banned IPs refreshed repeatedly must not re-hit ipinfo.io.
+
+        This guards against the bug where Country/ISP showed 'Unknown' because
+        ipinfo.io was rate-limited on every manual refresh cycle.
+        """
+        payload = {"city": "Tokyo", "country": "JP", "org": "AS4713 NTT", "region": "TK", "hostname": None}
+        ips = [f"10.0.{i}.{j}" for i in range(5) for j in range(10)]  # 50 IPs
+
+        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
+            # First refresh: all 50 IPs looked up
+            for ip in ips:
+                _lookup_ip_geo(ip)
+            first_run_calls = mock_open.call_count
+
+            # Second refresh (simulate monitor re-run): zero new network calls
+            for ip in ips:
+                _lookup_ip_geo(ip)
+            second_run_calls = mock_open.call_count
+
+        assert first_run_calls == 50
+        assert second_run_calls == 50  # No additional calls — all served from cache
 
 
 # ===========================================================================
