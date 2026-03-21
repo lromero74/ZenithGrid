@@ -21,9 +21,13 @@ _engine_kwargs = {
 }
 
 if settings.is_postgres:
-    # PostgreSQL connection pool tuning for t2.micro (max_connections=25)
-    _engine_kwargs["pool_size"] = 5
-    _engine_kwargs["max_overflow"] = 3
+    # PostgreSQL connection pool tuning for t2.micro (max_connections=25).
+    # size=8, overflow=4 → max 12 async connections, leaving headroom for
+    # the sync engine and other processes. Raised from 5/3 after pool
+    # exhaustion caused HTTP timeouts when the monitor ran many pairs.
+    _engine_kwargs["pool_size"] = 8
+    _engine_kwargs["max_overflow"] = 4
+    _engine_kwargs["pool_timeout"] = 10  # Fail fast instead of hanging 30s
 else:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 
