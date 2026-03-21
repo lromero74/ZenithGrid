@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.6] - 2026-03-21
+
+### Changed
+- **Banned IP geo lookups now run concurrently** — when the ban monitor refreshes and has many uncached IPs, geolocation requests (country, ISP, city) are now fired in parallel (up to 10 at a time) instead of one at a time. This makes the first load after a restart roughly 10× faster. Subsequent refreshes are instant due to the existing per-process cache.
+
 ## [v2.125.5] - 2026-03-21
 
 ### Changed

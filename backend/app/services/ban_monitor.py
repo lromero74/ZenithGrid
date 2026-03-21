@@ -10,9 +10,12 @@ import logging
 import subprocess
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
+
+MAX_GEO_WORKERS = 10
 
 
 @dataclass
@@ -85,6 +88,42 @@ def _lookup_ip_geo(ip: str) -> dict:
         return {}
 
 
+def _lookup_ip_geo_bulk(ips: list[str]) -> dict[str, dict]:
+    """Look up geolocation for a list of IPs concurrently.
+
+    Already-cached IPs are served from _geo_cache without any network call.
+    Up to MAX_GEO_WORKERS lookups run in parallel. Each IP's result is
+    independent — a failure for one IP returns {} for it and does not
+    affect others. Failed lookups are NOT stored in the cache.
+
+    Returns a mapping of {ip: geo_dict} for all IPs in the input list.
+    """
+    unique_ips = list(dict.fromkeys(ips))  # Deduplicate, preserve order
+    result: dict[str, dict] = {}
+
+    uncached = []
+    for ip in unique_ips:
+        if ip in _geo_cache:
+            result[ip] = _geo_cache[ip]
+        else:
+            uncached.append(ip)
+
+    if not uncached:
+        return result
+
+    with ThreadPoolExecutor(max_workers=MAX_GEO_WORKERS, thread_name_prefix="geo-lookup") as executor:
+        future_to_ip = {executor.submit(_lookup_ip_geo, ip): ip for ip in uncached}
+        for future in as_completed(future_to_ip):
+            ip = future_to_ip[future]
+            try:
+                result[ip] = future.result()
+            except Exception as e:
+                logger.debug(f"Bulk geo lookup exception for {ip}: {e}")
+                result[ip] = {}
+
+    return result
+
+
 def _query_fail2ban() -> BanSnapshot:
     """Query fail2ban-client for current ban status. Runs synchronously (subprocess)."""
     snapshot = BanSnapshot(last_updated=time.time())
@@ -105,7 +144,8 @@ def _query_fail2ban() -> BanSnapshot:
             if "Jail list:" in line:
                 jails = [j.strip() for j in line.split(":", 1)[1].split(",") if j.strip()]
 
-        # Query each jail
+        # Pass 1: query each jail, collect (ip, jail) pairs and counts
+        raw_bans: list[tuple[str, str]] = []  # (ip, jail)
         for jail in jails:
             jail_result = subprocess.run(
                 ["sudo", "fail2ban-client", "status", jail],
@@ -132,19 +172,24 @@ def _query_fail2ban() -> BanSnapshot:
                     except ValueError:
                         pass
                 elif "Banned IP list:" in line:
-                    ips = line.split(":", 1)[1].strip().split()
-                    for ip in ips:
-                        ip = ip.strip()
-                        if ip:
-                            geo = _lookup_ip_geo(ip)
-                            snapshot.banned_ips.append(BannedIP(
-                                ip=ip, jail=jail,
-                                city=geo.get("city"),
-                                region=geo.get("region"),
-                                country=geo.get("country"),
-                                org=geo.get("org"),
-                                hostname=geo.get("hostname"),
-                            ))
+                    for ip in line.split(":", 1)[1].strip().split():
+                        if ip.strip():
+                            raw_bans.append((ip.strip(), jail))
+
+        # Pass 2: bulk geo lookup for all unique IPs (concurrent, cache-aware)
+        all_ips = [ip for ip, _ in raw_bans]
+        geo_map = _lookup_ip_geo_bulk(all_ips)
+
+        for ip, jail in raw_bans:
+            geo = geo_map.get(ip, {})
+            snapshot.banned_ips.append(BannedIP(
+                ip=ip, jail=jail,
+                city=geo.get("city"),
+                region=geo.get("region"),
+                country=geo.get("country"),
+                org=geo.get("org"),
+                hostname=geo.get("hostname"),
+            ))
 
     except subprocess.TimeoutExpired:
         logger.warning("fail2ban-client timed out")

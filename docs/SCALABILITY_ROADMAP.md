@@ -105,14 +105,22 @@ Tier 3 — Batch (thread pool worker, can lag minutes):
 
 ---
 
-### 1.4 — Async geo lookup for ban monitor (burst improvement)
+### 1.4 — Async geo lookup for ban monitor (burst improvement) ✅ DONE (v2.125.6)
 
 **Problem:** `ban_monitor._query_fail2ban()` calls `_lookup_ip_geo()` synchronously in a thread pool executor — one HTTP request at a time. With 200+ banned IPs, the initial refresh after a restart takes minutes (even with the cache fix in v2.125.4).
 
-**Fix:** Convert `_query_fail2ban` to collect all IPs first, then use `asyncio.gather()` with `aiohttp` to fire all uncached geo lookups concurrently (respecting a semaphore of ~10 concurrent requests to be polite to ipinfo.io). The geo cache added in v2.125.4 already prevents repeated lookups — this just makes the first pass fast.
+**Fix:** Two-pass design in `_query_fail2ban`: Pass 1 collects all (ip, jail) pairs from all jails; Pass 2 calls `_lookup_ip_geo_bulk()` for all unique IPs concurrently (`ThreadPoolExecutor(max_workers=10)` + `as_completed()`). The geo cache from v2.125.4 ensures warm runs are instant; this makes the cold start fast too.
 
-**Impact:** Ban monitor refresh goes from minutes to seconds on first load.
-**Effort:** Low — isolated change in `ban_monitor.py`.
+**Implementation notes (learned during execution):**
+- `_query_fail2ban` already runs inside `run_in_executor(None, ...)` (it's a sync function called from an async context) — so `asyncio.gather()` + `aiohttp` would NOT work. Using `concurrent.futures.ThreadPoolExecutor` + `as_completed` is the correct approach for threading within a thread.
+- `aiohttp` not needed — stdlib `urllib.request` works fine in a thread pool. No new dependencies added.
+- `MAX_GEO_WORKERS = 10` constant at module level for easy tuning.
+- Deduplicate IPs with `dict.fromkeys()` (preserves order, unlike `set()`).
+- Cache short-circuit: cached IPs are resolved before the executor starts — zero overhead on warm runs.
+- Failed lookups return `{}` and are not cached, so they'll retry next run.
+
+**Impact:** Ban monitor first-pass refresh goes from O(n) × 500ms to O(ceil(n/10)) × 500ms — ~10× faster for 200 IPs.
+**Effort:** Low — isolated change in `ban_monitor.py`, 8 new tests.
 
 ---
 
