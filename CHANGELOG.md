@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.2] - 2026-03-21
+
+### Added
+- **Banned IP list: search, sort, and group** — search box filters across IP, country, org, jail, city, and hostname in real time and shows a result count. Column headers are clickable to sort asc/desc. Group by Country or Jail adds section headers with member counts. All controls operate across the full dataset before pagination.
+
 ## [v2.125.1] - 2026-03-21
 
 ### Fixed

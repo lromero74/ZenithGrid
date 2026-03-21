@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, X, AlertTriangle } from 'lucide-react'
+import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, X, AlertTriangle, Search, ChevronsUpDown, ChevronUp, ChevronDown, Layers } from 'lucide-react'
 import { adminApi, type BanSnapshot } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 
@@ -14,6 +14,9 @@ const PAGE_SIZE = 10
 
 type SubTab = 'bans' | 'report'
 type ChartMode = 'bar' | 'pie'
+type SortField = 'ip' | 'country' | 'org' | 'jail'
+type SortDir = 'asc' | 'desc'
+type GroupBy = 'none' | 'country' | 'jail'
 
 export function AdminSecurity() {
   const [data, setData] = useState<BanSnapshot | null>(null)
@@ -22,6 +25,10 @@ export function AdminSecurity() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [subTab, setSubTab] = useState<SubTab>('bans')
+  const [search, setSearch] = useState('')
+  const [sortField, setSortField] = useState<SortField>('ip')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [chartMode, setChartMode] = useState<ChartMode>('bar')
   const [detailIp, setDetailIp] = useState<string | null>(null)
   const [detailData, setDetailData] = useState<{ ip: string; total_hits: number; categories: Record<string, number>; sample_requests: string[] } | null>(null)
@@ -83,13 +90,49 @@ export function AdminSecurity() {
 
   useEffect(() => { fetchData() }, [])
 
-  // Pagination
-  const totalPages = data ? Math.ceil(data.banned_ips.length / PAGE_SIZE) : 0
-  const pagedBans = useMemo(() => {
+  // Filtered + sorted list (pre-pagination)
+  const filteredBans = useMemo(() => {
     if (!data) return []
+    const q = search.trim().toLowerCase()
+    let list = q
+      ? data.banned_ips.filter(b =>
+          b.ip.includes(q) ||
+          (b.country || '').toLowerCase().includes(q) ||
+          (b.org || '').toLowerCase().includes(q) ||
+          (b.jail || '').toLowerCase().includes(q) ||
+          (b.city || '').toLowerCase().includes(q) ||
+          (b.hostname || '').toLowerCase().includes(q)
+        )
+      : [...data.banned_ips]
+
+    list.sort((a, b) => {
+      let av = '', bv = ''
+      if (sortField === 'ip') { av = a.ip; bv = b.ip }
+      else if (sortField === 'country') { av = a.country || ''; bv = b.country || '' }
+      else if (sortField === 'org') { av = a.org || ''; bv = b.org || '' }
+      else if (sortField === 'jail') { av = a.jail; bv = b.jail }
+      const cmp = av.localeCompare(bv)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [data, search, sortField, sortDir])
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('asc') }
+    setPage(0)
+  }
+
+  // Reset page when search/sort/group changes
+  const handleSearch = (v: string) => { setSearch(v); setPage(0) }
+  const handleGroupBy = (v: GroupBy) => { setGroupBy(v); setPage(0) }
+
+  // Pagination (over filtered list)
+  const totalPages = Math.ceil(filteredBans.length / PAGE_SIZE)
+  const pagedBans = useMemo(() => {
     const start = page * PAGE_SIZE
-    return data.banned_ips.slice(start, start + PAGE_SIZE)
-  }, [data, page])
+    return filteredBans.slice(start, start + PAGE_SIZE)
+  }, [filteredBans, page])
 
   // Report data
   const jailCounts = useMemo(() => {
@@ -186,22 +229,79 @@ export function AdminSecurity() {
       {/* ── Bans Tab ─────────────────────────────────────────── */}
       {subTab === 'bans' && data && (
         <>
+          {/* Search + Group toolbar */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => handleSearch(e.target.value)}
+                placeholder="Search IP, country, org, jail…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {search && (
+                <button onClick={() => handleSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Group:</span>
+              {(['none', 'country', 'jail'] as GroupBy[]).map(g => (
+                <button
+                  key={g}
+                  onClick={() => handleGroupBy(g)}
+                  className={`px-2 py-1 rounded transition-colors ${groupBy === g ? 'bg-blue-600 text-white' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                >
+                  {g === 'none' ? 'None' : g === 'country' ? 'Country' : 'Jail'}
+                </button>
+              ))}
+            </div>
+            {search && (
+              <span className="text-xs text-slate-500">{filteredBans.length} of {data.banned_ips.length}</span>
+            )}
+          </div>
+
           {pagedBans.length > 0 ? (
             <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
               {/* Desktop table */}
               <table className="w-full text-sm hidden sm:table">
                 <thead>
                   <tr className="border-b border-slate-700 text-slate-400">
-                    <th className="text-left p-3">IP Address</th>
-                    <th className="text-left p-3">Location</th>
-                    <th className="text-left p-3">ISP / Org</th>
-                    <th className="text-left p-3">Jail</th>
+                    {([['ip', 'IP Address'], ['country', 'Location'], ['org', 'ISP / Org'], ['jail', 'Jail']] as [SortField, string][]).map(([field, label]) => (
+                      <th key={field} className="text-left p-3">
+                        <button onClick={() => handleSort(field)} className="flex items-center gap-1 hover:text-white transition-colors">
+                          {label}
+                          {sortField === field
+                            ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+                            : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+                        </button>
+                      </th>
+                    ))}
                     <th className="text-right p-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedBans.map((ban, i) => (
-                    <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                  {pagedBans.map((ban, i) => {
+                    const groupKey = groupBy === 'country' ? (ban.country || 'Unknown') : groupBy === 'jail' ? ban.jail : null
+                    const prevBan = pagedBans[i - 1]
+                    const prevKey = prevBan ? (groupBy === 'country' ? (prevBan.country || 'Unknown') : groupBy === 'jail' ? prevBan.jail : null) : null
+                    const showHeader = groupKey !== null && groupKey !== prevKey
+                    const groupCount = groupKey !== null
+                      ? filteredBans.filter(b => (groupBy === 'country' ? (b.country || 'Unknown') : b.jail) === groupKey).length
+                      : 0
+                    return <>
+                      {showHeader && (
+                        <tr key={`g-${groupKey}`} className="bg-slate-700/40">
+                          <td colSpan={5} className="px-3 py-1.5 text-xs font-semibold text-slate-300 flex items-center gap-2">
+                            {groupKey}
+                            <span className="text-slate-500 font-normal">({groupCount})</span>
+                          </td>
+                        </tr>
+                      )}
+                      <tr key={ban.ip} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                       <td className="p-3">
                         <button onClick={() => openDetail(ban.ip)} className="text-left hover:underline">
                           <code className="text-red-400 text-xs font-mono">{ban.ip}</code>
@@ -234,7 +334,8 @@ export function AdminSecurity() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    </>
+                  })}
                 </tbody>
               </table>
 
@@ -271,7 +372,7 @@ export function AdminSecurity() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, data.banned_ips.length)} of {data.banned_ips.length}
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredBans.length)} of {filteredBans.length}
               </span>
               <div className="flex items-center gap-1">
                 <button
