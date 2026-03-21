@@ -281,17 +281,30 @@ export function AdminSecurity() {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPage(i)}
-                    className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
-                      i === page ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {(() => {
+                  // Windowed pagination: first, last, current±2, with … gaps
+                  const slots: (number | '…')[] = []
+                  const add = (n: number) => { if (!slots.includes(n)) slots.push(n) }
+                  add(0); add(totalPages - 1)
+                  for (let i = Math.max(0, page - 2); i <= Math.min(totalPages - 1, page + 2); i++) add(i)
+                  slots.sort((a, b) => (a as number) - (b as number))
+                  const withEllipsis: (number | '…')[] = []
+                  slots.forEach((s, idx) => {
+                    if (idx > 0 && (s as number) - (slots[idx - 1] as number) > 1) withEllipsis.push('…')
+                    withEllipsis.push(s)
+                  })
+                  return withEllipsis.map((s, idx) =>
+                    s === '…'
+                      ? <span key={`e${idx}`} className="w-7 h-7 flex items-center justify-center text-xs text-slate-500">…</span>
+                      : <button
+                          key={s}
+                          onClick={() => setPage(s as number)}
+                          className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
+                            s === page ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                          }`}
+                        >{(s as number) + 1}</button>
+                  )
+                })()}
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
