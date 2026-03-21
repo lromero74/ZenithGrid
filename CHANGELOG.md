@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.5] - 2026-03-21
+
+### Changed
+- **TTS file I/O offloaded to a dedicated thread pool** — reading and writing audio files (MP3 cache) no longer blocks the async event loop. A bounded 2-worker `ThreadPoolExecutor` handles all disk operations, preventing slow file writes from stalling trading API responses or bot monitoring. Note: audio generation itself (`edge_tts`) was already async and unaffected.
+
 ## [v2.125.4] - 2026-03-21
 
 ### Fixed

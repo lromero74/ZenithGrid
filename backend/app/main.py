@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import logging
 from pathlib import Path
 from typing import Optional
@@ -79,6 +80,13 @@ logger = logging.getLogger(__name__)
 
 _brand = get_brand()
 app = FastAPI(title=f"{_brand['shortName']} Trading Platform", docs_url=None, redoc_url=None, openapi_url=None)
+
+# TTS thread pool — created at module level (no async dependency) so it is
+# available in tests without triggering startup_event(). max_workers=2 keeps
+# memory bounded on t2.micro; edge_tts itself is already async.
+app.state.tts_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="tts-worker"
+)
 
 # CORS middleware
 app.add_middleware(
@@ -629,6 +637,8 @@ async def startup_event():
     transfer_sync_task = asyncio.create_task(run_transfer_sync())
     logger.info("Transfer sync started - syncing deposits/withdrawals daily")
 
+    logger.info("TTS thread pool ready (max_workers=2)")
+
     logger.info("Startup complete!")
     logger.info("========================================")
 
@@ -684,6 +694,11 @@ async def shutdown_event():
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache
     clear_exchange_client_cache()
+
+    # Shut down TTS thread pool — wait for any in-flight file I/O to complete
+    if hasattr(app.state, "tts_executor"):
+        app.state.tts_executor.shutdown(wait=True)
+        logger.info("TTS thread pool shut down")
 
     logger.info("🛑 Monitors stopped - shutdown complete")
 
