@@ -1058,13 +1058,18 @@ async def get_public_prices() -> dict:
     return prices
 
 
-def _compute_allocation(balances: dict, prices: dict) -> dict:
-    """Compute USD-denominated allocation percentages from balances and prices."""
+def _compute_allocation(balances: dict, prices: dict, total_override: float | None = None) -> dict:
+    """Compute USD-denominated allocation percentages from balances and prices.
+
+    total_override: if provided, use this as the total instead of summing the
+    four standard currencies. Used when the account holds altcoins that are
+    priced separately.
+    """
     usd_value = balances.get("USD", 0.0)
     btc_value = balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0)
     eth_value = balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
     usdc_value = balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
-    total = usd_value + btc_value + eth_value + usdc_value
+    total = total_override if total_override is not None else (usd_value + btc_value + eth_value + usdc_value)
 
     if total > 0:
         usd_pct = round(usd_value / total * 100, 2)
@@ -1107,19 +1112,52 @@ async def get_rebalance_status(
             # Paper trading: read balances from JSON, use public prices
             balances = json.loads(account.paper_balances) if account.paper_balances else {}
             prices = await get_public_prices()
-            alloc = _compute_allocation(balances, prices)
+
+            # Compute value of altcoins not covered by get_public_prices (USD/BTC/ETH/USDC)
+            from app.coinbase_api import public_market_data
+            known_currencies = {"USD", "BTC", "ETH", "USDC", "USDT"}
+            btc_usd = prices.get("BTC-USD", 0.0)
+            standard_total = (
+                balances.get("USD", 0.0)
+                + balances.get("BTC", 0.0) * btc_usd
+                + balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
+                + balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
+                + balances.get("USDT", 0.0)
+            )
+            altcoin_total = 0.0
+            for currency, amount in balances.items():
+                if currency not in known_currencies and amount > 0:
+                    try:
+                        coin_price = float(await public_market_data.get_current_price(f"{currency}-USD"))
+                        altcoin_total += amount * coin_price
+                    except Exception:
+                        try:
+                            btc_price = float(await public_market_data.get_current_price(f"{currency}-BTC"))
+                            altcoin_total += amount * btc_price * btc_usd
+                        except Exception:
+                            pass
+
+            real_total = standard_total + altcoin_total
+            alloc = _compute_allocation(balances, prices, total_override=real_total if real_total > 0 else None)
         else:
-            # Live account: use Coinbase client with aggregate values
+            # Live account: use raw currency balances (physical holdings).
+            # calculate_aggregate_quote_value gives a "market deployment" view
+            # (deducting base assets from other-market bots) which confusingly
+            # shows 99% USD for users who physically hold 99% BTC. Physical
+            # holdings are what users expect to see in the allocation chart.
             coinbase = await get_coinbase_for_account(account)
 
-            aggregate_values = {}
-            for currency in ("USD", "BTC", "ETH", "USDC"):
+            raw_balances = {}
+            for currency, getter in (
+                ("USD", coinbase.get_usd_balance),
+                ("BTC", coinbase.get_btc_balance),
+                ("ETH", coinbase.get_eth_balance),
+                ("USDC", coinbase.get_usdc_balance),
+            ):
                 try:
-                    aggregate_values[currency] = float(
-                        await coinbase.calculate_aggregate_quote_value(currency)
-                    )
+                    raw_balances[currency] = float(await getter())
                 except Exception:
-                    aggregate_values[currency] = 0.0
+                    raw_balances[currency] = 0.0
 
             prices = {}
             for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
@@ -1128,7 +1166,7 @@ async def get_rebalance_status(
                 except Exception:
                     prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
 
-            alloc = _compute_allocation(aggregate_values, prices)
+            alloc = _compute_allocation(raw_balances, prices)
 
         t_usd = account.rebalance_target_usd_pct
         t_btc = account.rebalance_target_btc_pct

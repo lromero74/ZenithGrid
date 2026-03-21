@@ -1,7 +1,7 @@
 import { IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
 import type { Position } from '../../../types'
 import type { CandleData } from '../../../utils/indicators/types'
-import { getFeeAdjustedProfitMultiplier } from '../../positions/positionUtils'
+import { getFeeAdjustedProfitMultiplier, calculateSOLevels } from '../../positions/positionUtils'
 
 /**
  * Renders position reference lines on the chart
@@ -66,54 +66,23 @@ export function addPositionLines(
   targetSeries.setData(targetData)
   positionLinesRef.current.push(targetSeries)
 
-  // Safety order lines (blue) if configured
-  if (position.bot_config?.safety_order_step_percentage && position.bot_config?.max_safety_orders) {
-    const stepPercentage = position.bot_config.safety_order_step_percentage
-    const maxSOs = Math.min(position.bot_config.max_safety_orders, 5) // Limit to 5 lines
+  // Safety order lines — calculated to match actual backend trigger prices.
+  // Uses strategy_config_snapshot (frozen at deal open) with correct reference
+  // price (average/base_order/last_buy), geometric step scale, and skips
+  // already-filled SOs so only remaining unfilled levels are shown.
+  const soLevels = calculateSOLevels(position)
+  const visibleSOLevels = soLevels.slice(0, 5) // cap at 5 lines for readability
 
-    for (let i = 1; i <= maxSOs; i++) {
-      const deviation = stepPercentage * i
-      const soPrice = avgBuyPrice * (1 - deviation / 100)
-
-      const soSeries = chartRef.addLineSeries({
-        color: '#3b82f6',
-        lineWidth: 1,
-        lineStyle: LineStyle.Dotted,
-        title: `SO${i}`,
-        priceLineVisible: false,
-        lastValueVisible: false,
-      })
-      const soData = chartData.map(d => ({ time: d.time as Time, value: soPrice }))
-      soSeries.setData(soData)
-      positionLinesRef.current.push(soSeries)
-    }
-  }
-
-  // DCA level lines (magenta) - show minimum price drops for next DCA orders
-  const minPriceDropForDCA = position.strategy_config_snapshot?.min_price_drop_for_dca
-    || position.bot_config?.min_price_drop_for_dca
-  const maxDCAOrders = position.strategy_config_snapshot?.max_safety_orders
-    || position.bot_config?.max_safety_orders
-    || 3
-
-  if (minPriceDropForDCA && position.status === 'open') {
-    const maxDCA = Math.min(maxDCAOrders, 5) // Limit to 5 lines
-
-    for (let i = 1; i <= maxDCA; i++) {
-      const dropPercentage = minPriceDropForDCA * i
-      const dcaPrice = avgBuyPrice * (1 - dropPercentage / 100)
-
-      const dcaSeries = chartRef.addLineSeries({
-        color: '#a855f7', // Purple/magenta to distinguish from safety orders
-        lineWidth: 1,
-        lineStyle: LineStyle.Dotted,
-        title: `DCA${i} (-${dropPercentage.toFixed(1)}%)`,
-        priceLineVisible: false,
-        lastValueVisible: false,
-      })
-      const dcaData = chartData.map(d => ({ time: d.time as Time, value: dcaPrice }))
-      dcaSeries.setData(dcaData)
-      positionLinesRef.current.push(dcaSeries)
-    }
+  for (const level of visibleSOLevels) {
+    const soSeries = chartRef.addLineSeries({
+      color: '#3b82f6',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dotted,
+      title: `SO${level.soNumber}`,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+    soSeries.setData(chartData.map(d => ({ time: d.time as Time, value: level.triggerPrice })))
+    positionLinesRef.current.push(soSeries)
   }
 }

@@ -3,7 +3,7 @@ import { X, BarChart2, Search } from 'lucide-react'
 import type { Position } from '../types'
 import type { IndicatorConfig } from '../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../utils/indicators/definitions'
-import { getFeeAdjustedProfitMultiplier } from './positions/positionUtils'
+import { getFeeAdjustedProfitMultiplier, calculateSOLevels } from './positions/positionUtils'
 import { useChartData } from './LightweightChartModal/hooks/useChartData'
 import { useMainChart } from './LightweightChartModal/hooks/useMainChart'
 import { useIndicatorRendering } from './LightweightChartModal/hooks/useIndicatorRendering'
@@ -124,15 +124,18 @@ export default function LightweightChartModal({
                     <span className="text-slate-400">Target (+{profitTargetPercent}%):</span>
                     <span className="text-green-400 font-semibold">{targetPrice?.toFixed(8)}</span>
                   </div>
-                  {position.bot_config?.safety_order_step_percentage && (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-0.5 bg-blue-500"></div>
-                      <span className="text-slate-400">Next SO:</span>
-                      <span className="text-blue-400 font-semibold">
-                        {(position.average_buy_price * (1 - position.bot_config.safety_order_step_percentage / 100))?.toFixed(8)}
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const nextSO = calculateSOLevels(position)[0]
+                    return nextSO ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-0.5 bg-blue-500"></div>
+                        <span className="text-slate-400">Next SO{nextSO.soNumber}:</span>
+                        <span className="text-blue-400 font-semibold">
+                          {nextSO.triggerPrice.toFixed(8)}
+                        </span>
+                      </div>
+                    ) : null
+                  })()}
                 </div>
               )
             })()}

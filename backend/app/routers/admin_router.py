@@ -742,10 +742,40 @@ async def get_ban_details(
         except Exception:
             pass
 
-    await asyncio.gather(
-        _grep_log("/var/log/nginx/access.log", "nginx"),
-        _grep_log("/var/log/zenithgrid/intrusion.log", "intrusion"),
-    )
+    async def _zgrep_log(log_path: str, source: str):
+        """Search gzipped rotated logs."""
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    ["zgrep", ip, log_path],
+                    capture_output=True, text=True, timeout=10,
+                )
+            )
+            if result.returncode != 0:
+                return
+            for line in result.stdout.strip().split("\n")[:50]:
+                if not line.strip():
+                    continue
+                patterns.append({"source": source, "line": line.strip()[:500]})
+        except Exception:
+            pass
+
+    # Search current + rotated logs (plain text and gzipped)
+    import glob
+    nginx_rotated = sorted(glob.glob("/var/log/nginx/access.log-*"))
+    # Only search the 3 most recent rotated logs to keep it fast
+    nginx_rotated = nginx_rotated[-3:]
+
+    tasks = [_grep_log("/var/log/nginx/access.log", "nginx")]
+    for rotated in nginx_rotated:
+        if rotated.endswith(".gz"):
+            tasks.append(_zgrep_log(rotated, "nginx"))
+        else:
+            tasks.append(_grep_log(rotated, "nginx"))
+    tasks.append(_grep_log("/var/log/zenithgrid/intrusion.log", "intrusion"))
+
+    await asyncio.gather(*tasks)
 
     # Categorize patterns
     categories: dict[str, int] = {}
