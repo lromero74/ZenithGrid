@@ -497,6 +497,13 @@ async def logout(
     return {"message": "Logged out successfully"}
 
 
+@router.get("/disposable-domains")
+async def get_disposable_domains():
+    """Return the list of known disposable email domains for client-side validation."""
+    from app.services.disposable_email_service import get_disposable_domains
+    return {"domains": get_disposable_domains()}
+
+
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     request: RegisterRequest,
@@ -527,6 +534,14 @@ async def signup(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
+        )
+
+    # Log disposable email registrations — user was warned by the frontend
+    from app.services.disposable_email_service import is_disposable_email
+    if is_disposable_email(request.email):
+        logger.warning(
+            f"Disposable email registration: {request.email} from IP {client_ip} — "
+            "user was warned by frontend and chose to proceed"
         )
 
     # Create new user (unverified)

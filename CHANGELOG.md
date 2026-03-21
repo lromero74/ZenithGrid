@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.0] - 2026-03-21
+
+### Added
+- **Disposable email warning at registration** — the signup form now detects known throwaway/disposable email providers and auto-generated-looking addresses. Users are shown a clear warning that accounts registered with throwaway emails are likely to be banned along with their IP, and must explicitly acknowledge before proceeding. Detection uses both a curated list of known disposable mail services and a local-part entropy heuristic for obviously bot-generated addresses (e.g. `1qe9k827b1@gmail.com`). Legitimate addresses like `james194@gmail.com` are never flagged.
+
 ## [v2.124.2] - 2026-03-21
 
 ### Fixed
