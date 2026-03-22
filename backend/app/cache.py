@@ -43,8 +43,10 @@ class SimpleCache:
         # appears inside any of the lock-guarded blocks — all operations are
         # pure dict reads/writes, which are fine under a threading.Lock.
         self._lock = threading.Lock()
-        # In-flight futures: key -> Future (prevents thundering herd)
-        self._in_flight: Dict[str, asyncio.Future] = {}
+        # In-flight futures: (loop_id, key) -> Future (prevents thundering herd).
+        # Keyed by (id(loop), key) so Futures from different event loops never
+        # share a slot — awaiting a Future from the wrong loop raises RuntimeError.
+        self._in_flight: Dict[tuple, asyncio.Future] = {}
         # Negative cache: key -> monotonic expiry time
         self._not_found: Dict[str, float] = {}
 
@@ -132,17 +134,22 @@ class SimpleCache:
         if cached is not None:
             return cached
 
-        # Check if another coroutine is already fetching this key
-        if key in self._in_flight:
-            return await self._in_flight[key]
-
-        # We're the first — create a future and fetch
+        # Key by (loop_id, key) so Futures from different event loops never share
+        # a slot.  Within one loop asyncio is cooperative — no preemption between
+        # the dict check and the dict write — so the single-flight guarantee holds.
         loop = asyncio.get_running_loop()
+        loop_key = (id(loop), key)
+
+        # Check if another coroutine on THIS loop is already fetching this key
+        if loop_key in self._in_flight:
+            return await self._in_flight[loop_key]
+
+        # We're the first on this loop — create a future and fetch
         future: asyncio.Future = loop.create_future()
         # Prevent "Future exception was never retrieved" when no concurrent
         # waiters exist — the caller handles the error via re-raise below.
         future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
-        self._in_flight[key] = future
+        self._in_flight[loop_key] = future
 
         try:
             result = await fetch_fn()
@@ -153,7 +160,7 @@ class SimpleCache:
             future.set_exception(exc)
             raise
         finally:
-            self._in_flight.pop(key, None)
+            self._in_flight.pop(loop_key, None)
 
 
 # Global cache instance
@@ -172,7 +179,9 @@ class PersistentPortfolioCache:
         _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self._cache_dir = os.path.join(_backend_dir, ".portfolio_cache")
         os.makedirs(self._cache_dir, exist_ok=True)
-        self._lock = asyncio.Lock()
+        # threading.Lock: all lock-guarded blocks contain only sync file I/O
+        # (no await), so threading.Lock is correct and works from any event loop.
+        self._lock = threading.Lock()
 
     def _path(self, user_id: int) -> str:
         return os.path.join(self._cache_dir, f"user_{user_id}.json")

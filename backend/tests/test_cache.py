@@ -226,12 +226,14 @@ class TestSimpleCacheGetOrFetch:
     @pytest.mark.asyncio
     async def test_get_or_fetch_propagates_exception(self):
         """Failure: exception from fetch_fn propagates and cleans up in-flight."""
+        import asyncio as _asyncio
         cache = SimpleCache()
         fetch_fn = AsyncMock(side_effect=ValueError("fetch failed"))
+        loop = _asyncio.get_running_loop()
         with pytest.raises(ValueError, match="fetch failed"):
             await cache.get_or_fetch("key1", fetch_fn, ttl_seconds=60)
-        # In-flight should be cleaned up
-        assert "key1" not in cache._in_flight
+        # In-flight must be cleaned up — key is (loop_id, cache_key) after fix
+        assert (id(loop), "key1") not in cache._in_flight
 
     @pytest.mark.asyncio
     async def test_get_or_fetch_single_flight(self):
