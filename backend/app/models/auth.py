@@ -26,6 +26,7 @@ user_groups = Table(
     Base.metadata,
     Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+    schema="auth",
 )
 
 group_roles = Table(
@@ -33,6 +34,7 @@ group_roles = Table(
     Base.metadata,
     Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
     Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    schema="auth",
 )
 
 role_permissions = Table(
@@ -40,6 +42,7 @@ role_permissions = Table(
     Base.metadata,
     Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
     Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    schema="auth",
 )
 
 
@@ -54,6 +57,7 @@ class User(Base):
     - Templates and blacklisted coins
     """
     __tablename__ = "users"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
@@ -116,6 +120,7 @@ class User(Base):
 class Group(Base):
     """Organizational group. Users belong to groups; groups are assigned roles."""
     __tablename__ = "groups"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
@@ -131,6 +136,7 @@ class Group(Base):
 class Role(Base):
     """Functional capability set with associated permissions."""
     __tablename__ = "roles"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
@@ -146,6 +152,7 @@ class Role(Base):
 class Permission(Base):
     """Granular permission using resource:action naming (e.g. bots:read, admin:users)."""
     __tablename__ = "permissions"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
@@ -163,6 +170,7 @@ class TrustedDevice(Base):
     Users can view and revoke trusted devices from Settings.
     """
     __tablename__ = "trusted_devices"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -188,6 +196,7 @@ class EmailVerificationToken(Base):
     Supports both link-based (token) and code-based (verification_code) verification.
     """
     __tablename__ = "email_verification_tokens"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -213,6 +222,7 @@ class RevokedToken(Base):
     Expired entries (past their JWT expiry) are cleaned up by a periodic task.
     """
     __tablename__ = "revoked_tokens"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String, unique=True, nullable=False, index=True)
@@ -226,6 +236,7 @@ class RevokedToken(Base):
 class ActiveSession(Base):
     """Tracks active user sessions for enforcement of session limits."""
     __tablename__ = "active_sessions"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -249,6 +260,7 @@ class RateLimitAttempt(Base):
     A periodic cleanup job prunes rows older than their window.
     """
     __tablename__ = "rate_limit_attempts"
+    __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
     category = Column(String(30), nullable=False, index=True)   # login, signup, forgot_pw, mfa, resend

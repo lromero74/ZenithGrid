@@ -28,8 +28,8 @@ class Friendship(Base):
     __tablename__ = "friendships"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    friend_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    friend_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", foreign_keys=[user_id])
@@ -37,6 +37,7 @@ class Friendship(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "friend_id", name="uq_friendship"),
+        {'schema': 'social'},
     )
 
 
@@ -45,8 +46,8 @@ class FriendRequest(Base):
     __tablename__ = "friend_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    to_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     from_user = relationship("User", foreign_keys=[from_user_id])
@@ -54,6 +55,7 @@ class FriendRequest(Base):
 
     __table_args__ = (
         UniqueConstraint("from_user_id", "to_user_id", name="uq_friend_request"),
+        {'schema': 'social'},
     )
 
 
@@ -62,8 +64,8 @@ class BlockedUser(Base):
     __tablename__ = "blocked_users"
 
     id = Column(Integer, primary_key=True, index=True)
-    blocker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    blocked_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    blocker_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    blocked_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     blocker = relationship("User", foreign_keys=[blocker_id])
@@ -71,12 +73,14 @@ class BlockedUser(Base):
 
     __table_args__ = (
         UniqueConstraint("blocker_id", "blocked_id", name="uq_blocked_user"),
+        {'schema': 'social'},
     )
 
 
 class GameResult(Base):
     """Persistent record of a completed multiplayer game."""
     __tablename__ = "game_results"
+    __table_args__ = {'schema': 'social'}
 
     id = Column(Integer, primary_key=True, index=True)
     room_id = Column(String, nullable=False, index=True)
@@ -93,12 +97,13 @@ class GameResult(Base):
 class GameResultPlayer(Base):
     """Per-player result within a game."""
     __tablename__ = "game_result_players"
+    __table_args__ = {'schema': 'social'}
 
     id = Column(Integer, primary_key=True, index=True)
     game_result_id = Column(
         Integer, ForeignKey("game_results.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     placement = Column(Integer, nullable=True)
     score = Column(Integer, nullable=True)
     is_winner = Column(Boolean, default=False)
@@ -111,9 +116,10 @@ class GameResultPlayer(Base):
 class GameHistoryVisibility(Base):
     """Per-user privacy control for game history sharing."""
     __tablename__ = "game_history_visibility"
+    __table_args__ = {'schema': 'social'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, unique=True)
     default_visibility = Column(String, default="all_friends")  # "all_friends", "opponents_only", "private"
     game_overrides = Column(JSON, nullable=True)
 
@@ -125,7 +131,7 @@ class GameHighScore(Base):
     __tablename__ = "game_high_scores"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False)
     game_id = Column(String, nullable=False)
     score = Column(Integer, nullable=False, default=0)
     score_type = Column(String(20), nullable=False, default="high_score")
@@ -134,6 +140,7 @@ class GameHighScore(Base):
 
     __table_args__ = (
         UniqueConstraint('user_id', 'game_id', 'score_type', name='uq_user_game_score_type'),
+        {'schema': 'social'},
     )
 
     user = relationship("User", foreign_keys=[user_id])
@@ -142,10 +149,11 @@ class GameHighScore(Base):
 class Tournament(Base):
     """Multi-game tournament among friends."""
     __tablename__ = "tournaments"
+    __table_args__ = {'schema': 'social'}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    creator_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     game_ids = Column(JSON, nullable=False)
     config = Column(JSON, nullable=True)
     status = Column(String, default="pending")  # "pending", "active", "completed"
@@ -166,7 +174,7 @@ class TournamentPlayer(Base):
     tournament_id = Column(
         Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     total_score = Column(Integer, default=0)
     placement = Column(Integer, nullable=True)
     archived = Column(Boolean, default=False)
@@ -177,6 +185,7 @@ class TournamentPlayer(Base):
 
     __table_args__ = (
         UniqueConstraint("tournament_id", "user_id", name="uq_tournament_player"),
+        {'schema': 'social'},
     )
 
 
@@ -188,11 +197,12 @@ class TournamentDeleteVote(Base):
     tournament_id = Column(
         Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     voted_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint("tournament_id", "user_id", name="uq_tournament_delete_vote"),
+        {'schema': 'social'},
     )
 
 
@@ -202,11 +212,12 @@ class TournamentDeleteVote(Base):
 class ChatChannel(Base):
     """Chat channel: DM (2 users), group (N users), or channel (open/admin-created)."""
     __tablename__ = "chat_channels"
+    __table_args__ = {'schema': 'social'}
 
     id = Column(Integer, primary_key=True, index=True)
     type = Column(String, nullable=False)  # "dm", "group", "channel"
     name = Column(String, nullable=True)   # null for DMs, required for group/channel
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("auth.users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -221,7 +232,7 @@ class ChatChannelMember(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String, default="member")  # "owner", "admin", "member"
     last_read_at = Column(DateTime, nullable=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
@@ -231,6 +242,7 @@ class ChatChannelMember(Base):
 
     __table_args__ = (
         UniqueConstraint("channel_id", "user_id", name="uq_chat_channel_member"),
+        {'schema': 'social'},
     )
 
 
@@ -240,7 +252,7 @@ class ChatMessage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False)
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False)
     content = Column(String(2000), nullable=False)
     media_url = Column(String(500), nullable=True)
     reply_to_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
@@ -256,6 +268,7 @@ class ChatMessage(Base):
 
     __table_args__ = (
         Index("ix_chat_messages_channel_created", "channel_id", "created_at"),
+        {'schema': 'social'},
     )
 
 
@@ -265,7 +278,7 @@ class ChatMessageReaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False)
     emoji = Column(String(32), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -274,4 +287,5 @@ class ChatMessageReaction(Base):
 
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", "emoji", name="uq_chat_reaction"),
+        {'schema': 'social'},
     )

@@ -129,3 +129,29 @@ def sample_candles():
             for p in prices
         ]
     return _make_candles
+
+
+# ---------------------------------------------------------------------------
+# Sync DB connection (for schema inspection — PostgreSQL only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def db_sync_conn():
+    """Synchronous DB connection for schema inspection (PostgreSQL only).
+
+    Used by test_domain_schemas.py to verify table placement in named schemas.
+    On SQLite the tests using this fixture are skipped via pytestmark.
+    """
+    import os
+    import importlib.util
+    # Load db_utils directly by file path to avoid shadowing from tests/migrations/
+    _spec = importlib.util.spec_from_file_location(
+        "_db_utils",
+        os.path.join(os.path.dirname(__file__), "..", "migrations", "db_utils.py"),
+    )
+    _db_utils = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_db_utils)
+    conn = _db_utils.get_migration_connection()
+    yield conn
+    conn.close()

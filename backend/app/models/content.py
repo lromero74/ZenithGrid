@@ -28,9 +28,10 @@ class AIProviderCredential(Base):
     """
 
     __tablename__ = "ai_provider_credentials"
+    __table_args__ = {'schema': 'content'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
 
     # Provider identification
     provider = Column(String, nullable=False, index=True)  # "claude", "gemini", "grok", "groq", "openai"
@@ -58,6 +59,7 @@ class NewsArticle(Base):
     """
 
     __tablename__ = "news_articles"
+    __table_args__ = {'schema': 'content'}
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -107,6 +109,7 @@ class VideoArticle(Base):
     """
 
     __tablename__ = "video_articles"
+    __table_args__ = {'schema': 'content'}
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -142,6 +145,7 @@ class ContentSource(Base):
     """
 
     __tablename__ = "content_sources"
+    __table_args__ = {'schema': 'content'}
 
     id = Column(Integer, primary_key=True, index=True)
     source_key = Column(String, unique=True, nullable=False)  # e.g., "coin_bureau", "coindesk"
@@ -157,7 +161,7 @@ class ContentSource(Base):
     content_scrape_allowed = Column(Boolean, default=True)   # False = RSS-only, no article scraping
     crawl_delay_seconds = Column(Integer, default=0)          # robots.txt crawl-delay
     # Owner for custom sources (null for system)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -175,7 +179,7 @@ class UserSourceSubscription(Base):
     __tablename__ = "user_source_subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     source_id = Column(Integer, ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
     is_subscribed = Column(Boolean, default=True)
     user_category = Column(String, nullable=True)  # Per-user category override
@@ -183,7 +187,7 @@ class UserSourceSubscription(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Unique constraint
-    __table_args__ = (UniqueConstraint("user_id", "source_id", name="uq_user_source"),)
+    __table_args__ = (UniqueConstraint("user_id", "source_id", name="uq_user_source"), {'schema': 'content'})
 
     # Relationships
     user = relationship("User", back_populates="source_subscriptions")
@@ -207,11 +211,12 @@ class ArticleTTS(Base):
     content_hash = Column(String(8), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(
-        Integer, ForeignKey("users.id"), nullable=True,
+        Integer, ForeignKey("auth.users.id"), nullable=True,
     )
 
     __table_args__ = (
         UniqueConstraint("article_id", "voice_id", name="uq_article_voice"),
+        {'schema': 'content'},
     )
 
 
@@ -222,7 +227,7 @@ class UserVoiceSubscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     voice_id = Column(String, nullable=False)
@@ -231,6 +236,7 @@ class UserVoiceSubscription(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "voice_id", name="uq_user_voice"),
+        {'schema': 'content'},
     )
 
 
@@ -241,7 +247,7 @@ class UserArticleTTSHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     article_id = Column(
@@ -255,6 +261,7 @@ class UserArticleTTSHistory(Base):
         UniqueConstraint(
             "user_id", "article_id", name="uq_user_article_tts"
         ),
+        {'schema': 'content'},
     )
 
 
@@ -265,7 +272,7 @@ class UserContentSeenStatus(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False,
     )
     content_type = Column(String, nullable=False)   # "article" | "video"
@@ -281,4 +288,5 @@ class UserContentSeenStatus(Base):
             "ix_user_content_seen_lookup",
             "user_id", "content_type",
         ),
+        {'schema': 'content'},
     )

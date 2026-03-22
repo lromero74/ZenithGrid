@@ -29,6 +29,13 @@ if settings.is_postgres:
     _engine_kwargs["pool_size"] = 5
     _engine_kwargs["max_overflow"] = 3
     _engine_kwargs["pool_timeout"] = 10  # Fail fast instead of hanging 30s
+    # Set search_path so unqualified table names in raw SQL resolve correctly
+    # across all 6 domain schemas. SQLAlchemy ORM uses fully-qualified names,
+    # so this is mainly for ad-hoc queries and any legacy unqualified references.
+    # asyncpg uses server_settings (not psycopg2-style "options").
+    _engine_kwargs["connect_args"] = {
+        "server_settings": {"search_path": "auth,trading,reporting,social,content,system,public"}
+    }
 else:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 

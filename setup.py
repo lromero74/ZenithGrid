@@ -931,9 +931,14 @@ def initialize_database(project_root, db_config=None):
                 "import sys; sys.path.insert(0, 'backend'); "
                 "from app.database import Base, get_sync_engine; "
                 "from app.models import *; "  # noqa
+                "from sqlalchemy import text; "
                 "engine = get_sync_engine(); "
+                "conn = engine.connect(); "
+                "[conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS {s}')) "
+                "for s in ['auth','trading','reporting','social','content','system']]; "
+                "conn.commit(); conn.close(); "
                 "Base.metadata.create_all(engine); "
-                "print('PostgreSQL schema created successfully')"
+                "print('PostgreSQL domain schemas and tables created successfully')"
             )
             result = subprocess.run(
                 [str(venv_python), '-c', init_script],
