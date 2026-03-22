@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.126.1] - 2026-03-22
+
+### Fixed
+- **TTS shutdown test** — updated test to match the APScheduler refactor: removed patches for services that no longer exist as module-level names in `main.py` after the v2.126.0 background task migration.
+
 ## [v2.126.0] - 2026-03-22
 
 ### Changed
