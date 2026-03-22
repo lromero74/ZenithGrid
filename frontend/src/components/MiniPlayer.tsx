@@ -322,10 +322,12 @@ export function MiniPlayer() {
               <iframe
                 ref={iframeRef}
                 key={`player-${currentVideo.video_id}`}
-                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1${isIOS ? '&mute=1' : ''}&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                 title={currentVideo.title}
                 className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                {...({ playsinline: 'true' } as any)}
                 allowFullScreen
               />
             </div>
@@ -403,8 +405,8 @@ export function MiniPlayer() {
                 </span>
               </div>
 
-              {/* Volume control */}
-              <div className="relative flex-shrink-0" ref={volumeRef}>
+              {/* Volume control — hidden on iOS (hardware volume buttons only) */}
+              {!isIOS && <div className="relative flex-shrink-0" ref={volumeRef}>
                 <button
                   onClick={toggleMute}
                   onMouseEnter={() => setShowVolumeSlider(true)}
@@ -438,7 +440,7 @@ export function MiniPlayer() {
                   </div>
                 </div>
               )}
-              </div>
+              </div>}
 
               {/* Controls */}
               <div className={`flex items-center gap-1 flex-shrink-0 ${isExpanded ? 'flex-wrap justify-center sm:justify-start' : 'justify-center sm:justify-start'}`}>
