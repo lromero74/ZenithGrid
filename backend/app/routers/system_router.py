@@ -104,6 +104,16 @@ def get_latest_git_tag() -> str:
     return get_git_version()  # Fallback to current version
 
 
+@router.get("/api/health")
+async def health_check():
+    """Health check endpoint — returns status, version, and process uptime."""
+    return {
+        "status": "ok",
+        "version": get_git_version(),
+        "started_at": _STARTUP_TIME,
+    }
+
+
 @router.get("/api/version")
 async def get_version():
     """Get the current application version from git tags"""

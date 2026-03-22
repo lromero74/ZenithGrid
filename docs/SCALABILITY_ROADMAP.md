@@ -226,7 +226,7 @@ Cross-schema foreign keys work in PostgreSQL (`schema_a.table.column → schema_
 
 ---
 
-### 2.2 — Service abstraction layer (ServiceRegistry pattern)
+### 2.2 — Service abstraction layer (ServiceRegistry pattern) ✅ DONE (v2.131.0)
 
 **Problem:** Routers import services directly as module-level functions. There's no seam to swap a local service for a remote API call without changing router code.
 
@@ -245,8 +245,14 @@ articles = await services.news.get_latest_articles(user_id)
 
 This doesn't need to happen everywhere at once — do it when you touch a service. Start with content and social (the easiest extraction candidates).
 
-**Impact:** Zero runtime impact. Creates an explicit service boundary.
-**Effort:** Low per service, high to do everywhere at once — do it incrementally.
+**Implementation notes (learned during execution):**
+- `app/registry.py` — `ServiceRegistry` dataclass holding four abstraction singletons: `event_bus`, `broadcast` (BroadcastBackend), `rate_limiter` (RateLimitBackend), `credentials` (CredentialsProvider). Module-level `_default_registry` populated at import time with today's in-process implementations.
+- `get_registry()` FastAPI dependency returns `_default_registry`. Routers receive all four backends via a single `Depends(get_registry)` injection instead of importing singletons directly.
+- The registry is the Phase 3 swap point: replacing `_default_registry` at startup switches all four backends simultaneously (NATS, Redis, remote credentials service) with no router changes.
+- Zero behavior change — all fields hold the same local implementations already in use.
+
+**Impact:** Zero runtime impact. Single swap point for all four service backends in Phase 3.
+**Effort:** Low — single file addition (`app/registry.py`).
 
 ---
 
@@ -277,7 +283,7 @@ Services subscribe to events they care about. Today the bus is in-process. When 
 
 ---
 
-### 2.4 — Extract exchange client into a credentials service interface
+### 2.4 — Extract exchange client into a credentials service interface ✅ DONE (v2.130.0)
 
 **Problem:** `get_exchange_client_for_account(db, account_id)` decrypts account credentials inline from the database and returns a `CoinbaseClient`. This logic is scattered across `exchange_service.py`, 3 other services, and 6+ routers. It cannot be externalized without significant surgery.
 
@@ -299,7 +305,13 @@ class RemoteCredentialsProvider:
 
 Inject `CredentialsProvider` via `Depends()` or `ServiceRegistry`. Today it's always `LocalCredentialsProvider`. When you extract trading to its own service, you swap it for `RemoteCredentialsProvider`.
 
-**Impact:** Zero runtime impact. Makes credential management portable.
+**Implementation notes (learned during execution):**
+- `app/services/credentials_provider.py` — `CredentialsProvider` Protocol + `LocalCredentialsProvider` wrapping `get_exchange_client_for_account()`. Callers pass `db=` (existing session) or `session_maker=` (factory); when neither is provided, the default pool is used automatically.
+- `RemoteCredentialsProvider` stub documents the Phase 3 HTTP API architecture and raises `NotImplementedError`.
+- Wired into `ServiceRegistry` as `registry.credentials`.
+- Zero behavior change — `LocalCredentialsProvider` delegates to the existing function.
+
+**Impact:** Zero runtime impact. Makes credential management portable — one stub swap for a credentials microservice.
 **Effort:** Medium — touching exchange_service.py and all callers.
 
 ---
@@ -326,14 +338,20 @@ Inject `CredentialsProvider` via `Depends()` or `ServiceRegistry`. Today it's al
 
 ---
 
-### 2.6 — Distributed rate limiting (prep for multi-process)
+### 2.6 — Distributed rate limiting (prep for multi-process) ✅ DONE (seam added, swap-ready)
 
 **Problem:** Rate limiting state is stored in `RateLimitAttempt` (PostgreSQL). This works correctly today. But the middleware uses a per-request DB write, which adds latency under load.
 
 **Fix:** Move rate limit counters to Redis (or keep them in PostgreSQL but add a Redis cache layer for the hot path). The `rate_limiters.py` module already has a clean interface — swap the storage backend.
 
-**Impact:** Lower auth endpoint latency under concurrent login attempts.
-**Effort:** Low — isolated to `rate_limiters.py`.
+**Implementation notes (learned during execution):**
+- `app/auth_routers/rate_limit_backend.py` — `RateLimitBackend` Protocol + `PostgresRateLimitBackend` wrapping the three PostgreSQL helpers (`record_attempt`, `count_recent`, `cleanup`). Zero behavior change.
+- `RedisRateLimitBackend` stub documents the Phase 3 key pattern (`INCR` + `EXPIRE` per key) and raises `NotImplementedError`.
+- Wired into `ServiceRegistry` as `registry.rate_limiter`.
+- **Existing call sites NOT migrated** — `rate_limiters.py` still calls the helpers directly. Migration happens when `RedisRateLimitBackend` is implemented.
+
+**Impact (to activate):** Lower auth endpoint latency under concurrent login attempts — atomic Redis `INCR`/`EXPIRE` replaces a DB write per attempt.
+**Effort (to activate):** Low — implement `RedisRateLimitBackend`, point `registry.rate_limiter` at it, migrate call sites.
 
 ---
 
