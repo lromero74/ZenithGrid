@@ -517,7 +517,7 @@ class RebalanceMonitor:
 
         self._processing.add(account.id)
         try:
-            client = await get_exchange_client_for_account(db, account.id)
+            client = await get_exchange_client_for_account(db, account.id, session_maker=self._get_sm())
             if not client:
                 logger.warning(
                     f"Rebalance: no exchange client for account {account.id}"

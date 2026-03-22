@@ -6,8 +6,8 @@ Supports per-user, per-account exchange client instantiation.
 Includes support for paper trading accounts.
 """
 
-import asyncio
 import logging
+import threading
 from typing import Optional
 
 from sqlalchemy import select
@@ -30,7 +30,10 @@ logger = logging.getLogger(__name__)
 # Cache for exchange clients (key: account_id)
 # This avoids recreating clients on every request
 _exchange_client_cache: dict[int, ExchangeClient] = {}
-_exchange_client_lock = asyncio.Lock()
+# threading.Lock (not asyncio.Lock) so get_exchange_client_for_account is safe
+# from both the main event loop and the secondary event loop.  The lock guards
+# cache reads/writes only; async DB work happens OUTSIDE the lock.
+_exchange_client_lock = threading.Lock()
 
 
 async def get_coinbase_for_account(
@@ -108,7 +111,8 @@ def clear_exchange_client_cache(account_id: Optional[int] = None):
 async def get_exchange_client_for_account(
     db: AsyncSession,
     account_id: int,
-    use_cache: bool = True
+    use_cache: bool = True,
+    session_maker=None,
 ) -> Optional[ExchangeClient]:
     """
     Get an exchange client for a specific account.
@@ -117,188 +121,203 @@ async def get_exchange_client_for_account(
         db: Database session
         account_id: The account ID to get client for
         use_cache: Whether to use cached client (default True)
+        session_maker: Optional session maker for PropGuardClient DB work.
+            Pass the secondary loop's session maker when calling from the
+            secondary event loop.  Defaults to the main async_session_maker.
 
     Returns:
         ExchangeClient or None if account not found or credentials missing
     """
-    # Check cache first (lock-free fast path)
+    # Fast path: cache hit (dict reads are GIL-protected)
     if use_cache and account_id in _exchange_client_cache:
         return _exchange_client_cache[account_id]
 
-    # Acquire lock for creation to prevent concurrent duplicate creation
-    async with _exchange_client_lock:
-        # Double-check after acquiring lock (another coroutine may have created it)
+    # Quick double-check inside threading.Lock before doing expensive async work
+    with _exchange_client_lock:
         if use_cache and account_id in _exchange_client_cache:
             return _exchange_client_cache[account_id]
+    # Lock released — async DB work and client creation happen OUTSIDE the lock
+    # so we never hold a threading.Lock across an `await`.  Two concurrent
+    # callers may both proceed past here on a cache miss; the last one to
+    # finish the cache write wins (both produce equivalent clients, so this
+    # is safe and harmless).
 
-        # Fetch account from database
-        result = await db.execute(
-            select(Account).where(Account.id == account_id)
-        )
-        account = result.scalar_one_or_none()
+    # Fetch account from database
+    result = await db.execute(
+        select(Account).where(Account.id == account_id)
+    )
+    account = result.scalar_one_or_none()
 
-        if not account:
-            logger.warning(f"Account {account_id} not found")
-            return None
+    if not account:
+        logger.warning(f"Account {account_id} not found")
+        return None
 
-        if not account.is_active:
-            logger.warning(f"Account {account_id} is not active")
-            return None
+    if not account.is_active:
+        logger.warning(f"Account {account_id} is not active")
+        return None
 
-        # Check if this is a paper trading account
-        if account.is_paper_trading:
-            logger.info(f"Creating paper trading client for account {account_id}")
+    # Check if this is a paper trading account
+    if account.is_paper_trading:
+        logger.info(f"Creating paper trading client for account {account_id}")
 
-            # Get a real CEX account for price data (scoped to same user)
-            real_client = None
-            try:
-                cex_result = await db.execute(
-                    select(Account).where(
-                        Account.type == "cex",
-                        Account.user_id == account.user_id,
-                        Account.is_active.is_(True),
-                        Account.is_paper_trading.is_(False),
-                        Account.api_key_name.isnot(None),
-                        Account.api_private_key.isnot(None)
-                    ).order_by(Account.is_default.desc(), Account.created_at)
-                    .limit(1)
-                )
-                cex_account = cex_result.scalar_one_or_none()
+        # Get a real CEX account for price data (scoped to same user)
+        real_client = None
+        try:
+            cex_result = await db.execute(
+                select(Account).where(
+                    Account.type == "cex",
+                    Account.user_id == account.user_id,
+                    Account.is_active.is_(True),
+                    Account.is_paper_trading.is_(False),
+                    Account.api_key_name.isnot(None),
+                    Account.api_private_key.isnot(None)
+                ).order_by(Account.is_default.desc(), Account.created_at)
+                .limit(1)
+            )
+            cex_account = cex_result.scalar_one_or_none()
 
-                if cex_account:
-                    kn = cex_account.api_key_name
-                    if is_encrypted(kn):
-                        kn = decrypt_value(kn)
-                    pk = cex_account.api_private_key
-                    if is_encrypted(pk):
-                        pk = decrypt_value(pk)
-                    real_client = create_exchange_client(ExchangeClientConfig(
-                        exchange_type="cex",
-                        coinbase=CoinbaseCredentials(
-                            key_name=kn, private_key=pk, account_id=cex_account.id,
-                        ),
-                    ))
-                    logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
-            except Exception as e:
-                logger.warning(f"Failed to get real client for paper trading price data: {e}")
-
-            client = PaperTradingClient(account=account, db=db, real_client=real_client)
-            # Don't cache paper trading clients (they hold db session)
-            return client
-
-        # Create exchange client based on account type
-        client = None
-        if account.type == "cex":
-            exchange_name = account.exchange or "coinbase"
-
-            if exchange_name == "bybit":
-                # ByBit V5 (HyroTrader / prop firms)
-                if not account.api_key_name or not account.api_private_key:
-                    logger.warning(f"Account {account_id} missing ByBit API credentials")
-                    return None
-                ak = account.api_key_name
-                if is_encrypted(ak):
-                    ak = decrypt_value(ak)
-                sk = account.api_private_key
-                if is_encrypted(sk):
-                    sk = decrypt_value(sk)
-                # Testnet flag from prop_firm_config
-                config = account.prop_firm_config or {}
-                testnet = config.get("testnet", False)
-                client = create_exchange_client(ExchangeClientConfig(
-                    exchange_type="cex",
-                    exchange_name="bybit",
-                    bybit=ByBitCredentials(api_key=ak, api_secret=sk, testnet=testnet),
-                ))
-
-            elif exchange_name == "mt5_bridge":
-                # MT5 Bridge (FTMO)
-                config = account.prop_firm_config or {}
-                bridge_url = config.get("bridge_url")
-                if not bridge_url:
-                    logger.warning(f"Account {account_id} missing MT5 bridge_url")
-                    return None
-                client = create_exchange_client(ExchangeClientConfig(
-                    exchange_type="cex",
-                    exchange_name="mt5_bridge",
-                    mt5=MT5BridgeCredentials(
-                        bridge_url=bridge_url,
-                        magic_number=config.get("magic_number", 12345),
-                        account_balance=account.prop_initial_deposit or 100000.0,
-                    ),
-                ))
-
-            else:
-                # Default: Coinbase
-                if not account.api_key_name or not account.api_private_key:
-                    logger.warning(f"Account {account_id} missing API credentials")
-                    return None
-                kn = account.api_key_name
+            if cex_account:
+                kn = cex_account.api_key_name
                 if is_encrypted(kn):
                     kn = decrypt_value(kn)
-                pk = account.api_private_key
+                pk = cex_account.api_private_key
                 if is_encrypted(pk):
                     pk = decrypt_value(pk)
-                client = create_exchange_client(ExchangeClientConfig(
+                real_client = create_exchange_client(ExchangeClientConfig(
                     exchange_type="cex",
                     coinbase=CoinbaseCredentials(
-                        key_name=kn, private_key=pk, account_id=account_id,
+                        key_name=kn, private_key=pk, account_id=cex_account.id,
                     ),
                 ))
+                logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
+        except Exception as e:
+            logger.warning(f"Failed to get real client for paper trading price data: {e}")
 
-        elif account.type == "dex":
-            if not account.wallet_private_key or not account.rpc_url:
-                logger.warning(f"Account {account_id} missing DEX credentials")
+        client = PaperTradingClient(account=account, db=db, real_client=real_client)
+        # Don't cache paper trading clients (they hold db session)
+        return client
+
+    # Create exchange client based on account type
+    client = None
+    if account.type == "cex":
+        exchange_name = account.exchange or "coinbase"
+
+        if exchange_name == "bybit":
+            # ByBit V5 (HyroTrader / prop firms)
+            if not account.api_key_name or not account.api_private_key:
+                logger.warning(f"Account {account_id} missing ByBit API credentials")
                 return None
-
-            wpk = account.wallet_private_key
-            if is_encrypted(wpk):
-                wpk = decrypt_value(wpk)
+            ak = account.api_key_name
+            if is_encrypted(ak):
+                ak = decrypt_value(ak)
+            sk = account.api_private_key
+            if is_encrypted(sk):
+                sk = decrypt_value(sk)
+            # Testnet flag from prop_firm_config
+            config = account.prop_firm_config or {}
+            testnet = config.get("testnet", False)
             client = create_exchange_client(ExchangeClientConfig(
-                exchange_type="dex",
-                dex=DEXCredentials(
-                    chain_id=account.chain_id,
-                    private_key=wpk,
-                    rpc_url=account.rpc_url,
-                    dex_router=None,  # TODO: Get from account or default
+                exchange_type="cex",
+                exchange_name="bybit",
+                bybit=ByBitCredentials(api_key=ak, api_secret=sk, testnet=testnet),
+            ))
+
+        elif exchange_name == "mt5_bridge":
+            # MT5 Bridge (FTMO)
+            config = account.prop_firm_config or {}
+            bridge_url = config.get("bridge_url")
+            if not bridge_url:
+                logger.warning(f"Account {account_id} missing MT5 bridge_url")
+                return None
+            client = create_exchange_client(ExchangeClientConfig(
+                exchange_type="cex",
+                exchange_name="mt5_bridge",
+                mt5=MT5BridgeCredentials(
+                    bridge_url=bridge_url,
+                    magic_number=config.get("magic_number", 12345),
+                    account_balance=account.prop_initial_deposit or 100000.0,
                 ),
             ))
+
         else:
-            logger.error(f"Unknown account type: {account.type}")
+            # Default: Coinbase
+            if not account.api_key_name or not account.api_private_key:
+                logger.warning(f"Account {account_id} missing API credentials")
+                return None
+            kn = account.api_key_name
+            if is_encrypted(kn):
+                kn = decrypt_value(kn)
+            pk = account.api_private_key
+            if is_encrypted(pk):
+                pk = decrypt_value(pk)
+            client = create_exchange_client(ExchangeClientConfig(
+                exchange_type="cex",
+                coinbase=CoinbaseCredentials(
+                    key_name=kn, private_key=pk, account_id=account_id,
+                ),
+            ))
+
+    elif account.type == "dex":
+        if not account.wallet_private_key or not account.rpc_url:
+            logger.warning(f"Account {account_id} missing DEX credentials")
             return None
 
-        # Wrap with PropGuard if this is a prop firm account
-        if client and account.prop_firm:
-            from app.database import async_session_maker
-            from app.exchange_clients.prop_guard import PropGuardClient
-            from app.exchange_clients.bybit_ws import get_ws_manager
+        wpk = account.wallet_private_key
+        if is_encrypted(wpk):
+            wpk = decrypt_value(wpk)
+        client = create_exchange_client(ExchangeClientConfig(
+            exchange_type="dex",
+            dex=DEXCredentials(
+                chain_id=account.chain_id,
+                private_key=wpk,
+                rpc_url=account.rpc_url,
+                dex_router=None,  # TODO: Get from account or default
+            ),
+        ))
+    else:
+        logger.error(f"Unknown account type: {account.type}")
+        return None
 
-            ws_state = None
-            ws_mgr = get_ws_manager(account_id)
-            if ws_mgr:
-                ws_state = ws_mgr.state
+    # Wrap with PropGuard if this is a prop firm account
+    if client and account.prop_firm:
+        from app.database import async_session_maker as _default_sm
+        from app.exchange_clients.prop_guard import PropGuardClient
+        from app.exchange_clients.bybit_ws import get_ws_manager
 
-            client = PropGuardClient(
-                inner=client,
-                account_id=account_id,
-                db_session_maker=async_session_maker,
-                daily_drawdown_pct=account.prop_daily_drawdown_pct or 4.5,
-                total_drawdown_pct=account.prop_total_drawdown_pct or 9.0,
-                initial_deposit=account.prop_initial_deposit or 100000.0,
-                ws_state=ws_state,
-            )
-            logger.info(
-                f"PropGuard wrapped account {account_id} "
-                f"(firm={account.prop_firm}, "
-                f"daily_dd={account.prop_daily_drawdown_pct}%, "
-                f"total_dd={account.prop_total_drawdown_pct}%)"
-            )
+        ws_state = None
+        ws_mgr = get_ws_manager(account_id)
+        if ws_mgr:
+            ws_state = ws_mgr.state
 
-        # Cache the client
-        if client and use_cache:
-            _exchange_client_cache[account_id] = client
+        # Use the caller-supplied session_maker so PropGuardClient's async
+        # DB work (drawdown checks) runs on the correct event loop pool.
+        prop_sm = session_maker or _default_sm
 
-        return client
+        client = PropGuardClient(
+            inner=client,
+            account_id=account_id,
+            db_session_maker=prop_sm,
+            daily_drawdown_pct=account.prop_daily_drawdown_pct or 4.5,
+            total_drawdown_pct=account.prop_total_drawdown_pct or 9.0,
+            initial_deposit=account.prop_initial_deposit or 100000.0,
+            ws_state=ws_state,
+        )
+        logger.info(
+            f"PropGuard wrapped account {account_id} "
+            f"(firm={account.prop_firm}, "
+            f"daily_dd={account.prop_daily_drawdown_pct}%, "
+            f"total_dd={account.prop_total_drawdown_pct}%)"
+        )
+
+    # Cache write with threading.Lock — double-check so we don't overwrite
+    # a client set by a concurrent task that finished first.
+    if client and use_cache:
+        with _exchange_client_lock:
+            if account_id not in _exchange_client_cache:
+                _exchange_client_cache[account_id] = client
+        return _exchange_client_cache[account_id]
+
+    return client
 
 
 async def get_exchange_client_for_user(

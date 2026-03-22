@@ -147,7 +147,7 @@ class AutoBuyMonitor:
         """Process one account - check balances and buy BTC if needed"""
         try:
             logger.info(f"Auto-buy: checking account '{account.name}' (id={account.id})")
-            client = await get_exchange_client_for_account(db, account.id)
+            client = await get_exchange_client_for_account(db, account.id, session_maker=self._get_sm())
             if not client:
                 logger.warning(f"Auto-buy: no exchange client for account {account.id}")
                 return
@@ -364,7 +364,7 @@ class AutoBuyMonitor:
         """Cancel and replace a limit order at current market price"""
         try:
             # Get exchange client
-            client = await get_exchange_client_for_account(db, pending.account_id)
+            client = await get_exchange_client_for_account(db, pending.account_id, session_maker=self._get_sm())
             if not client:
                 return
 

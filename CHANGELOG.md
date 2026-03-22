@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.12] - 2026-03-22
+
+### Fixed
+- **Completed background monitor loop migration** — auto-buy, rebalance, trading-pair, account snapshot, and transfer sync monitors have been moved to the secondary event loop. This was previously blocked by two module-level `asyncio.Lock` objects (`_rate_lock` in the public market data module and `_exchange_client_lock` in the exchange client service) that would bind to whichever loop first acquired them and then crash when called from a different loop. Both locks have been converted to `threading.Lock`, making them loop-agnostic. Async work (DB queries, HTTP requests) continues to happen outside the lock using `asyncio.sleep`, so timing and behaviour are unchanged.
+- **PropGuardClient now uses the correct DB pool when called from the secondary loop** — the session maker is now threaded through the exchange client factory so prop firm accounts' drawdown checks run against the secondary loop's connection pool rather than the main pool.
+
 ## [v2.125.11] - 2026-03-22
 
 ### Fixed

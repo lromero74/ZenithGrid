@@ -150,8 +150,6 @@ limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
 memory_cache_cleanup_task = None
-account_snapshot_task = None
-transfer_sync_task = None
 
 
 def override_get_price_monitor():
@@ -431,7 +429,7 @@ async def run_account_snapshot_capture(session_maker=None):
                     try:
                         logger.info(f"Capturing account snapshots for user {user.id}")
                         result = await account_snapshot_service.capture_all_account_snapshots(
-                            db, user.id
+                            db, user.id, session_maker=sm
                         )
                         logger.info(
                             f"User {user.id}: {result['success_count']}/"
@@ -497,7 +495,6 @@ async def run_transfer_sync(session_maker=None):
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
     global missing_order_detector_task, memory_cache_cleanup_task
-    global account_snapshot_task, transfer_sync_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -574,32 +571,33 @@ async def startup_event():
     sm = get_secondary_session_maker()
     logger.info("Secondary event loop started")
 
-    # ── MAIN LOOP: Exchange-client services ──────────────────────────────────
-    # These monitors call helpers (calculate_aggregate_usd_value, public price
-    # fetch, exchange_client_lock etc.) that share module-level asyncio.Lock
-    # objects.  Moving them to the secondary loop would bind those locks to the
-    # secondary loop, causing RuntimeError in the main-loop tasks that use the
-    # same locks.  Full migration requires threading threading.Lock through every
-    # helper in the call chain — tracked in SCALABILITY_ROADMAP Phase 1.2.
-    logger.info("Starting auto-buy BTC monitor...")
-    await auto_buy_monitor.start()
-    logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
+    # ── SECONDARY LOOP: Exchange-client monitors ──────────────────────────────
+    # These monitors use get_exchange_client_for_account (threading.Lock guard,
+    # async work outside lock) and _public_request (threading.Lock rate limiter).
+    # Both locks are now threading.Lock — loop-agnostic, safe from any loop.
+    # session_maker is injected so PropGuardClient DB work runs on the correct pool.
+    logger.info("Starting auto-buy BTC monitor on secondary loop...")
+    auto_buy_monitor.set_session_maker(sm)
+    schedule(auto_buy_monitor.start())
+    logger.info("Auto-buy BTC monitor scheduled - converting stablecoins to BTC per account settings")
 
-    logger.info("Starting portfolio rebalance monitor...")
-    await rebalance_monitor.start()
-    logger.info("Rebalance monitor started - maintaining target allocations per account")
+    logger.info("Starting portfolio rebalance monitor on secondary loop...")
+    rebalance_monitor.set_session_maker(sm)
+    schedule(rebalance_monitor.start())
+    logger.info("Rebalance monitor scheduled - maintaining target allocations per account")
 
-    logger.info("Starting trading pair monitor...")
-    await trading_pair_monitor.start()
-    logger.info("Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
+    logger.info("Starting trading pair monitor on secondary loop...")
+    trading_pair_monitor.set_session_maker(sm)
+    schedule(trading_pair_monitor.start())
+    logger.info("Trading pair monitor scheduled - syncing pairs daily (first check in 5 minutes)")
 
-    logger.info("Starting account snapshot capture job...")
-    account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
-    logger.info("Account snapshot capture job started - capturing daily account values")
+    logger.info("Starting account snapshot capture job on secondary loop...")
+    schedule(run_account_snapshot_capture(session_maker=sm))
+    logger.info("Account snapshot capture job scheduled - capturing daily account values")
 
-    logger.info("Starting transfer sync job...")
-    transfer_sync_task = asyncio.create_task(run_transfer_sync())
-    logger.info("Transfer sync started - syncing deposits/withdrawals daily")
+    logger.info("Starting transfer sync job on secondary loop...")
+    schedule(run_transfer_sync(session_maker=sm))
+    logger.info("Transfer sync scheduled - syncing deposits/withdrawals daily")
 
     logger.info("Starting content refresh service on secondary loop...")
     content_refresh_service.set_session_maker(sm)
@@ -691,7 +689,6 @@ async def shutdown_event():
     for task in [
         limit_order_monitor_task, order_reconciliation_monitor_task,
         missing_order_detector_task, memory_cache_cleanup_task,
-        account_snapshot_task, transfer_sync_task,
     ]:
         await _cancel_task(task)
 

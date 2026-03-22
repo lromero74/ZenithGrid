@@ -38,7 +38,7 @@ async def _fetch_position_prices(client, positions: List) -> Dict[str, float]:
     return {pid: price for pid, price in results if price is not None}
 
 
-async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
+async def capture_account_snapshot(db: AsyncSession, account: Account, session_maker=None) -> bool:
     """
     Capture a single account value snapshot.
 
@@ -62,7 +62,7 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
 
         if account.is_paper_trading:
             # Paper trading - use exchange client directly
-            client = await get_exchange_client_for_account(db, account.id)
+            client = await get_exchange_client_for_account(db, account.id, session_maker=session_maker)
             if not client:
                 logger.error(f"Failed to get exchange client for account {account.id}")
                 return False
@@ -131,7 +131,7 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
                     Position.status == "open"
                 )
             )
-            cb_client = await get_exchange_client_for_account(db, account.id)
+            cb_client = await get_exchange_client_for_account(db, account.id, session_maker=session_maker)
             open_positions = pos_result.scalars().all()
 
             # Parallel price fetch: dedupe product_ids, gather all at once
@@ -221,7 +221,7 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
         return False
 
 
-async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[str, Any]:
+async def capture_all_account_snapshots(db: AsyncSession, user_id: int, session_maker=None) -> Dict[str, Any]:
     """
     Capture snapshots for all active accounts belonging to a user.
 
@@ -245,7 +245,7 @@ async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[
 
     for account_id, account_name, account in account_tuples:
         try:
-            success = await capture_account_snapshot(db, account)
+            success = await capture_account_snapshot(db, account, session_maker=session_maker)
             if success:
                 success_count += 1
             else:

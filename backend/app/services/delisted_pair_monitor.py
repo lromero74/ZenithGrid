@@ -100,7 +100,7 @@ class TradingPairMonitor:
                 logger.warning("No active CEX account found for pair check")
                 return set()
 
-            exchange = await get_exchange_client_for_account(db, account.id)
+            exchange = await get_exchange_client_for_account(db, account.id, session_maker=self._get_sm())
             if not exchange:
                 logger.warning("Could not get exchange client for pair check")
                 return set()

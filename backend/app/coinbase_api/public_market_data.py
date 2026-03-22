@@ -14,6 +14,7 @@ Public endpoints used:
 
 import asyncio
 import logging
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -26,8 +27,10 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.coinbase.com"
 
-# Module-level rate limiting: 200ms minimum between requests
-_rate_lock = asyncio.Lock()
+# Module-level rate limiting: 200ms minimum between requests.
+# threading.Lock (not asyncio.Lock) so this is safe from both the main event
+# loop and the secondary event loop without cross-loop RuntimeErrors.
+_rate_lock = threading.Lock()
 _last_request_time: float = 0.0
 
 
@@ -42,12 +45,15 @@ async def _public_request(
     """
     global _last_request_time
 
-    async with _rate_lock:
+    # Reserve a time slot atomically inside the threading.Lock, then sleep
+    # OUTSIDE it so other coroutines can proceed concurrently while we wait.
+    with _rate_lock:
         now = time.monotonic()
-        elapsed = now - _last_request_time
-        if elapsed < 0.2:
-            await asyncio.sleep(0.2 - elapsed)
-        _last_request_time = time.monotonic()
+        wait = max(0.0, 0.2 - (now - _last_request_time))
+        _last_request_time = now + wait  # reserve slot before releasing lock
+
+    if wait > 0.0:
+        await asyncio.sleep(wait)
 
     url = f"{BASE_URL}{endpoint}"
 
