@@ -20,6 +20,7 @@ from app.database import Base
 
 class Settings(Base):
     __tablename__ = "settings"
+    __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String, unique=True, index=True)
@@ -31,6 +32,7 @@ class Settings(Base):
 
 class MarketData(Base):
     __tablename__ = "market_data"
+    __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
@@ -47,10 +49,11 @@ class MarketData(Base):
 
 class AIBotLog(Base):
     __tablename__ = "ai_bot_logs"
+    __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True, index=True)  # Link to position
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True, index=True)  # Link to position
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
     # AI thinking/reasoning content
@@ -76,9 +79,10 @@ class ScannerLog(Base):
     Captures pattern detection decisions, volume checks, and reasoning.
     """
     __tablename__ = "scanner_logs"
+    __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
     # What was scanned
@@ -104,9 +108,10 @@ class IndicatorLog(Base):
     Captures which conditions were checked, their values, and results.
     """
     __tablename__ = "indicator_logs"
+    __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
     # What was evaluated

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.132.0] - 2026-03-22
+
+### Changed
+- **Domain-scoped PostgreSQL schemas** — all 63 database tables are now organized into six named schemas (`auth`, `trading`, `reporting`, `social`, `content`, `system`), replacing the flat `public` schema. Zero behavior change for the running app. Each schema groups related tables by domain, laying the groundwork for future service extraction where each schema can become an independent database with no additional data migration. Cross-schema foreign keys are preserved and enforced by PostgreSQL.
+
 ## [v2.131.0] - 2026-03-22
 
 ### Added

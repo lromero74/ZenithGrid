@@ -32,9 +32,10 @@ class Account(Base):
     and account-based UI filtering.
     """
     __tablename__ = "accounts"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     name = Column(String, nullable=False)  # User-friendly account name
     type = Column(String, nullable=False)  # "cex" or "dex"
     is_default = Column(Boolean, default=False)  # Default account for UI
@@ -129,7 +130,7 @@ class Bot(Base):
     __tablename__ = "bots"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     name = Column(String, index=True)  # User-defined bot name (unique per user, not globally)
     description = Column(Text, nullable=True)  # Optional description
 
@@ -186,7 +187,7 @@ class Bot(Base):
     # Relationships
     user = relationship("User", back_populates="bots")
     # Bot name must be unique per user, not globally
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_bot_user_name"),)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_bot_user_name"), {'schema': 'trading'})
 
     account = relationship("Account", back_populates="bots")
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
@@ -312,7 +313,7 @@ class BotProduct(Base):
     product_id = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("bot_id", "product_id", name="uq_bot_product"),)
+    __table_args__ = (UniqueConstraint("bot_id", "product_id", name="uq_bot_product"), {'schema': 'trading'})
 
     # Relationships
     bot = relationship("Bot", back_populates="products")
@@ -320,9 +321,10 @@ class BotProduct(Base):
 
 class BotTemplate(Base):
     __tablename__ = "bot_templates"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for system presets)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)  # Owner (null = system preset)
     name = Column(String, unique=True, index=True)  # Template name
     description = Column(Text, nullable=True)  # Optional description
 
@@ -362,7 +364,7 @@ class BotTemplateProduct(Base):
     product_id = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("template_id", "product_id", name="uq_template_product"),)
+    __table_args__ = (UniqueConstraint("template_id", "product_id", name="uq_template_product"), {'schema': 'trading'})
 
     # Relationships
     template = relationship("BotTemplate", back_populates="products")
@@ -370,6 +372,7 @@ class BotTemplateProduct(Base):
 
 class Position(Base):
     __tablename__ = "positions"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
     # Link to bot (nullable for backwards compatibility)
@@ -377,7 +380,7 @@ class Position(Base):
     # Link to account (for filtering)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
     # Owner (for user-specific deal numbers)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)
     # Sequential attempt number (ALL positions: success + failed)
     user_attempt_number = Column(Integer, nullable=True, index=True)
     # User-specific deal number (SUCCESSFUL deals only)
@@ -551,6 +554,7 @@ class Position(Base):
 
 class Trade(Base):
     __tablename__ = "trades"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("positions.id"), index=True)
@@ -575,6 +579,7 @@ class Trade(Base):
 
 class Signal(Base):
     __tablename__ = "signals"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)
@@ -599,6 +604,7 @@ class PendingOrder(Base):
     """
 
     __tablename__ = "pending_orders"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("positions.id"), nullable=False)
@@ -659,6 +665,7 @@ class OrderHistory(Base):
     """
 
     __tablename__ = "order_history"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -695,9 +702,10 @@ class BlacklistedCoin(Base):
     """
 
     __tablename__ = "blacklisted_coins"
+    __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     symbol = Column(String, index=True)  # e.g., "ICP", "EOS", "DOGE" - unique per user, not globally
     reason = Column(Text, nullable=True)  # Why the coin is blacklisted
     created_at = Column(DateTime, default=datetime.utcnow)

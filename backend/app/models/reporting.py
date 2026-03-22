@@ -30,8 +30,8 @@ class AccountValueSnapshot(Base):
     __tablename__ = "account_value_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     snapshot_date = Column(DateTime, nullable=False, index=True)
     total_value_btc = Column(Float, nullable=False, default=0.0)
     total_value_usd = Column(Float, nullable=False, default=0.0)
@@ -43,7 +43,10 @@ class AccountValueSnapshot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Unique constraint: one snapshot per account per day
-    __table_args__ = (UniqueConstraint("account_id", "snapshot_date", name="uq_account_snapshot_date"),)
+    __table_args__ = (
+        UniqueConstraint("account_id", "snapshot_date", name="uq_account_snapshot_date"),
+        {'schema': 'reporting'},
+    )
 
     # Relationships
     account = relationship("Account")
@@ -58,6 +61,7 @@ class MetricSnapshot(Base):
     Pruned to 90 days to keep the table small.
     """
     __tablename__ = "metric_snapshots"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
     metric_name = Column(String, nullable=False, index=True)
@@ -74,10 +78,11 @@ class PropFirmState(Base):
     One row per prop firm account.
     """
     __tablename__ = "prop_firm_state"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"),
         nullable=False, unique=True, index=True
     )
 
@@ -119,10 +124,11 @@ class PropFirmEquitySnapshot(Base):
     equity trajectory and drawdown history over time.
     """
     __tablename__ = "prop_firm_equity_snapshots"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     equity = Column(Float, nullable=False)
@@ -141,10 +147,11 @@ class ReportGoal(Base):
     and progress is calculated in each generated report.
     """
     __tablename__ = "report_goals"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)
     name = Column(String, nullable=False)  # e.g. "Reach 1 BTC"
     target_type = Column(String, nullable=False)  # "balance" / "profit" / "both"
     target_currency = Column(String, nullable=False, default="USD")  # "USD" / "BTC"
@@ -192,6 +199,7 @@ class ExpenseItem(Base):
     expense_period for coverage calculations.
     """
     __tablename__ = "expense_items"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
     goal_id = Column(
@@ -199,7 +207,7 @@ class ExpenseItem(Base):
         nullable=False, index=True
     )
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     category = Column(String, nullable=False)
@@ -239,7 +247,7 @@ class GoalProgressSnapshot(Base):
         nullable=False, index=True
     )
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     snapshot_date = Column(DateTime, nullable=False, index=True)
@@ -251,6 +259,7 @@ class GoalProgressSnapshot(Base):
 
     __table_args__ = (
         UniqueConstraint("goal_id", "snapshot_date", name="uq_goal_snapshot_date"),
+        {'schema': 'reporting'},
     )
 
     # Relationships
@@ -265,10 +274,11 @@ class ReportSchedule(Base):
     Each schedule can link to multiple goals and deliver to multiple recipients.
     """
     __tablename__ = "report_schedules"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # null = all accounts
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True)  # null = all accounts
     name = Column(String, nullable=False)  # e.g. "Weekly Performance Report"
     periodicity = Column(String, nullable=False)  # Human-readable label (derived)
     schedule_type = Column(String, nullable=True)  # daily/weekly/monthly/quarterly/yearly
@@ -318,6 +328,7 @@ class ReportScheduleGoal(Base):
 
     __table_args__ = (
         UniqueConstraint("schedule_id", "goal_id", name="uq_schedule_goal"),
+        {'schema': 'reporting'},
     )
 
     # Relationships
@@ -333,10 +344,11 @@ class Report(Base):
     and can be viewed in-app or downloaded as PDF.
     """
     __tablename__ = "reports"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)
     schedule_id = Column(Integer, ForeignKey("report_schedules.id", ondelete="SET NULL"), nullable=True)
     period_start = Column(DateTime, nullable=False)
     period_end = Column(DateTime, nullable=False)
@@ -366,14 +378,15 @@ class AccountTransfer(Base):
     reports, dashboard projections, and account value charts.
     """
     __tablename__ = "account_transfers"
+    __table_args__ = {'schema': 'reporting'}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        Integer, ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     account_id = Column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     external_id = Column(String, unique=True, nullable=True)  # Coinbase txn ID (dedup)

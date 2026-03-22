@@ -184,25 +184,45 @@ Secondary Event Loop (Tier 2/3):
 
 These are **internal refactors** that don't change behavior but reduce coupling. Each one makes a future microservice extraction cheaper. Do them opportunistically — when touching a related area anyway.
 
-### 2.1 — Domain-scoped database schemas
+### 2.1 — Domain-scoped database schemas ✅ DONE (v2.132.0)
 
 **Problem:** All tables are in the `public` schema. There's no isolation between trading, social, content, and reporting data. A microservice extraction would require a data migration and cross-schema foreign keys.
 
 **Fix:** Introduce PostgreSQL schemas as namespaces (not separate databases yet). Group tables:
 ```
-schema: trading    → Bot, Position, Order, Trade, PendingOrder, Indicator*, Decision*, Signal*, BlacklistedPair
-schema: portfolio  → Account, Transfer, AccountValueHistory, ExchangeBalance
-schema: reporting  → Goal, Expense, Report, ReportSchedule
-schema: social     → Friend, GameRoom, ChatMessage, ChatGroup, ChatChannel
-schema: content    → NewsSource, Article, VideoSource, Video
-schema: auth       → User, Session, RevokedToken, DeviceTrust, RateLimitAttempt
-schema: system     → BanLog, CoinMetadata, DisplayName
+schema: auth       → User, Group, Role, Permission, TrustedDevice, EmailVerificationToken,
+                     RevokedToken, ActiveSession, RateLimitAttempt (12 tables)
+schema: trading    → Account, Bot, BotProduct, BotTemplate, BotTemplateProduct, Position,
+                     Trade, Signal, PendingOrder, OrderHistory, BlacklistedCoin (11 tables)
+schema: reporting  → AccountValueSnapshot, MetricSnapshot, PropFirmState,
+                     PropFirmEquitySnapshot, ReportGoal, ExpenseItem, GoalProgressSnapshot,
+                     ReportSchedule, ReportScheduleGoal, Report, AccountTransfer, Donation (12 tables)
+schema: social     → Friendship, FriendRequest, BlockedUser, GameResult, GameResultPlayer,
+                     GameHistoryVisibility, GameHighScore, Tournament, TournamentPlayer,
+                     TournamentDeleteVote, ChatChannel, ChatChannelMember, ChatMessage,
+                     ChatMessageReaction (14 tables)
+schema: content    → AIProviderCredential, NewsArticle, VideoArticle, ContentSource,
+                     UserSourceSubscription, ArticleTTS, UserVoiceSubscription,
+                     UserArticleTTSHistory, UserContentSeenStatus (9 tables)
+schema: system     → Setting, MarketData, AIBotLog, ScannerLog, IndicatorLog (5 tables)
 ```
 
 Cross-schema foreign keys work in PostgreSQL (`schema_a.table.column → schema_b.table.column`). This is not a breaking change — it's a rename migration. But it makes future extraction obvious: each schema becomes a service's database.
 
-**Impact:** Zero runtime impact. Dramatically simplifies future extraction.
-**Effort:** Medium — requires a careful migration (rename all table references, update SQLAlchemy `__table_args__`).
+**Implementation notes (learned during execution):**
+- Migration `068_domain_schemas.py`: `CREATE SCHEMA IF NOT EXISTS` × 6, then `ALTER TABLE public.X SET SCHEMA Y` for all 63 tables. Idempotent — checks `information_schema.tables WHERE table_schema = 'public'` before each move. PostgreSQL-only (SQLite: no-op).
+- All 7 model files updated with `{'schema': 'name'}` as the last element of `__table_args__`. Models with existing `UniqueConstraint`/`Index` constraints merge the dict into the tuple: `(UniqueConstraint(...), {'schema': 'x'})`.
+- Junction `Table()` objects in `auth.py` (`user_groups`, `group_roles`, `role_permissions`): `schema="auth"` passed as a keyword argument directly to `Table()`, not via `__table_args__`.
+- Cross-schema FK strings updated across all model files: `ForeignKey("users.id")` → `ForeignKey("auth.users.id")`, `ForeignKey("accounts.id")` → `ForeignKey("trading.accounts.id")`, `ForeignKey("bots.id")` → `ForeignKey("trading.bots.id")` etc. ~45 FK strings changed total.
+- `setup.py`: `CREATE SCHEMA IF NOT EXISTS` for all 6 schemas executed before `Base.metadata.create_all()` on fresh PostgreSQL installs.
+- `database.py`: `connect_args = {"options": "-csearch_path=auth,trading,reporting,social,content,system,public"}` added to PostgreSQL engine kwargs for ad-hoc psql compatibility.
+- `GRANT USAGE ON SCHEMA` + `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES` executed per schema for `zenithgrid_app` role.
+- **FK OID semantics**: PostgreSQL stores FK constraints by OID, not name. Moving a table to a new schema preserves all existing FK constraints — no drop/recreate needed.
+- Tests: `TestSchemaAssignments` (DB-level, queries `information_schema.tables`, PostgreSQL-only via `pytestmark`) + `TestSQLAlchemySchemaMetadata` (ORM-level, checks `__table__.schema` and FK `target_fullname` values). Total 40 tests.
+- `conftest.py` `db_sync_conn` fixture uses `importlib.util.spec_from_file_location` to load `db_utils.py` by absolute path — avoids `tests/migrations/__init__.py` shadowing the real `backend/migrations/` package.
+
+**Impact:** Zero runtime impact. Dramatically simplifies future extraction — each schema becomes a service's database.
+**Effort:** Medium — 9 files changed (7 model files, migration, setup.py, database.py), 40 new tests.
 
 ---
 
