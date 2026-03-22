@@ -12,6 +12,7 @@ Thin wrapper around pybit's HTTP client with:
 
 import asyncio
 import logging
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -135,8 +136,10 @@ class ByBitClient:
             api_key=api_key,
             api_secret=api_secret,
         )
-        # Per-instance rate limiting (avoids cross-user interference)
-        self._rate_lock = asyncio.Lock()
+        # Per-instance rate limiting (avoids cross-user interference).
+        # threading.Lock so this client is safe from both the main and
+        # secondary event loops (same pattern as CoinbaseClient).
+        self._rate_lock = threading.Lock()
         self._last_request_time: float = 0.0
         logger.info(
             f"ByBitClient initialized (testnet={testnet})"
@@ -144,12 +147,12 @@ class ByBitClient:
 
     async def _rate_limited_call(self, func, **kwargs):
         """Execute a pybit call with per-instance rate limiting."""
-        async with self._rate_lock:
+        with self._rate_lock:
             now = time.monotonic()
-            elapsed = now - self._last_request_time
-            if elapsed < _BYBIT_MIN_INTERVAL:
-                await asyncio.sleep(_BYBIT_MIN_INTERVAL - elapsed)
-            self._last_request_time = time.monotonic()
+            wait = max(0.0, _BYBIT_MIN_INTERVAL - (now - self._last_request_time))
+            self._last_request_time = now + wait  # reserve slot atomically
+        if wait > 0.0:
+            await asyncio.sleep(wait)
         return await asyncio.to_thread(func, **kwargs)
 
     # ----------------------------------------------------------

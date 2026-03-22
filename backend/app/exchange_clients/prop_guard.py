@@ -30,17 +30,19 @@ from app.exchange_clients.prop_guard_state import (
     should_reset_daily,
 )
 
-# Per-account locks to serialize order execution through PropGuard.
-# Prevents two simultaneous orders from both passing preflight checks
-# independently and collectively breaching drawdown limits.
-_account_locks: dict[int, asyncio.Lock] = {}
+# Per-account-per-loop locks to serialize order execution through PropGuard.
+# Keyed by (loop_id, account_id) so the main event loop and the secondary
+# event loop each get their own asyncio.Lock, eliminating cross-loop binding.
+_account_locks: dict[tuple, asyncio.Lock] = {}
 
 
 def _get_account_lock(account_id: int) -> asyncio.Lock:
-    """Get or create an asyncio.Lock for a specific account."""
-    if account_id not in _account_locks:
-        _account_locks[account_id] = asyncio.Lock()
-    return _account_locks[account_id]
+    """Get or create an asyncio.Lock for (current_loop, account_id)."""
+    loop = asyncio.get_running_loop()
+    key = (id(loop), account_id)
+    if key not in _account_locks:
+        _account_locks[key] = asyncio.Lock()
+    return _account_locks[key]
 
 
 logger = logging.getLogger(__name__)
@@ -89,7 +91,11 @@ class PropGuardClient(ExchangeClient):
         self._vol_threshold = volatility_threshold
         self._vol_reduction = volatility_reduction_pct
         self._ws_state = ws_state
-        self._order_lock = _get_account_lock(account_id)
+        # _order_lock is looked up lazily at call time (not stored here) so
+        # each event loop gets its own asyncio.Lock for this account_id.
+        # Storing it in __init__ would bind it to the creation loop, causing
+        # cross-loop RuntimeErrors if the cached client is later used from a
+        # different event loop.
 
     # ==========================================================
     # PROPGUARD PRE-FLIGHT CHECKS
@@ -511,7 +517,7 @@ class PropGuardClient(ExchangeClient):
         size: Optional[str] = None,
         funds: Optional[str] = None,
     ) -> Dict[str, Any]:
-        async with self._order_lock:
+        async with _get_account_lock(self._account_id):
             # Pre-flight check (serialized per account)
             block_reason = await self._preflight_check(product_id)
             if block_reason:
@@ -544,7 +550,7 @@ class PropGuardClient(ExchangeClient):
         size: Optional[str] = None,
         funds: Optional[str] = None,
     ) -> Dict[str, Any]:
-        async with self._order_lock:
+        async with _get_account_lock(self._account_id):
             block_reason = await self._preflight_check(product_id)
             if block_reason:
                 logger.warning(

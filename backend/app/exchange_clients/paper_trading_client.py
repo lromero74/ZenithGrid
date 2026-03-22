@@ -24,10 +24,12 @@ from app.trading_engine.book_depth_guard import (
 
 logger = logging.getLogger(__name__)
 
-# Per-account asyncio locks to serialize balance operations.
-# Without this, concurrent PaperTradingClient instances for the same account
-# read stale snapshots of paper_balances and the last writer silently wins.
-_account_balance_locks: Dict[int, asyncio.Lock] = {}
+# Per-account-per-loop locks to serialize balance operations.
+# Keyed by (loop_id, account_id) so the main event loop and the secondary
+# event loop each get their own asyncio.Lock, eliminating cross-loop binding.
+# Without per-account locks, concurrent PaperTradingClient instances for the
+# same account read stale snapshots of paper_balances and the last writer wins.
+_account_balance_locks: Dict[tuple, asyncio.Lock] = {}
 
 # Per-task toggle for VWAP-based fill simulation.
 # Each asyncio.Task in multi_bot_monitor gets its own copy via ContextVar,
@@ -36,10 +38,12 @@ simulate_slippage_ctx: ContextVar[bool] = ContextVar('simulate_slippage', defaul
 
 
 def _get_account_lock(account_id: int) -> asyncio.Lock:
-    """Return (or create) the asyncio.Lock for a given paper account."""
-    if account_id not in _account_balance_locks:
-        _account_balance_locks[account_id] = asyncio.Lock()
-    return _account_balance_locks[account_id]
+    """Return (or create) the asyncio.Lock for (current_loop, account_id)."""
+    loop = asyncio.get_running_loop()
+    key = (id(loop), account_id)
+    if key not in _account_balance_locks:
+        _account_balance_locks[key] = asyncio.Lock()
+    return _account_balance_locks[key]
 
 
 class PaperTradingClient(ExchangeClient):

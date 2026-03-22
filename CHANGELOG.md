@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.13] - 2026-03-22
+
+### Fixed
+- **SimpleCache threading.Lock** — `api_cache._lock` was an `asyncio.Lock` that would bind to the main event loop on first use. Any secondary-loop task calling `calculate_aggregate_quote_value()` (which reads from `api_cache`) would crash with "Future attached to a different loop". All internal operations in `SimpleCache` are pure dict reads/writes with no `await` inside the lock, so converting to `threading.Lock` is safe and loop-agnostic.
+- **ByBitClient rate-limit lock** — `_rate_lock` converted from `asyncio.Lock` to `threading.Lock` using the slot-reserve pattern: compute wait and advance `_last_request_time` inside the lock, then `await asyncio.sleep(wait)` outside it. ByBit client is now callable from either event loop.
+- **PropGuardClient per-account lock** — replaced a fixed `asyncio.Lock` stored at construction time (bound to the creation loop) with a lazy lookup keyed by `(id(current_loop), account_id)`. Each event loop gets its own lock per account; no cross-loop sharing.
+- **PaperTradingClient per-account balance lock** — same loop-aware `(id(loop), account_id)` key pattern as PropGuardClient.
+- **Test fixes** — updated pre-existing tests that asserted `_rate_lock` was `asyncio.Lock` (now correctly checks for `threading.Lock`); updated `TestAccountLock` tests to run inside an event loop (required since `_get_account_lock` calls `asyncio.get_running_loop()`). Added 8 new tests for `SimpleCache` lock thread safety and 6 new tests for `ByBitClient` rate lock.
+- **pybit package** — was listed in `requirements.txt` but not installed. Installed via pip.
+
 ## [v2.125.12] - 2026-03-22
 
 ### Fixed

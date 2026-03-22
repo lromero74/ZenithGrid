@@ -156,13 +156,15 @@ class TestPropGuardInit:
 class TestAccountLock:
     """Tests for per-account locking."""
 
-    def test_same_account_gets_same_lock(self):
-        """Happy path: same account_id returns same lock object."""
+    @pytest.mark.asyncio
+    async def test_same_account_gets_same_lock(self):
+        """Happy path: same account_id returns same lock object within one loop."""
         lock1 = _get_account_lock(999)
         lock2 = _get_account_lock(999)
         assert lock1 is lock2
 
-    def test_different_accounts_get_different_locks(self):
+    @pytest.mark.asyncio
+    async def test_different_accounts_get_different_locks(self):
         """Edge case: different account_ids get separate locks."""
         lock1 = _get_account_lock(1001)
         lock2 = _get_account_lock(1002)

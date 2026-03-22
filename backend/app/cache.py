@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Dict, Optional
@@ -37,7 +38,11 @@ class SimpleCache:
 
     def __init__(self):
         self._cache: Dict[str, CacheEntry] = {}
-        self._lock = asyncio.Lock()
+        # threading.Lock (not asyncio.Lock) so cache is safe from both the
+        # main event loop and the secondary event loop.  No `await` expression
+        # appears inside any of the lock-guarded blocks — all operations are
+        # pure dict reads/writes, which are fine under a threading.Lock.
+        self._lock = threading.Lock()
         # In-flight futures: key -> Future (prevents thundering herd)
         self._in_flight: Dict[str, asyncio.Future] = {}
         # Negative cache: key -> monotonic expiry time
@@ -45,7 +50,7 @@ class SimpleCache:
 
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
-        async with self._lock:
+        with self._lock:
             entry = self._cache.get(key)
             if entry is None:
                 return None
@@ -58,23 +63,23 @@ class SimpleCache:
 
     async def set(self, key: str, value: Any, ttl_seconds: int):
         """Set value in cache with TTL"""
-        async with self._lock:
+        with self._lock:
             self._cache[key] = CacheEntry(value, ttl_seconds)
 
     async def delete(self, key: str):
         """Delete a cache entry"""
-        async with self._lock:
+        with self._lock:
             if key in self._cache:
                 del self._cache[key]
 
     async def mark_not_found(self, key: str, ttl_seconds: int):
         """Mark a key as not-found with a TTL (negative cache)."""
-        async with self._lock:
+        with self._lock:
             self._not_found[key] = time.monotonic() + ttl_seconds
 
     async def is_not_found(self, key: str) -> bool:
         """Check if a key is negative-cached. Lazily removes expired entries."""
-        async with self._lock:
+        with self._lock:
             expiry = self._not_found.get(key)
             if expiry is None:
                 return False
@@ -85,20 +90,20 @@ class SimpleCache:
 
     async def clear(self):
         """Clear all cache entries"""
-        async with self._lock:
+        with self._lock:
             self._cache.clear()
             self._not_found.clear()
 
     async def delete_prefix(self, prefix: str):
         """Delete all cache entries whose keys start with the given prefix"""
-        async with self._lock:
+        with self._lock:
             keys_to_delete = [key for key in self._cache if key.startswith(prefix)]
             for key in keys_to_delete:
                 del self._cache[key]
 
     async def cleanup_expired(self):
         """Remove all expired entries"""
-        async with self._lock:
+        with self._lock:
             expired_keys = [key for key, entry in self._cache.items() if entry.is_expired()]
             for key in expired_keys:
                 del self._cache[key]
@@ -174,7 +179,7 @@ class PersistentPortfolioCache:
 
     async def get(self, user_id: int) -> Optional[dict]:
         """Load cached portfolio from disk. Returns None if missing."""
-        async with self._lock:
+        with self._lock:
             path = self._path(user_id)
             if not os.path.exists(path):
                 return None
@@ -195,7 +200,7 @@ class PersistentPortfolioCache:
 
     async def save(self, user_id: int, portfolio_data: dict):
         """Persist portfolio response to disk."""
-        async with self._lock:
+        with self._lock:
             path = self._path(user_id)
             try:
                 data = dict(portfolio_data)
@@ -207,7 +212,7 @@ class PersistentPortfolioCache:
 
     async def invalidate(self, user_id: Optional[int] = None):
         """Remove cached portfolio files."""
-        async with self._lock:
+        with self._lock:
             if user_id is not None:
                 path = self._path(user_id)
                 if os.path.exists(path):

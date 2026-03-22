@@ -271,8 +271,9 @@ class TestByBitClientInit:
         assert bybit_client._testnet is True
 
     def test_init_creates_rate_lock(self, bybit_client):
-        """Initialization creates an asyncio lock for rate limiting."""
-        assert isinstance(bybit_client._rate_lock, asyncio.Lock)
+        """Initialization creates a threading.Lock for rate limiting (loop-agnostic)."""
+        import threading
+        assert isinstance(bybit_client._rate_lock, type(threading.Lock()))
 
     def test_init_sets_last_request_time_to_zero(self, bybit_client):
         """Initial last request time is 0.0."""
