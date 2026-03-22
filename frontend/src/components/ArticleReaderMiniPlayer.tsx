@@ -33,6 +33,9 @@ const NUMBER_WORDS = new Set([
 // Check if a string contains digits
 const hasDigits = (s: string) => /\d/.test(s)
 
+// iOS WebKit ignores audio.volume — hide the slider so it doesn't mislead users
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+
 // Memoized volume slider — isolated from currentTime re-renders (4x/sec)
 // that would otherwise cause stutter during drag on both desktop and iOS.
 const VolumeControls = React.memo(function VolumeControls({
@@ -794,8 +797,8 @@ export function ArticleReaderMiniPlayer() {
                           </select>
                         </div>
 
-                        {/* Volume slider (memoized to prevent stutter from currentTime re-renders) */}
-                        <VolumeControls volume={volume} setVolume={setVolume} setVolumeImmediate={setVolumeImmediate} />
+                        {/* Volume slider — hidden on iOS (hardware volume only, audio.volume is ignored by WebKit) */}
+                        {!isIOS && <VolumeControls volume={volume} setVolume={setVolume} setVolumeImmediate={setVolumeImmediate} />}
                       </div>
                     </div>
                   )}
