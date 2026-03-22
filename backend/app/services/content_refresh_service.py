@@ -27,6 +27,16 @@ class ContentRefreshService:
         self._running = False
         self._last_news_refresh: datetime | None = None
         self._last_video_refresh: datetime | None = None
+        self._session_maker = None  # injected by secondary_loop startup
+
+    def set_session_maker(self, sm):
+        """Inject a session maker (used when running on the secondary event loop)."""
+        self._session_maker = sm
+
+    def _get_sm(self):
+        """Return the injected session maker, falling back to the default."""
+        from app.database import async_session_maker as _default
+        return self._session_maker or _default
 
     async def start(self):
         """Start the background refresh task."""
@@ -54,14 +64,16 @@ class ContentRefreshService:
         # Import here to avoid circular imports
         from app.services.news_fetch_service import fetch_all_news, fetch_all_videos
 
+        sm = self._get_sm()
+
         # Wait a bit after startup before first refresh
         await asyncio.sleep(INITIAL_DELAY)
 
         # Do initial refresh immediately
         logger.info("Content refresh: Running initial content fetch...")
-        await self._refresh_news(fetch_all_news)
+        await self._refresh_news(fetch_all_news, sm)
         await asyncio.sleep(5)  # Stagger to avoid CPU spike
-        await self._refresh_videos(fetch_all_videos)
+        await self._refresh_videos(fetch_all_videos, sm)
 
         while self._running:
             try:
@@ -72,17 +84,17 @@ class ContentRefreshService:
                 if self._last_news_refresh:
                     news_age = (now - self._last_news_refresh).total_seconds()
                     if news_age >= NEWS_REFRESH_INTERVAL:
-                        await self._refresh_news(fetch_all_news)
+                        await self._refresh_news(fetch_all_news, sm)
                 else:
-                    await self._refresh_news(fetch_all_news)
+                    await self._refresh_news(fetch_all_news, sm)
 
                 # Check if videos need refresh
                 if self._last_video_refresh:
                     video_age = (now - self._last_video_refresh).total_seconds()
                     if video_age >= VIDEO_REFRESH_INTERVAL:
-                        await self._refresh_videos(fetch_all_videos)
+                        await self._refresh_videos(fetch_all_videos, sm)
                 else:
-                    await self._refresh_videos(fetch_all_videos)
+                    await self._refresh_videos(fetch_all_videos, sm)
 
             except Exception as e:
                 logger.error(f"Error in content refresh loop: {e}")
@@ -90,21 +102,21 @@ class ContentRefreshService:
             # Sleep for a minute before checking again
             await asyncio.sleep(60)
 
-    async def _refresh_news(self, fetch_func):
+    async def _refresh_news(self, fetch_func, session_maker=None):
         """Refresh news articles."""
         try:
             logger.info("Content refresh: Fetching news articles...")
-            await fetch_func()
+            await fetch_func(session_maker=session_maker)
             self._last_news_refresh = datetime.utcnow()
             logger.info("Content refresh: News articles updated successfully")
         except Exception as e:
             logger.error(f"Content refresh: Failed to refresh news: {e}")
 
-    async def _refresh_videos(self, fetch_func):
+    async def _refresh_videos(self, fetch_func, session_maker=None):
         """Refresh video articles."""
         try:
             logger.info("Content refresh: Fetching videos...")
-            await fetch_func()
+            await fetch_func(session_maker=session_maker)
             self._last_video_refresh = datetime.utcnow()
             logger.info("Content refresh: Videos updated successfully")
         except Exception as e:

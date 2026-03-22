@@ -21,7 +21,7 @@ import feedparser
 from sqlalchemy import delete, desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
+from app.database import async_session_maker as _default_session_maker
 from app.models import ArticleTTS, ContentSource, NewsArticle, VideoArticle
 from app.news_data import (
     NEWS_ITEM_MAX_AGE_DAYS,
@@ -60,9 +60,10 @@ def get_last_video_refresh() -> Optional[datetime]:
 # =============================================================================
 
 
-async def get_news_sources_from_db() -> Dict[str, Dict]:
+async def get_news_sources_from_db(session_maker=None) -> Dict[str, Dict]:
     """Get news sources from database, formatted like NEWS_SOURCES dict."""
-    async with async_session_maker() as db:
+    sm = session_maker or _default_session_maker
+    async with sm() as db:
         result = await db.execute(
             select(ContentSource)
             .where(ContentSource.type == "news")
@@ -85,9 +86,10 @@ async def get_news_sources_from_db() -> Dict[str, Dict]:
     }
 
 
-async def get_video_sources_from_db() -> Dict[str, Dict]:
+async def get_video_sources_from_db(session_maker=None) -> Dict[str, Dict]:
     """Get video sources from database, formatted like VIDEO_SOURCES dict."""
-    async with async_session_maker() as db:
+    sm = session_maker or _default_session_maker
+    async with sm() as db:
         result = await db.execute(
             select(ContentSource)
             .where(ContentSource.type == "video")
@@ -108,9 +110,10 @@ async def get_video_sources_from_db() -> Dict[str, Dict]:
     }
 
 
-async def _get_source_key_to_id_map(source_type: Optional[str] = None) -> Dict[str, int]:
+async def _get_source_key_to_id_map(source_type: Optional[str] = None, session_maker=None) -> Dict[str, int]:
     """Build a mapping of source_key -> content_sources.id for linking articles/videos."""
-    async with async_session_maker() as db:
+    sm = session_maker or _default_session_maker
+    async with sm() as db:
         query = select(ContentSource.source_key, ContentSource.id)
         if source_type:
             query = query.where(ContentSource.type == source_type)
@@ -560,13 +563,15 @@ async def cleanup_old_videos(
 async def cleanup_articles_with_images(
     max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
     min_keep: int = 5,
+    session_maker=None,
 ) -> tuple:
     """Run per-source article cleanup and delete associated files.
     Cleans up: image files, TTS audio cache dirs, TTS DB records.
     Returns (articles_deleted, image_files_deleted)."""
+    sm = session_maker or _default_session_maker
     image_files_deleted = 0
     tts_dirs_deleted = 0
-    async with async_session_maker() as db:
+    async with sm() as db:
         # Collect image paths and article IDs that will be deleted
         # We need to query before deleting
         # Use naive datetime to match SQLite's naive storage
@@ -673,17 +678,18 @@ async def cleanup_articles_with_images(
 # =============================================================================
 
 
-async def fetch_all_news() -> None:
+async def fetch_all_news(session_maker=None) -> None:
     """Fetch news from all sources, cache images, and store in database."""
     global _last_news_refresh
 
+    sm = session_maker or _default_session_maker
     fresh_items = []
 
-    db_sources = await get_news_sources_from_db()
+    db_sources = await get_news_sources_from_db(session_maker=sm)
     sources_to_use = db_sources if db_sources else NEWS_SOURCES
 
     # Build source_key -> source_id map for linking articles to content_sources
-    source_key_to_id = await _get_source_key_to_id_map("news")
+    source_key_to_id = await _get_source_key_to_id_map("news", session_maker=sm)
 
     connector = aiohttp.TCPConnector()
     async with aiohttp.ClientSession(connector=connector, max_field_size=16384) as session:
@@ -704,7 +710,7 @@ async def fetch_all_news() -> None:
 
         new_articles_count = 0
         articles_to_download = []
-        async with async_session_maker() as db:
+        async with sm() as db:
             seen_urls = set()
             for item in fresh_items:
                 if item.url in seen_urls:
@@ -735,7 +741,7 @@ async def fetch_all_news() -> None:
             for article_id, thumbnail_url in articles_to_download:
                 filename = await download_and_save_image(session, thumbnail_url, article_id)
                 if filename:
-                    async with async_session_maker() as db:
+                    async with sm() as db:
                         await db.execute(
                             update(NewsArticle)
                             .where(NewsArticle.id == article_id)
@@ -748,7 +754,7 @@ async def fetch_all_news() -> None:
 
     # Run per-source retention cleanup (articles + images)
     try:
-        deleted, imgs = await cleanup_articles_with_images()
+        deleted, imgs = await cleanup_articles_with_images(session_maker=sm)
         if deleted > 0:
             logger.info(f"Post-fetch cleanup: {deleted} articles, {imgs} images")
     except Exception as e:
@@ -757,17 +763,18 @@ async def fetch_all_news() -> None:
     _last_news_refresh = datetime.utcnow()
 
 
-async def fetch_all_videos() -> Dict[str, Any]:
+async def fetch_all_videos(session_maker=None) -> Dict[str, Any]:
     """Fetch videos from all YouTube sources and store in database."""
     global _last_video_refresh
 
+    sm = session_maker or _default_session_maker
     fresh_items: List[VideoItem] = []
 
-    db_sources = await get_video_sources_from_db()
+    db_sources = await get_video_sources_from_db(session_maker=sm)
     sources_to_use = db_sources if db_sources else VIDEO_SOURCES
 
     # Build source_key -> source_id map for linking videos to content_sources
-    source_key_to_id = await _get_source_key_to_id_map("video")
+    source_key_to_id = await _get_source_key_to_id_map("video", session_maker=sm)
 
     async with aiohttp.ClientSession() as session:
         tasks = []
@@ -783,7 +790,7 @@ async def fetch_all_videos() -> Dict[str, Any]:
                 logger.error(f"Video fetch task failed: {result}")
 
     new_count = 0
-    async with async_session_maker() as db:
+    async with sm() as db:
         for item in fresh_items:
             video = await store_video_in_db(
                 db, item, category=item.category,

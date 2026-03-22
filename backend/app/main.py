@@ -144,13 +144,12 @@ rebalance_monitor = RebalanceMonitor()
 # Perpetual futures position monitor - syncs open perps positions with exchange
 perps_monitor = PerpsMonitor(interval_seconds=60)
 
-# Background task handles — main loop tasks
+# Background task handles — main loop tasks only
+# (secondary loop tasks are managed by stop_secondary_loop())
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
 memory_cache_cleanup_task = None
-account_snapshot_task = None
-transfer_sync_task = None
 
 
 def override_get_price_monitor():
@@ -496,7 +495,6 @@ async def run_transfer_sync(session_maker=None):
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
     global missing_order_detector_task, memory_cache_cleanup_task
-    global account_snapshot_task, transfer_sync_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -561,11 +559,6 @@ async def startup_event():
     memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
     logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
 
-    # ContentRefreshService stays on main loop: news_fetch_service has 8 async_session_maker call
-    # sites that would require threading session_maker through (deferred to a future refactor).
-    await content_refresh_service.start()
-    logger.info("Content refresh service started - news every 30min, videos every 60min")
-
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
@@ -578,30 +571,36 @@ async def startup_event():
     sm = get_secondary_session_maker()
     logger.info("Secondary event loop started")
 
-    # ── MAIN LOOP: Services that use the shared exchange client cache ────────
-    # These cannot move to the secondary loop because get_exchange_client_for_account()
-    # returns cached CoinbaseClient instances with asyncio.Lock objects bound to the
-    # first event loop that acquired them. Using them from a different loop causes
-    # "bound to a different event loop" RuntimeErrors.
-    logger.info("Starting auto-buy BTC monitor...")
-    await auto_buy_monitor.start()
+    # ── SECONDARY LOOP: Exchange-client services ──────────────────────────────
+    # CoinbaseClient now uses threading.Lock for rate limiting (not asyncio.Lock),
+    # making all cached exchange clients safe to use from any event loop.
+    # Session makers are injected so these services use the secondary loop's DB pool.
+    logger.info("Starting auto-buy BTC monitor on secondary loop...")
+    auto_buy_monitor.set_session_maker(sm)
+    schedule(auto_buy_monitor.start())
     logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
 
-    logger.info("Starting portfolio rebalance monitor...")
-    await rebalance_monitor.start()
+    logger.info("Starting portfolio rebalance monitor on secondary loop...")
+    rebalance_monitor.set_session_maker(sm)
+    schedule(rebalance_monitor.start())
     logger.info("Rebalance monitor started - maintaining target allocations per account")
 
-    logger.info("Starting trading pair monitor...")
-    await trading_pair_monitor.start()
+    logger.info("Starting trading pair monitor on secondary loop...")
+    trading_pair_monitor.set_session_maker(sm)
+    schedule(trading_pair_monitor.start())
     logger.info("Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
 
-    logger.info("Starting account snapshot capture job...")
-    account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
+    logger.info("Starting account snapshot capture job on secondary loop...")
+    schedule(run_account_snapshot_capture(session_maker=sm))
     logger.info("Account snapshot capture job started - capturing daily account values")
 
-    logger.info("Starting transfer sync job...")
-    transfer_sync_task = asyncio.create_task(run_transfer_sync())
+    logger.info("Starting transfer sync job on secondary loop...")
+    schedule(run_transfer_sync(session_maker=sm))
     logger.info("Transfer sync started - syncing deposits/withdrawals daily")
+
+    logger.info("Starting content refresh service on secondary loop...")
+    content_refresh_service.set_session_maker(sm)
+    schedule(content_refresh_service.start())
 
     # ── SECONDARY LOOP: DB-only and HTTP-only tasks (no shared exchange client) ──
     # These are safe because they either use DB only (with secondary session maker)
@@ -676,15 +675,16 @@ async def shutdown_event():
     # ── Stop main loop monitors ───────────────────────────────────────────────
     logger.info("🛑 Stopping main loop monitors...")
 
-    for monitor in [
-        price_monitor, content_refresh_service, perps_monitor,
-        auto_buy_monitor, rebalance_monitor,
-    ]:
+    for monitor in [price_monitor, perps_monitor]:
         if monitor:
             await monitor.stop()
 
-    if trading_pair_monitor:
-        await trading_pair_monitor.stop()
+    # Signal secondary-loop monitors to stop (set running=False so their loops
+    # exit cleanly). The actual task cancellation happens in stop_secondary_loop().
+    for monitor in [auto_buy_monitor, rebalance_monitor, trading_pair_monitor]:
+        if monitor:
+            monitor.running = False
+    content_refresh_service._running = False
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
@@ -693,7 +693,6 @@ async def shutdown_event():
     for task in [
         limit_order_monitor_task, order_reconciliation_monitor_task,
         missing_order_detector_task, memory_cache_cleanup_task,
-        account_snapshot_task, transfer_sync_task,
     ]:
         await _cancel_task(task)
 

@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.9] - 2026-03-22
+
+### Changed
+- **Exchange client rate limiter is now loop-agnostic** — the per-client rate limit lock was changed from `asyncio.Lock` to `threading.Lock`. This eliminates a subtle crash where a cached Coinbase client (whose lock was acquired first by the main loop) would raise `RuntimeError: is bound to a different event loop` if a secondary-loop task tried to use it. The actual rate-limiting sleep still uses `await asyncio.sleep()` so the 150 ms request spacing is unchanged.
+- **5 more background services moved to the secondary event loop** — auto-buy monitor, portfolio rebalance monitor, trading pair monitor, account snapshot capture, and transfer sync now run on the dedicated secondary asyncio loop (with its own DB pool) instead of the main trading loop. This was unblocked by the threading.Lock fix above. Content refresh service (news and video fetching) also moves to the secondary loop now that its database calls use the secondary session maker.
+- **Thread-safe in-memory timer maps** — auto-buy and rebalance monitors now protect their `_account_timers` dict with a `threading.Lock`. The main-loop cleanup job and the secondary-loop monitors accessed this dict from different threads without synchronization.
+
 ## [v2.125.8] - 2026-03-21
 
 ### Changed

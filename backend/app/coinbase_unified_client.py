@@ -7,6 +7,7 @@ Maintains backward compatibility with existing code.
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -153,8 +154,10 @@ class CoinbaseClient:
         self.account_id = account_id
 
         # Per-instance rate limiter (each user's API credentials have independent rate limits)
-        self._last_request_time = 0
-        self._rate_limit_lock = asyncio.Lock()
+        # threading.Lock is used (not asyncio.Lock) so the client is safe to use from any
+        # event loop — asyncio.Lock binds to the first loop that calls acquire().
+        self._last_request_time = 0.0
+        self._rate_limit_lock = threading.Lock()
         self._circuit_breaker = CircuitBreaker()
 
     async def _request(
@@ -168,16 +171,17 @@ class CoinbaseClient:
                 "Circuit breaker open — Coinbase API unavailable, retrying shortly"
             )
 
-        # Rate limiting: ensure minimum interval between requests for this client
-        async with self._rate_limit_lock:
+        # Rate limiting: ensure minimum interval between requests for this client.
+        # The critical section (float reads/writes) is microseconds — threading.Lock
+        # is safe here. The actual sleep uses await asyncio.sleep() which is loop-agnostic.
+        with self._rate_limit_lock:
             now = time.time()
-            time_since_last = now - self._last_request_time
+            wait = max(0.0, _MIN_REQUEST_INTERVAL - (now - self._last_request_time))
+            # Reserve the slot atomically — future acquirers will see the updated time.
+            self._last_request_time = now + wait
 
-            if time_since_last < _MIN_REQUEST_INTERVAL:
-                delay = _MIN_REQUEST_INTERVAL - time_since_last
-                await asyncio.sleep(delay)
-
-            self._last_request_time = time.time()
+        if wait > 0.0:
+            await asyncio.sleep(wait)
 
         try:
             result = await auth.authenticated_request(

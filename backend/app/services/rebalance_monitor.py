@@ -12,6 +12,7 @@ are rebalanced — funds in open bot positions are untouched.
 import asyncio
 import json
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -439,6 +440,9 @@ class RebalanceMonitor:
         self.task = None
         self._account_timers: Dict[int, datetime] = {}
         self._processing: set = set()  # Account IDs currently being processed
+        # Protects _account_timers against concurrent access when monitor runs on the
+        # secondary loop while cleanup_in_memory_caches() runs on the main loop.
+        self._account_timers_lock = threading.Lock()
         self._session_maker = None  # injected by secondary_loop startup
 
     def set_session_maker(self, sm):
@@ -463,11 +467,16 @@ class RebalanceMonitor:
         logger.info("Rebalance Monitor stopped")
 
     def cleanup_stale_entries(self, active_account_ids: set) -> dict:
-        """Remove tracking entries for accounts that are no longer active."""
-        stale = [aid for aid in self._account_timers if aid not in active_account_ids]
-        for aid in stale:
-            del self._account_timers[aid]
-            self._processing.discard(aid)
+        """Remove tracking entries for accounts that are no longer active.
+
+        Called from the main loop while the monitor may run on the secondary loop,
+        so _account_timers_lock must be held for any dict mutation.
+        """
+        with self._account_timers_lock:
+            stale = [aid for aid in self._account_timers if aid not in active_account_ids]
+            for aid in stale:
+                del self._account_timers[aid]
+                self._processing.discard(aid)
         return {"timers_pruned": len(stale)}
 
     async def _monitor_loop(self):
@@ -560,7 +569,8 @@ class RebalanceMonitor:
                 )
                 if swept:
                     # Balances are stale after sweeps; skip rebalancing this cycle
-                    self._account_timers[account.id] = datetime.utcnow()
+                    with self._account_timers_lock:
+                        self._account_timers[account.id] = datetime.utcnow()
                     return
 
             # Load minimum balance reserves
@@ -658,7 +668,8 @@ class RebalanceMonitor:
             for trade in trades:
                 await self._execute_trade(client, account, trade, prices)
 
-            self._account_timers[account.id] = datetime.utcnow()
+            with self._account_timers_lock:
+                self._account_timers[account.id] = datetime.utcnow()
 
         except Exception as e:
             logger.error(

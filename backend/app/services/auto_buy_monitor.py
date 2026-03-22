@@ -10,6 +10,7 @@ IMPORTANT: Respects bot reservations - only converts funds that are truly free
 """
 import asyncio
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict
@@ -51,6 +52,9 @@ class AutoBuyMonitor:
         self.task = None
         self._account_timers: Dict[int, datetime] = {}  # account_id -> last_check_time
         self._pending_orders: Dict[str, AutoBuyPendingOrder] = {}  # order_id -> order info
+        # Protects _account_timers against concurrent access when monitor runs on the
+        # secondary loop while cleanup_in_memory_caches() runs on the main loop.
+        self._account_timers_lock = threading.Lock()
         self._session_maker = None  # injected by secondary_loop startup
 
     def set_session_maker(self, sm):
@@ -77,13 +81,18 @@ class AutoBuyMonitor:
         logger.info("Auto-Buy Monitor stopped")
 
     def cleanup_stale_entries(self, active_account_ids: set) -> dict:
-        """Remove tracking entries for accounts that are no longer active."""
+        """Remove tracking entries for accounts that are no longer active.
+
+        Called from the main loop while the monitor may run on the secondary loop,
+        so _account_timers_lock must be held for any dict mutation.
+        """
         import time as _time
         now = _time.time()
-        # Prune timers for deleted/deactivated accounts
-        stale_timers = [aid for aid in self._account_timers if aid not in active_account_ids]
-        for aid in stale_timers:
-            del self._account_timers[aid]
+        with self._account_timers_lock:
+            # Prune timers for deleted/deactivated accounts
+            stale_timers = [aid for aid in self._account_timers if aid not in active_account_ids]
+            for aid in stale_timers:
+                del self._account_timers[aid]
         # Prune orphaned pending orders (>30 min old or inactive account)
         stale_orders = [
             oid for oid, order in self._pending_orders.items()
@@ -166,8 +175,9 @@ class AutoBuyMonitor:
                     reserved_usd=reserved,
                 )
 
-            # Update timer for this account
-            self._account_timers[account.id] = datetime.utcnow()
+            # Update timer for this account (lock guards cross-thread access)
+            with self._account_timers_lock:
+                self._account_timers[account.id] = datetime.utcnow()
 
         except Exception as e:
             logger.error(f"Auto-buy failed for account {account.id}: {e}", exc_info=True)
