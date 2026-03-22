@@ -894,6 +894,24 @@ async def execute_sell(
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
 
+    # Publish domain event (best-effort — polling fallback handles misses)
+    try:
+        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            fill_type="sell_order",
+            quote_amount=quote_received,
+            base_amount=actual_base_sold,
+            price=actual_price,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
+
     # Invalidate balance cache after trade (best-effort)
     try:
         await trading_client.invalidate_balance_cache()

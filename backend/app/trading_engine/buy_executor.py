@@ -248,6 +248,22 @@ async def _post_buy_operations(
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
 
+    # Publish domain event (best-effort — polling fallback handles misses)
+    try:
+        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            fill_type=fill_type,
+            quote_amount=actual_quote_amount,
+            base_amount=actual_base_amount,
+            price=actual_price,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
+
     # Invalidate balance cache after trade (best-effort)
     try:
         await trading_client.invalidate_balance_cache()
@@ -812,6 +828,24 @@ async def execute_buy_close_short(
         ))
     except Exception as e:
         logger.warning(f"Failed to broadcast short close WebSocket notification: {e}")
+
+    # Publish domain event (best-effort)
+    try:
+        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            fill_type="close_short",
+            quote_amount=usd_spent_to_close,
+            base_amount=filled_size,
+            price=average_filled_price,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
 
     logger.info(f"  SHORT POSITION CLOSED: Profit ${profit_quote:.2f} ({profit_percentage:.2f}%)")
 

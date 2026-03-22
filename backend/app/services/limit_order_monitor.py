@@ -144,6 +144,22 @@ class LimitOrderMonitor:
                         is_paper_trading=is_paper,
                     ))
 
+                    # Publish domain event (best-effort)
+                    try:
+                        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+                        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+                            position_id=position.id,
+                            user_id=position.user_id,
+                            product_id=position.product_id,
+                            fill_type="partial_fill",
+                            quote_amount=new_fill_value,
+                            base_amount=new_fill_size,
+                            price=avg_fill_price,
+                            is_paper_trading=is_paper,
+                        ))
+                    except Exception as _eb_err:
+                        logger.warning(f"Event bus publish failed (non-critical): {_eb_err}")
+
                     # Update position totals (reduce remaining base, add quote received)
                     if not position.total_quote_received:
                         position.total_quote_received = 0
@@ -575,6 +591,24 @@ class LimitOrderMonitor:
                     user_id=position.user_id,
                     is_paper_trading=is_paper,
                 ))
+
+                # Publish domain event (best-effort)
+                try:
+                    from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+                    await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+                        position_id=position.id,
+                        user_id=position.user_id,
+                        product_id=position.product_id,
+                        fill_type="sell_order",
+                        quote_amount=filled_value,
+                        base_amount=filled_size,
+                        price=avg_fill_price,
+                        profit=position.profit_quote,
+                        profit_percentage=position.profit_percentage,
+                        is_paper_trading=is_paper,
+                    ))
+                except Exception as _eb_err:
+                    logger.warning(f"Event bus publish failed (non-critical): {_eb_err}")
 
             elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:
                 # Order cancelled/expired - reset position flags

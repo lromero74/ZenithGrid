@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.127.0] - 2026-03-22
+
+### Added
+- **In-process event bus** (`app/event_bus.py`) — lightweight pub/sub layer for domain events. Publishers fire `order.filled` events on every buy, sell, partial fill, and limit-order close; `bot.started` and `bot.stopped` on bot control actions. On each fill, the `auto_buy_monitor` and `rebalance_monitor` APScheduler jobs are triggered immediately (via `job.modify(next_run_time=now)`) instead of waiting up to 10–30 seconds for their next scheduled tick. Polling fallback stays intact — events are an additive latency optimization, not a replacement. Interface-swappable for NATS/Redis Streams when multi-process scale demands it.
+
 ## [v2.126.1] - 2026-03-22
 
 ### Fixed

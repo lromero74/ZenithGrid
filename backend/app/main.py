@@ -382,6 +382,41 @@ async def run_missing_order_detector():
         await asyncio.sleep(300)
 
 
+def _wire_event_bus_subscribers() -> None:
+    """Register event bus subscribers. Called once from startup_event().
+
+    All handlers run fire-and-forget (see InProcessEventBus.publish).
+    Handler exceptions are caught by the bus — polling fallback ensures correctness.
+    """
+    from app.event_bus import event_bus, ORDER_FILLED, BOT_STARTED, BOT_STOPPED
+    from app.scheduler import scheduler as _scheduler
+
+    async def _on_order_filled(payload) -> None:
+        """Trigger auto-buy and rebalance monitors immediately after any fill.
+
+        Uses APScheduler job.modify(next_run_time=now) to fire the jobs at the
+        next scheduler tick rather than calling run_once() directly. This preserves
+        max_instances=1 + coalesce=True protection against concurrent runs.
+        """
+        from datetime import datetime
+        for job_id in ("auto_buy_monitor", "rebalance_monitor"):
+            try:
+                job = _scheduler.get_job(job_id)
+                if job:
+                    job.modify(next_run_time=datetime.utcnow())
+            except Exception:
+                pass  # Graceful degradation — periodic polling still runs
+
+    async def _on_bot_event(payload) -> None:
+        logger.info("Bot event: %s bot_id=%s", type(payload).__name__, payload.bot_id)
+
+    event_bus.subscribe(ORDER_FILLED, _on_order_filled)
+    event_bus.subscribe(BOT_STARTED, _on_bot_event)
+    event_bus.subscribe(BOT_STOPPED, _on_bot_event)
+
+    logger.info("Event bus: subscribers wired (order.filled → auto_buy + rebalance)")
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
@@ -461,6 +496,9 @@ async def startup_event():
     logger.info(f"APScheduler started — {len(scheduler.get_jobs())} jobs registered")
 
     logger.info("TTS thread pool ready (max_workers=2)")
+
+    # ── Event bus: wire subscribers ───────────────────────────────────────────
+    _wire_event_bus_subscribers()
 
     logger.info("Startup complete!")
     logger.info("========================================")

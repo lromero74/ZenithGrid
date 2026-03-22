@@ -87,6 +87,15 @@ async def start_bot(
 
     await db.commit()
 
+    # Publish domain event (best-effort)
+    try:
+        from app.event_bus import event_bus, BOT_STARTED, BotStartedPayload
+        await event_bus.publish(BOT_STARTED, BotStartedPayload(
+            bot_id=bot.id, user_id=current_user.id,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
+
     return {"message": f"Bot '{bot.name}' started successfully"}
 
 
@@ -113,6 +122,15 @@ async def stop_bot(
     bot.updated_at = datetime.utcnow()
 
     await db.commit()
+
+    # Publish domain event (best-effort)
+    try:
+        from app.event_bus import event_bus, BOT_STOPPED, BotStoppedPayload
+        await event_bus.publish(BOT_STOPPED, BotStoppedPayload(
+            bot_id=bot.id, user_id=current_user.id,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
 
     return {"message": f"Bot '{bot.name}' stopped successfully"}
 
