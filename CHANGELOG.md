@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.130.0] - 2026-03-22
+
+### Added
+- **CredentialsProvider abstraction** (`app/services/credentials_provider.py`) — `CredentialsProvider` protocol and `LocalCredentialsProvider` implementation wrap `get_exchange_client_for_account()`. Callers can pass an existing DB session (`db=`) or a session factory (`session_maker=`); when neither is provided, the default pool is used automatically. Zero behavior change today. The seam enables a future `RemoteCredentialsProvider` swap for a credentials microservice with no call-site changes. `RemoteCredentialsProvider` stub documents the Phase 3 HTTP API architecture.
+
 ## [v2.129.0] - 2026-03-22
 
 ### Added
