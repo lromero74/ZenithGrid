@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.134.3] - 2026-03-22
+
+### Fixed
+- **Video player starts unmuted on iOS** — previously forced to muted autoplay; now lets iOS handle autoplay policy naturally (video starts paused, plays with sound when you tap play).
+- **Volume slider hidden in video player on iOS** — consistent with TTS player; use hardware volume buttons.
+- **`playsinline` added to YouTube iframe** — improves background audio continuation when switching apps on iOS.
+
 ## [v2.134.2] - 2026-03-22
 
 ### Changed
