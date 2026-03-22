@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.134.2] - 2026-03-22
+
+### Changed
+- **Volume slider hidden on iOS** — iOS ignores software volume control (`audio.volume`); the slider has been removed on iOS devices to avoid confusion. Use hardware volume buttons as usual.
+
 ## [v2.134.1] - 2026-03-22
 
 ### Fixed
