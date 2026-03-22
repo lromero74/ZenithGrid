@@ -5,10 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.134.1] - 2026-03-22
+
+### Fixed
+- **TTS continues playing while in other apps (iOS)** — the Web Audio API GainNode was permanently connected to the audio element via `createMediaElementSource`, which iOS suspends when the app is backgrounded, stopping playback. Removed the GainNode routing entirely; audio now plays through the standard `<audio>` element which iOS allows to continue in background. Volume slider continues working on desktop and Android. iOS users control volume with hardware buttons as usual.
+
 ## [v2.134.0] - 2026-03-22
 
 ### Added
-- **TTS background audio recovery** — when you switch away from the app (e.g. to Apple Maps for navigation), audio now resumes immediately when you return. On iOS 17+, audio may continue uninterrupted in the background. Handles AudioContext interruptions from phone calls, navigation prompts, and app switches. The keepalive audio session is also restored on return so there are no gaps between articles.
+- **TTS background audio recovery** — audio resumes immediately when returning from another app. Handles AudioContext interruptions from phone calls, navigation prompts, and app switches. The keepalive audio session is also restored on return so there are no gaps between articles.
 
 ## [v2.133.2] - 2026-03-22
 
