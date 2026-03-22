@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.129.0] - 2026-03-22
+
+### Added
+- **Rate limit backend abstraction** (`app/auth_routers/rate_limit_backend.py`) — `RateLimitBackend` protocol and `PostgresRateLimitBackend` implementation wrap the three PostgreSQL persistence helpers in the rate limiter (`record_attempt`, `count_recent`, `cleanup`). Zero behavior change today. The seam enables a future `RedisRateLimitBackend` swap for atomic cross-process rate limiting (`INCR` + `EXPIRE` per key) with no changes to call-site code. `RedisRateLimitBackend` stub documents the Phase 3 Redis key pattern and raises `NotImplementedError` until implemented.
+
 ## [v2.128.0] - 2026-03-22
 
 ### Added
