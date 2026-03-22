@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.11] - 2026-03-22
+
+### Fixed
+- **Background monitor cross-loop crash** — auto-buy, rebalance, trading-pair, account snapshot, and transfer sync monitors have been moved back to the main event loop. Moving them to the secondary loop caused `RuntimeError: Future attached to a different loop` and `asyncio.Lock is bound to a different event loop` crashes because helper functions they call deep in the stack (aggregate value calculation, exchange client cache, public price fetch) share module-level asyncio locks that bind to whichever loop first acquires them. These monitors will be fully migrated in a future phase once all shared asyncio primitives in their call chains are converted to threading-safe equivalents.
+- **Content refresh service remains on secondary loop** — it does not call the affected helpers and continues to run on the dedicated secondary event loop with its own DB pool.
+
 ## [v2.125.10] - 2026-03-22
 
 ### Fixed

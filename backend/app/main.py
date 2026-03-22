@@ -144,12 +144,14 @@ rebalance_monitor = RebalanceMonitor()
 # Perpetual futures position monitor - syncs open perps positions with exchange
 perps_monitor = PerpsMonitor(interval_seconds=60)
 
-# Background task handles — main loop tasks only
+# Background task handles — main loop tasks
 # (secondary loop tasks are managed by stop_secondary_loop())
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
 memory_cache_cleanup_task = None
+account_snapshot_task = None
+transfer_sync_task = None
 
 
 def override_get_price_monitor():
@@ -495,6 +497,7 @@ async def run_transfer_sync(session_maker=None):
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
     global missing_order_detector_task, memory_cache_cleanup_task
+    global account_snapshot_task, transfer_sync_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -571,31 +574,31 @@ async def startup_event():
     sm = get_secondary_session_maker()
     logger.info("Secondary event loop started")
 
-    # ── SECONDARY LOOP: Exchange-client services ──────────────────────────────
-    # CoinbaseClient now uses threading.Lock for rate limiting (not asyncio.Lock),
-    # making all cached exchange clients safe to use from any event loop.
-    # Session makers are injected so these services use the secondary loop's DB pool.
-    logger.info("Starting auto-buy BTC monitor on secondary loop...")
-    auto_buy_monitor.set_session_maker(sm)
-    schedule(auto_buy_monitor.start())
+    # ── MAIN LOOP: Exchange-client services ──────────────────────────────────
+    # These monitors call helpers (calculate_aggregate_usd_value, public price
+    # fetch, exchange_client_lock etc.) that share module-level asyncio.Lock
+    # objects.  Moving them to the secondary loop would bind those locks to the
+    # secondary loop, causing RuntimeError in the main-loop tasks that use the
+    # same locks.  Full migration requires threading threading.Lock through every
+    # helper in the call chain — tracked in SCALABILITY_ROADMAP Phase 1.2.
+    logger.info("Starting auto-buy BTC monitor...")
+    await auto_buy_monitor.start()
     logger.info("Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
 
-    logger.info("Starting portfolio rebalance monitor on secondary loop...")
-    rebalance_monitor.set_session_maker(sm)
-    schedule(rebalance_monitor.start())
+    logger.info("Starting portfolio rebalance monitor...")
+    await rebalance_monitor.start()
     logger.info("Rebalance monitor started - maintaining target allocations per account")
 
-    logger.info("Starting trading pair monitor on secondary loop...")
-    trading_pair_monitor.set_session_maker(sm)
-    schedule(trading_pair_monitor.start())
+    logger.info("Starting trading pair monitor...")
+    await trading_pair_monitor.start()
     logger.info("Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
 
-    logger.info("Starting account snapshot capture job on secondary loop...")
-    schedule(run_account_snapshot_capture(session_maker=sm))
+    logger.info("Starting account snapshot capture job...")
+    account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
     logger.info("Account snapshot capture job started - capturing daily account values")
 
-    logger.info("Starting transfer sync job on secondary loop...")
-    schedule(run_transfer_sync(session_maker=sm))
+    logger.info("Starting transfer sync job...")
+    transfer_sync_task = asyncio.create_task(run_transfer_sync())
     logger.info("Transfer sync started - syncing deposits/withdrawals daily")
 
     logger.info("Starting content refresh service on secondary loop...")
@@ -675,16 +678,11 @@ async def shutdown_event():
     # ── Stop main loop monitors ───────────────────────────────────────────────
     logger.info("🛑 Stopping main loop monitors...")
 
-    for monitor in [price_monitor, perps_monitor]:
+    for monitor in [price_monitor, perps_monitor, auto_buy_monitor, rebalance_monitor, trading_pair_monitor]:
         if monitor:
             await monitor.stop()
 
-    # Signal secondary-loop monitors to stop (set running=False so their loops
-    # exit cleanly). The actual task cancellation happens in stop_secondary_loop().
-    for monitor in [auto_buy_monitor, rebalance_monitor, trading_pair_monitor]:
-        if monitor:
-            monitor.running = False
-    content_refresh_service._running = False
+    content_refresh_service._running = False  # signal secondary-loop content refresh to stop
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
@@ -693,6 +691,7 @@ async def shutdown_event():
     for task in [
         limit_order_monitor_task, order_reconciliation_monitor_task,
         missing_order_detector_task, memory_cache_cleanup_task,
+        account_snapshot_task, transfer_sync_task,
     ]:
         await _cancel_task(task)
 

@@ -49,13 +49,13 @@ Main Event Loop (Tier 1 — real-time trading + in-memory state):
   PerpsMonitor             60s interval
   MissingOrderDetector     5m interval
   MemoryCacheCleanup       5m interval    ← touches shared in-memory state
+  AutoBuyMonitor           continuous     ← cannot move: calls helpers using asyncio.Lock (see note)
+  RebalanceMonitor         continuous     ← cannot move: calls helpers using asyncio.Lock (see note)
+  TradingPairMonitor       daily          ← cannot move: calls helpers using asyncio.Lock (see note)
+  TransferSync             daily          ← cannot move: calls helpers using asyncio.Lock (see note)
+  AccountSnapshotService   daily          ← cannot move: calls helpers using asyncio.Lock (see note)
 
-Secondary Event Loop (Tier 2/3 — all other background services):
-  AutoBuyMonitor           continuous     ← uses shared exchange client cache (safe: threading.Lock)
-  RebalanceMonitor         continuous     ← uses shared exchange client cache (safe: threading.Lock)
-  TradingPairMonitor       daily          ← uses shared exchange client cache (safe: threading.Lock)
-  TransferSync             daily          ← uses shared exchange client cache (safe: threading.Lock)
-  AccountSnapshotService   daily          ← uses shared exchange client cache (safe: threading.Lock)
+Secondary Event Loop (Tier 2/3):
   ContentRefreshService    30m / 60m      ← uses DB via news_fetch_service (session_maker injected)
   BanMonitor               daily, 30s startup delay
   ReportScheduler          15m interval
@@ -81,7 +81,8 @@ Secondary Event Loop (Tier 2/3 — all other background services):
 - **`MemoryCacheCleanup` stays on main loop**: It touches in-memory state shared with request handlers (rate-limit dicts). `cleanup_stale_entries()` on auto_buy_monitor and rebalance_monitor is called from here — those monitors now run on the secondary loop, so these calls are cross-thread dict mutations. Protected with `threading.Lock` on `_account_timers_lock` in both monitors.
 - **`DomainBlacklistService` and `DebtCeilingMonitor` do NOT use `async_session_maker`** (HTTP-only services) — no `set_session_maker()` needed, just `schedule(service.start())`.
 - **`ContentRefreshService` was incorrectly identified as HTTP-only during initial Phase 1.1** — it calls `news_fetch_service.fetch_all_news()` and `fetch_all_videos()`, which had 8 `async_session_maker()` call sites. Running it on the secondary loop caused `asyncpg: Future attached to a different loop` errors in production (v2.125.8). **Fix C (v2.125.9)**: threaded `session_maker` through all 8 DB call sites in `news_fetch_service.py` and added `set_session_maker`/`_get_sm` to `ContentRefreshService`. Now runs safely on the secondary loop.
-- **Exchange client asyncio.Lock constraint — RESOLVED (v2.125.9)**: `CoinbaseClient._rate_limit_lock` was `asyncio.Lock()`. In Python 3.10+, once any loop acquires it, it's bound to that loop forever. Fix: replaced with `threading.Lock`. The critical section (float reads/writes) is < 1 microsecond. The actual rate-limiting sleep uses `await asyncio.sleep(wait)` which is loop-agnostic. All services using `get_exchange_client_for_account()` now safely run on the secondary loop. `_account_timers_lock` (threading.Lock) also added to both monitors to guard cross-thread dict mutations from `MemoryCacheCleanup` on the main loop.
+- **CoinbaseClient rate limit lock fixed (v2.125.9)**: `CoinbaseClient._rate_limit_lock` was `asyncio.Lock()`. Replaced with `threading.Lock`. The critical section (float reads/writes) is < 1 µs; the actual sleep uses `await asyncio.sleep(wait)` (loop-agnostic). `_account_timers_lock` (threading.Lock) also added to both monitors for cross-thread dict safety.
+- **Deeper asyncio.Lock constraint — 5 monitors stay on main loop (v2.125.11)**: Moving AutoBuyMonitor, RebalanceMonitor, TradingPairMonitor, AccountSnapshotService, TransferSync to the secondary loop caused `RuntimeError: Task got Future attached to a different loop` and `asyncio.Lock is bound to a different event loop` errors in production. Root cause: these monitors call helper functions (`calculate_aggregate_usd_value`, `get_exchange_client_for_account`, `public_market_data._public_request`, etc.) that use module-level `asyncio.Lock` objects and the main pool's `async_session_maker`. These helpers share asyncio primitives that bind to the first loop that acquires them. Moving these monitors to the secondary loop would require: (a) threading `session_maker` through ALL helper functions in the call chain (not just the monitor's direct DB calls), AND (b) replacing `_exchange_client_lock` in exchange_service (which holds async DB work inside the lock — can't use threading.Lock without restructuring) and `_rate_lock` in public_market_data (can use threading.Lock — same pattern as CoinbaseClient). **Full migration deferred to Phase 1.2.** ContentRefreshService does NOT call any of these helpers — it is safely on the secondary loop.
 - **Shutdown**: Secondary-loop monitors get `running = False` signal; `stop_secondary_loop()` handles actual task cancellation. `await monitor.stop()` only for main loop monitors (price_monitor, perps_monitor). Module-level task globals reduced from 6 to 4.
 - **`build_changelog_cache()` stays synchronous on main startup path**: It runs `git log` (< 1 second), is startup-only, and not a loop — no benefit to moving it.
 
