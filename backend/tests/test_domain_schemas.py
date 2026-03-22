@@ -286,3 +286,91 @@ class TestDatabaseEngineConfig:
         connect_args = db_module._engine_kwargs.get("connect_args", {})
         search_path = connect_args.get("server_settings", {}).get("search_path", "")
         assert "public" in search_path, f"'public' fallback missing from search_path: {search_path!r}"
+
+
+class TestIntraSchemaFKsAreQualified:
+    """Verify all intra-schema FKs use schema-qualified names.
+
+    When a table has schema='X' in __table_args__, all ForeignKey() strings pointing
+    to tables in the SAME schema must also be qualified (ForeignKey("X.table.id")).
+    SQLAlchemy registers tables as 'schema.table' in metadata, so unqualified FKs
+    cause NoReferencedTableError during mapper configuration on startup.
+    This class prevents regressions where an intra-schema FK is accidentally added
+    without a schema prefix.
+    """
+
+    def _collect_fk_strings(self, table):
+        """Return all FK target strings for columns in a table."""
+        fks = []
+        for col in table.columns:
+            for fk in col.foreign_keys:
+                fks.append(fk.target_fullname)
+        return fks
+
+    def test_auth_intra_schema_fks_are_qualified(self):
+        """Happy path: all auth→auth FKs use auth.X.id format."""
+        from app.models.auth import user_groups, group_roles, role_permissions
+        from app.models.auth import TrustedDevice, EmailVerificationToken, RevokedToken, ActiveSession
+        for table in (user_groups, group_roles, role_permissions):
+            for fk_str in self._collect_fk_strings(table):
+                if not fk_str.startswith("auth."):
+                    pytest.fail(f"Junction table FK not schema-qualified: {fk_str!r}")
+        for model in (TrustedDevice, EmailVerificationToken, RevokedToken, ActiveSession):
+            for fk_str in self._collect_fk_strings(model.__table__):
+                assert fk_str.startswith("auth."), (
+                    f"{model.__tablename__} FK not schema-qualified: {fk_str!r}"
+                )
+
+    def test_trading_intra_schema_fks_are_qualified(self):
+        """Happy path: all trading→trading FKs use trading.X.id format."""
+        from app.models.trading import (
+            Bot, BotProduct, BotTemplate, BotTemplateProduct,
+            Position, Trade, Signal, PendingOrder, OrderHistory, BlacklistedCoin,
+        )
+        for model in (Bot, BotProduct, BotTemplate, BotTemplateProduct,
+                      Position, Trade, Signal, PendingOrder, OrderHistory, BlacklistedCoin):
+            for fk_str in self._collect_fk_strings(model.__table__):
+                schema = fk_str.split(".")[0]
+                assert schema in ("trading", "auth"), (
+                    f"{model.__tablename__} FK has unexpected schema: {fk_str!r}"
+                )
+
+    def test_content_intra_schema_fks_are_qualified(self):
+        """Happy path: all content→content FKs use content.X.id format."""
+        from app.models.content import (
+            NewsArticle, VideoArticle, UserSourceSubscription,
+            ArticleTTS, UserVoiceSubscription, UserArticleTTSHistory, UserContentSeenStatus,
+        )
+        for model in (NewsArticle, VideoArticle, UserSourceSubscription,
+                      ArticleTTS, UserVoiceSubscription, UserArticleTTSHistory, UserContentSeenStatus):
+            for fk_str in self._collect_fk_strings(model.__table__):
+                schema = fk_str.split(".")[0]
+                assert schema in ("content", "auth"), (
+                    f"{model.__tablename__} FK has unexpected schema: {fk_str!r}"
+                )
+
+    def test_reporting_intra_schema_fks_are_qualified(self):
+        """Happy path: all reporting→reporting FKs use reporting.X.id format."""
+        from app.models.reporting import (
+            GoalProgressSnapshot, ReportScheduleGoal, Report,
+        )
+        for model in (GoalProgressSnapshot, ReportScheduleGoal, Report):
+            for fk_str in self._collect_fk_strings(model.__table__):
+                schema = fk_str.split(".")[0]
+                assert schema in ("reporting", "auth", "trading"), (
+                    f"{model.__tablename__} FK has unexpected schema: {fk_str!r}"
+                )
+
+    def test_social_intra_schema_fks_are_qualified(self):
+        """Happy path: all social→social FKs use social.X.id format."""
+        from app.models.social import (
+            GameResult, GameResultPlayer, TournamentPlayer, TournamentDeleteVote,
+            ChatChannelMember, ChatMessage, ChatMessageReaction,
+        )
+        for model in (GameResult, GameResultPlayer, TournamentPlayer, TournamentDeleteVote,
+                      ChatChannelMember, ChatMessage, ChatMessageReaction):
+            for fk_str in self._collect_fk_strings(model.__table__):
+                schema = fk_str.split(".")[0]
+                assert schema in ("social", "auth"), (
+                    f"{model.__tablename__} FK has unexpected schema: {fk_str!r}"
+                )

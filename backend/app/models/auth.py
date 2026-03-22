@@ -24,24 +24,24 @@ from app.database import Base
 user_groups = Table(
     "user_groups",
     Base.metadata,
-    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
-    Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", Integer, ForeignKey("auth.groups.id", ondelete="CASCADE"), primary_key=True),
     schema="auth",
 )
 
 group_roles = Table(
     "group_roles",
     Base.metadata,
-    Column("group_id", Integer, ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
-    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", Integer, ForeignKey("auth.groups.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("auth.roles.id", ondelete="CASCADE"), primary_key=True),
     schema="auth",
 )
 
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
-    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("auth.roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("auth.permissions.id", ondelete="CASCADE"), primary_key=True),
     schema="auth",
 )
 
@@ -173,7 +173,7 @@ class TrustedDevice(Base):
     __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     device_id = Column(String, unique=True, nullable=False, index=True)  # UUID in the JWT
     device_name = Column(String, nullable=True)  # Parsed from User-Agent
     ip_address = Column(String, nullable=True)
@@ -199,7 +199,7 @@ class EmailVerificationToken(Base):
     __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     token = Column(String, unique=True, nullable=False, index=True)
     verification_code = Column(String, nullable=True)  # 6-digit code for manual entry
     token_type = Column(String, nullable=False, default="email_verify")
@@ -226,7 +226,7 @@ class RevokedToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String, unique=True, nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     revoked_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)  # JWT's original expiry — for cleanup
 
@@ -239,7 +239,7 @@ class ActiveSession(Base):
     __table_args__ = {'schema': 'auth'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id = Column(String(36), unique=True, nullable=False, index=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(512), nullable=True)

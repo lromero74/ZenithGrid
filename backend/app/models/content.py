@@ -82,7 +82,7 @@ class NewsArticle(Base):
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)
 
     # FK to content_sources for proper relational lookups
-    source_id = Column(Integer, ForeignKey("content_sources.id"), nullable=True, index=True)
+    source_id = Column(Integer, ForeignKey("content.content_sources.id"), nullable=True, index=True)
 
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
@@ -129,7 +129,7 @@ class VideoArticle(Base):
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)
 
     # FK to content_sources for proper relational lookups
-    source_id = Column(Integer, ForeignKey("content_sources.id"), nullable=True, index=True)
+    source_id = Column(Integer, ForeignKey("content.content_sources.id"), nullable=True, index=True)
 
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
@@ -180,7 +180,7 @@ class UserSourceSubscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    source_id = Column(Integer, ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
+    source_id = Column(Integer, ForeignKey("content.content_sources.id", ondelete="CASCADE"), nullable=False)
     is_subscribed = Column(Boolean, default=True)
     user_category = Column(String, nullable=True)  # Per-user category override
     retention_days = Column(Integer, nullable=True)  # Per-user visibility filter (days)
@@ -201,7 +201,7 @@ class ArticleTTS(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     article_id = Column(
-        Integer, ForeignKey("news_articles.id", ondelete="CASCADE"),
+        Integer, ForeignKey("content.news_articles.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     voice_id = Column(String, nullable=False)
@@ -251,7 +251,7 @@ class UserArticleTTSHistory(Base):
         nullable=False, index=True,
     )
     article_id = Column(
-        Integer, ForeignKey("news_articles.id", ondelete="CASCADE"),
+        Integer, ForeignKey("content.news_articles.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
     last_voice_id = Column(String, nullable=False)

@@ -89,7 +89,7 @@ class GameResult(Base):
     started_at = Column(DateTime, nullable=False)
     finished_at = Column(DateTime, default=datetime.utcnow)
     result_data = Column(JSON, nullable=True)
-    tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=True)
+    tournament_id = Column(Integer, ForeignKey("social.tournaments.id"), nullable=True)
 
     players = relationship("GameResultPlayer", back_populates="game_result", cascade="all, delete-orphan")
 
@@ -101,7 +101,7 @@ class GameResultPlayer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     game_result_id = Column(
-        Integer, ForeignKey("game_results.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("social.game_results.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     placement = Column(Integer, nullable=True)
@@ -172,7 +172,7 @@ class TournamentPlayer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tournament_id = Column(
-        Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("social.tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     total_score = Column(Integer, default=0)
@@ -195,7 +195,7 @@ class TournamentDeleteVote(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tournament_id = Column(
-        Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("social.tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
     voted_at = Column(DateTime, default=datetime.utcnow)
@@ -231,7 +231,7 @@ class ChatChannelMember(Base):
     __tablename__ = "chat_channel_members"
 
     id = Column(Integer, primary_key=True, index=True)
-    channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id = Column(Integer, ForeignKey("social.chat_channels.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String, default="member")  # "owner", "admin", "member"
     last_read_at = Column(DateTime, nullable=True)
@@ -251,11 +251,11 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    channel_id = Column(Integer, ForeignKey("chat_channels.id", ondelete="CASCADE"), nullable=False)
+    channel_id = Column(Integer, ForeignKey("social.chat_channels.id", ondelete="CASCADE"), nullable=False)
     sender_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False)
     content = Column(String(2000), nullable=False)
     media_url = Column(String(500), nullable=True)
-    reply_to_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    reply_to_id = Column(Integer, ForeignKey("social.chat_messages.id", ondelete="SET NULL"), nullable=True)
     is_pinned = Column(Boolean, default=False)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
@@ -277,7 +277,7 @@ class ChatMessageReaction(Base):
     __tablename__ = "chat_message_reactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id = Column(Integer, ForeignKey("social.chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False)
     emoji = Column(String(32), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -135,7 +135,7 @@ class Bot(Base):
     description = Column(Text, nullable=True)  # Optional description
 
     # Account reference (links bot to CEX or DEX account)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)  # Nullable for backwards compat
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)  # Nullable for compat
 
     # Exchange configuration (CEX or DEX)
     exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
@@ -309,7 +309,7 @@ class BotProduct(Base):
     __tablename__ = "bot_products"
 
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False, index=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -360,7 +360,9 @@ class BotTemplateProduct(Base):
     __tablename__ = "bot_template_products"
 
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("bot_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_id = Column(
+        Integer, ForeignKey("trading.bot_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     product_id = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -376,9 +378,9 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # Link to bot (nullable for backwards compatibility)
-    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True, index=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=True, index=True)
     # Link to account (for filtering)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)
     # Owner (for user-specific deal numbers)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)
     # Sequential attempt number (ALL positions: success + failed)
@@ -557,7 +559,7 @@ class Trade(Base):
     __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("positions.id"), index=True)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), index=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     side = Column(String)  # buy, sell
@@ -582,7 +584,7 @@ class Signal(Base):
     __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     signal_type = Column(String)  # macd_cross_up, macd_cross_down
@@ -607,8 +609,8 @@ class PendingOrder(Base):
     __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=False)
-    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=False)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=False)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=False)
 
     # Order details
     order_id = Column(String, nullable=False, unique=True, index=True)  # Coinbase order ID
@@ -671,8 +673,8 @@ class OrderHistory(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Bot and position references
-    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=False)
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)  # NULL for failed base orders
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=False)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True)  # NULL for failed base orders
 
     # Order details
     product_id = Column(String, nullable=False)  # e.g., "ETH-BTC"

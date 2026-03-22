@@ -203,7 +203,7 @@ class ExpenseItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     goal_id = Column(
-        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        Integer, ForeignKey("reporting.report_goals.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     user_id = Column(
@@ -243,7 +243,7 @@ class GoalProgressSnapshot(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     goal_id = Column(
-        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        Integer, ForeignKey("reporting.report_goals.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     user_id = Column(
@@ -318,11 +318,11 @@ class ReportScheduleGoal(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     schedule_id = Column(
-        Integer, ForeignKey("report_schedules.id", ondelete="CASCADE"),
+        Integer, ForeignKey("reporting.report_schedules.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     goal_id = Column(
-        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        Integer, ForeignKey("reporting.report_goals.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
 
@@ -349,7 +349,7 @@ class Report(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)
-    schedule_id = Column(Integer, ForeignKey("report_schedules.id", ondelete="SET NULL"), nullable=True)
+    schedule_id = Column(Integer, ForeignKey("reporting.report_schedules.id", ondelete="SET NULL"), nullable=True)
     period_start = Column(DateTime, nullable=False)
     period_end = Column(DateTime, nullable=False)
     periodicity = Column(String, nullable=False)  # Frozen copy from schedule
