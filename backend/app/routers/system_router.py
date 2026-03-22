@@ -13,8 +13,9 @@ Handles system-level endpoints:
 
 import logging
 import subprocess
+import time
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, desc, func, select
@@ -48,6 +49,11 @@ router = APIRouter(tags=["system"])
 # vs. just a tag push (where the live git version changes but the process hasn't restarted).
 _STARTUP_TIME = datetime.utcnow().isoformat()
 
+# Short-lived cache for git version — avoids spawning a subprocess on every health/version poll.
+_version_cache: Optional[str] = None
+_version_cache_at: float = 0.0
+_VERSION_TTL = 30.0
+
 
 def get_repo_root():
     """Get the repository root path"""
@@ -75,6 +81,16 @@ def get_git_version() -> str:
     except Exception:
         pass
     return "dev"
+
+
+def get_git_version_cached() -> str:
+    """Cached wrapper around get_git_version() — TTL 30 seconds."""
+    global _version_cache, _version_cache_at
+    if _version_cache and (time.time() - _version_cache_at < _VERSION_TTL):
+        return _version_cache
+    _version_cache = get_git_version()
+    _version_cache_at = time.time()
+    return _version_cache
 
 
 def get_latest_git_tag() -> str:
@@ -109,7 +125,7 @@ async def health_check():
     """Health check endpoint — returns status, version, and process uptime."""
     return {
         "status": "ok",
-        "version": get_git_version(),
+        "version": get_git_version_cached(),
         "started_at": _STARTUP_TIME,
     }
 
@@ -117,7 +133,7 @@ async def health_check():
 @router.get("/api/version")
 async def get_version():
     """Get the current application version from git tags"""
-    return {"version": get_git_version()}
+    return {"version": get_git_version_cached()}
 
 
 def get_sorted_tags() -> list:

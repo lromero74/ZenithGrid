@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.134.4",
+  "version": "v2.135.0",
   "updated": "2026-03-22",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
@@ -172,6 +172,36 @@
         "file": "routers/transfers_router.py",
         "prefix": "/api/transfers",
         "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats"
+      },
+      {
+        "file": "routers/display_name_router.py",
+        "prefix": "/api/users",
+        "purpose": "Set/update display name, uniqueness check"
+      },
+      {
+        "file": "routers/donations_router.py",
+        "prefix": "/api/donations",
+        "purpose": "Donation self-reporting and admin confirmation with monthly goal progress"
+      },
+      {
+        "file": "routers/friends_router.py",
+        "prefix": "/api/friends, /api/users",
+        "purpose": "Friend requests, friendships, blocking, user search"
+      },
+      {
+        "file": "routers/game_history_router.py",
+        "prefix": "/api/game-history",
+        "purpose": "Game history, results, privacy settings"
+      },
+      {
+        "file": "routers/tournament_router.py",
+        "prefix": "/api/tournaments",
+        "purpose": "Multiplayer tournament CRUD and management"
+      },
+      {
+        "file": "routers/sessions_router.py",
+        "prefix": "/api/sessions",
+        "purpose": "Active session listing and termination (S08 IDOR fix applied)"
       }
     ],
     "sub_routers": {
@@ -1048,6 +1078,33 @@
           "created_at"
         ],
         "purpose": "Emoji reaction on a chat message; unique per user+message+emoji"
+      },
+      {
+        "name": "RateLimitAttempt",
+        "table": "rate_limit_attempts",
+        "schema": "auth",
+        "key_fields": [
+          "id",
+          "key",
+          "attempt_type",
+          "attempted_at"
+        ],
+        "purpose": "Persists rate limit tracking across restarts"
+      },
+      {
+        "name": "Donation",
+        "table": "donations",
+        "schema": "reporting",
+        "key_fields": [
+          "id",
+          "user_id",
+          "amount",
+          "currency",
+          "status",
+          "reported_at",
+          "confirmed_at"
+        ],
+        "purpose": "Self-report -> admin confirm workflow for donations"
       }
     ],
     "services": [
@@ -1274,6 +1331,46 @@
       {
         "file": "services/websocket_manager.py",
         "purpose": "WebSocket connection manager for real-time order fill notifications",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/ban_monitor.py",
+        "purpose": "Banned IP monitoring with geo-lookup enrichment (country, ISP, city); daily snapshot via APScheduler",
+        "type": "background"
+      },
+      {
+        "file": "services/broadcast_backend.py",
+        "purpose": "BroadcastBackend protocol + InProcessBroadcast + RedisBroadcast; Phase 3 multi-process WebSocket fan-out seam (v2.128.0)",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/disposable_email_service.py",
+        "purpose": "Detects throwaway email addresses at registration",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/friend_notifications.py",
+        "purpose": "Real-time WebSocket notifications for friend events",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/game_room_manager.py",
+        "purpose": "In-memory game room state for multiplayer sessions",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/game_ws_handler.py",
+        "purpose": "WebSocket handler for multiplayer game messages",
+        "type": "infrastructure"
+      },
+      {
+        "file": "services/rebalance_monitor.py",
+        "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval",
+        "type": "background"
+      },
+      {
+        "file": "services/credentials_provider.py",
+        "purpose": "CredentialsProvider protocol seam for Phase 3 credentials microservice (v2.130.0)",
         "type": "infrastructure"
       }
     ],
@@ -1539,6 +1636,18 @@
       {
         "file": "trading_engine_v2.py",
         "purpose": "Strategy-based trading engine coordinator (StrategyTradingEngine) wrapping all trading engine modules"
+      },
+      {
+        "file": "scheduler.py",
+        "purpose": "APScheduler AsyncIOScheduler managing all non-realtime background jobs (replaced hand-rolled loops at v2.126.0)"
+      },
+      {
+        "file": "event_bus.py",
+        "purpose": "In-process pub/sub event bus for domain events (order.filled, bot.started, etc.); NATS/Redis swap seam (v2.127.0)"
+      },
+      {
+        "file": "registry.py",
+        "purpose": "ServiceRegistry injection point for four backend abstractions: event_bus, broadcast, rate_limiter, credentials (v2.131.0)"
       }
     ],
     "schemas": [
@@ -1726,100 +1835,161 @@
         ]
       }
     },
+    "background_tasks_note": "v2.126.0: Tiered scheduler architecture. Tier 1 (asyncio.create_task, real-time trading): MultiBotMonitor, LimitOrderMonitor, OrderReconciliationMonitor, MissingOrderDetector, PerpsMonitor, PropGuardMonitor. Tier 2 (APScheduler near-realtime): AutoBuyMonitor (10s), RebalanceMonitor (30s), TransferSync (24h), AccountSnapshotCapture (24h), BanMonitor (24h), ReportScheduler (15min). Tier 3 (APScheduler batch): ContentRefreshService, DomainBlacklistService, DebtCeilingMonitor, CoinReviewScheduler, TradingPairMonitor, cleanup jobs.",
     "background_tasks": [
       {
         "name": "MultiBotMonitor",
         "interval": "Per-strategy (15min for AI, varies for others)",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
         "purpose": "Core bot loop: parallel price monitoring and strategy signal dispatch (Semaphore(5))"
       },
       {
         "name": "LimitOrderMonitor",
         "interval": "10 seconds",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
         "purpose": "Check pending limit orders for fills"
       },
       {
         "name": "OrderReconciliationMonitor",
         "interval": "60 seconds",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
         "purpose": "Auto-fix orphaned positions with missing fill data"
       },
       {
         "name": "MissingOrderDetector",
         "interval": "5 minutes",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
         "purpose": "Detect unrecorded orders from exchange"
-      },
-      {
-        "name": "TradingPairMonitor",
-        "interval": "Daily (first check after 5min)",
-        "purpose": "Sync trading pairs, remove delisted pairs from bots"
-      },
-      {
-        "name": "ContentRefreshService",
-        "interval": "News: 30min, Videos: 60min",
-        "purpose": "Fetch fresh news articles and YouTube videos"
-      },
-      {
-        "name": "DebtCeilingMonitor",
-        "interval": "Weekly",
-        "purpose": "Check for new US debt ceiling legislation"
-      },
-      {
-        "name": "AutoBuyMonitor",
-        "interval": "Per-account setting",
-        "purpose": "Convert stablecoins to BTC when thresholds exceeded"
       },
       {
         "name": "PerpsMonitor",
         "interval": "60 seconds",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
         "purpose": "Sync perpetual futures positions with exchange state"
       },
       {
+        "name": "PropGuardMonitor",
+        "interval": "30 seconds",
+        "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+        "purpose": "Background equity monitoring for prop firm accounts"
+      },
+      {
+        "name": "AutoBuyMonitor",
+        "interval": "10 seconds (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Convert stablecoins to BTC when thresholds exceeded"
+      },
+      {
+        "name": "RebalanceMonitor",
+        "interval": "30 seconds (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Portfolio rebalance trigger monitoring"
+      },
+      {
+        "name": "ReportScheduler",
+        "interval": "15 minutes (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Check for due report schedules and generate reports"
+      },
+      {
+        "name": "TransferSync",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Sync deposit/withdrawal transactions from Coinbase"
+      },
+      {
+        "name": "AccountSnapshotCapture",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Capture account value snapshots for historical charts and goal progress snapshots"
+      },
+      {
+        "name": "BanMonitor",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+        "purpose": "Banned IP monitoring with geo-lookup enrichment (country, ISP, city)"
+      },
+      {
+        "name": "TradingPairMonitor",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
+        "purpose": "Sync trading pairs, remove delisted pairs from bots"
+      },
+      {
+        "name": "ContentRefreshService",
+        "interval": "News: 30min, Videos: 60min (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
+        "purpose": "Fetch fresh news articles and YouTube videos"
+      },
+      {
+        "name": "DebtCeilingMonitor",
+        "interval": "Weekly (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
+        "purpose": "Check for new US debt ceiling legislation"
+      },
+      {
+        "name": "CoinReviewScheduler",
+        "interval": "7 days (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
+        "purpose": "Weekly AI-powered coin status review and categorization"
+      },
+      {
+        "name": "DomainBlacklistService",
+        "interval": "Weekly (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
+        "purpose": "Domain-level blocking refresh for content sources that block our IP"
+      },
+      {
         "name": "DecisionLogCleanup",
-        "interval": "Daily",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove old AI decision logs"
       },
       {
         "name": "FailedConditionCleanup",
-        "interval": "6 hours",
+        "interval": "6 hours (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove noise indicator condition logs"
       },
       {
         "name": "FailedOrderCleanup",
-        "interval": "6 hours",
+        "interval": "6 hours (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove old failed order records"
       },
       {
-        "name": "AccountSnapshotCapture",
-        "interval": "Daily (24 hours)",
-        "purpose": "Capture account value snapshots for historical charts and goal progress snapshots"
-      },
-      {
         "name": "RevokedTokenCleanup",
-        "interval": "Daily",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove expired entries from revoked_tokens table"
       },
       {
         "name": "ReportCleanup",
-        "interval": "Weekly",
+        "interval": "Weekly (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove generated reports older than 2 years"
       },
       {
         "name": "SessionCleanup",
-        "interval": "Daily",
+        "interval": "Daily (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Expire stale active sessions and delete old inactive session records"
       },
       {
         "name": "RateLimitAttemptCleanup",
-        "interval": "Hourly",
+        "interval": "Hourly (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Remove expired rate limit attempt records from database"
       },
       {
         "name": "InMemoryCacheCleanup",
-        "interval": "5 minutes",
+        "interval": "5 minutes (APScheduler)",
+        "scheduler_tier": "Tier 3 — APScheduler batch",
         "purpose": "Sweep all in-memory caches to prevent unbounded growth: price cache, chat/game rate-limit dicts, game rooms, monitor caches, auth rate limiters, public endpoint rate limiter, WebSocket stale connections"
       }
     ],
     "migrations": {
-      "count": 73,
+      "count": 77,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -1897,7 +2067,11 @@
         "create_chat_tables.py",
         "chat_enhancements.py",
         "add_social_chat_permission.py",
-        "add_chat_media_url.py"
+        "add_chat_media_url.py",
+        "add_admin_display_name.py",
+        "add_donations_table.py",
+        "extend_game_high_scores.py",
+        "068_domain_schemas.py"
       ]
     }
   },

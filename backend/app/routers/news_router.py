@@ -770,7 +770,7 @@ async def get_cache_stats(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/cleanup")
-async def cleanup_cache(current_user: User = Depends(get_current_user)):
+async def cleanup_cache(current_user: User = Depends(require_superuser)):
     """Manually trigger cleanup of old news articles and videos."""
     articles_deleted, image_files_deleted = await cleanup_articles_with_images()
     async with async_session_maker() as db:

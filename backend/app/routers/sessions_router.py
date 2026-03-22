@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import (
@@ -23,6 +24,7 @@ from app.auth.dependencies import (
 )
 from app.database import get_db
 from app.models import User
+from app.models.auth import ActiveSession
 from app.services.session_service import (
     end_session,
     expire_stale_sessions_for_user,
@@ -108,6 +110,13 @@ async def terminate_sessions(
     for sid in body.session_ids:
         if sid == current_sid:
             continue  # Never terminate own session
+        # Verify ownership — silently skip sessions that don't belong to the caller
+        result = await db.execute(
+            select(ActiveSession).where(ActiveSession.session_id == sid)
+        )
+        session = result.scalar_one_or_none()
+        if session is None or session.user_id != current_user.id:
+            continue
         ended = await end_session(sid, db)
         if ended:
             terminated += 1

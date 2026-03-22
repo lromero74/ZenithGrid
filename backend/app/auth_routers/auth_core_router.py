@@ -33,6 +33,7 @@ from app.auth_routers.helpers import (
     create_mfa_token,
     create_refresh_token,
     decode_device_trust_token,
+    get_client_ip,
     get_user_by_email,
     hash_password,
     verify_password,
@@ -71,7 +72,7 @@ async def login(
     The client must then call POST /api/auth/mfa/verify with the mfa_token + TOTP code.
     """
     # Rate limiting by IP + username — only FAILED attempts count (S11)
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = get_client_ip(http_request)
     email_lower = request.email.lower()
     _check_rate_limit(client_ip, username=email_lower)
 

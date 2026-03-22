@@ -74,7 +74,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "API Layer (27 routers)"
+    subgraph "API Layer (33 routers)"
         R_AUTH[auth]
         R_BOTS[bots<br/><small>crud / control / ai_logs<br/>indicator_logs / scanner_logs / validation</small>]
         R_POS[positions<br/><small>queries / actions / limit_orders<br/>manual_ops / perps</small>]
@@ -320,7 +320,7 @@ sequenceDiagram
 
 ## 5. Data Model
 
-The codebase has 55+ SQLAlchemy models. The ERD below shows the core entities with their relationships, plus model groups for the remaining categories.
+The codebase has 65 SQLAlchemy models across 6 PostgreSQL schemas (auth, trading, reporting, social, content, system — introduced in v2.132.0 migration `068_domain_schemas.py`). The ERD below shows the core entities with their relationships, plus model groups for the remaining categories.
 
 ```mermaid
 erDiagram
@@ -431,7 +431,7 @@ erDiagram
     }
 ```
 
-### Model Groups (55+ models total)
+### Model Groups (65 models total)
 
 | Group | Count | Models |
 |-------|-------|--------|
@@ -519,35 +519,55 @@ erDiagram
 
 ## Background Task Scheduling
 
-All background tasks are launched in `main.py` during the FastAPI `startup` event:
+As of v2.126.0, background tasks use a **tiered scheduler architecture** managed by `scheduler.py` (APScheduler `AsyncIOScheduler`) rather than hand-rolled `while True / asyncio.sleep` loops.
 
-| Task | Interval | Method |
-|------|----------|--------|
-| MultiBotMonitor | Per-strategy | `asyncio` event loop |
-| LimitOrderMonitor | 10s | `asyncio.create_task` loop |
-| OrderReconciliationMonitor | 60s | `asyncio.create_task` loop |
-| MissingOrderDetector | 5min | `asyncio.create_task` loop |
-| TradingPairMonitor | Daily | Service `.start()` method |
-| ContentRefreshService | 30min/60min | Service `.start()` method |
-| DomainBlacklistService | Weekly | Service `.start()` method |
-| DebtCeilingMonitor | Weekly | Service `.start()` method |
-| AutoBuyMonitor | Per-account | Service `.start()` method |
-| PerpsMonitor | 60s | Service `.start()` method |
-| PropGuardMonitor | 30s | `asyncio.create_task` loop |
-| DecisionLogCleanup | Daily | `asyncio.create_task` loop |
-| FailedConditionCleanup | 6h | `asyncio.create_task` loop |
-| FailedOrderCleanup | 6h | `asyncio.create_task` loop |
-| AccountSnapshotCapture | Daily | `asyncio.create_task` loop |
-| RevokedTokenCleanup | Daily | `asyncio.create_task` loop |
-| ReportScheduler | 15min | `asyncio.create_task` loop |
-| ReportCleanup | Weekly | `asyncio.create_task` loop |
-| CoinReviewScheduler | 7 days | `asyncio.create_task` loop |
-| TransferSync | Daily | `asyncio.create_task` loop |
-| SessionCleanup | Daily | `asyncio.create_task` loop |
-| RateLimitAttemptCleanup | Hourly | `asyncio.create_task` loop |
-| InMemoryCacheCleanup | 5min | `asyncio.create_task` loop |
+### Tier 1 — asyncio.create_task (real-time trading)
 
-All tasks are cancelled gracefully during `shutdown` event. The `ShutdownManager` ensures no orders are mid-execution before allowing shutdown.
+These tasks require sub-second responsiveness and run as persistent asyncio tasks:
+
+| Task | Interval | Purpose |
+|------|----------|---------|
+| MultiBotMonitor | Per-strategy | Core bot loop: parallel price monitoring and strategy signal dispatch (Semaphore(5)) |
+| LimitOrderMonitor | 10s | Check pending limit orders for fills |
+| OrderReconciliationMonitor | 60s | Auto-fix orphaned positions with missing fill data |
+| MissingOrderDetector | 5min | Detect unrecorded orders from exchange |
+| PerpsMonitor | 60s | Sync perpetual futures positions with exchange state |
+| PropGuardMonitor | 30s | Background equity monitoring for prop firm accounts |
+
+### Tier 2 — APScheduler near-realtime
+
+Near-realtime jobs that tolerate scheduling overhead, managed by APScheduler:
+
+| Task | Interval | Purpose |
+|------|----------|---------|
+| AutoBuyMonitor | 10s | Convert stablecoins to BTC when thresholds exceeded |
+| RebalanceMonitor | 30s | Portfolio rebalance trigger monitoring |
+| ReportScheduler | 15min | Check for due report schedules and generate reports |
+| TransferSync | Daily | Sync deposit/withdrawal transactions from Coinbase |
+| AccountSnapshotCapture | Daily | Capture account value snapshots for historical charts and goal progress |
+| BanMonitor | Daily | Banned IP monitoring with geo-lookup enrichment (country, ISP, city) |
+
+### Tier 3 — APScheduler batch
+
+Infrequent background jobs with no real-time requirement, all managed by APScheduler:
+
+| Task | Interval | Purpose |
+|------|----------|---------|
+| ContentRefreshService | News: 30min / Videos: 60min | Fetch fresh news articles and YouTube videos |
+| DomainBlacklistService | Weekly | Domain-level blocking refresh for sources that block our IP |
+| DebtCeilingMonitor | Weekly | Check for new US debt ceiling legislation |
+| CoinReviewScheduler | 7 days | AI-powered coin status review and categorization |
+| TradingPairMonitor | Daily | Sync trading pairs, remove delisted pairs from bots |
+| DecisionLogCleanup | Daily | Remove old AI decision logs |
+| FailedConditionCleanup | 6h | Remove noise indicator condition logs |
+| FailedOrderCleanup | 6h | Remove old failed order records |
+| RevokedTokenCleanup | Daily | Remove expired entries from revoked_tokens table |
+| ReportCleanup | Weekly | Remove generated reports older than 2 years |
+| SessionCleanup | Daily | Expire stale active sessions and delete old inactive session records |
+| RateLimitAttemptCleanup | Hourly | Remove expired rate limit attempt records from database |
+| InMemoryCacheCleanup | 5min | Sweep all in-memory caches to prevent unbounded growth |
+
+All tasks are cancelled gracefully during the `shutdown` event. The `ShutdownManager` ensures no orders are mid-execution before allowing shutdown.
 
 ### Resilience Patterns
 
@@ -555,3 +575,17 @@ All tasks are cancelled gracefully during `shutdown` event. The `ShutdownManager
 - **SSRF Protection**: All user-supplied URLs are validated against internal/private/loopback/link-local addresses and the AWS metadata endpoint before fetching
 - **Bounded fire-and-forget tasks**: Background tasks that spawn fire-and-forget coroutines track them in bounded sets to prevent unbounded memory growth
 - **Cache size caps**: Coin icon cache, price cache, and other in-memory caches enforce maximum entry counts with LRU or TTL eviction
+
+---
+
+## Phase 3 Seam Modules
+
+Five modules were introduced as explicit swap seams to prepare for a future multi-process / microservice split, without requiring any current callers to change:
+
+| Module | Introduced | Purpose |
+|--------|-----------|---------|
+| `scheduler.py` | v2.126.0 | `APScheduler AsyncIOScheduler` managing all non-realtime background jobs; replaces hand-rolled `while True / asyncio.sleep` loops |
+| `event_bus.py` | v2.127.0 | In-process pub/sub event bus for domain events (`order.filled`, `bot.started`, etc.); designed to swap to NATS or Redis pub/sub without caller changes |
+| `services/broadcast_backend.py` | v2.128.0 | `BroadcastBackend` protocol + `InProcessBroadcast` + `RedisBroadcast`; Phase 3 multi-process WebSocket fan-out seam |
+| `services/credentials_provider.py` | v2.130.0 | `CredentialsProvider` protocol seam for future credentials microservice extraction |
+| `registry.py` | v2.131.0 | `ServiceRegistry` injection point for four backend abstractions: `event_bus`, `broadcast`, `rate_limiter`, `credentials` |

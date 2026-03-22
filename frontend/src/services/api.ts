@@ -1010,6 +1010,7 @@ export interface BanInfo {
   city: string | null
   region: string | null
   country: string | null
+  country_name: string | null
   org: string | null
   hostname: string | null
 }

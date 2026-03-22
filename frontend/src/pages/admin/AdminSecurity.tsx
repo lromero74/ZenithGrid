@@ -97,7 +97,7 @@ export function AdminSecurity() {
     let list = q
       ? data.banned_ips.filter(b =>
           b.ip.includes(q) ||
-          (b.country || '').toLowerCase().includes(q) ||
+          (b.country_name || b.country || '').toLowerCase().includes(q) ||
           (b.org || '').toLowerCase().includes(q) ||
           (b.jail || '').toLowerCase().includes(q) ||
           (b.city || '').toLowerCase().includes(q) ||
@@ -108,7 +108,7 @@ export function AdminSecurity() {
     list.sort((a, b) => {
       let av = '', bv = ''
       if (sortField === 'ip') { av = a.ip; bv = b.ip }
-      else if (sortField === 'country') { av = a.country || ''; bv = b.country || '' }
+      else if (sortField === 'country') { av = a.country_name || a.country || ''; bv = b.country_name || b.country || '' }
       else if (sortField === 'org') { av = a.org || ''; bv = b.org || '' }
       else if (sortField === 'jail') { av = a.jail; bv = b.jail }
       const cmp = av.localeCompare(bv)
@@ -148,7 +148,7 @@ export function AdminSecurity() {
     if (!data) return {}
     const counts: Record<string, number> = {}
     for (const ban of data.banned_ips) {
-      const country = ban.country || 'Unknown'
+      const country = ban.country_name || ban.country || 'Unknown'
       counts[country] = (counts[country] || 0) + 1
     }
     return counts
@@ -286,7 +286,7 @@ export function AdminSecurity() {
                 <tbody>
                   {pagedBans.map((ban, i) => {
                     const getKey = (b: typeof ban) =>
-                      groupBy === 'country' ? (b.country || 'Unknown')
+                      groupBy === 'country' ? (b.country_name || b.country || 'Unknown')
                       : groupBy === 'org' ? (b.org?.replace(/^AS\d+\s*/, '') || 'Unknown')
                       : groupBy === 'jail' ? b.jail
                       : null
@@ -319,7 +319,7 @@ export function AdminSecurity() {
                         <div className="flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                           <p className="text-slate-200 text-xs">
-                            {[ban.city, ban.region, ban.country].filter(Boolean).join(', ') || 'Unknown'}
+                            {[ban.city, ban.region, ban.country_name || ban.country].filter(Boolean).join(', ') || 'Unknown'}
                           </p>
                         </div>
                       </td>
@@ -360,7 +360,7 @@ export function AdminSecurity() {
                       </div>
                     </div>
                     <p className="text-xs text-slate-300">
-                      {[ban.city, ban.region, ban.country].filter(Boolean).join(', ') || 'Unknown'}
+                      {[ban.city, ban.region, ban.country_name || ban.country].filter(Boolean).join(', ') || 'Unknown'}
                     </p>
                     {ban.org && <p className="text-xs text-slate-500 truncate">{ban.org}</p>}
                   </div>

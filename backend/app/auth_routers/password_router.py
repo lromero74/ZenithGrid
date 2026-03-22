@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import EmailVerificationToken
 
-from app.auth_routers.helpers import get_user_by_email, hash_password
+from app.auth_routers.helpers import get_client_ip, get_user_by_email, hash_password
 from app.auth_routers.rate_limiters import (
     _check_forgot_pw_rate_limit,
     _is_forgot_pw_email_rate_limited,
@@ -38,7 +38,7 @@ async def forgot_password(
     """
     Send password reset email. Always returns success to avoid leaking email existence.
     """
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = get_client_ip(http_request)
     _check_forgot_pw_rate_limit(client_ip)
     _record_forgot_pw_attempt(client_ip)
 

@@ -13,6 +13,17 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
+import pycountry
+
+
+def _country_name(alpha_2: str | None) -> str | None:
+    """Resolve a 2-letter ISO country code to its full name."""
+    if not alpha_2:
+        return None
+    country = pycountry.countries.get(alpha_2=alpha_2.upper())
+    return country.name if country else None
+
+
 logger = logging.getLogger(__name__)
 
 MAX_GEO_WORKERS = 10
@@ -24,7 +35,8 @@ class BannedIP:
     jail: str
     city: str | None = None
     region: str | None = None
-    country: str | None = None
+    country: str | None = None       # 2-letter ISO code from ipinfo.io
+    country_name: str | None = None  # Full name resolved via pycountry
     org: str | None = None
     hostname: str | None = None
 
@@ -74,10 +86,12 @@ def _lookup_ip_geo(ip: str) -> dict:
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
+            code = data.get("country")
             result = {
                 "city": data.get("city"),
                 "region": data.get("region"),
-                "country": data.get("country"),
+                "country": code,
+                "country_name": _country_name(code),
                 "org": data.get("org"),
                 "hostname": data.get("hostname"),
             }
@@ -187,6 +201,7 @@ def _query_fail2ban() -> BanSnapshot:
                 city=geo.get("city"),
                 region=geo.get("region"),
                 country=geo.get("country"),
+                country_name=geo.get("country_name"),
                 org=geo.get("org"),
                 hostname=geo.get("hostname"),
             ))

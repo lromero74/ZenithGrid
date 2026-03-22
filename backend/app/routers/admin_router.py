@@ -8,11 +8,13 @@ Handles RBAC administration:
 - Permission listing (read-only)
 """
 
+import ipaddress
 import logging
+import time
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -67,6 +69,19 @@ class RoleUpdateRequest(BaseModel):
     permission_ids: Optional[List[int]] = None
 
 
+class SessionPolicyRequest(BaseModel):
+    max_sessions: Optional[int] = Field(None, ge=1, le=100)
+    session_duration_hours: Optional[int] = Field(None, ge=1, le=8760)
+    require_mfa: Optional[bool] = None
+    trusted_device_days: Optional[int] = Field(None, ge=0, le=365)
+
+
+# ---------------------------------------------------------------------------
+# Module-level state
+
+_last_ban_refresh: float = 0.0
+
+
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
@@ -119,9 +134,11 @@ async def list_users(
 
         if all_unique_ips:
             loop = asyncio.get_event_loop()
-            ip_geo_cache: dict[str, dict] = {}
-            for ip in all_unique_ips:
-                ip_geo_cache[ip] = await loop.run_in_executor(None, _lookup_ip_geo, ip)
+            unique_ip_list = list(all_unique_ips)
+            geo_results = await asyncio.gather(
+                *[loop.run_in_executor(None, _lookup_ip_geo, ip) for ip in unique_ip_list]
+            )
+            ip_geo_cache: dict[str, dict] = dict(zip(unique_ip_list, geo_results))
 
             for uid, ips in user_ips.items():
                 observer_locations[uid] = [
@@ -531,7 +548,7 @@ async def list_permissions(
 @router.put("/groups/{group_id}/session-policy")
 async def update_group_session_policy(
     group_id: int,
-    policy: Optional[dict] = None,
+    policy: Optional[SessionPolicyRequest] = None,
     current_user: User = Depends(require_permission(Perm.ADMIN_GROUPS)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -541,16 +558,17 @@ async def update_group_session_policy(
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    group.session_policy = policy
+    policy_dict = policy.model_dump(exclude_none=True) if policy else None
+    group.session_policy = policy_dict
     await db.commit()
 
-    return {"message": f"Session policy updated for group '{group.name}'", "policy": policy}
+    return {"message": f"Session policy updated for group '{group.name}'", "policy": policy_dict}
 
 
 @router.put("/users/{user_id}/session-policy")
 async def update_user_session_policy(
     user_id: int,
-    policy: Optional[dict] = None,
+    policy: Optional[SessionPolicyRequest] = None,
     current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -560,10 +578,11 @@ async def update_user_session_policy(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.session_policy_override = policy
+    policy_dict = policy.model_dump(exclude_none=True) if policy else None
+    user.session_policy_override = policy_dict
     await db.commit()
 
-    return {"message": f"Session policy override updated for user '{user.email}'", "policy": policy}
+    return {"message": f"Session policy override updated for user '{user.email}'", "policy": policy_dict}
 
 
 @router.get("/users/{user_id}/effective-session-policy")
@@ -648,9 +667,14 @@ async def refresh_bans(
     current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
 ):
     """Force-refresh the fail2ban ban snapshot (queries fail2ban now)."""
+    global _last_ban_refresh
+    if time.time() - _last_ban_refresh < 10:
+        raise HTTPException(status_code=429, detail="Refresh rate limited — wait 10 seconds between refreshes")
+
     from app.services.ban_monitor import refresh_ban_snapshot
 
     snapshot = await refresh_ban_snapshot()
+    _last_ban_refresh = time.time()
     return _format_ban_snapshot(snapshot)
 
 
@@ -667,6 +691,11 @@ async def unban_ip(
     import subprocess
 
     ip = data.ip.strip()
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid IP address format")
+
     unbanned_jails = []
 
     # Get jail list
@@ -722,6 +751,11 @@ async def get_ban_details(
     import subprocess
     import asyncio
 
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid IP address format")
+
     patterns: list[dict] = []
 
     async def _grep_log(log_path: str, source: str):
@@ -729,7 +763,7 @@ async def get_ban_details(
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
-                    ["grep", ip, log_path],
+                    ["grep", "-F", ip, log_path],
                     capture_output=True, text=True, timeout=10,
                 )
             )
@@ -748,7 +782,7 @@ async def get_ban_details(
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
-                    ["zgrep", ip, log_path],
+                    ["zgrep", "-F", ip, log_path],
                     capture_output=True, text=True, timeout=10,
                 )
             )
@@ -824,6 +858,7 @@ def _format_ban_snapshot(snapshot):
                 "city": b.city,
                 "region": b.region,
                 "country": b.country,
+                "country_name": b.country_name,
                 "org": b.org,
                 "hostname": b.hostname,
             }

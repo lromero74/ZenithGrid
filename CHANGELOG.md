@@ -5,6 +5,30 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.0] - 2026-03-22
+
+### Security
+- **Auth rate limiting now correctly keys on real client IP** — requests were previously bucketed on `127.0.0.1` (the nginx proxy address) instead of the actual client IP, meaning all users shared a single rate limit slot. Login, forgot-password, and device trust lookups now read `X-Forwarded-For` correctly.
+- **Admin ban/unban endpoints validate IP format** — inputs are now validated as proper IP addresses before being passed to fail2ban or firewalld subprocesses.
+- **Log grep uses fixed-string matching** — the ban detail endpoint now uses `grep -F` to treat the IP as a literal string rather than a regex pattern.
+- **Session terminate endpoint verifies ownership** — terminating a session now confirms the session belongs to the requesting user before ending it.
+- **News cleanup restricted to superusers** — the manual article/video cleanup endpoint previously accepted any authenticated user; it now requires superuser privileges.
+- **Session policy endpoints accept typed input** — replaced the unvalidated `dict` body with a typed model enforcing field ranges.
+- **Article domain error no longer reveals allowed domains** — the error message for unsupported article sources is now generic.
+- **Content-Security-Policy and HSTS headers added** — applied at the application layer as a fallback alongside the existing nginx-level headers. Deprecated `X-XSS-Protection` header removed.
+- **Refresh bans endpoint rate-limited** — the admin ban snapshot refresh is now limited to once per 10 seconds to prevent rapid subprocess spawning.
+
+### Added
+- **Full country names in Security ban reports** — the admin security panel now shows full country names (e.g., "United States", "Russian Federation") instead of 2-letter ISO codes. Powered by `pycountry`; country data is maintained externally.
+
+### Fixed
+- **Test suite SQLite/PostgreSQL compatibility** — router tests were crashing since the v2.132.0 domain schema migration because in-memory SQLite doesn't support PostgreSQL named schemas. The test engine now uses `schema_translate_map` to flatten schemas for SQLite. Tests also print which database backend they are running against.
+
+### Changed
+- **Admin geo-lookup parallelized** — observer IP geolocation lookups in the user list now run concurrently instead of serially, improving load time when many observer sessions are active.
+- **Git version endpoint cached** — `/api/version` and `/api/health` now cache the git tag result for 30 seconds instead of spawning a subprocess on every poll.
+- **Architecture documentation updated** — docs now reflect the current 33 routers, 65 models across 6 PostgreSQL schemas, APScheduler tiered background task architecture, and all Phase 3 seam modules.
+
 ## [v2.134.4] - 2026-03-22
 
 ### Added

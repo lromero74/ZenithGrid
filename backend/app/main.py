@@ -88,10 +88,25 @@ app.add_middleware(
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
+        # Note: CSP and HSTS are set by nginx with domain-specific values.
+        # App-level headers here serve as fallback when accessed directly (non-nginx).
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Only set HSTS/CSP at app layer if not already set by nginx (avoid stacking)
+        if "strict-transport-security" not in response.headers:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        if "content-security-policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https: blob:; "
+                "media-src 'self' blob:; "
+                "frame-src https://www.youtube.com; "
+                "connect-src 'self' wss: https:; "
+                "font-src 'self' data:;"
+            )
         return response
 
 

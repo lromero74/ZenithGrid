@@ -262,7 +262,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
             return ArticleContentResponse(
                 url=url,
                 success=False,
-                error=f"Domain not allowed. Supported: {', '.join(sorted(allowed_domains))}"
+                error="Domain not allowed."
             )
 
         if domain in PAYWALLED_DOMAINS:

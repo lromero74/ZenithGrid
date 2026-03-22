@@ -35,23 +35,71 @@ def event_loop():
 # ---------------------------------------------------------------------------
 
 
+def _is_postgres_url(url: str) -> bool:
+    return "postgresql" in url or "postgres" in url
+
+
+def pytest_configure(config):
+    """Print which database backend the production app uses vs. the test fixture."""
+    import os
+    from app.config import settings
+
+    test_db_url = os.environ.get("TEST_DATABASE_URL", "")
+    if test_db_url and _is_postgres_url(test_db_url):
+        print("\n[TEST DB] PostgreSQL via TEST_DATABASE_URL (dedicated test DB)")
+    elif settings.is_postgres:
+        print("\n[TEST DB] SQLite in-memory (app uses PostgreSQL in production)")
+    else:
+        print("\n[TEST DB] SQLite in-memory")
+
+
 @pytest.fixture
 async def async_engine():
-    """Create an in-memory async SQLite engine for testing."""
+    """Create an async test database engine.
+
+    Tests always run against an isolated database — never production:
+    - Default: in-memory SQLite. Uses schema_translate_map to flatten the 6
+      PostgreSQL domain schemas (auth, trading, reporting, social, content,
+      system) to None, since SQLite has no named schema support.
+    - Set TEST_DATABASE_URL to a dedicated (non-production) PostgreSQL URL to
+      run tests with full PostgreSQL fidelity. Tables are created and dropped
+      per run. Never set this to the production DATABASE_URL.
+    """
+    import os
     from app.models import Base
 
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    test_db_url = os.environ.get("TEST_DATABASE_URL", "")
 
-    yield engine
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    if test_db_url and _is_postgres_url(test_db_url):
+        # Dedicated test PostgreSQL DB — safe to create/drop tables
+        engine = create_async_engine(test_db_url, echo=False)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        yield engine
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+    else:
+        # Default: in-memory SQLite with schema flattening
+        _SCHEMA_MAP = {
+            "auth": None,
+            "trading": None,
+            "reporting": None,
+            "social": None,
+            "content": None,
+            "system": None,
+        }
+        engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            echo=False,
+            execution_options={"schema_translate_map": _SCHEMA_MAP},
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        yield engine
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
 
 
 @pytest.fixture

@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP — reads X-Forwarded-For first (nginx proxy)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt"""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -212,7 +220,7 @@ async def _create_device_trust(
     device_trust = create_device_trust_token(user.id, device_uuid)
 
     user_agent = request.headers.get("user-agent", "")
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     location = await _geolocate_ip(client_ip)
 
     trusted_device = TrustedDevice(
@@ -281,7 +289,7 @@ async def _complete_mfa_login(
     session_expires_at = None
 
     if has_any_limits(policy):
-        client_ip = http_request.client.host if http_request.client else "unknown"
+        client_ip = get_client_ip(http_request)
         try:
             await check_session_limits(user.id, client_ip, policy, db)
 
