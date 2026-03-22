@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.131.0] - 2026-03-22
+
+### Added
+- **ServiceRegistry** (`app/registry.py`) — single injection point for all four service backend abstractions: `event_bus`, `broadcast`, `rate_limiter`, and `credentials`. Expose via `Depends(get_registry)` so routers can receive all backends through one object instead of importing singletons directly. The registry is the Phase 3 swap point: replacing `_default_registry` at startup switches all four backends (NATS, Redis, remote credentials service) simultaneously with no router changes. All fields hold today's in-process / local implementations — zero behavior change.
+
 ## [v2.130.0] - 2026-03-22
 
 ### Added
