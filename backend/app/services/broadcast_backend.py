@@ -1,5 +1,5 @@
 """
-BroadcastBackend abstraction — Phase 2.5 of the scalability roadmap.
+BroadcastBackend abstraction — Phase 2.5 / Phase 3 of the scalability roadmap.
 
 Puts a protocol in front of WebSocketManager's fan-out methods so that
 Phase 3 (multi-process) can swap InProcessBroadcast for RedisBroadcast
@@ -16,6 +16,7 @@ Usage (new code should use this, not ws_manager directly for broadcasts):
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional, Protocol, runtime_checkable
 
@@ -96,26 +97,33 @@ class InProcessBroadcast:
 # ---------------------------------------------------------------------------
 
 class RedisBroadcast:
-    """BroadcastBackend backed by Redis pub/sub (Phase 3).
+    """BroadcastBackend backed by Redis pub/sub.
 
-    When ZenithGrid runs multiple backend workers, each process has its own
-    WebSocketManager. Broadcasting to a user requires publishing to a shared
-    Redis channel that ALL workers subscribe to. Each worker then delivers to
-    locally-connected sockets.
+    Each method publishes a JSON payload to a Redis channel. A per-process
+    subscriber task (started in main.py lifespan) receives messages and
+    dispatches them to the local WebSocketManager.
 
-    Architecture (Phase 3):
-        Publisher → PUBLISH ws:user:{user_id} <message>
-        Each worker subscribes: SUB ws:user:* → ws_manager.send_to_user()
-
-    NOT IMPLEMENTED — raises NotImplementedError. Swap this in when Phase 3
-    deploys multi-process uvicorn or adds a Celery/Dramatiq worker fleet.
+    Channel scheme:
+        ws:user:{user_id}  — direct message to one user
+        ws:broadcast       — fan-out to all (user_id=None) or filtered (user_id=int)
+        ws:room            — room message with player_ids list
     """
 
     async def broadcast(self, message: dict, user_id: Optional[int] = None) -> None:
-        raise NotImplementedError("RedisBroadcast not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        redis = await get_redis()
+        if user_id is not None:
+            channel = f"ws:user:{user_id}"
+            payload = json.dumps({"message": message})
+        else:
+            channel = "ws:broadcast"
+            payload = json.dumps({"message": message, "user_id": None})
+        await redis.publish(channel, payload)
 
     async def send_to_user(self, user_id: int, message: dict) -> None:
-        raise NotImplementedError("RedisBroadcast not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        redis = await get_redis()
+        await redis.publish(f"ws:user:{user_id}", json.dumps({"message": message}))
 
     async def send_to_room(
         self,
@@ -123,10 +131,68 @@ class RedisBroadcast:
         message: dict,
         exclude_user: Optional[int] = None,
     ) -> None:
-        raise NotImplementedError("RedisBroadcast not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        redis = await get_redis()
+        payload = json.dumps({
+            "message": message,
+            "player_ids": list(player_ids),
+            "exclude_user": exclude_user,
+        })
+        await redis.publish("ws:room", payload)
 
     async def broadcast_order_fill(self, event: OrderFillEvent) -> None:
-        raise NotImplementedError("RedisBroadcast not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        redis = await get_redis()
+        payload = json.dumps({
+            "type": "order_fill",
+            "fill_type": event.fill_type,
+            "product_id": event.product_id,
+            "base_amount": event.base_amount,
+            "quote_amount": event.quote_amount,
+            "price": event.price,
+            "position_id": event.position_id,
+            "profit": event.profit,
+            "profit_percentage": event.profit_percentage,
+            "is_paper_trading": event.is_paper_trading,
+            "user_id": event.user_id,
+        })
+        await redis.publish(f"ws:user:{event.user_id}", payload)
+
+
+# ---------------------------------------------------------------------------
+# Subscriber routing — called by the per-process subscriber loop in main.py
+# ---------------------------------------------------------------------------
+
+async def route_redis_message(channel: str, raw: str, manager: WebSocketManager) -> None:
+    """Dispatch an incoming Redis pub/sub message to the local WebSocketManager.
+
+    Called by the subscriber background task for every message received.
+    Errors are logged and swallowed so one bad message doesn't kill the loop.
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Redis subscriber: invalid JSON on channel %s", channel)
+        return
+
+    try:
+        if channel.startswith("ws:user:"):
+            user_id = int(channel.split(":")[-1])
+            msg = data.get("message") or data  # order_fill payloads have no "message" key
+            await manager.send_to_user(user_id, msg)
+
+        elif channel == "ws:broadcast":
+            await manager.broadcast(data["message"], user_id=data.get("user_id"))
+
+        elif channel == "ws:room":
+            await manager.send_to_room(
+                set(data["player_ids"]),
+                data["message"],
+                exclude_user=data.get("exclude_user"),
+            )
+
+    except Exception:
+        logger.exception("Redis subscriber: error routing message on channel %s", channel)
 
 
 # ---------------------------------------------------------------------------

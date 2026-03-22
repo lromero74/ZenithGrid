@@ -172,6 +172,12 @@ def _mem_count(store: dict, key: str, window: int) -> tuple[int, list]:
     return len(cleaned), cleaned
 
 
+def _get_rate_limit_backend():
+    """Return the current rate_limit_backend singleton (always reads the live module attr)."""
+    from app.auth_routers.rate_limit_backend import rate_limit_backend as _backend
+    return _backend
+
+
 async def _check(category: str, key: str, error_msg: str):
     """Unified rate limit check: memory first, DB fallback on cold cache."""
     _prune_memory()
@@ -179,9 +185,9 @@ async def _check(category: str, key: str, error_msg: str):
     store = _CATEGORY_STORE[category]
     cache_key = (category, key)
 
-    # Warm from DB on first access after restart
+    # Warm from backend on first access after restart
     if cache_key not in _warmed:
-        db_count = await _db_count(category, key, window)
+        db_count = await _get_rate_limit_backend().count_recent(category, key, window)
         if db_count > 0:
             # Backfill memory with synthetic timestamps spread across the window
             now = time.time()
@@ -201,10 +207,10 @@ async def _check(category: str, key: str, error_msg: str):
 
 
 async def _record(category: str, key: str):
-    """Record an attempt in both memory and DB."""
+    """Record an attempt in both memory and backend."""
     _CATEGORY_STORE[category][key].append(time.time())
     _warmed.add((category, key))
-    await _db_record(category, key)
+    await _get_rate_limit_backend().record_attempt(category, key)
 
 
 # ---------------------------------------------------------------------------
@@ -245,10 +251,10 @@ def _record_attempt(ip: str, username=None):
     if username:
         _login_attempts_by_username[username].append(time.time())
         _warmed.add(("login_user", username))
-    # Fire-and-forget DB persistence (bounded task tracking)
-    _fire_and_forget(_db_record("login", ip))
+    # Fire-and-forget backend persistence (bounded task tracking)
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("login", ip))
     if username:
-        _fire_and_forget(_db_record("login_user", username))
+        _fire_and_forget(_get_rate_limit_backend().record_attempt("login_user", username))
 
 
 # -- Signup --
@@ -271,7 +277,7 @@ def _check_signup_rate_limit(ip: str):
 def _record_signup_attempt(ip: str):
     _signup_attempts[ip].append(time.time())
     _warmed.add(("signup", ip))
-    _fire_and_forget(_db_record("signup", ip))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("signup", ip))
 
 
 # -- Forgot password --
@@ -294,7 +300,7 @@ def _check_forgot_pw_rate_limit(ip: str):
 def _record_forgot_pw_attempt(ip: str):
     _forgot_pw_attempts[ip].append(time.time())
     _warmed.add(("forgot_pw", ip))
-    _fire_and_forget(_db_record("forgot_pw", ip))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("forgot_pw", ip))
 
 
 def _is_forgot_pw_email_rate_limited(email: str) -> bool:
@@ -310,7 +316,7 @@ def _is_forgot_pw_email_rate_limited(email: str) -> bool:
 def _record_forgot_pw_email_attempt(email: str):
     _forgot_pw_by_email[email].append(time.time())
     _warmed.add(("forgot_pw_email", email))
-    _fire_and_forget(_db_record("forgot_pw_email", email))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("forgot_pw_email", email))
 
 
 # -- Resend verification --
@@ -335,7 +341,7 @@ def _record_resend_attempt(user_id: int):
     key = str(user_id)
     _resend_attempts[key].append(time.time())
     _warmed.add(("resend", key))
-    _fire_and_forget(_db_record("resend", key))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("resend", key))
 
 
 # -- MFA --
@@ -354,4 +360,4 @@ def _check_mfa_rate_limit(mfa_token: str):
 def _record_mfa_attempt(mfa_token: str):
     _mfa_attempts[mfa_token].append(time.time())
     _warmed.add(("mfa", mfa_token))
-    _fire_and_forget(_db_record("mfa", mfa_token))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("mfa", mfa_token))

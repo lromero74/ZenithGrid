@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.133.0] - 2026-03-22
+
+### Added
+- **Redis rate limiting** — login, signup, MFA, and password-reset rate limit attempts now persist to Redis (INCR + TTL fixed window) instead of PostgreSQL, reducing DB load and enabling cross-process consistency. In-memory fast path is preserved; Redis is used for warming the cache after restart.
+- **Redis WebSocket broadcast** — `RedisBroadcast` backend publishes WebSocket fan-out messages (`send_to_user`, `send_to_room`, `broadcast_order_fill`) to Redis pub/sub channels (`ws:user:*`, `ws:broadcast`, `ws:room`). A per-process subscriber loop dispatches incoming messages to the local `WebSocketManager`. Enables multi-process fan-out in Phase 3 with no call-site changes.
+- **Redis APScheduler jobstore** — background job state (Tier 2 & 3 scheduler) is now persisted in Redis DB 1. Jobs survive a restart without missing their next scheduled run.
+- **Full broadcast backend migration** — all remaining call sites (`sell_executor`, `buy_executor`, `limit_order_monitor`, `perps_monitor`, `friend_notifications`, `game_ws_handler`, `chat_ws_handler`) now use `broadcast_backend` instead of calling `ws_manager` directly for fan-out. Connection registry calls (`connect`, `disconnect`, `get_connected_user_ids`) remain on `ws_manager`.
+
 ## [v2.132.1] - 2026-03-22
 
 ### Added

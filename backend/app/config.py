@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./trading.db"
+    redis_url: str = "redis://localhost:6379/0"   # DB 0: rate limiting / general cache
 
     # Security
     # CORS origins as comma-separated string (parsed to list via validator)

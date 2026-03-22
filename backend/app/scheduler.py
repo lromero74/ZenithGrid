@@ -12,12 +12,32 @@ import logging
 from datetime import datetime, timedelta
 
 from apscheduler.events import EVENT_JOB_ERROR
+from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+# Parse host/port from redis_url (redis://host:port/db)
+_redis_url = settings.redis_url  # e.g. redis://localhost:6379/0
+_redis_host = "localhost"
+_redis_port = 6379
+
+try:
+    import urllib.parse
+    _parsed = urllib.parse.urlparse(_redis_url)
+    _redis_host = _parsed.hostname or "localhost"
+    _redis_port = _parsed.port or 6379
+except Exception:
+    pass
+
+scheduler = AsyncIOScheduler(
+    jobstores={
+        "default": RedisJobStore(host=_redis_host, port=_redis_port, db=1),
+    }
+)
 
 
 def _job_error_handler(event):

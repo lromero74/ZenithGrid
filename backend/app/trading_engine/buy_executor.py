@@ -15,7 +15,8 @@ from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.order_validation import validate_order_size
 from app.services.shutdown_manager import shutdown_manager
-from app.services.websocket_manager import ws_manager, OrderFillEvent
+from app.services.websocket_manager import OrderFillEvent
+from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
@@ -235,7 +236,7 @@ async def _post_buy_operations(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(OrderFillEvent(
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type=fill_type,
             product_id=product_id,
             base_amount=actual_base_amount,
@@ -814,7 +815,7 @@ async def execute_buy_close_short(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(OrderFillEvent(
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type="close_short",
             product_id=product_id,
             base_amount=filled_size,
