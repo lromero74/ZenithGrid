@@ -58,9 +58,9 @@ async def _init_secondary_engine():
     }
     if settings.is_postgres:
         # Small pool — batch tasks don't need many connections.
-        # Main pool (size=8, overflow=4) stays exclusively for Tier 1 + API handlers.
-        kwargs["pool_size"] = 3
-        kwargs["max_overflow"] = 2
+        # Full budget: main(8) + read(4) + secondary(3) = 15 max vs 22 usable slots.
+        kwargs["pool_size"] = 2
+        kwargs["max_overflow"] = 1
         kwargs["pool_timeout"] = 30  # Batch tasks can wait longer
     else:
         kwargs["connect_args"] = {"check_same_thread": False}

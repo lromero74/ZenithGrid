@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.10] - 2026-03-22
+
+### Fixed
+- **Connection pool exhaustion** — reduced PostgreSQL connection pool sizes across all three pools (main 12→8, read 6→4, secondary 5→3 max connections) to comfortably fit within the server's `max_connections=25` limit. The previous budget of 23 max connections plus superuser reserved slots caused sporadic `TooManyConnectionsError` errors.
+- **Leaked idle-in-transaction connections** — set `idle_in_transaction_session_timeout=15min` at the PostgreSQL level so connections left open by service restarts are automatically terminated rather than accumulating until they exhaust the connection limit.
+
 ## [v2.125.9] - 2026-03-22
 
 ### Changed
