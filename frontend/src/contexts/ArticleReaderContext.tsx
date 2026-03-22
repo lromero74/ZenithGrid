@@ -440,16 +440,22 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     return () => releaseWakeLock()
   }, [isPlaying, acquireWakeLock, releaseWakeLock])
 
-  // Re-acquire wake lock when tab becomes visible (auto-released on visibility:hidden)
+  // Re-acquire wake lock and keepalive audio when tab becomes visible.
+  // Wake lock auto-releases on visibility:hidden; keepalive can get paused by iOS.
   useEffect(() => {
     const handleVisibility = () => {
       if (!document.hidden && isPlaying) {
         acquireWakeLock()
+        // Re-start keepalive if iOS paused it while backgrounded
+        const keepalive = keepaliveAudioRef.current
+        if (keepalive && keepalive.paused && (tts.isLoading || (!tts.isPlaying && !tts.isPaused))) {
+          keepalive.play().catch(() => {})
+        }
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [isPlaying, acquireWakeLock])
+  }, [isPlaying, acquireWakeLock, tts.isLoading, tts.isPlaying, tts.isPaused])
 
   // Create keepalive audio element (silent, looped) to prevent tab discard.
   // Browsers avoid killing tabs with active audio playback.

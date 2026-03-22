@@ -114,6 +114,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     'CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
     'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI' +
     'CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA=='
+  const wasPlayingWhenHiddenRef = useRef(false)  // Track state when page is backgrounded
   const wordsRef = useRef<WordTiming[]>([])  // Ref to avoid stale closure
   const isAnimatingRef = useRef(false)  // Track if animation loop should run
   const lastFoundIndexRef = useRef(0)  // Track last word index for O(1) search
@@ -233,6 +234,14 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         gain.gain.value = volumeRef.current
         audioContextRef.current = ctx
         gainNodeRef.current = gain
+        // Auto-resume after iOS audio interruptions (phone calls, Maps navigation, etc.).
+        // iOS 17+ supports Web Audio background play; on older iOS the context gets
+        // 'interrupted' — resuming here restores audio when the interruption ends.
+        ctx.onstatechange = () => {
+          if (ctx.state === 'suspended' && !document.hidden) {
+            ctx.resume().catch(() => {})
+          }
+        }
       } catch (e) {
         console.warn('AudioContext init failed:', e)
         return
@@ -249,6 +258,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   useEffect(() => {
     const audio = new Audio()
     audio.volume = volume
+    // playsInline: allow in-page (non-fullscreen) playback on iOS, which is
+    // required for Media Session background audio to work correctly.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(audio as any).playsInline = true
     audioRef.current = audio
 
     audio.onplay = () => {
@@ -325,6 +338,32 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       }
     }
   }, [startAnimationLoop, stopAnimationLoop])
+
+  // iOS background audio recovery: when the page becomes visible again (user
+  // returns from Maps/another app), resume the AudioContext and restart
+  // the audio element if iOS suspended it while backgrounded.
+  // iOS 17+ allows Web Audio background play; older iOS suspends the AudioContext.
+  // In both cases this handler ensures clean recovery.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page going to background — snapshot current playback state
+        wasPlayingWhenHiddenRef.current = !!(audioRef.current && !audioRef.current.paused)
+      } else {
+        // Page returning to foreground — restore audio chain
+        if (audioContextRef.current?.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {})
+        }
+        // If audio was playing when we left but the element is now paused
+        // (iOS suspended the AudioContext chain), restart from current position.
+        if (wasPlayingWhenHiddenRef.current && audioRef.current?.paused && !audioRef.current?.ended) {
+          audioRef.current.play().catch(() => {})
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   // Update playback rate when it changes
   useEffect(() => {
