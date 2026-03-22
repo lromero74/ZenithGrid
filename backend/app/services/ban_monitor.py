@@ -10,23 +10,15 @@ import logging
 import subprocess
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-
-import pycountry
-
-
-def _country_name(alpha_2: str | None) -> str | None:
-    """Resolve a 2-letter ISO country code to its full name."""
-    if not alpha_2:
-        return None
-    country = pycountry.countries.get(alpha_2=alpha_2.upper())
-    return country.name if country else None
-
 
 logger = logging.getLogger(__name__)
 
-MAX_GEO_WORKERS = 10
+# ip-api.com batch endpoint — free tier, no key required, 100 IPs per request.
+# Returns full country names directly so no pycountry resolution needed.
+_GEO_BATCH_URL = "http://ip-api.com/batch"
+_GEO_FIELDS = "status,country,countryCode,regionName,city,isp,query"
+_GEO_BATCH_SIZE = 100
 
 
 @dataclass
@@ -35,8 +27,8 @@ class BannedIP:
     jail: str
     city: str | None = None
     region: str | None = None
-    country: str | None = None       # 2-letter ISO code from ipinfo.io
-    country_name: str | None = None  # Full name resolved via pycountry
+    country: str | None = None       # 2-letter ISO code
+    country_name: str | None = None  # Full country name (e.g. "United States")
     org: str | None = None
     hostname: str | None = None
 
@@ -54,7 +46,7 @@ class BanSnapshot:
 _snapshot = BanSnapshot()
 
 # Geo cache: persists across refreshes so each IP is looked up only once.
-# Avoids hammering ipinfo.io rate limits when hundreds of IPs are banned.
+# Avoids hammering the rate limit when hundreds of IPs are banned.
 _geo_cache: dict[str, dict] = {}
 
 
@@ -71,46 +63,13 @@ async def refresh_ban_snapshot() -> BanSnapshot:
     return _snapshot
 
 
-def _lookup_ip_geo(ip: str) -> dict:
-    """Look up IP geolocation via ipinfo.io (free, no key needed for basic data).
+def _lookup_ip_geo_batch(ips: list[str]) -> dict[str, dict]:
+    """Look up geolocation for a list of IPs via ip-api.com batch endpoint.
 
-    Results are cached in _geo_cache so each IP is only queried once per process
-    lifetime — avoids rate-limiting when hundreds of IPs are banned.
-    """
-    if ip in _geo_cache:
-        return _geo_cache[ip]
-    try:
-        req = urllib.request.Request(
-            f"https://ipinfo.io/{ip}/json",
-            headers={"Accept": "application/json", "User-Agent": "ZenithGrid-BanMonitor"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
-            code = data.get("country")
-            result = {
-                "city": data.get("city"),
-                "region": data.get("region"),
-                "country": code,
-                "country_name": _country_name(code),
-                "org": data.get("org"),
-                "hostname": data.get("hostname"),
-            }
-            _geo_cache[ip] = result
-            return result
-    except Exception as e:
-        logger.debug(f"IP geo lookup failed for {ip}: {e}")
-        return {}
-
-
-def _lookup_ip_geo_bulk(ips: list[str]) -> dict[str, dict]:
-    """Look up geolocation for a list of IPs concurrently.
-
-    Already-cached IPs are served from _geo_cache without any network call.
-    Up to MAX_GEO_WORKERS lookups run in parallel. Each IP's result is
-    independent — a failure for one IP returns {} for it and does not
-    affect others. Failed lookups are NOT stored in the cache.
-
-    Returns a mapping of {ip: geo_dict} for all IPs in the input list.
+    - Already-cached IPs are served from _geo_cache without any network call.
+    - Uncached IPs are fetched in batches of up to 100 per request.
+    - Failed lookups return {} and are NOT stored in the cache.
+    - Returns a mapping of {ip: geo_dict} for all IPs in the input list.
     """
     unique_ips = list(dict.fromkeys(ips))  # Deduplicate, preserve order
     result: dict[str, dict] = {}
@@ -125,15 +84,47 @@ def _lookup_ip_geo_bulk(ips: list[str]) -> dict[str, dict]:
     if not uncached:
         return result
 
-    with ThreadPoolExecutor(max_workers=MAX_GEO_WORKERS, thread_name_prefix="geo-lookup") as executor:
-        future_to_ip = {executor.submit(_lookup_ip_geo, ip): ip for ip in uncached}
-        for future in as_completed(future_to_ip):
-            ip = future_to_ip[future]
-            try:
-                result[ip] = future.result()
-            except Exception as e:
-                logger.debug(f"Bulk geo lookup exception for {ip}: {e}")
-                result[ip] = {}
+    for i in range(0, len(uncached), _GEO_BATCH_SIZE):
+        batch = uncached[i:i + _GEO_BATCH_SIZE]
+        try:
+            body = json.dumps(batch).encode()
+            req = urllib.request.Request(
+                f"{_GEO_BATCH_URL}?fields={_GEO_FIELDS}",
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": "ZenithGrid-BanMonitor",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                entries = json.loads(resp.read())
+
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                ip = entry.get("query")
+                if not ip:
+                    continue
+                if entry.get("status") != "success":
+                    result[ip] = {}
+                    continue
+                geo = {
+                    "city": entry.get("city"),
+                    "region": entry.get("regionName"),
+                    "country": entry.get("countryCode"),
+                    "country_name": entry.get("country"),
+                    "org": entry.get("isp"),
+                    "hostname": None,
+                }
+                _geo_cache[ip] = geo
+                result[ip] = geo
+
+        except Exception as e:
+            logger.debug(f"Geo batch lookup failed (batch starting {batch[0]}): {e}")
+            for ip in batch:
+                result.setdefault(ip, {})
 
     return result
 
@@ -190,9 +181,9 @@ def _query_fail2ban() -> BanSnapshot:
                         if ip.strip():
                             raw_bans.append((ip.strip(), jail))
 
-        # Pass 2: bulk geo lookup for all unique IPs (concurrent, cache-aware)
+        # Pass 2: batch geo lookup for all unique IPs (cache-aware)
         all_ips = [ip for ip, _ in raw_bans]
-        geo_map = _lookup_ip_geo_bulk(all_ips)
+        geo_map = _lookup_ip_geo_batch(all_ips)
 
         for ip, jail in raw_bans:
             geo = geo_map.get(ip, {})

@@ -94,7 +94,7 @@ async def list_users(
     """List all users with group memberships, MFA status, and online indicator."""
     from app.services.websocket_manager import ws_manager
     from app.models.auth import ActiveSession
-    from app.services.ban_monitor import _lookup_ip_geo
+    from app.services.ban_monitor import _lookup_ip_geo_batch
     import asyncio
 
     query = (
@@ -135,10 +135,9 @@ async def list_users(
         if all_unique_ips:
             loop = asyncio.get_event_loop()
             unique_ip_list = list(all_unique_ips)
-            geo_results = await asyncio.gather(
-                *[loop.run_in_executor(None, _lookup_ip_geo, ip) for ip in unique_ip_list]
+            ip_geo_cache: dict[str, dict] = await loop.run_in_executor(
+                None, _lookup_ip_geo_batch, unique_ip_list
             )
-            ip_geo_cache: dict[str, dict] = dict(zip(unique_ip_list, geo_results))
 
             for uid, ips in user_ips.items():
                 observer_locations[uid] = [

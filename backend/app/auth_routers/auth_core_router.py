@@ -20,7 +20,8 @@ from app.auth.dependencies import (
     decode_token,
     get_current_user,
     get_user_by_id,
-    require_superuser,
+    require_permission,
+    Perm,
 )
 from app.config import settings
 from app.database import get_db
@@ -370,7 +371,7 @@ async def change_password(
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     request: RegisterRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.ADMIN_USERS)),
     db: AsyncSession = Depends(get_db)
 ):
     """

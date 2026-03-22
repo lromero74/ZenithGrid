@@ -17,8 +17,7 @@ from app.services.ban_monitor import (
     BanSnapshot,
     get_ban_snapshot,
     refresh_ban_snapshot,
-    _lookup_ip_geo,
-    _lookup_ip_geo_bulk,
+    _lookup_ip_geo_batch,
     _query_fail2ban,
 )
 import app.services.ban_monitor as ban_mod
@@ -52,11 +51,13 @@ class TestBannedIP:
         ip = BannedIP(
             ip="1.2.3.4", jail="sshd",
             city="London", region="England", country="GB",
-            org="AS1234 Example ISP", hostname="host.example.com",
+            country_name="United Kingdom",
+            org="Virgin Media", hostname="host.example.com",
         )
         assert ip.ip == "1.2.3.4"
         assert ip.jail == "sshd"
         assert ip.country == "GB"
+        assert ip.country_name == "United Kingdom"
 
     def test_create_with_defaults(self):
         """Edge case: optional geo fields default to None."""
@@ -64,6 +65,7 @@ class TestBannedIP:
         assert ip.city is None
         assert ip.region is None
         assert ip.country is None
+        assert ip.country_name is None
         assert ip.org is None
         assert ip.hostname is None
 
@@ -121,248 +123,174 @@ class TestGetBanSnapshot:
 
 
 # ===========================================================================
-# _lookup_ip_geo
+# _lookup_ip_geo_batch — ip-api.com batch endpoint
 # ===========================================================================
 
 
-class TestLookupIpGeo:
-    """Tests for _lookup_ip_geo() — IP geolocation lookup."""
-
-    def test_successful_lookup(self):
-        """Happy path: ipinfo.io returns geo data."""
-        mock_data = json.dumps({
-            "city": "San Francisco",
-            "region": "California",
-            "country": "US",
-            "org": "AS13335 Cloudflare",
-            "hostname": "one.one.one.one",
-        }).encode()
-
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = mock_data
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch('urllib.request.urlopen', return_value=mock_resp):
-            result = _lookup_ip_geo("1.1.1.1")
-
-        assert result["city"] == "San Francisco"
-        assert result["country"] == "US"
-        assert result["org"] == "AS13335 Cloudflare"
-
-    def test_network_error_returns_empty_dict(self):
-        """Failure: network error returns empty dict (logged, not raised)."""
-        with patch('urllib.request.urlopen', side_effect=Exception("Connection refused")):
-            result = _lookup_ip_geo("1.2.3.4")
-
-        assert result == {}
-
-    def test_timeout_returns_empty_dict(self):
-        """Failure: timeout returns empty dict."""
-        from urllib.error import URLError
-        with patch('urllib.request.urlopen', side_effect=URLError("timeout")):
-            result = _lookup_ip_geo("1.2.3.4")
-
-        assert result == {}
-
-    def test_invalid_json_returns_empty_dict(self):
-        """Failure: invalid JSON response returns empty dict."""
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"not json"
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch('urllib.request.urlopen', return_value=mock_resp):
-            result = _lookup_ip_geo("1.2.3.4")
-
-        assert result == {}
-
-
-# ===========================================================================
-# _lookup_ip_geo — geo cache behaviour
-# ===========================================================================
-
-
-class TestLookupIpGeoCache:
-    """Tests for the _geo_cache caching layer in _lookup_ip_geo()."""
-
-    def _make_urlopen_mock(self, payload: dict):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps(payload).encode()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        return mock_resp
-
-    def test_second_call_uses_cache_not_network(self):
-        """Happy path: second lookup for same IP returns cached result without hitting the network."""
-        payload = {
-            "city": "London", "country": "GB", "org": "AS5089 Virgin Media",
-            "region": "England", "hostname": None,
+def _make_batch_response(ips: list[str], country: str = "US", country_code: str = "US",
+                         city: str = "New York", region: str = "New York",
+                         isp: str = "Test ISP") -> bytes:
+    """Build a mock ip-api.com batch JSON response for the given IPs."""
+    entries = [
+        {
+            "query": ip,
+            "status": "success",
+            "country": country,
+            "countryCode": country_code,
+            "regionName": region,
+            "city": city,
+            "isp": isp,
         }
-
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
-            result1 = _lookup_ip_geo("10.0.0.1")
-            result2 = _lookup_ip_geo("10.0.0.1")
-
-        assert mock_open.call_count == 1  # Only one HTTP call despite two lookups
-        assert result1 == result2
-        assert result1["country"] == "GB"
-
-    def test_different_ips_each_make_a_network_call(self):
-        """Edge case: distinct IPs are each looked up once via the network."""
-        payload = {"city": "X", "country": "US", "org": "AS1 Test", "region": "CA", "hostname": None}
-
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
-            _lookup_ip_geo("10.0.0.1")
-            _lookup_ip_geo("10.0.0.2")
-            _lookup_ip_geo("10.0.0.1")  # cache hit — no extra call
-
-        assert mock_open.call_count == 2
-
-    def test_cache_stores_geo_data_in_module_dict(self):
-        """Happy path: successful lookup is stored in the module-level _geo_cache."""
-        payload = {"city": "Paris", "country": "FR", "org": "AS3215 Orange", "region": "IDF", "hostname": "host.fr"}
-
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)):
-            _lookup_ip_geo("192.168.1.1")
-
-        assert "192.168.1.1" in ban_mod._geo_cache
-        assert ban_mod._geo_cache["192.168.1.1"]["country"] == "FR"
-
-    def test_failed_lookup_not_cached(self):
-        """Failure: network error returns empty dict and is NOT stored in cache (retried next time)."""
-        with patch('urllib.request.urlopen', side_effect=Exception("Rate limited")) as mock_open:
-            result1 = _lookup_ip_geo("10.0.0.5")
-            result2 = _lookup_ip_geo("10.0.0.5")
-
-        assert result1 == {}
-        assert result2 == {}
-        assert mock_open.call_count == 2  # Both calls hit the network (no cache)
-        assert "10.0.0.5" not in ban_mod._geo_cache
-
-    def test_cache_prevents_rate_limit_exhaustion_on_bulk_refresh(self):
-        """Regression: many banned IPs refreshed repeatedly must not re-hit ipinfo.io.
-
-        This guards against the bug where Country/ISP showed 'Unknown' because
-        ipinfo.io was rate-limited on every manual refresh cycle.
-        """
-        payload = {"city": "Tokyo", "country": "JP", "org": "AS4713 NTT", "region": "TK", "hostname": None}
-        ips = [f"10.0.{i}.{j}" for i in range(5) for j in range(10)]  # 50 IPs
-
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
-            # First refresh: all 50 IPs looked up
-            for ip in ips:
-                _lookup_ip_geo(ip)
-            first_run_calls = mock_open.call_count
-
-            # Second refresh (simulate monitor re-run): zero new network calls
-            for ip in ips:
-                _lookup_ip_geo(ip)
-            second_run_calls = mock_open.call_count
-
-        assert first_run_calls == 50
-        assert second_run_calls == 50  # No additional calls — all served from cache
+        for ip in ips
+    ]
+    return json.dumps(entries).encode()
 
 
-# ===========================================================================
-# _lookup_ip_geo_bulk
-# ===========================================================================
+def _make_urlopen_mock(body: bytes) -> MagicMock:
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = body
+    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    return mock_resp
 
 
-class TestLookupIpGeoBulk:
-    """Tests for _lookup_ip_geo_bulk() — concurrent geo lookup for a list of IPs."""
+class TestLookupIpGeoBatch:
+    """Tests for _lookup_ip_geo_batch() — batch geo lookup via ip-api.com."""
 
-    def _make_urlopen_mock(self, payload: dict):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps(payload).encode()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        return mock_resp
+    def test_successful_batch_lookup(self):
+        """Happy path: batch returns correct geo data for all queried IPs."""
+        ips = ["1.1.1.1", "8.8.8.8"]
+        body = _make_batch_response(ips, country="United States", country_code="US", isp="Google LLC")
 
-    def test_bulk_returns_geo_for_all_ips(self):
-        """Happy path: bulk lookup returns a mapping for every IP in the list."""
-        payload = {"city": "NYC", "country": "US", "org": "AS1 Test", "region": "NY", "hostname": None}
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)):
+            result = _lookup_ip_geo_batch(ips)
 
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)):
-            result = _lookup_ip_geo_bulk(["1.1.1.1", "2.2.2.2"])
-
-        assert set(result.keys()) == {"1.1.1.1", "2.2.2.2"}
+        assert set(result.keys()) == {"1.1.1.1", "8.8.8.8"}
         assert result["1.1.1.1"]["country"] == "US"
-        assert result["2.2.2.2"]["country"] == "US"
+        assert result["1.1.1.1"]["country_name"] == "United States"
+        assert result["1.1.1.1"]["org"] == "Google LLC"
+        assert result["1.1.1.1"]["region"] == "New York"
 
-    def test_bulk_skips_already_cached_ips(self):
-        """Edge case: IPs already in _geo_cache are not fetched from the network."""
-        ban_mod._geo_cache["10.0.0.1"] = {
-            "country": "DE", "city": "Berlin", "org": None, "region": None, "hostname": None,
-        }
-        payload = {"city": "Paris", "country": "FR", "org": None, "region": None, "hostname": None}
+    def test_single_ip_lookup(self):
+        """Happy path: single IP lookup returns a dict with the IP key."""
+        body = _make_batch_response(["10.0.0.1"], country="Canada", country_code="CA", isp="Rogers")
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)):
+            result = _lookup_ip_geo_batch(["10.0.0.1"])
+        assert result["10.0.0.1"]["country"] == "CA"
+        assert result["10.0.0.1"]["country_name"] == "Canada"
 
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
-            result = _lookup_ip_geo_bulk(["10.0.0.1", "10.0.0.2"])
-
-        assert mock_open.call_count == 1  # Only 10.0.0.2 fetched
-        assert result["10.0.0.1"]["country"] == "DE"  # From cache
-        assert result["10.0.0.2"]["country"] == "FR"  # From network
-
-    def test_bulk_error_for_one_ip_does_not_prevent_others(self):
-        """Failure: a network error for one IP returns {} for it but others still succeed."""
-        good_payload = {"city": "Tokyo", "country": "JP", "org": None, "region": None, "hostname": None}
-        good_resp = self._make_urlopen_mock(good_payload)
-
-        call_count = [0]
-
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise Exception("Rate limited")
-            return good_resp
-
-        with patch('urllib.request.urlopen', side_effect=side_effect):
-            result = _lookup_ip_geo_bulk(["1.2.3.4", "5.6.7.8"])
-
-        # Both keys must be present
-        assert "1.2.3.4" in result
-        assert "5.6.7.8" in result
-        # Failed IP returns empty dict; successful one has data
+    def test_failed_status_returns_empty_dict(self):
+        """Failure: ip-api returns status='fail' → empty dict for that IP (not cached)."""
+        body = json.dumps([{"query": "1.2.3.4", "status": "fail", "message": "private range"}]).encode()
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)):
+            result = _lookup_ip_geo_batch(["1.2.3.4"])
         assert result["1.2.3.4"] == {}
-        assert result["5.6.7.8"]["country"] == "JP"
+        assert "1.2.3.4" not in ban_mod._geo_cache
 
-    def test_bulk_empty_list_returns_empty_dict(self):
+    def test_network_error_returns_empty_dicts_for_batch(self):
+        """Failure: network error returns {} for all IPs in the failed batch."""
+        with patch('urllib.request.urlopen', side_effect=Exception("Connection refused")):
+            result = _lookup_ip_geo_batch(["1.1.1.1", "2.2.2.2"])
+        assert result["1.1.1.1"] == {}
+        assert result["2.2.2.2"] == {}
+
+    def test_empty_list_returns_empty_dict_no_network(self):
         """Edge case: empty input list returns empty result without any network calls."""
         with patch('urllib.request.urlopen') as mock_open:
-            result = _lookup_ip_geo_bulk([])
-
+            result = _lookup_ip_geo_batch([])
         assert result == {}
         mock_open.assert_not_called()
 
-    def test_bulk_all_cached_makes_zero_network_calls(self):
+    def test_all_cached_makes_zero_network_calls(self):
         """Edge case: when all IPs are cached, no network requests are made."""
-        ban_mod._geo_cache["1.2.3.4"] = {"country": "US", "city": None, "org": None, "region": None, "hostname": None}
-        ban_mod._geo_cache["5.6.7.8"] = {"country": "GB", "city": None, "org": None, "region": None, "hostname": None}
-
+        ban_mod._geo_cache["1.2.3.4"] = {"country": "US", "country_name": "United States",
+                                          "city": None, "org": None, "region": None, "hostname": None}
+        ban_mod._geo_cache["5.6.7.8"] = {"country": "GB", "country_name": "United Kingdom",
+                                          "city": None, "org": None, "region": None, "hostname": None}
         with patch('urllib.request.urlopen') as mock_open:
-            result = _lookup_ip_geo_bulk(["1.2.3.4", "5.6.7.8"])
-
+            result = _lookup_ip_geo_batch(["1.2.3.4", "5.6.7.8"])
         mock_open.assert_not_called()
         assert result["1.2.3.4"]["country"] == "US"
         assert result["5.6.7.8"]["country"] == "GB"
 
-    def test_bulk_deduplicates_duplicate_ips(self):
-        """Edge case: duplicate IPs in the list result in only one network call per unique IP."""
-        payload = {"city": "Seoul", "country": "KR", "org": None, "region": None, "hostname": None}
+    def test_partial_cache_only_fetches_uncached(self):
+        """Edge case: IPs already in cache are not fetched; only uncached IPs are requested."""
+        ban_mod._geo_cache["1.2.3.4"] = {"country": "DE", "country_name": "Germany",
+                                          "city": None, "org": None, "region": None, "hostname": None}
+        body = _make_batch_response(["5.6.7.8"], country="France", country_code="FR")
 
-        with patch('urllib.request.urlopen', return_value=self._make_urlopen_mock(payload)) as mock_open:
-            result = _lookup_ip_geo_bulk(["1.1.1.1", "1.1.1.1", "1.1.1.1"])
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)) as mock_open:
+            result = _lookup_ip_geo_batch(["1.2.3.4", "5.6.7.8"])
 
         assert mock_open.call_count == 1
-        assert result["1.1.1.1"]["country"] == "KR"
+        assert result["1.2.3.4"]["country"] == "DE"   # From cache
+        assert result["5.6.7.8"]["country"] == "FR"   # From network
 
-    def test_bulk_failed_ips_not_stored_in_cache(self):
+    def test_deduplicates_duplicate_ips(self):
+        """Edge case: duplicate IPs in the list result in only one network call."""
+        body = _make_batch_response(["1.1.1.1"], country="Japan", country_code="JP")
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)) as mock_open:
+            result = _lookup_ip_geo_batch(["1.1.1.1", "1.1.1.1", "1.1.1.1"])
+        assert mock_open.call_count == 1
+        assert result["1.1.1.1"]["country"] == "JP"
+
+    def test_successful_lookup_stored_in_cache(self):
+        """Happy path: successful lookups are stored in _geo_cache for future use."""
+        body = _make_batch_response(["192.168.1.1"], country="France", country_code="FR", city="Paris")
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)):
+            _lookup_ip_geo_batch(["192.168.1.1"])
+        assert "192.168.1.1" in ban_mod._geo_cache
+        assert ban_mod._geo_cache["192.168.1.1"]["country"] == "FR"
+        assert ban_mod._geo_cache["192.168.1.1"]["city"] == "Paris"
+
+    def test_failed_lookup_not_cached(self):
         """Failure: IPs that fail lookup are not cached so they can be retried next run."""
         with patch('urllib.request.urlopen', side_effect=Exception("Timeout")):
-            _lookup_ip_geo_bulk(["9.9.9.9"])
-
+            _lookup_ip_geo_batch(["9.9.9.9"])
         assert "9.9.9.9" not in ban_mod._geo_cache
+
+    def test_batches_large_lists(self):
+        """Edge case: lists > 100 IPs are split into batches of 100."""
+        ips = [f"10.0.{i // 256}.{i % 256}" for i in range(250)]
+
+        call_count = [0]
+
+        def urlopen_side_effect(req, timeout=None):
+            body = json.loads(req.data)
+            call_count[0] += 1
+            response_data = [
+                {"query": ip, "status": "success", "country": "US", "countryCode": "US",
+                 "regionName": "CA", "city": "X", "isp": "ISP"}
+                for ip in body
+            ]
+            return _make_urlopen_mock(json.dumps(response_data).encode())
+
+        with patch('urllib.request.urlopen', side_effect=urlopen_side_effect):
+            result = _lookup_ip_geo_batch(ips)
+
+        assert call_count[0] == 3  # ceil(250/100) = 3 batches
+        assert len(result) == 250
+
+    def test_cache_prevents_rate_limit_exhaustion(self):
+        """Regression: IPs looked up once are served from cache on subsequent refreshes.
+
+        Guards against the bug where Country/ISP showed 'Unknown' because
+        ip-api.com was being re-queried on every refresh cycle.
+        """
+        ips = [f"10.0.{i}.1" for i in range(10)]
+        body = _make_batch_response(ips, country="United States", country_code="US")
+
+        with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)) as mock_open:
+            # First refresh: all IPs fetched
+            _lookup_ip_geo_batch(ips)
+            first_call_count = mock_open.call_count
+
+            # Second refresh: zero new network calls (all in cache)
+            _lookup_ip_geo_batch(ips)
+            second_call_count = mock_open.call_count
+
+        assert first_call_count == 1   # One batch request
+        assert second_call_count == 1  # No additional requests
 
 
 # ===========================================================================
@@ -396,8 +324,15 @@ class TestQueryFail2ban:
                 result.stdout = jail_output
             return result
 
+        batch_result = {
+            "1.2.3.4": {"country": "US", "country_name": "United States",
+                         "city": None, "org": None, "region": None, "hostname": None},
+            "5.6.7.8": {"country": "US", "country_name": "United States",
+                         "city": None, "org": None, "region": None, "hostname": None},
+        }
+
         with patch('subprocess.run', side_effect=mock_subprocess_run), \
-             patch.object(ban_mod, '_lookup_ip_geo', return_value={"country": "US"}):
+             patch.object(ban_mod, '_lookup_ip_geo_batch', return_value=batch_result):
             snapshot = _query_fail2ban()
 
         assert snapshot.currently_banned == 2
@@ -407,6 +342,7 @@ class TestQueryFail2ban:
         assert snapshot.banned_ips[0].ip == "1.2.3.4"
         assert snapshot.banned_ips[0].jail == "sshd"
         assert snapshot.banned_ips[0].country == "US"
+        assert snapshot.banned_ips[0].country_name == "United States"
         assert snapshot.last_updated > 0
 
     def test_multiple_jails(self):
@@ -438,13 +374,17 @@ class TestQueryFail2ban:
                 result.stdout = nginx_output
             return result
 
+        batch_result = {
+            "1.1.1.1": {}, "2.2.2.2": {}, "3.3.3.3": {}, "4.4.4.4": {},
+        }
+
         with patch('subprocess.run', side_effect=mock_run), \
-             patch.object(ban_mod, '_lookup_ip_geo', return_value={}):
+             patch.object(ban_mod, '_lookup_ip_geo_batch', return_value=batch_result):
             snapshot = _query_fail2ban()
 
         assert snapshot.currently_banned == 4  # 1 + 3
-        assert snapshot.total_banned == 20  # 5 + 15
-        assert snapshot.total_failed == 250  # 50 + 200
+        assert snapshot.total_banned == 20     # 5 + 15
+        assert snapshot.total_failed == 250    # 50 + 200
         assert len(snapshot.banned_ips) == 4
 
     def test_fail2ban_not_found(self):
@@ -542,11 +482,8 @@ class TestQueryFail2ban:
         assert snapshot.total_banned == 0
         assert snapshot.total_failed == 0
 
-    def test_query_fail2ban_uses_bulk_lookup(self):
-        """Happy path: _query_fail2ban calls _lookup_ip_geo_bulk (not serial _lookup_ip_geo).
-
-        FAILS before impl: _query_fail2ban still calls _lookup_ip_geo per IP.
-        """
+    def test_query_fail2ban_uses_batch_lookup(self):
+        """Happy path: _query_fail2ban calls _lookup_ip_geo_batch for all IPs at once."""
         status_output = "Status\n`- Jail list:\tsshd\n"
         jail_output = (
             "Status for the jail: sshd\n"
@@ -565,21 +502,25 @@ class TestQueryFail2ban:
                 result.stdout = jail_output
             return result
 
-        bulk_result = {
-            "1.1.1.1": {"country": "US", "city": None, "org": None, "region": None, "hostname": None},
-            "2.2.2.2": {"country": "DE", "city": None, "org": None, "region": None, "hostname": None},
-            "3.3.3.3": {"country": "JP", "city": None, "org": None, "region": None, "hostname": None},
+        batch_result = {
+            "1.1.1.1": {"country": "US", "country_name": "United States",
+                         "city": None, "org": None, "region": None, "hostname": None},
+            "2.2.2.2": {"country": "DE", "country_name": "Germany",
+                         "city": None, "org": None, "region": None, "hostname": None},
+            "3.3.3.3": {"country": "JP", "country_name": "Japan",
+                         "city": None, "org": None, "region": None, "hostname": None},
         }
 
         with patch('subprocess.run', side_effect=mock_run), \
-             patch.object(ban_mod, '_lookup_ip_geo_bulk', return_value=bulk_result) as mock_bulk, \
-             patch.object(ban_mod, '_lookup_ip_geo') as mock_serial:
+             patch.object(ban_mod, '_lookup_ip_geo_batch', return_value=batch_result) as mock_batch:
             snapshot = _query_fail2ban()
 
-        mock_bulk.assert_called_once()
-        mock_serial.assert_not_called()
+        mock_batch.assert_called_once()
+        call_args = mock_batch.call_args[0][0]
+        assert set(call_args) == {"1.1.1.1", "2.2.2.2", "3.3.3.3"}
         assert len(snapshot.banned_ips) == 3
         assert snapshot.banned_ips[0].country == "US"
+        assert snapshot.banned_ips[0].country_name == "United States"
 
 
 # ===========================================================================

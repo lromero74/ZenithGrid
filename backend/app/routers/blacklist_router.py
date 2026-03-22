@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User
-from app.auth.dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.settings_service import (
     ALLOWED_CATEGORIES_KEY,
     AI_REVIEW_PROVIDER_KEY,
@@ -120,7 +120,7 @@ async def get_category_settings(db: AsyncSession = Depends(get_db), current_user
 async def update_category_settings(
     request: CategorySettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Update which categories are allowed to trade.
@@ -205,7 +205,7 @@ async def get_ai_provider_setting(db: AsyncSession = Depends(get_db), current_us
 async def update_ai_provider_setting(
     request: AIProviderSettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Update which AI provider to use for coin review.
@@ -407,7 +407,7 @@ async def list_blacklisted_coins(
 async def add_to_blacklist(
     request: BlacklistAddRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Add one or more coins to the global categorization list.
@@ -462,7 +462,7 @@ async def add_to_blacklist(
 async def add_single_to_blacklist(
     request: BlacklistAddSingleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Add a single coin to the global categorization with its own reason.
@@ -509,7 +509,7 @@ async def add_single_to_blacklist(
 async def remove_from_blacklist(
     symbol: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Remove a coin from the global categorization list.
@@ -542,7 +542,7 @@ async def update_blacklist_reason(
     symbol: str,
     request: BlacklistUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Update the category/reason for a coin.
@@ -619,7 +619,7 @@ async def check_if_blacklisted(
 
 @router.post("/ai-review")
 async def trigger_ai_review(
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
 ):
     """
     Trigger an AI-powered review of all tracked coins.

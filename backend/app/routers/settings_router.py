@@ -23,7 +23,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Settings, User
-from app.auth.dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def update_env_file(key: str, value: str):
 
 
 @router.get("/settings")
-async def get_settings(current_user: User = Depends(require_superuser)):
+async def get_settings(current_user: User = Depends(require_permission(Perm.SETTINGS_READ))):
     """Get current settings"""
     # Mask API credentials for security
     masked_key = ""
@@ -139,7 +139,7 @@ async def get_settings(current_user: User = Depends(require_superuser)):
 async def update_settings(
     settings_update: SettingsUpdate,
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
 ):
     """Update trading settings"""
     # Update API credentials in .env file if provided
@@ -220,7 +220,7 @@ async def test_connection(request: TestConnectionRequest, current_user: User = D
 async def get_setting_by_key(
     key: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.SETTINGS_READ)),
 ):
     """Get a single database setting by key (superuser only)."""
     query = select(Settings).where(Settings.key == key)
@@ -244,7 +244,7 @@ async def update_setting_by_key(
     key: str,
     value: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
 ):
     """Update a single database setting by key"""
     query = select(Settings).where(Settings.key == key)

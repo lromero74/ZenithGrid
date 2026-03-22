@@ -30,7 +30,7 @@ from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
-from app.auth.dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.brand_service import get_brand, get_brand_images_dir
 from app.schemas import (
     DashboardStats,
@@ -570,7 +570,7 @@ async def get_dashboard(
 @router.post("/api/monitor/start")
 async def start_monitor(
     price_monitor: MultiBotMonitor = Depends(get_price_monitor),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.SYSTEM_RESTART))
 ):
     """Start the price monitor (admin only)"""
     if not price_monitor.running:
@@ -582,7 +582,7 @@ async def start_monitor(
 @router.post("/api/monitor/stop")
 async def stop_monitor(
     price_monitor: MultiBotMonitor = Depends(get_price_monitor),
-    current_user: User = Depends(require_superuser)
+    current_user: User = Depends(require_permission(Perm.SYSTEM_RESTART))
 ):
     """Stop the price monitor (admin only)"""
     if price_monitor.running:
@@ -664,7 +664,7 @@ async def get_shutdown_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/api/system/prepare-shutdown")
-async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(require_superuser)):
+async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(require_permission(Perm.SYSTEM_SHUTDOWN))):
     """
     Prepare for graceful shutdown.
 
@@ -691,7 +691,7 @@ async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(requi
 
 
 @router.post("/api/system/cancel-shutdown")
-async def cancel_shutdown(current_user: User = Depends(require_superuser)):
+async def cancel_shutdown(current_user: User = Depends(require_permission(Perm.SYSTEM_SHUTDOWN))):
     """
     Cancel a pending shutdown request.
 
@@ -714,7 +714,7 @@ def set_trading_pair_monitor(monitor):
 
 
 @router.get("/api/system/pair-monitor/status")
-async def get_pair_monitor_status(current_user: User = Depends(require_superuser)):
+async def get_pair_monitor_status(current_user: User = Depends(require_permission(Perm.SYSTEM_MONITOR))):
     """Get status of the trading pair monitor"""
     if not _trading_pair_monitor:
         raise HTTPException(status_code=503, detail="Trading pair monitor not initialized")
@@ -722,7 +722,7 @@ async def get_pair_monitor_status(current_user: User = Depends(require_superuser
 
 
 @router.post("/api/system/pair-monitor/sync")
-async def trigger_pair_sync(current_user: User = Depends(require_superuser)):
+async def trigger_pair_sync(current_user: User = Depends(require_permission(Perm.SYSTEM_RESTART))):
     """
     Manually trigger a trading pair sync.
 

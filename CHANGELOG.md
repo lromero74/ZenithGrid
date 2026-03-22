@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.1] - 2026-03-22
+
+### Fixed
+- **TradingView chart restored** — the app-level Content-Security-Policy added in v2.135.0 was stacking with nginx's CSP and the browser was applying the most restrictive intersection, blocking `s3.tradingview.com`. CSP and HSTS are now owned exclusively by nginx (which already had the correct complete policy); the app-level fallback has been removed.
+- **Ban report now shows country names and ISP** — geo lookups were returning empty results because ipinfo.io was rate-limiting unauthenticated requests. Switched to ip-api.com batch endpoint (no API key required, returns full country names and ISP directly, 100 IPs per request).
+
+### Security
+- **RBAC sweep — all `require_superuser` gates replaced with specific permissions** — endpoints now use fine-grained RBAC permissions instead of the blunt superuser check: blacklist write operations use `BLACKLIST_WRITE`, settings reads use `SETTINGS_READ`, settings writes use `SETTINGS_WRITE`, monitor start/stop use `SYSTEM_RESTART`, shutdown use `SYSTEM_SHUTDOWN`, pair monitor status uses `SYSTEM_MONITOR`, user registration uses `ADMIN_USERS`, news write operations use `NEWS_WRITE`, and template seeding uses `TEMPLATES_WRITE`. The `require_permission` dependency already has a built-in superuser bypass, so superusers retain full access.
+
+### Changed
+- **Removed `pycountry` dependency** — full country names are now returned directly by ip-api.com; there is no longer any local country code mapping to maintain.
+
 ## [v2.135.0] - 2026-03-22
 
 ### Security

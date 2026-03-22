@@ -30,7 +30,7 @@ from app.models import (
     ContentSource, NewsArticle, User, UserContentSeenStatus,
     UserSourceSubscription, VideoArticle,
 )
-from app.auth.dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.news_data import (
     CACHE_FILE,
     NEWS_CACHE_CHECK_MINUTES,
@@ -682,7 +682,7 @@ async def bulk_mark_content_seen(
 @router.post("/article-issue")
 async def mark_article_issue(
     payload: Dict[str, Any],
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_permission(Perm.NEWS_WRITE)),
 ):
     """Flag an article as having a playback/content issue (superuser only)."""
     article_id = payload.get("article_id")
@@ -770,7 +770,7 @@ async def get_cache_stats(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/cleanup")
-async def cleanup_cache(current_user: User = Depends(require_superuser)):
+async def cleanup_cache(current_user: User = Depends(require_permission(Perm.NEWS_WRITE))):
     """Manually trigger cleanup of old news articles and videos."""
     articles_deleted, image_files_deleted = await cleanup_articles_with_images()
     async with async_session_maker() as db:
