@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.125.14] - 2026-03-22
+
+### Fixed
+- **PaperTradingClient cross-loop crash** — `_reload_balances`, `_save_balances`, and `calculate_aggregate_quote_value` were importing and using `async_session_maker` (the main event loop's connection pool) directly. When `RebalanceMonitor` on the secondary loop called these methods for paper trading accounts (3, 9, 11), the secondary loop tried to `await main_pool_queue.get()` and crashed with "Queue is bound to a different event loop". Fixed by adding a `session_maker` parameter to `PaperTradingClient.__init__` and using it in all three methods (falls back to global for non-injected callers). `exchange_service.py` now passes `session_maker` when constructing `PaperTradingClient` so the correct pool is used.
+
 ## [v2.125.13] - 2026-03-22
 
 ### Fixed

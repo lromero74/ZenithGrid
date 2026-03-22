@@ -54,7 +54,13 @@ class PaperTradingClient(ExchangeClient):
     to simulate execution without hitting real exchanges.
     """
 
-    def __init__(self, account: Account, db=None, real_client: Optional[ExchangeClient] = None):
+    def __init__(
+        self,
+        account: Account,
+        db=None,
+        real_client: Optional[ExchangeClient] = None,
+        session_maker=None,
+    ):
         """
         Initialize paper trading client.
 
@@ -63,6 +69,9 @@ class PaperTradingClient(ExchangeClient):
             db: Deprecated — ignored. Fresh sessions are created per-operation
                 to avoid greenlet_spawn errors across async contexts.
             real_client: Optional real exchange client for price data (uses Coinbase if not provided)
+            session_maker: Async session maker for DB operations. When injected
+                (e.g., secondary loop's session_maker), DB calls use the correct
+                connection pool and avoid "Queue is bound to a different event loop".
         """
         if not account.is_paper_trading:
             raise ValueError("PaperTradingClient requires a paper trading account")
@@ -70,6 +79,7 @@ class PaperTradingClient(ExchangeClient):
         self.account = account
         self.account_id = account.id
         self.real_client = real_client  # For fetching real prices
+        self._session_maker = session_maker  # None → falls back to global async_session_maker
         self._order_cache: Dict[str, Dict[str, Any]] = {}
 
         # Load virtual balances
@@ -97,8 +107,9 @@ class PaperTradingClient(ExchangeClient):
         Uses a fresh session each time to avoid greenlet_spawn errors when
         the original session is used across different async contexts.
         """
-        from app.database import async_session_maker
-        async with async_session_maker() as db:
+        from app.database import async_session_maker as _default_sm
+        sm = self._session_maker or _default_sm
+        async with sm() as db:
             result = await db.execute(
                 select(Account).where(Account.id == self.account_id)
             )
@@ -113,11 +124,12 @@ class PaperTradingClient(ExchangeClient):
         Retries with exponential backoff + jitter to avoid thundering herd.
         """
         import random
-        from app.database import async_session_maker
+        from app.database import async_session_maker as _default_sm
+        sm = self._session_maker or _default_sm
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
-                async with async_session_maker() as db:
+                async with sm() as db:
                     result = await db.execute(
                         select(Account).where(Account.id == self.account_id)
                     )
@@ -676,9 +688,10 @@ class PaperTradingClient(ExchangeClient):
         total = self.balances.get(quote_currency, 0.0)
 
         # Add value of open positions in this quote currency's pairs
-        from app.database import async_session_maker
+        from app.database import async_session_maker as _default_sm
         from app.models import Position
-        async with async_session_maker() as db:
+        sm = self._session_maker or _default_sm
+        async with sm() as db:
             result = await db.execute(
                 select(Position).where(
                     Position.account_id == self.account_id,

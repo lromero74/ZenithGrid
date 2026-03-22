@@ -193,7 +193,10 @@ async def get_exchange_client_for_account(
         except Exception as e:
             logger.warning(f"Failed to get real client for paper trading price data: {e}")
 
-        client = PaperTradingClient(account=account, db=db, real_client=real_client)
+        client = PaperTradingClient(
+            account=account, db=db, real_client=real_client,
+            session_maker=session_maker,  # pass caller's sm so secondary loop uses correct pool
+        )
         # Don't cache paper trading clients (they hold db session)
         return client
 

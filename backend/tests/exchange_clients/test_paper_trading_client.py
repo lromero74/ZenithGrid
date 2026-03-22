@@ -1445,3 +1445,124 @@ class TestSlippageSimulation:
         # Response price and average_filled_price should be VWAP (0.055)
         assert float(result["price"]) == pytest.approx(0.055, rel=1e-6)
         assert float(result["average_filled_price"]) == pytest.approx(0.055, rel=1e-6)
+
+
+class TestSessionMakerInjection:
+    """
+    Verify that PaperTradingClient uses an injected session_maker instead
+    of importing app.database.async_session_maker directly.
+
+    This ensures secondary-event-loop callers (e.g., RebalanceMonitor) get
+    DB connections from the correct pool (secondary) rather than the main
+    loop's pool — which would raise 'Queue is bound to a different event loop'.
+    """
+
+    def _make_account(self):
+        account = MagicMock(spec=["id", "is_paper_trading", "paper_balances", "user_id"])
+        account.id = 42
+        account.is_paper_trading = True
+        account.paper_balances = json.dumps({"USD": 5000.0, "BTC": 0.5})
+        account.user_id = 1
+        return account
+
+    def _make_session_maker(self, account=None):
+        """Create a session_maker that records calls."""
+        calls = []
+
+        def factory():
+            calls.append(1)
+            mock_db = AsyncMock()
+            mock_db.execute = AsyncMock(return_value=MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            ))
+            mock_db.commit = AsyncMock()
+
+            @asynccontextmanager
+            async def ctx():
+                yield mock_db
+
+            return ctx()
+
+        factory.calls = calls
+        return factory
+
+    def test_accepts_session_maker_parameter(self):
+        """Happy path: PaperTradingClient accepts a session_maker kwarg."""
+        account = self._make_account()
+        sm = self._make_session_maker()
+        client = PaperTradingClient(account=account, session_maker=sm)
+        assert client._session_maker is sm
+
+    def test_defaults_to_none_without_injection(self):
+        """Edge case: no session_maker → _session_maker is None (falls back to global)."""
+        account = self._make_account()
+        client = PaperTradingClient(account=account)
+        assert client._session_maker is None
+
+    @pytest.mark.asyncio
+    async def test_reload_balances_uses_injected_session_maker(self):
+        """_reload_balances calls the injected session_maker, not the global one."""
+        account = self._make_account()
+        sm = self._make_session_maker(account)
+
+        fresh_account = MagicMock()
+        fresh_account.paper_balances = json.dumps({"USD": 9999.0})
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = fresh_account
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        @asynccontextmanager
+        async def ctx():
+            yield mock_db
+
+        def injected_sm():
+            return ctx()
+
+        injected_sm.called = []
+
+        original_ctx = ctx
+
+        def counting_sm():
+            injected_sm.called.append(1)
+            return original_ctx()
+
+        client = PaperTradingClient(account=account, session_maker=counting_sm)
+
+        with patch("app.database.async_session_maker") as global_sm:
+            await client._reload_balances()
+            global_sm.assert_not_called()
+
+        assert injected_sm.called  # injected sm was used
+
+    @pytest.mark.asyncio
+    async def test_calculate_aggregate_quote_value_uses_injected_session_maker(self):
+        """calculate_aggregate_quote_value uses injected session_maker, not global."""
+        account = self._make_account()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []  # No open positions
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        injected_calls = []
+
+        @asynccontextmanager
+        async def ctx():
+            yield mock_db
+
+        def injected_sm():
+            injected_calls.append(1)
+            return ctx()
+
+        client = PaperTradingClient(account=account, session_maker=injected_sm)
+
+        with patch("app.database.async_session_maker") as global_sm:
+            result = await client.calculate_aggregate_quote_value("USD")
+            global_sm.assert_not_called()
+
+        assert injected_calls, "injected session_maker was not called"
+        assert result == 5000.0  # Just the balance, no positions
