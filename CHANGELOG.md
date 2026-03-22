@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.133.1] - 2026-03-22
+
+### Fixed
+- **`SimpleCache.get_or_fetch` cross-loop safety** — `_in_flight` futures are now keyed by `(loop_id, cache_key)` instead of a plain string. Previously, if the main event loop put a Future in-flight for key `X` and the secondary event loop checked the same key, it would `await` the wrong loop's Future and raise `RuntimeError: Task got Future attached to a different loop`. The fix gives each event loop its own in-flight slot; the single-flight guarantee within a loop is preserved.
+- **`PersistentPortfolioCache` lock type** — `asyncio.Lock` replaced with `threading.Lock`. The lock-guarded blocks contain only sync file I/O (no `await`), so `asyncio.Lock` was both incorrect (raised `TypeError` on `with` usage) and unnecessary.
+
 ## [v2.133.0] - 2026-03-22
 
 ### Added
