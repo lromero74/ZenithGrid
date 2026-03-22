@@ -126,10 +126,7 @@ class TestTTSExecutorShutdown:
 
     @pytest.mark.asyncio
     async def test_shutdown_event_calls_executor_shutdown(self):
-        """Happy path: shutdown_event() calls tts_executor.shutdown(wait=True).
-
-        FAILS before impl: shutdown_event doesn't reference tts_executor.
-        """
+        """Happy path: shutdown_event() calls tts_executor.shutdown(wait=True)."""
         from app.main import app, shutdown_event
 
         mock_executor = MagicMock()
@@ -138,22 +135,20 @@ class TestTTSExecutorShutdown:
 
         try:
             with patch("app.main.shutdown_manager") as mock_sm, \
-                 patch.object(app.state, "tts_executor", mock_executor), \
                  patch("app.main.price_monitor") as pm, \
-                 patch("app.main.content_refresh_service") as crs, \
-                 patch("app.main.domain_blacklist_service") as dbs, \
-                 patch("app.main.debt_ceiling_monitor") as dcm, \
-                 patch("app.main.auto_buy_monitor") as abm, \
-                 patch("app.main.rebalance_monitor") as rm, \
                  patch("app.main.perps_monitor") as pem, \
                  patch("app.main.stop_prop_guard_monitor", new_callable=AsyncMock), \
-                 patch("app.main.trading_pair_monitor") as tpm, \
+                 patch("app.main.limit_order_monitor_task", None), \
+                 patch("app.main.order_reconciliation_monitor_task", None), \
+                 patch("app.main.missing_order_detector_task", None), \
+                 patch("app.scheduler.scheduler") as mock_sched, \
                  patch("app.services.exchange_service.clear_exchange_client_cache"):
                 mock_sm.prepare_shutdown = AsyncMock(
                     return_value={"ready": True, "message": "OK"}
                 )
-                for m in [pm, crs, dbs, dcm, abm, rm, pem, tpm]:
+                for m in [pm, pem]:
                     m.stop = AsyncMock()
+                mock_sched.shutdown = MagicMock()
                 await shutdown_event()
 
             mock_executor.shutdown.assert_called_once_with(wait=True)
