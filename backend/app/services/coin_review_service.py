@@ -361,49 +361,37 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]], session_make
     return stats
 
 
-async def run_coin_review_scheduler(session_maker=None):
+async def run_coin_review_once(session_maker=None):
     """
-    Background task that runs a full coin review weekly.
-
-    Waits 30 minutes after startup (let the app settle), then runs
-    every 7 days.  If the last review was recent (within 6 days),
-    it skips until the next window.
+    Run a coin review if enough time has passed since the last one.
+    Called by APScheduler every 7 days.
+    Skips if a review ran within the last 6 days (guards against duplicate runs
+    after a restart).
     """
-    # Initial delay — let everything else start first
-    await asyncio.sleep(1800)  # 30 minutes
-
-    interval = 7 * 24 * 3600  # 7 days in seconds
-
-    while True:
-        try:
-            # Check when the last review ran (most recent global entry)
-            last_review = await _get_last_review_timestamp(session_maker=session_maker)
-            if last_review:
-                age_seconds = (datetime.utcnow() - last_review).total_seconds()
-                if age_seconds < 6 * 24 * 3600:  # < 6 days
-                    logger.info(
-                        f"Coin review: last ran {age_seconds / 3600:.0f}h ago, "
-                        f"skipping until next window"
-                    )
-                    await asyncio.sleep(interval)
-                    continue
-
-            logger.info("Coin review scheduler: starting weekly review")
-            result = await run_weekly_review(session_maker=session_maker)
-            if result["status"] == "success":
+    try:
+        last_review = await _get_last_review_timestamp(session_maker=session_maker)
+        if last_review:
+            age_seconds = (datetime.utcnow() - last_review).total_seconds()
+            if age_seconds < 6 * 24 * 3600:  # < 6 days
                 logger.info(
-                    f"Coin review complete: {result['coins_analyzed']} coins, "
-                    f"{result['categories']}"
+                    f"Coin review: last ran {age_seconds / 3600:.0f}h ago, skipping"
                 )
-            else:
-                logger.warning(
-                    f"Coin review finished with status: {result['status']} — "
-                    f"{result.get('message', '')}"
-                )
-        except Exception as e:
-            logger.error(f"Coin review scheduler error: {e}", exc_info=True)
+                return
 
-        await asyncio.sleep(interval)
+        logger.info("Coin review: starting weekly review")
+        result = await run_weekly_review(session_maker=session_maker)
+        if result["status"] == "success":
+            logger.info(
+                f"Coin review complete: {result['coins_analyzed']} coins, "
+                f"{result['categories']}"
+            )
+        else:
+            logger.warning(
+                f"Coin review finished with status: {result['status']} — "
+                f"{result.get('message', '')}"
+            )
+    except Exception as e:
+        logger.error(f"Coin review error: {e}", exc_info=True)
 
 
 async def _get_last_review_timestamp(session_maker=None):

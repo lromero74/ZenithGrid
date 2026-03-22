@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.125.14",
+  "version": "v2.126.0",
   "updated": "2026-03-22",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
@@ -859,98 +859,194 @@
         "name": "Friendship",
         "table": "friendships",
         "file": "models/social.py",
-        "key_fields": ["id", "user_id", "friend_id", "created_at"],
+        "key_fields": [
+          "id",
+          "user_id",
+          "friend_id",
+          "created_at"
+        ],
         "purpose": "Bidirectional friend relationship; stored as two rows per friendship (A->B and B->A)"
       },
       {
         "name": "FriendRequest",
         "table": "friend_requests",
         "file": "models/social.py",
-        "key_fields": ["id", "from_user_id", "to_user_id", "created_at"],
+        "key_fields": [
+          "id",
+          "from_user_id",
+          "to_user_id",
+          "created_at"
+        ],
         "purpose": "Pending friend request; deleted on accept or reject"
       },
       {
         "name": "BlockedUser",
         "table": "blocked_users",
         "file": "models/social.py",
-        "key_fields": ["id", "blocker_id", "blocked_id", "created_at"],
+        "key_fields": [
+          "id",
+          "blocker_id",
+          "blocked_id",
+          "created_at"
+        ],
         "purpose": "User block relationship; prevents friend requests from blocked user"
       },
       {
         "name": "GameResult",
         "table": "game_results",
         "file": "models/social.py",
-        "key_fields": ["id", "room_id", "game_id", "mode", "started_at", "finished_at", "result_data", "tournament_id"],
+        "key_fields": [
+          "id",
+          "room_id",
+          "game_id",
+          "mode",
+          "started_at",
+          "finished_at",
+          "result_data",
+          "tournament_id"
+        ],
         "purpose": "Persistent record of a completed multiplayer game"
       },
       {
         "name": "GameResultPlayer",
         "table": "game_result_players",
         "file": "models/social.py",
-        "key_fields": ["id", "game_result_id", "user_id", "placement", "score", "is_winner", "stats"],
+        "key_fields": [
+          "id",
+          "game_result_id",
+          "user_id",
+          "placement",
+          "score",
+          "is_winner",
+          "stats"
+        ],
         "purpose": "Per-player result within a game"
       },
       {
         "name": "GameHistoryVisibility",
         "table": "game_history_visibility",
         "file": "models/social.py",
-        "key_fields": ["id", "user_id", "default_visibility", "game_overrides"],
+        "key_fields": [
+          "id",
+          "user_id",
+          "default_visibility",
+          "game_overrides"
+        ],
         "purpose": "Per-user privacy control for game history sharing (all_friends, opponents_only, private)"
       },
       {
         "name": "GameHighScore",
         "table": "game_high_scores",
         "file": "models/social.py",
-        "key_fields": ["id", "user_id", "game_id", "score", "updated_at"],
+        "key_fields": [
+          "id",
+          "user_id",
+          "game_id",
+          "score",
+          "updated_at"
+        ],
         "purpose": "Per-user best score for each game"
       },
       {
         "name": "Tournament",
         "table": "tournaments",
         "file": "models/social.py",
-        "key_fields": ["id", "name", "creator_id", "game_ids", "config", "status", "created_at", "started_at", "finished_at"],
+        "key_fields": [
+          "id",
+          "name",
+          "creator_id",
+          "game_ids",
+          "config",
+          "status",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
         "purpose": "Multi-game tournament among friends; status: pending, active, completed"
       },
       {
         "name": "TournamentPlayer",
         "table": "tournament_players",
         "file": "models/social.py",
-        "key_fields": ["id", "tournament_id", "user_id", "total_score", "placement", "archived", "joined_at"],
+        "key_fields": [
+          "id",
+          "tournament_id",
+          "user_id",
+          "total_score",
+          "placement",
+          "archived",
+          "joined_at"
+        ],
         "purpose": "Player enrolled in a tournament with score tracking"
       },
       {
         "name": "TournamentDeleteVote",
         "table": "tournament_delete_votes",
         "file": "models/social.py",
-        "key_fields": ["id", "tournament_id", "user_id", "voted_at"],
+        "key_fields": [
+          "id",
+          "tournament_id",
+          "user_id",
+          "voted_at"
+        ],
         "purpose": "Committee vote for tournament deletion; all players must vote to delete"
       },
       {
         "name": "ChatChannel",
         "table": "chat_channels",
         "file": "models/social.py",
-        "key_fields": ["id", "type", "name", "created_by", "created_at", "updated_at"],
+        "key_fields": [
+          "id",
+          "type",
+          "name",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
         "purpose": "Chat channel: DM (2 users), group (N users), or channel (open/admin-created)"
       },
       {
         "name": "ChatChannelMember",
         "table": "chat_channel_members",
         "file": "models/social.py",
-        "key_fields": ["id", "channel_id", "user_id", "role", "last_read_at", "joined_at"],
+        "key_fields": [
+          "id",
+          "channel_id",
+          "user_id",
+          "role",
+          "last_read_at",
+          "joined_at"
+        ],
         "purpose": "Membership in a chat channel with role (owner/admin/member) and read tracking"
       },
       {
         "name": "ChatMessage",
         "table": "chat_messages",
         "file": "models/social.py",
-        "key_fields": ["id", "channel_id", "sender_id", "content", "reply_to_id", "is_pinned", "edited_at", "deleted_at", "created_at"],
+        "key_fields": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "reply_to_id",
+          "is_pinned",
+          "edited_at",
+          "deleted_at",
+          "created_at"
+        ],
         "purpose": "Message in a chat channel; supports edit, soft delete, reply threading, and pin"
       },
       {
         "name": "ChatMessageReaction",
         "table": "chat_message_reactions",
         "file": "models/social.py",
-        "key_fields": ["id", "message_id", "user_id", "emoji", "created_at"],
+        "key_fields": [
+          "id",
+          "message_id",
+          "user_id",
+          "emoji",
+          "created_at"
+        ],
         "purpose": "Emoji reaction on a chat message; unique per user+message+emoji"
       }
     ],

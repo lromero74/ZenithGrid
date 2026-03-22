@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.126.0] - 2026-03-22
+
+### Changed
+- **APScheduler replaces hand-rolled background loops** — all Tier 2 and Tier 3 background tasks (auto-buy monitor, rebalance monitor, transfer sync, account snapshot, ban monitor, report scheduler, content refresh, domain blacklist, debt ceiling monitor, coin review, trading pair monitor) and all 8 database/memory cleanup jobs now run under APScheduler's `AsyncIOScheduler`. Each job function runs once per call; scheduling intervals and staggered startup delays are configured centrally in `app/scheduler.py`. Eliminates `while True: await asyncio.sleep(N)` loops and the secondary event loop's `schedule()` calls.
+- **Service singletons relocated** — `auto_buy_monitor`, `rebalance_monitor`, and `trading_pair_monitor` singletons moved from `main.py` into their respective service modules to eliminate circular imports with the scheduler.
+
 ## [v2.125.14] - 2026-03-22
 
 ### Fixed

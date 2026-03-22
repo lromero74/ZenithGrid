@@ -7,30 +7,26 @@ Users never have to wait for cache refreshes - they always get instant
 responses from the database.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Cache refresh intervals (in seconds)
+# Cache refresh intervals (in seconds) — kept for status reporting
 NEWS_REFRESH_INTERVAL = 30 * 60     # 30 minutes
 VIDEO_REFRESH_INTERVAL = 60 * 60    # 60 minutes
-INITIAL_DELAY = 10                  # Wait 10 seconds after startup
 
 
 class ContentRefreshService:
     """Background service that periodically refreshes news and video caches."""
 
     def __init__(self):
-        self._task = None
-        self._running = False
         self._last_news_refresh: datetime | None = None
         self._last_video_refresh: datetime | None = None
-        self._session_maker = None  # injected by secondary_loop startup
+        self._session_maker = None  # optional injected session maker
 
     def set_session_maker(self, sm):
-        """Inject a session maker (used when running on the secondary event loop)."""
+        """Inject a session maker (for testing or non-default pools)."""
         self._session_maker = sm
 
     def _get_sm(self):
@@ -38,69 +34,15 @@ class ContentRefreshService:
         from app.database import async_session_maker as _default
         return self._session_maker or _default
 
-    async def start(self):
-        """Start the background refresh task."""
-        if self._running:
-            logger.warning("Content refresh service already running")
-            return
+    async def refresh_news(self):
+        """Fetch and cache news articles. Called by APScheduler every 30 minutes."""
+        from app.services.news_fetch_service import fetch_all_news
+        await self._refresh_news(fetch_all_news, self._get_sm())
 
-        self._running = True
-        self._task = asyncio.create_task(self._refresh_loop())
-        logger.info("Content refresh service started")
-
-    async def stop(self):
-        """Stop the background refresh task."""
-        self._running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Content refresh service stopped")
-
-    async def _refresh_loop(self):
-        """Main loop that handles periodic content refresh."""
-        # Import here to avoid circular imports
-        from app.services.news_fetch_service import fetch_all_news, fetch_all_videos
-
-        sm = self._get_sm()
-
-        # Wait a bit after startup before first refresh
-        await asyncio.sleep(INITIAL_DELAY)
-
-        # Do initial refresh immediately
-        logger.info("Content refresh: Running initial content fetch...")
-        await self._refresh_news(fetch_all_news, sm)
-        await asyncio.sleep(5)  # Stagger to avoid CPU spike
-        await self._refresh_videos(fetch_all_videos, sm)
-
-        while self._running:
-            try:
-                # Calculate time until next refresh
-                now = datetime.utcnow()
-
-                # Check if news needs refresh
-                if self._last_news_refresh:
-                    news_age = (now - self._last_news_refresh).total_seconds()
-                    if news_age >= NEWS_REFRESH_INTERVAL:
-                        await self._refresh_news(fetch_all_news, sm)
-                else:
-                    await self._refresh_news(fetch_all_news, sm)
-
-                # Check if videos need refresh
-                if self._last_video_refresh:
-                    video_age = (now - self._last_video_refresh).total_seconds()
-                    if video_age >= VIDEO_REFRESH_INTERVAL:
-                        await self._refresh_videos(fetch_all_videos, sm)
-                else:
-                    await self._refresh_videos(fetch_all_videos, sm)
-
-            except Exception as e:
-                logger.error(f"Error in content refresh loop: {e}")
-
-            # Sleep for a minute before checking again
-            await asyncio.sleep(60)
+    async def refresh_videos(self):
+        """Fetch and cache video articles. Called by APScheduler every hour."""
+        from app.services.news_fetch_service import fetch_all_videos
+        await self._refresh_videos(fetch_all_videos, self._get_sm())
 
     async def _refresh_news(self, fetch_func, session_maker=None):
         """Refresh news articles."""
@@ -126,7 +68,6 @@ class ContentRefreshService:
     def status(self) -> dict:
         """Get current status of the refresh service."""
         return {
-            "running": self._running,
             "last_news_refresh": self._last_news_refresh.isoformat() if self._last_news_refresh else None,
             "last_video_refresh": self._last_video_refresh.isoformat() if self._last_video_refresh else None,
             "news_interval_minutes": NEWS_REFRESH_INTERVAL // 60,

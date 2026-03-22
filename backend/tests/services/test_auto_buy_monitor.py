@@ -51,36 +51,25 @@ class TestAutoBuyMonitorInit:
     def test_init_defaults(self):
         """Happy path: monitor initializes with expected defaults."""
         monitor = AutoBuyMonitor()
-        assert monitor.running is False
-        assert monitor.task is None
         assert monitor._account_timers == {}
         assert monitor._pending_orders == {}
 
     @pytest.mark.asyncio
-    async def test_start_sets_running(self):
-        """Happy path: start sets running flag and creates task."""
+    async def test_run_once_calls_check_methods(self):
+        """Happy path: run_once() calls _check_accounts and _check_pending_orders."""
         monitor = AutoBuyMonitor()
-        with patch.object(monitor, '_monitor_loop', new_callable=AsyncMock):
-            await monitor.start()
-            assert monitor.running is True
-            assert monitor.task is not None
-            # Clean up
-            monitor.running = False
-            monitor.task.cancel()
-            try:
-                await monitor.task
-            except (Exception, asyncio.CancelledError):
-                pass
+        monitor._check_accounts = AsyncMock()
+        monitor._check_pending_orders = AsyncMock()
+        await monitor.run_once()
+        monitor._check_accounts.assert_awaited_once()
+        monitor._check_pending_orders.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_start_idempotent_when_already_running(self):
-        """Edge case: calling start when already running does not create a second task."""
+    async def test_run_once_logs_and_returns_on_error(self):
+        """Edge case: run_once() catches exceptions and does not re-raise."""
         monitor = AutoBuyMonitor()
-        monitor.running = True
-        monitor.task = MagicMock()
-        await monitor.start()
-        # Should not have replaced the existing task
-        assert isinstance(monitor.task, MagicMock)
+        monitor._check_accounts = AsyncMock(side_effect=RuntimeError("boom"))
+        await monitor.run_once()  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +265,7 @@ class TestCheckPendingOrders:
         await monitor._check_pending_orders()
 
     @pytest.mark.asyncio
-    @patch('app.services.auto_buy_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     @patch('app.services.auto_buy_monitor.get_exchange_client_for_account')
     async def test_reprice_order_after_timeout(self, mock_get_client, mock_session_maker):
         """Happy path: order older than 2 minutes gets cancelled and replaced."""
@@ -320,7 +309,7 @@ class TestCheckPendingOrders:
         assert new_pending.price == pytest.approx(51000.0)
 
     @pytest.mark.asyncio
-    @patch('app.services.auto_buy_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     @patch('app.services.auto_buy_monitor.get_exchange_client_for_account')
     async def test_reprice_skipped_for_already_filled_order(self, mock_get_client, mock_session_maker):
         """Edge case: order already filled on exchange, skip repricing."""

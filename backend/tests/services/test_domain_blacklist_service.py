@@ -406,40 +406,42 @@ class TestDownloadCategory:
 
 
 class TestServiceLifecycle:
-    """Tests for start/stop of the background service."""
+    """Tests for run_once() behavior."""
 
     @pytest.mark.asyncio
-    async def test_start_and_stop(self, tmp_path):
-        """Happy path: service starts and stops cleanly."""
+    async def test_run_once_downloads_when_stale(self, tmp_path):
+        """Happy path: run_once() triggers download when last_download is None."""
         svc = DomainBlacklistService()
+        svc._download_all = AsyncMock()
+        # Ensure _load_from_disk doesn't read the real metadata file
+        with patch.object(svc, '_load_from_disk'):
+            with patch("app.services.domain_blacklist_service.BLACKLIST_DIR", tmp_path):
+                await svc.run_once()
+
+        svc._download_all.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_run_once_skips_download_when_fresh(self, tmp_path):
+        """Edge case: run_once() skips download when data is fresh."""
+        from datetime import timezone
+        svc = DomainBlacklistService()
+        svc._last_download = datetime.now(timezone.utc)
+        svc._domains = {"example.com"}
+        svc._download_all = AsyncMock()
 
         with patch("app.services.domain_blacklist_service.BLACKLIST_DIR", tmp_path):
-            with patch("app.services.domain_blacklist_service.METADATA_FILE", tmp_path / "metadata.json"):
-                await svc.start()
-                assert svc._running is True
-                assert svc._task is not None
+            await svc.run_once()
 
-                await svc.stop()
-                assert svc._running is False
-                assert svc._task is None
+        svc._download_all.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_start_idempotent(self, tmp_path):
-        """Edge case: calling start twice does not create duplicate tasks."""
+    async def test_run_once_loads_from_disk_if_empty(self, tmp_path):
+        """Edge case: run_once() loads from disk if in-memory domains is empty."""
         svc = DomainBlacklistService()
+        svc._download_all = AsyncMock()
 
-        with patch("app.services.domain_blacklist_service.BLACKLIST_DIR", tmp_path):
-            with patch("app.services.domain_blacklist_service.METADATA_FILE", tmp_path / "metadata.json"):
-                await svc.start()
-                first_task = svc._task
-                await svc.start()  # Second call
-                assert svc._task is first_task  # Same task, not replaced
+        with patch.object(svc, '_load_from_disk') as mock_load:
+            with patch("app.services.domain_blacklist_service.BLACKLIST_DIR", tmp_path):
+                await svc.run_once()
 
-                await svc.stop()
-
-    @pytest.mark.asyncio
-    async def test_stop_when_not_started(self):
-        """Edge case: stop on never-started service does not crash."""
-        svc = DomainBlacklistService()
-        await svc.stop()
-        assert svc._running is False
+        mock_load.assert_called_once()

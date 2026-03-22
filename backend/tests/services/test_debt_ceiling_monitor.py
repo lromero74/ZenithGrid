@@ -23,52 +23,27 @@ class TestDebtCeilingMonitorInit:
 
     def test_init_defaults(self):
         """Happy path: monitor initializes with expected defaults."""
-        monitor = DebtCeilingMonitor()
-        assert monitor._running is False
-        assert monitor._task is None
+        with patch.object(DebtCeilingMonitor, '_load_cache'):
+            monitor = DebtCeilingMonitor()
         assert monitor._last_check is None
         assert monitor._last_result is None
 
     @pytest.mark.asyncio
-    async def test_start_sets_running(self):
-        """Happy path: start sets running flag and creates task."""
+    async def test_run_once_calls_check_and_saves_cache(self):
+        """Happy path: run_once() calls _check_for_updates and saves cache."""
         monitor = DebtCeilingMonitor()
-        with patch.object(monitor, '_monitor_loop', new_callable=AsyncMock):
-            with patch.object(monitor, '_load_cache'):
-                await monitor.start()
-                assert monitor._running is True
-                assert monitor._task is not None
-                # Clean up
-                monitor._running = False
-                monitor._task.cancel()
-                try:
-                    await monitor._task
-                except (Exception, asyncio.CancelledError):
-                    pass
+        monitor._check_for_updates = AsyncMock()
+        with patch.object(monitor, '_save_cache') as mock_save:
+            await monitor.run_once()
+        monitor._check_for_updates.assert_awaited_once()
+        mock_save.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_idempotent(self):
-        """Edge case: calling start when already running does nothing."""
+    async def test_run_once_logs_and_returns_on_error(self):
+        """Edge case: run_once() catches exceptions and does not re-raise."""
         monitor = DebtCeilingMonitor()
-        monitor._running = True
-        await monitor.start()
-        # Task should not be created (still None since it was already "running")
-        assert monitor._task is None
-
-    @pytest.mark.asyncio
-    async def test_stop_resets_state(self):
-        """Happy path: stop resets running flag and cancels task."""
-        monitor = DebtCeilingMonitor()
-        monitor._running = True
-        # Create a real future that can be awaited and cancelled
-        loop = asyncio.get_event_loop()
-        fut = loop.create_future()
-        fut.set_result(None)
-        monitor._task = fut
-
-        await monitor.stop()
-
-        assert monitor._running is False
+        monitor._check_for_updates = AsyncMock(side_effect=RuntimeError("boom"))
+        await monitor.run_once()  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -96,25 +71,19 @@ class TestCacheOperations:
 
     def test_load_cache_missing_file(self, tmp_path):
         """Edge case: cache file does not exist."""
-        monitor = DebtCeilingMonitor()
         cache_file = tmp_path / "nonexistent.json"
-
         with patch('app.services.debt_ceiling_monitor.DEBT_CEILING_CHECK_CACHE', cache_file):
-            monitor._load_cache()
-
+            monitor = DebtCeilingMonitor()
         assert monitor._last_check is None
         assert monitor._last_result is None
 
     def test_load_cache_corrupt_file(self, tmp_path):
         """Failure: cache file contains invalid JSON."""
-        monitor = DebtCeilingMonitor()
         cache_file = tmp_path / "bad.json"
         cache_file.write_text("not valid json{{{")
-
         with patch('app.services.debt_ceiling_monitor.DEBT_CEILING_CHECK_CACHE', cache_file):
             # Should not raise
-            monitor._load_cache()
-
+            monitor = DebtCeilingMonitor()
         assert monitor._last_check is None
 
     def test_save_cache_writes_file(self, tmp_path):
@@ -304,11 +273,12 @@ class TestDebtCeilingMonitorStatus:
         {"date": "2025-01-01", "amount_trillion": 36.1}
     ])
     def test_status_initial(self):
-        """Happy path: status before any check."""
+        """Happy path: status has expected fields."""
         monitor = DebtCeilingMonitor()
+        monitor._last_check = None
+        monitor._last_result = None
         status = monitor.status
 
-        assert status["running"] is False
         assert status["last_check"] is None
         assert status["last_result"] is None
         assert status["check_interval_days"] == 7
@@ -325,7 +295,6 @@ class TestDebtCeilingMonitorStatus:
     def test_status_after_check(self):
         """Happy path: status after a check has run."""
         monitor = DebtCeilingMonitor()
-        monitor._running = True
         monitor._last_check = datetime(2025, 6, 1, 10, 0, 0)
         monitor._last_result = {"new_legislation_found": False}
 
@@ -334,6 +303,5 @@ class TestDebtCeilingMonitorStatus:
         ]):
             status = monitor.status
 
-        assert status["running"] is True
         assert status["last_check"] == "2025-06-01T10:00:00"
         assert status["last_result"]["new_legislation_found"] is False

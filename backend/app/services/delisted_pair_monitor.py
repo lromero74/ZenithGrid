@@ -58,10 +58,7 @@ class TradingPairMonitor:
     # If BASE starts with one of these, it's likely pegged to the quote asset.
     WRAPPED_PREFIXES = ("W", "CB", "ST", "LS", "JITO", "M")
 
-    def __init__(self, check_interval_seconds: int = 86400):  # 24 hours default
-        self.check_interval_seconds = check_interval_seconds
-        self.running = False
-        self.task = None
+    def __init__(self):
         self._last_check: datetime = None
         self._available_products: Set[str] = set()
         self._btc_pairs: Set[str] = set()
@@ -480,63 +477,10 @@ class TradingPairMonitor:
         self._last_check = datetime.utcnow()
         return results
 
-    async def run_loop(self):
-        """Background loop that runs the check periodically."""
-        # Wait 5 minutes after startup before first check
-        await asyncio.sleep(300)
-
-        while self.running:
-            try:
-                logger.info("Running daily trading pair sync...")
-                results = await self.check_and_sync_pairs()
-
-                if results["pairs_removed"] > 0:
-                    logger.warning(
-                        f"DELISTED PAIRS REMOVED: {results['pairs_removed']} pairs "
-                        f"from {len(results['affected_bots'])} bots"
-                    )
-
-                if results["pairs_added"] > 0:
-                    logger.info(
-                        f"NEW PAIRS ADDED: {results['pairs_added']} pairs "
-                        f"to {len(results['affected_bots'])} bots"
-                    )
-
-            except Exception as e:
-                logger.error(f"Error in pair monitor loop: {e}", exc_info=True)
-
-            # Sleep for check interval (default 24 hours)
-            await asyncio.sleep(self.check_interval_seconds)
-
-    async def start(self):
-        """Start the background monitor."""
-        if self.running:
-            return
-
-        self.running = True
-        self.task = asyncio.create_task(self.run_loop())
-        logger.info(
-            f"Trading pair monitor started - "
-            f"checking every {self.check_interval_seconds / 3600:.1f} hours"
-        )
-
-    async def stop(self):
-        """Stop the background monitor."""
-        self.running = False
-        if self.task:
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Trading pair monitor stopped")
-
     def get_status(self) -> dict:
         """Get current status of the monitor."""
         return {
-            "running": self.running,
             "last_check": self._last_check.isoformat() if self._last_check else None,
-            "check_interval_hours": self.check_interval_seconds / 3600,
             "available_products_count": len(self._available_products),
             "btc_pairs_count": len(self._btc_pairs),
             "usd_pairs_count": len(self._usd_pairs),
@@ -551,3 +495,7 @@ class TradingPairMonitor:
         """
         logger.info("Manual pair sync triggered")
         return await self.check_and_sync_pairs()
+
+
+# Module-level singleton — imported by scheduler.py and main.py
+trading_pair_monitor = TradingPairMonitor()

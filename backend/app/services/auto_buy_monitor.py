@@ -8,7 +8,6 @@ automatic re-pricing for unfilled limit orders.
 IMPORTANT: Respects bot reservations - only converts funds that are truly free
 (not reserved by any bot's budget or tied up in open positions).
 """
-import asyncio
 import logging
 import threading
 from dataclasses import dataclass
@@ -48,17 +47,14 @@ class AutoBuyMonitor:
     """
 
     def __init__(self):
-        self.running = False
-        self.task = None
         self._account_timers: Dict[int, datetime] = {}  # account_id -> last_check_time
         self._pending_orders: Dict[str, AutoBuyPendingOrder] = {}  # order_id -> order info
-        # Protects _account_timers against concurrent access when monitor runs on the
-        # secondary loop while cleanup_in_memory_caches() runs on the main loop.
+        # Protects _account_timers against concurrent access from cleanup_in_memory_caches().
         self._account_timers_lock = threading.Lock()
-        self._session_maker = None  # injected by secondary_loop startup
+        self._session_maker = None  # optional injected session maker
 
     def set_session_maker(self, sm):
-        """Inject a session maker (used when running on the secondary event loop)."""
+        """Inject a session maker (for testing or non-default pools)."""
         self._session_maker = sm
 
     def _get_sm(self):
@@ -66,19 +62,13 @@ class AutoBuyMonitor:
         from app.database import async_session_maker as _default
         return self._session_maker or _default
 
-    async def start(self):
-        """Start the auto-buy monitor"""
-        if not self.running:
-            self.running = True
-            self.task = asyncio.create_task(self._monitor_loop())
-            logger.info("Auto-Buy Monitor started")
-
-    async def stop(self):
-        """Stop the auto-buy monitor"""
-        self.running = False
-        if self.task:
-            await self.task
-        logger.info("Auto-Buy Monitor stopped")
+    async def run_once(self):
+        """Check all accounts once. Called by APScheduler every 10 seconds."""
+        try:
+            await self._check_accounts()
+            await self._check_pending_orders()
+        except Exception as e:
+            logger.error(f"Error in auto-buy monitor: {e}", exc_info=True)
 
     def cleanup_stale_entries(self, active_account_ids: set) -> dict:
         """Remove tracking entries for accounts that are no longer active.
@@ -102,17 +92,6 @@ class AutoBuyMonitor:
         for oid in stale_orders:
             del self._pending_orders[oid]
         return {"timers_pruned": len(stale_timers), "orders_pruned": len(stale_orders)}
-
-    async def _monitor_loop(self):
-        """Main monitoring loop - checks every 10 seconds"""
-        while self.running:
-            try:
-                await self._check_accounts()
-                await self._check_pending_orders()
-            except Exception as e:
-                logger.error(f"Error in auto-buy monitor loop: {e}", exc_info=True)
-
-            await asyncio.sleep(10)  # Check every 10 seconds
 
     async def _check_accounts(self):
         """Check which accounts need processing based on their intervals"""
@@ -425,3 +404,7 @@ class AutoBuyMonitor:
 
         except Exception as e:
             logger.error(f"Error re-pricing order {pending.order_id}: {e}", exc_info=True)
+
+
+# Module-level singleton — imported by scheduler.py and main.py
+auto_buy_monitor = AutoBuyMonitor()

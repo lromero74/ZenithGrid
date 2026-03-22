@@ -7,7 +7,6 @@ may have been passed since our last recorded entry. Uses the system AI
 debt ceiling changes.
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime
@@ -27,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Check interval: once per week (in seconds)
 CHECK_INTERVAL = 7 * 24 * 60 * 60  # 7 days
-INITIAL_DELAY = 60 * 5  # Wait 5 minutes after startup
 
 # Cache file for tracking last check
 CACHE_DIR = Path(__file__).parent.parent.parent
@@ -38,32 +36,9 @@ class DebtCeilingMonitor:
     """Background service that monitors for new debt ceiling legislation."""
 
     def __init__(self):
-        self._task = None
-        self._running = False
         self._last_check: datetime | None = None
         self._last_result: Dict[str, Any] | None = None
-
-    async def start(self):
-        """Start the background monitor task."""
-        if self._running:
-            logger.warning("Debt ceiling monitor already running")
-            return
-
-        self._running = True
         self._load_cache()
-        self._task = asyncio.create_task(self._monitor_loop())
-        logger.info("Debt ceiling monitor started")
-
-    async def stop(self):
-        """Stop the background monitor task."""
-        self._running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Debt ceiling monitor stopped")
 
     def _load_cache(self):
         """Load last check timestamp from cache."""
@@ -90,33 +65,14 @@ class DebtCeilingMonitor:
         except Exception as e:
             logger.warning(f"Failed to save debt ceiling check cache: {e}")
 
-    async def _monitor_loop(self):
-        """Main loop that checks for debt ceiling changes weekly."""
-        await asyncio.sleep(INITIAL_DELAY)
-
-        while self._running:
-            try:
-                now = datetime.utcnow()
-
-                # Check if we need to run
-                should_check = False
-                if self._last_check is None:
-                    should_check = True
-                else:
-                    time_since_check = (now - self._last_check).total_seconds()
-                    if time_since_check >= CHECK_INTERVAL:
-                        should_check = True
-
-                if should_check:
-                    await self._check_for_updates()
-                    self._last_check = now
-                    self._save_cache()
-
-            except Exception as e:
-                logger.error(f"Error in debt ceiling monitor loop: {e}")
-
-            # Sleep for an hour before checking again if we need to run
-            await asyncio.sleep(60 * 60)
+    async def run_once(self):
+        """Check for new debt ceiling legislation. Called by APScheduler weekly."""
+        try:
+            await self._check_for_updates()
+            self._last_check = datetime.utcnow()
+            self._save_cache()
+        except Exception as e:
+            logger.error(f"Error in debt ceiling monitor: {e}")
 
     async def _check_for_updates(self):
         """Check Congressional sources for new debt ceiling legislation."""
@@ -237,7 +193,6 @@ Respond in JSON format only:
     def status(self) -> dict:
         """Get current status of the monitor service."""
         return {
-            "running": self._running,
             "last_check": self._last_check.isoformat() if self._last_check else None,
             "last_result": self._last_result,
             "check_interval_days": CHECK_INTERVAL // (24 * 60 * 60),

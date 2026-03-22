@@ -168,3 +168,28 @@ async def sync_all_user_transfers(
         await db.commit()
 
     return total_new
+
+
+async def run_transfer_sync_once(session_maker=None):
+    """Sync deposits/withdrawals for all active users. Called by APScheduler."""
+    from sqlalchemy import select
+    from app.database import async_session_maker as _default_sm
+    from app.models import User
+    import logging as _logging
+
+    logger = _logging.getLogger(__name__)
+    sm = session_maker or _default_sm
+    try:
+        async with sm() as db:
+            result = await db.execute(select(User).where(User.is_active.is_(True)))
+            users = result.scalars().all()
+
+            for user in users:
+                try:
+                    count = await sync_all_user_transfers(db, user.id)
+                    if count > 0:
+                        logger.info(f"Synced {count} new transfers for user {user.id}")
+                except Exception as e:
+                    logger.error(f"Transfer sync failed for user {user.id}: {e}")
+    except Exception as e:
+        logger.error(f"Error in transfer sync: {e}")

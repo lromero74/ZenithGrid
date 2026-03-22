@@ -10,7 +10,6 @@ Lists are downloaded on startup (if stale or missing), refreshed weekly,
 and cached to disk for fast restarts.
 """
 
-import asyncio
 import gzip
 import json
 import logging
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 REFRESH_INTERVAL = 7 * 24 * 60 * 60  # 7 days in seconds
-INITIAL_DELAY = 5  # seconds after startup before first check
 MAX_BLACKLIST_DOMAINS = 2_000_000  # memory safety cap
 DOWNLOAD_TIMEOUT = 120  # seconds per HTTP request
 
@@ -108,8 +106,6 @@ class DomainBlacklistService:
     """Background service maintaining an in-memory domain blacklist."""
 
     def __init__(self):
-        self._task: Optional[asyncio.Task] = None
-        self._running = False
         self._domains: Set[str] = set()
         self._last_download: Optional[datetime] = None
         self._category_counts: Dict[str, int] = {}
@@ -118,32 +114,19 @@ class DomainBlacklistService:
     # Public API
     # ------------------------------------------------------------------
 
-    async def start(self):
-        """Load disk cache and start the background refresh loop."""
-        if self._running:
-            logger.warning("Domain blacklist service already running")
-            return
-
-        self._running = True
+    async def run_once(self):
+        """Check and refresh blacklists if stale. Called by APScheduler weekly."""
         BLACKLIST_DIR.mkdir(parents=True, exist_ok=True)
-        self._load_from_disk()
-        self._task = asyncio.create_task(self._refresh_loop())
-        logger.info(
-            "Domain blacklist service started (%d domains loaded from cache)",
-            len(self._domains),
+        if not self._domains:
+            self._load_from_disk()
+        needs_download = (
+            self._last_download is None
+            or (
+                datetime.now(timezone.utc) - self._last_download
+            ).total_seconds() > REFRESH_INTERVAL
         )
-
-    async def stop(self):
-        """Cancel the background task."""
-        self._running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
-        logger.info("Domain blacklist service stopped")
+        if needs_download:
+            await self._download_all()
 
     def is_domain_blocked(self, url: str) -> Tuple[bool, str]:
         """Check whether a URL's domain appears on the blacklist.
@@ -236,34 +219,6 @@ class DomainBlacklistService:
     # ------------------------------------------------------------------
     # Background refresh
     # ------------------------------------------------------------------
-
-    async def _refresh_loop(self):
-        """Periodically download fresh blacklists."""
-        try:
-            # Wait a moment for the rest of the app to finish starting
-            await asyncio.sleep(INITIAL_DELAY)
-
-            while self._running:
-                needs_download = (
-                    self._last_download is None
-                    or (
-                        datetime.now(timezone.utc) - self._last_download
-                    ).total_seconds()
-                    > REFRESH_INTERVAL
-                )
-
-                if needs_download:
-                    await self._download_all()
-
-                # Sleep in small increments so we can stop quickly
-                for _ in range(REFRESH_INTERVAL // 60):
-                    if not self._running:
-                        break
-                    await asyncio.sleep(60)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception("Domain blacklist refresh loop crashed")
 
     async def _download_all(self):
         """Fetch all category lists and atomic-swap the in-memory set."""

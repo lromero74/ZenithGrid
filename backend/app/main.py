@@ -1,6 +1,7 @@
 import asyncio
 import concurrent.futures
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -13,18 +14,6 @@ from starlette.responses import Response
 
 from app.middleware.public_rate_limit import PublicEndpointRateLimiter
 from app.middleware.intrusion_detect import IntrusionDetector
-from app.cleanup_jobs import (
-    cleanup_in_memory_caches,
-    cleanup_old_rate_limit_attempts,
-    cleanup_expired_revoked_tokens,
-    cleanup_expired_sessions,
-    cleanup_failed_condition_logs,
-    cleanup_old_decision_logs,
-    cleanup_old_failed_orders,
-    cleanup_old_reports,
-)
-from app.services.coin_review_service import run_coin_review_scheduler
-from app.services.report_scheduler import run_report_scheduler
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
@@ -63,12 +52,9 @@ from app.routers import sessions_router  # Session management for multiplayer
 from app.routers import chat_router  # Chat (DMs, groups, channels)
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
-from app.services.auto_buy_monitor import AutoBuyMonitor
-from app.services.rebalance_monitor import RebalanceMonitor
-from app.services.content_refresh_service import content_refresh_service
-from app.services.debt_ceiling_monitor import debt_ceiling_monitor
-from app.services.delisted_pair_monitor import TradingPairMonitor
-from app.services.domain_blacklist_service import domain_blacklist_service
+from app.services.auto_buy_monitor import auto_buy_monitor  # noqa: F401
+from app.services.rebalance_monitor import rebalance_monitor  # noqa: F401
+from app.services.delisted_pair_monitor import trading_pair_monitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.perps_monitor import PerpsMonitor
 from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor
@@ -131,15 +117,8 @@ async def app_error_handler(request: Request, exc: AppError):
 # Monitor loop runs every 10s to check if any bots need processing
 price_monitor = MultiBotMonitor(interval_seconds=10)
 
-# Trading pair monitor - daily job to remove delisted pairs, add new ones
-trading_pair_monitor = TradingPairMonitor(check_interval_seconds=86400)  # 24 hours
-set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
-
-# Auto-buy BTC monitor - converts stablecoins to BTC based on account settings
-auto_buy_monitor = AutoBuyMonitor()
-
-# Portfolio rebalance monitor - maintains target USD/BTC/ETH allocations per account
-rebalance_monitor = RebalanceMonitor()
+# Register trading pair monitor with system_router for admin-triggered force-refresh
+set_trading_pair_monitor(trading_pair_monitor)
 
 # Perpetual futures position monitor - syncs open perps positions with exchange
 perps_monitor = PerpsMonitor(interval_seconds=60)
@@ -149,7 +128,6 @@ perps_monitor = PerpsMonitor(interval_seconds=60)
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
-memory_cache_cleanup_task = None
 
 
 def override_get_price_monitor():
@@ -404,97 +382,11 @@ async def run_missing_order_detector():
         await asyncio.sleep(300)
 
 
-# Background task for capturing daily account value snapshots
-async def run_account_snapshot_capture(session_maker=None):
-    """Background task that captures account value snapshots once per day"""
-    from sqlalchemy import select
-
-    from app.database import async_session_maker as _default_sm
-    from app.models import User
-    from app.services import account_snapshot_service
-
-    sm = session_maker or _default_sm
-
-    # Wait 5 minutes after startup before first check
-    await asyncio.sleep(300)
-
-    while True:
-        try:
-            async with sm() as db:
-                # Get all active users
-                result = await db.execute(select(User).where(User.is_active.is_(True)))
-                users = result.scalars().all()
-
-                for user in users:
-                    try:
-                        logger.info(f"Capturing account snapshots for user {user.id}")
-                        result = await account_snapshot_service.capture_all_account_snapshots(
-                            db, user.id, session_maker=sm
-                        )
-                        logger.info(
-                            f"User {user.id}: {result['success_count']}/"
-                            f"{result['total_accounts']} snapshots captured"
-                        )
-                        if result['errors']:
-                            for error in result['errors']:
-                                logger.warning(f"Snapshot error: {error}")
-                    except Exception as e:
-                        logger.error(f"Failed to capture snapshots for user {user.id}: {e}")
-
-        except Exception as e:
-            logger.error(f"Error in account snapshot capture loop: {e}")
-
-        # Run once per day (24 hours)
-        await asyncio.sleep(86400)
-
-
-# Background task for syncing deposit/withdrawal transfers from Coinbase
-async def run_transfer_sync(session_maker=None):
-    """Background task that syncs transfers once per day, after snapshots."""
-    from sqlalchemy import select
-
-    from app.database import async_session_maker as _default_sm
-    from app.models import User
-    from app.services.transfer_sync_service import sync_all_user_transfers
-
-    sm = session_maker or _default_sm
-
-    # Wait 20 minutes after startup (run after account snapshots)
-    await asyncio.sleep(1200)
-
-    while True:
-        try:
-            async with sm() as db:
-                result = await db.execute(
-                    select(User).where(User.is_active.is_(True))
-                )
-                users = result.scalars().all()
-
-                for user in users:
-                    try:
-                        count = await sync_all_user_transfers(db, user.id)
-                        if count > 0:
-                            logger.info(
-                                f"Synced {count} new transfers for "
-                                f"user {user.id}"
-                            )
-                    except Exception as e:
-                        logger.error(
-                            f"Transfer sync failed for user {user.id}: {e}"
-                        )
-
-        except Exception as e:
-            logger.error(f"Error in transfer sync loop: {e}")
-
-        # Run once per day
-        await asyncio.sleep(86400)
-
-
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
-    global missing_order_detector_task, memory_cache_cleanup_task
+    global missing_order_detector_task
 
     logger.info("========================================")
     logger.info("FastAPI startup event triggered")
@@ -555,95 +447,18 @@ async def startup_event():
     await start_prop_guard_monitor()
     logger.info("PropGuard monitor started - checking prop firm drawdowns every 30s")
 
-    # memory_cache_cleanup stays on main loop — it touches in-memory state shared with request handlers
-    memory_cache_cleanup_task = asyncio.create_task(cleanup_in_memory_caches())
-    logger.info("In-memory cache cleanup started - sweeping every 5 minutes")
-
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
 
     logger.info("Tier 1 monitors started")
 
-    # ── Start secondary event loop (Tier 2/3) ────────────────────────────────
-    from app.secondary_loop import get_secondary_session_maker, schedule, start_secondary_loop
-    start_secondary_loop()
-    sm = get_secondary_session_maker()
-    logger.info("Secondary event loop started")
-
-    # ── SECONDARY LOOP: Exchange-client monitors ──────────────────────────────
-    # These monitors use get_exchange_client_for_account (threading.Lock guard,
-    # async work outside lock) and _public_request (threading.Lock rate limiter).
-    # Both locks are now threading.Lock — loop-agnostic, safe from any loop.
-    # session_maker is injected so PropGuardClient DB work runs on the correct pool.
-    logger.info("Starting auto-buy BTC monitor on secondary loop...")
-    auto_buy_monitor.set_session_maker(sm)
-    schedule(auto_buy_monitor.start())
-    logger.info("Auto-buy BTC monitor scheduled - converting stablecoins to BTC per account settings")
-
-    logger.info("Starting portfolio rebalance monitor on secondary loop...")
-    rebalance_monitor.set_session_maker(sm)
-    schedule(rebalance_monitor.start())
-    logger.info("Rebalance monitor scheduled - maintaining target allocations per account")
-
-    logger.info("Starting trading pair monitor on secondary loop...")
-    trading_pair_monitor.set_session_maker(sm)
-    schedule(trading_pair_monitor.start())
-    logger.info("Trading pair monitor scheduled - syncing pairs daily (first check in 5 minutes)")
-
-    logger.info("Starting account snapshot capture job on secondary loop...")
-    schedule(run_account_snapshot_capture(session_maker=sm))
-    logger.info("Account snapshot capture job scheduled - capturing daily account values")
-
-    logger.info("Starting transfer sync job on secondary loop...")
-    schedule(run_transfer_sync(session_maker=sm))
-    logger.info("Transfer sync scheduled - syncing deposits/withdrawals daily")
-
-    logger.info("Starting content refresh service on secondary loop...")
-    content_refresh_service.set_session_maker(sm)
-    schedule(content_refresh_service.start())
-
-    # ── SECONDARY LOOP: DB-only and HTTP-only tasks (no shared exchange client) ──
-    # These are safe because they either use DB only (with secondary session maker)
-    # or make independent HTTP/AI calls with no shared asyncio primitives.
-    logger.info("Starting Tier 2/3 tasks on secondary event loop...")
-
-    from app.services.ban_monitor import ban_monitor_loop
-    schedule(ban_monitor_loop())
-    logger.info("Ban monitor scheduled on secondary loop - daily (30s startup delay)")
-
-    schedule(run_report_scheduler(session_maker=sm))
-    logger.info("Report scheduler scheduled on secondary loop - every 15 minutes")
-
-    schedule(run_coin_review_scheduler(session_maker=sm))
-    logger.info("Coin review scheduler scheduled on secondary loop - full review every 7 days")
-
-    schedule(domain_blacklist_service.start())
-    logger.info("Domain blacklist service scheduled on secondary loop - refreshing weekly")
-
-    schedule(debt_ceiling_monitor.start())
-    logger.info("Debt ceiling monitor scheduled on secondary loop - checking weekly")
-
-    schedule(cleanup_old_decision_logs(session_maker=sm))
-    logger.info("Decision log cleanup scheduled on secondary loop - daily")
-
-    schedule(cleanup_failed_condition_logs(session_maker=sm))
-    logger.info("Failed condition log cleanup scheduled on secondary loop - every 6 hours")
-
-    schedule(cleanup_old_failed_orders(session_maker=sm))
-    logger.info("Failed order cleanup scheduled on secondary loop - every 6 hours")
-
-    schedule(cleanup_expired_revoked_tokens(session_maker=sm))
-    logger.info("Revoked token cleanup scheduled on secondary loop - daily")
-
-    schedule(cleanup_expired_sessions(session_maker=sm))
-    logger.info("Session cleanup scheduled on secondary loop - daily")
-
-    schedule(cleanup_old_rate_limit_attempts(session_maker=sm))
-    logger.info("Rate limit cleanup scheduled on secondary loop - hourly")
-
-    schedule(cleanup_old_reports(session_maker=sm))
-    logger.info("Report cleanup scheduled on secondary loop - weekly")
+    # ── APScheduler: Tier 2 & 3 background jobs ───────────────────────────────
+    from app.scheduler import scheduler, register_jobs
+    startup_time = datetime.utcnow()
+    register_jobs(startup_time)
+    scheduler.start()
+    logger.info(f"APScheduler started — {len(scheduler.get_jobs())} jobs registered")
 
     logger.info("TTS thread pool ready (max_workers=2)")
 
@@ -673,14 +488,18 @@ async def shutdown_event():
     else:
         logger.warning(f"⚠️ {shutdown_result['message']}")
 
+    # ── Stop APScheduler (Tier 2/3 jobs) ─────────────────────────────────────
+    logger.info("🛑 Stopping APScheduler...")
+    from app.scheduler import scheduler
+    scheduler.shutdown(wait=False)
+    logger.info("🛑 APScheduler stopped")
+
     # ── Stop main loop monitors ───────────────────────────────────────────────
     logger.info("🛑 Stopping main loop monitors...")
 
-    for monitor in [price_monitor, perps_monitor, auto_buy_monitor, rebalance_monitor, trading_pair_monitor]:
+    for monitor in [price_monitor, perps_monitor]:
         if monitor:
             await monitor.stop()
-
-    content_refresh_service._running = False  # signal secondary-loop content refresh to stop
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
@@ -688,15 +507,9 @@ async def shutdown_event():
     # Cancel main loop asyncio tasks
     for task in [
         limit_order_monitor_task, order_reconciliation_monitor_task,
-        missing_order_detector_task, memory_cache_cleanup_task,
+        missing_order_detector_task,
     ]:
         await _cancel_task(task)
-
-    # ── Stop secondary event loop (cancels all Tier 2/3 tasks) ───────────────
-    logger.info("🛑 Stopping secondary event loop (Tier 2/3 tasks)...")
-    from app.secondary_loop import stop_secondary_loop
-    stop_secondary_loop()
-    logger.info("🛑 Secondary event loop stopped")
 
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache

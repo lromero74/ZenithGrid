@@ -201,23 +201,15 @@ def _query_fail2ban() -> BanSnapshot:
     return snapshot
 
 
-async def ban_monitor_loop(session_maker=None):
-    """Background task: query fail2ban every hour and cache the result."""
+async def run_ban_monitor_once(session_maker=None):
+    """Query fail2ban and cache the result. Called by APScheduler every 24 hours."""
     global _snapshot
-
-    # Initial query after 30s startup delay
-    await asyncio.sleep(30)
-
-    while True:
-        try:
-            # Run subprocess in thread pool to avoid blocking the event loop
-            loop = asyncio.get_event_loop()
-            _snapshot = await loop.run_in_executor(None, _query_fail2ban)
-            logger.info(
-                f"Ban monitor: {_snapshot.currently_banned} currently banned, "
-                f"{_snapshot.total_banned} total banned"
-            )
-        except Exception as e:
-            logger.error(f"Ban monitor loop error: {e}")
-
-        await asyncio.sleep(86400)  # Every 24 hours
+    try:
+        loop = asyncio.get_event_loop()
+        _snapshot = await loop.run_in_executor(None, _query_fail2ban)
+        logger.info(
+            f"Ban monitor: {_snapshot.currently_banned} currently banned, "
+            f"{_snapshot.total_banned} total banned"
+        )
+    except Exception as e:
+        logger.error(f"Ban monitor error: {e}")

@@ -21,23 +21,15 @@ from app.services.delisted_pair_monitor import (
 # ---------------------------------------------------------------------------
 
 class TestTradingPairMonitorInit:
-    """Tests for TradingPairMonitor initialization and lifecycle."""
+    """Tests for TradingPairMonitor initialization."""
 
     def test_init_defaults(self):
         """Happy path: monitor initializes with expected defaults."""
         monitor = TradingPairMonitor()
-        assert monitor.check_interval_seconds == 86400  # 24 hours
-        assert monitor.running is False
-        assert monitor.task is None
         assert monitor._last_check is None
         assert monitor._available_products == set()
         assert monitor._btc_pairs == set()
         assert monitor._usd_pairs == set()
-
-    def test_init_custom_interval(self):
-        """Happy path: custom check interval."""
-        monitor = TradingPairMonitor(check_interval_seconds=3600)
-        assert monitor.check_interval_seconds == 3600
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +188,7 @@ class TestGetStatus:
         """Happy path: status before any check runs."""
         monitor = TradingPairMonitor()
         status = monitor.get_status()
-        assert status["running"] is False
         assert status["last_check"] is None
-        assert status["check_interval_hours"] == pytest.approx(24.0)
         assert status["available_products_count"] == 0
 
     def test_status_after_products_loaded(self):
@@ -208,10 +198,8 @@ class TestGetStatus:
         monitor._btc_pairs = {"ETH-BTC", "SOL-BTC"}
         monitor._usd_pairs = {"BTC-USD"}
         monitor._last_check = datetime(2025, 1, 1, 12, 0, 0)
-        monitor.running = True
 
         status = monitor.get_status()
-        assert status["running"] is True
         assert status["available_products_count"] == 3
         assert status["btc_pairs_count"] == 2
         assert status["usd_pairs_count"] == 1
@@ -225,7 +213,7 @@ class TestCheckAndSyncPairs:
     """Tests for TradingPairMonitor.check_and_sync_pairs()."""
 
     @pytest.mark.asyncio
-    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     async def test_no_available_products_reports_error(self, mock_session_maker):
         """Failure: could not fetch products, error reported."""
         mock_db = AsyncMock()
@@ -239,7 +227,7 @@ class TestCheckAndSyncPairs:
         assert "Could not fetch available products" in results["errors"]
 
     @pytest.mark.asyncio
-    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     async def test_delisted_pair_removed_from_bot(self, mock_session_maker):
         """Happy path: delisted pair removed from bot configuration."""
         mock_db = AsyncMock()
@@ -272,7 +260,7 @@ class TestCheckAndSyncPairs:
         mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     async def test_new_pair_added_when_auto_add_enabled(self, mock_session_maker):
         """Happy path: new pair added when auto_add_new_pairs is enabled."""
         mock_db = AsyncMock()
@@ -302,7 +290,7 @@ class TestCheckAndSyncPairs:
         mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     async def test_no_changes_needed(self, mock_session_maker):
         """Edge case: all pairs match, no changes needed."""
         mock_db = AsyncMock()
@@ -687,7 +675,7 @@ class TestDetectStablePairs:
         assert detected == []
 
     @pytest.mark.asyncio
-    @patch('app.services.delisted_pair_monitor.async_session_maker')
+    @patch('app.database.async_session_maker')
     async def test_check_and_sync_includes_detected_stable_pairs(self, mock_session_maker):
         """Integration: check_and_sync_pairs includes detected_stable_pairs in results."""
         mock_db = AsyncMock()

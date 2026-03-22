@@ -9,7 +9,6 @@ Settings are per-account (stored on the Account model). Only free balances
 are rebalanced — funds in open bot positions are untouched.
 """
 
-import asyncio
 import json
 import logging
 import threading
@@ -436,14 +435,11 @@ class RebalanceMonitor:
     """Background service that rebalances account allocations."""
 
     def __init__(self):
-        self.running = False
-        self.task = None
         self._account_timers: Dict[int, datetime] = {}
         self._processing: set = set()  # Account IDs currently being processed
-        # Protects _account_timers against concurrent access when monitor runs on the
-        # secondary loop while cleanup_in_memory_caches() runs on the main loop.
+        # Protects _account_timers against concurrent access from cleanup_in_memory_caches().
         self._account_timers_lock = threading.Lock()
-        self._session_maker = None  # injected by secondary_loop startup
+        self._session_maker = None  # optional injected session maker
 
     def set_session_maker(self, sm):
         """Inject a session maker (used when running on the secondary event loop)."""
@@ -454,17 +450,12 @@ class RebalanceMonitor:
         from app.database import async_session_maker as _default
         return self._session_maker or _default
 
-    async def start(self):
-        if not self.running:
-            self.running = True
-            self.task = asyncio.create_task(self._monitor_loop())
-            logger.info("Rebalance Monitor started")
-
-    async def stop(self):
-        self.running = False
-        if self.task:
-            await self.task
-        logger.info("Rebalance Monitor stopped")
+    async def run_once(self):
+        """Check all accounts once. Called by APScheduler every 30 seconds."""
+        try:
+            await self._check_accounts()
+        except Exception as e:
+            logger.error(f"Error in rebalance monitor: {e}", exc_info=True)
 
     def cleanup_stale_entries(self, active_account_ids: set) -> dict:
         """Remove tracking entries for accounts that are no longer active.
@@ -478,15 +469,6 @@ class RebalanceMonitor:
                 del self._account_timers[aid]
                 self._processing.discard(aid)
         return {"timers_pruned": len(stale)}
-
-    async def _monitor_loop(self):
-        """Main loop — checks every 30 seconds."""
-        while self.running:
-            try:
-                await self._check_accounts()
-            except Exception as e:
-                logger.error(f"Error in rebalance monitor loop: {e}", exc_info=True)
-            await asyncio.sleep(30)
 
     async def _check_accounts(self):
         async with self._get_sm()() as db:
@@ -956,3 +938,7 @@ async def execute_dust_sweep(account, client, db: AsyncSession) -> List[dict]:
             free_balances[currency] = 0.0
 
     return await monitor._sweep_dust(client, account, db, prices, free_balances)
+
+
+# Module-level singleton — imported by scheduler.py and main.py
+rebalance_monitor = RebalanceMonitor()

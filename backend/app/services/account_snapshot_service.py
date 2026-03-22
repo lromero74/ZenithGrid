@@ -501,3 +501,32 @@ async def get_daily_activity(
 
     result.sort(key=lambda r: r["date"])
     return result
+
+
+async def run_account_snapshot_once(session_maker=None):
+    """Capture daily account value snapshots for all active users. Called by APScheduler."""
+    from sqlalchemy import select
+    from app.database import async_session_maker as _default_sm
+    from app.models import User
+
+    sm = session_maker or _default_sm
+    try:
+        async with sm() as db:
+            result = await db.execute(select(User).where(User.is_active.is_(True)))
+            users = result.scalars().all()
+
+            for user in users:
+                try:
+                    logger.info(f"Capturing account snapshots for user {user.id}")
+                    res = await capture_all_account_snapshots(db, user.id, session_maker=sm)
+                    logger.info(
+                        f"User {user.id}: {res['success_count']}/"
+                        f"{res['total_accounts']} snapshots captured"
+                    )
+                    if res['errors']:
+                        for error in res['errors']:
+                            logger.warning(f"Snapshot error: {error}")
+                except Exception as e:
+                    logger.error(f"Failed to capture snapshots for user {user.id}: {e}")
+    except Exception as e:
+        logger.error(f"Error in account snapshot capture: {e}")

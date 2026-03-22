@@ -5,7 +5,6 @@ Background task that checks for due report schedules and generates reports.
 Also provides the generate_report_for_schedule function used by manual triggers.
 """
 
-import asyncio
 import calendar
 import json
 import logging
@@ -32,71 +31,62 @@ logger = logging.getLogger(__name__)
 RUN_HOUR = 6  # All scheduled reports run at 06:00 UTC
 
 
-async def run_report_scheduler(session_maker=None):
+async def run_report_scheduler_once(session_maker=None):
     """
-    Background task that checks for due report schedules.
-
-    Runs every 15 minutes after an initial 10-minute startup delay.
+    Check for due report schedules and generate them. Called by APScheduler every 15 minutes.
     """
     sm = session_maker or _default_session_maker
-    # Wait 10 minutes after startup
-    await asyncio.sleep(600)
+    try:
+        async with sm() as db:
+            now = datetime.utcnow()
 
-    while True:
-        try:
-            async with sm() as db:
-                now = datetime.utcnow()
-
-                # Find enabled schedules that are due
-                result = await db.execute(
-                    select(ReportSchedule)
-                    .where(
-                        and_(
-                            ReportSchedule.is_enabled.is_(True),
-                            ReportSchedule.next_run_at <= now,
-                        )
+            # Find enabled schedules that are due
+            result = await db.execute(
+                select(ReportSchedule)
+                .where(
+                    and_(
+                        ReportSchedule.is_enabled.is_(True),
+                        ReportSchedule.next_run_at <= now,
                     )
-                    .options(selectinload(ReportSchedule.goal_links))
                 )
-                due_schedules = result.scalars().all()
-
-                for schedule in due_schedules:
-                    try:
-                        # Get the user for this schedule
-                        user_result = await db.execute(
-                            select(User).where(User.id == schedule.user_id)
-                        )
-                        user = user_result.scalar_one_or_none()
-                        if not user or not user.is_active:
-                            logger.warning(
-                                f"Skipping schedule {schedule.id}: user "
-                                f"{schedule.user_id} inactive or missing"
-                            )
-                            continue
-
-                        logger.info(
-                            f"Generating report for schedule {schedule.id} "
-                            f"({schedule.name}, {schedule.periodicity})"
-                        )
-                        await generate_report_for_schedule(db, schedule, user)
-                        logger.info(
-                            f"Report generated for schedule {schedule.id}"
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to generate report for schedule "
-                            f"{schedule.id}: {e}",
-                            exc_info=True,
-                        )
-
-        except Exception as e:
-            logger.error(
-                f"Error in report scheduler loop: {e}", exc_info=True
+                .options(selectinload(ReportSchedule.goal_links))
             )
+            due_schedules = result.scalars().all()
 
-        # Check every 15 minutes
-        await asyncio.sleep(900)
+            for schedule in due_schedules:
+                try:
+                    # Get the user for this schedule
+                    user_result = await db.execute(
+                        select(User).where(User.id == schedule.user_id)
+                    )
+                    user = user_result.scalar_one_or_none()
+                    if not user or not user.is_active:
+                        logger.warning(
+                            f"Skipping schedule {schedule.id}: user "
+                            f"{schedule.user_id} inactive or missing"
+                        )
+                        continue
+
+                    logger.info(
+                        f"Generating report for schedule {schedule.id} "
+                        f"({schedule.name}, {schedule.periodicity})"
+                    )
+                    await generate_report_for_schedule(db, schedule, user)
+                    logger.info(
+                        f"Report generated for schedule {schedule.id}"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to generate report for schedule "
+                        f"{schedule.id}: {e}",
+                        exc_info=True,
+                    )
+
+    except Exception as e:
+        logger.error(
+            f"Error in report scheduler: {e}", exc_info=True
+        )
 
 
 def _normalize_recipient(item) -> str:
