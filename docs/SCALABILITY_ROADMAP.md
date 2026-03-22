@@ -101,7 +101,7 @@ Secondary Event Loop (Tier 2/3):
 
 ---
 
-### 1.2 — Move cleanup and batch jobs to APScheduler
+### 1.2 — Move cleanup and batch jobs to APScheduler ✅ DONE (v2.126.0)
 
 **Problem:** All 27 tasks are hand-rolled `asyncio.sleep()` loops. There's no retry logic, no error isolation, no visibility into task health. A crashing cleanup task silently dies.
 
@@ -110,6 +110,12 @@ Secondary Event Loop (Tier 2/3):
 - Per-job error handlers
 - Job history / next-run visibility (useful for admin panel)
 - Easy migration to distributed backends later (Redis, SQLAlchemy store)
+
+**Implementation notes (learned during execution):**
+- `AsyncIOScheduler` from APScheduler 3.11.2 used. Scheduler instance lives in `app/scheduler.py` as a module-level singleton imported by `main.py`.
+- `job.modify(next_run_time=datetime.utcnow())` is the correct way to trigger an immediate run without destroying the `IntervalTrigger`. `reschedule()` would have destroyed the trigger.
+- All secondary-loop sleep-loop tasks converted to APScheduler `IntervalTrigger` jobs. Main-loop monitors (MultiBotMonitor, LimitOrderMonitor, etc.) retain their own asyncio loops — APScheduler is for the background cleanup/batch tier only.
+- v2.126.1 patched a TTS shutdown test failure caused by the APScheduler refactor (test expected the old sleep-loop shutdown sequence).
 
 **Impact:** Frees ~15 manual asyncio loops. Reduces main.py startup block from ~150 lines to ~30 lines.
 **Effort:** Low-medium — drop-in replacement per task.
@@ -224,7 +230,7 @@ This doesn't need to happen everywhere at once — do it when you touch a servic
 
 ---
 
-### 2.3 — Introduce an internal event bus
+### 2.3 — Introduce an internal event bus ✅ DONE (v2.127.0)
 
 **Problem:** All inter-service coordination goes through direct database queries. When an order fills, the bot monitor queries Position directly, the reconciliation monitor queries Trade directly, the report scheduler queries Goal directly. There's no event stream — everything polls.
 
@@ -237,6 +243,14 @@ await event_bus.publish("goal.achieved", {"goal_id": ..., "user_id": ...})
 ```
 
 Services subscribe to events they care about. Today the bus is in-process. When you extract a service, you swap the in-process bus for NATS or Redis Pub/Sub — **no subscriber code changes**.
+
+**Implementation notes (learned during execution):**
+- `app/event_bus.py` — `InProcessEventBus` with `asyncio.create_task()` for fire-and-forget dispatch; `_safe_call()` isolates handler exceptions; module-level singleton `event_bus`.
+- Topic constants: `ORDER_FILLED`, `POSITION_OPENED`, `POSITION_CLOSED`, `BOT_STARTED`, `BOT_STOPPED`, `GOAL_ACHIEVED` — namespaced strings (map to NATS subjects in Phase 3 unchanged).
+- Payload dataclasses: `OrderFilledPayload`, `PositionOpenedPayload`, `PositionClosedPayload`, `BotStartedPayload`, `BotStoppedPayload`.
+- **Best-effort publisher pattern**: all `event_bus.publish()` calls at the 5 active call sites (buy_executor, sell_executor, limit_order_monitor ×2, bot_control_router ×2) are wrapped in `try/except` — a bus failure never breaks the trade path.
+- Subscribers wired in `_wire_event_bus_subscribers()` called from `startup_event()` in `main.py`. The `ORDER_FILLED` subscriber triggers scheduler jobs (`job.modify(next_run_time=datetime.utcnow())`) to avoid poll delay after fills.
+- Future swap: replace `event_bus = InProcessEventBus()` singleton assignment in startup with a NATS/Redis implementation — no publisher or subscriber code changes needed.
 
 **Impact:** Decouples monitors from the trading core. Enables event-driven architecture later.
 **Effort:** Medium — requires identifying the key events and wiring publishers.
@@ -270,30 +284,25 @@ Inject `CredentialsProvider` via `Depends()` or `ServiceRegistry`. Today it's al
 
 ---
 
-### 2.5 — Move WebSocket fan-out to a pub/sub model
+### 2.5 — Move WebSocket fan-out to a pub/sub model ✅ DONE (seam added, swap-ready)
 
 **Problem:** `ws_manager` is a module-level singleton that directly maps `connection_id → WebSocket`. It works on a single server. It breaks the moment you run two backend processes (which you'd need for horizontal scale).
 
-**Fix:** Add a Redis Pub/Sub adapter behind a `BroadcastBackend` interface:
+**Fix:** Add a `BroadcastBackend` protocol in front of `ws_manager`'s fan-out methods. `ws_manager` remains the **connection registry** (connect/disconnect/sweep). `BroadcastBackend` is the **fan-out layer** only.
 
-```python
-class BroadcastBackend(Protocol):
-    async def publish(self, channel: str, message: dict): ...
-    async def subscribe(self, channel: str) -> AsyncIterator[dict]: ...
+**Implementation notes (learned during execution):**
+- `app/services/broadcast_backend.py` — single new file (no existing files changed).
+- The `BroadcastBackend` protocol exposes the **ws_manager fan-out surface**, not a generic channel-based pub/sub. Methods: `broadcast(message, user_id)`, `send_to_user(user_id, message)`, `send_to_room(player_ids, message, exclude_user)`, `broadcast_order_fill(event)`. This mirrors the ws_manager interface exactly — zero behavior change.
+- `@runtime_checkable` on the Protocol enables `isinstance(obj, BroadcastBackend)` checks in tests.
+- `InProcessBroadcast(manager)` takes an injected `WebSocketManager` — clean for testing (no global patching needed).
+- `RedisBroadcast` stub documents the Phase 3 architecture in its docstring: `PUBLISH ws:user:{user_id}` + worker-side subscription that delivers to local sockets. Raises `NotImplementedError` on all methods.
+- Module singleton: `broadcast_backend: BroadcastBackend = InProcessBroadcast(ws_manager)` — same pattern as `event_bus` and `ws_manager`.
+- The roadmap's original sketch (`publish(channel, message)` / `subscribe(channel)`) was adapted — a channel-based interface doesn't match the existing ws_manager call sites. The current interface is more ergonomic at the call site and maps cleanly to Redis channels in Phase 3 (one channel per user ID, one for rooms).
+- **Existing call sites NOT migrated** — `ws_manager.broadcast_order_fill()` etc. still call `ws_manager` directly. Migration of call sites happens in Phase 3 when `RedisBroadcast` is implemented. The seam is in place; the swap is a one-line change to the singleton assignment.
+- `broadcaster` library (mentioned in original roadmap) NOT used — it would add a dependency for zero benefit at single-process scale.
 
-class InProcessBroadcast:
-    """Current behavior — asyncio.Queue per connection."""
-    ...
-
-class RedisBroadcast:
-    """Future — Redis pub/sub for multi-process fan-out."""
-    ...
-```
-
-[`broadcaster`](https://github.com/encode/broadcaster) is a lightweight library that already implements this pattern and works with FastAPI/Starlette WebSockets.
-
-**Impact:** Enables multi-process WebSocket servers. Required for any horizontal scale.
-**Effort:** Medium — isolated to `ws_manager.py` and the three WebSocket endpoint handlers.
+**Impact:** Seam is in place. Multi-process WebSocket fan-out is a one-file implementation away (RedisBroadcast) + singleton swap.
+**Effort (to activate):** Low — implement `RedisBroadcast`, point `broadcast_backend` at it, migrate call sites to `broadcast_backend`.
 
 ---
 

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.128.0] - 2026-03-22
+
+### Added
+- **WebSocket broadcast abstraction** (`app/services/broadcast_backend.py`) — `BroadcastBackend` protocol and `InProcessBroadcast` implementation wrap the existing WebSocket manager's fan-out methods (`broadcast`, `send_to_user`, `send_to_room`, `broadcast_order_fill`). Zero behavior change today. The seam enables a future `RedisBroadcast` swap for multi-process WebSocket fan-out with no changes to call-site code. `RedisBroadcast` stub documents the Phase 3 architecture and raises `NotImplementedError` until implemented.
+
 ## [v2.127.0] - 2026-03-22
 
 ### Added
