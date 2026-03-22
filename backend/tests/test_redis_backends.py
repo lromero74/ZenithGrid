@@ -300,24 +300,32 @@ class TestRedisClient:
 
 
 # ---------------------------------------------------------------------------
-# APScheduler Redis jobstore
+# APScheduler jobstore
 # ---------------------------------------------------------------------------
 
 class TestSchedulerJobstore:
-    """Verify scheduler is configured to use Redis jobstore."""
+    """Verify scheduler uses MemoryJobStore (safe with threading.Lock jobs)."""
 
-    def test_scheduler_default_jobstore_is_redis(self):
-        """Happy path: scheduler uses Redis jobstore when Redis is configured."""
-        from app.scheduler import scheduler
-        jobstores = scheduler._jobstores
-        assert "default" in jobstores
-        store = jobstores["default"]
-        assert store.__class__.__name__ == "RedisJobStore"
+    def test_scheduler_does_not_use_redis_jobstore(self):
+        """Happy path: scheduler must NOT use RedisJobStore.
 
-    def test_redis_jobstore_uses_separate_db(self):
-        """Edge case: jobstore uses Redis DB 1, not DB 0 (rate limiter uses DB 0)."""
+        RedisJobStore was reverted: it pickles bound-method job targets, which
+        fails when those objects hold threading.Lock attributes (all monitors do).
+        MemoryJobStore never pickles — jobs run fresh each restart.
+        """
         from app.scheduler import scheduler
-        store = scheduler._jobstores["default"]
-        # RedisJobStore stores the db in its internal Redis client's connection pool
-        db = store.redis.connection_pool.connection_kwargs.get("db", 0)
-        assert db == 1
+        # RedisJobStore import should not appear in the scheduler module
+        import app.scheduler as _sched_module
+        assert not hasattr(_sched_module, "RedisJobStore"), (
+            "RedisJobStore must not be imported in scheduler.py"
+        )
+        # Confirm no explicitly configured non-default jobstore
+        assert scheduler._jobstores == {}, (
+            "scheduler should use APScheduler default (MemoryJobStore), not a custom store"
+        )
+
+    def test_scheduler_is_asyncio_scheduler(self):
+        """Edge case: scheduler must be AsyncIOScheduler to share the FastAPI loop."""
+        from app.scheduler import scheduler
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        assert isinstance(scheduler, AsyncIOScheduler)
