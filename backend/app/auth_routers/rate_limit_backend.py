@@ -81,35 +81,35 @@ class PostgresRateLimitBackend:
 # ---------------------------------------------------------------------------
 
 class RedisRateLimitBackend:
-    """RateLimitBackend backed by Redis (Phase 3, multi-process deployments).
+    """RateLimitBackend backed by Redis.
 
-    In a multi-process deployment, each worker process has its own in-memory
-    rate limit dict. A request hitting Process A does not see attempts recorded
-    by Process B. Redis solves this with atomic INCR + EXPIRE per key.
+    Uses atomic INCR + EXPIRE (fixed window) per (category, key) pair.
+    TTL is set only on the first increment so the window isn't reset by
+    subsequent attempts within the same window.
 
-    Architecture (Phase 3):
-        record_attempt  → INCR rl:{category}:{key}  (atomic, with EXPIRE = window)
-        count_recent    → GET  rl:{category}:{key}  (returns current INCR value)
-        cleanup         → no-op (Redis TTL handles expiry automatically)
-
-    When implementing:
-        - Use `redis.asyncio` client (included in redis-py >= 4.2)
-        - Key pattern: f"rl:{category}:{key}"
-        - Set TTL to window_seconds on first INCR (use SET NX + EXPIRE or MULTI/EXEC)
-        - count_recent returns int(await redis.get(key)) or 0 if key missing
-
-    NOT IMPLEMENTED — raises NotImplementedError. Swap this in when Phase 3
-    deploys multi-process uvicorn workers.
+    Key pattern: rl:{category}:{key}
+    DB: 0 (shared with general cache)
     """
 
     async def record_attempt(self, category: str, key: str) -> None:
-        raise NotImplementedError("RedisRateLimitBackend not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        from app.auth_routers.rate_limiters import _LIMITS
+        redis = await get_redis()
+        rkey = f"rl:{category}:{key}"
+        _, window = _LIMITS.get(category, (5, 900))
+        count = await redis.incr(rkey)
+        if count == 1:
+            # First attempt — set TTL so the key expires after the window
+            await redis.expire(rkey, window)
 
     async def count_recent(self, category: str, key: str, window_seconds: int) -> int:
-        raise NotImplementedError("RedisRateLimitBackend not yet implemented (Phase 3)")
+        from app.redis_client import get_redis
+        redis = await get_redis()
+        val = await redis.get(f"rl:{category}:{key}")
+        return int(val) if val else 0
 
     async def cleanup(self) -> None:
-        raise NotImplementedError("RedisRateLimitBackend not yet implemented (Phase 3)")
+        pass  # Redis TTL handles expiry automatically
 
 
 # ---------------------------------------------------------------------------

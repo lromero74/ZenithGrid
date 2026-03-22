@@ -11,6 +11,7 @@ import time
 
 from fastapi import WebSocket
 
+from app.services.broadcast_backend import broadcast_backend
 from app.services.game_room_manager import game_room_manager
 
 logger = logging.getLogger(__name__)
@@ -234,7 +235,7 @@ async def _handle_join(ws_manager, websocket, user_id, msg, display_name):
     })
 
     # Notify existing players
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_joined",
@@ -287,7 +288,7 @@ async def _handle_mid_join(ws_manager, websocket, user_id, msg, display_name):
     })
 
     # Notify existing players that a new human joined mid-game
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:mid_player_joined",
@@ -331,7 +332,7 @@ async def _handle_rejoin(ws_manager, websocket, user_id, msg, display_name):
     })
 
     # Notify other players that the disconnected player is back
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_reconnected",
@@ -366,7 +367,7 @@ async def _handle_leave(ws_manager, websocket, user_id, msg, display_name):
         room.ready_players.discard(user_id)
         game_room_manager._user_rooms.pop(user_id, None)
         await websocket.send_json({"type": "game:left", "roomId": room_id})
-        await ws_manager.send_to_room(
+        await broadcast_backend.send_to_room(
             room.players,
             {
                 "type": "game:player_left",
@@ -384,12 +385,12 @@ async def _handle_leave(ws_manager, websocket, user_id, msg, display_name):
 
     if is_host:
         # Room was closed — notify all remaining players
-        await ws_manager.send_to_room(
+        await broadcast_backend.send_to_room(
             remaining,
             {"type": "game:room_closed", "roomId": room_id, "reason": "Host left"},
         )
     else:
-        await ws_manager.send_to_room(
+        await broadcast_backend.send_to_room(
             room.players,
             {
                 "type": "game:player_left",
@@ -417,7 +418,7 @@ async def _handle_forfeit(ws_manager, websocket, user_id, msg, display_name):
     player_name = room.player_names.get(user_id, display_name)
 
     # Broadcast forfeit to all players (game:action with type forfeit)
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:action",
@@ -429,7 +430,7 @@ async def _handle_forfeit(ws_manager, websocket, user_id, msg, display_name):
     )
 
     # Notify with a dedicated message for UI handling
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_forfeit",
@@ -459,7 +460,7 @@ async def handle_player_disconnect(ws_manager, user_id: int):
         game_room_manager.mark_disconnected(room.room_id, user_id)
 
         # Broadcast pause notification to remaining players
-        await ws_manager.send_to_room(
+        await broadcast_backend.send_to_room(
             room.players,
             {
                 "type": "game:player_disconnect",
@@ -481,7 +482,7 @@ async def _handle_ready(ws_manager, websocket, user_id, msg, display_name):
     game_room_manager.set_ready(room_id, user_id)
     room = game_room_manager.get_room(room_id)
 
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_ready",
@@ -500,7 +501,7 @@ async def _handle_start(ws_manager, websocket, user_id, msg, display_name):
 
     room = game_room_manager.start_game(room_id, user_id)
 
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:started",
@@ -528,7 +529,7 @@ async def _handle_action(ws_manager, websocket, user_id, msg, display_name):
     room = game_room_manager.get_room(room_id)
 
     # Broadcast action to all players with server-authoritative playerId
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:action",
@@ -558,7 +559,7 @@ async def _handle_state_update(ws_manager, websocket, user_id, msg, display_name
     logger.info(f"game:state relay: user {user_id} → {targets} (room {room_id}, {len(str(state))} chars)")
 
     # In race mode, broadcast player's state to others
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_state",
@@ -597,7 +598,7 @@ async def _handle_invite(ws_manager, websocket, user_id, msg, display_name):
     mid_game = room.status == "playing"
 
     # Send invite notification to the target user
-    await ws_manager.send_to_user(target_user_id, {
+    await broadcast_backend.send_to_user(target_user_id, {
         "type": "game:invite",
         "roomId": room_id,
         "gameId": room.game_id,
@@ -704,7 +705,7 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
     })
 
     # Notify other players in the room
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:player_joined",
@@ -716,7 +717,7 @@ async def _handle_join_friend(ws_manager, websocket, user_id, msg, display_name)
     )
 
     # Send toast notification to the host
-    await ws_manager.send_to_user(room.host_user_id, {
+    await broadcast_backend.send_to_user(room.host_user_id, {
         "type": "game:friend_joined",
         "roomId": room_id,
         "userId": user_id,
@@ -779,7 +780,7 @@ async def _handle_update_config(ws_manager, websocket, user_id, msg, display_nam
     room.config.update(updates)
 
     # Broadcast updated config to all players
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:config_updated",
@@ -803,7 +804,7 @@ async def _handle_chat(ws_manager, websocket, user_id, msg, display_name):
     # Truncate to prevent abuse
     text = text[:500]
 
-    await ws_manager.send_to_room(
+    await broadcast_backend.send_to_room(
         room.players,
         {
             "type": "game:chat",
@@ -846,5 +847,5 @@ async def _handle_back_to_lobby(ws_manager, websocket, user_id, msg, display_nam
         "config": {**room.config, "mode": room.mode},
     }
     await asyncio.gather(*(
-        ws_manager.send_to_user(pid, broadcast) for pid in room.players
+        broadcast_backend.send_to_user(pid, broadcast) for pid in room.players
     ))

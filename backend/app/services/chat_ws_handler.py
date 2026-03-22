@@ -15,6 +15,7 @@ from fastapi import WebSocket
 
 from app.database import async_session_maker
 from app.services import chat_service
+from app.services.broadcast_backend import broadcast_backend
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def _broadcast_to_members(ws_manager, member_ids: list[int], message: dict
     if not member_ids:
         return
     await asyncio.gather(
-        *(ws_manager.send_to_user(mid, message) for mid in member_ids),
+        *(broadcast_backend.send_to_user(mid, message) for mid in member_ids),
         return_exceptions=True,
     )
 

@@ -224,8 +224,8 @@ class PerpsMonitor:
 
             # Broadcast via WebSocket (scoped to position owner)
             try:
-                from app.services.websocket_manager import ws_manager
-                await ws_manager.broadcast({
+                from app.services.broadcast_backend import broadcast_backend
+                await broadcast_backend.broadcast({
                     "type": "perps_position_closed",
                     "position_id": position.id,
                     "product_id": position.product_id,

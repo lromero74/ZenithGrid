@@ -16,7 +16,8 @@ from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.product_precision import get_base_precision
 from app.services.shutdown_manager import shutdown_manager
-from app.services.websocket_manager import ws_manager, OrderFillEvent
+from app.services.websocket_manager import OrderFillEvent
+from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
@@ -507,7 +508,7 @@ async def execute_sell_short(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast({
+        await broadcast_backend.broadcast({
             "type": "order_fill",
             "fill_type": "short_sell",
             "product_id": product_id,
@@ -879,7 +880,7 @@ async def execute_sell(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(OrderFillEvent(
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type="sell_order",
             product_id=product_id,
             base_amount=actual_base_sold,

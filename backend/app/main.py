@@ -451,6 +451,52 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"Database VACUUM failed (non-fatal): {e}")
 
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    from app.redis_client import init_redis
+    await init_redis()
+
+    # Swap ServiceRegistry to Redis-backed implementations
+    import app.registry as _reg
+    from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
+    from app.services.broadcast_backend import RedisBroadcast
+    from app.services.credentials_provider import credentials_provider as _creds
+    from app.event_bus import event_bus as _eb
+    from app.registry import ServiceRegistry
+    _redis_rl = RedisRateLimitBackend()
+    _redis_bc = RedisBroadcast()
+    _reg._default_registry = ServiceRegistry(
+        event_bus=_eb,
+        broadcast=_redis_bc,
+        rate_limiter=_redis_rl,
+        credentials=_creds,
+    )
+    # Also swap the module-level singleton so rate_limiters.py picks up Redis
+    import app.auth_routers.rate_limit_backend as _rlb_module
+    _rlb_module.rate_limit_backend = _redis_rl
+    import app.services.broadcast_backend as _bb_module
+    _bb_module.broadcast_backend = _redis_bc
+    logger.info("ServiceRegistry + singletons: Redis backends active (RedisBroadcast, RedisRateLimitBackend)")
+
+    # Start Redis pub/sub subscriber task for WebSocket fan-out
+    import asyncio as _asyncio
+    from app.services.broadcast_backend import route_redis_message
+    from app.services.websocket_manager import ws_manager as _ws_manager
+    from app.redis_client import get_redis as _get_redis
+
+    async def _redis_subscriber():
+        redis = await _get_redis()
+        pubsub = redis.pubsub()
+        await pubsub.psubscribe("ws:*")
+        logger.info("Redis pub/sub subscriber started — listening on ws:*")
+        async for msg in pubsub.listen():
+            if msg["type"] not in ("pmessage", "message"):
+                continue
+            channel = msg.get("channel") or msg.get("pattern", "")
+            await route_redis_message(channel, msg["data"], _ws_manager)
+
+    _sub_task = _asyncio.create_task(_redis_subscriber())
+    app.state.redis_subscriber_task = _sub_task
+
     logger.info("Initializing database...")
     await init_db()
     logger.info("Database initialized successfully")
@@ -557,6 +603,14 @@ async def shutdown_event():
     if hasattr(app.state, "tts_executor"):
         app.state.tts_executor.shutdown(wait=True)
         logger.info("TTS thread pool shut down")
+
+    # ── Redis cleanup ─────────────────────────────────────────────────────────
+    if hasattr(app.state, "redis_subscriber_task"):
+        await _cancel_task(app.state.redis_subscriber_task)
+        logger.info("Redis pub/sub subscriber task cancelled")
+
+    from app.redis_client import close_redis
+    await close_redis()
 
     logger.info("🛑 Monitors stopped - shutdown complete")
 
@@ -699,13 +753,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                     is_host = user_id == room.host_user_id
                     game_room_manager.leave_room(room_id, user_id)
                     if is_host:
-                        await ws_manager.send_to_room(
+                        from app.services.broadcast_backend import broadcast_backend as _bc
+                        await _bc.send_to_room(
                             players_before - {user_id},
                             {"type": "game:room_closed", "roomId": room_id,
                              "reason": "Host disconnected"},
                         )
                     elif room_id in game_room_manager._rooms:
-                        await ws_manager.send_to_room(
+                        from app.services.broadcast_backend import broadcast_backend as _bc
+                        await _bc.send_to_room(
                             room.players,
                             {"type": "game:player_left", "roomId": room_id,
                              "playerId": user_id, "players": list(room.players)},

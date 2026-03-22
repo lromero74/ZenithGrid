@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 from app.models.auth import user_groups, group_roles, role_permissions, Permission
 from app.models.social import Friendship
+from app.services.broadcast_backend import broadcast_backend
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ async def broadcast_friend_online(ws_manager, db: AsyncSession, user_id: int) ->
 
     for fid in online_friend_ids:
         try:
-            await ws_manager.send_to_user(fid, message)
+            await broadcast_backend.send_to_user(fid, message)
         except Exception as e:
             logger.debug(f"Failed to notify user {fid} of friend online: {e}")
 
@@ -79,7 +80,7 @@ async def notify_friend_request_accepted(
     }
 
     try:
-        await ws_manager.send_to_user(requester_id, message)
+        await broadcast_backend.send_to_user(requester_id, message)
     except Exception as e:
         logger.debug(f"Failed to notify user {requester_id} of accepted request: {e}")
 
@@ -123,6 +124,6 @@ async def broadcast_user_presence(
 
     for uid in admin_ids:
         try:
-            await ws_manager.send_to_user(uid, message)
+            await broadcast_backend.send_to_user(uid, message)
         except Exception:
             pass
