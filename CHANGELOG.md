@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.8] - 2026-03-23
+
+### Fixed
+- **Admin Bans grouping sort** — when grouping bans by country, ISP, or jail, the list now sorts by group key first so all members of a group are contiguous across pagination pages. Previously, group headers could show a count that disagreed with the visible rows because items from the same group were spread across different pages.
+
+### Changed
+- **Bot monitor concurrency now scales with available RAM** — instead of hardcoded limits, bot and pair concurrency are derived each monitor cycle using a sigmoid curve over available system memory. Concurrency rises smoothly from a safe minimum at low memory to its carrying capacity at comfortable memory levels, then plateaus regardless of how much RAM is free. The sigmoid midpoint scales with total RAM so the curve stays meaningful after a hardware upgrade.
+- **Database pool sizes now auto-derive from PostgreSQL's `max_connections`** — on startup the backend queries `max_connections`, subtracts superuser-reserved slots, and allocates the remainder across the write pool, read pool, and API connections using a configurable resource share ratio. The only value that needs manual tuning when switching hardware is `MONITOR_RESOURCE_SHARE` in `server_resources.py`.
+
 ## [v2.135.7] - 2026-03-23
 
 ### Fixed
