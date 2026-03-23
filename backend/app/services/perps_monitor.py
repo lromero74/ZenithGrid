@@ -42,8 +42,12 @@ class PerpsMonitor:
     async def stop(self):
         """Stop the perps monitoring loop"""
         self.running = False
-        if self.task:
-            await self.task
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
             logger.info("Perps monitor stopped")
 
     async def _monitor_loop(self):
@@ -51,6 +55,9 @@ class PerpsMonitor:
         while self.running:
             try:
                 await self._sync_positions()
+            except asyncio.CancelledError:
+                logger.info("Perps monitor loop cancelled — exiting cleanly")
+                raise
             except Exception as e:
                 logger.error(f"Perps monitor error: {e}", exc_info=True)
 
