@@ -7,7 +7,7 @@ and the clear_monitor_exchange_cache() helper.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,7 +16,6 @@ from app.multi_bot_monitor import (
     MultiBotMonitor,
     clear_monitor_exchange_cache,
     filter_pairs_by_allowed_categories,
-    _active_monitor_instance,
 )
 
 
@@ -440,7 +439,7 @@ class TestProcessBot:
             "app.multi_bot_monitor.asyncio.sleep",
             new_callable=AsyncMock,
         ):
-            result = await monitor.process_bot(db_session, bot)
+            await monitor.process_bot(db_session, bot)
 
         # Should only process ETH-BTC (the one with an open position)
         assert mock_pair.call_count == 1
@@ -498,7 +497,7 @@ class TestProcessBot:
             "app.multi_bot_monitor.asyncio.sleep",
             new_callable=AsyncMock,
         ):
-            result = await monitor.process_bot(db_session, bot)
+            await monitor.process_bot(db_session, bot)
 
         # Only SOL-BTC should be processed (has position, at capacity)
         assert mock_pair.call_count == 1
@@ -662,3 +661,135 @@ class TestFilterPairsByAllowedCategories:
         result = await filter_pairs_by_allowed_categories(db_session, pairs, ["APPROVED"])
         assert "ETH-BTC" in result
         assert "DOGE-BTC" not in result
+
+
+# ===========================================================================
+# Class: TestConcurrentPairProcessing
+# ===========================================================================
+
+
+class TestConcurrentPairProcessing:
+    """
+    Tests that sequential pair processing uses asyncio.gather() for concurrency
+    while honouring the per-bot semaphore.
+    """
+
+    @pytest.mark.asyncio
+    async def test_all_pairs_processed_concurrently(self, db_session):
+        """All pairs in a multi-pair bot are processed and results returned."""
+        pairs = ["ETH-BTC", "SOL-BTC", "ADA-BTC", "DOT-BTC", "LINK-BTC", "MATIC-BTC"]
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        bot = _make_bot(
+            product_ids=pairs,
+            strategy_config={"max_concurrent_deals": 10},
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        mock_strategy = MagicMock(spec=[])  # no batch method
+
+        call_order = []
+
+        async def fake_pair(monitor_self, db, bot_, product_id, **kwargs):
+            call_order.append(product_id)
+            return {"action": "none", "pair": product_id}
+
+        with patch("app.multi_bot_monitor.StrategyRegistry.get_strategy", return_value=mock_strategy), \
+             patch("app.multi_bot_monitor._process_bot_pair", side_effect=fake_pair), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new_callable=AsyncMock), \
+             patch("app.multi_bot_monitor.async_session_maker") as mock_session_maker:
+            # Each pair call to async_session_maker yields a usable session context manager
+            mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await monitor.process_bot(db_session, bot)
+
+        assert set(result.keys()) == set(pairs), "All pairs must appear in results"
+        assert len(call_order) == len(pairs), "Each pair must be processed exactly once"
+
+    @pytest.mark.asyncio
+    async def test_semaphore_limits_concurrent_pairs(self, db_session):
+        """Pairs run concurrently (> 1 at once) but no more than PAIR_CONCURRENCY at a time.
+
+        Uses real asyncio.sleep(0) by patching PAIR_PROCESSING_DELAY_SECONDS=0 so tasks
+        actually yield to the event loop and we can observe true concurrency.
+        """
+        import app.multi_bot_monitor as mod
+
+        pairs = [f"COIN{i}-BTC" for i in range(10)]
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        bot = _make_bot(product_ids=pairs, strategy_config={"max_concurrent_deals": 20})
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        mock_strategy = MagicMock(spec=[])
+
+        # Track max concurrent executions
+        concurrent_count = 0
+        max_concurrent = 0
+
+        async def fake_pair(monitor_self, db, bot_, product_id, **kwargs):
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0)  # real yield — lets other tasks advance
+            concurrent_count -= 1
+            return {"action": "none"}
+
+        pair_concurrency = getattr(mod, "PAIR_CONCURRENCY", 5)
+
+        # Patch constant to 0 so asyncio.sleep(0) is used in _process_pair_task,
+        # which is a real yield and allows other tasks to interleave.
+        with patch("app.multi_bot_monitor.StrategyRegistry.get_strategy", return_value=mock_strategy), \
+             patch("app.multi_bot_monitor._process_bot_pair", side_effect=fake_pair), \
+             patch("app.multi_bot_monitor.PAIR_PROCESSING_DELAY_SECONDS", 0), \
+             patch("app.multi_bot_monitor.async_session_maker") as mock_session_maker:
+            mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await monitor.process_bot(db_session, bot)
+
+        # Upper bound: semaphore must not be exceeded
+        assert max_concurrent <= pair_concurrency, (
+            f"Semaphore exceeded: expected max {pair_concurrency}, got {max_concurrent}"
+        )
+        # Lower bound: must achieve actual concurrency (> 1 pair at a time)
+        assert max_concurrent > 1, (
+            f"Expected concurrent pair execution (> 1), but max was {max_concurrent} — "
+            "pairs appear to be processing sequentially"
+        )
+
+    @pytest.mark.asyncio
+    async def test_one_pair_error_does_not_block_others(self, db_session):
+        """An exception in one pair task returns error dict but lets other pairs complete."""
+        pairs = ["ETH-BTC", "FAIL-BTC", "SOL-BTC"]
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        bot = _make_bot(product_ids=pairs, strategy_config={"max_concurrent_deals": 5})
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        mock_strategy = MagicMock(spec=[])
+
+        async def fake_pair(monitor_self, db, bot_, product_id, **kwargs):
+            if product_id == "FAIL-BTC":
+                raise ValueError("simulated API failure")
+            return {"action": "none", "pair": product_id}
+
+        with patch("app.multi_bot_monitor.StrategyRegistry.get_strategy", return_value=mock_strategy), \
+             patch("app.multi_bot_monitor._process_bot_pair", side_effect=fake_pair), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new_callable=AsyncMock), \
+             patch("app.multi_bot_monitor.async_session_maker") as mock_session_maker:
+            mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await monitor.process_bot(db_session, bot)
+
+        assert "error" in result.get("FAIL-BTC", {})
+        assert result.get("ETH-BTC", {}).get("action") == "none"
+        assert result.get("SOL-BTC", {}).get("action") == "none"

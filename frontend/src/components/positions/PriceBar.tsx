@@ -6,7 +6,7 @@
  */
 
 import { memo, useMemo } from 'react'
-import { formatPrice } from './index'
+import { formatPrice, calculateDCAPrices } from './index'
 import type { Position } from '../../types'
 
 interface PriceBarProps {
@@ -56,21 +56,8 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
     }
     // For average_price or if first/last prices not available, use entryPrice (average)
 
-    // Calculate all remaining DCA prices
-    const dcaPrices: { level: number; price: number }[] = []
-    for (let dcaNum = completedDCAs + 1; dcaNum <= maxDCAOrders; dcaNum++) {
-      // Same formula as backend: calculate_safety_order_price
-      let totalDeviation = 0
-      for (let i = 0; i < dcaNum; i++) {
-        if (i === 0) {
-          totalDeviation += priceDeviation
-        } else {
-          totalDeviation += priceDeviation * Math.pow(stepScale, i)
-        }
-      }
-      const dcaPrice = referencePrice * (1 - totalDeviation / 100)
-      dcaPrices.push({ level: dcaNum, price: dcaPrice })
-    }
+    // Calculate all remaining DCA prices — O(d) closed-form formula
+    const dcaPrices = calculateDCAPrices(completedDCAs, maxDCAOrders, priceDeviation, stepScale, referencePrice)
 
     // Get lowest DCA price for range calculation
     const lowestDCAPrice = dcaPrices.length > 0 ? dcaPrices[dcaPrices.length - 1].price : null

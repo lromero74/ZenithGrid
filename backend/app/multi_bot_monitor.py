@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants import (
     CANDLE_CACHE_DEFAULT_TTL,
     CANDLE_CACHE_TTL,
+    PAIR_CONCURRENCY,
     PAIR_PROCESSING_DELAY_SECONDS,
 )
 from app.database import async_session_maker
@@ -563,46 +564,38 @@ class MultiBotMonitor:
                 else:
                     logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
 
-                # Process trading pairs in batches to avoid Coinbase API throttling
-                results = {}
-                batch_size = 5
+                # Process pairs concurrently — each task gets its own DB session so
+                # there are no shared-session conflicts. A semaphore caps concurrency
+                # at PAIR_CONCURRENCY to stay t2.micro friendly.
+                pair_semaphore = asyncio.Semaphore(PAIR_CONCURRENCY)
+                logger.info(f"  Processing {len(trading_pairs)} pairs (max {PAIR_CONCURRENCY} concurrent)")
 
-                for i in range(0, len(trading_pairs), batch_size):
-                    batch = trading_pairs[i:i + batch_size]
-                    logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
-
-                    # Process batch sequentially to avoid DB session conflicts
-                    batch_results = []
-                    for product_id in batch:
-                        try:
-                            result = await _process_bot_pair(
-                                self, db, bot, product_id, skip_ai_analysis=skip_ai_analysis,
-                                open_positions_count=open_count,
-                            )
-                            batch_results.append(result)
-                        except Exception as e:
-                            logger.error(f"  Error processing {product_id}: {e}")
-                            batch_results.append({"error": str(e)})
-                            # Recover session so next product doesn't cascade
+                async def _process_pair_task(product_id: str) -> tuple[str, dict]:
+                    async with pair_semaphore:
+                        async with async_session_maker() as pair_db:
                             try:
-                                await db.rollback()
-                            except Exception:
-                                pass
-                        # Throttle between pairs to reduce CPU burst (t2.micro friendly)
-                        await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
+                                result = await _process_bot_pair(
+                                    self, pair_db, bot, product_id,
+                                    skip_ai_analysis=skip_ai_analysis,
+                                    open_positions_count=open_count,
+                                )
+                            except Exception as e:
+                                logger.error(f"  Error processing {product_id}: {e}")
+                                result = {"error": str(e)}
+                            # Throttle per-pair to keep CPU burst low on t2.micro
+                            await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
+                            return product_id, result
 
-                    # Store results
-                    for product_id, result in zip(batch, batch_results):
-                        if isinstance(result, Exception):
-                            logger.error(f"  Error processing {product_id}: {result}")
-                            results[product_id] = {"error": str(result)}
-                        else:
-                            results[product_id] = result
+                task_list = [_process_pair_task(pid) for pid in trading_pairs]
+                pair_results = await asyncio.gather(*task_list, return_exceptions=True)
 
-                    # Add delay between batches (if not last batch)
-                    if i + batch_size < len(trading_pairs):
-                        logger.info("  Waiting 1s before next batch to avoid API throttling...")
-                        await asyncio.sleep(1)
+                results = {}
+                for item in pair_results:
+                    if isinstance(item, Exception):
+                        logger.error(f"  Pair task raised unexpected exception: {item}")
+                    else:
+                        product_id, result = item
+                        results[product_id] = result
 
                 return results
 

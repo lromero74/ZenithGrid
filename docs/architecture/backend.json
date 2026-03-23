@@ -1593,7 +1593,7 @@
     },
     {
       "file": "constants.py",
-      "purpose": "Trading pairs, timeframes, and other application constants"
+      "purpose": "Trading pairs, timeframes, and other application constants. Includes PAIR_CONCURRENCY = 5, the semaphore limit for concurrent per-pair sessions in multi_bot_monitor."
     },
     {
       "file": "currency_utils.py",
@@ -1637,7 +1637,7 @@
     },
     {
       "file": "multi_bot_monitor.py",
-      "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation"
+      "purpose": "Monitors prices for all active bots and dispatches strategy signals; concurrent per-pair processing via asyncio.gather() with asyncio.Semaphore(PAIR_CONCURRENCY=5) and per-pair DB sessions; sequential inter-pair batch sleep removed"
     },
     {
       "file": "order_validation.py",

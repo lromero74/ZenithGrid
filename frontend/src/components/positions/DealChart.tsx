@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
 import { api } from '../../services/api'
 import {
   BarChart3,
@@ -51,6 +51,8 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const positionLinesRef = useRef<ISeriesApi<any>[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const soPriceLinesRef = useRef<ReturnType<ISeriesApi<any>['createPriceLine']>[]>([])
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
   const lastUpdateRef = useRef<string>('')
@@ -537,6 +539,18 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       }
       positionLinesRef.current = []
 
+      // Remove previous SO price lines
+      if (mainSeriesRef.current) {
+        for (const priceLine of soPriceLinesRef.current) {
+          try {
+            mainSeriesRef.current.removePriceLine(priceLine)
+          } catch {
+            // Price line may already be removed
+          }
+        }
+      }
+      soPriceLinesRef.current = []
+
       // Add entry/profit/loss lines
       const isBTCPair = selectedPair.endsWith('-BTC')
       const priceFormat = isBTCPair
@@ -602,8 +616,8 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         positionLinesRef.current.push(stopLossSeries)
       }
 
-      // Safety Order price levels
-      if (bot && position.status === 'open') {
+      // Safety Order price levels — O(d) via price lines (no per-candle data needed)
+      if (bot && position.status === 'open' && mainSeriesRef.current) {
         const config = bot.strategy_config
         const priceDeviation = config.price_deviation || 2.0
         const stepScale = config.safety_order_step_scale || 1.0
@@ -613,21 +627,15 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         for (let i = 0; i < maxSafetyOrders; i++) {
           const soPrice = position.average_buy_price * (1 - cumulativeDeviation / 100)
 
-          const soSeries = chartRef.current.addLineSeries({
+          const priceLine = mainSeriesRef.current.createPriceLine({
+            price: soPrice,
             color: '#64748b',
             lineWidth: 1,
-            lineStyle: 2,
-            priceLineVisible: false,
-            lastValueVisible: false,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: false,
             title: `SO${i + 1}`,
-            priceFormat: priceFormat,
           })
-
-          soSeries.setData(chartData.map((c) => ({
-            time: c.time as Time,
-            value: soPrice,
-          })))
-          positionLinesRef.current.push(soSeries)
+          soPriceLinesRef.current.push(priceLine)
 
           cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
         }

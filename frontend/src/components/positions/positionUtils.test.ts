@@ -17,6 +17,7 @@ import {
   formatBaseAmount,
   formatQuoteAmount,
   calculateSOLevels,
+  calculateDCAPrices,
 } from './positionUtils'
 
 describe('SELL_FEE_RATE', () => {
@@ -322,5 +323,59 @@ describe('calculateSOLevels', () => {
     const levels = calculateSOLevels(pos)
     // Falls back to average_buy_price=100
     expect(levels[0].triggerPrice).toBeCloseTo(98)
+  })
+})
+
+// ─── calculateDCAPrices ───────────────────────────────────────────────────────
+
+describe('calculateDCAPrices', () => {
+  // Reference values derived from the O(d²) nested loop in PriceBar.tsx
+  // so we can verify the closed-form formula matches exactly.
+
+  test('linear step_scale=1 — matches O(d²) loop output', () => {
+    // priceDeviation=2, stepScale=1, referencePrice=100, completedDCAs=0, max=3
+    // Level 1: totalDev = 2*1 = 2    → price = 100*(1-0.02) = 98
+    // Level 2: totalDev = 2*2 = 4    → price = 100*(1-0.04) = 96
+    // Level 3: totalDev = 2*3 = 6    → price = 100*(1-0.06) = 94
+    const result = calculateDCAPrices(0, 3, 2.0, 1.0, 100)
+    expect(result).toHaveLength(3)
+    expect(result[0]).toEqual({ level: 1, price: 98 })
+    expect(result[1]).toEqual({ level: 2, price: 96 })
+    expect(result[2]).toEqual({ level: 3, price: 94 })
+  })
+
+  test('geometric step_scale=1.5 — matches O(d²) loop output', () => {
+    // priceDeviation=2, stepScale=1.5, referencePrice=100, completedDCAs=0, max=3
+    // Level 1: sum(1.5^i for i=0..0) = 1             → totalDev = 2*1     = 2   → price = 98
+    // Level 2: sum(1.5^i for i=0..1) = 1+1.5 = 2.5   → totalDev = 2*2.5  = 5   → price = 95
+    // Level 3: sum(1.5^i for i=0..2) = 1+1.5+2.25=4.75→ totalDev = 2*4.75 = 9.5 → price = 90.5
+    const result = calculateDCAPrices(0, 3, 2.0, 1.5, 100)
+    expect(result).toHaveLength(3)
+    expect(result[0].price).toBeCloseTo(98)
+    expect(result[1].price).toBeCloseTo(95)
+    expect(result[2].price).toBeCloseTo(90.5)
+  })
+
+  test('skips already-completed DCA levels', () => {
+    // completedDCAs=2 means DCA 1 and 2 are done — only return DCA 3
+    const result = calculateDCAPrices(2, 3, 2.0, 1.0, 100)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ level: 3, price: 94 })
+  })
+
+  test('returns empty array when all DCA levels completed', () => {
+    const result = calculateDCAPrices(3, 3, 2.0, 1.0, 100)
+    expect(result).toHaveLength(0)
+  })
+
+  test('returns empty array when maxDCAOrders=0', () => {
+    const result = calculateDCAPrices(0, 0, 2.0, 1.0, 100)
+    expect(result).toHaveLength(0)
+  })
+
+  test('level field matches the DCA number, not array index', () => {
+    const result = calculateDCAPrices(1, 3, 2.0, 1.0, 100)
+    expect(result[0].level).toBe(2)
+    expect(result[1].level).toBe(3)
   })
 })

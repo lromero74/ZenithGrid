@@ -144,3 +144,22 @@ export function calculateSOLevels(position: Position): SOLevel[] {
   }
   return levels
 }
+
+// O(d) DCA price calculation — replaces the O(d²) nested loop in PriceBar.tsx.
+// Uses the closed-form geometric series sum instead of accumulating per-level.
+export function calculateDCAPrices(
+  completedDCAs: number,
+  maxDCAOrders: number,
+  priceDeviation: number,
+  stepScale: number,
+  referencePrice: number,
+): { level: number; price: number }[] {
+  const prices: { level: number; price: number }[] = []
+  for (let dcaNum = completedDCAs + 1; dcaNum <= maxDCAOrders; dcaNum++) {
+    const totalDeviation = stepScale === 1.0
+      ? priceDeviation * dcaNum
+      : priceDeviation * (Math.pow(stepScale, dcaNum) - 1) / (stepScale - 1)
+    prices.push({ level: dcaNum, price: referencePrice * (1 - totalDeviation / 100) })
+  }
+  return prices
+}

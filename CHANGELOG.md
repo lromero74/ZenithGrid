@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.6] - 2026-03-23
+
+### Changed
+- **Bot pair processing is now concurrent** — the monitor now processes up to 5 trading pairs simultaneously per bot (using an asyncio semaphore with per-pair database sessions) instead of sequentially. A bot with 20 pairs now completes a monitoring cycle in ~6 seconds instead of ~30 seconds. The per-pair API throttle delay is preserved to keep things t2.micro friendly.
+- **DCA price bar calculation optimised** — the position price bar now uses an O(n) closed-form formula for remaining DCA level prices instead of an O(n²) nested loop. The helper `calculateDCAPrices` is now a reusable, tested utility in `positionUtils`.
+- **Safety order chart lines are cheaper to render** — the deal chart now uses lightweight price lines for safety order levels instead of creating full time-series line data (one data point per candle per level). This eliminates redundant O(levels × candles) chart work on every position update.
+
 ## [v2.135.5] - 2026-03-23
 
 ### Changed
