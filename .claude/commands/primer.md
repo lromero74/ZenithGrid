@@ -3,7 +3,9 @@ Prime context for working on ZenithGrid.
 Read the following files to build a complete understanding of the project:
 
 1. **CLAUDE.md** — Development rules and process (the bible)
-2. **docs/architecture.json** — Complete architecture reference (models, routers, services, migrations)
+2. **docs/architecture/index.json** — Project metadata, stack, data flow, multi-user isolation
+3. **docs/architecture/backend.json** — Routers, models, services, strategies, middleware, migrations
+4. **docs/architecture/frontend.json** — Pages, components, contexts, hooks, API layer
 3. **docs/ARCHITECTURE.md** — Architecture narrative
 4. **docs/DOMAIN_KNOWLEDGE.md** — Trading domain: BTC budget calculation, AI allocation, signal flow
 5. **CHANGELOG.md** — Recent version history (last 5 entries)

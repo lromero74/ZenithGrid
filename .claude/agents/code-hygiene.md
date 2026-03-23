@@ -11,7 +11,7 @@ You are a code hygiene specialist for ZenithGrid, a FastAPI + React trading bot 
 - **Python**: `backend/venv/bin/python3` (always use the venv)
 - **Backend**: `backend/app/` — FastAPI + SQLAlchemy (async) + SQLite
 - **Frontend**: `frontend/src/` — React + TypeScript + Vite + TailwindCSS
-- **Architecture reference**: `docs/architecture.json`
+- **Architecture reference**: `docs/architecture/` (index.json, backend.json, frontend.json)
 - **Pyflakes**: `backend/venv/bin/python3 -m pyflakes` (for unused import detection)
 
 ## Rules
@@ -108,14 +108,15 @@ Find mismatches between code and documentation.
 - Don't flag simple/obvious functions (getters, single-line helpers)
 
 **Code-doc drift:**
-- Check `docs/architecture.json` against actual routers, models, and services — flag any that exist in code but not in the doc, or vice versa
+- Check `docs/architecture/backend.json` against actual routers, models, and services — flag any that exist in code but not in the doc, or vice versa
 - Check `docs/ARCHITECTURE.md` for stale references to renamed/removed modules
 
-**Missing from architecture.json:**
-- New routers not listed in the routers section
-- New models not listed in the models section
-- New services not listed in the services section
-- New migrations not listed in the migrations section
+**Missing from architecture docs (`docs/architecture/`):**
+- New routers not listed in `backend.json` routers section
+- New models not listed in `backend.json` models section
+- New services not listed in `backend.json` services section
+- New migrations not listed in `backend.json` migrations section
+- New frontend components/pages/contexts not listed in `frontend.json`
 
 ### 5. Error Handling Anti-Patterns
 

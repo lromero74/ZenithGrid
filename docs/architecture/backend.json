@@ -1,0 +1,2108 @@
+{
+  "routers": [
+    {
+      "file": "routers/account_router.py",
+      "prefix": "/api/account",
+      "purpose": "Account balances, aggregate value, portfolio operations"
+    },
+    {
+      "file": "routers/account_value_router.py",
+      "prefix": "/api/account-value",
+      "purpose": "Historical account value snapshots for charting, daily activity markers (trades, deposits, withdrawals)"
+    },
+    {
+      "file": "routers/accounts_router.py",
+      "prefix": "/api/accounts",
+      "purpose": "CRUD for CEX and DEX trading accounts"
+    },
+    {
+      "file": "routers/admin_router.py",
+      "prefix": "/api/admin",
+      "purpose": "RBAC administration: user management, group CRUD with role assignments, role CRUD with permission assignments, permission listing, session policy management, user session management"
+    },
+    {
+      "file": "routers/ai_credentials_router.py",
+      "prefix": "/api/ai-credentials",
+      "purpose": "Manage per-user AI provider API keys"
+    },
+    {
+      "file": "routers/auth_router.py",
+      "prefix": "/api/auth",
+      "purpose": "Thin aggregator that includes all auth sub-routers (auth_routers package)"
+    },
+    {
+      "file": "routers/blacklist_router.py",
+      "prefix": "/api/blacklist",
+      "purpose": "Coin blacklist and category management"
+    },
+    {
+      "file": "routers/chat_router.py",
+      "prefix": "/api/chat",
+      "purpose": "Real-time chat channels (DM, group, channel), message CRUD with soft delete, read tracking, member management, pinned messages, emoji reactions, message search"
+    },
+    {
+      "file": "routers/bots.py",
+      "prefix": "/api/bots",
+      "purpose": "Aggregator for bot sub-routers (CRUD, control, logs, validation)"
+    },
+    {
+      "file": "routers/coin_icons_router.py",
+      "prefix": "/api/coin-icons",
+      "purpose": "Proxy and cache cryptocurrency icons to avoid CORS"
+    },
+    {
+      "file": "routers/market_data_router.py",
+      "prefix": "/api",
+      "purpose": "Current prices, OHLCV candles (cached), product listings"
+    },
+    {
+      "file": "routers/news_router.py",
+      "prefix": "/api/news",
+      "purpose": "Aggregated crypto news, video feeds, article content, source management"
+    },
+    {
+      "file": "routers/news_metrics_router.py",
+      "prefix": "/api/news",
+      "purpose": "Market sentiment & blockchain metrics endpoints (Fear & Greed, BTC dominance, etc.)"
+    },
+    {
+      "file": "routers/news_tts_router.py",
+      "prefix": "/api/news",
+      "purpose": "Text-to-speech generation, audio caching, voice subscriptions"
+    },
+    {
+      "file": "routers/order_history.py",
+      "prefix": "/api/order-history",
+      "purpose": "Successful and failed order history with filtering"
+    },
+    {
+      "file": "routers/paper_trading_router.py",
+      "prefix": "/api/paper-trading",
+      "purpose": "Virtual paper trading account management"
+    },
+    {
+      "file": "routers/positions_router.py",
+      "prefix": "/api/positions",
+      "purpose": "Aggregator for position sub-routers (queries, actions, limit orders, manual ops, perps)"
+    },
+    {
+      "file": "routers/seasonality_router.py",
+      "prefix": "/api/seasonality",
+      "purpose": "Market seasonality toggle for automatic bot management"
+    },
+    {
+      "file": "routers/settings_router.py",
+      "prefix": "/api",
+      "purpose": "User settings, changelog, system configuration"
+    },
+    {
+      "file": "routers/sources_router.py",
+      "prefix": "/api/sources",
+      "purpose": "News and video source subscription management"
+    },
+    {
+      "file": "routers/strategies_router.py",
+      "prefix": "/api/strategies",
+      "purpose": "Available trading strategies and parameter definitions"
+    },
+    {
+      "file": "routers/system_router.py",
+      "prefix": "/api",
+      "purpose": "Health check, dashboard stats, monitor control, system status"
+    },
+    {
+      "file": "routers/templates.py",
+      "prefix": "/api/templates",
+      "purpose": "Bot template CRUD"
+    },
+    {
+      "file": "routers/trading_router.py",
+      "prefix": "/api/trading",
+      "purpose": "Manual buy/sell orders for portfolio management"
+    },
+    {
+      "file": "routers/prop_guard_router.py",
+      "prefix": "/api/propguard",
+      "purpose": "PropGuard safety monitoring: status, kill switch, reset, history"
+    },
+    {
+      "file": "routers/reports_router.py",
+      "prefix": "/api/reports",
+      "purpose": "Financial goals CRUD, expense item CRUD, expense categories, report schedules, generated reports, goal trend data with auto-backfill"
+    },
+    {
+      "file": "routers/transfers_router.py",
+      "prefix": "/api/transfers",
+      "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats"
+    },
+    {
+      "file": "routers/display_name_router.py",
+      "prefix": "/api/users",
+      "purpose": "Set/update display name, uniqueness check"
+    },
+    {
+      "file": "routers/donations_router.py",
+      "prefix": "/api/donations",
+      "purpose": "Donation self-reporting and admin confirmation with monthly goal progress"
+    },
+    {
+      "file": "routers/friends_router.py",
+      "prefix": "/api/friends, /api/users",
+      "purpose": "Friend requests, friendships, blocking, user search"
+    },
+    {
+      "file": "routers/game_history_router.py",
+      "prefix": "/api/game-history",
+      "purpose": "Game history, results, privacy settings"
+    },
+    {
+      "file": "routers/tournament_router.py",
+      "prefix": "/api/tournaments",
+      "purpose": "Multiplayer tournament CRUD and management"
+    },
+    {
+      "file": "routers/sessions_router.py",
+      "prefix": "/api/sessions",
+      "purpose": "Active session listing and termination (S08 IDOR fix applied)"
+    }
+  ],
+  "sub_routers": {
+    "bot_routers": [
+      {
+        "file": "bot_routers/bot_crud_router.py",
+        "purpose": "Bot creation, reading, updating, deletion, strategy listing"
+      },
+      {
+        "file": "bot_routers/bot_control_router.py",
+        "purpose": "Bot activation, deactivation, and force-run operations"
+      },
+      {
+        "file": "bot_routers/bot_ai_logs_router.py",
+        "purpose": "AI bot reasoning/thinking log retrieval"
+      },
+      {
+        "file": "bot_routers/bot_indicator_logs_router.py",
+        "purpose": "Indicator condition evaluation log retrieval"
+      },
+      {
+        "file": "bot_routers/bot_scanner_logs_router.py",
+        "purpose": "Scanner/monitor log retrieval for non-AI strategies"
+      },
+      {
+        "file": "bot_routers/bot_validation_router.py",
+        "purpose": "Bot config validation against exchange minimums"
+      },
+      {
+        "file": "bot_routers/schemas.py",
+        "purpose": "Pydantic request/response schemas for bot routes"
+      }
+    ],
+    "position_routers": [
+      {
+        "file": "position_routers/position_query_router.py",
+        "purpose": "Position listing, details, trades, AI logs, P&L timeseries"
+      },
+      {
+        "file": "position_routers/position_actions_router.py",
+        "purpose": "Cancel, force-close, and update position settings"
+      },
+      {
+        "file": "position_routers/position_limit_orders_router.py",
+        "purpose": "Limit order operations (create, cancel, slippage check)"
+      },
+      {
+        "file": "position_routers/position_manual_ops_router.py",
+        "purpose": "Manual operations: add funds, update notes"
+      },
+      {
+        "file": "position_routers/perps_router.py",
+        "purpose": "Perpetual futures (INTX) position endpoints"
+      },
+      {
+        "file": "position_routers/dependencies.py",
+        "purpose": "Shared dependency functions for position routes"
+      },
+      {
+        "file": "position_routers/helpers.py",
+        "purpose": "Shared helper functions (budget resize computation) used by multiple position sub-routers"
+      },
+      {
+        "file": "position_routers/schemas.py",
+        "purpose": "Pydantic request/response schemas for position routes"
+      }
+    ],
+    "news_data_modules": [
+      {
+        "file": "news_data/news_sources.py",
+        "purpose": "News and video source configurations by category"
+      },
+      {
+        "file": "news_data/news_cache.py",
+        "purpose": "Cache loading/saving for news and video data"
+      },
+      {
+        "file": "news_data/news_models.py",
+        "purpose": "Pydantic models for news router API"
+      },
+      {
+        "file": "news_data/debt_ceiling_data.py",
+        "purpose": "Historical US debt ceiling data (1939-present)"
+      }
+    ],
+    "auth_routers": [
+      {
+        "file": "auth_routers/__init__.py",
+        "purpose": "Package init"
+      },
+      {
+        "file": "auth_routers/schemas.py",
+        "purpose": "Pydantic request/response schemas for all auth endpoints"
+      },
+      {
+        "file": "auth_routers/helpers.py",
+        "purpose": "Shared helpers: password hashing, JWT creation, device trust, IP geolocation via ip-api.com (city/region/country per login event), MFA login completion"
+      },
+      {
+        "file": "auth_routers/rate_limiters.py",
+        "purpose": "In-memory rate limiting for login, signup, forgot-password, resend verification, MFA verification"
+      },
+      {
+        "file": "auth_routers/auth_core_router.py",
+        "purpose": "Core auth endpoints: login, register, logout, refresh, /me, change-password"
+      },
+      {
+        "file": "auth_routers/email_verify_router.py",
+        "purpose": "Email verification: verify-email, resend-verification, verify-email-code"
+      },
+      {
+        "file": "auth_routers/password_router.py",
+        "purpose": "Password reset: forgot-password, reset-password"
+      },
+      {
+        "file": "auth_routers/mfa_totp_router.py",
+        "purpose": "TOTP MFA: setup, verify-setup, disable, verify during login"
+      },
+      {
+        "file": "auth_routers/mfa_email_router.py",
+        "purpose": "Email MFA: verify-email-code, verify-email-link, enable, disable, resend"
+      },
+      {
+        "file": "auth_routers/device_trust_router.py",
+        "purpose": "Trusted device management: list, revoke, revoke-all"
+      },
+      {
+        "file": "auth_routers/preferences_router.py",
+        "purpose": "User preferences: accept-terms, last-seen-history"
+      }
+    ]
+  },
+  "models": [
+    {
+      "name": "User",
+      "table": "users",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "email",
+        "hashed_password",
+        "is_active",
+        "mfa_enabled",
+        "totp_secret",
+        "terms_accepted",
+        "email_verified",
+        "session_policy_override"
+      ]
+    },
+    {
+      "name": "TrustedDevice",
+      "table": "trusted_devices",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "user_id",
+        "device_id",
+        "device_name",
+        "ip_address",
+        "location",
+        "expires_at"
+      ]
+    },
+    {
+      "name": "EmailVerificationToken",
+      "table": "email_verification_tokens",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "user_id",
+        "token",
+        "expires_at",
+        "used"
+      ]
+    },
+    {
+      "name": "RevokedToken",
+      "table": "revoked_tokens",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "jti",
+        "user_id",
+        "expires_at"
+      ],
+      "purpose": "Revoked JWT tokens for server-side token invalidation on logout and password change"
+    },
+    {
+      "name": "Group",
+      "table": "groups",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "name",
+        "description",
+        "is_system",
+        "session_policy",
+        "created_at"
+      ],
+      "purpose": "Organizational group for RBAC; users belong to groups, groups are assigned roles; session_policy (JSON) defines session limits for the group"
+    },
+    {
+      "name": "Role",
+      "table": "roles",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "name",
+        "description",
+        "is_system",
+        "requires_mfa",
+        "created_at"
+      ],
+      "purpose": "Functional capability set with associated permissions for RBAC"
+    },
+    {
+      "name": "Permission",
+      "table": "permissions",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "name",
+        "description"
+      ],
+      "purpose": "Granular permission using resource:action naming (e.g. bots:read, admin:users). All valid permission strings are enumerated in the Perm StrEnum (app/auth/dependencies.py) — use Perm constants in route declarations to prevent typos. Permissions cover: bots, positions, orders, accounts, reports, templates, settings, blacklist, news, system (monitor/restart/shutdown), admin (users/groups/roles/permissions), games (play/multiplayer), social (chat)."
+    },
+    {
+      "name": "ActiveSession",
+      "table": "active_sessions",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "user_id",
+        "session_id",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "expires_at",
+        "ended_at",
+        "is_active"
+      ],
+      "purpose": "Tracks active user sessions for enforcement of session limits (max simultaneous, per-IP, timeout)"
+    },
+    {
+      "name": "Account",
+      "table": "accounts",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "user_id",
+        "name",
+        "exchange",
+        "account_type",
+        "api_key",
+        "api_secret",
+        "is_default"
+      ]
+    },
+    {
+      "name": "Bot",
+      "table": "bots",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "account_id",
+        "name",
+        "strategy",
+        "status",
+        "trading_pairs",
+        "budget_percentage",
+        "max_concurrent_deals"
+      ]
+    },
+    {
+      "name": "BotTemplate",
+      "table": "bot_templates",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "user_id",
+        "name",
+        "strategy",
+        "config_json"
+      ]
+    },
+    {
+      "name": "Position",
+      "table": "positions",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "bot_id",
+        "product_id",
+        "status",
+        "side",
+        "total_base_acquired",
+        "total_quote_spent",
+        "average_buy_price"
+      ]
+    },
+    {
+      "name": "Trade",
+      "table": "trades",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "position_id",
+        "trade_type",
+        "price",
+        "amount",
+        "quote_amount"
+      ]
+    },
+    {
+      "name": "Signal",
+      "table": "signals",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "product_id",
+        "signal_type",
+        "price",
+        "indicator_values"
+      ]
+    },
+    {
+      "name": "Settings",
+      "table": "settings",
+      "schema": "system",
+      "key_fields": [
+        "id",
+        "user_id",
+        "key",
+        "value"
+      ]
+    },
+    {
+      "name": "MarketData",
+      "table": "market_data",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "product_id",
+        "timestamp",
+        "price",
+        "volume"
+      ]
+    },
+    {
+      "name": "AIBotLog",
+      "table": "ai_bot_logs",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "bot_id",
+        "product_id",
+        "decision",
+        "confidence",
+        "thinking",
+        "context"
+      ]
+    },
+    {
+      "name": "ScannerLog",
+      "table": "scanner_logs",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "bot_id",
+        "product_id",
+        "decision",
+        "metrics"
+      ]
+    },
+    {
+      "name": "IndicatorLog",
+      "table": "indicator_logs",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "bot_id",
+        "product_id",
+        "phase",
+        "conditions_met",
+        "details"
+      ]
+    },
+    {
+      "name": "PendingOrder",
+      "table": "pending_orders",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "position_id",
+        "order_id",
+        "order_type",
+        "side",
+        "price",
+        "size",
+        "status"
+      ]
+    },
+    {
+      "name": "OrderHistory",
+      "table": "order_history",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "bot_id",
+        "product_id",
+        "side",
+        "status",
+        "order_type"
+      ]
+    },
+    {
+      "name": "BlacklistedCoin",
+      "table": "blacklisted_coins",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "symbol",
+        "reason",
+        "category"
+      ]
+    },
+    {
+      "name": "AIProviderCredential",
+      "table": "ai_provider_credentials",
+      "schema": "system",
+      "key_fields": [
+        "id",
+        "user_id",
+        "provider",
+        "api_key_encrypted",
+        "is_active"
+      ]
+    },
+    {
+      "name": "BotProduct",
+      "table": "bot_products",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "bot_id",
+        "product_id",
+        "created_at"
+      ],
+      "purpose": "Junction table normalizing bot trading pairs (1NF)"
+    },
+    {
+      "name": "BotTemplateProduct",
+      "table": "bot_template_products",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "template_id",
+        "product_id",
+        "created_at"
+      ],
+      "purpose": "Junction table normalizing template trading pairs (1NF)"
+    },
+    {
+      "name": "NewsArticle",
+      "table": "news_articles",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "title",
+        "url",
+        "source",
+        "category",
+        "published_at",
+        "cached_thumbnail_path"
+      ]
+    },
+    {
+      "name": "VideoArticle",
+      "table": "video_articles",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "title",
+        "video_id",
+        "channel_name",
+        "category",
+        "published_at"
+      ]
+    },
+    {
+      "name": "ContentSource",
+      "table": "content_sources",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "source_key",
+        "name",
+        "source_type",
+        "url",
+        "category",
+        "is_system",
+        "user_id"
+      ]
+    },
+    {
+      "name": "UserSourceSubscription",
+      "table": "user_source_subscriptions",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "user_id",
+        "source_id",
+        "is_subscribed"
+      ]
+    },
+    {
+      "name": "ArticleTTS",
+      "table": "article_tts",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "article_url",
+        "voice_id",
+        "audio_data",
+        "content_hash"
+      ],
+      "purpose": "Cached TTS audio per article and voice, shared across users"
+    },
+    {
+      "name": "UserVoiceSubscription",
+      "table": "user_voice_subscriptions",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "user_id",
+        "voice_id",
+        "is_subscribed"
+      ],
+      "purpose": "Per-user TTS voice preferences"
+    },
+    {
+      "name": "UserArticleTTSHistory",
+      "table": "user_article_tts_history",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "user_id",
+        "article_url",
+        "voice_id"
+      ],
+      "purpose": "Per-user last-played voice per article for auto-resume"
+    },
+    {
+      "name": "UserContentSeenStatus",
+      "table": "user_content_seen_status",
+      "schema": "content",
+      "key_fields": [
+        "id",
+        "user_id",
+        "content_type",
+        "content_id",
+        "seen_at"
+      ],
+      "purpose": "Tracks which articles/videos each user has seen"
+    },
+    {
+      "name": "AccountValueSnapshot",
+      "table": "account_value_snapshots",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "account_id",
+        "timestamp",
+        "btc_value",
+        "usd_value"
+      ]
+    },
+    {
+      "name": "MetricSnapshot",
+      "table": "metric_snapshots",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "metric_type",
+        "timestamp",
+        "value_json"
+      ]
+    },
+    {
+      "name": "PropFirmState",
+      "table": "prop_firm_state",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "account_id",
+        "initial_deposit",
+        "current_equity",
+        "is_killed",
+        "kill_reason"
+      ]
+    },
+    {
+      "name": "PropFirmEquitySnapshot",
+      "table": "prop_firm_equity_snapshots",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "account_id",
+        "equity",
+        "daily_drawdown_pct",
+        "total_drawdown_pct",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "ReportGoal",
+      "table": "report_goals",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "name",
+        "target_type",
+        "target_currency",
+        "target_value",
+        "start_date",
+        "target_date",
+        "is_active",
+        "expense_period",
+        "tax_withholding_pct"
+      ],
+      "purpose": "User financial targets (balance, profit, income, expenses) with time horizons for report tracking; expenses goals use expense_period and tax_withholding_pct"
+    },
+    {
+      "name": "ExpenseItem",
+      "table": "expense_items",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "goal_id",
+        "user_id",
+        "category",
+        "name",
+        "amount",
+        "frequency",
+        "frequency_n",
+        "frequency_anchor",
+        "is_active"
+      ],
+      "purpose": "Itemized living expenses for expense-type goals, each with its own frequency normalized to the goal's expense_period for coverage calculations"
+    },
+    {
+      "name": "ReportSchedule",
+      "table": "report_schedules",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "account_id",
+        "name",
+        "schedule_type",
+        "is_active"
+      ],
+      "purpose": "Report delivery configuration — when and how reports are generated"
+    },
+    {
+      "name": "ReportScheduleGoal",
+      "table": "report_schedule_goals",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "schedule_id",
+        "goal_id"
+      ],
+      "purpose": "Junction table linking report schedules to goals (many-to-many)"
+    },
+    {
+      "name": "Report",
+      "table": "reports",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "schedule_id",
+        "metrics_json",
+        "html_content",
+        "pdf_data"
+      ],
+      "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary"
+    },
+    {
+      "name": "AccountTransfer",
+      "table": "account_transfers",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "account_id",
+        "external_id",
+        "transfer_type",
+        "amount",
+        "currency",
+        "amount_usd",
+        "occurred_at",
+        "source",
+        "original_type"
+      ],
+      "purpose": "Deposit/withdrawal tracking for accurate P&L calculation; synced from Coinbase API or entered manually"
+    },
+    {
+      "name": "GoalProgressSnapshot",
+      "table": "goal_progress_snapshots",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "goal_id",
+        "user_id",
+        "snapshot_date",
+        "current_value",
+        "target_value",
+        "progress_pct",
+        "on_track",
+        "created_at"
+      ],
+      "purpose": "Daily goal progress data points for trend line visualization, captured during account snapshot cycle"
+    },
+    {
+      "name": "Friendship",
+      "table": "friendships",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "user_id",
+        "friend_id",
+        "created_at"
+      ],
+      "purpose": "Bidirectional friend relationship; stored as two rows per friendship (A->B and B->A)"
+    },
+    {
+      "name": "FriendRequest",
+      "table": "friend_requests",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "from_user_id",
+        "to_user_id",
+        "created_at"
+      ],
+      "purpose": "Pending friend request; deleted on accept or reject"
+    },
+    {
+      "name": "BlockedUser",
+      "table": "blocked_users",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "blocker_id",
+        "blocked_id",
+        "created_at"
+      ],
+      "purpose": "User block relationship; prevents friend requests from blocked user"
+    },
+    {
+      "name": "GameResult",
+      "table": "game_results",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "room_id",
+        "game_id",
+        "mode",
+        "started_at",
+        "finished_at",
+        "result_data",
+        "tournament_id"
+      ],
+      "purpose": "Persistent record of a completed multiplayer game"
+    },
+    {
+      "name": "GameResultPlayer",
+      "table": "game_result_players",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "game_result_id",
+        "user_id",
+        "placement",
+        "score",
+        "is_winner",
+        "stats"
+      ],
+      "purpose": "Per-player result within a game"
+    },
+    {
+      "name": "GameHistoryVisibility",
+      "table": "game_history_visibility",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "user_id",
+        "default_visibility",
+        "game_overrides"
+      ],
+      "purpose": "Per-user privacy control for game history sharing (all_friends, opponents_only, private)"
+    },
+    {
+      "name": "GameHighScore",
+      "table": "game_high_scores",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "user_id",
+        "game_id",
+        "score",
+        "updated_at"
+      ],
+      "purpose": "Per-user best score for each game"
+    },
+    {
+      "name": "Tournament",
+      "table": "tournaments",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "name",
+        "creator_id",
+        "game_ids",
+        "config",
+        "status",
+        "created_at",
+        "started_at",
+        "finished_at"
+      ],
+      "purpose": "Multi-game tournament among friends; status: pending, active, completed"
+    },
+    {
+      "name": "TournamentPlayer",
+      "table": "tournament_players",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "tournament_id",
+        "user_id",
+        "total_score",
+        "placement",
+        "archived",
+        "joined_at"
+      ],
+      "purpose": "Player enrolled in a tournament with score tracking"
+    },
+    {
+      "name": "TournamentDeleteVote",
+      "table": "tournament_delete_votes",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "tournament_id",
+        "user_id",
+        "voted_at"
+      ],
+      "purpose": "Committee vote for tournament deletion; all players must vote to delete"
+    },
+    {
+      "name": "ChatChannel",
+      "table": "chat_channels",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "type",
+        "name",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ],
+      "purpose": "Chat channel: DM (2 users), group (N users), or channel (open/admin-created)"
+    },
+    {
+      "name": "ChatChannelMember",
+      "table": "chat_channel_members",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "channel_id",
+        "user_id",
+        "role",
+        "last_read_at",
+        "joined_at"
+      ],
+      "purpose": "Membership in a chat channel with role (owner/admin/member) and read tracking"
+    },
+    {
+      "name": "ChatMessage",
+      "table": "chat_messages",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "channel_id",
+        "sender_id",
+        "content",
+        "reply_to_id",
+        "is_pinned",
+        "edited_at",
+        "deleted_at",
+        "created_at"
+      ],
+      "purpose": "Message in a chat channel; supports edit, soft delete, reply threading, and pin"
+    },
+    {
+      "name": "ChatMessageReaction",
+      "table": "chat_message_reactions",
+      "schema": "social",
+      "file": "models/social.py",
+      "key_fields": [
+        "id",
+        "message_id",
+        "user_id",
+        "emoji",
+        "created_at"
+      ],
+      "purpose": "Emoji reaction on a chat message; unique per user+message+emoji"
+    },
+    {
+      "name": "RateLimitAttempt",
+      "table": "rate_limit_attempts",
+      "schema": "auth",
+      "key_fields": [
+        "id",
+        "key",
+        "attempt_type",
+        "attempted_at"
+      ],
+      "purpose": "Persists rate limit tracking across restarts"
+    },
+    {
+      "name": "Donation",
+      "table": "donations",
+      "schema": "reporting",
+      "key_fields": [
+        "id",
+        "user_id",
+        "amount",
+        "currency",
+        "status",
+        "reported_at",
+        "confirmed_at"
+      ],
+      "purpose": "Self-report -> admin confirm workflow for donations"
+    }
+  ],
+  "models_note": "Models are split into domain files under backend/app/models/: auth.py, trading.py, reporting.py, social.py, content.py, donations.py, system.py. All tables live in named PostgreSQL schemas matching their domain (auth, trading, reporting, social, content, system) as of migration 068_domain_schemas.py. Foreign keys across schemas use fully-qualified strings (e.g. 'auth.users.id').",
+  "services": [
+    {
+      "file": "services/account_service.py",
+      "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/account_snapshot_service.py",
+      "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture; aggregates daily activity (closed trades, transfers) for chart markers",
+      "type": "background"
+    },
+    {
+      "file": "services/ai_credential_service.py",
+      "purpose": "Per-user AI provider credential management and retrieval",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/ai_grid_optimizer.py",
+      "purpose": "AI-powered grid parameter optimization",
+      "type": "analysis"
+    },
+    {
+      "file": "services/article_content_service.py",
+      "purpose": "Article content extraction: fetches article body from external URLs with robots.txt compliance, caches in DB (article_content_cache column), per-user rate limiting (30/hr), trafilatura-based extraction; router is a thin wrapper over this service",
+      "type": "background"
+    },
+    {
+      "file": "services/auto_buy_monitor.py",
+      "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums",
+      "type": "background"
+    },
+    {
+      "file": "services/ban_monitor.py",
+      "purpose": "Banned IP monitoring via fail2ban with geo-lookup enrichment using ip-api.com batch endpoint (free, 100 IPs/request, full country names returned directly); daily snapshot via APScheduler; geo results cached per-IP to avoid re-lookups across refreshes",
+      "type": "background"
+    },
+    {
+      "file": "services/bot_stats_service.py",
+      "purpose": "Calculates PnL, win rate, trades/day, budget utilization, and daily PnL projections for bot listings",
+      "type": "analysis"
+    },
+    {
+      "file": "services/bot_validation_service.py",
+      "purpose": "Validates quote currency consistency, auto-corrects AI bot market focus, and validates bidirectional budget config",
+      "type": "trading"
+    },
+    {
+      "file": "services/brand_service.py",
+      "purpose": "White-label branding configuration and customization",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/broadcast_backend.py",
+      "purpose": "BroadcastBackend protocol + InProcessBroadcast + RedisBroadcast; Phase 3 multi-process WebSocket fan-out seam (v2.128.0)",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/budget_calculator.py",
+      "purpose": "Calculates available capital for bidirectional bots with reservations",
+      "type": "trading"
+    },
+    {
+      "file": "services/chat_service.py",
+      "purpose": "Chat business logic: channel creation/management, message lifecycle (send, edit, soft delete), read tracking, membership with roles (owner/admin/member), emoji reactions, pinned messages, message search",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/chat_ws_handler.py",
+      "purpose": "Real-time WebSocket chat routing: send, typing indicator (debounced), read receipt, message edit/delete, emoji reactions, pin toggle",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/coin_review_service.py",
+      "purpose": "Weekly AI-powered coin status review and categorization",
+      "type": "analysis"
+    },
+    {
+      "file": "services/content_refresh_service.py",
+      "purpose": "Periodically fetches news and video content from configured sources",
+      "type": "background"
+    },
+    {
+      "file": "services/credentials_provider.py",
+      "purpose": "CredentialsProvider protocol seam for Phase 3 credentials microservice (v2.130.0)",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/debt_ceiling_monitor.py",
+      "purpose": "Weekly check for US debt ceiling legislation changes",
+      "type": "background"
+    },
+    {
+      "file": "services/delisted_pair_monitor.py",
+      "purpose": "Daily sync of trading pairs; removes delisted pairs from bots",
+      "type": "background"
+    },
+    {
+      "file": "services/dex_wallet_service.py",
+      "purpose": "Fetches wallet balances from blockchain networks (Ethereum, L2s)",
+      "type": "exchange"
+    },
+    {
+      "file": "services/disposable_email_service.py",
+      "purpose": "Detects throwaway email addresses at registration",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/domain_blacklist_service.py",
+      "purpose": "Domain-level blocking for content sources that block our IP",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/email_service.py",
+      "purpose": "AWS SES email sending for verification, password reset, MFA codes",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/exchange_service.py",
+      "purpose": "Per-user, per-account exchange client instantiation with async locking and double-checked caching",
+      "type": "exchange"
+    },
+    {
+      "file": "services/expense_service.py",
+      "purpose": "Expense item normalization (frequency to period) and coverage waterfall calculations for expenses goals",
+      "type": "analysis"
+    },
+    {
+      "file": "services/friend_notifications.py",
+      "purpose": "Real-time WebSocket notifications for friend events",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/game_room_manager.py",
+      "purpose": "In-memory game room state for multiplayer sessions",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/game_ws_handler.py",
+      "purpose": "WebSocket handler for multiplayer game messages",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/goal_snapshot_service.py",
+      "purpose": "Captures daily goal progress snapshots (balance, profit, expense types), backfills from AccountValueSnapshot history and closed-position income, provides trend data for charting",
+      "type": "background"
+    },
+    {
+      "file": "services/grid_rotation_service.py",
+      "purpose": "Periodic profit lock-in and grid refresh for winning positions",
+      "type": "trading"
+    },
+    {
+      "file": "services/grid_trading_service.py",
+      "purpose": "Grid bot lifecycle: initialization, level management, order placement",
+      "type": "trading"
+    },
+    {
+      "file": "services/indicator_log_service.py",
+      "purpose": "Logs indicator condition evaluations for non-AI bots",
+      "type": "logging"
+    },
+    {
+      "file": "services/limit_order_monitor.py",
+      "purpose": "Monitors pending limit orders and updates positions on fill",
+      "type": "background"
+    },
+    {
+      "file": "services/market_metrics_service.py",
+      "purpose": "External API fetch functions for market sentiment and blockchain metrics (Fear & Greed, BTC dominance, altseason, mempool, hash rate, lightning, ATH, RSI, stablecoin mcap, US debt); includes metric snapshot recording and pruning",
+      "type": "background"
+    },
+    {
+      "file": "services/news_fetch_service.py",
+      "purpose": "Fetches individual article content from source URLs with robots.txt compliance",
+      "type": "background"
+    },
+    {
+      "file": "services/news_image_cache.py",
+      "purpose": "Downloads and saves news thumbnails as WebP files to backend/news_images/",
+      "type": "background"
+    },
+    {
+      "file": "services/order_reconciliation_monitor.py",
+      "purpose": "Detects and fixes positions with missing fill data; includes MissingOrderDetector",
+      "type": "background"
+    },
+    {
+      "file": "services/perps_monitor.py",
+      "purpose": "Syncs perpetual futures positions with Coinbase INTX state",
+      "type": "background"
+    },
+    {
+      "file": "services/portfolio_conversion_service.py",
+      "purpose": "Portfolio conversion with progress tracking",
+      "type": "trading"
+    },
+    {
+      "file": "services/portfolio_service.py",
+      "purpose": "Portfolio aggregation and balance calculations",
+      "type": "trading"
+    },
+    {
+      "file": "services/prop_guard_monitor.py",
+      "purpose": "Background equity monitoring for prop firm accounts every 30s",
+      "type": "background"
+    },
+    {
+      "file": "services/rebalance_monitor.py",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval",
+      "type": "background"
+    },
+    {
+      "file": "services/report_ai_service.py",
+      "purpose": "Generates AI-powered summaries for performance reports using per-user AI credentials; tiered output (beginner/comfortable/experienced); includes trading activity context in prompts",
+      "type": "analysis"
+    },
+    {
+      "file": "services/report_data_service.py",
+      "purpose": "Gathers metrics for report generation: account value snapshots, closed positions, profit calculations, goal progress, trade summary stats, prior period comparisons",
+      "type": "analysis"
+    },
+    {
+      "file": "services/report_generator_service/",
+      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts), pdf_generator (PDF generation with fpdf2, expense trend charts)",
+      "type": "analysis"
+    },
+    {
+      "file": "services/report_schedule_service.py",
+      "purpose": "Report schedule CRUD business logic: create and update report schedules with goal associations; extracted from reports_router.py",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/report_scheduler.py",
+      "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function",
+      "type": "background"
+    },
+    {
+      "file": "services/season_detector.py",
+      "purpose": "Market season detection using halving cycles and multiple indicators",
+      "type": "analysis"
+    },
+    {
+      "file": "services/session_policy_service.py",
+      "purpose": "Resolves effective session policy by merging group policies (most-restrictive) and applying per-user overrides",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/session_service.py",
+      "purpose": "Session lifecycle management: create, validate, end, enforce limits (max simultaneous, per-IP), expire stale sessions",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/settings_service.py",
+      "purpose": "User settings retrieval and persistence",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/shutdown_manager.py",
+      "purpose": "Tracks in-flight operations for graceful shutdown",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/transfer_sync_service.py",
+      "purpose": "Syncs deposit/withdrawal transactions from Coinbase into account_transfers table with deduplication by external_id",
+      "type": "background"
+    },
+    {
+      "file": "services/websocket_manager.py",
+      "purpose": "WebSocket connection manager for real-time order fill notifications",
+      "type": "infrastructure"
+    }
+  ],
+  "trading_engine": {
+    "coordinators_note": "Top-level coordinators (trading_engine_v2.py, trading_client.py, multi_bot_monitor.py, order_validation.py, precision.py, product_precision.py) are listed in core_modules",
+    "modules": [
+      {
+        "file": "trading_engine/signal_processor.py",
+        "purpose": "Signal processing and trading decision orchestration"
+      },
+      {
+        "file": "trading_engine/buy_executor.py",
+        "purpose": "Market and limit buy order execution"
+      },
+      {
+        "file": "trading_engine/sell_executor.py",
+        "purpose": "Market and limit sell order execution"
+      },
+      {
+        "file": "trading_engine/perps_executor.py",
+        "purpose": "Perpetual futures order execution with bracket TP/SL"
+      },
+      {
+        "file": "trading_engine/position_manager.py",
+        "purpose": "Position CRUD operations and lifecycle management"
+      },
+      {
+        "file": "trading_engine/order_logger.py",
+        "purpose": "Order logging, AI decision logging, audit trail"
+      },
+      {
+        "file": "trading_engine/trailing_stops.py",
+        "purpose": "Trailing stop loss and trailing take profit management"
+      },
+      {
+        "file": "trading_engine/fill_reconciler.py",
+        "purpose": "Shared fill reconciliation logic with retry-based order fill retrieval and exponential backoff, used by buy_executor and sell_executor"
+      }
+    ],
+    "monitor_modules": [
+      {
+        "file": "monitor/batch_analyzer.py",
+        "purpose": "Batch analysis of multiple trading pairs using AI batch analysis (single API call); extracted from MultiBotMonitor.process_bot_batch()"
+      },
+      {
+        "file": "monitor/pair_processor.py",
+        "purpose": "Signal processing for a single bot/pair combination; extracted from MultiBotMonitor.process_bot_pair()"
+      },
+      {
+        "file": "monitor/bull_flag_processor.py",
+        "purpose": "Bull flag strategy bot processing: volume spike scanning, pattern detection, trailing stop management; extracted from MultiBotMonitor.process_bull_flag_bot()"
+      }
+    ]
+  },
+  "exchange_clients": {
+    "base": "exchange_clients/base.py (ExchangeClient ABC)",
+    "implementations": [
+      {
+        "file": "exchange_clients/coinbase_adapter.py",
+        "purpose": "Wraps CoinbaseClient to implement ExchangeClient interface"
+      },
+      {
+        "file": "exchange_clients/paper_trading_client.py",
+        "purpose": "Simulated exchange client for paper trading"
+      },
+      {
+        "file": "exchange_clients/bybit_adapter.py",
+        "purpose": "Wraps ByBitClient to implement ExchangeClient for ByBit V5 linear perps"
+      },
+      {
+        "file": "exchange_clients/bybit_client.py",
+        "purpose": "Low-level pybit HTTP wrapper with product ID translation and async"
+      },
+      {
+        "file": "exchange_clients/bybit_ws.py",
+        "purpose": "ByBit WebSocket manager for real-time position/order/wallet/ticker streams"
+      },
+      {
+        "file": "exchange_clients/mt5_bridge_client.py",
+        "purpose": "ExchangeClient for FTMO MT5 EA bridge via HTTP JSON"
+      },
+      {
+        "file": "exchange_clients/prop_guard.py",
+        "purpose": "PropGuard safety decorator wrapping any ExchangeClient with drawdown checks"
+      },
+      {
+        "file": "exchange_clients/prop_guard_state.py",
+        "purpose": "Pure helper functions for drawdown calculations and daily reset logic"
+      },
+      {
+        "file": "exchange_clients/dex_client.py",
+        "purpose": "DEX trading client for on-chain swaps"
+      },
+      {
+        "file": "exchange_clients/dex_constants.py",
+        "purpose": "DEX contract addresses, router ABIs, chain configs"
+      }
+    ],
+    "factory": "exchange_clients/factory.py",
+    "coinbase_modules": [
+      {
+        "file": "coinbase_api/auth.py",
+        "purpose": "HMAC and CDP authentication for Coinbase API"
+      },
+      {
+        "file": "coinbase_api/account_balance_api.py",
+        "purpose": "Account balance and portfolio queries"
+      },
+      {
+        "file": "coinbase_api/market_data_api.py",
+        "purpose": "Prices, candles, product listings with single-flight caching"
+      },
+      {
+        "file": "coinbase_api/order_api.py",
+        "purpose": "Order placement, cancellation, and status"
+      },
+      {
+        "file": "coinbase_api/perpetuals_api.py",
+        "purpose": "Perpetual futures positions, portfolio, allocations"
+      },
+      {
+        "file": "coinbase_api/public_market_data.py",
+        "purpose": "Public (no-auth) market data endpoints for paper trading and fallback; includes PublicMarketDataClient"
+      }
+    ],
+    "unified_client": "coinbase_unified_client.py (CoinbaseClient wrapper coordinating all API modules with CircuitBreaker)"
+  },
+  "strategies": [
+    {
+      "file": "strategies/__init__.py",
+      "class": "TradingStrategy (ABC), StrategyRegistry",
+      "purpose": "Base strategy interface and registry for strategy discovery"
+    },
+    {
+      "file": "strategies/grid_trading.py",
+      "class": "GridTradingStrategy",
+      "purpose": "DCA grid trading with limit orders at predetermined price levels"
+    },
+    {
+      "file": "strategies/indicator_based.py",
+      "class": "IndicatorBasedStrategy",
+      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit"
+    },
+    {
+      "file": "strategies/spatial_arbitrage.py",
+      "class": "SpatialArbitrageStrategy",
+      "purpose": "Cross-exchange arbitrage exploiting price differences between venues"
+    },
+    {
+      "file": "strategies/statistical_arbitrage.py",
+      "class": "StatisticalArbitrageStrategy",
+      "purpose": "Mean-reversion strategy based on price correlations between pairs"
+    },
+    {
+      "file": "strategies/triangular_arbitrage.py",
+      "class": "TriangularArbitrageStrategy",
+      "purpose": "Single-exchange 3-currency cycle arbitrage (e.g., ETH->BTC->USDT->ETH)"
+    },
+    {
+      "file": "strategies/bull_flag_scanner.py",
+      "class": "N/A (utility)",
+      "purpose": "Volume spike and bull flag pattern detection for USD pairs"
+    },
+    {
+      "file": "strategies/condition_mirror.py",
+      "class": "ConditionMirror",
+      "purpose": "Mirrors long conditions to short conditions for bidirectional bots"
+    }
+  ],
+  "core_modules": [
+    {
+      "file": "main.py",
+      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration"
+    },
+    {
+      "file": "ai_service.py",
+      "purpose": "Unified AI client interface (Anthropic, OpenAI, Google Gemini)"
+    },
+    {
+      "file": "cache.py",
+      "purpose": "In-memory cache with TTL, single-flight pattern (thundering herd prevention), and persistent portfolio cache"
+    },
+    {
+      "file": "cleanup_jobs.py",
+      "purpose": "Scheduled database and in-memory cleanup: old decision logs, failed orders, noise logs, expired sessions, revoked tokens, rate limit attempts, and periodic 5-minute in-memory cache sweep (price cache, chat/game rate-limit dicts, game rooms, monitor caches, WebSocket stale connections)"
+    },
+    {
+      "file": "conditions.py",
+      "purpose": "Flexible condition framework (indicator-based) with indicator comparisons"
+    },
+    {
+      "file": "config.py",
+      "purpose": "Pydantic settings loaded from .env (database URL, JWT secret, CORS, etc.)"
+    },
+    {
+      "file": "constants.py",
+      "purpose": "Trading pairs, timeframes, and other application constants"
+    },
+    {
+      "file": "currency_utils.py",
+      "purpose": "Multi-quote-currency detection and formatting (BTC/USD)"
+    },
+    {
+      "file": "database.py",
+      "purpose": "SQLAlchemy async engine, session maker, default content sources"
+    },
+    {
+      "file": "exceptions.py",
+      "purpose": "Domain exceptions (AppError, ValidationError, NotFoundError, ExchangeUnavailableError) replacing HTTPException in services for framework decoupling"
+    },
+    {
+      "file": "encryption.py",
+      "purpose": "MultiFernet encryption for API keys and credentials at rest; supports comma-separated keys for key rotation (first key encrypts, all keys decrypt)"
+    },
+    {
+      "file": "indicator_calculator.py",
+      "purpose": "Calculates all technical indicators from candle data for conditions"
+    },
+    {
+      "file": "indicators.py",
+      "purpose": "Technical indicator calculators (MACD, RSI, Bollinger Bands, EMA, SMA)"
+    },
+    {
+      "file": "models/ (package)",
+      "purpose": "SQLAlchemy ORM model definitions split into domain files: auth.py (users, groups, roles, permissions, sessions, tokens), trading.py (bots, positions, trades, signals, orders), reporting.py (goals, expenses, reports, snapshots, transfers), social.py (friends, chat, games, tournaments), content.py (news, videos, TTS, sources), donations.py, system.py. All tables live in named schemas matching their domain (auth, trading, reporting, social, content, system) as of migration 068_domain_schemas.py. Foreign keys across schemas use fully-qualified strings (e.g. 'auth.users.id')."
+    },
+    {
+      "file": "phase_conditions.py",
+      "purpose": "Advanced condition grouping with AND/OR/NOT logic (phase-based)"
+    },
+    {
+      "file": "coinbase_unified_client.py",
+      "purpose": "Unified CoinbaseClient class coordinating all Coinbase API modules with rate limiting (150ms min between requests) and CircuitBreaker for API resilience (5-failure threshold, 60s recovery)"
+    },
+    {
+      "file": "database_seeds.py",
+      "purpose": "Default content sources, dead source lists, scrape policies, and coin categories loaded by database.init_db() on startup"
+    },
+    {
+      "file": "multi_bot_monitor.py",
+      "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation"
+    },
+    {
+      "file": "order_validation.py",
+      "purpose": "Ensures orders meet exchange minimum size requirements before submission using product precision data"
+    },
+    {
+      "file": "paths.py",
+      "purpose": "Shared filesystem path constants (BACKEND_DIR, TTS_CACHE_DIR) preventing cross-layer imports"
+    },
+    {
+      "file": "precision.py",
+      "purpose": "Quote and base currency amount formatting with proper decimal precision for exchange API orders"
+    },
+    {
+      "file": "product_precision.py",
+      "purpose": "Per-product increment specification lookup from Coinbase API precision data (JSON-backed, cached)"
+    },
+    {
+      "file": "trading_client.py",
+      "purpose": "Quote-currency agnostic buy/sell wrapper that auto-detects quote currency and calls appropriate ExchangeClient methods"
+    },
+    {
+      "file": "trading_engine_v2.py",
+      "purpose": "Strategy-based trading engine coordinator (StrategyTradingEngine) wrapping all trading engine modules"
+    },
+    {
+      "file": "scheduler.py",
+      "purpose": "APScheduler AsyncIOScheduler managing all non-realtime background jobs (replaced hand-rolled loops at v2.126.0)"
+    },
+    {
+      "file": "event_bus.py",
+      "purpose": "In-process pub/sub event bus for domain events (order.filled, bot.started, etc.); NATS/Redis swap seam (v2.127.0)"
+    },
+    {
+      "file": "registry.py",
+      "purpose": "ServiceRegistry injection point for four backend abstractions: event_bus, broadcast, rate_limiter, credentials (v2.131.0)"
+    }
+  ],
+  "schemas": [
+    {
+      "file": "schemas/dashboard.py",
+      "purpose": "Dashboard statistics Pydantic response models"
+    },
+    {
+      "file": "schemas/market.py",
+      "purpose": "Market data and signal Pydantic schemas"
+    },
+    {
+      "file": "schemas/position.py",
+      "purpose": "Position Pydantic response schemas"
+    },
+    {
+      "file": "schemas/settings.py",
+      "purpose": "Settings Pydantic schemas"
+    }
+  ],
+  "indicators_module": [
+    {
+      "file": "indicators/ai_spot_opinion.py",
+      "purpose": "AI-powered indicator combining technical metrics with LLM reasoning"
+    },
+    {
+      "file": "indicators/bull_flag_indicator.py",
+      "purpose": "Bull flag chart pattern detection aggregate indicator"
+    },
+    {
+      "file": "indicators/risk_presets.py",
+      "purpose": "Default risk preset configurations for AI indicators"
+    }
+  ],
+  "price_feeds": [
+    {
+      "file": "price_feeds/base.py",
+      "purpose": "Abstract PriceFeed interface"
+    },
+    {
+      "file": "price_feeds/coinbase_feed.py",
+      "purpose": "Coinbase exchange price feed implementation"
+    },
+    {
+      "file": "price_feeds/dex_feed.py",
+      "purpose": "DEX price feed implementation (Uniswap V3, etc.)"
+    },
+    {
+      "file": "price_feeds/aggregator.py",
+      "purpose": "Combines multiple price feeds for best-price discovery"
+    }
+  ],
+  "middleware": [
+    {
+      "file": "middleware/datetime_timezone.py",
+      "purpose": "Adds 'Z' suffix to datetime fields in JSON responses"
+    },
+    {
+      "file": "middleware/public_rate_limit.py",
+      "purpose": "ASGI middleware that rate-limits public (unauthenticated) endpoints by client IP (120 req/60s); covers ticker, prices, candles, coin icons, version, and brand endpoints"
+    },
+    {
+      "file": "middleware/intrusion_detect.py",
+      "purpose": "Scans POST/PUT/PATCH bodies and GET query strings for injection patterns (SQL, XSS, shell, path traversal); logs attempts and triggers fail2ban after threshold — does NOT block requests to avoid false positives on legitimate content"
+    }
+  ],
+  "security_headers": "SecurityHeadersMiddleware (inline in main.py) sets X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin. CSP and HSTS are intentionally NOT set here — they are owned by nginx (tradebot.conf) to avoid header stacking that would break TradingView chart embeds.",
+  "utils": [
+    {
+      "file": "utils/candle_utils.py",
+      "purpose": "Candle data utilities: timeframe aggregation, gap filling, synthetic timeframes"
+    },
+    {
+      "file": "utils/robots_checker.py",
+      "purpose": "Checks robots.txt compliance before scraping article content"
+    },
+    {
+      "file": "utils/url_utils.py",
+      "purpose": "URL normalization, feed deduplication, and SSRF protection (validates URLs do not target internal/private/loopback/link-local addresses or AWS metadata endpoint)"
+    }
+  ],
+  "external_integrations": {
+    "ai_providers": [
+      {
+        "name": "Anthropic (Claude)",
+        "library": "anthropic",
+        "usage": "AI bot decisions, coin review, grid optimization"
+      },
+      {
+        "name": "OpenAI (GPT)",
+        "library": "openai",
+        "usage": "Alternative AI provider for bot decisions"
+      },
+      {
+        "name": "Google Gemini",
+        "library": "google-generativeai",
+        "usage": "Alternative AI provider for bot decisions"
+      }
+    ],
+    "coinbase_api": {
+      "type": "REST + WebSocket",
+      "auth_methods": [
+        "HMAC",
+        "CDP (Cloud Developer Platform)"
+      ],
+      "features": [
+        "Spot trading",
+        "Perpetual futures (INTX)",
+        "Market data",
+        "Account management"
+      ]
+    },
+    "bybit_api": {
+      "type": "REST (pybit) + WebSocket (pybit)",
+      "auth_methods": [
+        "API Key + Secret (HMAC)"
+      ],
+      "features": [
+        "Linear perps trading",
+        "Wallet balance",
+        "Position management",
+        "Real-time equity via WS"
+      ]
+    },
+    "mt5_bridge": {
+      "type": "HTTP JSON (custom EA bridge)",
+      "auth_methods": [
+        "Bridge URL + Magic Number"
+      ],
+      "features": [
+        "Market/limit orders",
+        "Position management",
+        "Equity polling",
+        "Emergency close-all"
+      ]
+    },
+    "dex": {
+      "networks": [
+        "Ethereum mainnet",
+        "Arbitrum",
+        "Polygon",
+        "Base"
+      ],
+      "features": [
+        "Wallet balances",
+        "Token holdings",
+        "On-chain swaps"
+      ]
+    },
+    "news_feeds": {
+      "types": [
+        "RSS feeds",
+        "Reddit JSON API",
+        "YouTube Atom feeds"
+      ],
+      "categories": [
+        "CryptoCurrency",
+        "AI",
+        "Finance",
+        "World",
+        "Nation",
+        "Business",
+        "Technology",
+        "Entertainment",
+        "Sports"
+      ],
+      "architecture_spec": "docs/NEWS_CONTENT_ARCHITECTURE.md",
+      "notes": "See NEWS_CONTENT_ARCHITECTURE.md for full rules on system vs user sources, TTS sharing, retention, and visibility"
+    },
+    "market_data": {
+      "sources": [
+        "Fear & Greed Index",
+        "BTC Dominance",
+        "Altseason Index",
+        "Market Cap",
+        "Mempool",
+        "Hash Rate",
+        "Lightning Network"
+      ]
+    },
+    "email": {
+      "provider": "AWS SES",
+      "region": "us-east-1",
+      "sender": "noreply@romerotechsolutions.com",
+      "auth": "IAM role (ZenithGridEC2Role)",
+      "features": [
+        "Email verification",
+        "Password reset",
+        "MFA codes"
+      ]
+    }
+  },
+  "background_tasks_note": "v2.126.0: Tiered scheduler architecture. Tier 1 (asyncio.create_task, real-time trading): MultiBotMonitor, LimitOrderMonitor, OrderReconciliationMonitor, MissingOrderDetector, PerpsMonitor, PropGuardMonitor. Tier 2 (APScheduler near-realtime): AutoBuyMonitor (10s), RebalanceMonitor (30s), TransferSync (24h), AccountSnapshotCapture (24h), BanMonitor (24h), ReportScheduler (15min). Tier 3 (APScheduler batch): ContentRefreshService, DomainBlacklistService, DebtCeilingMonitor, CoinReviewScheduler, TradingPairMonitor, cleanup jobs.",
+  "background_tasks": [
+    {
+      "name": "MultiBotMonitor",
+      "interval": "Per-strategy (15min for AI, varies for others)",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Core bot loop: parallel price monitoring and strategy signal dispatch (Semaphore(5))"
+    },
+    {
+      "name": "LimitOrderMonitor",
+      "interval": "10 seconds",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Check pending limit orders for fills"
+    },
+    {
+      "name": "OrderReconciliationMonitor",
+      "interval": "60 seconds",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Auto-fix orphaned positions with missing fill data"
+    },
+    {
+      "name": "MissingOrderDetector",
+      "interval": "5 minutes",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Detect unrecorded orders from exchange"
+    },
+    {
+      "name": "PerpsMonitor",
+      "interval": "60 seconds",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Sync perpetual futures positions with exchange state"
+    },
+    {
+      "name": "PropGuardMonitor",
+      "interval": "30 seconds",
+      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "purpose": "Background equity monitoring for prop firm accounts"
+    },
+    {
+      "name": "AutoBuyMonitor",
+      "interval": "10 seconds (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Convert stablecoins to BTC when thresholds exceeded"
+    },
+    {
+      "name": "RebalanceMonitor",
+      "interval": "30 seconds (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Portfolio rebalance trigger monitoring"
+    },
+    {
+      "name": "ReportScheduler",
+      "interval": "15 minutes (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Check for due report schedules and generate reports"
+    },
+    {
+      "name": "TransferSync",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Sync deposit/withdrawal transactions from Coinbase"
+    },
+    {
+      "name": "AccountSnapshotCapture",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Capture account value snapshots for historical charts and goal progress snapshots"
+    },
+    {
+      "name": "BanMonitor",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "purpose": "Banned IP monitoring with geo-lookup enrichment (country, ISP, city) via ip-api.com"
+    },
+    {
+      "name": "TradingPairMonitor",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Sync trading pairs, remove delisted pairs from bots"
+    },
+    {
+      "name": "ContentRefreshService",
+      "interval": "News: 30min, Videos: 60min (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Fetch fresh news articles and YouTube videos"
+    },
+    {
+      "name": "DebtCeilingMonitor",
+      "interval": "Weekly (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Check for new US debt ceiling legislation"
+    },
+    {
+      "name": "CoinReviewScheduler",
+      "interval": "7 days (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Weekly AI-powered coin status review and categorization"
+    },
+    {
+      "name": "DomainBlacklistService",
+      "interval": "Weekly (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Domain-level blocking refresh for content sources that block our IP"
+    },
+    {
+      "name": "DecisionLogCleanup",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove old AI decision logs"
+    },
+    {
+      "name": "FailedConditionCleanup",
+      "interval": "6 hours (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove noise indicator condition logs"
+    },
+    {
+      "name": "FailedOrderCleanup",
+      "interval": "6 hours (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove old failed order records"
+    },
+    {
+      "name": "RevokedTokenCleanup",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove expired entries from revoked_tokens table"
+    },
+    {
+      "name": "ReportCleanup",
+      "interval": "Weekly (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove generated reports older than 2 years"
+    },
+    {
+      "name": "SessionCleanup",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Expire stale active sessions and delete old inactive session records"
+    },
+    {
+      "name": "RateLimitAttemptCleanup",
+      "interval": "Hourly (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Remove expired rate limit attempt records from database"
+    },
+    {
+      "name": "InMemoryCacheCleanup",
+      "interval": "5 minutes (APScheduler)",
+      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "purpose": "Sweep all in-memory caches to prevent unbounded growth: price cache, chat/game rate-limit dicts, game rooms, monitor caches, auth rate limiters, public endpoint rate limiter, WebSocket stale connections"
+    }
+  ],
+  "migrations": {
+    "count": 77,
+    "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
+    "directory": "backend/migrations/",
+    "discovery": "Auto-discovered by update.py",
+    "idempotent": true,
+    "files": [
+      "add_account_id_to_goals_and_reports.py",
+      "add_account_transfers.py",
+      "add_account_value_snapshots.py",
+      "add_article_content_cache.py",
+      "add_article_content_fetch_failed.py",
+      "add_article_has_issue.py",
+      "add_article_source_id_fk.py",
+      "add_bidirectional_support.py",
+      "add_bot_name_unique_index.py",
+      "add_content_scrape_policies.py",
+      "add_content_source_user_id.py",
+      "add_email_verification.py",
+      "add_expense_donation_pct.py",
+      "add_expense_due_day.py",
+      "add_expense_due_month.py",
+      "add_expense_goal_support.py",
+      "add_expense_login_url.py",
+      "add_expense_lookahead.py",
+      "add_expense_sort_fields.py",
+      "add_flexible_report_scheduling.py",
+      "add_force_standard_days.py",
+      "add_generate_ai_summary.py",
+      "add_goal_chart_settings.py",
+      "add_goal_progress_snapshots.py",
+      "add_income_goal_fields.py",
+      "add_metric_snapshots_table.py",
+      "add_mfa_email_method.py",
+      "add_mfa_totp_support.py",
+      "add_news_category_column.py",
+      "add_paper_trading_accounts.py",
+      "add_pending_order_reserves.py",
+      "add_perpetual_futures_fields.py",
+      "add_portion_columns_to_snapshots.py",
+      "add_prop_firm_support.py",
+      "add_reports_and_goals.py",
+      "add_rbac_tables.py",
+      "add_revoked_tokens.py",
+      "add_schedule_chart_settings.py",
+      "add_session_limits.py",
+      "add_snapshot_unrealized_pnl.py",
+      "add_subscription_category_retention.py",
+      "add_transfer_original_type.py",
+      "add_tts_content_hash.py",
+      "add_tts_tables.py",
+      "add_user_content_seen_status.py",
+      "bot_name_per_user_unique.py",
+      "convert_coin_categories_to_global.py",
+      "convert_recipients_to_objects.py",
+      "encrypt_existing_credentials.py",
+      "extract_bot_products.py",
+      "migrate_take_profit_mode.py",
+      "move_news_images_to_filesystem.py",
+      "reclassify_and_add_full_article_sources.py",
+      "remove_medicalxpress_source.py",
+      "repair_paper_balance_from_positions.py",
+      "replace_paywalled_sources.py",
+      "seed_demo_goals_and_schedules.py",
+      "add_skip_stable_pairs_default.py",
+      "add_simulate_slippage_default.py",
+      "061_add_performance_indexes.py",
+      "062_add_rebalance_columns.py",
+      "063_add_rebalance_min_trade.py",
+      "064_add_rebalance_min_trade_pct.py",
+      "065_add_rebalance_usdc.py",
+      "066_add_min_balance_reserves.py",
+      "067_add_dust_sweep_fields.py",
+      "add_games_multiplayer_permission.py",
+      "create_social_tables.py",
+      "add_game_high_scores_table.py",
+      "create_chat_tables.py",
+      "chat_enhancements.py",
+      "add_social_chat_permission.py",
+      "add_chat_media_url.py",
+      "add_admin_display_name.py",
+      "add_donations_table.py",
+      "extend_game_high_scores.py",
+      "068_domain_schemas.py"
+    ]
+  }
+}

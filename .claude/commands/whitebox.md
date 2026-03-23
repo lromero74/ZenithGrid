@@ -8,7 +8,7 @@ You are auditing this area of the ZenithGrid application with the following stan
 - **Multi-user environment**: Multiple users with separate accounts, API keys encrypted per-user, role-based access
 - **Security model**: JWT auth + MFA/TOTP, encrypted credentials at rest (Fernet), rate limiting, HTTPS via nginx/Let's Encrypt
 - **Infrastructure**: t2.micro EC2 (1 vCPU, 1GB RAM), SQLite, FastAPI async backend, React+Vite frontend
-- Consult `docs/architecture.json` for the full architecture reference
+- Consult `docs/architecture/` for the architecture reference (`index.json` for metadata/stack, `backend.json` for routers/models/services, `frontend.json` for components/contexts)
 
 ### What to Audit
 

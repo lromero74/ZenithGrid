@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.5] - 2026-03-23
+
+### Changed
+- Architecture documentation split from a single monolithic `architecture.json` into three focused files (`docs/architecture/index.json`, `backend.json`, `frontend.json`) for faster, more targeted access. Also corrected several stale entries in the process (middleware headers, ban monitor geo-IP, models package structure, missing contexts and services).
+
 ## [v2.135.4] - 2026-03-23
 
 ### Fixed

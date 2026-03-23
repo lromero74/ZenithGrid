@@ -6,7 +6,7 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
 2. Pre-flight: review diffs, lint all changed files, ensure branch is clean
 3. **Detect frontend deployment mode**: Run `./bot.sh status` to check current mode (DEV or PROD). This determines step 7 behavior.
 4. Database & schema: if models changed, back up DB, stop services, run migrations, update setup.py and database.py
-5. Update all version references (CHANGELOG.md, docs/architecture.json) in the same commit
+5. Update all version references (CHANGELOG.md, docs/architecture/index.json) in the same commit
    - **CHANGELOG entries are user-facing** — describe features, fixes, and changes in plain language
    - Do NOT include merge notes, branch names, or internal git operations in the changelog
    - Use Keep a Changelog format: Added / Changed / Fixed / Removed / Security sections

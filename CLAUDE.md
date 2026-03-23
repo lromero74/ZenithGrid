@@ -215,7 +215,7 @@ Version references to update in the tag commit:
 | File | Field |
 |------|-------|
 | `CHANGELOG.md` | `## [vX.Y.Z] - YYYY-MM-DD` section |
-| `docs/architecture.json` | `"version"` field |
+| `docs/architecture/index.json` | `"version"` field |
 
 ## Commercialization Mindset
 
@@ -262,7 +262,9 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 
 | Document | Purpose |
 |----------|---------|
-| `docs/architecture.json` | Complete architecture reference (models, routers, services, migrations) |
+| `docs/architecture/index.json` | Version, stack, data flow, multi-user isolation |
+| `docs/architecture/backend.json` | Routers, models, services, strategies, migrations |
+| `docs/architecture/frontend.json` | Pages, components, contexts, hooks |
 | `docs/ARCHITECTURE.md` | Architecture narrative |
 | `docs/DOMAIN_KNOWLEDGE.md` | Trading domain: BTC budget calculation, AI allocation flow, signal process |
 | `docs/NEWS_CONTENT_ARCHITECTURE.md` | News/video system rules |

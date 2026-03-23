@@ -1,6 +1,6 @@
 # ZenithGrid Architecture
 
-> Machine-readable catalog: [`architecture.json`](architecture.json)
+> Machine-readable catalogs: [`index.json`](architecture/index.json) (version, stack, data flow) · [`backend.json`](architecture/backend.json) (routers, models, services) · [`frontend.json`](architecture/frontend.json) (pages, components, contexts)
 
 ## Stack & Deployment
 

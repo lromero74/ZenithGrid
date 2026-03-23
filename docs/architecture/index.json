@@ -1,0 +1,70 @@
+{
+  "project": "BTC-Bot",
+  "version": "v2.135.5",
+  "updated": "2026-03-23",
+  "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
+  "split_files": {
+    "backend": "docs/architecture/backend.json",
+    "frontend": "docs/architecture/frontend.json"
+  },
+  "stack": {
+    "backend": {
+      "framework": "FastAPI",
+      "orm": "SQLAlchemy (async)",
+      "database": "PostgreSQL (asyncpg)",
+      "python": "3.x (venv)",
+      "auth": "JWT (python-jose) + TOTP MFA (pyotp) + Email MFA",
+      "encryption": "MultiFernet (cryptography) with key rotation support",
+      "email": "AWS SES (boto3, IAM role auth)"
+    },
+    "frontend": {
+      "framework": "React 18",
+      "language": "TypeScript",
+      "bundler": "Vite",
+      "styling": "TailwindCSS",
+      "state": "React Context + React Query",
+      "charts": "Lightweight Charts (TradingView), Recharts",
+      "http": "Axios",
+      "routing": "react-router-dom"
+    },
+    "deployment": {
+      "platform": "AWS EC2 (Amazon Linux 2023)",
+      "process_manager": "systemd",
+      "services": [
+        "trading-bot-backend",
+        "trading-bot-frontend (dev mode only)",
+        "nginx"
+      ],
+      "reverse_proxy": "Nginx with Let's Encrypt SSL",
+      "public_url": "https://tradebot.romerotechsolutions.com",
+      "frontend_serving": "PROD mode: built dist/ served by FastAPI backend behind Nginx. DEV mode: Vite dev server with HMR."
+    }
+  },
+  "data_flow": {
+    "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> PostgreSQL",
+    "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient (-> PropGuard for prop firms) -> Exchange API",
+    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast(user_id) -> NotificationContext -> Toast component + Audio notification",
+    "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",
+    "background_task_flow": "FastAPI startup -> asyncio.create_task() -> Periodic loop with sleep interval -> Database operations"
+  },
+  "multi_user_data_isolation": {
+    "description": "All user-facing API endpoints scope queries by current_user.id or their account IDs. Background services process all users intentionally but with per-account isolation.",
+    "ownership_chain": "User -> Account(s) -> Bot(s) -> Position(s) -> Trade(s)",
+    "patterns": {
+      "router_queries": "Filter by user_account_ids: select(Account.id).where(Account.user_id == current_user.id), then Position.account_id.in_(user_account_ids)",
+      "position_ownership": "Helper function _get_user_position() in position_limit_orders_router.py verifies position belongs to user's accounts before any operation",
+      "bot_ownership": "All bot queries include Bot.user_id == current_user.id; bot names are unique per-user via composite constraint uq_bot_user_name(user_id, name)",
+      "websocket_scoping": "WebSocketManager stores (websocket, user_id) tuples; broadcast() filters by user_id so notifications only reach the owning user",
+      "exchange_clients": "Each account has its own API credentials; get_exchange_client_for_account(db, account_id) creates per-account clients with async locking",
+      "paper_trading": "Users without Coinbase credentials get PublicMarketDataClient (no-auth public endpoints) instead of failing CoinbaseClient"
+    },
+    "background_services": "Bot monitor, limit order monitor, and reconciliation services intentionally process all users (no user filter) but use per-account exchange clients and route notifications to the correct user",
+    "hardened_in_v2_7_0": "Round 1: order_history user scoping, perps position ownership checks, scanner logs user filter, signals user scoping, news cleanup auth, account balance ownership, bot name per-user uniqueness, delisted pair monitor account selection",
+    "hardened_in_v2_7_1": "Round 2: settings/seasonality/blacklist admin-gated, source ownership with user_id, template seed-defaults auth, strategy endpoints auth, position active count scoped, perps monitor broadcast scoped, AI service per-user credentials + Gemini race fix",
+    "hardened_in_v2_7_2": "Round 3: balance cache isolation (account_id passed to all get_accounts/get_btc_balance calls), per-instance rate limiter (no cross-user throttling), bull_flag_scanner BlacklistedCoin scoped to user, broadcast_position_update crash fix in sell/buy executors, factory account_id passthrough",
+    "hardened_in_v2_7_3": "Round 4: conversion-status endpoint auth, dead calculate_available_balance removed, OrderReconciliationMonitor+MissingOrderDetector scoped by account_id, ByBit per-instance rate limiter, monitor/shutdown/pair-sync endpoints admin-gated, market_data prefers system/public credentials, dead order_monitor.py + limit_order_monitor dead methods removed, TTS endpoints auth, changelog auth, DEX portfolio price lookup scoped to same user",
+    "scalability_v2_26_0": "Parallel bot processing (Semaphore(5) + contextvars), exchange client cache locking, candle cache shared across users, single-flight thundering herd prevention, rate limiter pruning",
+    "security_audit_v2_26_2": "Internet-facing hardening: login timing equalization (constant-time bcrypt), MFA brute-force rate limiting (5 attempts/5min per token), nginx rate limiting (auth 5r/m + API 30r/s per IP), HSTS + CSP security headers, request size limit (10MB), per-username + per-IP login rate limiting, per-email forgot-password rate limiting, page_size clamped to 200 max, settings endpoint superuser-gated, article flagging superuser-gated, per-user article fetch rate limit (30/hr), WebSocket idle timeout 86400s→300s",
+    "security_audit_v2_26_3": "Token revocation (JTI-based revoked_tokens table + tokens_valid_after bulk invalidation on password change/reset), WebSocket per-user connection limit (5), message size limit (4KB), image endpoint path traversal guard (is_relative_to), CSP media-src blob: for TTS audio"
+  }
+}

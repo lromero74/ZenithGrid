@@ -1,0 +1,905 @@
+{
+  "pages": [
+    {
+      "file": "pages/Dashboard.tsx",
+      "route": "/",
+      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics"
+    },
+    {
+      "file": "pages/Bots.tsx",
+      "route": "/bots",
+      "purpose": "Create, edit, delete, and manage trading bots with strategy configuration"
+    },
+    {
+      "file": "pages/Positions.tsx",
+      "route": "/positions",
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds"
+    },
+    {
+      "file": "pages/ClosedPositions.tsx",
+      "route": "/history",
+      "purpose": "Closed and failed positions with trade history, AI logs, statistics"
+    },
+    {
+      "file": "pages/Portfolio.tsx",
+      "route": "/portfolio",
+      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts"
+    },
+    {
+      "file": "pages/News.tsx",
+      "route": "/news",
+      "purpose": "Aggregated news, video player, article reader with TTS, sentiment cards"
+    },
+    {
+      "file": "pages/Charts.tsx",
+      "route": "/charts",
+      "purpose": "Technical analysis with multiple indicators, timeframes, chart types"
+    },
+    {
+      "file": "pages/Settings.tsx",
+      "route": "/settings",
+      "purpose": "User settings, password, accounts, AI credentials, blacklist config"
+    },
+    {
+      "file": "pages/Login.tsx",
+      "route": "(auth page)",
+      "purpose": "Email/password login and signup form"
+    },
+    {
+      "file": "pages/Reports.tsx",
+      "route": "/reports",
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history"
+    },
+    {
+      "file": "pages/Admin.tsx",
+      "route": "/admin",
+      "purpose": "Admin management page with tabs for users, groups, and roles (RBAC administration)"
+    }
+  ],
+  "components": {
+    "bot_management": [
+      {
+        "file": "components/DCABudgetConfigForm.tsx",
+        "purpose": "DCA budget configuration form"
+      },
+      {
+        "file": "components/ConditionalStrategyForm.tsx",
+        "purpose": "Conditional/rule-based strategy configuration form"
+      },
+      {
+        "file": "components/AdvancedConditionBuilder.tsx",
+        "purpose": "Complex trading condition builder with logic gates"
+      },
+      {
+        "file": "components/ConditionBuilder.tsx",
+        "purpose": "Simple condition builder for strategy parameters"
+      },
+      {
+        "file": "components/PhaseConditionSelector.tsx",
+        "purpose": "Market phase condition selector (bull/bear/accumulation)"
+      },
+      {
+        "file": "components/GridVisualizer.tsx",
+        "purpose": "DCA grid level visualization"
+      },
+      {
+        "file": "pages/bots/components/BotFormModal.tsx",
+        "purpose": "Modal form for creating/editing bots"
+      },
+      {
+        "file": "pages/bots/components/CoinCategorySelector.tsx",
+        "purpose": "Coin category badge display and category-based pair selection for bot forms"
+      },
+      {
+        "file": "pages/bots/components/StrategyConfigSection.tsx",
+        "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params)"
+      },
+      {
+        "file": "pages/bots/components/BotListItem.tsx",
+        "purpose": "Bot card component for bot list"
+      },
+      {
+        "file": "pages/bots/components/SampleBotsSection.tsx",
+        "purpose": "Pre-configured sample bot templates for quick setup"
+      },
+      {
+        "file": "pages/bots/data/sampleBots.ts",
+        "purpose": "Sample bot template data definitions"
+      },
+      {
+        "file": "pages/bots/helpers.ts",
+        "purpose": "Bot page helper functions"
+      }
+    ],
+    "position_management": [
+      {
+        "file": "components/EditPositionSettingsModal.tsx",
+        "purpose": "Edit TP, SL, trailing TP, max safety orders"
+      },
+      {
+        "file": "components/AddFundsModal.tsx",
+        "purpose": "Add funds to existing positions"
+      },
+      {
+        "file": "components/LimitCloseModal.tsx",
+        "purpose": "Set limit close orders with price target"
+      },
+      {
+        "file": "components/SlippageWarningModal.tsx",
+        "purpose": "Slippage impact warning before market close"
+      },
+      {
+        "file": "components/PositionLogsModal.tsx",
+        "purpose": "View logs, trades, AI decisions for a position"
+      },
+      {
+        "file": "pages/positions/components/FilterPanel.tsx",
+        "purpose": "Filter controls for positions"
+      },
+      {
+        "file": "pages/positions/components/OverallStatsPanel.tsx",
+        "purpose": "Summary statistics for open positions"
+      },
+      {
+        "file": "pages/positions/components/PerpsPortfolioPanel.tsx",
+        "purpose": "Perpetual futures portfolio overview"
+      },
+      {
+        "file": "pages/positions/components/PositionCard.tsx",
+        "purpose": "Individual position display with P&L and actions"
+      },
+      {
+        "file": "pages/positions/components/modals/CloseConfirmModal.tsx",
+        "purpose": "Close position confirmation"
+      },
+      {
+        "file": "pages/positions/components/modals/NotesModal.tsx",
+        "purpose": "Position notes editor"
+      },
+      {
+        "file": "pages/positions/components/modals/TradeHistoryModal.tsx",
+        "purpose": "Trade history for a position"
+      },
+      {
+        "file": "pages/positions/helpers.ts",
+        "purpose": "Position page helper functions"
+      }
+    ],
+    "charts": [
+      {
+        "file": "components/TradingChart.tsx",
+        "purpose": "Lightweight price chart for position entry/exit"
+      },
+      {
+        "file": "components/TradingViewChartModal.tsx",
+        "purpose": "TradingView integration for technical analysis"
+      },
+      {
+        "file": "components/LightweightChartModal.tsx",
+        "purpose": "Full-featured chart modal with indicators and oscillators"
+      },
+      {
+        "file": "components/DepthChart.tsx",
+        "purpose": "Order book depth visualization"
+      },
+      {
+        "file": "components/AccountValueChart.tsx",
+        "purpose": "Account value over time line chart with activity markers (trade wins/losses, deposits, withdrawals) on BTC/USD series"
+      },
+      {
+        "file": "components/PnLChart.tsx",
+        "purpose": "P&L bar/line chart by time period"
+      },
+      {
+        "file": "components/Sparkline.tsx",
+        "purpose": "Minimal inline sparkline chart"
+      },
+      {
+        "file": "components/charts/IndicatorSettingsModal.tsx",
+        "purpose": "Indicator parameter configuration"
+      },
+      {
+        "file": "pages/charts/helpers.ts",
+        "purpose": "Charts page helper functions"
+      }
+    ],
+    "logs_and_analysis": [
+      {
+        "file": "components/AIBotLogs.tsx",
+        "purpose": "AI bot decision logs with filtering"
+      },
+      {
+        "file": "components/ScannerLogs.tsx",
+        "purpose": "Scanner logs for pair scanning decisions"
+      },
+      {
+        "file": "components/IndicatorLogs.tsx",
+        "purpose": "Indicator calculation logs with search"
+      }
+    ],
+    "news_and_media": [
+      {
+        "file": "components/MiniPlayer.tsx",
+        "purpose": "Persistent minimizable video player"
+      },
+      {
+        "file": "components/ArticleReaderMiniPlayer.tsx",
+        "purpose": "Persistent TTS article reader"
+      },
+      {
+        "file": "pages/news/components/ArticleContent.tsx",
+        "purpose": "Article content display"
+      },
+      {
+        "file": "pages/news/components/ArticlePreviewModal.tsx",
+        "purpose": "Full-screen modal for article preview with reader mode and TTS"
+      },
+      {
+        "file": "pages/news/components/ArticleSection.tsx",
+        "purpose": "Articles tab: Read All controls, category/source filters, article grid, pagination"
+      },
+      {
+        "file": "pages/news/components/NewsFilterBar.tsx",
+        "purpose": "Seen/unseen filter pills, full-articles-only toggle, bulk mark buttons for articles and videos"
+      },
+      {
+        "file": "pages/news/components/VideoSection.tsx",
+        "purpose": "Videos tab: category/source filters, Play All controls, video grid, pagination"
+      },
+      {
+        "file": "pages/news/components/TTSControls.tsx",
+        "purpose": "Text-to-speech playback controls"
+      },
+      {
+        "file": "components/news/SourceSubscriptionsModal.tsx",
+        "purpose": "Subscribe/unsubscribe from news sources"
+      },
+      {
+        "file": "pages/news/types.ts",
+        "purpose": "TypeScript types for news page"
+      },
+      {
+        "file": "pages/news/helpers.ts",
+        "purpose": "News page helper functions"
+      }
+    ],
+    "market_sentiment_cards": [
+      {
+        "file": "components/MarketSentimentCards.tsx",
+        "purpose": "Card grid container for all sentiment indicators"
+      },
+      {
+        "file": "components/cards/CardStates.tsx",
+        "purpose": "Shared loading/error/empty states for cards"
+      },
+      {
+        "file": "components/cards/InfoTooltip.tsx",
+        "purpose": "Info tooltip component for card descriptions"
+      },
+      {
+        "file": "components/cards/FearGreedCard.tsx",
+        "purpose": "Fear & Greed Index card"
+      },
+      {
+        "file": "components/cards/BTCDominanceCard.tsx",
+        "purpose": "BTC dominance card"
+      },
+      {
+        "file": "components/cards/AltseasonCard.tsx",
+        "purpose": "Altseason Index card"
+      },
+      {
+        "file": "components/cards/ATHCard.tsx",
+        "purpose": "All-Time High distance card"
+      },
+      {
+        "file": "components/cards/BTCRSICard.tsx",
+        "purpose": "BTC RSI indicator card"
+      },
+      {
+        "file": "components/cards/BTCSupplyCard.tsx",
+        "purpose": "BTC supply metrics card"
+      },
+      {
+        "file": "components/cards/HalvingCard.tsx",
+        "purpose": "BTC halving countdown card"
+      },
+      {
+        "file": "components/cards/SeasonCard.tsx",
+        "purpose": "Market season indicator card"
+      },
+      {
+        "file": "components/cards/USDebtCard.tsx",
+        "purpose": "US debt ceiling card"
+      },
+      {
+        "file": "components/cards/HashRateCard.tsx",
+        "purpose": "Bitcoin hash rate card"
+      },
+      {
+        "file": "components/cards/LightningCard.tsx",
+        "purpose": "Lightning Network stats card"
+      },
+      {
+        "file": "components/cards/MempoolCard.tsx",
+        "purpose": "Bitcoin mempool stats card"
+      },
+      {
+        "file": "components/cards/StablecoinMcapCard.tsx",
+        "purpose": "Stablecoin market cap card"
+      },
+      {
+        "file": "components/cards/TotalMarketCapCard.tsx",
+        "purpose": "Total crypto market cap card"
+      },
+      {
+        "file": "components/DebtCeilingModal.tsx",
+        "purpose": "Debt ceiling detail modal"
+      }
+    ],
+    "reports": [
+      {
+        "file": "components/reports/GoalProgressBar.tsx",
+        "purpose": "Visual progress bar for individual goal completion"
+      },
+      {
+        "file": "components/reports/GoalTrendChart.tsx",
+        "purpose": "Recharts ComposedChart showing actual vs ideal goal progress over time with on-track status"
+      },
+      {
+        "file": "components/reports/ReportViewModal.tsx",
+        "purpose": "Modal for viewing generated report details"
+      },
+      {
+        "file": "components/reports/ExpenseItemsEditor.tsx",
+        "purpose": "Expense items CRUD editor for expenses-type goals with category, frequency, and amount management"
+      }
+    ],
+    "prop_firm": [
+      {
+        "file": "components/PropGuardStatus.tsx",
+        "purpose": "PropGuard drawdown monitoring dashboard for prop firm accounts"
+      }
+    ],
+    "auth_and_security": [
+      {
+        "file": "components/ForgotPassword.tsx",
+        "purpose": "Password reset request form"
+      },
+      {
+        "file": "components/ResetPassword.tsx",
+        "purpose": "Password reset with token form"
+      },
+      {
+        "file": "components/VerifyEmail.tsx",
+        "purpose": "Email verification handler"
+      },
+      {
+        "file": "components/EmailVerificationPending.tsx",
+        "purpose": "Pending email verification state"
+      },
+      {
+        "file": "components/MFAEmailVerify.tsx",
+        "purpose": "Email-based MFA code verification"
+      },
+      {
+        "file": "components/MFAEncouragement.tsx",
+        "purpose": "Prompt to enable MFA for security"
+      },
+      {
+        "file": "components/PasswordStrengthMeter.tsx",
+        "purpose": "Visual password strength indicator"
+      },
+      {
+        "file": "components/SessionLimitsNotice.tsx",
+        "purpose": "Full-screen notice shown when session limits are active, requiring user acknowledgment"
+      },
+      {
+        "file": "components/DemoLogin.tsx",
+        "purpose": "Auto-login component for demo accounts via URL shortcut (/demo_usd, /demo_btc, /demo_both)"
+      }
+    ],
+    "account_and_settings": [
+      {
+        "file": "components/AccountSwitcher.tsx",
+        "purpose": "Header dropdown for switching accounts"
+      },
+      {
+        "file": "components/AccountsManagement.tsx",
+        "purpose": "Account CRUD (CEX/DEX/Prop Firm)"
+      },
+      {
+        "file": "components/AddAccountModal.tsx",
+        "purpose": "Add new account with credentials"
+      },
+      {
+        "file": "components/AIProvidersManager.tsx",
+        "purpose": "Manage AI provider API keys"
+      },
+      {
+        "file": "components/AutoBuySettings.tsx",
+        "purpose": "Configure auto-buy BTC settings"
+      },
+      {
+        "file": "components/BlacklistManager.tsx",
+        "purpose": "Coin blacklist with AI review"
+      },
+      {
+        "file": "components/PaperTradingManager.tsx",
+        "purpose": "Paper trading mode management"
+      },
+      {
+        "file": "components/PaperTradingToggle.tsx",
+        "purpose": "Header toggle for paper trading"
+      },
+      {
+        "file": "components/DexConfigSection.tsx",
+        "purpose": "DEX-specific settings configuration"
+      }
+    ],
+    "layout_and_common": [
+      {
+        "file": "components/AboutModal.tsx",
+        "purpose": "App version, changelog, update availability"
+      },
+      {
+        "file": "components/CoinIcon.tsx",
+        "purpose": "Crypto coin logo with fallback"
+      },
+      {
+        "file": "components/LoadingSpinner.tsx",
+        "purpose": "Animated loading spinner"
+      },
+      {
+        "file": "components/Toast.tsx",
+        "purpose": "Toast notifications for order fills and alerts"
+      },
+      {
+        "file": "components/RiskDisclaimer.tsx",
+        "purpose": "Terms acceptance modal on first login"
+      },
+      {
+        "file": "components/SeasonalityToggle.tsx",
+        "purpose": "Seasonality/market phase display toggle"
+      }
+    ],
+    "sub_components": {
+      "bots": [
+        {
+          "file": "components/bots/botUtils.ts",
+          "purpose": "BotFormData type, defaults, parameter validation, pair conversion"
+        }
+      ],
+      "news": [
+        {
+          "file": "components/news/newsUtils.tsx",
+          "purpose": "Lightweight markdown renderer for article content display"
+        }
+      ],
+      "positions": [
+        {
+          "file": "components/positions/AISentimentIcon.tsx",
+          "purpose": "AI sentiment indicator with tooltip"
+        },
+        {
+          "file": "components/positions/DealChart.tsx",
+          "purpose": "Buy/sell history visualization within position"
+        },
+        {
+          "file": "components/positions/IndicatorModals.tsx",
+          "purpose": "Indicator information modal dialogs"
+        },
+        {
+          "file": "components/positions/PriceBar.tsx",
+          "purpose": "Price bar with entry/exit levels"
+        },
+        {
+          "file": "components/positions/positionUtils.ts",
+          "purpose": "Position calculation and formatting utilities"
+        }
+      ],
+      "chart_internals": [
+        {
+          "file": "components/LightweightChartModal/hooks/useChartData.ts",
+          "purpose": "Fetch and manage OHLCV data"
+        },
+        {
+          "file": "components/LightweightChartModal/hooks/useIndicatorRendering.ts",
+          "purpose": "Render technical indicators on chart"
+        },
+        {
+          "file": "components/LightweightChartModal/hooks/useMainChart.ts",
+          "purpose": "Initialize main price chart"
+        },
+        {
+          "file": "components/LightweightChartModal/hooks/useOscillators.ts",
+          "purpose": "Manage oscillator sub-charts (RSI, MACD)"
+        },
+        {
+          "file": "components/LightweightChartModal/utils/chartMarkers.ts",
+          "purpose": "Entry/exit/TP/SL chart markers"
+        },
+        {
+          "file": "components/LightweightChartModal/utils/oscillatorChartFactory.ts",
+          "purpose": "Factory for oscillator charts"
+        },
+        {
+          "file": "components/LightweightChartModal/utils/positionLinesRenderer.ts",
+          "purpose": "Position entry/exit lines on chart"
+        }
+      ]
+    }
+  },
+  "contexts": [
+    {
+      "file": "contexts/AuthContext.tsx",
+      "exports": [
+        "AuthProvider",
+        "useAuth"
+      ],
+      "purpose": "User authentication, JWT token management, session state"
+    },
+    {
+      "file": "contexts/AccountContext.tsx",
+      "exports": [
+        "AccountProvider",
+        "useAccount"
+      ],
+      "purpose": "Multi-account state (CEX/DEX), account switching"
+    },
+    {
+      "file": "contexts/BrandContext.tsx",
+      "exports": [
+        "BrandProvider",
+        "useBrand"
+      ],
+      "purpose": "White-label branding configuration (app name, logo, colors)"
+    },
+    {
+      "file": "contexts/ThemeContext.tsx",
+      "exports": [
+        "ThemeProvider",
+        "useTheme"
+      ],
+      "purpose": "Dark/light theme state management"
+    },
+    {
+      "file": "contexts/NotificationContext.tsx",
+      "exports": [
+        "NotificationProvider",
+        "useNotifications"
+      ],
+      "purpose": "WebSocket order fill notifications, toast alerts, audio"
+    },
+    {
+      "file": "contexts/VideoPlayerContext.tsx",
+      "exports": [
+        "VideoPlayerProvider",
+        "useVideoPlayer"
+      ],
+      "purpose": "Persistent video player state across page navigation"
+    },
+    {
+      "file": "contexts/ArticleReaderContext.tsx",
+      "exports": [
+        "ArticleReaderProvider",
+        "useArticleReader"
+      ],
+      "purpose": "Persistent article reader with TTS playback"
+    },
+    {
+      "file": "contexts/ConfirmContext.tsx",
+      "exports": [
+        "ConfirmProvider",
+        "useConfirm"
+      ],
+      "purpose": "Styled async confirm dialog replacing native window.confirm(); useConfirm() returns a promise-based function accepting title, message, labels, and variant (danger/warning/default)"
+    },
+    {
+      "file": "contexts/mediaCoordinator.ts",
+      "exports": [
+        "registerVideoPlayer",
+        "registerArticleReader",
+        "stopVideoPlayer",
+        "stopArticleReader"
+      ],
+      "purpose": "Coordinate media playback (pause video when reading, vice versa)"
+    }
+  ],
+  "hooks": {
+    "global": [
+      {
+        "file": "hooks/useAudio.ts",
+        "purpose": "Web Audio API for order fill notification sounds"
+      },
+      {
+        "file": "hooks/useMarketSeason.ts",
+        "purpose": "Fetch market indicators and determine current season"
+      }
+    ],
+    "page_specific": {
+      "bots": [
+        {
+          "file": "pages/bots/hooks/useBotForm.ts",
+          "purpose": "Bot form state management: form data, validation, coin categories, pair selection"
+        },
+        {
+          "file": "pages/bots/hooks/useBotMutations.ts",
+          "purpose": "Create/update/delete/start/stop bot mutations"
+        },
+        {
+          "file": "pages/bots/hooks/useBotsData.ts",
+          "purpose": "Fetch bots, strategies, trading pairs, portfolio"
+        },
+        {
+          "file": "pages/bots/hooks/useValidation.ts",
+          "purpose": "Bot config validation, budget sizing, parameters"
+        }
+      ],
+      "charts": [
+        {
+          "file": "pages/charts/hooks/useChartManagement.ts",
+          "purpose": "Chart instance initialization and lifecycle"
+        },
+        {
+          "file": "pages/charts/hooks/useChartsData.ts",
+          "purpose": "Fetch OHLCV data for multiple pairs/timeframes"
+        },
+        {
+          "file": "pages/charts/hooks/useIndicators.ts",
+          "purpose": "Indicator state, rendering, and settings"
+        }
+      ],
+      "positions": [
+        {
+          "file": "pages/positions/hooks/usePositionFilters.ts",
+          "purpose": "Filter and search positions"
+        },
+        {
+          "file": "pages/positions/hooks/usePositionMutations.ts",
+          "purpose": "Close, add funds, update settings, save notes"
+        },
+        {
+          "file": "pages/positions/hooks/usePositionTrades.ts",
+          "purpose": "Fetch and cache trades for positions"
+        },
+        {
+          "file": "pages/positions/hooks/usePositionsData.ts",
+          "purpose": "Fetch positions, bots, prices, calculate P&L"
+        }
+      ],
+      "news": [
+        {
+          "file": "pages/news/hooks/useArticleContent.ts",
+          "purpose": "Fetch and cache article content by URL"
+        },
+        {
+          "file": "pages/news/hooks/useNewsData.ts",
+          "purpose": "Fetch news and video articles with caching"
+        },
+        {
+          "file": "pages/news/hooks/useNewsFilters.ts",
+          "purpose": "Filter news by source, date, category"
+        },
+        {
+          "file": "pages/news/hooks/useTTSSync.ts",
+          "purpose": "Text-to-speech with word timing, voice cycling, rate control"
+        },
+        {
+          "file": "pages/news/hooks/useSeenStatus.ts",
+          "purpose": "Track and query user seen/unseen status for content"
+        }
+      ]
+    }
+  },
+  "api_layer": {
+    "base_url": "Configured via VITE_API_URL env var, defaults to same origin",
+    "auth": "Authorization: Bearer {token} header via Axios interceptor",
+    "file": "services/api.ts",
+    "modules": [
+      {
+        "name": "authFetch",
+        "purpose": "Fetch wrapper with auth token injection"
+      },
+      {
+        "name": "dashboardApi",
+        "purpose": "Dashboard statistics"
+      },
+      {
+        "name": "positionsApi",
+        "purpose": "Position CRUD, trades, AI logs, settings, budget resize"
+      },
+      {
+        "name": "tradesApi",
+        "purpose": "All trades"
+      },
+      {
+        "name": "signalsApi",
+        "purpose": "Trading signals"
+      },
+      {
+        "name": "marketDataApi",
+        "purpose": "Market data, coin listings"
+      },
+      {
+        "name": "settingsApi",
+        "purpose": "Get/update settings by key"
+      },
+      {
+        "name": "monitorApi",
+        "purpose": "Start/stop trading monitor"
+      },
+      {
+        "name": "accountApi",
+        "purpose": "Balances, aggregate value, portfolio conversion"
+      },
+      {
+        "name": "statusApi",
+        "purpose": "API connection and monitor status"
+      },
+      {
+        "name": "botsApi",
+        "purpose": "Bot CRUD, strategies, logs, decisions, scanners, indicators, bulk ops"
+      },
+      {
+        "name": "templatesApi",
+        "purpose": "Bot template management"
+      },
+      {
+        "name": "orderHistoryApi",
+        "purpose": "Order history with filtering and pagination"
+      },
+      {
+        "name": "blacklistApi",
+        "purpose": "Blacklist and category management with AI review"
+      },
+      {
+        "name": "aiCredentialsApi",
+        "purpose": "AI provider credential management"
+      },
+      {
+        "name": "autoBuyApi",
+        "purpose": "Auto-buy BTC settings"
+      },
+      {
+        "name": "accountValueApi",
+        "purpose": "Historical account value snapshots and daily activity markers (trades, deposits, withdrawals)"
+      },
+      {
+        "name": "reportsApi",
+        "purpose": "Goals CRUD, goal trend data, report schedules, generated reports"
+      }
+    ]
+  },
+  "state_management": {
+    "pattern": "React Context (app state) + React Query (server state)",
+    "contexts": [
+      "AuthContext",
+      "AccountContext",
+      "BrandContext",
+      "ThemeContext",
+      "NotificationContext",
+      "VideoPlayerContext",
+      "ArticleReaderContext",
+      "ConfirmContext"
+    ],
+    "react_query": {
+      "purpose": "Centralized data caching with automatic refetch",
+      "polling_intervals": {
+        "positions": "30 seconds",
+        "portfolio_prices": "2 minutes",
+        "btc_eth_prices": "1 minute",
+        "closed_position_badges": "60 seconds"
+      }
+    }
+  },
+  "realtime": {
+    "websocket": {
+      "endpoint": "/ws/notifications",
+      "events": [
+        "base_order",
+        "dca_order",
+        "sell_order",
+        "partial_fill"
+      ],
+      "limits": {
+        "max_connections_per_user": 5,
+        "max_message_size_bytes": 4096,
+        "idle_timeout_seconds": 300
+      },
+      "features": [
+        "Audio notifications",
+        "Toast alerts",
+        "Auto-reconnect with exponential backoff"
+      ]
+    }
+  },
+  "types": {
+    "file": "types/index.ts",
+    "categories": {
+      "position": [
+        "Position",
+        "LimitOrderDetails",
+        "LimitOrderFill",
+        "Trade",
+        "Signal",
+        "AIBotLog"
+      ],
+      "bot": [
+        "Bot",
+        "BotCreate",
+        "BotStats",
+        "StrategyParameter",
+        "StrategyDefinition",
+        "OrderHistory"
+      ],
+      "account": [
+        "Balances",
+        "AggregateValue",
+        "DashboardStats",
+        "Settings"
+      ],
+      "market": [
+        "Candle",
+        "ReservedBalances",
+        "MarketData"
+      ],
+      "perps": [
+        "PerpsProduct",
+        "PerpsPosition",
+        "PerpsPortfolio"
+      ],
+      "sentiment": [
+        "FearGreedData",
+        "BTCDominanceResponse",
+        "AltseasonIndexResponse",
+        "ATHResponse",
+        "BTCRSIResponse",
+        "HalvingCountdown",
+        "DebtCeilingEvent"
+      ],
+      "reports": [
+        "ReportGoal",
+        "ReportSchedule",
+        "ReportSummary",
+        "GoalTrendPoint",
+        "GoalTrendData",
+        "ExpenseItem"
+      ]
+    }
+  },
+  "utilities": [
+    {
+      "file": "utils/dateFormat.ts",
+      "purpose": "Date/time formatting helpers"
+    },
+    {
+      "file": "utils/marketSentiment.ts",
+      "purpose": "Fear & Greed coloring, debt calculations, halving countdown"
+    },
+    {
+      "file": "utils/seasonDetection.ts",
+      "purpose": "Client-side market season detection logic"
+    },
+    {
+      "file": "utils/indicators/calculations.ts",
+      "purpose": "MACD, RSI, Bollinger Bands, EMA, SMA calculations"
+    },
+    {
+      "file": "utils/indicators/definitions.ts",
+      "purpose": "Indicator metadata and default settings"
+    },
+    {
+      "file": "utils/indicators/types.ts",
+      "purpose": "Indicator type definitions (CandleData, IndicatorResult)"
+    },
+    {
+      "file": "config/api.ts",
+      "purpose": "API base URL configuration from env vars"
+    },
+    {
+      "file": "constants/voices.ts",
+      "purpose": "TTS voice definitions, CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter — child voices are automatically swapped for adult voices when article content matches"
+    }
+  ]
+}

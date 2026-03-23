@@ -11,7 +11,7 @@ A PRP gives Claude all the context needed for one-pass implementation success.
 - Check how related features were implemented (study the precedent)
 
 ### 2. Architecture Review
-- Read `docs/architecture.json` for relevant models, routers, services
+- Read `docs/architecture/backend.json` for relevant models, routers, and services; `docs/architecture/frontend.json` for components and contexts
 - Read `docs/DOMAIN_KNOWLEDGE.md` if the feature touches trading logic
 - Identify which layers will be affected (models? services? routers? frontend?)
 
