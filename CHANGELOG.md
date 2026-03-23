@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.7] - 2026-03-23
+
+### Fixed
+- **Concurrent pair processing connection pool exhaustion** — the initial concurrent implementation created up to 25 simultaneous database sessions against an 8-connection pool, causing widespread 500 errors. Fixed by: bumping the write pool to 15 connections (pool_size=10, max_overflow=5), reducing bot concurrency to 3 (from 5), and setting pair concurrency to 2 — giving a safe budget of 3 × (1+2) = 9 monitor sessions plus 6 for API requests, staying within the PostgreSQL max_connections=25 limit.
+
 ## [v2.135.6] - 2026-03-23
 
 ### Changed

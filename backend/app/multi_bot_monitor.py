@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import (
+    BOT_CONCURRENCY,
     CANDLE_CACHE_DEFAULT_TTL,
     CANDLE_CACHE_TTL,
     PAIR_CONCURRENCY,
@@ -184,7 +185,8 @@ class MultiBotMonitor:
         self._current_account_id: Optional[int] = None
 
         # Semaphore to limit concurrent bot processing (protects API rate limits + t2.micro CPU)
-        self._bot_semaphore = asyncio.Semaphore(5)
+        # BOT_CONCURRENCY × (1 bot session + PAIR_CONCURRENCY pair sessions) must stay within DB pool.
+        self._bot_semaphore = asyncio.Semaphore(BOT_CONCURRENCY)
 
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
@@ -564,9 +566,9 @@ class MultiBotMonitor:
                 else:
                     logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
 
-                # Process pairs concurrently — each task gets its own DB session so
-                # there are no shared-session conflicts. A semaphore caps concurrency
-                # at PAIR_CONCURRENCY to stay t2.micro friendly.
+                # Process pairs concurrently — each task gets its own DB session.
+                # PAIR_CONCURRENCY semaphore + BOT_CONCURRENCY bot semaphore are sized
+                # to fit within the write pool: BOT_CONCURRENCY × (1 + PAIR_CONCURRENCY) sessions.
                 pair_semaphore = asyncio.Semaphore(PAIR_CONCURRENCY)
                 logger.info(f"  Processing {len(trading_pairs)} pairs (max {PAIR_CONCURRENCY} concurrent)")
 
@@ -582,7 +584,6 @@ class MultiBotMonitor:
                             except Exception as e:
                                 logger.error(f"  Error processing {product_id}: {e}")
                                 result = {"error": str(e)}
-                            # Throttle per-pair to keep CPU burst low on t2.micro
                             await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
                             return product_id, result
 

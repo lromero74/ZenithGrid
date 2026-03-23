@@ -22,12 +22,15 @@ _engine_kwargs = {
 
 if settings.is_postgres:
     # PostgreSQL connection pool tuning for t2.micro (max_connections=25).
-    # Budget: main(5+3=8) + read(3+1=4) + secondary(2+1=3) = 15 max across all pools.
-    # Leaves 7 slots of headroom below the 22 usable connections (25 - 3 superuser reserved).
+    # Budget: main(10+5=15) + read(3+1=4) + secondary(2+1=3) = 22 max across all pools.
+    # 3 superuser-reserved slots remain below PG max (25 - 3 = 22 usable).
+    # Main pool bumped to support concurrent pair processing in the monitor:
+    #   bot_semaphore(3) × (1 bot session + PAIR_CONCURRENCY(2) pair sessions) = 9 monitor connections
+    #   + ~6 API connections = 15 total.
     # idle_in_transaction_session_timeout=15min is set at the PostgreSQL level to
     # auto-kill connections that previous process restarts leave behind.
-    _engine_kwargs["pool_size"] = 5
-    _engine_kwargs["max_overflow"] = 3
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 5
     _engine_kwargs["pool_timeout"] = 10  # Fail fast instead of hanging 30s
     # Set search_path so unqualified table names in raw SQL resolve correctly
     # across all 6 domain schemas. SQLAlchemy ORM uses fully-qualified names,
