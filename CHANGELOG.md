@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.11] - 2026-03-23
+
+### Fixed
+- **Rebalance status timeout** — the portfolio allocation endpoint was making 7 Coinbase API calls sequentially, each with a 30-second timeout. If any one call stalled, the total response time blew past the frontend's 45-second limit. All balance and price fetches are now parallelised with `asyncio.gather()`, cutting response time by ~6× and eliminating cascading timeouts.
+
 ## [v2.135.10] - 2026-03-23
 
 ### Added

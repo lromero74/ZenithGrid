@@ -9,6 +9,7 @@ This enables multi-account trading where each bot is linked to a specific accoun
 and the UI can filter by selected account.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -1147,24 +1148,36 @@ async def get_rebalance_status(
             # holdings are what users expect to see in the allocation chart.
             coinbase = await get_coinbase_for_account(account)
 
-            raw_balances = {}
-            for currency, getter in (
-                ("USD", coinbase.get_usd_balance),
-                ("BTC", coinbase.get_btc_balance),
-                ("ETH", coinbase.get_eth_balance),
-                ("USDC", coinbase.get_usdc_balance),
-            ):
+            async def _safe_balance(getter, fallback: float = 0.0) -> float:
                 try:
-                    raw_balances[currency] = float(await getter())
+                    return float(await getter())
                 except Exception:
-                    raw_balances[currency] = 0.0
+                    return fallback
 
-            prices = {}
-            for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
+            async def _safe_price(product_id: str, fallback: float = 0.0) -> float:
                 try:
-                    prices[product_id] = float(await coinbase.get_current_price(product_id))
+                    return float(await coinbase.get_current_price(product_id))
                 except Exception:
-                    prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
+                    return fallback
+
+            # Fetch all balances and prices in parallel — previously 7 sequential
+            # calls each with a 30s httpx timeout, so one hung call could blow
+            # past the frontend's 45s Axios timeout.
+            (
+                usd_bal, btc_bal, eth_bal, usdc_bal,
+                btc_price, eth_price, usdc_price,
+            ) = await asyncio.gather(
+                _safe_balance(coinbase.get_usd_balance),
+                _safe_balance(coinbase.get_btc_balance),
+                _safe_balance(coinbase.get_eth_balance),
+                _safe_balance(coinbase.get_usdc_balance),
+                _safe_price("BTC-USD"),
+                _safe_price("ETH-USD"),
+                _safe_price("USDC-USD", fallback=1.0),
+            )
+
+            raw_balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal}
+            prices = {"BTC-USD": btc_price, "ETH-USD": eth_price, "USDC-USD": usdc_price}
 
             alloc = _compute_allocation(raw_balances, prices)
 
