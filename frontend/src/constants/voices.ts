@@ -148,6 +148,67 @@ export const ADULT_CONTENT_KEYWORDS: string[] = [
   'hostage', 'kidnapping', 'kidnapped',
   'beating', 'beaten to death',
   'arson', 'arsonist',
+
+  // Death and fatal events (house fire, accidents, tragedies)
+  'death', 'deaths',
+  'died', 'dying',
+  'killed', 'killing',
+  'fatal', 'fatality', 'fatalities',
+  'casualty', 'casualties',
+  'victim', 'victims',
+  'suicide', 'suicidal',
+  'executed', 'execution',
+  'perished', 'perish',
+  'house fire', 'building fire', 'apartment fire', 'structure fire',
+  'dead', 'bodies found', 'body found',
+  'crash victim', 'accident victim',
+  'drowning', 'drowned', 'drown',
+  'choking', 'choked', 'choke', 'asphyxiation', 'asphyxiated',
+  'suffocation', 'suffocated',
+  'strangulation', 'strangled',
+  'cardiac arrest', 'heart attack',
+  'hit-and-run', 'struck and killed',
+  'collapsed', 'collapse', 'crushed',
+  'fell to death', 'fall victim',
+  'burned to death', 'died in the fire',
+
+  // War and armed conflict
+  'war crimes', 'war crime',
+  'warzone', 'war zone',
+  'airstrike', 'air strike',
+  'civilian deaths', 'civilian casualties',
+  'collateral damage',
+  'combat zone', 'battlefield',
+  'atrocity', 'atrocities',
+
+  // Hate crimes and extremism
+  'hate crime', 'hate crimes',
+  'racially motivated',
+  'white supremacy', 'white supremacist',
+  'neo-nazi', 'neo-nazism',
+  'extremist', 'extremism', 'radicalized',
+
+  // Abortion and pregnancy loss
+  'abortion', 'aborted',
+  'miscarriage', 'stillborn', 'stillbirth',
+
+  // Self-harm
+  'self-harm', 'self-inflicted',
+  'cutting himself', 'cutting herself',
+
+  // Graphic/disturbing crime scene
+  'mutilated', 'mutilation',
+  'autopsy', 'morgue',
+  'decomposed body',
+
+  // Animal cruelty
+  'animal cruelty', 'animal abuse',
+  'tortured animal', 'animals killed',
+
+  // Abuse (broader)
+  'physical abuse', 'sexual abuse', 'abuse victim',
+  'neglect', 'neglected', 'starvation',
+  'starved to death',
 ]
 
 // Precompiled regex for efficient matching

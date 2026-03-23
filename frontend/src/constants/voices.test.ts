@@ -153,6 +153,21 @@ describe('containsAdultContent', () => {
     expect(containsAdultContent('Cigarette taxes are increasing')).toBe(true)
   })
 
+  test('returns true for death and fatal event keywords', () => {
+    expect(containsAdultContent('Three people died in a house fire')).toBe(true)
+    expect(containsAdultContent('The crash was fatal for two victims')).toBe(true)
+    expect(containsAdultContent('Police investigate the death of a local man')).toBe(true)
+    expect(containsAdultContent('Firefighters battled a building fire overnight')).toBe(true)
+    expect(containsAdultContent('Suicide rates among veterans increased')).toBe(true)
+    expect(containsAdultContent('All passengers killed in the accident')).toBe(true)
+    expect(containsAdultContent('Fatalities reported after the structure fire')).toBe(true)
+    expect(containsAdultContent('Child drowned in backyard pool')).toBe(true)
+    expect(containsAdultContent('Man choked to death on food')).toBe(true)
+    expect(containsAdultContent('Victim suffocated before body was found')).toBe(true)
+    expect(containsAdultContent('Runner collapsed during marathon')).toBe(true)
+    expect(containsAdultContent('Driver died of cardiac arrest at the wheel')).toBe(true)
+  })
+
   test('returns false for clean text', () => {
     expect(containsAdultContent('Bitcoin price reached new highs today')).toBe(false)
     expect(containsAdultContent('The weather will be sunny tomorrow')).toBe(false)

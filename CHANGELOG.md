@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.4] - 2026-03-23
+
+### Fixed
+- **Child voice content filter restored and significantly expanded** — Ana (en-US-AnaNeural) has been restored to the voice list. The existing content-filtering system (which automatically swaps child voices to an adult voice for inappropriate content) was always the correct mechanism; the voice was incorrectly removed entirely in v2.135.2. The adult-content keyword list has been substantially expanded to cover categories that were missing: death and fatal events (death, died, killed, fatal, fatality, victim, house fire, building fire), drowning, choking, asphyxiation, suffocation, strangulation, cardiac arrest, hit-and-run, war crimes, airstrikes, civilian casualties, hate crimes, extremism, abortion, miscarriage, stillbirth, self-harm, autopsy, morgue, animal cruelty, neglect, and starvation. The filter now covers 200+ keywords across 8 categories.
+
 ## [v2.135.3] - 2026-03-23
 
 ### Fixed

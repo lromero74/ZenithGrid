@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.135.3",
+  "version": "v2.135.4",
   "updated": "2026-03-22",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
@@ -2967,7 +2967,7 @@
       },
       {
         "file": "constants/voices.ts",
-        "purpose": "TTS voice IDs and cycling configuration"
+        "purpose": "TTS voice definitions, CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter — child voices are automatically swapped for adult voices when article content matches"
       }
     ]
   },
