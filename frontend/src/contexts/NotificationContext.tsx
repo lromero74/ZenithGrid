@@ -260,6 +260,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               title: 'Friend Request Accepted',
               message: `${data.display_name} accepted your friend request!`,
             })
+          } else if (data.type === 'account:invitation') {
+            // Real-time notification when an invitation is sent to a logged-in user
+            addToast({
+              type: 'info',
+              title: 'Account Invitation',
+              message: `${data.invited_by} invited you to ${data.role === 'manager' ? 'manage' : 'observe'} "${data.account_name}"`,
+            })
+            // Trigger a refresh of pending invitations in AccountContext
+            window.dispatchEvent(new CustomEvent('account:invitation_received'))
           } else if (data.type === 'admin:user_presence') {
             window.dispatchEvent(new CustomEvent('admin:user_presence', {
               detail: { user_id: data.user_id, is_online: data.is_online },

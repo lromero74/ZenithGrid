@@ -19,12 +19,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.exceptions import AppError
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.encryption import encrypt_value, mask_api_key
 from app.models import Account, Bot, User
+from app.models.sharing import AccountMembership
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.account_service import (
     VALID_PROP_FIRMS,
@@ -40,6 +41,30 @@ from app.services.exchange_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+
+def _accessible_accounts_filter(current_user_id: int):
+    """
+    SQLAlchemy filter clause matching all accounts a user can access:
+      1. Accounts they own (account.user_id == current_user_id)
+      2. Accounts they have an active (non-expired) membership on
+
+    Used in list/get endpoints to include shared accounts transparently.
+    Owner-only operations (delete, credentials, set-default) do NOT use this
+    — they keep the strict account.user_id == current_user_id check.
+    """
+    return or_(
+        Account.user_id == current_user_id,
+        Account.id.in_(
+            select(AccountMembership.account_id).where(
+                AccountMembership.user_id == current_user_id,
+                or_(
+                    AccountMembership.expires_at.is_(None),
+                    AccountMembership.expires_at > datetime.utcnow(),
+                ),
+            )
+        ),
+    )
 
 
 # =============================================================================
@@ -150,6 +175,11 @@ class AccountResponse(BaseModel):
     short_address: Optional[str] = None
     bot_count: int = 0
 
+    # Sharing fields — null/absent means the current user owns this account
+    membership_role: Optional[str] = None   # 'manager' | 'observer' | None (owner)
+    shared_by: Optional[str] = None         # Display name of the account owner (non-owners only)
+    member_count: int = 0                   # Number of active non-owner members
+
     class Config:
         from_attributes = True
 
@@ -248,7 +278,7 @@ async def list_accounts(
     """
     try:
         query = select(Account)
-        query = query.where(Account.user_id == current_user.id)
+        query = query.where(_accessible_accounts_filter(current_user.id))
         if not include_inactive:
             query = query.where(Account.is_active)
         query = query.order_by(Account.is_default.desc(), Account.created_at.asc())
@@ -264,9 +294,45 @@ async def list_accounts(
         count_result = await db.execute(count_q)
         bot_counts = {row.account_id: row.cnt for row in count_result}
 
+        # Get member counts for all accounts (non-owner members only)
+        member_count_q = select(
+            AccountMembership.account_id, func.count(AccountMembership.id).label("cnt")
+        ).where(
+            AccountMembership.account_id.in_(account_ids),
+            or_(
+                AccountMembership.expires_at.is_(None),
+                AccountMembership.expires_at > datetime.utcnow(),
+            ),
+        ).group_by(AccountMembership.account_id)
+        member_count_result = await db.execute(member_count_q)
+        member_counts = {row.account_id: row.cnt for row in member_count_result}
+
+        # Get membership role for accounts this user doesn't own
+        owned_ids = {a.id for a in accounts if a.user_id == current_user.id}
+        membership_q = select(AccountMembership).where(
+            AccountMembership.account_id.in_(account_ids),
+            AccountMembership.user_id == current_user.id,
+        )
+        membership_result = await db.execute(membership_q)
+        memberships = {m.account_id: m for m in membership_result.scalars().all()}
+
         response = []
         for account in accounts:
             bot_count = bot_counts.get(account.id, 0)
+            member_count = member_counts.get(account.id, 0)
+            is_owner = account.id in owned_ids
+
+            membership_role = None
+            shared_by = None
+            if not is_owner:
+                m = memberships.get(account.id)
+                membership_role = m.role if m and not m.is_expired else None
+                owner_user = await db.get(User, account.user_id)
+                if owner_user:
+                    shared_by = owner_user.display_name or owner_user.email
+
+            # Mask API key name for non-owners
+            api_key_name = mask_api_key(account.api_key_name) if is_owner else None
 
             response.append(AccountResponse(
                 id=account.id,
@@ -276,7 +342,7 @@ async def list_accounts(
                 is_active=account.is_active,
                 is_paper_trading=account.is_paper_trading or False,
                 exchange=account.exchange,
-                api_key_name=mask_api_key(account.api_key_name),
+                api_key_name=api_key_name,
                 chain_id=account.chain_id,
                 wallet_address=account.wallet_address,
                 rpc_url=account.rpc_url,
@@ -293,7 +359,10 @@ async def list_accounts(
                 last_used_at=account.last_used_at,
                 display_name=account.get_display_name(),
                 short_address=account.get_short_address() if account.type == "dex" else None,
-                bot_count=bot_count
+                bot_count=bot_count,
+                membership_role=membership_role,
+                shared_by=shared_by,
+                member_count=member_count,
             ))
 
         return response
@@ -309,9 +378,12 @@ async def get_account(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific account by ID (must belong to current user if authenticated)."""
+    """Get a specific account by ID. Returns owned accounts and shared accounts."""
     try:
-        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+        query = select(Account).where(
+            Account.id == account_id,
+            _accessible_accounts_filter(current_user.id),
+        )
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
@@ -324,6 +396,34 @@ async def get_account(
         )
         bot_count = bot_count_result.scalar() or 0
 
+        # Resolve membership role and owner info for shared accounts
+        is_owner = account.user_id == current_user.id
+        membership_role = None
+        shared_by = None
+        if not is_owner:
+            m_result = await db.execute(
+                select(AccountMembership).where(
+                    AccountMembership.account_id == account.id,
+                    AccountMembership.user_id == current_user.id,
+                )
+            )
+            m = m_result.scalar_one_or_none()
+            membership_role = m.role if m and not m.is_expired else None
+            owner_user = await db.get(User, account.user_id)
+            if owner_user:
+                shared_by = owner_user.display_name or owner_user.email
+
+        member_count_result = await db.execute(
+            select(func.count(AccountMembership.id)).where(
+                AccountMembership.account_id == account.id,
+                or_(
+                    AccountMembership.expires_at.is_(None),
+                    AccountMembership.expires_at > datetime.utcnow(),
+                ),
+            )
+        )
+        member_count = member_count_result.scalar() or 0
+
         return AccountResponse(
             id=account.id,
             name=account.name,
@@ -332,7 +432,7 @@ async def get_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=mask_api_key(account.api_key_name),
+            api_key_name=mask_api_key(account.api_key_name) if is_owner else None,
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -349,7 +449,10 @@ async def get_account(
             last_used_at=account.last_used_at,
             display_name=account.get_display_name(),
             short_address=account.get_short_address() if account.type == "dex" else None,
-            bot_count=bot_count
+            bot_count=bot_count,
+            membership_role=membership_role,
+            shared_by=shared_by,
+            member_count=member_count,
         )
 
     except (HTTPException, AppError):

@@ -322,6 +322,75 @@ def send_report_email(
         return False
 
 
+def send_invitation_email(
+    to: str,
+    accept_url: str,
+    inviter_name: str,
+    role: str,
+    account_name: str,
+) -> bool:
+    """
+    Send an account sharing invitation email.
+
+    The link is one-time, expires in 7 days, and requires authentication
+    as the invited email address before it can be accepted.
+    """
+    if not settings.ses_enabled:
+        logger.warning("SES disabled, skipping invitation email to %s", to)
+        return False
+
+    b = _brand()
+    role_label = "Manager" if role == "manager" else "Observer"
+    role_description = (
+        "manage bots, view positions, and run reports"
+        if role == "manager"
+        else "view account activity in read-only mode"
+    )
+    subject = f"{inviter_name} invited you to co-manage {account_name} on {b['shortName']}"
+
+    html_body = (
+        '<div style="font-family: -apple-system, BlinkMacSystemFont,'
+        " 'Segoe UI', Roboto, sans-serif; max-width: 600px;"
+        ' margin: 0 auto; padding: 20px; background-color: #0f172a; color: #e2e8f0;">'
+        f'{_email_header()}'
+        '<div style="padding: 30px 0;">'
+        f'<h2 style="color: #f1f5f9; margin: 0 0 15px 0;">'
+        f"You've been invited as {role_label}</h2>"
+        '<p style="color: #cbd5e1; line-height: 1.6;">'
+        f'<strong style="color: #f1f5f9;">{inviter_name}</strong> has invited you to '
+        f'{role_description} on their account '
+        f'<strong style="color: #f1f5f9;">{account_name}</strong>.</p>'
+        '<div style="background-color: #1e293b; border-radius: 8px;'
+        ' border: 1px solid #334155; padding: 16px; margin: 20px 0;">'
+        f'<p style="color: #94a3b8; margin: 0 0 4px 0; font-size: 12px;">ROLE</p>'
+        f'<p style="color: #3b82f6; margin: 0; font-size: 18px; font-weight: 600;">'
+        f'{role_label}</p>'
+        '</div>'
+        '<div style="text-align: center; padding: 25px 0;">'
+        f'<a href="{accept_url}" style="display: inline-block;'
+        ' background-color: #3b82f6; color: #ffffff; text-decoration: none;'
+        ' padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">'
+        'View Invitation &rarr;</a></div>'
+        '<p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">'
+        'You must be logged in as the account that received this invitation to accept it. '
+        'This link expires in 7 days and can only be used once. '
+        "If you were not expecting this invitation, you can safely ignore this email.</p>"
+        '</div>'
+        f'{_email_footer()}'
+        '</div>'
+    )
+
+    text_body = (
+        f"{inviter_name} has invited you to {role_description} on {account_name} "
+        f"({b['shortName']}) as {role_label}.\n\n"
+        f"View invitation: {accept_url}\n\n"
+        "You must log in as the invited email address to accept. "
+        "This link expires in 7 days and can only be used once."
+    )
+
+    return _send_email(to, subject, html_body, text_body)
+
+
 def _send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
     """Send an email via SES. Returns True on success."""
     try:

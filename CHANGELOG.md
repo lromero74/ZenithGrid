@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.0] - 2026-03-23
+
+### Added
+- **Account sharing / co-management** — account owners can now invite other users to collaborate on a CEX account, Google Docs-style. Two access levels are available:
+  - **Manager** — can manage bots, view positions, run reports, and place orders on the account.
+  - **Observer** — read-only access to balances, bots, positions, and order history.
+- **Invite by email** — owners send a one-time, 7-day expiring invitation link to any email address. The recipient must authenticate as the invited address before they can accept, preventing accidental or malicious membership.
+- **Real-time invitation notification** — if the invitee is currently logged in, they receive an instant in-app notification via WebSocket push in addition to the invitation email.
+- **Inbound invitation bell** — a bell icon in the header shows a badge when pending invitations are waiting. Clicking it reveals a popover to review, accept, or decline each invitation without leaving the current page.
+- **Shared accounts section in account switcher** — accounts shared with you appear in a separate "Shared With You" section in the account dropdown, each labelled with your role and the owner's name.
+- **Sharing panel in Settings** — each CEX account in Settings now has an Account Sharing section. Owners can invite members, change roles, remove members, and revoke pending invitations. Members see their current role and a "Leave Account" button.
+- **Accept Invite page** — deep-link at `/accept-invite?token=…` handles the full accept/decline flow with auth-gate redirect for unauthenticated users and a clear error screen for email-mismatch cases.
+- **Audit trail** — all membership events (invited, accepted, declined, role changed, removed, left, revoke) are recorded in an append-only event log for each account.
+
 ## [v2.135.11] - 2026-03-23
 
 ### Fixed
