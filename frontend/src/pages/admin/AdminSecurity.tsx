@@ -105,7 +105,20 @@ export function AdminSecurity() {
         )
       : [...data.banned_ips]
 
+    const getGroupKey = (b: typeof list[0]) =>
+      groupBy === 'country' ? (b.country_name || b.country || 'Unknown')
+      : groupBy === 'org' ? (b.org?.replace(/^AS\d+\s*/, '') || 'Unknown')
+      : groupBy === 'jail' ? b.jail
+      : null
+
     list.sort((a, b) => {
+      // Primary sort: group key ascending (always) so groups are contiguous across pages
+      if (groupBy !== 'none') {
+        const ak = getGroupKey(a) ?? '', bk = getGroupKey(b) ?? ''
+        const gcmp = ak.localeCompare(bk)
+        if (gcmp !== 0) return gcmp
+      }
+      // Secondary sort: sortField with sortDir
       let av = '', bv = ''
       if (sortField === 'ip') { av = a.ip; bv = b.ip }
       else if (sortField === 'country') { av = a.country_name || a.country || ''; bv = b.country_name || b.country || '' }
@@ -115,7 +128,7 @@ export function AdminSecurity() {
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [data, search, sortField, sortDir])
+  }, [data, search, sortField, sortDir, groupBy])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')

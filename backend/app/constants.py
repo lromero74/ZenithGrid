@@ -109,5 +109,44 @@ CANDLE_CACHE_DEFAULT_TTL = 300  # 5 minutes default for unknown timeframes
 PAIR_PROCESSING_DELAY_SECONDS = 1.5  # Delay between processing each pair (was 0.5 - increased to allow API requests)
 BOT_PROCESSING_DELAY_SECONDS = 2.0  # Delay between processing each bot (was 1.0)
 API_YIELD_INTERVAL = 0.1  # Yield to event loop every N seconds during heavy processing
-PAIR_CONCURRENCY = 2   # Max pairs processed simultaneously per bot (semaphore cap)
-BOT_CONCURRENCY = 3    # Max bots processed simultaneously (semaphore cap)
+
+
+def compute_dynamic_concurrency() -> tuple[int, int]:
+    """Return (bot_concurrency, pair_concurrency) scaled to available RAM.
+
+    Carrying capacities (the sigmoid's plateau) are derived from the DB pool
+    budget via server_resources.ResourcePlan, so they automatically scale
+    when hardware is upgraded. The sigmoid maps current available RAM to a
+    value in [0, 1] and then scales to [1, max]:
+
+      t = sigmoid(k * (available_mb - midpoint))
+
+    Sigmoid shape (relative to total RAM):
+      ≤10% free  →  t ≈ 0.13  →  near-minimum concurrency
+       20% free  →  t ≈ 0.50  →  half capacity
+       40% free  →  t ≈ 0.84  →  near-maximum concurrency
+       60%+ free →  t ≈ 0.93+ →  plateau at carrying capacity
+
+    The midpoint scales with total RAM so the curve stays meaningful on
+    both a t2.micro (1 GB) and a larger server (8+ GB).
+    """
+    import math
+    from app.server_resources import get_resource_plan
+    plan = get_resource_plan()
+
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        available_mb = mem.available / (1024 * 1024)
+        total_mb = mem.total / (1024 * 1024)
+    except Exception:
+        return 1, 1  # psutil failure: safe minimum
+
+    # Midpoint at 20% of total RAM — scales naturally with hardware size
+    x0 = total_mb * 0.20
+    k = 10.0 / total_mb   # one "unit" = 10% of total RAM
+    t = 1.0 / (1.0 + math.exp(-k * (available_mb - x0)))
+
+    bot = max(1, round(1 + t * (plan.bot_concurrency_max - 1)))
+    pair = max(1, round(t * plan.pair_concurrency_max))
+    return bot, pair

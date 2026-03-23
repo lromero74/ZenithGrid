@@ -50,3 +50,6 @@ fpdf2>=2.8.0
 
 # Markdown rendering for AI summaries
 markdown>=3.5
+
+# System resource introspection (dynamic concurrency scaling)
+psutil>=6.0.0

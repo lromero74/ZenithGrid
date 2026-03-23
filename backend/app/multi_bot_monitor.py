@@ -19,11 +19,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import (
-    BOT_CONCURRENCY,
     CANDLE_CACHE_DEFAULT_TTL,
     CANDLE_CACHE_TTL,
-    PAIR_CONCURRENCY,
     PAIR_PROCESSING_DELAY_SECONDS,
+    compute_dynamic_concurrency,
 )
 from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
@@ -184,9 +183,10 @@ class MultiBotMonitor:
         self._current_exchange: Optional[ExchangeClient] = None
         self._current_account_id: Optional[int] = None
 
-        # Semaphore to limit concurrent bot processing (protects API rate limits + t2.micro CPU)
-        # BOT_CONCURRENCY × (1 bot session + PAIR_CONCURRENCY pair sessions) must stay within DB pool.
-        self._bot_semaphore = asyncio.Semaphore(BOT_CONCURRENCY)
+        # Semaphore to limit concurrent bot processing (protects API rate limits + t2.micro CPU).
+        # Seeded from current RAM; recomputed each monitor cycle via compute_dynamic_concurrency().
+        self._bot_concurrency, self._pair_concurrency = compute_dynamic_concurrency()
+        self._bot_semaphore = asyncio.Semaphore(self._bot_concurrency)
 
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
@@ -567,10 +567,10 @@ class MultiBotMonitor:
                     logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
 
                 # Process pairs concurrently — each task gets its own DB session.
-                # PAIR_CONCURRENCY semaphore + BOT_CONCURRENCY bot semaphore are sized
-                # to fit within the write pool: BOT_CONCURRENCY × (1 + PAIR_CONCURRENCY) sessions.
-                pair_semaphore = asyncio.Semaphore(PAIR_CONCURRENCY)
-                logger.info(f"  Processing {len(trading_pairs)} pairs (max {PAIR_CONCURRENCY} concurrent)")
+                # pair_semaphore is sized from self._pair_concurrency (sigmoid-scaled to RAM),
+                # capped so bot_concurrency × (1 + pair_concurrency) fits within the DB pool.
+                pair_semaphore = asyncio.Semaphore(self._pair_concurrency)
+                logger.info(f"  Processing {len(trading_pairs)} pairs (max {self._pair_concurrency} concurrent)")
 
                 async def _process_pair_task(product_id: str) -> tuple[str, dict]:
                     async with pair_semaphore:
@@ -737,6 +737,18 @@ class MultiBotMonitor:
 
         while self.running:
             logger.debug(f"Monitor loop iteration, self.running={self.running}")
+            # Recompute concurrency from current available RAM each cycle.
+            # Sigmoid scaling keeps us within DB pool budget while adapting to
+            # memory pressure or hardware upgrades without manual config changes.
+            new_bot, new_pair = compute_dynamic_concurrency()
+            if (new_bot, new_pair) != (self._bot_concurrency, self._pair_concurrency):
+                logger.info(
+                    f"Concurrency adjusted: bot {self._bot_concurrency}→{new_bot}, "
+                    f"pair {self._pair_concurrency}→{new_pair}"
+                )
+                self._bot_concurrency = new_bot
+                self._pair_concurrency = new_pair
+                self._bot_semaphore = asyncio.Semaphore(self._bot_concurrency)
             try:
                 async with async_session_maker() as db:
                     # Get all active bots
