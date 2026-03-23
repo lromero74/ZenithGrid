@@ -54,6 +54,19 @@ export interface Account {
   display_name?: string
   short_address?: string
   bot_count: number
+
+  // Sharing fields — absent/null means the current user owns this account
+  membership_role?: 'manager' | 'observer' | null
+  shared_by?: string | null        // Display name of owner (non-owners only)
+  member_count?: number            // Active non-owner members
+}
+
+export interface PendingInvitation {
+  token: string
+  account_name: string
+  invited_by: string
+  role: 'manager' | 'observer'
+  expires_at: string
 }
 
 export interface CreateAccountDto {
@@ -105,6 +118,13 @@ interface AccountContextType {
   isLoading: boolean
   error: string | null
 
+  // Sharing state
+  pendingInvitations: PendingInvitation[]
+  pendingInvitationCount: number
+  refreshInvitations: () => Promise<void>
+  acceptInvitation: (token: string) => Promise<void>
+  declineInvitation: (token: string) => Promise<void>
+
   // Actions
   selectAccount: (accountId: number) => void
   addAccount: (account: CreateAccountDto) => Promise<Account>
@@ -112,11 +132,15 @@ interface AccountContextType {
   deleteAccount: (id: number) => Promise<void>
   setDefaultAccount: (id: number) => Promise<void>
   refreshAccounts: () => Promise<void>
+  leaveSharedAccount: (accountId: number, userId: number) => Promise<void>
 
   // Helpers
   getAccountById: (id: number) => Account | undefined
   getCexAccounts: () => Account[]
   getDexAccounts: () => Account[]
+  isOwner: (account: Account) => boolean
+  getOwnedAccounts: () => Account[]
+  getSharedAccounts: () => Account[]
 }
 
 // =============================================================================
@@ -187,6 +211,41 @@ const accountsApi = {
     }
   },
 }
+
+const invitationsApi = {
+  getPending: async (): Promise<PendingInvitation[]> => {
+    const response = await authFetch('/api/invitations/pending')
+    if (!response.ok) return []
+    return response.json()
+  },
+
+  accept: async (token: string): Promise<void> => {
+    const response = await authFetch(`/api/invitations/${token}/accept`, { method: 'POST' })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to accept invitation')
+    }
+  },
+
+  decline: async (token: string): Promise<void> => {
+    const response = await authFetch(`/api/invitations/${token}/decline`, { method: 'POST' })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to decline invitation')
+    }
+  },
+
+  preview: async (token: string) => {
+    const response = await authFetch(`/api/invitations/preview/${token}`)
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Invalid invitation')
+    }
+    return response.json()
+  },
+}
+
+export { invitationsApi }
 
 // =============================================================================
 // Context
@@ -276,6 +335,27 @@ export function AccountProvider({ children }: AccountProviderProps) {
     },
   })
 
+  // Pending invitations query — poll every 60s for new invitations
+  const {
+    data: pendingInvitations = [],
+    refetch: refetchInvitations,
+  } = useQuery({
+    queryKey: ['invitations', 'pending'],
+    queryFn: invitationsApi.getPending,
+    staleTime: 30000,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+  })
+
+  // Listen for real-time invitation push from WebSocket (via custom DOM event)
+  useEffect(() => {
+    const handler = () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations', 'pending'] })
+    }
+    window.addEventListener('account:invitation_received', handler)
+    return () => window.removeEventListener('account:invitation_received', handler)
+  }, [queryClient])
+
   // Actions
   const selectAccount = useCallback((accountId: number) => {
     setSelectedAccountId(accountId)
@@ -319,6 +399,37 @@ export function AccountProvider({ children }: AccountProviderProps) {
     await refetchAccounts()
   }, [refetchAccounts])
 
+  const refreshInvitations = useCallback(async (): Promise<void> => {
+    await refetchInvitations()
+  }, [refetchInvitations])
+
+  const acceptInvitation = useCallback(async (token: string): Promise<void> => {
+    await invitationsApi.accept(token)
+    queryClient.invalidateQueries({ queryKey: ['invitations', 'pending'] })
+    queryClient.invalidateQueries({ queryKey: ['accounts'] })
+  }, [queryClient])
+
+  const declineInvitation = useCallback(async (token: string): Promise<void> => {
+    await invitationsApi.decline(token)
+    queryClient.invalidateQueries({ queryKey: ['invitations', 'pending'] })
+  }, [queryClient])
+
+  const leaveSharedAccount = useCallback(async (accountId: number, userId: number): Promise<void> => {
+    const response = await authFetch(
+      `/api/accounts/${accountId}/sharing/members/${userId}`,
+      { method: 'DELETE' }
+    )
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to leave account')
+    }
+    queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    if (selectedAccountId === accountId) {
+      setSelectedAccountId(null)
+      localStorage.removeItem('selectedAccountId')
+    }
+  }, [queryClient, selectedAccountId])
+
   // Helpers
   const getAccountById = useCallback(
     (id: number): Account | undefined => {
@@ -335,24 +446,48 @@ export function AccountProvider({ children }: AccountProviderProps) {
     return accounts.filter((a) => a.type === 'dex')
   }, [accounts])
 
+  const isOwner = useCallback((account: Account): boolean => {
+    return !account.membership_role
+  }, [])
+
+  const getOwnedAccounts = useCallback((): Account[] => {
+    return accounts.filter((a) => !a.membership_role)
+  }, [accounts])
+
+  const getSharedAccounts = useCallback((): Account[] => {
+    return accounts.filter((a) => !!a.membership_role)
+  }, [accounts])
+
   const value: AccountContextType = useMemo(() => ({
     accounts,
     selectedAccount,
     isLoading,
     error: fetchError ? (fetchError as Error).message : null,
+    pendingInvitations,
+    pendingInvitationCount: pendingInvitations.length,
+    refreshInvitations,
+    acceptInvitation,
+    declineInvitation,
     selectAccount,
     addAccount,
     updateAccount,
     deleteAccount,
     setDefaultAccount,
     refreshAccounts,
+    leaveSharedAccount,
     getAccountById,
     getCexAccounts,
     getDexAccounts,
+    isOwner,
+    getOwnedAccounts,
+    getSharedAccounts,
   }), [
     accounts, selectedAccount, isLoading, fetchError,
+    pendingInvitations, refreshInvitations, acceptInvitation, declineInvitation,
     selectAccount, addAccount, updateAccount, deleteAccount,
-    setDefaultAccount, refreshAccounts, getAccountById, getCexAccounts, getDexAccounts,
+    setDefaultAccount, refreshAccounts, leaveSharedAccount,
+    getAccountById, getCexAccounts, getDexAccounts,
+    isOwner, getOwnedAccounts, getSharedAccounts,
   ])
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>

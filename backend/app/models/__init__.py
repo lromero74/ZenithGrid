@@ -36,6 +36,9 @@ from app.models.system import (
     Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog,
 )
 from app.models.donations import Donation
+from app.models.sharing import (
+    AccountMembership, AccountInvitation, AccountMembershipEvent,
+)
 
 __all__ = [
     "Base",
@@ -64,4 +67,6 @@ __all__ = [
     "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog",
     # Donations
     "Donation",
+    # Sharing
+    "AccountMembership", "AccountInvitation", "AccountMembershipEvent",
 ]

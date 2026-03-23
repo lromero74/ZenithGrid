@@ -113,6 +113,9 @@ class Account(Base):
     # Relationships
     user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")
+    memberships = relationship(
+        "AccountMembership", back_populates="account", cascade="all, delete-orphan", lazy="select"
+    )
 
     def get_display_name(self) -> str:
         """Get display name with type indicator"""

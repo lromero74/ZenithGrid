@@ -249,6 +249,112 @@ def require_permission(*permissions: Perm):
     return _check
 
 
+# ---------------------------------------------------------------------------
+# Account-scoped RBAC: role-based access for shared accounts
+# ---------------------------------------------------------------------------
+
+# Maps account-level membership roles to the Perm constants they grant.
+# Ownership (account.user_id == user.id) bypasses this map entirely — full access.
+ACCOUNT_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "manager": {
+        Perm.ACCOUNTS_READ,
+        Perm.BOTS_READ, Perm.BOTS_WRITE,
+        Perm.POSITIONS_READ, Perm.POSITIONS_WRITE,
+        Perm.ORDERS_READ, Perm.ORDERS_WRITE,
+        Perm.REPORTS_READ,
+        Perm.TEMPLATES_READ,
+    },
+    "observer": {
+        Perm.ACCOUNTS_READ,
+        Perm.BOTS_READ,
+        Perm.POSITIONS_READ,
+        Perm.ORDERS_READ,
+        Perm.REPORTS_READ,
+    },
+}
+
+_ROLE_ORDER = {"observer": 0, "manager": 1, "owner": 2}
+
+
+async def get_account_role(
+    account_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> Optional[str]:
+    """
+    Return the effective role string for current_user on account_id.
+
+    Returns:
+        'owner'    — account.user_id == current_user.id
+        'manager'  — active, non-expired membership with role='manager'
+        'observer' — active, non-expired membership with role='observer'
+        None       — no access (account not found or user has no membership)
+    """
+    from app.models import Account
+    from app.models.sharing import AccountMembership
+
+    # Fast path: check ownership
+    result = await db.execute(
+        select(Account.user_id).where(Account.id == account_id)
+    )
+    owner_id = result.scalar_one_or_none()
+    if owner_id is None:
+        return None  # Account doesn't exist
+    if owner_id == current_user.id:
+        return "owner"
+
+    # Check for an active membership
+    result = await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.account_id == account_id,
+            AccountMembership.user_id == current_user.id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        return None
+    if membership.is_expired:
+        return None
+    return membership.role
+
+
+def require_account_access(min_role: str = "observer"):
+    """
+    Dependency factory: require at least `min_role` on the target account.
+
+    Role hierarchy (lowest to highest): observer < manager < owner
+
+    The injected value is the user's actual role string ('owner', 'manager', or 'observer').
+    Raises 404 if account does not exist (or user has no access), 403 if role insufficient.
+
+    Usage:
+        @router.delete("/{account_id}/sharing/members/{uid}")
+        async def remove_member(
+            account_id: int,
+            uid: int,
+            role: str = Depends(require_account_access("observer")),
+            current_user: User = Depends(get_current_user),
+            ...
+        ):
+    """
+    async def _check(
+        account_id: int,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> str:
+        role = await get_account_role(account_id, current_user, db)
+        if role is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+        if _ROLE_ORDER.get(role, -1) < _ROLE_ORDER.get(min_role, 0):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient account access",
+            )
+        return role
+
+    return _check
+
+
 def require_role(role_name: str):
     """
     Dependency factory: requires the user to have a specific role (via any group).

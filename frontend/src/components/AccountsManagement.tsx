@@ -29,6 +29,7 @@ import { useNotifications } from '../contexts/NotificationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission'
 import { PropGuardStatus } from './PropGuardStatus'
+import { AccountSharingPanel } from './sharing/AccountSharingPanel'
 
 interface AccountsManagementProps {
   onAddAccount: () => void
@@ -365,6 +366,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 isConverting={sellingToBTC || sellingToUSD}
                 onRefreshAccounts={refreshAccounts}
                 readOnly={!canWriteAccounts}
+                currentUserId={user?.id}
               />
             ))}
           </div>
@@ -414,6 +416,7 @@ interface AccountRowProps {
   isConverting?: boolean
   onRefreshAccounts?: () => Promise<void>
   readOnly?: boolean
+  currentUserId?: number
 }
 
 function AccountRow({
@@ -430,6 +433,7 @@ function AccountRow({
   isConverting,
   onRefreshAccounts,
   readOnly,
+  currentUserId,
 }: AccountRowProps) {
   const [linking, setLinking] = useState(false)
   const [perpsError, setPerpsError] = useState<string | null>(null)
@@ -640,6 +644,15 @@ function AccountRow({
             {account.prop_firm && (
               <PropGuardStatus account={account} />
             )}
+
+            {/* Account Sharing */}
+            <AccountSharingPanel
+              accountId={account.id}
+              accountName={account.name}
+              membershipRole={account.membership_role ?? 'owner'}
+              currentUserId={currentUserId || 0}
+              onLeave={onRefreshAccounts}
+            />
           </div>
         </div>
       )}

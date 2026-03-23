@@ -6,6 +6,7 @@ import { useMarketSeason } from './hooks/useMarketSeason'
 import { useIsAdmin } from './hooks/usePermission'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
+import { PendingInvitationsPopover } from './components/sharing/PendingInvitationsPopover'
 import { PaperTradingToggle } from './components/PaperTradingToggle'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
@@ -30,6 +31,7 @@ import { useUnreadCounts } from './pages/games/hooks/useChat'
 import { VerifyEmail } from './components/VerifyEmail'
 import { ResetPassword } from './components/ResetPassword'
 import MFAEmailVerify from './components/MFAEmailVerify'
+import { AcceptInvite } from './pages/AcceptInvite'
 import Login from './pages/Login'
 
 // App version - fetched from backend API at runtime (avoids Vite cache issues)
@@ -374,6 +376,9 @@ function AppContent() {
 
                 {/* Paper/Live Toggle */}
                 <PaperTradingToggle />
+
+                {/* Pending account invitations badge */}
+                <PendingInvitationsPopover onNavigate={(path) => navigate(path)} />
 
                 {/* Account Switcher */}
                 <AccountSwitcher
@@ -808,6 +813,9 @@ function App() {
   }
   if (location.pathname === '/reset-password') {
     return <ResetPasswordRoute />
+  }
+  if (location.pathname === '/accept-invite') {
+    return <AcceptInvite />
   }
   if (location.pathname === '/mfa-email-verify') {
     return <MFAEmailVerifyRoute />
