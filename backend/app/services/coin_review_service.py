@@ -84,9 +84,10 @@ Consider factors like:
 - Team credibility and project longevity
 - Tokenomics and unlock schedules
 
-IMPORTANT: Categorize ALL meme coins as MEME, not BLACKLISTED.
-Reserve BLACKLISTED for truly problematic projects
-(scams, abandoned, security issues).
+IMPORTANT: Categorize speculative-but-real meme coins as MEME (e.g. DOGE, SHIB, PEPE, WIF).
+If a meme coin is ALSO a proven rugpull, abandoned, or dead project, categorize it as BLACKLISTED —
+the meme origin does not protect it from being blacklisted.
+Reserve BLACKLISTED for truly problematic projects (scams, abandoned, security issues, proven rugpulls).
 
 Here are the coins to analyze (available on Coinbase across BTC, USD, and USDC markets):
 {coins_list}

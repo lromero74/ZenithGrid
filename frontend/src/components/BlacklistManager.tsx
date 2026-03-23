@@ -1,11 +1,12 @@
 /**
  * Blacklist Manager Component
  *
- * Manages coin categorization with 4 categories:
+ * Manages coin categorization with 5 categories:
  * - APPROVED: Solid projects, allowed to trade
  * - BORDERLINE: Decent but with concerns
  * - QUESTIONABLE: Higher risk projects
- * - BLACKLISTED: Do not trade
+ * - MEME: Community-driven speculative coins (DOGE, SHIB, etc.)
+ * - BLACKLISTED: Rugpulls, scams, abandoned — do not trade
  *
  * Category toggles control which categories can open new positions.
  */
@@ -32,10 +33,11 @@ const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderCo
   APPROVED: { color: 'text-green-400', bgColor: 'bg-green-600/20', borderColor: 'border-green-600/50', label: 'Approved', description: 'Solid project, safe to trade' },
   BORDERLINE: { color: 'text-yellow-400', bgColor: 'bg-yellow-600/20', borderColor: 'border-yellow-600/50', label: 'Borderline', description: 'Decent but has concerns' },
   QUESTIONABLE: { color: 'text-orange-400', bgColor: 'bg-orange-600/20', borderColor: 'border-orange-600/50', label: 'Questionable', description: 'Higher risk project' },
-  BLACKLISTED: { color: 'text-red-400', bgColor: 'bg-red-600/20', borderColor: 'border-red-600/50', label: 'Blacklisted', description: 'Do not trade' },
+  MEME: { color: 'text-purple-400', bgColor: 'bg-purple-600/20', borderColor: 'border-purple-600/50', label: 'Meme', description: 'Community-driven, speculative' },
+  BLACKLISTED: { color: 'text-red-400', bgColor: 'bg-red-600/20', borderColor: 'border-red-600/50', label: 'Blacklisted', description: 'Rugpull / scam / dead' },
 }
 
-const CATEGORIES = ['APPROVED', 'BORDERLINE', 'QUESTIONABLE', 'BLACKLISTED']
+const CATEGORIES = ['APPROVED', 'BORDERLINE', 'QUESTIONABLE', 'MEME', 'BLACKLISTED']
 
 // Coin with market info
 interface CoinInfo {
@@ -119,13 +121,14 @@ export function BlacklistManager() {
     if (reason.startsWith('[APPROVED]')) return 'APPROVED'
     if (reason.startsWith('[BORDERLINE]')) return 'BORDERLINE'
     if (reason.startsWith('[QUESTIONABLE]')) return 'QUESTIONABLE'
+    if (reason.startsWith('[MEME]')) return 'MEME'
     return 'BLACKLISTED'
   }
 
   // Helper to get reason text without category prefix
   const getReasonText = (reason: string | null): string => {
     if (!reason) return ''
-    return reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE|BLACKLISTED)\]\s*/, '')
+    return reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE|MEME|BLACKLISTED)\]\s*/, '')
   }
 
   // Build coin list with categories
@@ -175,6 +178,7 @@ export function BlacklistManager() {
       APPROVED: 0,
       BORDERLINE: 0,
       QUESTIONABLE: 0,
+      MEME: 0,
       BLACKLISTED: 0,
     }
     for (const coin of coinList) {

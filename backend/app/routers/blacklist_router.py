@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/blacklist", tags=["blacklist"])
 
 # Valid coin categories
-VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "BLACKLISTED"]
+VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "MEME", "BLACKLISTED"]
 
 
 # Pydantic schemas for blacklist operations

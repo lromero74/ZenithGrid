@@ -231,16 +231,15 @@ class TestUpdateCoinStatuses:
             "DOGE": {"category": "MEME", "reason": "Such wow"},
         }
 
-        # Mock async_session_maker to return our test session
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=db_session)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+        def make_session():
+            from contextlib import asynccontextmanager
 
-        with patch(
-            "app.services.coin_review_service.async_session_maker",
-            return_value=mock_session_ctx,
-        ):
-            stats = await update_coin_statuses(analysis)
+            @asynccontextmanager
+            async def _ctx():
+                yield db_session
+            return _ctx()
+
+        stats = await update_coin_statuses(analysis, session_maker=make_session)
 
         assert stats["added"] == 2
         assert stats["updated"] == 0
@@ -260,15 +259,15 @@ class TestUpdateCoinStatuses:
             "BTC": {"category": "APPROVED", "reason": "New reason"},
         }
 
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=db_session)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+        def make_session():
+            from contextlib import asynccontextmanager
 
-        with patch(
-            "app.services.coin_review_service.async_session_maker",
-            return_value=mock_session_ctx,
-        ):
-            stats = await update_coin_statuses(analysis)
+            @asynccontextmanager
+            async def _ctx():
+                yield db_session
+            return _ctx()
+
+        stats = await update_coin_statuses(analysis, session_maker=make_session)
 
         assert stats["updated"] == 1
 
@@ -286,15 +285,15 @@ class TestUpdateCoinStatuses:
             "BTC": {"category": "APPROVED", "reason": "Digital gold"},
         }
 
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=db_session)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+        def make_session():
+            from contextlib import asynccontextmanager
 
-        with patch(
-            "app.services.coin_review_service.async_session_maker",
-            return_value=mock_session_ctx,
-        ):
-            stats = await update_coin_statuses(analysis)
+            @asynccontextmanager
+            async def _ctx():
+                yield db_session
+            return _ctx()
+
+        stats = await update_coin_statuses(analysis, session_maker=make_session)
 
         assert stats["unchanged"] == 1
 
@@ -305,15 +304,15 @@ class TestUpdateCoinStatuses:
             "LUNA": {"category": "BLACKLISTED", "reason": "Collapsed"},
         }
 
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=db_session)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+        def make_session():
+            from contextlib import asynccontextmanager
 
-        with patch(
-            "app.services.coin_review_service.async_session_maker",
-            return_value=mock_session_ctx,
-        ):
-            stats = await update_coin_statuses(analysis)
+            @asynccontextmanager
+            async def _ctx():
+                yield db_session
+            return _ctx()
+
+        stats = await update_coin_statuses(analysis, session_maker=make_session)
 
         assert stats["added"] == 1
 

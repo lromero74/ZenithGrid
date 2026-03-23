@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.10] - 2026-03-23
+
+### Added
+- **Meme coin category** — meme coins (DOGE, SHIB, PEPE, WIF, etc.) now have their own distinct category, shown in purple throughout the coin manager. Previously they were mixed in with blacklisted coins, making it hard to tell community-driven speculative coins apart from proven rugpulls and dead projects. Meme coins that are also confirmed rugpulls or abandoned projects continue to be classified as Blacklisted.
+
+### Changed
+- **AI coin review distinguishes meme from blacklisted more precisely** — the AI is now instructed that a meme coin's community origin does not protect it from being blacklisted if it is also a proven scam, rugpull, or dead project.
+- **One extra PostgreSQL connection slot reserved for external access** — ad-hoc psql connections and maintenance scripts no longer hit the "remaining connection slots reserved for superuser" error during normal operation.
+
+### Fixed
+- **Coin review service tests** — four tests were patching a module attribute that no longer existed after an import rename. Tests now correctly pass the session factory as a parameter, matching how the function actually works.
+
 ## [v2.135.9] - 2026-03-23
 
 ### Fixed

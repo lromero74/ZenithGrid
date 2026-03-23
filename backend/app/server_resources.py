@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 # Lower it to favour API responsiveness over bot throughput.
 MONITOR_RESOURCE_SHARE = 0.60
 
-# Connections always reserved for superuser / DBA emergency access.
-PG_SUPERUSER_RESERVED = 3
+# Connections always reserved for superuser / DBA emergency access,
+# plus one spare slot for external ad-hoc access (psql, scripts, etc.).
+PG_SUPERUSER_RESERVED = 4
 
 # Fraction reserved for the read-only analytics pool (reports, account values).
 READ_POOL_SHARE = 0.12
