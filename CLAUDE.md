@@ -185,7 +185,7 @@ git checkout -b feature/my-feature    # Branch from main
 
 | Item | Value |
 |------|-------|
-| **EC2** | t2.micro, 1 vCPU, 1GB RAM, Amazon Linux 2023, us-east-1 |
+| **EC2** | 2 vCPU, 3.7GB RAM (Xeon Platinum 8259CL), Amazon Linux 2023, us-east-1 |
 | **URL** | https://tradebot.romerotechsolutions.com |
 | **Nginx** | `/etc/nginx/conf.d/tradebot.conf` → reverse proxy to :8100 |
 | **SSL** | Let's Encrypt via certbot (`sudo certbot renew --nginx`) |
