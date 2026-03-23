@@ -148,7 +148,7 @@ TTS_VOICES = {
     "emma": "en-US-EmmaNeural",
     "andrew": "en-US-AndrewNeural",
     "ava": "en-US-AvaNeural",
-    "ana": "en-US-AnaNeural",
+    # "ana" (en-US-AnaNeural) excluded — Azure child voice, not appropriate for news
     "christopher": "en-US-ChristopherNeural",
     "eric": "en-US-EricNeural",
     "michelle": "en-US-MichelleNeural",
