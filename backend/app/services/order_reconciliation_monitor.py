@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import Position, Trade
-from app.models.trading import Account
 
 logger = logging.getLogger(__name__)
 
@@ -200,136 +199,6 @@ class MissingOrderDetector:
         # Threshold for alerting (in BTC equivalent)
         self.alert_threshold_btc = 0.0001  # Alert if missing order is >= 0.0001 BTC
 
-    async def _reconcile_orphaned_orders(
-        self, missing_buys: list[dict], missing_sells: list[dict]
-    ) -> None:
-        """For each product with untracked filled orders, compute the net base holding.
-
-        - Net > 0: the position was partially or fully un-sold. Create an open tracking
-          Position (bot_id=None) plus Trade records for every order so the detector
-          never re-flags them.
-        - Net <= 0 (balanced or net-sold): no asset left to track. Acknowledge silently.
-
-        All orders are added to _acknowledged_missing_order_ids regardless of outcome
-        so subsequent runs stay quiet.
-        """
-        from collections import defaultdict
-
-        # Get account's user_id for position ownership
-        user_id = None
-        if self.account_id:
-            acc_result = await self.db.execute(
-                select(Account).where(Account.id == self.account_id)
-            )
-            account = acc_result.scalar_one_or_none()
-            if account:
-                user_id = account.user_id
-
-        # Group all orders by product
-        by_product: dict[str, dict] = defaultdict(lambda: {"buys": [], "sells": []})
-        for o in missing_buys:
-            by_product[o["product_id"]]["buys"].append(o)
-        for o in missing_sells:
-            by_product[o["product_id"]]["sells"].append(o)
-
-        for product_id, orders in by_product.items():
-            buys = orders["buys"]
-            sells = orders["sells"]
-
-            total_buy_base = sum(o["base_amount"] for o in buys)
-            total_sell_base = sum(o["base_amount"] for o in sells)
-            net_base = total_buy_base - total_sell_base
-
-            total_buy_quote = sum(o["quote_amount"] for o in buys)
-            total_sell_quote = sum(o["quote_amount"] for o in sells)
-            net_quote_cost = total_buy_quote - total_sell_quote
-
-            all_orders = buys + sells
-            n = len(all_orders)
-
-            if net_base <= 1e-8:
-                # Net zero or sold out — nothing to track
-                logger.info(
-                    f"Reconciliation: {product_id} — {n} untracked orders net to "
-                    f"{net_base:.8f} base (flat/closed). Acknowledged."
-                )
-                continue
-
-            # There's a real net holding — create a tracking position
-            avg_price = net_quote_cost / net_base if net_base > 0 else 0.0
-            quote_cost = max(net_quote_cost, 0.0)  # clamp: cost can't be negative
-
-            try:
-                position = Position(
-                    bot_id=None,
-                    account_id=self.account_id,
-                    user_id=user_id,
-                    product_id=product_id,
-                    status="open",
-                    direction="long",
-                    opened_at=datetime.utcnow(),
-                    initial_quote_balance=quote_cost or avg_price * net_base,
-                    max_quote_allowed=quote_cost or avg_price * net_base,
-                    total_quote_spent=quote_cost,
-                    total_base_acquired=net_base,
-                    average_buy_price=avg_price,
-                    notes=(
-                        f"Auto-reconciled from {n} untracked filled exchange orders "
-                        f"belonging to deleted/cancelled positions. "
-                        f"Buys: {len(buys)}, Sells: {len(sells)}."
-                    ),
-                )
-                self.db.add(position)
-                await self.db.flush()  # get position.id without full commit
-
-                # Create Trade records for each order so the detector finds them
-                # in the trades table on the next run and never re-flags them.
-                for o in buys:
-                    base = o["base_amount"]
-                    quote = o["quote_amount"]
-                    price = (quote / base) if base > 0 else avg_price
-                    created = o.get("created_time", "")
-                    ts = datetime.fromisoformat(created[:19]) if created else datetime.utcnow()
-                    self.db.add(Trade(
-                        position_id=position.id,
-                        timestamp=ts,
-                        side="buy",
-                        trade_type="dca",
-                        base_amount=base,
-                        quote_amount=quote,
-                        price=price,
-                        order_id=o["order_id"],
-                    ))
-
-                for o in sells:
-                    base = o["base_amount"]
-                    quote = o["quote_amount"]
-                    price = (quote / base) if base > 0 else avg_price
-                    created = o.get("created_time", "")
-                    ts = datetime.fromisoformat(created[:19]) if created else datetime.utcnow()
-                    self.db.add(Trade(
-                        position_id=position.id,
-                        timestamp=ts,
-                        side="sell",
-                        trade_type="sell",
-                        base_amount=base,
-                        quote_amount=quote,
-                        price=price,
-                        order_id=o["order_id"],
-                    ))
-
-                await self.db.commit()
-
-                logger.info(
-                    f"✅ Reconciled position #{position.id} created for {product_id}: "
-                    f"net {net_base:.6f} base @ avg {avg_price:.8f} "
-                    f"({n} orders linked as trades)."
-                )
-
-            except Exception as e:
-                await self.db.rollback()
-                logger.error(f"Failed to create reconciled position for {product_id}: {e}")
-
     async def check_for_missing_orders(self):
         """
         Compare exchange orders with recorded trades for both open and recently closed positions.
@@ -479,12 +348,39 @@ class MissingOrderDetector:
             for o in missing_buys + missing_sells + stuck_pending_orders:
                 _acknowledged_missing_order_ids.add(o["order_id"])
 
-            # For newly-found missing buy/sell orders: attempt smart reconciliation.
-            # Orders from deleted/cancelled positions that left a net positive holding
-            # are turned into tracking positions so the portfolio reflects reality.
-            # Orders that net to zero (closed trades) are simply acknowledged.
-            if new_buys or new_sells:
-                await self._reconcile_orphaned_orders(new_buys, new_sells)
+            # For newly-found missing buy/sell orders: log once at WARNING so the
+            # issue is visible, then acknowledge. The exchange API caps at 1000 orders
+            # so net-balance calculations from this data are unreliable (older sells
+            # may not be fetched). Subsequent detections of the same orders are
+            # suppressed to DEBUG — they belong to deleted/cancelled positions and
+            # will never appear in the trades table.
+            if new_buys:
+                logger.warning(
+                    f"⚠️  MISSING BUY ORDERS: {len(new_buys)} filled buy orders on exchange "
+                    f"not recorded in trades table (likely from deleted/cancelled positions). "
+                    f"Acknowledged — will not re-alert."
+                )
+                for o in new_buys[:5]:
+                    logger.warning(
+                        f"    - {o['product_id']} BUY: {o['base_amount']:.8f} base "
+                        f"order_id={o['order_id'][:12]}..."
+                    )
+                if len(new_buys) > 5:
+                    logger.warning(f"    ... and {len(new_buys) - 5} more")
+
+            if new_sells:
+                logger.warning(
+                    f"⚠️  MISSING SELL ORDERS: {len(new_sells)} filled sell orders on exchange "
+                    f"not recorded in trades table (likely from deleted/cancelled positions). "
+                    f"Acknowledged — will not re-alert."
+                )
+                for o in new_sells[:5]:
+                    logger.warning(
+                        f"    - {o['product_id']} SELL: {o['base_amount']:.8f} base "
+                        f"order_id={o['order_id'][:12]}..."
+                    )
+                if len(new_sells) > 5:
+                    logger.warning(f"    ... and {len(new_sells) - 5} more")
 
             # Stuck pending orders still need manual attention — no auto-fix available.
             if new_stuck:

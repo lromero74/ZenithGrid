@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.3] - 2026-03-23
+
+### Fixed
+- **Orphaned order monitor no longer creates phantom positions** — the auto-reconciliation added in v2.135.2 used a net-balance calculation from the exchange API, but the API hard-caps responses at 1000 orders, meaning older sell orders could be missing from the result. This made it appear that untracked buy orders left a larger net holding than actually existed, leading to phantom positions with inflated quantities. The reconciler now logs newly-detected orphaned orders once at WARNING (so the issue is visible) and silently suppresses all future detections of the same orders — no phantom positions are created.
+
 ## [v2.135.2] - 2026-03-23
 
 ### Fixed
