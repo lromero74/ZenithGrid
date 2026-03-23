@@ -890,6 +890,9 @@ class MultiBotMonitor:
                 logger.debug("Sleeping 10 seconds before next iteration...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
 
+            except asyncio.CancelledError:
+                logger.info("Monitor loop cancelled — exiting cleanly")
+                raise  # propagate so the task is marked cancelled
             except Exception as e:
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)
                 # Wait a bit before retrying
@@ -928,13 +931,22 @@ class MultiBotMonitor:
             logger.warning("Monitor already running, ignoring duplicate start() call")
 
     async def stop(self):
-        """Stop the monitoring task"""
+        """Stop the monitoring task.
+
+        Cancels the monitor loop task so shutdown completes in seconds instead
+        of waiting for the current cycle to finish (which can take 20+ seconds
+        due to reconciliation and exchange API calls).
+        """
         self.running = False
         # Stop order monitor (if available)
         if self.order_monitor:
             await self.order_monitor.stop()
-        if self.task:
-            await self.task
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
             logger.info("Multi-bot monitor task stopped")
 
     async def get_status(self) -> Dict[str, Any]:

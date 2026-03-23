@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.135.9] - 2026-03-23
+
+### Fixed
+- **Backend shuts down cleanly on restart** — the monitor loop previously blocked SIGTERM for up to 20+ seconds while finishing the current cycle (reconciliation, exchange API calls). The monitor task is now cancelled immediately on shutdown and exits within a second. Fixes 502 errors that appeared during service restarts.
+
 ## [v2.135.8] - 2026-03-23
 
 ### Fixed
