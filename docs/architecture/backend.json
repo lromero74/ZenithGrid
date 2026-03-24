@@ -68,7 +68,7 @@
     {
       "file": "routers/news_tts_router.py",
       "prefix": "/api/news",
-      "purpose": "Text-to-speech generation, audio caching, voice subscriptions"
+      "purpose": "Text-to-speech generation, audio caching, voice subscriptions; voices include Microsoft Edge TTS Neural voices and 7 added Neural/Multilingual Neural variants: davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi"
     },
     {
       "file": "routers/order_history.py",
@@ -128,7 +128,7 @@
     {
       "file": "routers/reports_router.py",
       "prefix": "/api/reports",
-      "purpose": "Financial goals CRUD, expense item CRUD, expense categories, report schedules, generated reports, goal trend data with auto-backfill"
+      "purpose": "Financial goals CRUD, expense item CRUD (supports both expense and savings_target item types), expense categories, report schedules, generated reports, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; _goal_to_dict() returns savings_target_count"
     },
     {
       "file": "routers/transfers_router.py",
@@ -812,9 +812,16 @@
         "frequency",
         "frequency_n",
         "frequency_anchor",
-        "is_active"
+        "is_active",
+        "item_type",
+        "savings_target_amount",
+        "savings_target_date",
+        "savings_is_recurring",
+        "savings_recurrence_months",
+        "assumed_growth_rate_pct",
+        "savings_current_balance"
       ],
-      "purpose": "Itemized living expenses for expense-type goals, each with its own frequency normalized to the goal's expense_period for coverage calculations"
+      "purpose": "Itemized living expenses or savings targets for expense-type goals. item_type is 'expense' (default) or 'savings_target'. Savings targets carry a goal amount, target date, optional growth rate, current balance, and optional recurring recurrence; the PMT formula in expense_service computes the required monthly contribution. Expenses are normalized to the goal period for coverage waterfall calculations."
     },
     {
       "name": "ReportSchedule",
@@ -1251,7 +1258,7 @@
     },
     {
       "file": "services/expense_service.py",
-      "purpose": "Expense item normalization (frequency to period) and coverage waterfall calculations for expenses goals",
+      "purpose": "Expense item normalization (frequency to period), PMT-formula monthly savings contribution calculation (compute_monthly_savings_contribution()), savings target entry builder (_build_savings_target_entry()), and two-pass coverage waterfall for expense-type goals: first pass sums expenses, second pass sums savings target contributions",
       "type": "analysis"
     },
     {
@@ -2020,7 +2027,7 @@
     }
   ],
   "migrations": {
-    "count": 77,
+    "count": 78,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2102,7 +2109,8 @@
       "add_admin_display_name.py",
       "add_donations_table.py",
       "extend_game_high_scores.py",
-      "068_domain_schemas.py"
+      "068_domain_schemas.py",
+      "071_expense_savings_targets.py"
     ]
   }
 }

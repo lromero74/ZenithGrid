@@ -2,10 +2,13 @@
 Expense Service
 
 Handles expense item normalization and coverage waterfall calculations
-for the expenses goal type.
+for the expenses goal type, including savings targets with PMT-based
+monthly contribution calculations.
 """
 
 import logging
+import math
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -77,6 +80,127 @@ def normalize_item_to_period(item, period: str) -> float:
     return normalize_monthly_to_period(monthly, period)
 
 
+def compute_monthly_savings_contribution(
+    target_amount: float,
+    target_date: date,
+    current_balance: float,
+    annual_growth_rate_pct: float,
+    tax_pct: float,
+) -> float:
+    """
+    Calculate the required monthly contribution to reach target_amount by target_date,
+    given current_balance growing at annual_growth_rate_pct.
+
+    Uses the standard PMT formula:
+        PMT = r * (FV - PV*(1+r)^n) / ((1+r)^n - 1)
+    where r = monthly rate, n = months remaining, PV = current_balance, FV = gross target.
+
+    Returns 0.0 if:
+    - target_date is in the past (can't contribute retroactively)
+    - current_balance already meets or exceeds the gross target
+    """
+    today = date.today()
+    if target_date <= today:
+        return 0.0
+
+    # Gross up target for tax withholding (if proceeds are taxed)
+    gross_target = target_amount / (1 - tax_pct / 100) if tax_pct > 0 else target_amount
+
+    if current_balance >= gross_target:
+        return 0.0
+
+    # Months remaining (fractional)
+    days_remaining = (target_date - today).days
+    n = days_remaining / 30.4375  # average days per month
+
+    if n <= 0:
+        return 0.0
+
+    r = annual_growth_rate_pct / 100.0 / 12.0  # monthly rate
+
+    if r == 0.0:
+        # Simple linear: no growth
+        return (gross_target - current_balance) / n
+
+    # Standard PMT for future value with existing present value:
+    # PMT = r * (FV - PV*(1+r)^n) / ((1+r)^n - 1)
+    factor = math.pow(1 + r, n)
+    numerator = r * (gross_target - current_balance * factor)
+    denominator = factor - 1
+    if denominator <= 0:
+        return 0.0
+
+    return max(0.0, numerator / denominator)
+
+
+def _build_savings_target_entry(item, period: str, income_after_tax: float, tax_pct: float) -> Dict[str, Any]:
+    """Build a savings target entry with contribution + progress fields."""
+    target_amount = getattr(item, "savings_target_amount", 0.0) or 0.0
+    target_date = getattr(item, "savings_target_date", None)
+    current_balance = getattr(item, "savings_current_balance", 0.0) or 0.0
+    growth_rate = getattr(item, "assumed_growth_rate_pct", 0.0) or 0.0
+    is_recurring = getattr(item, "savings_is_recurring", False)
+    recurrence_months = getattr(item, "savings_recurrence_months", None)
+
+    today = date.today()
+    months_remaining = 0
+    if target_date and target_date > today:
+        months_remaining = round((target_date - today).days / 30.4375)
+
+    # Required monthly contribution (PMT, no tax gross-up here — tax applied at goal level)
+    monthly_contribution = compute_monthly_savings_contribution(
+        target_amount=target_amount,
+        target_date=target_date or today,
+        current_balance=current_balance,
+        annual_growth_rate_pct=growth_rate,
+        tax_pct=0.0,  # tax gross-up is a report-level concern, not per-item
+    )
+
+    # Normalize monthly contribution to the goal period
+    monthly_in_period = normalize_monthly_to_period(monthly_contribution, period)
+
+    savings_pct = min((current_balance / target_amount * 100) if target_amount > 0 else 0.0, 100.0)
+
+    # On-track: compare current_balance to what FV should be by now (compound growth)
+    # Expected = FV of starting balance ($0 assumed) + contributions made
+    # Simplified: if savings_pct >= linear time fraction, call it on track
+    savings_on_track = False
+    if target_date and target_date > today and target_amount > 0:
+        # We don't know start_date here, so use savings_pct as a proxy.
+        savings_on_track = current_balance >= target_amount or savings_pct >= 50.0
+
+    # Determine status based on past due / funded / progress
+    if target_date and target_date <= today:
+        if current_balance >= target_amount:
+            status = "funded"
+        else:
+            status = "past_due"
+    elif current_balance >= target_amount:
+        status = "funded"
+    else:
+        status = "pending"  # will be overridden by waterfall coverage check
+
+    return {
+        "id": getattr(item, "id", None),
+        "name": item.name,
+        "category": getattr(item, "category", "Savings"),
+        "target_amount": round(target_amount, 2),
+        "target_date": target_date.isoformat() if target_date else None,
+        "current_balance": round(current_balance, 2),
+        "savings_pct": round(savings_pct, 1),
+        "months_remaining": months_remaining,
+        "monthly_contribution": round(monthly_contribution, 2),
+        "normalized_amount": round(monthly_in_period, 2),  # period-normalized contribution
+        "assumed_growth_rate_pct": growth_rate,
+        "is_recurring": is_recurring,
+        "recurrence_months": recurrence_months,
+        "savings_on_track": savings_on_track,
+        "sort_order": getattr(item, "sort_order", 0),
+        "status": status,
+        "coverage_pct": 0.0,  # set by waterfall pass below
+    }
+
+
 def compute_expense_coverage(
     items: list,
     period: str,
@@ -85,18 +209,28 @@ def compute_expense_coverage(
     sort_mode: str = "amount_asc",
 ) -> Dict[str, Any]:
     """
-    Compute coverage waterfall for expense items.
+    Compute coverage waterfall for expense items and savings targets.
 
-    1. Normalize all items to the goal period
-    2. Sort by sort_mode: amount_asc (default), amount_desc, or custom
-    3. Walk through deducting from income after tax
-    4. Return coverage status for each item
+    Pass 1 — Regular expenses:
+        1. Normalize all expense items (item_type='expense') to the goal period
+        2. Sort by sort_mode: amount_asc (default), amount_desc, or custom
+        3. Walk through deducting from income after tax
+        4. Return coverage status for each item
+
+    Pass 2 — Savings targets (item_type='savings_target'):
+        5. Calculate required monthly contribution (PMT) per target
+        6. Walk through remaining income after expenses
+        7. Return coverage status per target + progress tracking fields
     """
     income_after_tax = projected_income * (1 - tax_pct / 100)
 
-    # Normalize and sort items
+    # Split items into expenses and savings targets
+    expense_items = [i for i in items if getattr(i, "item_type", "expense") != "savings_target"]
+    savings_items = [i for i in items if getattr(i, "item_type", "expense") == "savings_target"]
+
+    # --- Pass 1: Expense waterfall ---
     normalized = []
-    for item in items:
+    for item in expense_items:
         amount_mode = getattr(item, "amount_mode", "fixed") or "fixed"
         pct_of_income = getattr(item, "percent_of_income", None)
         pct_basis = getattr(item, "percent_basis", None)
@@ -177,14 +311,56 @@ def compute_expense_coverage(
         if total_expenses > 0 else 100.0
     )
 
+    # --- Pass 2: Savings target waterfall ---
+    # Run against income remaining after expenses
+    savings_remaining = max(income_after_tax - total_expenses, 0.0)
+    savings_entries = []
+    total_savings_contributions = 0.0
+
+    for item in savings_items:
+        entry = _build_savings_target_entry(item, period, income_after_tax, tax_pct)
+        contrib = entry["normalized_amount"]
+        total_savings_contributions += contrib
+
+        # Override status from waterfall coverage
+        if entry["status"] in ("funded", "past_due"):
+            pass  # keep computed status
+        elif contrib <= 0:
+            entry["status"] = "funded"
+            entry["coverage_pct"] = 100.0
+        elif savings_remaining >= contrib:
+            entry["status"] = "covered"
+            entry["coverage_pct"] = 100.0
+            savings_remaining -= contrib
+        elif savings_remaining > 0:
+            entry["status"] = "partial"
+            entry["coverage_pct"] = round(savings_remaining / contrib * 100, 1)
+            entry["shortfall"] = round(contrib - savings_remaining, 2)
+            savings_remaining = 0.0
+        else:
+            entry["status"] = "uncovered"
+            entry["coverage_pct"] = 0.0
+
+        savings_entries.append(entry)
+
+    total_claims = round(total_expenses + total_savings_contributions, 2)
+    savings_coverage_pct = (
+        min(max(income_after_tax - total_expenses, 0.0) / total_savings_contributions * 100, 100.0)
+        if total_savings_contributions > 0 else 100.0
+    )
+
     result = {
         "total_expenses": round(total_expenses, 2),
+        "total_savings_contributions": round(total_savings_contributions, 2),
+        "total_claims": total_claims,
         "income_after_tax": round(income_after_tax, 2),
         "coverage_pct": round(coverage_pct, 1),
+        "savings_coverage_pct": round(savings_coverage_pct, 1),
         "shortfall": round(shortfall, 2),
         "covered_count": covered_count,
         "total_count": len(normalized),
         "items": normalized,
+        "savings_targets": savings_entries,
     }
 
     # Add granular deposit targets

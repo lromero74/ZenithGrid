@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.138.0] - 2026-03-24
+
+### Added
+- **Savings targets in expense goals** — you can now add "save up for" items alongside regular expenses in any expenses goal. Create a savings target with a goal amount (e.g. $5,000 for a cruise), a target date, how much you've already saved, and an assumed annual growth rate. The system uses the PMT formula to calculate the required monthly contribution and shows it in the same coverage waterfall as your expenses — so you can see at a glance whether your income covers both your bills and your savings goals.
+- **Savings target progress tracking** — each target shows a progress bar, percentage saved, months remaining, and an on-track indicator. Recurring targets (e.g. vacation fund that replenishes every 24 months) are supported.
+- **Expense editor redesigned as unified items editor** — the "Manage Expenses" panel now has an Expense / Savings Target toggle at the top when adding a new item. Savings targets display with a green piggy-bank badge and show "Goal: $X by [date] · Y% saved" instead of amount/frequency.
+- **Goal cards show item type counts** — the expenses goal card now shows separate counts for expenses and savings targets (e.g. "3 expenses, 2 savings targets").
+
 ## [v2.137.0] - 2026-03-24
 
 ### Added

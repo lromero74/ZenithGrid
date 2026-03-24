@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, Pencil, Trash2, GripVertical, ChevronsUp, ChevronsDown, ArrowUpNarrowWide, ArrowDownNarrowWide } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, GripVertical, ChevronsUp, ChevronsDown, ArrowUpNarrowWide, ArrowDownNarrowWide, PiggyBank } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
@@ -143,37 +143,60 @@ function SortableExpenseRow({
       {/* Item details */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
-            {item.category}
-          </span>
+          {item.item_type === 'savings_target' ? (
+            <span className="text-xs px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-700/50 text-emerald-300 flex items-center gap-1">
+              <PiggyBank className="w-3 h-3" /> Savings
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
+              {item.category}
+            </span>
+          )}
           <span className="font-medium text-white truncate">{item.name}</span>
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-          {item.amount_mode === 'percent_of_income' ? (
-            <span>
-              {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
-            </span>
+          {item.item_type === 'savings_target' ? (
+            <>
+              <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
+              {item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
+                <span className="text-emerald-400">
+                  {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+                </span>
+              )}
+              <span className="text-slate-500">|</span>
+              <span className="text-emerald-400">
+                {prefix}{(item.normalized_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{periodLabel} contribution
+              </span>
+            </>
           ) : (
             <>
-              <span>
-                {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
-              </span>
-              {item.frequency === 'every_n_days' && item.frequency_n && (
-                <span>(every {item.frequency_n} days)</span>
+              {item.amount_mode === 'percent_of_income' ? (
+                <span>
+                  {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
+                </span>
+              ) : (
+                <>
+                  <span>
+                    {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+                  </span>
+                  {item.frequency === 'every_n_days' && item.frequency_n && (
+                    <span>(every {item.frequency_n} days)</span>
+                  )}
+                </>
               )}
+              {badge && (
+                <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+                  {badge}
+                </span>
+              )}
+              <span className="text-slate-500">|</span>
+              <span className="text-blue-400">
+                {prefix}{(item.normalized_amount || 0).toLocaleString(
+                  undefined, { maximumFractionDigits: 2 }
+                )}{periodLabel}
+              </span>
             </>
           )}
-          {badge && (
-            <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
-              {badge}
-            </span>
-          )}
-          <span className="text-slate-500">|</span>
-          <span className="text-blue-400">
-            {prefix}{(item.normalized_amount || 0).toLocaleString(
-              undefined, { maximumFractionDigits: 2 }
-            )}{periodLabel}
-          </span>
         </div>
       </div>
 
@@ -305,10 +328,19 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
   const [amountMode, setAmountMode] = useState<'fixed' | 'percent_of_income'>('fixed')
   const [percentOfIncome, setPercentOfIncome] = useState('')
   const [percentBasis, setPercentBasis] = useState<'pre_tax' | 'post_tax'>('pre_tax')
+  // Savings target state
+  const [itemType, setItemType] = useState<'expense' | 'savings_target'>('expense')
+  const [savingsTargetAmount, setSavingsTargetAmount] = useState('')
+  const [savingsTargetDate, setSavingsTargetDate] = useState('')
+  const [savingsCurrentBalance, setSavingsCurrentBalance] = useState('')
+  const [savingsGrowthRate, setSavingsGrowthRate] = useState('8')
+  const [savingsIsRecurring, setSavingsIsRecurring] = useState(false)
+  const [savingsRecurrenceMonths, setSavingsRecurrenceMonths] = useState('')
 
   const resolvedCategory = category === '__custom__' ? customCategory : category
   const isDonations = resolvedCategory.toLowerCase() === 'donations'
   const isPercentMode = isDonations && amountMode === 'percent_of_income'
+  const isSavings = itemType === 'savings_target'
 
   const needsMonth = frequency === 'quarterly' || frequency === 'semi_annual' || frequency === 'yearly'
   const needsDow = frequency === 'weekly' || frequency === 'biweekly'
@@ -332,6 +364,13 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     setAmountMode('fixed')
     setPercentOfIncome('')
     setPercentBasis('pre_tax')
+    setItemType('expense')
+    setSavingsTargetAmount('')
+    setSavingsTargetDate('')
+    setSavingsCurrentBalance('')
+    setSavingsGrowthRate('8')
+    setSavingsIsRecurring(false)
+    setSavingsRecurrenceMonths('')
     setEditing(null)
     setShowForm(false)
   }
@@ -341,35 +380,69 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
       setCategory(categories.includes(editing.category) ? editing.category : '__custom__')
       setCustomCategory(categories.includes(editing.category) ? '' : editing.category)
       setName(editing.name)
-      setAmount(String(editing.amount))
-      setFrequency(editing.frequency)
-      setFrequencyN(editing.frequency_n ? String(editing.frequency_n) : '')
-      setAnchor(editing.frequency_anchor || '')
+      setItemType(editing.item_type || 'expense')
 
-      const isWeeklyType = editing.frequency === 'weekly' || editing.frequency === 'biweekly'
-      if (isWeeklyType) {
-        setDueDow(editing.due_day != null ? String(editing.due_day) : '')
+      if (editing.item_type === 'savings_target') {
+        // Savings target fields
+        setSavingsTargetAmount(editing.savings_target_amount != null ? String(editing.savings_target_amount) : '')
+        setSavingsTargetDate(editing.savings_target_date || '')
+        setSavingsCurrentBalance(editing.savings_current_balance != null ? String(editing.savings_current_balance) : '0')
+        setSavingsGrowthRate(editing.assumed_growth_rate_pct != null ? String(editing.assumed_growth_rate_pct) : '8')
+        setSavingsIsRecurring(editing.savings_is_recurring || false)
+        setSavingsRecurrenceMonths(editing.savings_recurrence_months != null ? String(editing.savings_recurrence_months) : '')
+        // Reset expense-only fields
+        setAmount('0')
+        setFrequency('monthly')
+        setFrequencyN('')
         setDueDay('')
         setDueDayLast(false)
-      } else if (editing.due_day === -1) {
-        setDueDayLast(true)
-        setDueDay('')
+        setDueMonth('')
         setDueDow('')
-      } else if (editing.due_day != null) {
-        setDueDayLast(false)
-        setDueDay(String(editing.due_day))
-        setDueDow('')
+        setAnchor('')
+        setLoginUrl('')
+        setAmountMode('fixed')
+        setPercentOfIncome('')
+        setPercentBasis('pre_tax')
       } else {
-        setDueDayLast(false)
-        setDueDay('')
-        setDueDow('')
+        // Expense fields
+        setAmount(String(editing.amount))
+        setFrequency(editing.frequency)
+        setFrequencyN(editing.frequency_n ? String(editing.frequency_n) : '')
+        setAnchor(editing.frequency_anchor || '')
+
+        const isWeeklyType = editing.frequency === 'weekly' || editing.frequency === 'biweekly'
+        if (isWeeklyType) {
+          setDueDow(editing.due_day != null ? String(editing.due_day) : '')
+          setDueDay('')
+          setDueDayLast(false)
+        } else if (editing.due_day === -1) {
+          setDueDayLast(true)
+          setDueDay('')
+          setDueDow('')
+        } else if (editing.due_day != null) {
+          setDueDayLast(false)
+          setDueDay(String(editing.due_day))
+          setDueDow('')
+        } else {
+          setDueDayLast(false)
+          setDueDay('')
+          setDueDow('')
+        }
+
+        setDueMonth(editing.due_month ? String(editing.due_month) : '')
+        setLoginUrl(editing.login_url || '')
+        setAmountMode(editing.amount_mode || 'fixed')
+        setPercentOfIncome(editing.percent_of_income ? String(editing.percent_of_income) : '')
+        setPercentBasis(editing.percent_basis || 'pre_tax')
+        // Reset savings fields
+        setSavingsTargetAmount('')
+        setSavingsTargetDate('')
+        setSavingsCurrentBalance('')
+        setSavingsGrowthRate('8')
+        setSavingsIsRecurring(false)
+        setSavingsRecurrenceMonths('')
       }
 
-      setDueMonth(editing.due_month ? String(editing.due_month) : '')
-      setLoginUrl(editing.login_url || '')
-      setAmountMode(editing.amount_mode || 'fixed')
-      setPercentOfIncome(editing.percent_of_income ? String(editing.percent_of_income) : '')
-      setPercentBasis(editing.percent_basis || 'pre_tax')
       setShowForm(true)
     }
   }, [editing, categories])
@@ -451,7 +524,31 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const finalCategory = category === '__custom__' ? customCategory : category
+
+    if (isSavings) {
+      const data: any = {
+        item_type: 'savings_target',
+        category: finalCategory,
+        name,
+        savings_target_amount: parseFloat(savingsTargetAmount),
+        savings_target_date: savingsTargetDate,
+        savings_current_balance: savingsCurrentBalance ? parseFloat(savingsCurrentBalance) : 0,
+        assumed_growth_rate_pct: savingsGrowthRate ? parseFloat(savingsGrowthRate) : 0,
+        savings_is_recurring: savingsIsRecurring,
+      }
+      if (savingsIsRecurring && savingsRecurrenceMonths) {
+        data.savings_recurrence_months = parseInt(savingsRecurrenceMonths)
+      }
+      if (editing) {
+        updateItem.mutate({ id: editing.id, data })
+      } else {
+        createItem.mutate(data)
+      }
+      return
+    }
+
     const data: any = {
+      item_type: 'expense',
       category: finalCategory,
       name,
       amount: isPercentMode ? 0 : parseFloat(amount),
@@ -507,12 +604,38 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     <form onSubmit={handleSubmit} className="bg-slate-700/30 rounded-lg p-4 space-y-3 border border-slate-600">
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium text-slate-300">
-          {editing ? 'Edit Expense' : 'New Expense'}
+          {editing
+            ? (isSavings ? 'Edit Savings Target' : 'Edit Expense')
+            : (isSavings ? 'New Savings Target' : 'New Expense')}
         </span>
         <button type="button" onClick={resetForm} className="text-slate-400 hover:text-white text-xs">
           Cancel
         </button>
       </div>
+
+      {/* Item type toggle */}
+      {!editing && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1.5">Type</label>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setItemType('expense')}
+              className={`${pillBase} ${itemType === 'expense' ? pillActive : pillInactive}`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => setItemType('savings_target')}
+              className={`${pillBase} ${itemType === 'savings_target' ? 'bg-emerald-700 border-emerald-600 text-white' : pillInactive}`}
+            >
+              <PiggyBank className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+              Savings Target
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -553,8 +676,93 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </div>
       </div>
 
-      {/* Amount mode toggle — Donations only */}
-      {isDonations && (
+      {/* Savings target fields */}
+      {isSavings && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Target Amount ({currency})</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={savingsTargetAmount}
+                onChange={e => setSavingsTargetAmount(e.target.value)}
+                required
+                placeholder="5000"
+                className={`w-full ${inputCls} placeholder-slate-500`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Target Date</label>
+              <input
+                type="date"
+                value={savingsTargetDate}
+                onChange={e => setSavingsTargetDate(e.target.value)}
+                required
+                className={`w-full ${inputCls}`}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Currently Saved ({currency})</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={savingsCurrentBalance}
+                onChange={e => setSavingsCurrentBalance(e.target.value)}
+                placeholder="0"
+                className={`w-full ${inputCls} placeholder-slate-500`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Annual Growth Rate (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="50"
+                value={savingsGrowthRate}
+                onChange={e => setSavingsGrowthRate(e.target.value)}
+                placeholder="8"
+                className={`w-full ${inputCls} placeholder-slate-500`}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={savingsIsRecurring}
+                onChange={e => setSavingsIsRecurring(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-700 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0"
+              />
+              <span className="text-xs text-slate-300">Recurring goal (restarts after each cycle)</span>
+            </label>
+            {savingsIsRecurring && (
+              <div className="flex items-center gap-2 mt-2 ml-6">
+                <span className="text-xs text-slate-400">Repeat every</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="360"
+                  value={savingsRecurrenceMonths}
+                  onChange={e => setSavingsRecurrenceMonths(e.target.value)}
+                  placeholder="24"
+                  required
+                  className={`w-20 ${inputCls} placeholder-slate-500`}
+                />
+                <span className="text-xs text-slate-400">months</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Amount mode toggle — Donations only (expense mode) */}
+      {!isSavings && isDonations && (
         <div>
           <label className="block text-xs text-slate-400 mb-1.5">Amount Mode</label>
           <div className="flex gap-1.5">
@@ -576,8 +784,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </div>
       )}
 
-      {/* Amount — fixed mode */}
-      {!isPercentMode && (
+      {/* Amount — fixed mode (expense only) */}
+      {!isSavings && !isPercentMode && (
         <div>
           <label className="block text-xs text-slate-400 mb-1">Amount ({currency})</label>
           <input
@@ -592,8 +800,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </div>
       )}
 
-      {/* Percent of income — percent mode */}
-      {isPercentMode && (
+      {/* Percent of income — percent mode (expense only) */}
+      {!isSavings && isPercentMode && (
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Percentage of Income</label>
@@ -634,8 +842,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </div>
       )}
 
-      {/* Frequency pills — hidden in percent mode */}
-      {!isPercentMode && <div>
+      {/* Frequency pills — hidden in percent mode and savings mode */}
+      {!isSavings && !isPercentMode && <div>
         <label className="block text-xs text-slate-400 mb-1.5">Frequency</label>
         <div className="flex flex-wrap gap-1.5">
           {FREQUENCY_PILLS.map(o => (
@@ -676,8 +884,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         )}
       </div>}
 
-      {/* Due date — frequency-aware */}
-      {!isPercentMode && showDueSection && (
+      {/* Due date — frequency-aware (expense only) */}
+      {!isSavings && !isPercentMode && showDueSection && (
         <div>
           <label className="block text-xs text-slate-400 mb-1.5">
             Due Date (optional)
@@ -751,26 +959,31 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </div>
       )}
 
-      {/* Login URL */}
-      <div>
-        <label className="block text-xs text-slate-400 mb-1">Login / Payment URL (optional)</label>
-        <input
-          type="url"
-          value={loginUrl}
-          onChange={e => setLoginUrl(e.target.value)}
-          placeholder="https://..."
-          className={`w-full ${inputCls} placeholder-slate-500`}
-        />
-      </div>
+      {/* Login URL — expense only */}
+      {!isSavings && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Login / Payment URL (optional)</label>
+          <input
+            type="url"
+            value={loginUrl}
+            onChange={e => setLoginUrl(e.target.value)}
+            placeholder="https://..."
+            className={`w-full ${inputCls} placeholder-slate-500`}
+          />
+        </div>
+      )}
 
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={createItem.isPending || updateItem.isPending || !name
-            || (isPercentMode ? !percentOfIncome : !amount)
-            || (!category || (category === '__custom__' && !customCategory))}
-          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium
-            rounded transition-colors"
+          disabled={
+            createItem.isPending || updateItem.isPending || !name
+            || (!category || (category === '__custom__' && !customCategory))
+            || (isSavings ? (!savingsTargetAmount || !savingsTargetDate) : (isPercentMode ? !percentOfIncome : !amount))
+          }
+          className={`px-4 py-1.5 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors ${
+            isSavings ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
         >
           {(createItem.isPending || updateItem.isPending) ? 'Saving...' : editing ? 'Update' : 'Add'}
         </button>
@@ -780,6 +993,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
 
   const readOnlyRow = (item: ExpenseItem, index: number) => {
     const badge = formatDueBadge(item)
+    const isSavingsItem = item.item_type === 'savings_target'
     return (
       <div key={item.id} className="flex items-center gap-2 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
         <span className="text-[10px] font-mono text-slate-500 shrink-0 w-10 text-center">
@@ -787,37 +1001,60 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
-              {item.category}
-            </span>
+            {isSavingsItem ? (
+              <span className="text-xs px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-700/50 text-emerald-300 flex items-center gap-1">
+                <PiggyBank className="w-3 h-3" /> Savings
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
+                {item.category}
+              </span>
+            )}
             <span className="font-medium text-white truncate">{item.name}</span>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-            {item.amount_mode === 'percent_of_income' ? (
-              <span>
-                {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
-              </span>
+            {isSavingsItem ? (
+              <>
+                <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
+                {item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
+                  <span className="text-emerald-400">
+                    {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+                  </span>
+                )}
+                <span className="text-slate-500">|</span>
+                <span className="text-emerald-400">
+                  {prefix}{(item.normalized_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{periodLabel} contribution
+                </span>
+              </>
             ) : (
               <>
-                <span>
-                  {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
-                </span>
-                {item.frequency === 'every_n_days' && item.frequency_n && (
-                  <span>(every {item.frequency_n} days)</span>
+                {item.amount_mode === 'percent_of_income' ? (
+                  <span>
+                    {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+                    </span>
+                    {item.frequency === 'every_n_days' && item.frequency_n && (
+                      <span>(every {item.frequency_n} days)</span>
+                    )}
+                  </>
                 )}
+                {badge && (
+                  <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+                    {badge}
+                  </span>
+                )}
+                <span className="text-slate-500">|</span>
+                <span className="text-blue-400">
+                  {prefix}{(item.normalized_amount || 0).toLocaleString(
+                    undefined, { maximumFractionDigits: 2 }
+                  )}{periodLabel}
+                </span>
               </>
             )}
-            {badge && (
-              <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
-                {badge}
-              </span>
-            )}
-            <span className="text-slate-500">|</span>
-            <span className="text-blue-400">
-              {prefix}{(item.normalized_amount || 0).toLocaleString(
-                undefined, { maximumFractionDigits: 2 }
-              )}{periodLabel}
-            </span>
           </div>
         </div>
       </div>
@@ -839,7 +1076,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
             periodLabel={periodLabel}
             onEdit={setEditing}
             onDelete={async (id) => {
-              if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' }))
+              if (await confirm({ title: 'Delete Item', message: 'Delete this item?', variant: 'danger', confirmLabel: 'Delete' }))
                 deleteItem.mutate(id)
             }}
             onMoveToTop={handleMoveToTop}
@@ -857,7 +1094,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         flex flex-col relative">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div>
-            <h3 className="text-lg font-semibold text-white">{readOnly ? 'Expense Items' : 'Manage Expenses'}</h3>
+            <h3 className="text-lg font-semibold text-white">{readOnly ? 'Expense Items' : 'Manage Expenses & Savings'}</h3>
             {!readOnly && displayItems.length > 1 && (
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-xs text-slate-500">Sort:</p>
@@ -928,7 +1165,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
                 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center
                 gap-2 text-sm"
             >
-              <Plus className="w-4 h-4" /> Add Expense
+              <Plus className="w-4 h-4" /> Add Expense or Savings Target
             </button>
           )}
         </div>

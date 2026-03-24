@@ -506,6 +506,222 @@ class TestPercentOfIncomeDonations:
         assert result["items"][0]["normalized_amount"] == pytest.approx(300.0)
 
 
+class TestComputeMonthlySavingsContribution:
+    """Tests for PMT-based monthly contribution calculator."""
+
+    def test_no_growth_no_existing_savings(self):
+        """At 0% growth: contribution = target / months_remaining."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() + timedelta(days=365)  # ~12 months
+        result = compute_monthly_savings_contribution(
+            target_amount=1200.0,
+            target_date=target_date,
+            current_balance=0.0,
+            annual_growth_rate_pct=0.0,
+            tax_pct=0.0,
+        )
+        # ~$100/month (exact depends on days remaining, approx 12 months)
+        assert result == pytest.approx(100.0, rel=0.1)
+
+    def test_with_growth_reduces_required_contribution(self):
+        """With positive growth, needed monthly contribution is less than flat."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() + timedelta(days=365 * 2)  # 24 months
+        no_growth = compute_monthly_savings_contribution(
+            target_amount=5000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        with_growth = compute_monthly_savings_contribution(
+            target_amount=5000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=8.0, tax_pct=0.0,
+        )
+        assert with_growth < no_growth
+
+    def test_existing_balance_reduces_contribution(self):
+        """A head start reduces the required monthly contribution."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() + timedelta(days=365)
+        full = compute_monthly_savings_contribution(
+            target_amount=1200.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        with_head_start = compute_monthly_savings_contribution(
+            target_amount=1200.0, target_date=target_date,
+            current_balance=600.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        assert with_head_start == pytest.approx(full / 2, rel=0.05)
+
+    def test_already_funded_returns_zero(self):
+        """If current_balance >= target, no contribution needed."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() + timedelta(days=365)
+        result = compute_monthly_savings_contribution(
+            target_amount=1000.0, target_date=target_date,
+            current_balance=1000.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        assert result == pytest.approx(0.0, abs=0.01)
+
+    def test_past_due_returns_zero(self):
+        """If target_date is in the past, return 0 (can't contribute retroactively)."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() - timedelta(days=30)
+        result = compute_monthly_savings_contribution(
+            target_amount=1000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        assert result == 0.0
+
+    def test_tax_grosses_up_target(self):
+        """Tax withholding increases the effective target amount."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        target_date = date.today() + timedelta(days=365)
+        no_tax = compute_monthly_savings_contribution(
+            target_amount=1000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=0.0, tax_pct=0.0,
+        )
+        with_tax = compute_monthly_savings_contribution(
+            target_amount=1000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=0.0, tax_pct=25.0,
+        )
+        # With 25% tax, gross-up: need $1000 / (1 - 0.25) = $1333.33
+        assert with_tax == pytest.approx(no_tax * (1 / 0.75), rel=0.05)
+
+    def test_known_pmt_value(self):
+        """Verify against a manually-calculated PMT value.
+
+        Scenario: save $5,000 in 24 months at 8% annual growth, starting from $0.
+        Excel PMT(8%/12, 24, 0, -5000) ≈ $191.19/month
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_monthly_savings_contribution
+        # Use exactly 730 days (≈ 24 months)
+        target_date = date.today() + timedelta(days=730)
+        result = compute_monthly_savings_contribution(
+            target_amount=5000.0, target_date=target_date,
+            current_balance=0.0, annual_growth_rate_pct=8.0, tax_pct=0.0,
+        )
+        # PMT formula result — allow 5% tolerance for day-count rounding
+        assert result == pytest.approx(191.19, rel=0.05)
+
+
+class TestComputeExpenseCoverageWithSavings:
+    """Tests for waterfall with mixed expense + savings_target items."""
+
+    def test_savings_targets_separated_from_expenses(self):
+        """Savings targets appear in savings_targets list, not items list."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+        expense = _mock_item("Rent", 1500, "monthly")
+        savings = _mock_savings_item(
+            name="Cruise 2026",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=548),  # ~18 months
+            current_balance=0.0,
+            growth_rate=0.0,
+        )
+        result = compute_expense_coverage(
+            [expense, savings], "monthly", 2000.0, 0.0
+        )
+        assert len(result["items"]) == 1
+        assert result["items"][0]["name"] == "Rent"
+        assert len(result["savings_targets"]) == 1
+        assert result["savings_targets"][0]["name"] == "Cruise 2026"
+
+    def test_savings_contribution_deducted_from_surplus(self):
+        """Savings contributions are deducted from income remaining after expenses."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+        expense = _mock_item("Rent", 1500, "monthly")
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=12000.0,
+            target_date=date.today() + timedelta(days=365),  # 12 months
+            current_balance=0.0,
+            growth_rate=0.0,
+        )
+        # Income = $3000, expense = $1500, savings contribution ≈ $1000/mo
+        result = compute_expense_coverage(
+            [expense, savings], "monthly", 3000.0, 0.0
+        )
+        assert result["items"][0]["status"] == "covered"
+        savings_item = result["savings_targets"][0]
+        assert savings_item["monthly_contribution"] == pytest.approx(1000.0, rel=0.05)
+        # Should be covered: $3000 - $1500 rent = $1500 remaining >= $1000 contribution
+        assert savings_item["status"] == "covered"
+
+    def test_savings_uncovered_when_income_exhausted(self):
+        """Savings target is uncovered if income is spent on expenses."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+        expense = _mock_item("Rent", 3000, "monthly")
+        savings = _mock_savings_item(
+            name="Vacation",
+            target_amount=6000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=0.0,
+        )
+        result = compute_expense_coverage(
+            [expense, savings], "monthly", 2500.0, 0.0
+        )
+        assert result["items"][0]["status"] == "partial"
+        assert result["savings_targets"][0]["status"] == "uncovered"
+
+    def test_total_claims_includes_savings(self):
+        """total_claims = total_expenses + total_savings_contributions."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+        expense = _mock_item("Rent", 1000, "monthly")
+        savings = _mock_savings_item(
+            name="Fund",
+            target_amount=12000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=0.0,
+        )
+        result = compute_expense_coverage(
+            [expense, savings], "monthly", 5000.0, 0.0
+        )
+        assert result["total_claims"] == pytest.approx(
+            result["total_expenses"] + result["total_savings_contributions"], rel=0.01
+        )
+
+    def test_savings_progress_fields_present(self):
+        """Each savings target item includes progress tracking fields."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+        savings = _mock_savings_item(
+            name="House DP",
+            target_amount=50000.0,
+            target_date=date.today() + timedelta(days=365 * 3),
+            current_balance=10000.0,
+            growth_rate=7.0,
+        )
+        result = compute_expense_coverage([savings], "monthly", 10000.0, 0.0)
+        st = result["savings_targets"][0]
+        assert "monthly_contribution" in st
+        assert "savings_pct" in st
+        assert "months_remaining" in st
+        assert "savings_on_track" in st
+        assert st["savings_pct"] == pytest.approx(20.0, rel=0.05)  # 10000/50000
+
+    def test_no_savings_targets_returns_empty_list(self):
+        """Result always has savings_targets key even with no savings items."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Rent", 1500, "monthly")]
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert "savings_targets" in result
+        assert result["savings_targets"] == []
+        assert result["total_savings_contributions"] == 0.0
+        assert result["total_claims"] == result["total_expenses"]
+
+
 # ----- Helpers -----
 
 def _mock_item(name: str, amount: float, frequency: str,
@@ -530,4 +746,40 @@ def _mock_item(name: str, amount: float, frequency: str,
     item.amount_mode = amount_mode
     item.percent_of_income = percent_of_income
     item.percent_basis = percent_basis
+    item.item_type = "expense"
+    item.savings_target_amount = None
+    item.savings_target_date = None
+    item.savings_is_recurring = False
+    item.savings_recurrence_months = None
+    item.assumed_growth_rate_pct = None
+    item.savings_current_balance = 0.0
+    return item
+
+
+def _mock_savings_item(name: str, target_amount: float, target_date,
+                       current_balance: float = 0.0, growth_rate: float = 8.0,
+                       is_recurring: bool = False, recurrence_months: int = None,
+                       sort_order: int = 0):
+    """Create a mock savings target item for testing."""
+    item = MagicMock()
+    item.name = name
+    item.category = 'Savings'
+    item.amount = 0.0
+    item.frequency = 'monthly'
+    item.frequency_n = None
+    item.due_day = None
+    item.due_month = None
+    item.login_url = None
+    item.is_active = True
+    item.sort_order = sort_order
+    item.amount_mode = 'fixed'
+    item.percent_of_income = None
+    item.percent_basis = None
+    item.item_type = 'savings_target'
+    item.savings_target_amount = target_amount
+    item.savings_target_date = target_date
+    item.savings_is_recurring = is_recurring
+    item.savings_recurrence_months = recurrence_months
+    item.assumed_growth_rate_pct = growth_rate
+    item.savings_current_balance = current_balance
     return item

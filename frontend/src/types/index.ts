@@ -498,6 +498,7 @@ export interface ReportGoal {
   tax_withholding_pct?: number
   expense_sort_mode?: 'amount_asc' | 'amount_desc' | 'custom'
   expense_item_count?: number
+  savings_target_count?: number
   time_horizon_months: number
   start_date: string | null
   target_date: string | null
@@ -528,6 +529,14 @@ export interface ExpenseItem {
   sort_order?: number
   normalized_amount?: number
   created_at: string | null
+  // Savings target fields
+  item_type?: 'expense' | 'savings_target'
+  savings_target_amount?: number | null
+  savings_target_date?: string | null       // ISO date YYYY-MM-DD
+  savings_is_recurring?: boolean
+  savings_recurrence_months?: number | null
+  assumed_growth_rate_pct?: number | null
+  savings_current_balance?: number
 }
 
 export type ScheduleType = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'

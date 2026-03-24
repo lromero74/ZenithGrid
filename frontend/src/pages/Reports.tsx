@@ -344,7 +344,10 @@ export default function Reports() {
                         </span>
                       </span>
                       <span className="text-xs text-slate-500">
-                        {goal.expense_item_count || 0} item{(goal.expense_item_count || 0) !== 1 ? 's' : ''}
+                        {(goal.expense_item_count || 0) - (goal.savings_target_count || 0)} expense{((goal.expense_item_count || 0) - (goal.savings_target_count || 0)) !== 1 ? 's' : ''}
+                        {(goal.savings_target_count || 0) > 0 && (
+                          <>, {goal.savings_target_count} saving{goal.savings_target_count !== 1 ? 's' : ''} target{goal.savings_target_count !== 1 ? 's' : ''}</>
+                        )}
                       </span>
                       {(goal.tax_withholding_pct || 0) > 0 && (
                         <span className="text-xs bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded">
@@ -355,7 +358,7 @@ export default function Reports() {
                           onClick={() => setExpenseEditorGoal(goal)}
                           className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
                         >
-                          <Receipt className="w-3 h-3" /> {canWriteReports ? 'Manage Expenses' : 'View Expenses'}
+                          <Receipt className="w-3 h-3" /> {canWriteReports ? 'Manage Items' : 'View Items'}
                         </button>
                     </div>
                   ) : (

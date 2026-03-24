@@ -219,9 +219,9 @@ class PreviewRequest(BaseModel):
 class ExpenseItemCreate(BaseModel):
     category: str = Field(..., min_length=1, max_length=100)
     name: str = Field(..., min_length=1, max_length=200)
-    amount: float = Field(..., ge=0)
+    amount: float = Field(0.0, ge=0)
     frequency: str = Field(
-        ...,
+        "monthly",
         pattern="^(daily|weekly|biweekly|every_n_days|semi_monthly|monthly|quarterly|semi_annual|yearly)$",
     )
     frequency_n: Optional[int] = Field(None, ge=1)
@@ -236,9 +236,17 @@ class ExpenseItemCreate(BaseModel):
     percent_basis: Optional[str] = Field(
         None, pattern="^(pre_tax|post_tax)$"
     )
+    # Savings target fields
+    item_type: Optional[str] = Field("expense", pattern="^(expense|savings_target)$")
+    savings_target_amount: Optional[float] = Field(None, gt=0)
+    savings_target_date: Optional[str] = None   # ISO date YYYY-MM-DD
+    savings_is_recurring: Optional[bool] = False
+    savings_recurrence_months: Optional[int] = Field(None, ge=1)
+    assumed_growth_rate_pct: Optional[float] = Field(None, ge=0, le=100)
+    savings_current_balance: Optional[float] = Field(None, ge=0)
 
     @model_validator(mode="after")
-    def validate_frequency_n(self):
+    def validate_fields(self):
         if self.frequency == "every_n_days" and not self.frequency_n:
             raise ValueError("frequency_n is required when frequency is 'every_n_days'")
         if self.due_day is not None and self.due_day == 0:
@@ -247,6 +255,11 @@ class ExpenseItemCreate(BaseModel):
             raise ValueError(
                 "percent_of_income is required when amount_mode is 'percent_of_income'"
             )
+        if self.item_type == "savings_target":
+            if not self.savings_target_amount:
+                raise ValueError("savings_target_amount is required for savings targets")
+            if not self.savings_target_date:
+                raise ValueError("savings_target_date is required for savings targets")
         return self
 
 
@@ -271,6 +284,13 @@ class ExpenseItemUpdate(BaseModel):
         None, pattern="^(pre_tax|post_tax)$"
     )
     is_active: Optional[bool] = None
+    # Savings target fields
+    savings_target_amount: Optional[float] = Field(None, gt=0)
+    savings_target_date: Optional[str] = None
+    savings_is_recurring: Optional[bool] = None
+    savings_recurrence_months: Optional[int] = Field(None, ge=1)
+    assumed_growth_rate_pct: Optional[float] = Field(None, ge=0, le=100)
+    savings_current_balance: Optional[float] = Field(None, ge=0)
 
 
 # ----- Helper Functions -----
@@ -313,16 +333,21 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "show_minimap": goal.show_minimap if goal.show_minimap is not None else True,
         "minimap_threshold_days": goal.minimap_threshold_days or 90,
     }
-    # Include expense item count (only if relationship is already loaded)
+    # Include expense item count split (only if relationship is already loaded)
     if goal.target_type == "expenses":
         state = sa_inspect(goal)
         if "expense_items" not in state.unloaded:
-            items = goal.expense_items
-            d["expense_item_count"] = len(items) if items else 0
+            items = goal.expense_items or []
+            d["expense_item_count"] = len(items)
+            d["savings_target_count"] = sum(
+                1 for i in items if getattr(i, "item_type", "expense") == "savings_target"
+            )
         else:
             d["expense_item_count"] = 0
+            d["savings_target_count"] = 0
     else:
         d["expense_item_count"] = 0
+        d["savings_target_count"] = 0
     return d
 
 
@@ -699,6 +724,14 @@ async def create_expense_item(
             status_code=400, detail="Can only add expense items to expenses goals"
         )
 
+    from datetime import date as _date
+    savings_target_date = None
+    if body.savings_target_date:
+        try:
+            savings_target_date = _date.fromisoformat(body.savings_target_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="savings_target_date must be YYYY-MM-DD")
+
     item = ExpenseItem(
         goal_id=goal.id,
         user_id=current_user.id,
@@ -714,6 +747,13 @@ async def create_expense_item(
         amount_mode=body.amount_mode or "fixed",
         percent_of_income=body.percent_of_income,
         percent_basis=body.percent_basis,
+        item_type=body.item_type or "expense",
+        savings_target_amount=body.savings_target_amount,
+        savings_target_date=savings_target_date,
+        savings_is_recurring=body.savings_is_recurring or False,
+        savings_recurrence_months=body.savings_recurrence_months,
+        assumed_growth_rate_pct=body.assumed_growth_rate_pct,
+        savings_current_balance=body.savings_current_balance or 0.0,
     )
     db.add(item)
     await db.flush()
@@ -786,7 +826,18 @@ async def update_expense_item(
     if not item:
         raise HTTPException(status_code=404, detail="Expense item not found")
 
+    from datetime import date as _date
     update_data = body.model_dump(exclude_unset=True)
+
+    # Parse savings_target_date string → date object
+    if "savings_target_date" in update_data and update_data["savings_target_date"]:
+        try:
+            update_data["savings_target_date"] = _date.fromisoformat(
+                update_data["savings_target_date"]
+            )
+        except ValueError:
+            raise HTTPException(status_code=422, detail="savings_target_date must be YYYY-MM-DD")
+
     for key, value in update_data.items():
         setattr(item, key, value)
     item.updated_at = datetime.utcnow()
@@ -895,6 +946,7 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
     """Convert an ExpenseItem to a dict for API responses."""
     from app.services.expense_service import normalize_item_to_period
 
+    item_type = getattr(item, "item_type", "expense") or "expense"
     d = {
         "id": item.id,
         "goal_id": item.goal_id,
@@ -913,9 +965,37 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
         "is_active": item.is_active,
         "sort_order": item.sort_order or 0,
         "created_at": item.created_at.isoformat() if item.created_at else None,
+        # Savings target fields
+        "item_type": item_type,
+        "savings_target_amount": getattr(item, "savings_target_amount", None),
+        "savings_target_date": (
+            getattr(item, "savings_target_date", None).isoformat()
+            if getattr(item, "savings_target_date", None) else None
+        ),
+        "savings_is_recurring": getattr(item, "savings_is_recurring", False) or False,
+        "savings_recurrence_months": getattr(item, "savings_recurrence_months", None),
+        "assumed_growth_rate_pct": getattr(item, "assumed_growth_rate_pct", None),
+        "savings_current_balance": getattr(item, "savings_current_balance", 0.0) or 0.0,
     }
     if period:
-        d["normalized_amount"] = round(normalize_item_to_period(item, period), 2)
+        if item_type == "savings_target":
+            from app.services.expense_service import compute_monthly_savings_contribution
+            from datetime import date as _date
+            target_date = getattr(item, "savings_target_date", None)
+            target_amount = getattr(item, "savings_target_amount", 0.0) or 0.0
+            current_balance = getattr(item, "savings_current_balance", 0.0) or 0.0
+            growth_rate = getattr(item, "assumed_growth_rate_pct", 0.0) or 0.0
+            monthly = compute_monthly_savings_contribution(
+                target_amount=target_amount,
+                target_date=target_date or _date.today(),
+                current_balance=current_balance,
+                annual_growth_rate_pct=growth_rate,
+                tax_pct=0.0,
+            )
+            from app.services.expense_service import normalize_monthly_to_period
+            d["normalized_amount"] = round(normalize_monthly_to_period(monthly, period), 2)
+        else:
+            d["normalized_amount"] = round(normalize_item_to_period(item, period), 2)
     return d
 
 

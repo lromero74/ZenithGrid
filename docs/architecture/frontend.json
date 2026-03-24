@@ -23,7 +23,7 @@
     {
       "file": "pages/Portfolio.tsx",
       "route": "/portfolio",
-      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts"
+      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts; always fetches with force_fresh=true (bypasses backend cache); listens for portfolio:trade-completed DOM event (dispatched by NotificationContext on order fills) to trigger immediate refresh; 60-second polling interval"
     },
     {
       "file": "pages/News.tsx",
@@ -48,7 +48,7 @@
     {
       "file": "pages/Reports.tsx",
       "route": "/reports",
-      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history"
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor"
     },
     {
       "file": "pages/Admin.tsx",
@@ -352,7 +352,7 @@
       },
       {
         "file": "components/reports/ExpenseItemsEditor.tsx",
-        "purpose": "Expense items CRUD editor for expenses-type goals with category, frequency, and amount management"
+        "purpose": "Expense items CRUD editor for expenses-type goals; supports item_type toggle (Expense | Savings Target); savings-target form shows target amount, target date, current balance, assumed growth rate, and recurring toggle; savings items display with green piggy-bank badge and progress percentage"
       }
     ],
     "prop_firm": [
@@ -435,6 +435,10 @@
       {
         "file": "components/DexConfigSection.tsx",
         "purpose": "DEX-specific settings configuration"
+      },
+      {
+        "file": "components/sharing/ObserverModeBanner.tsx",
+        "purpose": "Sticky read-only banner displayed when the active account is a shared account observed by the current user; shows the owner's display name and account name, e.g. 'Observer Mode — Viewing Louis's account Main Trading (Read-Only)'; receives ownerName from App.tsx via selectedAccount.shared_by"
       }
     ],
     "layout_and_common": [
@@ -859,12 +863,12 @@
         "DebtCeilingEvent"
       ],
       "reports": [
-        "ReportGoal",
+        "ReportGoal (includes savings_target_count)",
         "ReportSchedule",
         "ReportSummary",
         "GoalTrendPoint",
         "GoalTrendData",
-        "ExpenseItem"
+        "ExpenseItem (includes item_type, savings_target_amount, savings_target_date, savings_is_recurring, savings_recurrence_months, assumed_growth_rate_pct, savings_current_balance)"
       ]
     }
   },
@@ -899,7 +903,7 @@
     },
     {
       "file": "constants/voices.ts",
-      "purpose": "TTS voice definitions, CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter — child voices are automatically swapped for adult voices when article content matches"
+      "purpose": "TTS voice definitions (Microsoft Edge TTS Neural and Multilingual Neural voices including davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi added in v2.137), CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter — child voices are automatically swapped for adult voices when article content matches"
     }
   ]
 }

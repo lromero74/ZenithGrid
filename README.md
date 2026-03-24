@@ -30,7 +30,8 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Scheduled Email Reports**: Automated daily, weekly, monthly, quarterly, and yearly reports with xTD period summaries
 - **Financial Goals**: Set USD or BTC targets with deadlines, tracked via daily snapshots and trend analysis
 - **AI-Powered Insights**: Multi-provider AI analysis in email reports (Claude, GPT, Gemini, Grok, Groq)
-- **Expense Coverage Waterfall**: Three sort modes (smallest-first, largest-first, custom drag-to-reorder) for prioritizing expense coverage
+- **Expense Coverage Waterfall**: Three sort modes (smallest-first, largest-first, custom drag-to-reorder) for prioritizing expense coverage; waterfall shows which expenses income covers, which are partial, and which are uncovered
+- **Savings Targets**: Track lump-sum savings goals alongside regular expenses — vacation fund, car, emergency fund. Uses PMT formula to calculate required monthly contribution based on target amount, target date, current balance, and assumed annual growth rate. Multiple targets per goal, each with its own progress bar and on-track status. Recurring targets automatically restart after each cycle.
 - **Expense Goal Lookahead**: Next-period preview to project whether goals are on track
 - **Account-Scoped Reports**: Filter reports by paper trading vs live accounts
 - **Email Delivery**: Automated delivery via AWS SES
@@ -41,13 +42,13 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Position Markers**: Entry price, TP/SL lines, safety order levels
 - **Account Value Charts**: Historical BTC + USD value lines with split view by quote currency
 - **Daily Activity Markers**: Trade wins/losses, deposits, and withdrawals overlaid on charts
-- **Portfolio Tracking**: Real-time portfolio value and allocation (CEX & DEX)
+- **Portfolio Tracking**: Real-time portfolio value and allocation (CEX & DEX) — auto-refreshes every 60 seconds with live data, and immediately after any trade completes
 - **Transfer Tracking**: Deposit and withdrawal history synced from exchange
 - **Trade History**: Complete audit trail of all trades
 - **Closed Positions Page**: Dedicated history view with "new items" badges for recent closures
 - **Performance Metrics**: Win rate, total profit, active deals
 - **News Aggregation**: Configurable multi-source crypto news with advanced category and source filtering
-- **Article Reader with TTS**: Full article content with text-to-speech, voice cycling, and word-level sync
+- **Article Reader with TTS**: Full article content with text-to-speech, voice cycling, and word-level sync — 40+ Microsoft Edge Neural voices including high-fidelity Multilingual Neural variants (Ava, Emma, Brian, Andrew)
 - **YouTube Integration**: Educational content from crypto channels
 - **Market Intelligence**: 16+ indicator cards — Fear & Greed, BTC Dominance, Altseason Index, ATH Distance, Hash Rate, Mempool, Lightning Network, Stablecoin Market Cap, BTC RSI, Halving Countdown, US Debt, and more
 - **In-App Version History**: Click the version number in the header to see the changelog
@@ -60,6 +61,8 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Trusted Devices**: 30-day device trust with geolocation tracking
 - **Password Reset**: Secure email-based password recovery
 - **Multi-User**: Full data isolation between users with per-user encrypted credentials
+- **Account Sharing**: Invite other users to co-manage (full write access) or observe (read-only) a CEX account. Observer banner identifies the account owner by name. Shared access is revocable at any time.
+- **Disposable Email Jail**: Blocks registration from disposable/temporary email providers
 - **Encrypted at Rest**: All API keys and secrets encrypted with MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation support
 - **Token Revocation**: Server-side JWT revocation on logout; password change invalidates all sessions
 - **Rate Limiting**: Multi-layer — nginx (per-IP) + application (per-user/per-email/per-token)
@@ -313,6 +316,8 @@ python3 update.py --yes
 | **Category Filtering** | ❌ | ✅ **5 categories** |
 | **Scheduled Email Reports** | ❌ | ✅ **Daily/weekly/monthly/quarterly/yearly** |
 | **Financial Goal Tracking** | ❌ | ✅ **USD & BTC targets with deadlines** |
+| **Expense & Savings Waterfall** | ❌ | ✅ **Coverage analysis + PMT savings planning** |
+| **Account Sharing** | ❌ | ✅ **Observer + co-manager roles** |
 | **Account Value Charts** | Basic | ✅ **Historical lines + split view** |
 | **Transfer History** | ✅ | ✅ **Auto-synced from exchange** |
 | **In-App Version History** | ❌ | ✅ **Clickable changelog** |
@@ -384,6 +389,8 @@ python3 update.py --yes
 - Account value snapshots for historical charting
 - Scheduled reports and email delivery history
 - Financial goals and progress snapshots
+- Expense items and savings targets (with PMT contribution tracking)
+- Account sharing memberships (observer/co-manager roles)
 - Account transfers (deposits and withdrawals)
 - Prop firm equity snapshots and drawdown history
 
@@ -409,6 +416,9 @@ python3 update.py --yes
 - [x] **Email verification & password reset** (AWS SES)
 - [x] **Scheduled email reports** (daily/weekly/monthly/quarterly/yearly)
 - [x] **Financial goal tracking** (USD & BTC targets with deadlines)
+- [x] **Expense goal with coverage waterfall** (income vs expenses visualization)
+- [x] **Savings targets** (PMT-based contribution planning alongside expenses)
+- [x] **Account sharing** (observer + co-manager roles with revocable access)
 - [x] **Account value charting** (historical lines + split view)
 - [x] **Transfer sync** (deposit/withdrawal history from exchange)
 - [x] **Account-scoped filtering** (paper vs live isolation)

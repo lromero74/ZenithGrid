@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -226,6 +227,15 @@ class ExpenseItem(Base):
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Savings target fields (item_type = 'savings_target')
+    item_type = Column(String, default="expense")  # 'expense' | 'savings_target'
+    savings_target_amount = Column(Float, nullable=True)  # Lump sum goal (e.g. 5000.00)
+    savings_target_date = Column(Date, nullable=True)     # When the money is needed
+    savings_is_recurring = Column(Boolean, default=False)  # Cycle repeats after withdrawal
+    savings_recurrence_months = Column(Integer, nullable=True)  # e.g. 24 for every 2 yrs
+    assumed_growth_rate_pct = Column(Float, nullable=True)  # Annual return assumption
+    savings_current_balance = Column(Float, default=0.0)  # Amount saved so far
 
     # Relationships
     goal = relationship("ReportGoal", back_populates="expense_items")
