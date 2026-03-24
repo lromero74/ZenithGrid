@@ -74,3 +74,8 @@ def _run_sqlite(cur, conn):
                 f"ALTER TABLE expense_items ADD COLUMN {col_name} {col_def}"
             )
             conn.commit()
+
+
+if __name__ == "__main__":
+    run()
+    print("Migration 071 complete.")
