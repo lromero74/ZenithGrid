@@ -213,6 +213,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     if (audioEnabled) {
       playOrderSound(event.fill_type as OrderFillType)
     }
+
+    // Signal portfolio to refresh after any completed trade
+    window.dispatchEvent(new CustomEvent('portfolio:trade-completed'))
   }, [addToast, audioEnabled, playOrderSound])
 
   // Connect to WebSocket

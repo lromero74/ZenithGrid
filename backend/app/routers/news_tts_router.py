@@ -150,10 +150,18 @@ TTS_VOICES = {
     "ava": "en-US-AvaNeural",
     "ana": "en-US-AnaNeural",   # Child voice — frontend filters adult content before use
     "christopher": "en-US-ChristopherNeural",
+    "davis": "en-US-DavisNeural",
     "eric": "en-US-EricNeural",
     "michelle": "en-US-MichelleNeural",
+    "nancy": "en-US-NancyNeural",
     "roger": "en-US-RogerNeural",
     "steffan": "en-US-SteffanNeural",
+    "tony": "en-US-TonyNeural",
+    # US Multilingual Neural — higher-fidelity model tier
+    "ava-multi": "en-US-AvaMultilingualNeural",
+    "emma-multi": "en-US-EmmaMultilingualNeural",
+    "brian-multi": "en-US-BrianMultilingualNeural",
+    "andrew-multi": "en-US-AndrewMultilingualNeural",
     # British voices
     "libby": "en-GB-LibbyNeural",
     "sonia": "en-GB-SoniaNeural",

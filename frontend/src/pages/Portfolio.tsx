@@ -87,23 +87,28 @@ function Portfolio() {
     return response.json() as Promise<PortfolioData>
   }
 
-  // Use React Query with account-specific key to support CEX/DEX switching
-  const { data: portfolio, isLoading: loading, error, isFetching } = useQuery({
+  // Use React Query with account-specific key to support CEX/DEX switching.
+  // Always force_fresh so the backend bypasses its cache and fetches live exchange data.
+  // 10-minute interval keeps the portfolio warm without hammering the exchange API.
+  const { data: portfolio, isLoading: loading, error, isFetching, refetch: refetchPortfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: () => fetchPortfolio(false),
-    refetchInterval: 60000, // Update every 60 seconds
-    staleTime: 15000, // Consider data fresh for 15 seconds
-    refetchOnMount: true, // Refetch when navigating to portfolio page
-    refetchOnWindowFocus: true, // Refetch when switching back to tab
+    queryFn: () => fetchPortfolio(true),
+    refetchInterval: 60000, // 60 seconds
+    staleTime: 0, // Always consider data stale so navigating to the page refreshes immediately
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     enabled: true,
   })
 
-  // Manual refresh bypasses backend cache entirely
-  const handleManualRefresh = async () => {
-    queryClient.setQueryData(['account-portfolio', selectedAccount?.id],
-      await fetchPortfolio(true)
-    )
-  }
+  // Refresh portfolio after any completed trade (buy or sell) from any page
+  useEffect(() => {
+    const handler = () => { void refetchPortfolio() }
+    window.addEventListener('portfolio:trade-completed', handler)
+    return () => window.removeEventListener('portfolio:trade-completed', handler)
+  }, [refetchPortfolio])
+
+  // Manual refresh — same as auto-refresh since queryFn always uses force_fresh
+  const handleManualRefresh = () => { void refetchPortfolio() }
 
   // Sell coin mutation
   const sellCoinMutation = useMutation({

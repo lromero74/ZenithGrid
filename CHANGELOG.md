@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.137.0] - 2026-03-24
+
+### Added
+- **Observer mode banner shows account owner's name** — the purple observer banner now reads "Viewing [Owner]'s account '[Account Name]' (Read-Only)" so it's always clear whose account you're viewing.
+- **7 new TTS voices** — added Davis, Nancy, and Tony (high-quality US Neural voices), plus four Multilingual Neural variants (ava-multi, emma-multi, brian-multi, andrew-multi) which use Microsoft's higher-fidelity model tier.
+
+### Fixed
+- **Portfolio auto-refreshes without manual intervention** — the portfolio now fetches live exchange data on every 60-second poll instead of serving backend-cached results. Manual "Refresh" button is no longer needed to see current balances.
+- **Portfolio refreshes immediately after completed trades** — any buy or sell order fill (from bots or manual trades) triggers an instant portfolio refresh via WebSocket notification.
+
 ## [v2.136.8] - 2026-03-24
 
 ### Added

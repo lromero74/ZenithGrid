@@ -402,7 +402,7 @@ function AppContent() {
 
         {/* Observer Mode Indicator */}
         {selectedAccount?.membership_role === 'observer' && (
-          <ObserverModeBanner accountName={selectedAccount.name} />
+          <ObserverModeBanner accountName={selectedAccount.name} ownerName={selectedAccount.shared_by} />
         )}
 
         {/* Paper Trading Mode Indicator */}
