@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.5] - 2026-03-24
+
+### Fixed
+- **Observer: bot AI logs 404** — observers can now view bot decision logs and scanner logs for shared accounts (was returning 404 because the endpoint enforced ownership instead of account membership).
+- **Observer: account balances 503** — the balances endpoint was fetching exchange credentials using the observer's user ID (who has no credentials) instead of the account owner's. Now correctly uses the resolved account owner.
+
 ## [v2.136.4] - 2026-03-24
 
 ### Added

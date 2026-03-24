@@ -79,8 +79,13 @@ async def get_scanner_logs(
         decision: Optional filter by decision (passed, rejected, triggered, hold)
         since: Optional filter for logs since this timestamp
     """
-    # Verify bot exists
-    bot_query = select(Bot).where(Bot.id == bot_id, Bot.user_id == current_user.id)
+    # Verify bot exists and is accessible (owned account or shared account)
+    from app.services.account_access import accessible_account_ids
+    account_ids = await accessible_account_ids(db, current_user.id)
+    bot_query = select(Bot).where(
+        Bot.id == bot_id,
+        Bot.account_id.in_(account_ids) if account_ids else Bot.user_id == current_user.id
+    )
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
