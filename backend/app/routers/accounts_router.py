@@ -27,6 +27,7 @@ from app.encryption import encrypt_value, mask_api_key
 from app.models import Account, Bot, User
 from app.models.sharing import AccountMembership
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.account_access import accessible_accounts_filter as _shared_accessible_accounts_filter
 from app.services.account_service import (
     VALID_PROP_FIRMS,
     create_exchange_account,
@@ -53,18 +54,7 @@ def _accessible_accounts_filter(current_user_id: int):
     Owner-only operations (delete, credentials, set-default) do NOT use this
     — they keep the strict account.user_id == current_user_id check.
     """
-    return or_(
-        Account.user_id == current_user_id,
-        Account.id.in_(
-            select(AccountMembership.account_id).where(
-                AccountMembership.user_id == current_user_id,
-                or_(
-                    AccountMembership.expires_at.is_(None),
-                    AccountMembership.expires_at > datetime.utcnow(),
-                ),
-            )
-        ),
-    )
+    return _shared_accessible_accounts_filter(current_user_id)
 
 
 # =============================================================================

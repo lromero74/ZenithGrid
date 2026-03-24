@@ -39,6 +39,7 @@ from app.schemas import (
     SignalResponse,
     TradeResponse,
 )
+from app.services.account_access import accessible_account_ids as _acc_ids
 from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
@@ -345,10 +346,11 @@ async def get_coinbase(
     """
     Get Coinbase client for the authenticated user's active CEX account.
     """
-    # Get user's active CEX account
+    # Get user's active CEX account (own or shared via membership)
+    from app.services.account_access import accessible_accounts_filter
     result = await db.execute(
         select(Account).where(
-            Account.user_id == current_user.id,
+            accessible_accounts_filter(current_user.id),
             Account.type == "cex",
             Account.is_active.is_(True),
         ).order_by(Account.is_default.desc(), Account.created_at)
@@ -492,10 +494,8 @@ async def get_dashboard(
 ):
     """Get dashboard statistics"""
     try:
-        # Get current user's account IDs for scoping queries
-        user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-        user_accounts_r = await db.execute(user_accounts_q)
-        user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+        # Get all account IDs accessible to this user (owned + shared)
+        user_account_ids = await _acc_ids(db, current_user.id)
 
         # Get current position (scoped to user)
         current_position = None

@@ -18,12 +18,25 @@ from app.database import get_db
 from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.account_access import accessible_account_ids
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import get_coinbase_from_db
 from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _accessible_bot_filter(db: AsyncSession, current_user_id: int):
+    """Return a SQLAlchemy filter clause for bots visible to the user.
+
+    Includes bots they own AND bots on accounts they have shared access to.
+    Used for read-only operations (get, stats). Write operations keep the
+    strict Bot.user_id == current_user.id check.
+    """
+    from sqlalchemy import or_
+    acc_ids = await accessible_account_ids(db, current_user_id)
+    return or_(Bot.user_id == current_user_id, Bot.account_id.in_(acc_ids))
 
 
 async def _get_paper_account(db: AsyncSession, user_id: int):
@@ -165,8 +178,13 @@ async def list_bots(
         get_open_position_products,
     )
 
+    # Include bots owned by the user AND bots on accounts they have shared access to
+    acc_ids = await accessible_account_ids(db, current_user.id)
+    from sqlalchemy import or_
     query = select(Bot).order_by(desc(Bot.created_at))
-    query = query.where(Bot.user_id == current_user.id)
+    query = query.where(
+        or_(Bot.user_id == current_user.id, Bot.account_id.in_(acc_ids))
+    )
 
     if active_only:
         query = query.where(Bot.is_active)
@@ -261,8 +279,7 @@ async def get_bot(
 ):
     """Get details for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    query = query.where(Bot.user_id == current_user.id)
+    query = query.where(await _accessible_bot_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -658,8 +675,7 @@ async def get_bot_stats(
 ):
     """Get statistics for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    query = query.where(Bot.user_id == current_user.id)
+    query = query.where(await _accessible_bot_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 

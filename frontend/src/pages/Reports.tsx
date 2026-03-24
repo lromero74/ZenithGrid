@@ -78,8 +78,12 @@ export default function Reports() {
   const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
   const { selectedAccount } = useAccount()
-  const canWriteReports = usePermission('reports', 'write')
-  const canDeleteReports = usePermission('reports', 'delete')
+  const canWriteReportsRaw = usePermission('reports', 'write')
+  const canDeleteReportsRaw = usePermission('reports', 'delete')
+  // Observers on shared accounts have read-only access regardless of RBAC permissions
+  const isObserverAccount = selectedAccount?.membership_role === 'observer'
+  const canWriteReports = canWriteReportsRaw && !isObserverAccount
+  const canDeleteReports = canDeleteReportsRaw && !isObserverAccount
 
   const confirm = useConfirm()
 

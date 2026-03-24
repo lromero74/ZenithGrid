@@ -8,18 +8,48 @@ import logging
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError
 
 from app.database import get_db, get_read_db
 from app.auth.dependencies import get_current_user
-from app.models import User
+from app.models import Account, User
 from app.services import account_snapshot_service
+from app.services.account_access import accessible_accounts_filter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/account-value", tags=["account-value"])
+
+
+async def _resolve_snapshot_user_id(
+    db: AsyncSession, current_user_id: int, account_id: int | None
+) -> int:
+    """
+    Return the user_id to use when querying AccountValueSnapshot rows.
+
+    Snapshots are stored with the account OWNER's user_id.  When a member
+    (observer/manager) requests history for a specific account, we look up
+    the owner's user_id so the query matches the stored rows.
+
+    Falls back to current_user_id when no account_id is given (aggregated
+    view) — in that case the caller only sees their own accounts anyway.
+    """
+    if account_id is None:
+        return current_user_id
+
+    result = await db.execute(
+        select(Account.user_id).where(
+            Account.id == account_id,
+            accessible_accounts_filter(current_user_id),
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found or not accessible")
+    return row[0]
 
 
 @router.get("/history")
@@ -39,10 +69,13 @@ async def get_account_value_history(
     By default, excludes paper trading accounts (virtual money) when aggregating.
     """
     try:
+        snapshot_user_id = await _resolve_snapshot_user_id(db, current_user.id, account_id)
         history = await account_snapshot_service.get_account_value_history(
-            db, current_user.id, days, include_paper_trading, account_id
+            db, snapshot_user_id, days, include_paper_trading, account_id
         )
         return history
+    except (HTTPException, AppError):
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch account value history: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -98,10 +131,13 @@ async def get_daily_activity(
     Used for chart markers on the account value chart.
     """
     try:
+        snapshot_user_id = await _resolve_snapshot_user_id(db, current_user.id, account_id)
         activity = await account_snapshot_service.get_daily_activity(
-            db, current_user.id, days, include_paper_trading, account_id
+            db, snapshot_user_id, days, include_paper_trading, account_id
         )
         return activity
+    except (HTTPException, AppError):
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch daily activity: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -125,10 +161,11 @@ async def get_bidirectional_reservations(
     from sqlalchemy import select
 
     try:
-        # Verify account belongs to user
+        # Verify account is accessible to user (owner or active member)
+        from app.services.account_access import accessible_accounts_filter
         account_query = select(Account).where(
             Account.id == account_id,
-            Account.user_id == current_user.id
+            accessible_accounts_filter(current_user.id)
         )
         account_result = await db.execute(account_query)
         account = account_result.scalars().first()

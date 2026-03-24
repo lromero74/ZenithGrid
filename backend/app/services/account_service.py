@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.encryption import encrypt_value
 from app.models import Account, User
+from app.services.account_access import accessible_accounts_filter
 from app.services.exchange_service import get_coinbase_for_account, get_exchange_client_for_account
 from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio, get_generic_cex_portfolio
 
@@ -182,8 +183,8 @@ async def get_portfolio_for_account(
     For DEX accounts: Fetches from blockchain via RPC
     For Paper Trading accounts: Returns virtual balances with real-time pricing
     """
-    # Get the account (filtered by user)
-    query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    # Get the account — allow owners and account members (observers/managers)
+    query = select(Account).where(Account.id == account_id, accessible_accounts_filter(current_user.id))
     result = await db.execute(query)
     account = result.scalar_one_or_none()
 

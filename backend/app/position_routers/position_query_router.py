@@ -16,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
+from app.models import AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
 from app.auth.dependencies import get_current_user
+from app.services.account_access import accessible_account_ids
 from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 
@@ -45,9 +46,7 @@ async def get_positions(
     )
 
     # Get user's account IDs
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
     if user_account_ids:
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
@@ -171,9 +170,7 @@ async def get_pnl_timeseries(
         Position.profit_usd is not None
     )
 
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
     if user_account_ids:
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
@@ -358,9 +355,7 @@ async def get_completed_trades_stats(
         "average_profit_usd": 0.0,
     }
 
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
     if not user_account_ids:
         return empty_stats
 
@@ -481,9 +476,7 @@ async def get_realized_pnl(
         'daily', 'yesterday', 'last_week', 'last_month', 'last_quarter',
         'last_year', 'wtd', 'mtd', 'qtd', 'ytd', 'alltime']
 
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
     if not user_account_ids:
         empty = {}
         for p in periods:
@@ -580,9 +573,7 @@ async def get_position(
 
     query = select(Position).where(Position.id == position_id)
 
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
     if user_account_ids:
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
@@ -643,9 +634,7 @@ async def get_position_trades(
 ):
     """Get all trades for a position (verifies ownership)"""
     # Verify position belongs to current user
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
 
     pos_query = select(Position).where(
         Position.id == position_id,
@@ -675,9 +664,7 @@ async def get_position_ai_logs(
     decision-making process including what led to opening and closing.
     """
     # Verify position belongs to current user
-    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_result = await db.execute(accounts_query)
-    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    user_account_ids = await accessible_account_ids(db, current_user.id)
 
     pos_query = select(Position).where(
         Position.id == position_id,

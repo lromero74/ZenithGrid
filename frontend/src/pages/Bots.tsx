@@ -231,8 +231,10 @@ function Bots() {
 
   const handleOpenEdit = (bot: Bot) => {
     setEditingBot(bot)
-    setReadOnly(!canWriteBots)
-    setReadOnlyTitle(!canWriteBots ? `View Bot: ${bot.name}` : '')
+    const isObserverAccount = selectedAccount?.membership_role === 'observer'
+    const forceReadOnly = !canWriteBots || isObserverAccount
+    setReadOnly(forceReadOnly)
+    setReadOnlyTitle(forceReadOnly ? `View Bot: ${bot.name}` : '')
     // Handle both legacy single pair and new multi-pair bots
     const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
     setFormData({
@@ -612,7 +614,7 @@ function Bots() {
                     setIndicatorLogsBotId={setIndicatorLogsBotId}
                     setScannerLogsBotId={setScannerLogsBotId}
                     portfolio={portfolio}
-                    canWrite={canWriteBots}
+                    canWrite={canWriteBots && selectedAccount?.membership_role !== 'observer'}
                   />
                 ))}
               </tbody>

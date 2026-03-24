@@ -19,6 +19,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Bot, PendingOrder, Position, User
+from app.services.account_access import accessible_account_ids, accessible_accounts_filter
 from app.services.dex_wallet_service import dex_wallet_service
 from app.services.exchange_service import get_exchange_client_for_account
 
@@ -756,7 +757,7 @@ async def get_account_balances(
 
     if account_id:
         account_result = await db.execute(
-            select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+            select(Account).where(Account.id == account_id, accessible_accounts_filter(current_user.id))
         )
         account = account_result.scalar_one_or_none()
         if not account:
@@ -766,7 +767,7 @@ async def get_account_balances(
             select(Account).where(
                 Account.type == "cex",
                 Account.is_active.is_(True),
-                Account.user_id == current_user.id,
+                accessible_accounts_filter(current_user.id),
             ).order_by(Account.is_default.desc(), Account.created_at)
             .limit(1)
         )
@@ -1177,10 +1178,8 @@ async def get_account_portfolio_data(
         _process_cex_holdings(spot_positions, btc_usd_price)
     )
 
-    # Phase 2: Get open/closed positions for this user's accounts
-    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    user_accounts_r = await db.execute(user_accounts_q)
-    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+    # Phase 2: Get open/closed positions for all accessible accounts (owned + shared)
+    user_account_ids = await accessible_account_ids(db, current_user.id)
 
     positions_query = select(Position).where(
         Position.status == "open",

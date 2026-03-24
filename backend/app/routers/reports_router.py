@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.database import get_db, get_read_db
 from app.models import (
+    Account,
     ExpenseItem,
     GoalProgressSnapshot,
     Report,
@@ -28,10 +29,39 @@ from app.models import (
     ReportSchedule,
     User,
 )
+from app.services.account_access import accessible_accounts_filter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+
+async def _resolve_report_user_id(
+    db: AsyncSession, current_user_id: int, account_id: Optional[int]
+) -> int:
+    """
+    Return the user_id to use when querying report rows.
+
+    Goals, schedules, and history are stored with the account OWNER's user_id.
+    When a member (observer/manager) requests data for a specific account, we
+    resolve the owner's user_id so the query returns the correct rows.
+
+    When no account_id is given, returns current_user_id (observer sees only
+    their own records, which is the correct behaviour for unscoped requests).
+    """
+    if account_id is None:
+        return current_user_id
+
+    result = await db.execute(
+        select(Account.user_id).where(
+            Account.id == account_id,
+            accessible_accounts_filter(current_user_id),
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found or not accessible")
+    return row[0]
 
 
 # ----- Pydantic Schemas -----
@@ -411,7 +441,8 @@ async def list_goals(
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all goals for the current user, optionally filtered by account."""
-    filters = [ReportGoal.user_id == current_user.id]
+    uid = await _resolve_report_user_id(db, current_user.id, account_id)
+    filters = [ReportGoal.user_id == uid]
     if account_id:
         filters.append(ReportGoal.account_id == account_id)
     result = await db.execute(
@@ -847,7 +878,8 @@ async def list_schedules(
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all report schedules for the current user, optionally filtered by account."""
-    filters = [ReportSchedule.user_id == current_user.id]
+    uid = await _resolve_report_user_id(db, current_user.id, account_id)
+    filters = [ReportSchedule.user_id == uid]
     if account_id:
         filters.append(ReportSchedule.account_id == account_id)
     result = await db.execute(
@@ -919,7 +951,8 @@ async def list_reports(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """List generated reports (paginated), optionally filtered by account."""
-    filters = [Report.user_id == current_user.id]
+    uid = await _resolve_report_user_id(db, current_user.id, account_id)
+    filters = [Report.user_id == uid]
     if schedule_id:
         filters.append(Report.schedule_id == schedule_id)
     if account_id:
