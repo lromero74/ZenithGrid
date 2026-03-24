@@ -333,7 +333,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
   const [savingsTargetAmount, setSavingsTargetAmount] = useState('')
   const [savingsTargetDate, setSavingsTargetDate] = useState('')
   const [savingsCurrentBalance, setSavingsCurrentBalance] = useState('')
-  const [savingsGrowthRate, setSavingsGrowthRate] = useState('8')
+  const [savingsGrowthRate, setSavingsGrowthRate] = useState('')
   const [savingsIsRecurring, setSavingsIsRecurring] = useState(false)
   const [savingsRecurrenceMonths, setSavingsRecurrenceMonths] = useState('')
 
@@ -387,7 +387,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         setSavingsTargetAmount(editing.savings_target_amount != null ? String(editing.savings_target_amount) : '')
         setSavingsTargetDate(editing.savings_target_date || '')
         setSavingsCurrentBalance(editing.savings_current_balance != null ? String(editing.savings_current_balance) : '0')
-        setSavingsGrowthRate(editing.assumed_growth_rate_pct != null ? String(editing.assumed_growth_rate_pct) : '8')
+        setSavingsGrowthRate(editing.assumed_growth_rate_pct != null ? String(editing.assumed_growth_rate_pct) : '')
         setSavingsIsRecurring(editing.savings_is_recurring || false)
         setSavingsRecurrenceMonths(editing.savings_recurrence_months != null ? String(editing.savings_recurrence_months) : '')
         // Reset expense-only fields
@@ -533,7 +533,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
         savings_target_amount: parseFloat(savingsTargetAmount),
         savings_target_date: savingsTargetDate,
         savings_current_balance: savingsCurrentBalance ? parseFloat(savingsCurrentBalance) : 0,
-        assumed_growth_rate_pct: savingsGrowthRate ? parseFloat(savingsGrowthRate) : 0,
+        assumed_growth_rate_pct: savingsGrowthRate !== '' ? parseFloat(savingsGrowthRate) : null,
         savings_is_recurring: savingsIsRecurring,
       }
       if (savingsIsRecurring && savingsRecurrenceMonths) {
@@ -718,17 +718,23 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Annual Growth Rate (%)</label>
+              <label className="block text-xs text-slate-400 mb-1">
+                Annual Growth Rate (%)
+                <span className="ml-1 text-[10px] text-emerald-400">optional override</span>
+              </label>
               <input
                 type="number"
                 step="0.1"
                 min="0"
-                max="50"
+                max="100"
                 value={savingsGrowthRate}
                 onChange={e => setSavingsGrowthRate(e.target.value)}
-                placeholder="8"
+                placeholder="Auto (from account)"
                 className={`w-full ${inputCls} placeholder-slate-500`}
               />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Leave blank to use your account's live projected return
+              </p>
             </div>
           </div>
           <div>

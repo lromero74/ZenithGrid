@@ -619,21 +619,25 @@ async def _compute_expenses_goal_progress(
     )
     expense_items = items_result.scalars().all()
 
-    # Run coverage waterfall using user-defined order
-    coverage = compute_expense_coverage(
-        expense_items, expense_period, projected_income, tax_pct,
-        sort_mode="custom",
-    )
-
-    # Compound projection (same formula as income goal)
-    projected_income_compound = 0.0
-    deposit_needed_compound = None
+    # Compute account return rate first so savings targets can use it
     daily_return_rate = 0.0
+    projected_income_compound = 0.0
     if account_value > 0 and daily_income > 0:
         daily_return_rate = daily_income / account_value
         projected_income_compound = account_value * (
             (1 + daily_return_rate) ** period_days - 1
         )
+    account_annual_return_pct = daily_return_rate * 365 * 100
+
+    # Run coverage waterfall using user-defined order, passing live account return
+    coverage = compute_expense_coverage(
+        expense_items, expense_period, projected_income, tax_pct,
+        sort_mode="custom",
+        account_annual_return_pct=account_annual_return_pct,
+    )
+
+    # Compound projection already computed above
+    deposit_needed_compound = None
 
     # Deposit needed: how much additional capital to generate enough
     # after-tax income to cover the shortfall, based on past return rate.

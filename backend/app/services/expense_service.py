@@ -133,12 +133,25 @@ def compute_monthly_savings_contribution(
     return max(0.0, numerator / denominator)
 
 
-def _build_savings_target_entry(item, period: str, income_after_tax: float, tax_pct: float) -> Dict[str, Any]:
-    """Build a savings target entry with contribution + progress fields."""
+def _build_savings_target_entry(
+    item,
+    period: str,
+    income_after_tax: float,
+    tax_pct: float,
+    account_annual_return_pct: float = 0.0,
+) -> Dict[str, Any]:
+    """Build a savings target entry with contribution + progress fields.
+
+    growth_rate priority: item.assumed_growth_rate_pct (explicit override) →
+    account_annual_return_pct (derived from live trading returns) → 0.
+    """
     target_amount = getattr(item, "savings_target_amount", 0.0) or 0.0
     target_date = getattr(item, "savings_target_date", None)
     current_balance = getattr(item, "savings_current_balance", 0.0) or 0.0
-    growth_rate = getattr(item, "assumed_growth_rate_pct", 0.0) or 0.0
+    item_rate = getattr(item, "assumed_growth_rate_pct", None)
+    # Use item override if explicitly set; otherwise use live account return
+    growth_rate = item_rate if (item_rate is not None and item_rate > 0) else account_annual_return_pct
+    effective_rate_source = "override" if (item_rate is not None and item_rate > 0) else "account"
     is_recurring = getattr(item, "savings_is_recurring", False)
     recurrence_months = getattr(item, "savings_recurrence_months", None)
 
@@ -192,6 +205,7 @@ def _build_savings_target_entry(item, period: str, income_after_tax: float, tax_
         "monthly_contribution": round(monthly_contribution, 2),
         "normalized_amount": round(monthly_in_period, 2),  # period-normalized contribution
         "assumed_growth_rate_pct": growth_rate,
+        "growth_rate_source": effective_rate_source,
         "is_recurring": is_recurring,
         "recurrence_months": recurrence_months,
         "savings_on_track": savings_on_track,
@@ -207,6 +221,7 @@ def compute_expense_coverage(
     projected_income: float,
     tax_pct: float,
     sort_mode: str = "amount_asc",
+    account_annual_return_pct: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Compute coverage waterfall for expense items and savings targets.
@@ -218,7 +233,8 @@ def compute_expense_coverage(
         4. Return coverage status for each item
 
     Pass 2 — Savings targets (item_type='savings_target'):
-        5. Calculate required monthly contribution (PMT) per target
+        5. Calculate required monthly contribution (PMT) per target,
+           using item.assumed_growth_rate_pct if set, otherwise account_annual_return_pct
         6. Walk through remaining income after expenses
         7. Return coverage status per target + progress tracking fields
     """
@@ -318,7 +334,9 @@ def compute_expense_coverage(
     total_savings_contributions = 0.0
 
     for item in savings_items:
-        entry = _build_savings_target_entry(item, period, income_after_tax, tax_pct)
+        entry = _build_savings_target_entry(
+            item, period, income_after_tax, tax_pct, account_annual_return_pct
+        )
         contrib = entry["normalized_amount"]
         total_savings_contributions += contrib
 
@@ -361,6 +379,7 @@ def compute_expense_coverage(
         "total_count": len(normalized),
         "items": normalized,
         "savings_targets": savings_entries,
+        "account_annual_return_pct": round(account_annual_return_pct, 4),
     }
 
     # Add granular deposit targets

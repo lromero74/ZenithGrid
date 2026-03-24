@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.138.1] - 2026-03-24
+
+### Changed
+- **Savings target growth rate is now driven by your account's live projected return** — since savings sit in the trading account and earn through trading, the required monthly contribution is automatically calculated using your account's annualized daily return rate (the same figure used to project income in your expenses goal). No manual entry needed.
+- **Growth rate override still available** — if you want to model a specific rate (e.g. a HYSA at 4.5% or a fixed-income assumption), you can enter it in the optional "Annual Growth Rate" field on the savings target. Leave it blank to use the live account projection.
+
+### Fixed
+- **Goals 500 error after v2.138.0 deploy** — migration 071 added the savings target columns to the model but failed to execute against PostgreSQL because the migration file had no `if __name__ == '__main__'` entrypoint. Columns are now applied and the goals endpoint is restored.
+
 ## [v2.138.0] - 2026-03-24
 
 ### Added
