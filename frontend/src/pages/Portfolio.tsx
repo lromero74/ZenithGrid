@@ -71,7 +71,8 @@ function Portfolio() {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const { addToast } = useNotifications()
-  const canWriteAccounts = usePermission('accounts', 'write')
+  const isObserver = selectedAccount?.membership_role === 'observer'
+  const canWriteAccounts = usePermission('accounts', 'write') && !isObserver
 
   // Fetch portfolio with optional cache bypass
   const fetchPortfolio = async (forceFresh = false): Promise<PortfolioData> => {
@@ -119,8 +120,9 @@ function Portfolio() {
       queryClient.invalidateQueries({ queryKey: ['account-portfolio'] })
       addToast({ type: 'success', title: 'Sell Complete', message: `Sold ${variables.size} ${variables.asset} to ${variables.quoteAsset}. Received: ${data.filled_value || 'N/A'} ${variables.quoteAsset}` })
     },
-    onError: (error: any, variables) => {
-      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error'
+    onError: (error: unknown, variables) => {
+      const e = error as { response?: { data?: { detail?: string } }; message?: string }
+      const errorMsg = e.response?.data?.detail || e.message || 'Unknown error'
       addToast({ type: 'error', title: 'Sell Failed', message: `Failed to sell ${variables.asset} to ${variables.quoteAsset}: ${errorMsg}` })
     }
   })
@@ -170,7 +172,7 @@ function Portfolio() {
 
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
+  const mainSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
 
   const formatCurrency = (value: number) => CURRENCY_FMT.format(value)
@@ -383,9 +385,10 @@ function Portfolio() {
             chartRef.current.timeScale().fitContent()
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching chart data:', err)
-        setChartError(err.response?.data?.detail || 'Failed to load chart data')
+        const e = err as { response?: { data?: { detail?: string } } }
+        setChartError(e.response?.data?.detail || 'Failed to load chart data')
       } finally {
         setChartLoading(false)
       }
@@ -768,15 +771,13 @@ function Portfolio() {
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        {canSellToUSD(holding.asset) && (
+                        {!isObserver && canSellToUSD(holding.asset) && (
                           <button
                             onClick={canWriteAccounts ? () => handleSell(holding.asset, 'USD', holding.available) : undefined}
                             disabled={!canWriteAccounts || holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="p-1.5 rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
-                              !canWriteAccounts
-                                ? 'Read-only account'
-                                : holding.hold > 0
+                              holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
                                 : holding.available <= 0
                                 ? `No ${holding.asset} available to sell`
@@ -786,15 +787,13 @@ function Portfolio() {
                             <DollarSign size={14} />
                           </button>
                         )}
-                        {canSellToBTC(holding.asset) && (
+                        {!isObserver && canSellToBTC(holding.asset) && (
                           <button
                             onClick={canWriteAccounts ? () => handleSell(holding.asset, 'BTC', holding.available) : undefined}
                             disabled={!canWriteAccounts || holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="p-1.5 rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
-                              !canWriteAccounts
-                                ? 'Read-only account'
-                                : holding.hold > 0
+                              holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
                                 : holding.available <= 0
                                 ? `No ${holding.asset} available to sell`
@@ -804,7 +803,7 @@ function Portfolio() {
                             <Bitcoin size={14} />
                           </button>
                         )}
-                        {!canSellToUSD(holding.asset) && !canSellToBTC(holding.asset) && (
+                        {(isObserver || (!canSellToUSD(holding.asset) && !canSellToBTC(holding.asset))) && (
                           <span className="text-xs text-slate-500">—</span>
                         )}
                       </div>

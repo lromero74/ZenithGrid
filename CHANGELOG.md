@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.4] - 2026-03-24
+
+### Added
+- **Observer mode banner** — when viewing a shared account as an observer, a persistent violet banner displays at the top of every page indicating the account name and read-only status.
+
+### Fixed
+- **Observer: sell buttons visible in Portfolio** — sell-to-USD and sell-to-BTC buttons are now hidden for observers on shared accounts.
+- **Observer: write actions accessible in Positions** — add funds, edit notes, edit settings, and resize all budgets are now disabled for observers.
+- **Observer: account sharing panel shown to observers** — the sharing/invite panel in Account Settings is now hidden for observers (it's an owner/manager feature only).
+- **Observer: bot modal missing read-only indicator** — the bot detail modal now shows a "Read-Only — observer access" label when opened by an observer.
+- **Charts: account name and observer badge** — the Charts page now shows the selected account name and an "(Observer)" label under the heading when in observer mode.
+
 ## [v2.136.3] - 2026-03-24
 
 ### Fixed

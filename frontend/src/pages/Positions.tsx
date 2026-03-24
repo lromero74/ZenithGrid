@@ -32,7 +32,8 @@ import {
 
 export default function Positions() {
   const { selectedAccount } = useAccount()
-  const canWritePositions = usePermission('positions', 'write')
+  const isObserver = selectedAccount?.membership_role === 'observer'
+  const canWritePositions = usePermission('positions', 'write') && !isObserver
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const navigate = useNavigate()
@@ -54,7 +55,15 @@ export default function Positions() {
   const [showLimitCloseModal, setShowLimitCloseModal] = useState(false)
   const [limitClosePosition, setLimitClosePosition] = useState<Position | null>(null)
   const [showSlippageWarning, setShowSlippageWarning] = useState(false)
-  const [slippageData, setSlippageData] = useState<any>(null)
+  const [slippageData, setSlippageData] = useState<{
+    product_id: string
+    best_bid: number
+    mark_price: number
+    expected_profit_at_mark: number
+    actual_profit_at_bid: number
+    slippage_amount: number
+    slippage_percentage: number
+  } | null>(null)
   const [pendingMarketClosePositionId, setPendingMarketClosePositionId] = useState<number | null>(null)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
@@ -176,11 +185,13 @@ export default function Positions() {
   }
 
   const openAddFundsModal = (position: Position) => {
+    if (isObserver) return
     setAddFundsPosition(position)
     setShowAddFundsModal(true)
   }
 
   const openNotesModal = (position: Position) => {
+    if (isObserver) return
     setEditingNotesPositionId(position.id)
     setNotesText(position.notes || '')
     setShowNotesModal(true)
@@ -218,16 +229,17 @@ export default function Positions() {
   }, [])
 
   const handleOpenEditSettings = useCallback((pos: Position) => {
+    if (isObserver) return
     setEditSettingsPosition(pos)
     setShowEditSettingsModal(true)
-  }, [])
+  }, [isObserver])
 
   const handleOpenTradeHistory = useCallback((pos: Position) => {
     setTradeHistoryPosition(pos)
     setShowTradeHistoryModal(true)
   }, [])
 
-  const handleEditBot = useCallback((bot: any) => {
+  const handleEditBot = useCallback((bot: Bot) => {
     navigate('/bots', { state: { editBot: bot } })
   }, [navigate])
 
@@ -267,7 +279,7 @@ export default function Positions() {
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {openPositions.length} Active
             </div>
-            {openPositions.length > 0 && (
+            {openPositions.length > 0 && !isObserver && (
               <button
                 className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-3 py-1 rounded-full text-sm font-medium transition-colors"
                 title="Recalculates each deal's budget to include base order + all safety orders with volume scaling. May result in overallocation if total exceeds available balance."
@@ -277,8 +289,9 @@ export default function Positions() {
                     const result = await positionsApi.resizeAllBudgets(selectedAccount?.id)
                     addToast({ type: 'success', title: 'Budgets Resized', message: `${result.message}` })
                     refetchPositions()
-                  } catch (err: any) {
-                    addToast({ type: 'error', title: 'Resize Failed', message: err.response?.data?.detail || err.message })
+                  } catch (err: unknown) {
+                    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+                    addToast({ type: 'error', title: 'Resize Failed', message: e.response?.data?.detail || e.message })
                   }
                 }}
               >

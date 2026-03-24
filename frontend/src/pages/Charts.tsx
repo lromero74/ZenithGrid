@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAccount } from '../contexts/AccountContext'
 import { BarChart2, X, Settings, Search, Activity } from 'lucide-react'
 import { IChartApi } from 'lightweight-charts'
 import {
@@ -13,6 +14,7 @@ import { transformPriceData, transformVolumeData, filterIndicators, groupIndicat
 import { PairSelector } from './charts/PairSelector'
 
 function Charts() {
+  const { selectedAccount } = useAccount()
   const [selectedPair, setSelectedPair] = useState(() => {
     const saved = localStorage.getItem('chart-selected-pair')
     return saved || 'BTC-USD'
@@ -22,7 +24,7 @@ function Charts() {
   })
   const [chartType, setChartType] = useState<'candlestick' | 'bar' | 'line' | 'area' | 'baseline'>(() => {
     const saved = localStorage.getItem('chart-type')
-    return (saved as any) || 'candlestick'
+    return (saved as 'candlestick' | 'bar' | 'line' | 'area' | 'baseline') || 'candlestick'
   })
   const [useHeikinAshi, setUseHeikinAshi] = useState(() => {
     return localStorage.getItem('chart-heikin-ashi') === 'true'
@@ -110,6 +112,7 @@ function Charts() {
 
       if (mainSeriesRef.current && volumeSeriesRef.current && !isCleanedUpRef.current) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           mainSeriesRef.current.setData(priceData as any)
           volumeSeriesRef.current.setData(volumeData)
 
@@ -123,7 +126,7 @@ function Charts() {
           }
 
           lastUpdateRef.current = latestCandleKey
-        } catch (e) {
+        } catch {
           // Chart may have been cleaned up
           return
         }
@@ -137,7 +140,17 @@ function Charts() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Charts</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Charts</h1>
+          {selectedAccount && (
+            <p className="text-sm text-slate-400 mt-0.5">
+              {selectedAccount.name}
+              {selectedAccount.membership_role === 'observer' && (
+                <span className="ml-2 text-xs text-violet-400">(Observer)</span>
+              )}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Toolbar */}
