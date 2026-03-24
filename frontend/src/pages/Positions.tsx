@@ -291,7 +291,7 @@ export default function Positions() {
                     refetchPositions()
                   } catch (err: unknown) {
                     const e = err as { response?: { data?: { detail?: string } }; message?: string }
-                    addToast({ type: 'error', title: 'Resize Failed', message: e.response?.data?.detail || e.message })
+                    addToast({ type: 'error', title: 'Resize Failed', message: e.response?.data?.detail || e.message || 'Unknown error' })
                   }
                 }}
               >
