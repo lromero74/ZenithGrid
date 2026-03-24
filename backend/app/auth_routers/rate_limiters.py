@@ -34,6 +34,7 @@ _LIMITS = {
     "forgot_pw_email":   (3,    3600),
     "resend":            (3,    3600),
     "mfa":               (5,    300),    # 5 per 5 min
+    "disposable_email":  (2,    86400),  # 2 attempts per 24h — IP jail for throwaway emails
 }
 
 # ---------------------------------------------------------------------------
@@ -47,15 +48,17 @@ _forgot_pw_attempts: dict = defaultdict(list)
 _forgot_pw_by_email: dict = defaultdict(list)
 _resend_attempts: dict = defaultdict(list)
 _mfa_attempts: dict = defaultdict(list)
+_disposable_email_attempts: dict = defaultdict(list)
 
 _CATEGORY_STORE = {
-    "login":           _login_attempts,
-    "login_user":      _login_attempts_by_username,
-    "signup":          _signup_attempts,
-    "forgot_pw":       _forgot_pw_attempts,
-    "forgot_pw_email": _forgot_pw_by_email,
-    "resend":          _resend_attempts,
-    "mfa":             _mfa_attempts,
+    "login":              _login_attempts,
+    "login_user":         _login_attempts_by_username,
+    "signup":             _signup_attempts,
+    "forgot_pw":          _forgot_pw_attempts,
+    "forgot_pw_email":    _forgot_pw_by_email,
+    "resend":             _resend_attempts,
+    "mfa":                _mfa_attempts,
+    "disposable_email":   _disposable_email_attempts,
 }
 
 # Track whether a key has been warmed from DB
@@ -361,3 +364,32 @@ def _record_mfa_attempt(mfa_token: str):
     _mfa_attempts[mfa_token].append(time.time())
     _warmed.add(("mfa", mfa_token))
     _fire_and_forget(_get_rate_limit_backend().record_attempt("mfa", mfa_token))
+
+
+# -- Disposable email jail --
+
+def _check_disposable_email_jail(ip: str):
+    """
+    Raise 429 if this IP has already hit the disposable-email limit.
+
+    Call this BEFORE recording a new attempt so the first offence is still
+    allowed through (with a warning); the second offence within 24h is jailed.
+    """
+    _prune_memory()
+    max_attempts, window = _LIMITS["disposable_email"]
+    count, timestamps = _mem_count(_disposable_email_attempts, ip, window)
+    if count >= max_attempts:
+        oldest = min(timestamps)
+        retry_after = int(oldest + window - time.time())
+        hours = max(1, (retry_after + 3599) // 3600)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many invalid signup attempts. Try again in {hours} hour{'s' if hours != 1 else ''}.",
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
+
+
+def _record_disposable_email_attempt(ip: str):
+    _disposable_email_attempts[ip].append(time.time())
+    _warmed.add(("disposable_email", ip))
+    _fire_and_forget(_get_rate_limit_backend().record_attempt("disposable_email", ip))

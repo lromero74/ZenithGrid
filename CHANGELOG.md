@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.1] - 2026-03-24
+
+### Security
+- **Email MFA on by default** — all new accounts now have email MFA enabled automatically. Existing verified accounts were backfilled. MFA activates at login once email address is verified; the signup verification email doubles as the first MFA step. Users can still add an authenticator app; only one method needs to pass.
+- **Disposable email jail** — IPs that attempt to sign up with throwaway email addresses twice within 24 hours are rate-limited for the remainder of that window. First attempt is still allowed through; the second is blocked with a neutral error message.
+
+### Fixed
+- USDC-based bots could open deals against DAI and other stablecoins because the stable-pair check only matched an explicit list. Now any pair where both sides are known stablecoins (e.g. `DAI-USDC`, `USDT-USDC`) is blocked regardless of whether it appears in the list.
+
 ## [v2.136.0] - 2026-03-23
 
 ### Added

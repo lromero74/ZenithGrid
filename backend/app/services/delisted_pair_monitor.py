@@ -37,10 +37,32 @@ EXCLUDED_PAIRS = STABLE_PAIRS
 # Non-USD quote currencies for stable pair detection (frozenset for O(1) lookup)
 _NON_USD_QUOTES = frozenset({"BTC", "ETH", "SOL"})
 
+# All known stablecoin tickers — used to detect stable-vs-stable cross pairs
+# (e.g. DAI-USDC, USDT-USDC) which are not in STABLE_PAIRS but should also be skipped.
+_STABLECOIN_TICKERS = frozenset({
+    "USD", "USDC", "USDT", "DAI", "GUSD", "PAX", "BUSD",
+    "USDP", "PYUSD", "EURC", "EURT", "USDS", "USD1",
+})
+
 
 def is_stable_pair(product_id: str) -> bool:
-    """Check if a trading pair is a stablecoin or wrapped/pegged same-asset pair."""
-    return product_id in STABLE_PAIRS
+    """
+    Check if a trading pair is a stablecoin or wrapped/pegged same-asset pair.
+
+    Covers:
+    - Explicit entries in STABLE_PAIRS (e.g. DAI-USD, WBTC-BTC)
+    - Stable-vs-stable cross pairs where both sides are known stablecoins
+      (e.g. DAI-USDC, USDT-USDC) — these slip through the explicit list because
+      there are too many combinations to enumerate.
+    """
+    if product_id in STABLE_PAIRS:
+        return True
+    parts = product_id.split("-", 1)
+    if len(parts) == 2:
+        base, quote = parts
+        if base in _STABLECOIN_TICKERS and quote in _STABLECOIN_TICKERS:
+            return True
+    return False
 
 
 class TradingPairMonitor:

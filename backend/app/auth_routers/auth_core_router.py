@@ -111,8 +111,11 @@ async def login(
             detail="User account is disabled",
         )
 
-    # If any MFA method is enabled, check for trusted device token before requiring MFA
-    any_mfa_enabled = user.mfa_enabled or user.mfa_email_enabled
+    # If any MFA method is enabled, check for trusted device token before requiring MFA.
+    # Email MFA only fires after email is verified — unverified users log in normally
+    # until they complete email verification, at which point MFA activates automatically.
+    email_mfa_active = user.mfa_email_enabled and user.email_verified
+    any_mfa_enabled = user.mfa_enabled or email_mfa_active
     if any_mfa_enabled:
         trusted = False
         if request.device_trust_token:
@@ -138,7 +141,7 @@ async def login(
             mfa_methods = []
             if user.mfa_enabled:
                 mfa_methods.append("totp")
-            if user.mfa_email_enabled:
+            if email_mfa_active:
                 mfa_methods.append("email_code")
                 mfa_methods.append("email_link")
 
@@ -538,15 +541,20 @@ async def signup(
             detail="Email already registered",
         )
 
-    # Log disposable email registrations — user was warned by the frontend
+    # Disposable/throwaway email jail — IP-based, 2 strikes per 24h
     from app.services.disposable_email_service import is_disposable_email
+    from app.auth_routers.rate_limiters import (
+        _check_disposable_email_jail, _record_disposable_email_attempt,
+    )
     if is_disposable_email(request.email):
+        _check_disposable_email_jail(client_ip)   # raises 429 if already jailed
+        _record_disposable_email_attempt(client_ip)
         logger.warning(
-            f"Disposable email registration: {request.email} from IP {client_ip} — "
-            "user was warned by frontend and chose to proceed"
+            f"Disposable email signup attempt: {request.email} from IP {client_ip} "
+            "(strike recorded)"
         )
 
-    # Create new user (unverified)
+    # Create new user — email MFA on by default (enforced at login once email is verified)
     new_user = User(
         email=request.email.lower(),
         hashed_password=hash_password(request.password),
@@ -554,6 +562,7 @@ async def signup(
         is_active=True,
         is_superuser=False,
         email_verified=False,
+        mfa_email_enabled=True,
         last_login_at=datetime.utcnow(),
     )
 

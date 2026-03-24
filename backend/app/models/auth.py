@@ -83,7 +83,7 @@ class User(Base):
     # MFA (Two-Factor Authentication)
     totp_secret = Column(String, nullable=True)  # Fernet-encrypted TOTP secret key
     mfa_enabled = Column(Boolean, default=False)  # Whether TOTP MFA is active
-    mfa_email_enabled = Column(Boolean, default=False)  # Whether email MFA is active
+    mfa_email_enabled = Column(Boolean, default=True)  # Email MFA — on by default for all new users
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
