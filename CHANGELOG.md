@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.8] - 2026-03-24
+
+### Added
+- **Manager role is now fully functional** — account managers can start/stop/force-run bots, create and delete bots, edit bot configuration, cancel and force-close positions, and update position settings on accounts they manage. Previously the manager role had the same read-only access as observer.
+- Manager access applies to bot cloning, copy-to-account, cancel-all-positions, and sell-all-positions as well.
+
+### Fixed
+- **Security: invite rate limit** — account owners are now capped at 10 invitations per account per hour to prevent invite spam.
+- **Security: rebalance and dust-sweep pages cache live API calls** — member requests no longer directly trigger repeated Coinbase API calls using the account owner's credentials. Responses are cached per account (30s for rebalance status, 60s for dust sweep).
+- Account bots list (`/api/accounts/{id}/bots`) now correctly returns bots for observers and managers, not just the account owner.
+
 ## [v2.136.7] - 2026-03-24
 
 ### Fixed

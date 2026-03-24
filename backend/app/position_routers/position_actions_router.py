@@ -13,16 +13,22 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Account, Bot, Position, User
+from app.models import Bot, Position, User
 from app.position_routers.helpers import compute_resize_budget
 from app.auth.dependencies import require_permission, Perm
 from app.schemas.position import UpdatePositionSettingsRequest
+from app.services.account_access import manager_account_ids
 from app.services.exchange_service import get_exchange_client_for_account
 
 from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _writable_account_ids(db, current_user_id: int):
+    """Account IDs the user can write to: owned + manager membership."""
+    return await manager_account_ids(db, current_user_id)
 
 
 @router.post("/{position_id}/cancel")
@@ -35,9 +41,7 @@ async def cancel_position(
     try:
         query = select(Position).where(Position.id == position_id)
 
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        user_account_ids = await _writable_account_ids(db, current_user.id)
         if user_account_ids:
             query = query.where(Position.account_id.in_(user_account_ids))
         else:
@@ -76,9 +80,7 @@ async def force_close_position(
     try:
         query = select(Position).where(Position.id == position_id)
 
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        user_account_ids = await _writable_account_ids(db, current_user.id)
         if user_account_ids:
             query = query.where(Position.account_id.in_(user_account_ids))
         else:
@@ -172,9 +174,7 @@ async def update_position_settings(
             Position.id == position_id
         )
 
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        user_account_ids = await _writable_account_ids(db, current_user.id)
         if user_account_ids:
             query = query.where(Position.account_id.in_(user_account_ids))
         else:
@@ -289,9 +289,7 @@ async def resize_position_budget(
             Position.id == position_id
         )
 
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        user_account_ids = await _writable_account_ids(db, current_user.id)
         if user_account_ids:
             query = query.where(Position.account_id.in_(user_account_ids))
         else:
@@ -363,23 +361,14 @@ async def resize_all_budgets(
             Position.status == "open"
         )
 
+        writable_ids = await _writable_account_ids(db, current_user.id)
         if account_id is not None:
-            # Verify the account belongs to this user
-            acct = await db.execute(
-                select(Account.id).where(
-                    Account.id == account_id,
-                    Account.user_id == current_user.id,
-                )
-            )
-            if not acct.scalar_one_or_none():
+            if account_id not in writable_ids:
                 raise HTTPException(status_code=404, detail="Account not found")
             query = query.where(Position.account_id == account_id)
         else:
-            accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-            accounts_result = await db.execute(accounts_query)
-            user_account_ids = [row[0] for row in accounts_result.fetchall()]
-            if user_account_ids:
-                query = query.where(Position.account_id.in_(user_account_ids))
+            if writable_ids:
+                query = query.where(Position.account_id.in_(writable_ids))
 
         result = await db.execute(query)
         positions = result.scalars().all()

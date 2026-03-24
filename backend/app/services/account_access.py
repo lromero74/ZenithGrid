@@ -3,8 +3,14 @@ Account access helpers — shared filter utilities for multi-user account access
 
 Provides SQLAlchemy filter clauses and helper functions that check both
 account ownership and account membership (shared access), used across
-routers and service functions to allow observers/managers to read data
-from accounts they have been granted access to.
+routers and service functions.
+
+Membership roles:
+  manager  — read + write access: can start/stop bots, add bots, manage positions,
+             view all data including operational settings (auto-buy, rebalance, dust sweep);
+             cannot touch credentials or invite/remove members
+  observer — read-only: balances, bots, positions, reports, logs, and operational settings
+             (auto-buy thresholds, rebalance config, dust sweep config)
 """
 
 from datetime import datetime
@@ -16,24 +22,45 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Account
 from app.models.sharing import AccountMembership
 
+_ACTIVE_MEMBERSHIP = lambda uid: (  # noqa: E731
+    AccountMembership.user_id == uid,
+    or_(
+        AccountMembership.expires_at.is_(None),
+        AccountMembership.expires_at > datetime.utcnow(),
+    ),
+)
+
 
 def accessible_accounts_filter(current_user_id: int):
     """
-    SQLAlchemy filter clause matching all accounts a user can access:
-      1. Accounts they own (account.user_id == current_user_id)
-      2. Accounts they have an active (non-expired) membership on
+    SQLAlchemy filter clause matching all accounts a user can access (any role):
+      1. Accounts they own
+      2. Accounts they have an active (non-expired) membership on (observer OR manager)
 
-    Suitable for any SELECT / WHERE clause on the Account model.
+    Suitable for read-only SELECT / WHERE clauses on the Account model.
+    """
+    return or_(
+        Account.user_id == current_user_id,
+        Account.id.in_(
+            select(AccountMembership.account_id).where(*_ACTIVE_MEMBERSHIP(current_user_id))
+        ),
+    )
+
+
+def manager_accounts_filter(current_user_id: int):
+    """
+    SQLAlchemy filter clause matching accounts the user can write to:
+      1. Accounts they own
+      2. Accounts where they have an active manager membership
+
+    Suitable for mutating endpoints (bot start/stop/create, position actions).
     """
     return or_(
         Account.user_id == current_user_id,
         Account.id.in_(
             select(AccountMembership.account_id).where(
-                AccountMembership.user_id == current_user_id,
-                or_(
-                    AccountMembership.expires_at.is_(None),
-                    AccountMembership.expires_at > datetime.utcnow(),
-                ),
+                *_ACTIVE_MEMBERSHIP(current_user_id),
+                AccountMembership.role == 'manager',
             )
         ),
     )
@@ -41,14 +68,21 @@ def accessible_accounts_filter(current_user_id: int):
 
 async def accessible_account_ids(db: AsyncSession, current_user_id: int) -> List[int]:
     """
-    Return a list of account IDs accessible to the given user:
-      - Accounts they own
-      - Accounts with an active (non-expired) membership
-
-    Used in queries that filter related objects (bots, positions, orders)
-    by account_id rather than by user ownership.
+    Return all account IDs accessible to the user (any role: owner, manager, observer).
+    Used for read-only queries on bots, positions, logs, etc.
     """
     result = await db.execute(
         select(Account.id).where(accessible_accounts_filter(current_user_id))
+    )
+    return [row[0] for row in result.fetchall()]
+
+
+async def manager_account_ids(db: AsyncSession, current_user_id: int) -> List[int]:
+    """
+    Return account IDs the user can write to: accounts they own OR have manager membership on.
+    Used to gate mutating bot/position endpoints for the manager role.
+    """
+    result = await db.execute(
+        select(Account.id).where(manager_accounts_filter(current_user_id))
     )
     return [row[0] for row in result.fetchall()]

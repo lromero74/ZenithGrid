@@ -12,8 +12,9 @@ and the UI can filter by selected account.
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -42,6 +43,14 @@ from app.services.exchange_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+# TTL caches for live-account endpoints that make Coinbase API calls.
+# Shared across all callers (owner + members) — limits live API calls to once per TTL
+# per account, preventing members from exhausting the account owner's API rate quota.
+_TTL_REBALANCE_STATUS: Dict[int, Tuple[float, Any]] = {}
+_TTL_DUST_SWEEP: Dict[int, Tuple[float, Any]] = {}
+_TTL_REBALANCE_SECONDS = 30
+_TTL_DUST_SWEEP_SECONDS = 60
 
 
 def _accessible_accounts_filter(current_user_id: int):
@@ -720,8 +729,12 @@ async def get_account_bots(
 ):
     """Get all bots linked to an account."""
     try:
-        # Verify account exists and belongs to user
-        account_query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+        # Verify account exists and is accessible (owner or member)
+        from app.services.account_access import accessible_accounts_filter
+        account_query = select(Account).where(
+            Account.id == account_id,
+            accessible_accounts_filter(current_user.id),
+        )
         account_result = await db.execute(account_query)
         account = account_result.scalar_one_or_none()
 
@@ -1200,6 +1213,15 @@ async def get_rebalance_status(
     if account.type != "cex":
         raise HTTPException(status_code=400, detail="Rebalancing only available for CEX accounts")
 
+    # M2: Serve from TTL cache for live accounts — prevents member requests from
+    # exhausting the account owner's Coinbase API rate quota.
+    if not account.is_paper_trading:
+        cached = _TTL_REBALANCE_STATUS.get(account_id)
+        if cached:
+            cached_at, cached_data = cached
+            if time.monotonic() - cached_at < _TTL_REBALANCE_SECONDS:
+                return cached_data
+
     try:
         if account.is_paper_trading:
             # Paper trading: read balances from JSON, use public prices
@@ -1277,7 +1299,7 @@ async def get_rebalance_status(
         t_btc = account.rebalance_target_btc_pct
         t_eth = account.rebalance_target_eth_pct
         t_usdc = account.rebalance_target_usdc_pct
-        return {
+        response_data = {
             "account_id": account_id,
             **alloc,
             "target_usd_pct": t_usd if t_usd is not None else 34.0,
@@ -1290,6 +1312,9 @@ async def get_rebalance_status(
             "min_balance_eth": account.min_balance_eth or 0.0,
             "min_balance_usdc": account.min_balance_usdc or 0.0,
         }
+        if not account.is_paper_trading:
+            _TTL_REBALANCE_STATUS[account_id] = (time.monotonic(), response_data)
+        return response_data
 
     except (HTTPException, AppError):
         raise
@@ -1327,6 +1352,14 @@ async def get_dust_sweep_settings(
 
     if not account:
         raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # M2: Serve from TTL cache for live accounts
+    if not account.is_paper_trading:
+        cached = _TTL_DUST_SWEEP.get(account_id)
+        if cached:
+            cached_at, cached_data = cached
+            if time.monotonic() - cached_at < _TTL_DUST_SWEEP_SECONDS:
+                return cached_data
 
     # Build dust positions list
     dust_positions = []
@@ -1384,7 +1417,7 @@ async def get_dust_sweep_settings(
     except Exception as e:
         logger.warning(f"Error building dust positions for account {account_id}: {e}")
 
-    return {
+    response_data = {
         "enabled": account.dust_sweep_enabled or False,
         "threshold_usd": account.dust_sweep_threshold_usd or 5.0,
         "last_sweep_at": (
@@ -1393,6 +1426,9 @@ async def get_dust_sweep_settings(
         ),
         "dust_positions": dust_positions,
     }
+    if not account.is_paper_trading:
+        _TTL_DUST_SWEEP[account_id] = (time.monotonic(), response_data)
+    return response_data
 
 
 @router.put("/{account_id}/dust-sweep-settings")

@@ -19,8 +19,10 @@ class AccountMembership(Base):
     Maps a non-owner user to an account with a specific role.
 
     Roles:
-      manager  — can trade, manage bots, view all data; cannot touch credentials
-      observer — read-only access to balances, bots, positions, reports
+      manager  — read + write: start/stop bots, add/edit/delete bots, cancel/close positions,
+                 view all data including operational settings; cannot touch credentials or invites
+      observer — read-only: balances, bots, positions, reports, logs, and operational settings
+                 (auto-buy thresholds, rebalance configuration, dust sweep settings)
 
     The account owner is identified by account.user_id — no 'owner' row here.
     """

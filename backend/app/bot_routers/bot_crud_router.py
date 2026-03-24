@@ -18,7 +18,7 @@ from app.database import get_db
 from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
-from app.services.account_access import accessible_account_ids
+from app.services.account_access import accessible_account_ids, manager_account_ids, manager_accounts_filter
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import get_coinbase_from_db
 from app.strategies import StrategyDefinition, StrategyRegistry
@@ -28,15 +28,17 @@ router = APIRouter()
 
 
 async def _accessible_bot_filter(db: AsyncSession, current_user_id: int):
-    """Return a SQLAlchemy filter clause for bots visible to the user.
-
-    Includes bots they own AND bots on accounts they have shared access to.
-    Used for read-only operations (get, stats). Write operations keep the
-    strict Bot.user_id == current_user.id check.
-    """
+    """Filter for bots the user can read (owner, observer, or manager)."""
     from sqlalchemy import or_
     acc_ids = await accessible_account_ids(db, current_user_id)
     return or_(Bot.user_id == current_user_id, Bot.account_id.in_(acc_ids))
+
+
+async def _bot_write_filter(db: AsyncSession, current_user_id: int):
+    """Filter for bots the user can write (owner or manager of the account)."""
+    from sqlalchemy import or_
+    mgr_ids = await manager_account_ids(db, current_user_id)
+    return or_(Bot.user_id == current_user_id, Bot.account_id.in_(mgr_ids))
 
 
 async def _get_paper_account(db: AsyncSession, user_id: int):
@@ -86,7 +88,18 @@ async def create_bot(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
-    # Check if name is unique for this user
+    # If creating a bot on a shared account, verify the user has manager access to it
+    if bot_data.account_id is not None:
+        acct_check = await db.execute(
+            select(Account).where(
+                Account.id == bot_data.account_id,
+                manager_accounts_filter(current_user.id),
+            )
+        )
+        if not acct_check.scalars().first():
+            raise HTTPException(status_code=403, detail="Manager access required to create bots on this account")
+
+    # Check if name is unique for this user (and managers of the same account)
     query = select(Bot).where(Bot.name == bot_data.name, Bot.user_id == current_user.id)
     result = await db.execute(query)
     if result.scalars().first():
@@ -310,9 +323,7 @@ async def update_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Update bot configuration"""
-    query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    query = query.where(Bot.user_id == current_user.id)
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -325,7 +336,7 @@ async def update_bot(
     # Update fields
     if bot_update.name is not None:
         # Check name uniqueness
-        name_query = select(Bot).where(Bot.name == bot_update.name, Bot.id != bot_id, Bot.user_id == current_user.id)
+        name_query = select(Bot).where(Bot.name == bot_update.name, Bot.id != bot_id, Bot.user_id == bot.user_id)
         name_result = await db.execute(name_query)
         if name_result.scalars().first():
             raise HTTPException(status_code=400, detail=f"Bot with name '{bot_update.name}' already exists")
@@ -420,9 +431,7 @@ async def delete_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_DELETE))
 ):
     """Delete a bot (only if it has no open positions)"""
-    query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    query = query.where(Bot.user_id == current_user.id)
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -467,10 +476,8 @@ async def clone_bot(
     - Starts in stopped state (is_active = False)
     - No positions copied (fresh start)
     """
-    # Get original bot
-    query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    query = query.where(Bot.user_id == current_user.id)
+    # Get original bot — accessible to owner and managers
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
@@ -575,17 +582,19 @@ async def copy_bot_to_account(
     - No positions copied (fresh start)
     - Reserved balances reset to 0
     """
-    # Get original bot
-    query = select(Bot).where(Bot.id == bot_id)
-    query = query.where(Bot.user_id == current_user.id)
+    # Get original bot — accessible to owner and managers
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
     if not original_bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    # Get target account and verify ownership
-    account_query = select(Account).where(Account.id == target_account_id, Account.user_id == current_user.id)
+    # Get target account — must be owned or managed by caller
+    account_query = select(Account).where(
+        Account.id == target_account_id,
+        manager_accounts_filter(current_user.id),
+    )
     account_result = await db.execute(account_query)
     target_account = account_result.scalars().first()
 

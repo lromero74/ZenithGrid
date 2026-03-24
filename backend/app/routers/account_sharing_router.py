@@ -9,9 +9,10 @@ Route groups:
 """
 
 import logging
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -57,7 +58,26 @@ async def invite_member(
     Creates a one-time, 7-day expiring invitation token and emails it
     to the specified address. The recipient must authenticate as that
     email address before they can accept.
+
+    Rate-limited to 10 invitations per account per hour.
     """
+    # M3: Prevent invite spam — cap at 10 invitations per account per hour
+    from datetime import timedelta
+    from app.models.sharing import AccountInvitation
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_count_result = await db.execute(
+        select(func.count(AccountInvitation.id)).where(
+            AccountInvitation.account_id == account_id,
+            AccountInvitation.created_at >= one_hour_ago,
+        )
+    )
+    recent_count = recent_count_result.scalar_one()
+    if recent_count >= 10:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many invitations sent in the last hour. Please wait before sending more.",
+        )
+
     try:
         invitation = await svc.create_invitation(
             db, account_id, str(body.email), body.role, current_user
