@@ -794,7 +794,8 @@ async def get_account_balances(
         current_price = await get_public_price("ETH-BTC")
         btc_usd_price = await get_public_btc_price()
     else:
-        coinbase = await get_coinbase_from_db(db, current_user.id)
+        # Use the account owner's credentials (not the observer's — they have none)
+        coinbase = await get_coinbase_from_db(db, account.user_id)
         btc_balance = await coinbase.get_btc_balance()
         eth_balance = await coinbase.get_eth_balance()
         usd_balance = await coinbase.get_usd_balance()
