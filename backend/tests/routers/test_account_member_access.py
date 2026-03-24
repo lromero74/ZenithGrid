@@ -330,3 +330,139 @@ class TestListBotsAccess:
 
         ids = await accessible_account_ids(db_session, stranger.id)
         assert acct.id not in ids
+
+
+# =============================================================================
+# Tests: list_expense_items (GET /reports/goals/{goal_id}/expenses)
+# =============================================================================
+
+
+async def _make_goal(db, user: User, name: str = "Test Goal") -> "ReportGoal":
+    from app.models import ReportGoal
+    from datetime import datetime, timedelta
+    goal = ReportGoal(
+        user_id=user.id,
+        name=name,
+        target_type="balance",
+        target_currency="USD",
+        target_value=1000.0,
+        time_horizon_months=12,
+        start_date=datetime.utcnow(),
+        target_date=datetime.utcnow() + timedelta(days=365),
+    )
+    db.add(goal)
+    await db.flush()
+    return goal
+
+
+class TestListExpenseItemsAccess:
+    """Observer can list expense items for goals on a shared account."""
+
+    @pytest.mark.asyncio
+    async def test_owner_can_list_expenses(self, db_session):
+        """Goal owner can list expense items."""
+        from app.routers.reports_router import _get_accessible_goal
+
+        owner = await _make_user(db_session, "owner_exp_lst@example.com")
+        goal = await _make_goal(db_session, owner)
+        await db_session.commit()
+
+        result = await _get_accessible_goal(db_session, goal.id, owner.id)
+        assert result.id == goal.id
+
+    @pytest.mark.asyncio
+    async def test_observer_can_list_expenses_on_shared_account(self, db_session):
+        """Observer can fetch expense goal when they have membership on owner's account."""
+        from app.routers.reports_router import _get_accessible_goal
+
+        owner = await _make_user(db_session, "owner_exp_obs@example.com")
+        observer = await _make_user(db_session, "observer_exp_obs@example.com")
+        acct = await _make_paper_account(db_session, owner)
+        await _make_membership(db_session, acct, observer, "observer")
+        goal = await _make_goal(db_session, owner)
+        await db_session.commit()
+
+        result = await _get_accessible_goal(db_session, goal.id, observer.id)
+        assert result.id == goal.id
+
+    @pytest.mark.asyncio
+    async def test_stranger_cannot_access_goal(self, db_session):
+        """User with no membership gets 404 on another user's goal."""
+        from fastapi import HTTPException
+        from app.routers.reports_router import _get_accessible_goal
+
+        owner = await _make_user(db_session, "owner_exp_str@example.com")
+        stranger = await _make_user(db_session, "stranger_exp_str@example.com")
+        goal = await _make_goal(db_session, owner)
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _get_accessible_goal(db_session, goal.id, stranger.id)
+        assert exc_info.value.status_code == 404
+
+
+# =============================================================================
+# Tests: get_report (GET /reports/{report_id})
+# =============================================================================
+
+
+async def _make_report(db, user: User) -> "Report":
+    from app.models import Report
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    report = Report(
+        user_id=user.id,
+        period_start=now - timedelta(days=30),
+        period_end=now,
+        periodicity="monthly",
+        delivery_status="manual",
+    )
+    db.add(report)
+    await db.flush()
+    return report
+
+
+class TestGetReportAccess:
+    """Observer can view individual report entries from a shared account."""
+
+    @pytest.mark.asyncio
+    async def test_owner_can_get_report(self, db_session):
+        """Report owner can fetch their own report."""
+        from app.routers.reports_router import _get_accessible_report
+
+        owner = await _make_user(db_session, "owner_rep@example.com")
+        report = await _make_report(db_session, owner)
+        await db_session.commit()
+
+        result = await _get_accessible_report(db_session, report.id, owner.id)
+        assert result.id == report.id
+
+    @pytest.mark.asyncio
+    async def test_observer_can_get_report_on_shared_account(self, db_session):
+        """Observer can fetch a report owned by the account they observe."""
+        from app.routers.reports_router import _get_accessible_report
+
+        owner = await _make_user(db_session, "owner_rep_obs@example.com")
+        observer = await _make_user(db_session, "observer_rep_obs@example.com")
+        acct = await _make_paper_account(db_session, owner)
+        await _make_membership(db_session, acct, observer, "observer")
+        report = await _make_report(db_session, owner)
+        await db_session.commit()
+
+        result = await _get_accessible_report(db_session, report.id, observer.id)
+        assert result.id == report.id
+
+    @pytest.mark.asyncio
+    async def test_stranger_cannot_get_report(self, db_session):
+        """Stranger gets 404 on another user's report."""
+        from fastapi import HTTPException
+        from app.routers.reports_router import _get_accessible_report
+
+        owner = await _make_user(db_session, "owner_rep_str@example.com")
+        stranger = await _make_user(db_session, "stranger_rep_str@example.com")
+        report = await _make_report(db_session, owner)
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _get_accessible_report(db_session, report.id, stranger.id)
+        assert exc_info.value.status_code == 404

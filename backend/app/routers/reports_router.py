@@ -673,7 +673,7 @@ async def list_expense_items(
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
     """List all expense items for a goal."""
-    goal = await _get_user_goal(db, goal_id, current_user.id)
+    goal = await _get_accessible_goal(db, goal_id, current_user.id)
     result = await db.execute(
         select(ExpenseItem)
         .where(ExpenseItem.goal_id == goal.id)
@@ -828,7 +828,7 @@ async def delete_expense_item(
 async def _get_user_goal(
     db: AsyncSession, goal_id: int, user_id: int,
 ) -> ReportGoal:
-    """Helper to fetch and validate goal ownership."""
+    """Helper to fetch and validate goal ownership (write paths only)."""
     result = await db.execute(
         select(ReportGoal).where(
             ReportGoal.id == goal_id,
@@ -839,6 +839,56 @@ async def _get_user_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
     return goal
+
+
+async def _get_accessible_goal(
+    db: AsyncSession, goal_id: int, current_user_id: int,
+) -> ReportGoal:
+    """Fetch a goal the user can read: owner OR observer/manager of owner's account."""
+    from sqlalchemy import or_
+    result = await db.execute(
+        select(ReportGoal).where(
+            ReportGoal.id == goal_id,
+            or_(
+                ReportGoal.user_id == current_user_id,
+                ReportGoal.user_id.in_(
+                    select(Account.user_id).where(
+                        accessible_accounts_filter(current_user_id),
+                        Account.user_id != current_user_id,
+                    )
+                ),
+            ),
+        )
+    )
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
+async def _get_accessible_report(
+    db: AsyncSession, report_id: int, current_user_id: int,
+) -> Report:
+    """Fetch a report the user can read: owner OR observer/manager of owner's account."""
+    from sqlalchemy import or_
+    result = await db.execute(
+        select(Report).where(
+            Report.id == report_id,
+            or_(
+                Report.user_id == current_user_id,
+                Report.user_id.in_(
+                    select(Account.user_id).where(
+                        accessible_accounts_filter(current_user_id),
+                        Account.user_id != current_user_id,
+                    )
+                ),
+            ),
+        ).options(selectinload(Report.schedule))
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
 
 
 def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
@@ -989,16 +1039,7 @@ async def get_report(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get a single report with HTML content for in-app viewing."""
-    result = await db.execute(
-        select(Report).where(
-            Report.id == report_id,
-            Report.user_id == current_user.id,
-        ).options(selectinload(Report.schedule))
-    )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-
+    report = await _get_accessible_report(db, report_id, current_user.id)
     return _report_to_dict(report, include_html=True)
 
 
