@@ -852,10 +852,9 @@ async def get_auto_buy_settings(
     current_user: User = Depends(get_current_user)
 ):
     """Get auto-buy BTC settings for an account"""
-    query = select(Account).where(Account.id == account_id)
-
-    query = query.where(Account.user_id == current_user.id)
-
+    query = select(Account).where(
+        Account.id == account_id, _accessible_accounts_filter(current_user.id)
+    )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
 
@@ -1044,7 +1043,7 @@ async def get_rebalance_settings(
 ):
     """Get portfolio rebalance settings for an account."""
     query = select(Account).where(
-        Account.id == account_id, Account.user_id == current_user.id
+        Account.id == account_id, _accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -1190,7 +1189,7 @@ async def get_rebalance_status(
 ):
     """Get current portfolio allocation vs targets for an account."""
     query = select(Account).where(
-        Account.id == account_id, Account.user_id == current_user.id
+        Account.id == account_id, _accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -1321,7 +1320,7 @@ async def get_dust_sweep_settings(
 ):
     """Get dust sweep settings and current dust positions for an account."""
     query = select(Account).where(
-        Account.id == account_id, Account.user_id == current_user.id
+        Account.id == account_id, _accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()

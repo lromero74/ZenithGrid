@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.136.6] - 2026-03-24
+
+### Fixed
+- **Observer: Portfolio Management settings blank in Settings** — auto-buy, rebalance, minimum balance reserves, and dust sweep settings for shared accounts were returning 404 for observers. All four read endpoints now allow access via account membership.
+- **Observer: rebalance/auto-buy/dust controls not disabled** — write controls in Portfolio Management (mode selector, sliders, save buttons, dust sweep) are now disabled per-account when the account is observed.
+- **Observer: "Observer — Read-Only" badge in Portfolio Management** — each shared account section in Settings now shows the role badge next to the account name.
+
 ## [v2.136.5] - 2026-03-24
 
 ### Fixed

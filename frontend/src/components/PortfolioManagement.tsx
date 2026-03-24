@@ -25,6 +25,7 @@ interface Account {
   name: string
   type: string
   exchange?: string
+  membership_role?: 'manager' | 'observer' | null
 }
 
 interface PortfolioManagementProps {
@@ -557,6 +558,8 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           const rb = rebalanceSettings[account.id]
           if (!ab && !rb) return null
 
+          const isObserver = account.membership_role === 'observer'
+          const canWriteAccount = canWrite && !isObserver
           const mode = getMode(account.id)
           const status = statuses[account.id]
           const hasWarning = hasStablecoinBots(account.id)
@@ -564,22 +567,29 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           return (
             <div key={account.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
               {/* Account header */}
-              <h3 className="text-lg font-medium text-white mb-3">{account.name}</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-lg font-medium text-white">{account.name}</h3>
+                {isObserver && (
+                  <span className="text-xs text-violet-400 bg-violet-900/40 px-2 py-0.5 rounded-full">
+                    Observer — Read-Only
+                  </span>
+                )}
+              </div>
 
               {/* Mode selector */}
               <div className="flex rounded-lg overflow-hidden border border-slate-600 mb-4">
                 {MODE_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
-                    onClick={() => canWrite && handleModeChange(account.id, opt.value)}
-                    disabled={!canWrite}
+                    onClick={() => canWriteAccount && handleModeChange(account.id, opt.value)}
+                    disabled={!canWriteAccount}
                     className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
                       mode === opt.value
                         ? opt.value === 'off'
                           ? 'bg-slate-600 text-white'
                           : 'bg-emerald-600 text-white'
                         : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                    } ${!canWrite ? 'cursor-not-allowed opacity-50' : ''}`}
+                    } ${!canWriteAccount ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     {opt.label}
                   </button>
@@ -616,7 +626,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                         onChange={(e) => updateAB(account.id, {
                           check_interval_minutes: parseInt(e.target.value) || 5,
                         })}
-                        disabled={!canWrite}
+                        disabled={!canWriteAccount}
                         className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
                       />
                     </div>
@@ -628,7 +638,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                       <select
                         value={ab.order_type}
                         onChange={(e) => updateAB(account.id, { order_type: e.target.value })}
-                        disabled={!canWrite}
+                        disabled={!canWriteAccount}
                         className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
                       >
                         <option value="market">Market (Immediate)</option>
@@ -650,12 +660,12 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                       { label: 'USDT', enabledKey: 'usdt_enabled' as const, minKey: 'usdt_min' as const },
                     ]).map(coin => (
                       <div key={coin.label} className="flex items-center gap-4 bg-slate-800/50 p-3 rounded">
-                        <label className={`flex items-center gap-2 flex-shrink-0 ${!canWrite ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <label className={`flex items-center gap-2 flex-shrink-0 ${!canWriteAccount ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                           <input
                             type="checkbox"
                             checked={ab[coin.enabledKey]}
                             onChange={(e) => updateAB(account.id, { [coin.enabledKey]: e.target.checked })}
-                            disabled={!canWrite}
+                            disabled={!canWriteAccount}
                             className="w-4 h-4"
                           />
                           <span className="text-white font-medium">{coin.label}</span>
@@ -666,13 +676,13 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                             type="number"
                             min="1"
                             step="1"
-                            disabled={!canWrite || !ab[coin.enabledKey]}
+                            disabled={!canWriteAccount || !ab[coin.enabledKey]}
                             value={ab[coin.minKey]}
                             onChange={(e) => updateAB(account.id, {
                               [coin.minKey]: parseFloat(e.target.value) || 10,
                             })}
                             className={`w-24 px-2 py-1 rounded border text-sm ${
-                              canWrite && ab[coin.enabledKey]
+                              canWriteAccount && ab[coin.enabledKey]
                                 ? 'bg-slate-700 text-white border-slate-600'
                                 : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
                             }`}
@@ -686,7 +696,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                   {/* Save */}
                   <button
                     onClick={() => handleSaveAutoBuy(account.id)}
-                    disabled={saving === account.id || !canWrite}
+                    disabled={saving === account.id || !canWriteAccount}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded flex items-center justify-center gap-2"
                   >
                     <Save size={16} />
@@ -716,7 +726,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                           max="100"
                           value={rb[key]}
                           onChange={(e) => handleSliderChange(account.id, key, parseInt(e.target.value))}
-                          disabled={!canWrite}
+                          disabled={!canWriteAccount}
                           className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
                         />
                         <span className="w-12 text-right text-sm text-white font-mono">{rb[key]}%</span>
@@ -734,7 +744,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                       <select
                         value={rb.check_interval_minutes}
                         onChange={(e) => updateRB(account.id, { check_interval_minutes: parseInt(e.target.value) })}
-                        disabled={!canWrite}
+                        disabled={!canWriteAccount}
                         className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600 text-sm"
                       >
                         {INTERVAL_OPTIONS.map(opt => (
@@ -751,7 +761,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                           type="range" min="1" max="10"
                           value={rb.drift_threshold_pct}
                           onChange={(e) => updateRB(account.id, { drift_threshold_pct: parseInt(e.target.value) })}
-                          disabled={!canWrite}
+                          disabled={!canWriteAccount}
                           className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
                         />
                         <span className="text-sm text-white font-mono w-8 text-right">{rb.drift_threshold_pct}%</span>
@@ -766,7 +776,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                           type="range" min="1" max="25"
                           value={rb.min_trade_pct}
                           onChange={(e) => updateRB(account.id, { min_trade_pct: parseInt(e.target.value) })}
-                          disabled={!canWrite}
+                          disabled={!canWriteAccount}
                           className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
                         />
                         <span className="text-sm text-white font-mono w-8 text-right">{rb.min_trade_pct}%</span>
@@ -812,7 +822,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                               step={cfg.step}
                               min="0"
                               placeholder={cfg.placeholder}
-                              disabled={!canWrite}
+                              disabled={!canWriteAccount}
                               className="w-full bg-slate-700 text-white px-2 py-1.5 rounded border border-slate-600 text-sm font-mono"
                             />
                           </div>
@@ -998,12 +1008,12 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
 
                           {/* Controls row */}
                           <div className="flex flex-wrap items-center gap-4">
-                            <label className={`flex items-center gap-2 ${!canWrite ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                            <label className={`flex items-center gap-2 ${!canWriteAccount ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                               <input
                                 type="checkbox"
                                 checked={dust.enabled}
                                 onChange={(e) => handleDustSettingsSave(account.id, { enabled: e.target.checked })}
-                                disabled={!canWrite}
+                                disabled={!canWriteAccount}
                                 className="w-4 h-4"
                               />
                               <span className="text-sm text-slate-300">Auto-sweep monthly</span>
@@ -1029,7 +1039,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                                     const val = parseFloat(e.target.value) || 5
                                     handleDustSettingsSave(account.id, { threshold_usd: val })
                                   }}
-                                  disabled={!canWrite}
+                                  disabled={!canWriteAccount}
                                   className="w-16 bg-slate-700 text-white px-2 py-1 rounded border border-slate-600 text-sm font-mono"
                                 />
                               </div>
@@ -1057,7 +1067,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                           <div className="flex items-center justify-between">
                             <button
                               onClick={() => handleSweepNow(account.id)}
-                              disabled={sweeping === account.id || !canWrite || dust.dust_positions.length === 0}
+                              disabled={sweeping === account.id || !canWriteAccount || dust.dust_positions.length === 0}
                               className="bg-amber-600 hover:bg-amber-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm flex items-center gap-2"
                             >
                               <Trash2 size={14} />
@@ -1080,7 +1090,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                   {/* Save */}
                   <button
                     onClick={() => handleSaveRebalance(account.id)}
-                    disabled={saving === account.id || !canWrite}
+                    disabled={saving === account.id || !canWriteAccount}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded flex items-center justify-center gap-2 text-sm"
                   >
                     <Save size={16} />
