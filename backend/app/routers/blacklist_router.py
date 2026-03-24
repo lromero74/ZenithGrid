@@ -13,13 +13,13 @@ import json
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import BlacklistedCoin, Settings, User
+from app.models import BlacklistedCoin, Settings, User, Account, AccountMembership
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.settings_service import (
     ALLOWED_CATEGORIES_KEY,
@@ -371,19 +371,51 @@ async def remove_user_override(
 @router.get("/", response_model=List[BlacklistEntry])
 async def list_blacklisted_coins(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    account_id: Optional[int] = Query(None, description="Show a shared account owner's overrides instead of your own"),
 ):
     """
     Get all coin categorizations.
 
     Returns global AI-generated entries (visible to all users).
-    Includes user_override_category if the current user has an override for that coin.
+    Includes user_override_category if the current user (or a shared account's owner) has an override.
+
+    Pass account_id to see the overrides belonging to a shared account's owner.
+    The current user must be a member of that account.
     """
-    # Fetch global entries + current user's overrides in a single query
     from sqlalchemy import or_
+
+    # Determine whose overrides to show
+    override_user_id = current_user.id
+
+    if account_id is not None:
+        # Verify caller has membership to this account (owner OR member)
+        account_result = await db.execute(select(Account).where(Account.id == account_id))
+        account = account_result.scalars().first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+        if account.user_id == current_user.id:
+            # Caller is the owner — show their own overrides (no change)
+            pass
+        else:
+            # Must be a member
+            membership_result = await db.execute(
+                select(AccountMembership).where(
+                    AccountMembership.account_id == account_id,
+                    AccountMembership.user_id == current_user.id,
+                )
+            )
+            membership = membership_result.scalars().first()
+            if not membership or membership.is_expired:
+                raise HTTPException(status_code=403, detail="Not a member of this account")
+            # Show the account owner's overrides
+            override_user_id = account.user_id
+
+    # Fetch global entries + target user's overrides in a single query
     result = await db.execute(
         select(BlacklistedCoin).where(
-            or_(BlacklistedCoin.user_id.is_(None), BlacklistedCoin.user_id == current_user.id)
+            or_(BlacklistedCoin.user_id.is_(None), BlacklistedCoin.user_id == override_user_id)
         ).order_by(BlacklistedCoin.symbol)
     )
     all_coins = result.scalars().all()

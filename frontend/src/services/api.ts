@@ -522,8 +522,8 @@ export interface CategorySettings {
 }
 
 export const blacklistApi = {
-  getAll: () =>
-    api.get<BlacklistEntry[]>('/blacklist/').then((res) => res.data),
+  getAll: (accountId?: number) =>
+    api.get<BlacklistEntry[]>('/blacklist/', { params: accountId ? { account_id: accountId } : undefined }).then((res) => res.data),
   add: (symbol: string, reason?: string) =>
     api.post<BlacklistEntry>('/blacklist/single', { symbol, reason }).then((res) => res.data),
   addBulk: (symbols: string[], reason?: string) =>

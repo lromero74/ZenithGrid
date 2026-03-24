@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings, AIProviderSettings } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useAccount } from '../contexts/AccountContext'
 import CoinIcon from './CoinIcon'
 
 // Category display config
@@ -48,14 +49,18 @@ interface CoinInfo {
 
 export function BlacklistManager() {
   const { user } = useAuth()
+  const { selectedAccount } = useAccount()
+  // When viewing a shared account, show that account owner's overrides (read-only)
+  const sharedAccountId = selectedAccount?.membership_role ? selectedAccount.id : undefined
+  const isSharedView = !!sharedAccountId
   const [blacklistedCoins, setBlacklistedCoins] = useState<BlacklistEntry[]>([])
   const [allCoins, setAllCoins] = useState<CoinInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingSymbol, setSavingSymbol] = useState<string | null>(null)
 
-  // Category settings (used for fetching, but permissions now handled at bot level)
-  const [_categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
+  // Category settings (fetched to keep state fresh; value unused — toggles are per-bot)
+  const [, setCategorySettings] = useState<CategorySettings | null>(null)
 
   // AI Review
   const [runningAIReview, setRunningAIReview] = useState(false)
@@ -81,7 +86,7 @@ export function BlacklistManager() {
     try {
       // Phase 1: Essential data — blacklist + categories (fast DB queries)
       const [blacklist, categories] = await Promise.all([
-        blacklistApi.getAll(),
+        blacklistApi.getAll(sharedAccountId),
         blacklistApi.getCategories(),
       ])
       setBlacklistedCoins(blacklist)
@@ -104,7 +109,8 @@ export function BlacklistManager() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedAccountId])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -335,6 +341,11 @@ export function BlacklistManager() {
           <p className="text-sm text-slate-400 mt-1">
             Categorize coins and control which categories can trade
           </p>
+          {isSharedView && (
+            <p className="text-xs text-violet-400 mt-1">
+              Viewing {selectedAccount?.name}'s personal overrides — read-only
+            </p>
+          )}
         </div>
         <button
           onClick={fetchData}
@@ -445,7 +456,7 @@ export function BlacklistManager() {
           <span>Symbol</span>
           <span>Markets</span>
           <span>Global</span>
-          <span>My Override</span>
+          <span>{isSharedView ? 'Their Override' : 'My Override'}</span>
           <span>Reason</span>
         </div>
 
@@ -495,15 +506,15 @@ export function BlacklistManager() {
                     ))}
                   </div>
 
-                  {/* Global Category Dropdown (admin only) */}
+                  {/* Global Category Dropdown (admin only, hidden for shared view) */}
                   <div className="relative">
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        setOpenDropdown(openDropdown === coin.symbol ? null : coin.symbol)
+                        if (!isSharedView) setOpenDropdown(openDropdown === coin.symbol ? null : coin.symbol)
                       }}
-                      disabled={isSaving}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-medium ${globalConfig.bgColor} ${globalConfig.color} border ${globalConfig.borderColor} hover:opacity-80 transition-opacity`}
+                      disabled={isSaving || isSharedView}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-medium ${globalConfig.bgColor} ${globalConfig.color} border ${globalConfig.borderColor} ${isSharedView ? 'opacity-70 cursor-default' : 'hover:opacity-80'} transition-opacity`}
                     >
                       <span>{globalConfig.label}</span>
                       <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === coin.symbol ? 'rotate-180' : ''}`} />
@@ -576,21 +587,23 @@ export function BlacklistManager() {
                     )}
                   </div>
 
-                  {/* User Override Badge */}
+                  {/* Override Badge */}
                   <div>
                     {hasOverride ? (
                       <div className="flex items-center gap-1">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${effectiveConfig.bgColor} ${effectiveConfig.color} border ${effectiveConfig.borderColor}`}>
                           {effectiveConfig.label}*
                         </span>
-                        <button
-                          onClick={() => removeOverride(coin.symbol)}
-                          className="p-0.5 text-slate-500 hover:text-red-400 transition-colors"
-                          title="Remove override"
-                          disabled={isSaving}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        {!isSharedView && (
+                          <button
+                            onClick={() => removeOverride(coin.symbol)}
+                            className="p-0.5 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Remove override"
+                            disabled={isSaving}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <span className="text-xs text-slate-600 italic">None</span>
@@ -631,13 +644,15 @@ export function BlacklistManager() {
                         <span className="text-sm text-slate-400 truncate flex-1" title={coin.reasonText}>
                           {coin.reasonText || <span className="text-slate-600 italic">No reason</span>}
                         </span>
-                        <button
-                          onClick={() => startEditReason(coin.symbol, coin.reasonText)}
-                          className="p-1 text-slate-500 hover:text-slate-300 flex-shrink-0"
-                          title="Edit reason"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!isSharedView && (
+                          <button
+                            onClick={() => startEditReason(coin.symbol, coin.reasonText)}
+                            className="p-1 text-slate-500 hover:text-slate-300 flex-shrink-0"
+                            title="Edit reason"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
