@@ -7,6 +7,7 @@ import { useIsAdmin } from './hooks/usePermission'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { PendingInvitationsPopover } from './components/sharing/PendingInvitationsPopover'
+import { ObserverModeBanner } from './components/sharing/ObserverModeBanner'
 import { PaperTradingToggle } from './components/PaperTradingToggle'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
@@ -398,6 +399,11 @@ function AppContent() {
             </div>
           </div>
         </div>
+
+        {/* Observer Mode Indicator */}
+        {selectedAccount?.membership_role === 'observer' && (
+          <ObserverModeBanner accountName={selectedAccount.name} />
+        )}
 
         {/* Paper Trading Mode Indicator */}
         {selectedAccount?.is_paper_trading && (

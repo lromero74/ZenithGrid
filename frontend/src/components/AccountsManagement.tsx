@@ -196,7 +196,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     }, 500) // Poll every 500ms for smooth progress updates
 
     return () => clearInterval(pollInterval)
-  }, [conversionProgress.taskId, conversionProgress.status, conversionProgress.targetCurrency, refreshAccounts])
+  }, [conversionProgress.taskId, conversionProgress.status, conversionProgress.targetCurrency, refreshAccounts, addToast])
 
   const handleSellPortfolioToBase = async (account: Account, targetCurrency: 'BTC' | 'USD') => {
     const currencySetter = targetCurrency === 'BTC' ? setSellingToBTC : setSellingToUSD
@@ -447,8 +447,9 @@ function AccountRow({
     try {
       await api.post(`/accounts/${account.id}/link-perps-portfolio`)
       if (onRefreshAccounts) await onRefreshAccounts()
-    } catch (err: any) {
-      setPerpsError(err.response?.data?.detail || 'Failed to link portfolio')
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } }
+      setPerpsError(e.response?.data?.detail || 'Failed to link portfolio')
     } finally {
       setLinking(false)
     }
@@ -645,14 +646,16 @@ function AccountRow({
               <PropGuardStatus account={account} />
             )}
 
-            {/* Account Sharing */}
-            <AccountSharingPanel
-              accountId={account.id}
-              accountName={account.name}
-              membershipRole={account.membership_role ?? 'owner'}
-              currentUserId={currentUserId || 0}
-              onLeave={onRefreshAccounts}
-            />
+            {/* Account Sharing — not shown to observers (read-only access, no management UI) */}
+            {account.membership_role !== 'observer' && (
+              <AccountSharingPanel
+                accountId={account.id}
+                accountName={account.name}
+                membershipRole={account.membership_role ?? 'owner'}
+                currentUserId={currentUserId || 0}
+                onLeave={onRefreshAccounts}
+              />
+            )}
           </div>
         </div>
       )}

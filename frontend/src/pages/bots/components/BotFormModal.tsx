@@ -156,6 +156,12 @@ export function BotFormModal({
                 ? 'Edit Bot'
                 : 'Create New Bot'}
           </h3>
+          {readOnly && (
+            <p className="text-xs text-violet-400 mt-1 flex items-center gap-1">
+              <span>👁</span>
+              Read-Only — observer access
+            </p>
+          )}
         </div>
 
         <form
