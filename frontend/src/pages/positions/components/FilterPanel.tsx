@@ -1,5 +1,7 @@
 import { X } from 'lucide-react'
 import type { Bot } from '../../../types'
+import type { GroupByMode } from '../hooks/usePositionFilters'
+import { getCategoryLabel } from '../hooks/usePositionFilters'
 
 interface FilterPanelProps {
   filterBot: number | 'all'
@@ -8,26 +10,31 @@ interface FilterPanelProps {
   setFilterMarket: (value: 'all' | 'USD' | 'BTC') => void
   filterPair: string
   setFilterPair: (value: string) => void
+  filterCategory: string
+  setFilterCategory: (value: string) => void
+  groupBy: GroupByMode
+  setGroupBy: (value: GroupByMode) => void
   bots: Bot[] | undefined
   uniquePairs: string[]
+  uniqueCategories: string[]
   onClearFilters: () => void
 }
 
 export const FilterPanel = ({
-  filterBot,
-  setFilterBot,
-  filterMarket,
-  setFilterMarket,
-  filterPair,
-  setFilterPair,
+  filterBot, setFilterBot,
+  filterMarket, setFilterMarket,
+  filterPair, setFilterPair,
+  filterCategory, setFilterCategory,
+  groupBy, setGroupBy,
   bots,
   uniquePairs,
+  uniqueCategories,
   onClearFilters,
 }: FilterPanelProps) => {
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-slate-300">Filters</h3>
+        <h3 className="text-sm font-semibold text-slate-300">Filters & Grouping</h3>
         <button
           onClick={onClearFilters}
           className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors flex items-center gap-2"
@@ -36,16 +43,16 @@ export const FilterPanel = ({
           Clear
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Account Filter (Market in our case) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* Market Filter */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Market</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Market</label>
           <select
             value={filterMarket}
             onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
-            <option value="all">All</option>
+            <option value="all">All Markets</option>
             <option value="USD">USD Markets</option>
             <option value="BTC">BTC Markets</option>
           </select>
@@ -53,13 +60,13 @@ export const FilterPanel = ({
 
         {/* Bot Filter */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Bot</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Bot</label>
           <select
             value={filterBot}
             onChange={(e) => setFilterBot(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
-            <option value="all">All</option>
+            <option value="all">All Bots</option>
             {bots?.map(bot => (
               <option key={bot.id} value={bot.id}>{bot.name}</option>
             ))}
@@ -68,16 +75,47 @@ export const FilterPanel = ({
 
         {/* Pair Filter */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Pair</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Pair</label>
           <select
             value={filterPair}
             onChange={(e) => setFilterPair(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
-            <option value="all">All</option>
+            <option value="all">All Pairs</option>
             {uniquePairs.map(pair => (
               <option key={pair} value={pair}>{pair}</option>
             ))}
+          </select>
+        </div>
+
+        {/* Category Filter */}
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Coin Category</label>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">All Categories</option>
+            {uniqueCategories.map(cat => (
+              <option key={cat} value={cat}>{getCategoryLabel(cat)}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Group By */}
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Group By</label>
+          <select
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value as GroupByMode)}
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+          >
+            <option value="none">No Grouping</option>
+            <option value="category">Category</option>
+            <option value="market">Market</option>
+            <option value="bot">Bot</option>
+            <option value="pair">Pair</option>
           </select>
         </div>
       </div>

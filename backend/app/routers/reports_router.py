@@ -827,7 +827,7 @@ async def list_expense_items(
     goal_id: int,
     db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
-) -> List[dict]:
+) -> dict:
     """List all expense items for a goal with live waterfall coverage.
 
     Runs the unified waterfall so each item shows its dynamic_reserved amount

@@ -13,7 +13,7 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds"
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter"
     },
     {
       "file": "pages/ClosedPositions.tsx",
@@ -134,7 +134,7 @@
       },
       {
         "file": "pages/positions/components/FilterPanel.tsx",
-        "purpose": "Filter controls for positions"
+        "purpose": "Filter controls for positions: bot, status, search, sort, category filter dropdown, group-by selector; 5-column grid layout"
       },
       {
         "file": "pages/positions/components/OverallStatsPanel.tsx",
@@ -657,7 +657,7 @@
       "positions": [
         {
           "file": "pages/positions/hooks/usePositionFilters.ts",
-          "purpose": "Filter and search positions"
+          "purpose": "Filter and search positions; manages category filter, groupBy state, client-side pagination (pageSize 10/100, currentPage), and uniqueCategories computed dynamically from position data"
         },
         {
           "file": "pages/positions/hooks/usePositionMutations.ts",
@@ -711,7 +711,7 @@
       },
       {
         "name": "positionsApi",
-        "purpose": "Position CRUD, trades, AI logs, settings, budget resize"
+        "purpose": "Position CRUD, trades, AI logs, settings, budget resize; getAll default limit raised to 500"
       },
       {
         "name": "tradesApi",
@@ -822,7 +822,7 @@
     "file": "types/index.ts",
     "categories": {
       "position": [
-        "Position",
+        "Position (includes coin_category?: string | null populated from blacklist reason prefix)",
         "LimitOrderDetails",
         "LimitOrderFill",
         "Trade",

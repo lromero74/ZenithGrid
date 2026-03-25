@@ -13,7 +13,7 @@
     {
       "file": "routers/accounts_router.py",
       "prefix": "/api/accounts",
-      "purpose": "CRUD for CEX and DEX trading accounts"
+      "purpose": "CRUD for CEX and DEX trading accounts; get_rebalance_status includes open position market values in allocation percentages (not just free balances)"
     },
     {
       "file": "routers/admin_router.py",
@@ -128,7 +128,7 @@
     {
       "file": "routers/reports_router.py",
       "prefix": "/api/reports",
-      "purpose": "Financial goals CRUD, expense item CRUD (supports both expense and savings_target item types), expense categories, report schedules, generated reports, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; _goal_to_dict() returns savings_target_count"
+      "purpose": "Financial goals CRUD, expense item CRUD (supports both expense and savings_target item types), expense categories, report schedules, generated reports, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; _goal_to_dict() returns savings_target_count; list_expense_items returns dict (not List[dict])"
     },
     {
       "file": "routers/transfers_router.py",
@@ -200,7 +200,7 @@
     "position_routers": [
       {
         "file": "position_routers/position_query_router.py",
-        "purpose": "Position listing, details, trades, AI logs, P&L timeseries"
+        "purpose": "Position listing (with offset/limit pagination, default limit 500), details, trades, AI logs, P&L timeseries; populates coin_category on each position from BlacklistedCoin reason prefix (e.g. [APPROVED], [MEME], [BLACKLISTED])"
       },
       {
         "file": "position_routers/position_actions_router.py",
@@ -1358,7 +1358,7 @@
     },
     {
       "file": "services/report_generator_service/",
-      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts), pdf_generator (PDF generation with fpdf2, expense trend charts)",
+      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts), pdf_generator (PDF generation with fpdf2, expense trend charts, savings targets section via _build_pdf_savings_targets())",
       "type": "analysis"
     },
     {

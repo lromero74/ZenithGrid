@@ -229,7 +229,6 @@ class TestBulkDeleteReports:
         user1, _, reports, _ = bulk_delete_setup
         ids_to_delete = [reports[0].id, reports[1].id, reports[2].id]
 
-        from app.routers.reports_router import BulkDeleteRequest
         # Simulate the endpoint logic directly on the DB
         result = await db_session.execute(
             select(Report).where(
@@ -594,7 +593,7 @@ class TestGetUserTradingMetricsAccountScoping:
         influence the result.
         """
         from datetime import datetime as dt
-        from unittest.mock import AsyncMock, patch, MagicMock
+        from unittest.mock import MagicMock
         from app.routers.reports_router import _get_user_trading_metrics
 
         # We test by mocking db.execute and verifying account_id appears in the
@@ -604,6 +603,7 @@ class TestGetUserTradingMetricsAccountScoping:
         class FakeScalar:
             def __init__(self, val):
                 self._val = val
+
             def scalar(self):
                 return self._val
 
@@ -648,6 +648,7 @@ class TestGetUserTradingMetricsAccountScoping:
         class FakeScalar:
             def __init__(self, val):
                 self._val = val
+
             def scalar(self):
                 return self._val
 
@@ -672,3 +673,125 @@ class TestGetUserTradingMetricsAccountScoping:
         # (user_id=1 will appear, but a specific account id like "42" won't)
         assert balance == pytest.approx(5000.0)
         assert annual_pct > 0
+
+
+class TestListExpenseItemsResponseShape:
+    """Guard against regression where list_expense_items returned a bare list
+    instead of {items, coverage_summary} envelope, causing FastAPI to reject the
+    response with a validation error (list_type, 'Input should be a valid list')."""
+
+    @pytest.mark.asyncio
+    async def test_response_is_dict_not_list(self, db_session, expense_goal):
+        """Happy path: endpoint must return a dict with 'items' and 'coverage_summary'."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from app.routers.reports_router import list_expense_items
+
+        user, goal = expense_goal
+
+        mock_current_user = MagicMock()
+        mock_current_user.id = user.id
+
+        # Stub the waterfall and metric helpers to keep the test lightweight
+        with (
+            patch(
+                "app.routers.reports_router._get_user_trading_metrics",
+                new=AsyncMock(return_value=(0.0, 0.0)),
+            ),
+            patch(
+                "app.services.expense_service.compute_expense_coverage",
+                return_value={
+                    "items": [],
+                    "savings_targets": [],
+                    "shortfall": 0.0,
+                    "coverage_pct": 100.0,
+                    "income_after_tax": 0.0,
+                    "total_expenses": 0.0,
+                    "total_claims": 0.0,
+                    "covered_count": 0,
+                    "total_count": 0,
+                    "first_gap_savings_name": None,
+                    "first_gap_savings_cap_gap": None,
+                    "first_gap_savings_capital_required": None,
+                    "first_blocked_after_savings_name": None,
+                    "first_blocked_after_savings_amount": None,
+                    "partial_item_name": None,
+                    "partial_item_shortfall": None,
+                    "next_uncovered_name": None,
+                    "next_uncovered_amount": None,
+                },
+            ),
+        ):
+            result = await list_expense_items(
+                goal_id=goal.id,
+                db=db_session,
+                current_user=mock_current_user,
+            )
+
+        # Must be a dict, not a list
+        assert isinstance(result, dict), (
+            f"list_expense_items must return a dict (envelope), got {type(result)}"
+        )
+        assert "items" in result, "Response dict must contain 'items' key"
+        assert "coverage_summary" in result, "Response dict must contain 'coverage_summary' key"
+        assert isinstance(result["items"], list), "'items' must be a list"
+        assert isinstance(result["coverage_summary"], dict), "'coverage_summary' must be a dict"
+
+    @pytest.mark.asyncio
+    async def test_items_key_contains_expense_items(self, db_session, expense_goal):
+        """Edge case: when goal has expense items, they appear under 'items' key."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from app.models import ExpenseItem as ExpenseItemModel
+        from app.routers.reports_router import list_expense_items
+
+        user, goal = expense_goal
+
+        # Add a real expense item
+        item = ExpenseItemModel(
+            goal_id=goal.id,
+            user_id=user.id,
+            category="Housing",
+            name="Rent",
+            amount=1200.0,
+            frequency="monthly",
+        )
+        db_session.add(item)
+        await db_session.flush()
+
+        mock_current_user = MagicMock()
+        mock_current_user.id = user.id
+
+        with (
+            patch(
+                "app.routers.reports_router._get_user_trading_metrics",
+                new=AsyncMock(return_value=(0.0, 0.0)),
+            ),
+            patch("app.services.expense_service.compute_expense_coverage") as mock_cov,
+        ):
+            mock_cov.return_value = {
+                "items": [{"id": item.id, "name": "Rent", "status": "uncovered"}],
+                "savings_targets": [],
+                "shortfall": 1200.0,
+                "coverage_pct": 0.0,
+                "income_after_tax": 0.0,
+                "total_expenses": 1200.0,
+                "total_claims": 1200.0,
+                "covered_count": 0,
+                "total_count": 1,
+                "first_gap_savings_name": None,
+                "first_gap_savings_cap_gap": None,
+                "first_gap_savings_capital_required": None,
+                "first_blocked_after_savings_name": None,
+                "first_blocked_after_savings_amount": None,
+                "partial_item_name": "Rent",
+                "partial_item_shortfall": 1200.0,
+                "next_uncovered_name": None,
+                "next_uncovered_amount": None,
+            }
+            result = await list_expense_items(
+                goal_id=goal.id,
+                db=db_session,
+                current_user=mock_current_user,
+            )
+
+        assert isinstance(result, dict)
+        assert len(result["items"]) >= 1

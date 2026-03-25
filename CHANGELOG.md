@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.141.0] - 2026-03-25
+
+### Added
+- **Positions — filter by coin category** — the Positions page now has a "Coin Category" filter dropdown (APPROVED, MEME, BORDERLINE, etc.). Categories are derived dynamically from the blacklist database — only categories actually present in your positions appear. No hard-coded lists.
+- **Positions — group by** — positions can be grouped by Category, Market, Bot, or Pair. Group headers appear inline in the list. Grouping persists across page navigation (saved to localStorage).
+- **Positions — pagination** — positions now default to 10 per page with a toggle for 100 per page. Previous/next navigation and a "X–Y of N" counter are shown at the bottom.
+- **Reports PDF — savings targets section** — generated PDF reports now include a "Savings Targets" section for each expense goal, showing each target's name, goal amount with deadline, and funding status (reserved ✓, % funded, or blocked). Previously only regular expense items appeared in PDFs.
+
+### Fixed
+- **Portfolio allocation includes open position values** — live CEX accounts now correctly show allocated capital in the rebalancing chart. Previously, only free (uninvested) balances were counted, making e.g. a BTC bot with all capital in positions show 0% BTC allocation. The fix mirrors how paper trading accounts already calculated this.
+- **Expense goals endpoint 500 error** — fixed a `ResponseValidationError` where FastAPI rejected the `/api/reports/goals/{id}/expenses` response because the return type annotation was `List[dict]` but the function returns an envelope `{items, coverage_summary}`. Guarded with regression tests.
+
 ## [v2.140.0] - 2026-03-25
 
 ### Added

@@ -93,20 +93,22 @@ export default function Positions() {
 
   // Use custom hooks for filtering
   const {
-    filterBot,
-    setFilterBot,
-    filterMarket,
-    setFilterMarket,
-    filterPair,
-    setFilterPair,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
+    filterBot, setFilterBot,
+    filterMarket, setFilterMarket,
+    filterPair, setFilterPair,
+    filterCategory, setFilterCategory,
+    groupBy, setGroupBy,
+    sortBy, setSortBy,
+    sortOrder, setSortOrder,
+    pageSize, setPageSize,
+    currentPage, setCurrentPage,
+    totalCount, totalPages,
     openPositions,
     uniquePairs,
+    uniqueCategories,
+    getGroupKey,
     clearFilters,
-  } = usePositionFilters({ positionsWithPnL })
+  } = usePositionFilters({ positionsWithPnL, bots })
 
   // Use custom hooks for trades
   const { trades, tradeHistory, isLoadingTradeHistory } = usePositionTrades({
@@ -277,7 +279,7 @@ export default function Positions() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
-              {openPositions.length} Active
+              {totalCount} Active
             </div>
             {openPositions.length > 0 && !isObserver && (
               <button
@@ -311,7 +313,7 @@ export default function Positions() {
           onRefreshBalances={refetchBalances}
         />
 
-        {/* Filters (Account, Bot, Pair) */}
+        {/* Filters (Market, Bot, Pair, Category, GroupBy) */}
         <FilterPanel
           filterBot={filterBot}
           setFilterBot={setFilterBot}
@@ -319,8 +321,13 @@ export default function Positions() {
           setFilterMarket={setFilterMarket}
           filterPair={filterPair}
           setFilterPair={setFilterPair}
+          filterCategory={filterCategory}
+          setFilterCategory={setFilterCategory}
+          groupBy={groupBy}
+          setGroupBy={setGroupBy}
           bots={bots}
           uniquePairs={uniquePairs}
+          uniqueCategories={uniqueCategories}
           onClearFilters={clearFilters}
         />
 
@@ -441,32 +448,86 @@ export default function Positions() {
               </div>
             </div>
 
-            {/* Position Cards */}
-            {openPositions.map((position) => (
-              <PositionCard
-                key={position.id}
-                position={position}
-                currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
-                bots={bots}
-                bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
-                btcUsdPrice={btcUsdPrice}
-                trades={trades}
-                selectedPosition={selectedPosition}
-                onTogglePosition={togglePosition}
-                onOpenChart={handleOpenChart}
-                onOpenLightweightChart={handleOpenLightweightChart}
-                onOpenLimitClose={handleOpenLimitClose}
-                onOpenLogs={handleOpenLogs}
-                onOpenAddFunds={openAddFundsModal}
-                onOpenEditSettings={handleOpenEditSettings}
-                onOpenNotes={openNotesModal}
-                onOpenTradeHistory={handleOpenTradeHistory}
-                onCheckSlippage={handleCheckSlippage}
-                onRefetch={refetchPositions}
-                onEditBot={handleEditBot}
-                canWrite={canWritePositions}
-              />
-            ))}
+            {/* Position Cards — with optional grouping headers */}
+            {(() => {
+              let lastGroupKey: string | null = null
+              return openPositions.map((position) => {
+                const groupKey = groupBy !== 'none' ? getGroupKey(position) : null
+                const showHeader = groupKey !== null && groupKey !== lastGroupKey
+                if (showHeader) lastGroupKey = groupKey
+                return (
+                  <div key={position.id}>
+                    {showHeader && (
+                      <div className="px-3 py-1.5 mb-1 mt-3 bg-slate-700/50 rounded text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        {groupKey}
+                      </div>
+                    )}
+                    <PositionCard
+                      position={position}
+                      currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
+                      bots={bots}
+                      bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
+                      btcUsdPrice={btcUsdPrice}
+                      trades={trades}
+                      selectedPosition={selectedPosition}
+                      onTogglePosition={togglePosition}
+                      onOpenChart={handleOpenChart}
+                      onOpenLightweightChart={handleOpenLightweightChart}
+                      onOpenLimitClose={handleOpenLimitClose}
+                      onOpenLogs={handleOpenLogs}
+                      onOpenAddFunds={openAddFundsModal}
+                      onOpenEditSettings={handleOpenEditSettings}
+                      onOpenNotes={openNotesModal}
+                      onOpenTradeHistory={handleOpenTradeHistory}
+                      onCheckSlippage={handleCheckSlippage}
+                      onRefetch={refetchPositions}
+                      onEditBot={handleEditBot}
+                      canWrite={canWritePositions}
+                    />
+                  </div>
+                )
+              })
+            })()}
+
+            {/* Pagination controls */}
+            {totalCount > 0 && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Per page:</span>
+                  {([10, 100] as const).map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setPageSize(n)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${pageSize === n ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <span className="text-xs text-slate-500">
+                    {Math.min((currentPage - 1) * pageSize + 1, totalCount)}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ‹ Prev
+                  </button>
+                  <span className="text-xs text-slate-400 px-2">
+                    {currentPage}/{totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next ›
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

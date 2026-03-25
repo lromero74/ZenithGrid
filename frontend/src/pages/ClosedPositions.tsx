@@ -450,8 +450,13 @@ function ClosedPositions() {
             setFilterMarket={setFilterMarket}
             filterPair={filterPair}
             setFilterPair={setFilterPair}
+            filterCategory="all"
+            setFilterCategory={() => {}}
+            groupBy="none"
+            setGroupBy={() => {}}
             bots={availableBots}
             uniquePairs={uniquePairs}
+            uniqueCategories={[]}
             onClearFilters={clearFilters}
           />
         )}

@@ -646,6 +646,93 @@ def _build_pdf_expense_projections(pdf, g: Dict, pfx: str, curr: str,
         pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
 
 
+def _build_pdf_savings_targets(pdf, savings_targets: list, pfx: str, exp_period: str):
+    """Render the Savings Targets section below the expense coverage table."""
+    if not savings_targets:
+        return
+
+    _tbl_inset = 8
+    _tbl_x = pdf.l_margin + _tbl_inset
+    _tbl_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _tbl_inset
+
+    # Section header
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(16, 185, 129)  # emerald-500
+    pdf.set_x(_tbl_x)
+    pdf.cell(0, 6, "Savings Targets", new_x="LMARGIN", new_y="NEXT")
+
+    # Pre-compute rows
+    _rows = []
+    for st in savings_targets:
+        name = _sanitize_for_pdf(st.get("name", ""))
+        recur = " (recurring)" if st.get("is_recurring") else ""
+        target_amt = st.get("target_amount", 0) or 0
+        target_date = st.get("target_date", "") or ""
+        cap_req = st.get("capital_required", 0) or 0
+        dyn_res = st.get("dynamic_reserved", st.get("current_balance", 0)) or 0
+        cap_gap = st.get("capital_gap", max(0.0, cap_req - dyn_res)) or 0
+        status = st.get("waterfall_status", "") or st.get("status", "")
+
+        if status == "blocked":
+            status_txt = f"Blocked (need {pfx}{cap_req:,.2f})"
+        elif cap_gap <= 0 and cap_req > 0:
+            status_txt = f"Reserved: {pfx}{dyn_res:,.2f} OK"
+        elif cap_req > 0:
+            funded_pct = round(dyn_res / cap_req * 100, 0) if cap_req > 0 else 0
+            status_txt = f"{funded_pct:.0f}% funded ({pfx}{dyn_res:,.2f}/{pfx}{cap_req:,.2f})"
+        else:
+            status_txt = "no target set"
+
+        due = target_date[:10] if len(target_date) >= 10 else target_date
+        target_str = f"{pfx}{target_amt:,.2f}" + (f" by {due}" if due else "")
+        _rows.append((name + recur, target_str, status_txt, cap_gap))
+
+    pdf.set_font("Helvetica", "", 9)
+    col_name_w = _tbl_w * 0.40
+    col_target_w = _tbl_w * 0.25
+    col_status_w = _tbl_w - col_name_w - col_target_w
+
+    _cov_total_h = 5 + len(_rows) * 5
+    if pdf.will_page_break(_cov_total_h):
+        pdf.add_page()
+
+    # Header row
+    _tbl_y_start = pdf.get_y()
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_x(_tbl_x)
+    pdf.cell(col_name_w, 5, "Name", new_x="RIGHT")
+    pdf.cell(col_target_w, 5, "Target", new_x="RIGHT", align="R")
+    pdf.cell(col_status_w, 5, "Status", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_draw_color(200, 200, 205)
+    pdf.line(_tbl_x, pdf.get_y(), _tbl_x + _tbl_w, pdf.get_y())
+
+    # Data rows
+    pdf.set_font("Helvetica", "", 9)
+    for _ri, (name, target_str, status_txt, cap_gap) in enumerate(_rows):
+        pdf.set_x(_tbl_x)
+        if _ri % 2 == 1:
+            pdf.set_fill_color(245, 250, 248)
+            pdf.rect(_tbl_x, pdf.get_y(), _tbl_w, 5, "F")
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(col_name_w, 5, _truncate_to_width(pdf, name, col_name_w), new_x="RIGHT")
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(col_target_w, 5, _truncate_to_width(pdf, target_str, col_target_w),
+                 new_x="RIGHT", align="R")
+        if cap_gap <= 0:
+            pdf.set_text_color(34, 197, 94)   # green — on track
+        else:
+            pdf.set_text_color(234, 179, 8)   # amber — behind
+        pdf.cell(col_status_w, 5, _truncate_to_width(pdf, status_txt, col_status_w),
+                 new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_draw_color(200, 200, 205)
+    pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, _cov_total_h)
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_text_color(30, 30, 30)
+    pdf.ln(3)
+
+
 def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
     """Render a single expense coverage goal with tables and projections."""
     br, bg, bb = brand_rgb
@@ -691,8 +778,10 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
             )
         except (KeyError, ValueError):
             pass
-    # Coverage items table
+    # Coverage items table (expense items only)
     _build_pdf_coverage_table(pdf, coverage.get("items", []), pfx, exp_period)
+    # Savings targets section (separate from expense items)
+    _build_pdf_savings_targets(pdf, coverage.get("savings_targets", []), pfx, exp_period)
     # Expense changes from prior report
     _render_expense_changes_pdf(
         pdf, g.get("expense_changes"), pfx, curr,

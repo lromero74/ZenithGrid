@@ -118,6 +118,7 @@ class TestGetPositions:
             response=response_mock,
             status=None,
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user,
         )
@@ -145,6 +146,7 @@ class TestGetPositions:
             response=response_mock,
             status=None,
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user,
         )
@@ -171,6 +173,7 @@ class TestGetPositions:
             response=response_mock,
             status="closed",
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user,
         )
@@ -196,6 +199,7 @@ class TestGetPositions:
             response=response_mock,
             status=None,
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user1,
         )
@@ -216,6 +220,7 @@ class TestGetPositions:
             response=response_mock,
             status=None,
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user,
         )
@@ -248,6 +253,7 @@ class TestGetPositions:
             response=response_mock,
             status=None,
             limit=50,
+            offset=0,
             db=db_session,
             current_user=user,
         )
@@ -738,7 +744,9 @@ class TestGetRealizedPnl:
             btc_usd_price_at_close=50000.0,
         )
 
-        with patch("datetime.datetime") as mock_dt:
+        # Patch only within the specific module to avoid breaking SQLAlchemy's
+        # datetime type processor which uses isinstance(value, datetime.datetime).
+        with patch("app.position_routers.position_query_router.datetime") as mock_dt:
             mock_dt.utcnow.return_value = fixed_now
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = await get_realized_pnl(
@@ -873,3 +881,171 @@ class TestGetRealizedPnl:
         assert result["alltime_profit_by_quote"].get("BTC", 0) == 0.0
         # profit_usd is still counted
         assert result["alltime_profit_usd"] == pytest.approx(50.0, abs=0.01)
+
+
+# =============================================================================
+# coin_category population from blacklist
+# =============================================================================
+
+
+class TestCoinCategoryFromBlacklist:
+    """Tests that coin_category is set correctly based on BlacklistedCoin reason prefix."""
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_coin_category_approved_prefix(self, mock_resize, db_session):
+        """Happy path: [APPROVED] reason sets coin_category='APPROVED'."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "cat_approved@example.com")
+        await _create_position(db_session, account, status="open", product_id="LINK-USD")
+
+        bl = BlacklistedCoin(
+            user_id=user.id, symbol="LINK", reason="[APPROVED] solid fundamentals"
+        )
+        db_session.add(bl)
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+        )
+        assert len(result) == 1
+        assert result[0].coin_category == "APPROVED"
+        assert result[0].is_blacklisted is True
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_coin_category_meme_prefix(self, mock_resize, db_session):
+        """Happy path: [MEME] reason sets coin_category='MEME'."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "cat_meme@example.com")
+        await _create_position(db_session, account, status="open", product_id="DOGE-USD")
+
+        bl = BlacklistedCoin(
+            user_id=user.id, symbol="DOGE", reason="[MEME] dog coin"
+        )
+        db_session.add(bl)
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+        )
+        assert len(result) == 1
+        assert result[0].coin_category == "MEME"
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_coin_category_no_prefix_falls_back_to_blacklisted(self, mock_resize, db_session):
+        """Edge case: reason with no category prefix defaults to 'BLACKLISTED'."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "cat_nopfx@example.com")
+        await _create_position(db_session, account, status="open", product_id="XYZ-USD")
+
+        bl = BlacklistedCoin(
+            user_id=user.id, symbol="XYZ", reason="some reason with no prefix"
+        )
+        db_session.add(bl)
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+        )
+        assert len(result) == 1
+        assert result[0].coin_category == "BLACKLISTED"
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_coin_category_none_when_not_in_blacklist(self, mock_resize, db_session):
+        """Failure case: position not in blacklist gets coin_category=None."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "cat_none@example.com")
+        await _create_position(db_session, account, status="open", product_id="ETH-USD")
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+        )
+        assert len(result) == 1
+        assert result[0].coin_category is None
+        assert result[0].is_blacklisted is False
+
+
+# =============================================================================
+# Pagination: offset parameter
+# =============================================================================
+
+
+class TestGetPositionsPagination:
+    """Tests for limit/offset pagination on GET /positions/."""
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_offset_skips_first_positions(self, mock_resize, db_session):
+        """Happy path: offset skips the first N positions."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "pagination@example.com")
+        # Create 5 positions
+        for i in range(5):
+            await _create_position(
+                db_session, account, status="open",
+                product_id="ETH-USD",
+                opened_at=datetime(2025, 1, i + 1),
+            )
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+
+        # With offset=2, should get 3 positions (oldest 3 since order is desc by opened_at)
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=2,
+            db=db_session, current_user=user,
+        )
+        assert len(result) == 3
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_limit_caps_results(self, mock_resize, db_session):
+        """Happy path: limit caps result count."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "paginat2@example.com")
+        for i in range(5):
+            await _create_position(db_session, account, status="open", product_id="ETH-USD")
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+
+        result = await get_positions(
+            response=response_mock, status=None, limit=3, offset=0,
+            db=db_session, current_user=user,
+        )
+        assert len(result) == 3
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_offset_beyond_count_returns_empty(self, mock_resize, db_session):
+        """Edge case: offset larger than result count returns empty list."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "paginat3@example.com")
+        await _create_position(db_session, account, status="open", product_id="ETH-USD")
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+
+        result = await get_positions(
+            response=response_mock, status=None, limit=50, offset=999,
+            db=db_session, current_user=user,
+        )
+        assert result == []
