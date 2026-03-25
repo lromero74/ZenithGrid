@@ -241,6 +241,20 @@ export interface Bot {
   exchange_type?: 'cex' | 'dex';  // Exchange type
   quote_currency?: string;  // Quote currency for bot's pairs (BTC or USD)
   open_positions_count?: number;  // Number of open positions for this bot
+  // Stats fields returned by list endpoint
+  closed_positions_count?: number;
+  closed_today_count?: number;
+  trades_per_day?: number;
+  total_pnl_usd?: number;
+  total_pnl_btc?: number;
+  total_pnl_percentage?: number;
+  avg_daily_pnl_usd?: number;
+  avg_daily_pnl_btc?: number;
+  avg_daily_pnl_usd_active?: number;  // PnL per active running day
+  avg_daily_pnl_btc_active?: number;
+  aggregate_running_days?: number;  // Total days bot has been in running state
+  calendar_days?: number;  // Calendar days since bot creation
+  win_rate?: number;
 }
 
 export interface BotCreate {

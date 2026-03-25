@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.142.0] - 2026-03-25
+
+### Added
+- **Bot running time tracking** — bots now record how many cumulative days they have spent in an active (running) state across all start/stop cycles. The Trade Stats column on the Bots page shows "X.Xd active" (hover to see total calendar days since creation).
+- **Per-active-day PnL projections** — a small "cal / active" toggle appears in each bot's projected PnL column (once the bot has meaningful run time). "cal" projects based on average daily PnL over calendar days; "active" projects based on days the bot was actually running — useful when a bot has been paused for extended periods.
+
+### Fixed
+- **Positions overall stats now cover all filtered results** — the stats card (total value, avg PnL, etc.) previously computed stats only from the current pagination page. It now covers all positions matching the active filters, regardless of which page is displayed.
+
 ## [v2.141.3] - 2026-03-25
 
 ### Fixed

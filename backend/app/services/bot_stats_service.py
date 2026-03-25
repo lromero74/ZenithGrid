@@ -152,14 +152,35 @@ def calculate_bot_pnl(
         if total_capital_deployed_usd > 0 else 0.0
     )
 
+    # Aggregate running days: stored seconds + current session (if active)
+    running_secs = bot.total_running_seconds or 0.0
+    if bot.is_active and bot.last_started_at is not None:
+        running_secs += (datetime.utcnow() - bot.last_started_at).total_seconds()
+    aggregate_running_days = running_secs / 86400.0
+
+    # Calendar days since creation
+    calendar_days = (datetime.utcnow() - bot.created_at).total_seconds() / 86400.0
+
+    # PnL per active day (only when bot has meaningful running time; else same as avg_daily)
+    if aggregate_running_days >= 0.01:
+        avg_daily_pnl_usd_active = recent_pnl_usd / aggregate_running_days
+        avg_daily_pnl_btc_active = recent_pnl_btc / aggregate_running_days
+    else:
+        avg_daily_pnl_usd_active = avg_daily_pnl_usd
+        avg_daily_pnl_btc_active = avg_daily_pnl_btc
+
     return {
         "total_pnl_usd": total_pnl_usd,
         "total_pnl_btc": total_pnl_btc,
         "total_pnl_percentage": total_pnl_percentage,
         "avg_daily_pnl_usd": avg_daily_pnl_usd,
         "avg_daily_pnl_btc": avg_daily_pnl_btc,
+        "avg_daily_pnl_usd_active": avg_daily_pnl_usd_active,
+        "avg_daily_pnl_btc_active": avg_daily_pnl_btc_active,
         "trades_per_day": trades_per_day,
         "win_rate": win_rate,
+        "aggregate_running_days": aggregate_running_days,
+        "calendar_days": calendar_days,
     }
 
 

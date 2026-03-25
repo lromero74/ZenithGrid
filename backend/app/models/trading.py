@@ -187,6 +187,13 @@ class Bot(Base):
     # Last time AI analysis was performed (expensive operation)
     last_ai_check = Column(DateTime, nullable=True)
 
+    # Running-time tracking (for aggregate active-days calculation)
+    # Accumulated seconds the bot has spent in the active (running) state.
+    # Updated each time the bot is stopped: total_running_seconds += (now - last_started_at)
+    total_running_seconds = Column(Float, default=0.0, nullable=True)
+    # Set when the bot is started; cleared when stopped.
+    last_started_at = Column(DateTime, nullable=True)
+
     # Relationships
     user = relationship("User", back_populates="bots")
     # Bot name must be unique per user, not globally

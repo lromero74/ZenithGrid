@@ -69,6 +69,10 @@ class BotResponse(BaseModel):
     insufficient_funds: bool = False
     budget_utilization_percentage: float = 0.0
     win_rate: float = 0.0  # Percentage of profitable closed positions
+    avg_daily_pnl_usd_active: float = 0.0  # PnL per active running day
+    avg_daily_pnl_btc_active: float = 0.0
+    aggregate_running_days: float = 0.0  # Total days bot has been in running state
+    calendar_days: float = 0.0  # Calendar days since bot creation
     quote_currency: str = "BTC"  # Quote currency for this bot's pairs (BTC or USD)
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
