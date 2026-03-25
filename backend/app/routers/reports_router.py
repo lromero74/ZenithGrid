@@ -708,10 +708,14 @@ async def get_expense_categories(
 
 
 async def _get_user_trading_metrics(
-    db: AsyncSession, user_id: int, is_btc: bool = False
+    db: AsyncSession, user_id: int, is_btc: bool = False, account_id: int = None
 ) -> tuple:
     """
     Return (annual_return_pct, account_balance) for a user.
+
+    If account_id is provided, scopes both the position profit and the balance
+    snapshot to that specific account. This prevents paper trading accounts or
+    other accounts from inflating or diluting the metrics used for expense planning.
 
     Uses closed positions (30-day window) for the return rate and
     AccountValueSnapshot for the current balance. Compound-annualizes
@@ -727,30 +731,30 @@ async def _get_user_trading_metrics(
     cutoff = now - timedelta(days=lookback_days)
 
     profit_col = Position.profit_usd if not is_btc else Position.profit_quote
-    r_profit = await db.execute(
-        select(func.sum(profit_col)).where(
-            Position.user_id == user_id,
-            Position.status == "closed",
-            Position.closed_at >= cutoff,
-        )
-    )
+    profit_filters = [
+        Position.user_id == user_id,
+        Position.status == "closed",
+        Position.closed_at >= cutoff,
+    ]
+    if account_id is not None:
+        profit_filters.append(Position.account_id == account_id)
+    r_profit = await db.execute(select(func.sum(profit_col)).where(*profit_filters))
     total_profit = r_profit.scalar() or 0.0
 
     value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
-    # Get the most recent snapshot date for this user, then sum all per-account
-    # values from that date. AccountValueSnapshot is per-account, so we need the
-    # sum across accounts as of the same timestamp to get total portfolio value.
+    snap_filters = [AccountValueSnapshot.user_id == user_id]
+    if account_id is not None:
+        snap_filters.append(AccountValueSnapshot.account_id == account_id)
+
     r_date = await db.execute(
-        select(func.max(AccountValueSnapshot.snapshot_date)).where(
-            AccountValueSnapshot.user_id == user_id,
-        )
+        select(func.max(AccountValueSnapshot.snapshot_date)).where(*snap_filters)
     )
     latest_date = r_date.scalar()
     if latest_date is None:
         return 0.0, 0.0
     r_value = await db.execute(
         select(func.sum(value_col)).where(
-            AccountValueSnapshot.user_id == user_id,
+            *snap_filters,
             AccountValueSnapshot.snapshot_date == latest_date,
         )
     )
@@ -843,7 +847,7 @@ async def list_expense_items(
     tax_pct = goal.tax_withholding_pct or 0.0
 
     annual_return_pct, account_balance = await _get_user_trading_metrics(
-        db, goal.user_id, is_btc=is_btc
+        db, goal.user_id, is_btc=is_btc, account_id=goal.account_id or None
     )
 
     # Compute projected monthly income from account balance and growth rate

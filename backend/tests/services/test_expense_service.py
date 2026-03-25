@@ -1495,3 +1495,139 @@ class TestSavingsTargetBlockedByUncoveredExpenses:
                 f"'{st['name']}' must be blocked when expenses above are uncovered"
             )
             assert st["dynamic_reserved"] == 0.0
+
+
+class TestDynamicReservedPVNotFullBalance:
+    """Tests that dynamic_reserved = capital_required (PV), not the full account balance.
+
+    The on-track check is PV-based: if the account holds enough today to compound
+    to the target, the savings target is 'funded' and only the PV is reserved.
+    Excess balance rolls forward to items lower in the priority list.
+    """
+
+    def test_only_pv_reserved_not_full_account_balance(self):
+        """dynamic_reserved equals capital_required (PV), not account_balance.
+
+        If the account has $2000 but only $905 (PV) is needed today to compound
+        to $1000 in 12 months at 10%/yr, exactly $905 should be reserved —
+        leaving $1095 of free balance for items below.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage, compute_savings_capital_required
+
+        target_date = date.today() + timedelta(days=365)
+        savings = _mock_savings_item(
+            name="Vacation Fund",
+            target_amount=1000.0,
+            target_date=target_date,
+            current_balance=0.0,
+            growth_rate=10.0,
+            sort_order=0,
+        )
+
+        pv = compute_savings_capital_required(
+            target_amount=1000.0,
+            target_date=target_date,
+            annual_growth_rate_pct=10.0,
+        )
+        # PV should be noticeably less than $1000
+        assert pv < 1000.0
+
+        result = compute_expense_coverage(
+            [savings],
+            period="monthly",
+            projected_income=200.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=10.0,
+            account_balance=2000.0,  # Much more than PV needed
+        )
+
+        st = result["savings_targets"][0]
+        # dynamic_reserved = min(capital_required, remaining_balance) = capital_required
+        assert st["dynamic_reserved"] == pytest.approx(st["capital_required"], rel=1e-5)
+        assert st["dynamic_reserved"] < 2000.0  # Not the full balance
+        assert st["capital_gap"] == 0.0
+        assert st["status"] == "funded"
+        # Remaining free balance = $2000 - PV
+        assert result["free_balance"] == pytest.approx(2000.0 - pv, rel=1e-3)
+
+    def test_excess_balance_available_to_items_below(self):
+        """After a funded savings target, remaining balance/income flows to items below.
+
+        A savings target that reserves only its PV leaves the excess income
+        available for expenses below it — the ✓ case does NOT gate items below.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        # Large expense that can only be covered if income isn't fully consumed
+        expense = _mock_item("Rent", 1000.0, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=1500.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=50000.0,  # Far more than PV — savings target will be funded
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] == 0.0
+        assert st["status"] == "funded"
+        # Expense below a funded savings target is NOT blocked and has income available
+        exp = result["items"][0]
+        assert exp["status"] != "blocked"
+        assert exp["status"] in ("covered", "partial")
+
+    def test_account_balance_just_enough_for_pv_is_on_track(self):
+        """If account_balance >= capital_required (PV), savings target is on track.
+
+        The '45% funded' raw metric (current_balance / gross_target) is irrelevant
+        to on-track status — only whether the PV is covered matters.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage, compute_savings_capital_required
+
+        target_date = date.today() + timedelta(days=180)  # 6 months out
+        pv = compute_savings_capital_required(
+            target_amount=1000.0,
+            target_date=target_date,
+            annual_growth_rate_pct=24.0,  # 2%/month
+        )
+        # Set account balance to exactly the PV — should be "just enough"
+        account_balance = round(pv, 2)
+
+        savings = _mock_savings_item(
+            name="Ticket",
+            target_amount=1000.0,
+            target_date=target_date,
+            current_balance=0.0,
+            growth_rate=24.0,
+            sort_order=0,
+        )
+
+        result = compute_expense_coverage(
+            [savings],
+            period="monthly",
+            projected_income=0.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=24.0,
+            account_balance=account_balance,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] == pytest.approx(0.0, abs=0.01)
+        assert st["status"] == "funded"
+        assert st["dynamic_reserved"] == pytest.approx(pv, rel=1e-3)

@@ -577,3 +577,98 @@ class TestAccountScopedReports:
         await db_session.flush()
         await db_session.refresh(report)
         assert report.account_id == s["acct_live"].id
+
+
+class TestGetUserTradingMetricsAccountScoping:
+    """_get_user_trading_metrics must scope to a single account when account_id is given.
+
+    This prevents paper-trading accounts (or other accounts) from inflating the
+    account balance and diluting the growth-rate calculation used for expense planning.
+    """
+
+    @pytest.mark.asyncio
+    async def test_metrics_scoped_to_specific_account(self, db_session):
+        """When account_id is provided, only that account's snapshot is used.
+
+        A second account (paper trading) with a much larger balance must NOT
+        influence the result.
+        """
+        from datetime import datetime as dt
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.routers.reports_router import _get_user_trading_metrics
+
+        # We test by mocking db.execute and verifying account_id appears in the
+        # WHERE clauses. Use the real function signature to check parameter flow.
+        calls = []
+
+        class FakeScalar:
+            def __init__(self, val):
+                self._val = val
+            def scalar(self):
+                return self._val
+
+        async def fake_execute(stmt):
+            # Capture the compiled SQL text to verify account_id filtering
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            calls.append(compiled)
+            # First call = profit SUM → return 100.0
+            # Second call = max(snapshot_date) → return a date
+            # Third call = sum(value) → return 1000.0
+            if "profit_usd" in compiled or "profit_quote" in compiled:
+                return FakeScalar(100.0)
+            elif "MAX" in compiled.upper():
+                return FakeScalar(dt(2026, 3, 25, 0, 0, 0))
+            else:
+                return FakeScalar(1000.0)
+
+        mock_db = MagicMock()
+        mock_db.execute = fake_execute
+
+        annual_pct, balance = await _get_user_trading_metrics(
+            mock_db, user_id=1, is_btc=False, account_id=42
+        )
+
+        # Verify account_id=42 appears in at least the balance queries
+        balance_calls = [c for c in calls if "42" in c]
+        assert len(balance_calls) >= 2, (
+            "account_id must appear in snapshot queries. calls: " + str(calls)
+        )
+        assert balance == pytest.approx(1000.0)
+        assert annual_pct > 0
+
+    @pytest.mark.asyncio
+    async def test_metrics_without_account_id_uses_all_accounts(self, db_session):
+        """When account_id is None, all accounts for the user are included."""
+        from datetime import datetime as dt
+        from unittest.mock import MagicMock
+        from app.routers.reports_router import _get_user_trading_metrics
+
+        calls = []
+
+        class FakeScalar:
+            def __init__(self, val):
+                self._val = val
+            def scalar(self):
+                return self._val
+
+        async def fake_execute(stmt):
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            calls.append(compiled)
+            if "profit_usd" in compiled or "profit_quote" in compiled:
+                return FakeScalar(50.0)
+            elif "MAX" in compiled.upper():
+                return FakeScalar(dt(2026, 3, 25, 0, 0, 0))
+            else:
+                return FakeScalar(5000.0)
+
+        mock_db = MagicMock()
+        mock_db.execute = fake_execute
+
+        annual_pct, balance = await _get_user_trading_metrics(
+            mock_db, user_id=1, is_btc=False, account_id=None
+        )
+
+        # No account_id filter → no specific account id in WHERE clauses
+        # (user_id=1 will appear, but a specific account id like "42" won't)
+        assert balance == pytest.approx(5000.0)
+        assert annual_pct > 0

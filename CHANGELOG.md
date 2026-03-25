@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.4] - 2026-03-25
+
+### Fixed
+- **Expense goal metrics now scoped to the goal's linked account** — account balance and growth rate calculations for savings targets and expense coverage now use only the account that the goal is tied to (shown in the account selector). Previously, paper trading accounts and any other accounts were included, which inflated the available balance and diluted the growth rate. A paper trading account with a large simulated balance would make every savings target appear funded (false ✓) while also suppressing the displayed growth rate. Now each goal uses only its own account's real balance and real trading history.
+
 ## [v2.139.3] - 2026-03-25
 
 ### Fixed
