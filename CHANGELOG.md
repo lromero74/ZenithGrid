@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.5] - 2026-03-25
+
+### Added
+- **Deposit coaching for savings goals** — "Manage Expenses & Savings" now shows a deposit coaching bar when a savings target in the middle of your priority list is underfunded. It tells you exactly how much to deposit to fund the savings goal, and how much more to also cover the next blocked expense below it. Previously, coaching was only shown for income-shortage situations; savings capital gaps were silently ignored.
+
+### Fixed
+- **Deposit coaching no longer breaks when a savings goal sits between expenses** — expenses blocked by an underfunded savings target now correctly show coaching, instead of coaching disappearing entirely.
+
 ## [v2.139.4] - 2026-03-25
 
 ### Fixed

@@ -406,6 +406,8 @@ def compute_expense_coverage(
     covered_count = 0
     partial_item = None
     next_uncovered_item = None
+    first_gap_savings = None    # first savings target with cap_gap > 0 (blocks items below)
+    first_blocked_after_savings = None  # first expense blocked by that savings gap
 
     for raw in all_entries:
         if raw["_type"] == "savings_target":
@@ -477,6 +479,9 @@ def compute_expense_coverage(
                     entry["coverage_pct"] = 0.0
                 # Gate: items below see nothing until this capital goal is met
                 blocked = True
+                # Track first underfunded savings target for deposit coaching
+                if first_gap_savings is None:
+                    first_gap_savings = entry
             else:
                 # No account balance context: fall back to income-based coverage
                 norm_contrib = entry["normalized_amount"]
@@ -507,6 +512,9 @@ def compute_expense_coverage(
             if blocked:
                 entry["status"] = "blocked"
                 entry["coverage_pct"] = 0.0
+                # Track first expense blocked specifically by a savings gap (for deposit coaching)
+                if first_gap_savings is not None and first_blocked_after_savings is None:
+                    first_blocked_after_savings = entry
             elif current_income >= amt:
                 entry["status"] = "covered"
                 entry["coverage_pct"] = 100.0
@@ -570,6 +578,15 @@ def compute_expense_coverage(
     if next_uncovered_item:
         result["next_uncovered_name"] = next_uncovered_item["name"]
         result["next_uncovered_amount"] = next_uncovered_item["normalized_amount"]
+
+    # Savings-gap deposit coaching: first underfunded savings target blocking items below
+    if first_gap_savings is not None:
+        result["first_gap_savings_name"] = first_gap_savings["name"]
+        result["first_gap_savings_cap_gap"] = first_gap_savings["capital_gap"]
+        result["first_gap_savings_capital_required"] = first_gap_savings["capital_required"]
+    if first_blocked_after_savings is not None:
+        result["first_blocked_after_savings_name"] = first_blocked_after_savings["name"]
+        result["first_blocked_after_savings_amount"] = first_blocked_after_savings["normalized_amount"]
 
     return result
 

@@ -784,7 +784,7 @@ export const reportsApi = {
 
   // Expense Items
   getExpenseItems: (goalId: number) =>
-    api.get<ExpenseItem[]>(`/reports/goals/${goalId}/expenses`).then(r => r.data),
+    api.get<{ items: ExpenseItem[]; coverage_summary: Record<string, unknown> }>(`/reports/goals/${goalId}/expenses`).then(r => r.data),
   createExpenseItem: (goalId: number, data: Omit<ExpenseItem, 'id' | 'goal_id' | 'is_active' | 'normalized_amount' | 'created_at'>) =>
     api.post<ExpenseItem>(`/reports/goals/${goalId}/expenses`, data).then(r => r.data),
   updateExpenseItem: (goalId: number, itemId: number, data: Partial<ExpenseItem>) =>

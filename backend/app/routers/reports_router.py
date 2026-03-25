@@ -893,7 +893,30 @@ async def list_expense_items(
                 d["monthly_contribution"] = wf.get("monthly_contribution", 0.0)
         enriched.append(d)
 
-    return enriched
+    # Build coverage summary for frontend deposit coaching
+    coverage_summary = {
+        "shortfall": coverage.get("shortfall", 0.0),
+        "income_after_tax": coverage.get("income_after_tax", 0.0),
+        "total_expenses": coverage.get("total_expenses", 0.0),
+        # Expense-path coaching
+        "partial_item_name": coverage.get("partial_item_name"),
+        "partial_item_shortfall": coverage.get("partial_item_shortfall"),
+        "next_uncovered_name": coverage.get("next_uncovered_name"),
+        "next_uncovered_amount": coverage.get("next_uncovered_amount"),
+        # Savings-gap coaching
+        "first_gap_savings_name": coverage.get("first_gap_savings_name"),
+        "first_gap_savings_cap_gap": coverage.get("first_gap_savings_cap_gap"),
+        "first_gap_savings_capital_required": coverage.get("first_gap_savings_capital_required"),
+        "first_blocked_after_savings_name": coverage.get("first_blocked_after_savings_name"),
+        "first_blocked_after_savings_amount": coverage.get("first_blocked_after_savings_amount"),
+        # Account context for income-based deposit math
+        "account_balance": account_balance,
+        "annual_return_pct": annual_return_pct,
+        "tax_pct": tax_pct,
+        "period": goal.expense_period or "monthly",
+    }
+
+    return {"items": enriched, "coverage_summary": coverage_summary}
 
 
 @router.post("/goals/{goal_id}/expenses")

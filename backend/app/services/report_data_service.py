@@ -646,9 +646,18 @@ async def _compute_expenses_goal_progress(
     # Deposit needed: how much additional capital to generate enough
     # after-tax income to cover the shortfall, based on past return rate.
     # Formula: shortfall / ((1 - tax_pct/100) * daily_return_rate * period_days)
+    #
+    # SAVINGS GAP coaching: when a savings target in the middle has cap_gap > 0,
+    # normal income-based coaching won't fire (partial_item/next_uncovered are empty).
+    # Instead: depositing cap_gap directly fills the savings reservation shortfall
+    # (no income multiplication needed — it's a capital reservation, not income generation).
+    # After filling the savings gap, the items below are unblocked; those expenses
+    # need additional income-generating capital on top.
     deposit_needed = None
     deposit_partial = None
     deposit_next = None
+    deposit_partial_label = None   # name of the first item needing a deposit
+    deposit_next_label = None      # name of the next item after that
     if account_value > 0 and daily_income > 0:
         after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
         denominator = daily_return_rate * period_days * after_tax_factor
@@ -658,13 +667,30 @@ async def _compute_expenses_goal_progress(
                     coverage["shortfall"] / denominator,
                     8 if is_btc else 2,
                 )
-            # Per-item deposits
+            # Per-item deposits — expense-first path
             partial_short = coverage.get("partial_item_shortfall")
             if partial_short:
                 deposit_partial = round(partial_short / denominator, 8 if is_btc else 2)
+                deposit_partial_label = coverage.get("partial_item_name")
             next_amt = coverage.get("next_uncovered_amount")
             if next_amt:
                 deposit_next = round(next_amt / denominator, 8 if is_btc else 2)
+                deposit_next_label = coverage.get("next_uncovered_name")
+
+            # Savings-gap path: overrides expense path when a savings target is blocking
+            savings_cap_gap = coverage.get("first_gap_savings_cap_gap")
+            if savings_cap_gap and savings_cap_gap > 0 and not partial_short:
+                # Depositing cap_gap fills the savings reservation directly
+                deposit_partial = round(savings_cap_gap, 8 if is_btc else 2)
+                deposit_partial_label = coverage.get("first_gap_savings_name")
+                # Additional income-generating deposit to cover the first blocked expense
+                blocked_amt = coverage.get("first_blocked_after_savings_amount")
+                if blocked_amt and blocked_amt > 0:
+                    deposit_next = round(
+                        savings_cap_gap + blocked_amt / denominator,
+                        8 if is_btc else 2,
+                    )
+                    deposit_next_label = coverage.get("first_blocked_after_savings_name")
 
         # Deposit needed (compound): target / ((1+r)^n - 1) - account_value
         compound_factor = (1 + daily_return_rate) ** period_days - 1
@@ -711,7 +737,9 @@ async def _compute_expenses_goal_progress(
         "deposit_needed": deposit_needed,
         "deposit_needed_compound": deposit_needed_compound,
         "deposit_partial": deposit_partial,
+        "deposit_partial_label": deposit_partial_label,
         "deposit_next": deposit_next,
+        "deposit_next_label": deposit_next_label,
         "daily_return_rate": round(daily_return_rate, 6) if account_value > 0 else None,
         "lookback_days_used": lookback_days_actual,
         "sample_trades": sample_trades,

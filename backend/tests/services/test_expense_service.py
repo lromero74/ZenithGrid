@@ -1631,3 +1631,134 @@ class TestDynamicReservedPVNotFullBalance:
         assert st["capital_gap"] == pytest.approx(0.0, abs=0.01)
         assert st["status"] == "funded"
         assert st["dynamic_reserved"] == pytest.approx(pv, rel=1e-3)
+
+
+class TestDepositCoachingFields:
+    """compute_expense_coverage emits savings-gap deposit coaching fields
+    when a savings target with cap_gap > 0 is blocking expenses below it."""
+
+    def test_savings_gap_coaching_fields_populated(self):
+        """first_gap_savings_* and first_blocked_after_savings_* are set when
+        a savings target is underfunded and blocks expenses below it."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="Vacation Fund",
+            target_amount=2000.0,
+            target_date=date.today() + timedelta(days=90),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Rent", 500.0, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=200.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=300.0,  # Less than PV → savings target underfunded
+        )
+
+        # Savings target should have a gap (300 < PV of 2000 in 3 months)
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] > 0
+        assert st["status"] in ("partial", "uncovered")
+
+        # Coaching fields should be populated
+        assert result.get("first_gap_savings_name") == "Vacation Fund"
+        assert result.get("first_gap_savings_cap_gap") == pytest.approx(st["capital_gap"], rel=1e-5)
+        assert result.get("first_blocked_after_savings_name") == "Rent"
+        assert result.get("first_blocked_after_savings_amount") == pytest.approx(500.0, rel=1e-5)
+
+    def test_savings_gap_coaching_fields_absent_when_funded(self):
+        """No coaching fields when savings target is fully funded."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=500.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=10.0,
+            sort_order=0,
+        )
+
+        result = compute_expense_coverage(
+            [savings],
+            period="monthly",
+            projected_income=0.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=10.0,
+            account_balance=50000.0,  # Far more than PV → funded
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] == 0.0
+        assert st["status"] == "funded"
+
+        # No savings-gap coaching needed
+        assert result.get("first_gap_savings_name") is None
+        assert result.get("first_gap_savings_cap_gap") is None
+
+    def test_first_blocked_after_savings_is_first_expense_only(self):
+        """first_blocked_after_savings_name is the FIRST blocked expense,
+        not subsequent ones."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="Trip",
+            target_amount=3000.0,
+            target_date=date.today() + timedelta(days=60),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        exp1 = _mock_item("Zoho Mail", 2.08, "monthly", sort_order=1)
+        exp2 = _mock_item("OSGLI", 8.70, "monthly", sort_order=2)
+
+        result = compute_expense_coverage(
+            [savings, exp1, exp2],
+            period="monthly",
+            projected_income=100.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=100.0,  # Less than PV → gap
+        )
+
+        assert result.get("first_gap_savings_name") == "Trip"
+        # first blocked = Zoho Mail (first expense below the savings gap)
+        assert result.get("first_blocked_after_savings_name") == "Zoho Mail"
+        # NOT OSGLI (that's the second blocked)
+
+    def test_expense_path_coaching_unaffected_when_no_savings_gap(self):
+        """When there is no savings target, classic partial-item coaching works."""
+        from app.services.expense_service import compute_expense_coverage
+
+        exp1 = _mock_item("Rent", 500.0, "monthly", sort_order=0)
+        exp2 = _mock_item("Food", 300.0, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [exp1, exp2],
+            period="monthly",
+            projected_income=600.0,   # Covers Rent ($500) but only $100 left for Food
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=10.0,
+            account_balance=5000.0,
+        )
+
+        # Savings coaching fields absent — no savings target
+        assert result.get("first_gap_savings_name") is None
+        assert result.get("first_blocked_after_savings_name") is None
+
+        # Classic expense path coaching is set
+        assert result.get("partial_item_name") == "Food"
+        assert (result.get("partial_item_shortfall") or 0) > 0

@@ -329,11 +329,13 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     expensePeriod === 'quarterly' ? '/qtr' :
     expensePeriod === 'yearly' ? '/yr' : '/mo'
 
-  // Fetch items
-  const { data: items = [], isLoading } = useQuery({
+  // Fetch items + coverage summary
+  const { data: expenseData, isLoading } = useQuery({
     queryKey: ['expense-items', goalId],
     queryFn: () => reportsApi.getExpenseItems(goalId),
   })
+  const items: ExpenseItem[] = (expenseData as any)?.items ?? []
+  const coverageSummary: Record<string, any> = (expenseData as any)?.coverage_summary ?? {}
 
   // Local ordered list for optimistic drag reorder
   const [localItems, setLocalItems] = useState<ExpenseItem[]>([])
@@ -1227,6 +1229,75 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
               </span>
             </div>
           )}
+
+          {/* Deposit coaching bar */}
+          {displayItems.length > 0 && (() => {
+            const cs = coverageSummary
+            const balance = (cs.account_balance as number) ?? 0
+            const annualPct = (cs.annual_return_pct as number) ?? 0
+            const taxPct = (cs.tax_pct as number) ?? 0
+            const period = (cs.period as string) ?? 'monthly'
+            const periodDays = period === 'weekly' ? 7 : period === 'quarterly' ? 91 : period === 'yearly' ? 365 : 30
+            const dailyRate = balance > 0 && annualPct > 0
+              ? (Math.pow(1 + annualPct / 100, 1 / 365) - 1)
+              : 0
+            const afterTax = taxPct < 100 ? (1 - taxPct / 100) : 0
+            const denom = dailyRate * periodDays * afterTax
+
+            // Savings-gap path
+            const savingsGapName = cs.first_gap_savings_name as string | undefined
+            const savingsGap = (cs.first_gap_savings_cap_gap as number) ?? 0
+            const blockedExpenseName = cs.first_blocked_after_savings_name as string | undefined
+            const blockedExpenseAmt = (cs.first_blocked_after_savings_amount as number) ?? 0
+
+            // Expense path
+            const partialName = cs.partial_item_name as string | undefined
+            const partialShortfall = (cs.partial_item_shortfall as number) ?? 0
+            const nextName = cs.next_uncovered_name as string | undefined
+            const nextAmt = (cs.next_uncovered_amount as number) ?? 0
+
+            const lines: { text: string; icon: string }[] = []
+
+            if (savingsGapName && savingsGap > 0 && !partialName) {
+              // Savings target gap is blocking items below
+              lines.push({
+                icon: '🏦',
+                text: `Deposit ${prefix}${savingsGap.toLocaleString(undefined, { maximumFractionDigits: 2 })} to fund ${savingsGapName}`
+              })
+              if (blockedExpenseName && blockedExpenseAmt > 0 && denom > 0) {
+                const totalDeposit = savingsGap + blockedExpenseAmt / denom
+                lines.push({
+                  icon: '➕',
+                  text: `Deposit ${prefix}${totalDeposit.toLocaleString(undefined, { maximumFractionDigits: 2 })} total to also cover ${blockedExpenseName}`
+                })
+              }
+            } else if (partialName && partialShortfall > 0 && denom > 0) {
+              const dep1 = partialShortfall / denom
+              lines.push({
+                icon: '💡',
+                text: `Deposit ${prefix}${dep1.toLocaleString(undefined, { maximumFractionDigits: 2 })} to finish covering ${partialName}`
+              })
+              if (nextName && nextAmt > 0) {
+                const dep2 = (partialShortfall + nextAmt) / denom
+                lines.push({
+                  icon: '➕',
+                  text: `Deposit ${prefix}${dep2.toLocaleString(undefined, { maximumFractionDigits: 2 })} total to also cover ${nextName}`
+                })
+              }
+            }
+
+            if (lines.length === 0) return null
+            return (
+              <div className="bg-blue-950/40 border border-blue-800/40 rounded-lg px-3 py-2.5 space-y-1">
+                <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wide mb-1">Deposit Coaching</p>
+                {lines.map((l, i) => (
+                  <p key={i} className="text-xs text-blue-200">
+                    <span className="mr-1">{l.icon}</span>{l.text}
+                  </p>
+                ))}
+              </div>
+            )
+          })()}
 
           {/* Add button (only when form overlay is NOT showing, hidden in read-only) */}
           {!readOnly && !showForm && (

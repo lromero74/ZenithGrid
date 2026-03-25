@@ -752,23 +752,32 @@ def _build_deposit_hints_html(
     dep = g.get("deposit_needed")
     dep_partial = g.get("deposit_partial")
     dep_next = g.get("deposit_next")
+    # Labels may come from the goal dict (savings-gap path) or from coverage (expense path)
+    partial_name = coverage.get("partial_item_name") or g.get("deposit_partial_label")
+    next_name = coverage.get("next_uncovered_name") or g.get("deposit_next_label")
 
-    if dep is None and not coverage.get("partial_item_name") and not coverage.get("next_uncovered_name"):
+    if dep is None and not partial_name and not next_name:
         return ""
 
     dep_parts = []
-    partial_name = coverage.get("partial_item_name")
-    next_name = coverage.get("next_uncovered_name")
 
     if partial_name and dep_partial is not None:
-        dep_parts.append(
-            f"Finish covering <strong>{partial_name}</strong>: "
-            f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
-        )
+        # Savings-gap coaching uses a capital-reservation framing
+        savings_gap = coverage.get("first_gap_savings_cap_gap")
+        if savings_gap and savings_gap > 0 and partial_name == g.get("deposit_partial_label"):
+            dep_parts.append(
+                f"Fund <strong>{partial_name}</strong> savings goal: "
+                f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
+            )
+        else:
+            dep_parts.append(
+                f"Finish covering <strong>{partial_name}</strong>: "
+                f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
+            )
         if next_name and dep_next is not None:
             dep_parts.append(
-                f"Then cover <strong>{next_name}</strong>: "
-                f"deposit ~{prefix}{dep_next:{fmt}} {currency} more"
+                f"Also cover <strong>{next_name}</strong>: "
+                f"deposit ~{prefix}{dep_next:{fmt}} {currency} total"
             )
     elif next_name and dep_next is not None:
         dep_parts.append(
