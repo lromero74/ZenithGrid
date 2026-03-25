@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.141.2] - 2026-03-25
+
+### Fixed
+- **Portfolio rebalancer now correctly executes USD↔USDC trades** — the Coinbase convert endpoint was returning 400 errors for fiat-to-stablecoin conversions, silently blocking all USD→USDC rebalancing every hour. The rebalancer now routes USD↔USDC via BTC as an intermediary (USD→BTC→USDC and USDC→BTC→USD), which uses proven market-order paths available on all account types.
+
 ## [v2.141.1] - 2026-03-25
 
 ### Fixed

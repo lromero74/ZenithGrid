@@ -676,11 +676,40 @@ class RebalanceMonitor:
             from_curr = trade["from_currency"]
             to_curr = trade["to_currency"]
 
-            # USD↔USDC: use 1:1 convert endpoint (no market pair exists)
+            # USD↔USDC: no direct market pair — route via BTC as intermediary.
+            # The Coinbase convert endpoint is unreliable for fiat↔stablecoin;
+            # USD→BTC and BTC→USDC are both proven market-order paths.
             if {from_curr, to_curr} == {"USD", "USDC"}:
-                result = await client.convert_currency(
-                    from_curr, to_curr, usd_amount
-                )
+                btc_price = prices.get("BTC-USD", 0.0)
+                if btc_price <= 0:
+                    logger.warning(
+                        f"Rebalance: {from_curr}→{to_curr} skipped — "
+                        f"no BTC-USD price available for intermediary route"
+                    )
+                    return
+                btc_amount = round(usd_amount / btc_price, 8)
+                if from_curr == "USD":
+                    # USD → BTC → USDC
+                    r1 = await client.buy_with_usd(usd_amount, "BTC-USD")
+                    self._log_trade_result(r1, {**trade, "to_currency": "BTC"}, account)
+                    if not r1.get("success_response"):
+                        return
+                    result = await client.create_market_order(
+                        product_id="BTC-USDC",
+                        side="SELL",
+                        size=f"{btc_amount:.8f}",
+                    )
+                else:
+                    # USDC → BTC → USD
+                    r1 = await client.create_market_order(
+                        product_id="BTC-USDC",
+                        side="BUY",
+                        funds=f"{usd_amount:.2f}",
+                    )
+                    self._log_trade_result(r1, {**trade, "from_currency": "USDC", "to_currency": "BTC"}, account)
+                    if not r1.get("success_response"):
+                        return
+                    result = await client.sell_for_usd(btc_amount, "BTC-USD")
                 self._log_trade_result(result, trade, account)
                 return
 

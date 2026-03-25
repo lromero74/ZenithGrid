@@ -954,18 +954,17 @@ class TestSweepDustFailureReporting:
 
 
 class TestConvertCurrency:
-    """Tests for USD↔USDC conversion via convert endpoint in rebalancing."""
+    """Tests for USD↔USDC conversion via BTC intermediary in rebalancing."""
 
     @pytest.mark.asyncio
-    async def test_execute_trade_usd_to_usdc_uses_convert(self):
-        """Happy path: USD→USDC uses client.convert_currency, not market order."""
+    async def test_execute_trade_usd_to_usdc_uses_btc_intermediary(self):
+        """Happy path: USD→USDC goes USD→BTC→USDC (no direct market pair)."""
         from app.services.rebalance_monitor import RebalanceMonitor
 
         monitor = RebalanceMonitor()
         client = AsyncMock()
-        client.convert_currency.return_value = {
-            "success_response": {"order_id": "convert-123"}
-        }
+        client.buy_with_usd.return_value = {"success_response": {"order_id": "buy-btc-1"}}
+        client.create_market_order.return_value = {"success_response": {"order_id": "sell-btc-usdc-1"}}
 
         account = MagicMock()
         account.name = "Test"
@@ -977,23 +976,27 @@ class TestConvertCurrency:
             "product_id": "USDC-USD",
             "side": "BUY",
         }
+        prices = {"BTC-USD": 100000.0}
 
-        await monitor._execute_trade(client, account, trade, {})
+        await monitor._execute_trade(client, account, trade, prices)
 
-        client.convert_currency.assert_called_once_with("USD", "USDC", 99.0)
-        client.create_market_order.assert_not_called()
-        client.buy_with_usd.assert_not_called()
+        # Step 1: buy BTC with USD (99% of 100 = 99.0)
+        client.buy_with_usd.assert_called_once_with(99.0, "BTC-USD")
+        # Step 2: sell BTC for USDC on BTC-USDC
+        client.create_market_order.assert_called_once()
+        call_kwargs = client.create_market_order.call_args
+        assert call_kwargs[1]["product_id"] == "BTC-USDC" or call_kwargs[0][0] == "BTC-USDC"
+        client.convert_currency.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_execute_trade_usdc_to_usd_uses_convert(self):
-        """Happy path: USDC→USD also uses convert endpoint."""
+    async def test_execute_trade_usdc_to_usd_uses_btc_intermediary(self):
+        """Happy path: USDC→USD goes USDC→BTC→USD (no direct market pair)."""
         from app.services.rebalance_monitor import RebalanceMonitor
 
         monitor = RebalanceMonitor()
         client = AsyncMock()
-        client.convert_currency.return_value = {
-            "success_response": {"order_id": "convert-456"}
-        }
+        client.create_market_order.return_value = {"success_response": {"order_id": "buy-btc-usdc-1"}}
+        client.sell_for_usd.return_value = {"success_response": {"order_id": "sell-btc-1"}}
 
         account = MagicMock()
         account.name = "Test"
@@ -1005,19 +1008,26 @@ class TestConvertCurrency:
             "product_id": "USDC-USD",
             "side": "SELL",
         }
+        prices = {"BTC-USD": 50000.0}
 
-        await monitor._execute_trade(client, account, trade, {})
+        await monitor._execute_trade(client, account, trade, prices)
 
-        client.convert_currency.assert_called_once_with("USDC", "USD", 49.5)
+        # Step 1: buy BTC with USDC on BTC-USDC
+        client.create_market_order.assert_called_once()
+        call_kwargs = client.create_market_order.call_args
+        assert call_kwargs[1]["product_id"] == "BTC-USDC" or call_kwargs[0][0] == "BTC-USDC"
+        # Step 2: sell BTC for USD
+        client.sell_for_usd.assert_called_once()
+        client.convert_currency.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_convert_failure_logged(self):
-        """Failure case: convert returns error_response — logged as warning."""
+    async def test_usd_to_usdc_first_leg_failure_aborts(self):
+        """Failure case: if USD→BTC step fails, USDC leg is not attempted."""
         from app.services.rebalance_monitor import RebalanceMonitor
 
         monitor = RebalanceMonitor()
         client = AsyncMock()
-        client.convert_currency.return_value = {
+        client.buy_with_usd.return_value = {
             "error_response": {"message": "Insufficient funds"}
         }
 
@@ -1031,11 +1041,13 @@ class TestConvertCurrency:
             "product_id": "USDC-USD",
             "side": "BUY",
         }
+        prices = {"BTC-USD": 100000.0}
 
         # Should not raise — failures are logged, not thrown
-        await monitor._execute_trade(client, account, trade, {})
+        await monitor._execute_trade(client, account, trade, prices)
 
-        client.convert_currency.assert_called_once()
+        client.buy_with_usd.assert_called_once()
+        client.create_market_order.assert_not_called()  # second leg aborted
 
     def test_plan_topup_usd_donates_to_usdc(self):
         """Happy path: USD is a valid donor for USDC top-ups (via convert)."""
