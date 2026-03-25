@@ -722,11 +722,13 @@ async def _get_user_trading_metrics(
     total_profit = r_profit.scalar() or 0.0
 
     value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
+    # Use the most recent single snapshot as the account balance denominator.
+    # Using SUM over a window would inflate the balance (multiple snapshots/day)
+    # and falsely deflate the computed daily rate.
     r_value = await db.execute(
-        select(func.sum(value_col)).where(
+        select(value_col).where(
             AccountValueSnapshot.user_id == user_id,
-            AccountValueSnapshot.snapshot_date >= now - timedelta(days=2),
-        )
+        ).order_by(AccountValueSnapshot.snapshot_date.desc()).limit(1)
     )
     account_balance = r_value.scalar() or 0.0
 

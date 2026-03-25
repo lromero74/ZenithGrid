@@ -655,8 +655,12 @@ class TestComputeExpenseCoverageWithSavings:
         # Should be covered: $3000 - $1500 rent = $1500 remaining >= $1000 contribution
         assert savings_item["status"] == "covered"
 
-    def test_savings_uncovered_when_income_exhausted(self):
-        """Savings target is uncovered if income is spent on expenses."""
+    def test_savings_blocked_when_expense_above_is_partial(self):
+        """Savings target is blocked when a higher-priority expense is only partially covered.
+
+        When income runs out mid-expense (partial status), the savings target that
+        follows should be 'blocked' — income is exhausted by items with higher claim.
+        """
         from datetime import date, timedelta
         from app.services.expense_service import compute_expense_coverage
         expense = _mock_item("Rent", 3000, "monthly")
@@ -671,7 +675,7 @@ class TestComputeExpenseCoverageWithSavings:
             [expense, savings], "monthly", 2500.0, 0.0
         )
         assert result["items"][0]["status"] == "partial"
-        assert result["savings_targets"][0]["status"] == "uncovered"
+        assert result["savings_targets"][0]["status"] == "blocked"
 
     def test_total_claims_includes_savings(self):
         """total_claims = total_expenses + total_savings_contributions."""
@@ -1262,3 +1266,210 @@ class TestCustomSortSavingsTargetPlacement:
             assert item["status"] != "blocked", (
                 f"'{item['name']}' (before the savings target) must not be blocked"
             )
+
+
+# ---------------------------------------------------------------------------
+# New tests: savings target blocked by uncovered expenses above it
+# ---------------------------------------------------------------------------
+
+class TestSavingsTargetBlockedByUncoveredExpenses:
+    """Savings targets must not reserve capital when higher-priority expenses
+    cannot be fully covered by income.
+
+    Rule: if any expense ranked above the savings target in sort order is
+    'partial' or 'uncovered', the savings target gets status='blocked' and
+    dynamic_reserved=0 — income has been exhausted by items with higher claim.
+    """
+
+    def test_savings_target_blocked_when_expense_above_is_uncovered(self):
+        """A savings target after an uncovered expense must be blocked.
+
+        Income: $0. Expense: $500 (uncovered — no income at all). Savings: after.
+        The savings target should NOT reserve capital — income is exhausted.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        expense = _mock_item("Alimony", 500, "monthly", sort_order=0)
+        savings = _mock_savings_item(
+            name="Vacation",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            sort_order=1,
+        )
+
+        result = compute_expense_coverage(
+            [expense, savings],
+            period="monthly",
+            projected_income=0.0,  # zero income → expense is "uncovered"
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=8.0,
+            account_balance=50000.0,  # plenty of balance — but expense is uncovered
+        )
+
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] == "uncovered"
+
+        st = result["savings_targets"][0]
+        assert st["status"] == "blocked", (
+            f"Savings target after uncovered expense must be 'blocked', got '{st['status']}'"
+        )
+        assert st["dynamic_reserved"] == 0.0, (
+            "Savings target must not reserve capital when expenses above are uncovered"
+        )
+
+    def test_savings_target_blocked_when_expense_above_is_partial(self):
+        """A savings target after a partially-covered expense must be blocked.
+
+        Income: $200. Expense: $500 (partial — income runs out). Savings: after.
+        After the partial expense current_income=0, savings must not reserve.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        expense = _mock_item("Rent", 500, "monthly", sort_order=0)
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            sort_order=1,
+        )
+
+        result = compute_expense_coverage(
+            [expense, savings],
+            period="monthly",
+            projected_income=200.0,  # only partially covers $500 expense
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=8.0,
+            account_balance=50000.0,
+        )
+
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] == "partial"
+
+        st = result["savings_targets"][0]
+        assert st["status"] == "blocked", (
+            f"Savings target after partial expense must be 'blocked', got '{st['status']}'"
+        )
+        assert st["dynamic_reserved"] == 0.0
+
+    def test_savings_target_not_blocked_when_all_expenses_above_covered(self):
+        """Savings target is NOT blocked when all higher-priority expenses are fully covered.
+
+        Income: $2000. Expenses above: $500 (covered). Savings: after.
+        Income not exhausted, so savings target can reserve from balance normally.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        expense = _mock_item("Rent", 500, "monthly", sort_order=0)
+        savings = _mock_savings_item(
+            name="Vacation",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            sort_order=1,
+        )
+
+        result = compute_expense_coverage(
+            [expense, savings],
+            period="monthly",
+            projected_income=2000.0,  # plenty of income
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=8.0,
+            account_balance=50000.0,
+        )
+
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] == "covered"
+
+        st = result["savings_targets"][0]
+        assert st["status"] != "blocked", (
+            f"Savings target must not be blocked when all expenses above are covered; "
+            f"got '{st['status']}'"
+        )
+        assert st["dynamic_reserved"] > 0.0
+
+    def test_multiple_uncovered_expenses_all_block_savings_target(self):
+        """Multiple uncovered expenses above all block the savings target.
+
+        Mirrors the user's real scenario: many uncovered expenses, then a savings target.
+        None of the unspent income (zero) should roll forward to fund savings.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # Income just barely covers item 0; items 1 and 2 are uncovered
+        exp0 = _mock_item("Tithes", 5, "monthly", sort_order=0)
+        exp1 = _mock_item("Alimony", 500, "monthly", sort_order=1)
+        exp2 = _mock_item("Student Loan", 680, "monthly", sort_order=2)
+        savings = _mock_savings_item(
+            name="Tickets to Opposite Coast",
+            target_amount=3000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=619.0,
+            growth_rate=8.0,
+            sort_order=3,
+        )
+
+        result = compute_expense_coverage(
+            [exp0, exp1, exp2, savings],
+            period="monthly",
+            projected_income=5.0,  # exactly covers Tithes ($5); Alimony+Loan are uncovered
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=8.0,
+            account_balance=10000.0,
+        )
+
+        assert result["items"][0]["status"] == "covered"   # Tithes ($5 = income)
+        assert result["items"][1]["status"] == "uncovered"  # Alimony (income=0 now)
+        assert result["items"][2]["status"] == "uncovered"  # Student Loan
+
+        st = result["savings_targets"][0]
+        assert st["status"] == "blocked"
+        assert st["dynamic_reserved"] == 0.0
+
+    def test_savings_target_blocked_propagates_to_savings_targets_below(self):
+        """When a savings target is blocked by uncovered expenses, subsequent
+        savings targets are also blocked (income still exhausted).
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        expense = _mock_item("Big Expense", 9999, "monthly", sort_order=0)
+        st1 = _mock_savings_item(
+            name="Vacation", target_amount=2000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0, growth_rate=8.0, sort_order=1,
+        )
+        st2 = _mock_savings_item(
+            name="Car Fund", target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0, growth_rate=8.0, sort_order=2,
+        )
+
+        result = compute_expense_coverage(
+            [expense, st1, st2],
+            period="monthly",
+            projected_income=100.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=8.0,
+            account_balance=50000.0,
+        )
+
+        assert result["items"][0]["status"] == "partial"  # only partial from $100 income
+        for st in result["savings_targets"]:
+            assert st["status"] == "blocked", (
+                f"'{st['name']}' must be blocked when expenses above are uncovered"
+            )
+            assert st["dynamic_reserved"] == 0.0

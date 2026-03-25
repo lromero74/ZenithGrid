@@ -540,6 +540,7 @@ def _build_transfers_section(data: Dict[str, Any]) -> str:
 
 def _build_metrics_section(data: Dict[str, Any]) -> str:
     """Key metrics cards grid."""
+    import math as _math
     value_usd = data.get("account_value_usd", 0)
     value_btc = data.get("account_value_btc", 0)
     profit_usd = data.get("period_profit_usd", 0)
@@ -552,6 +553,17 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
     trades_label = "Total Trades"
     if period_days:
         trades_label += f" (last {period_days}d)"
+
+    # Extract projected monthly/annual return from first expenses goal
+    monthly_return_pct = None
+    annual_return_pct_display = None
+    for g in data.get("goals", []):
+        if g.get("goal_type") == "expenses":
+            dr = g.get("daily_return_rate")
+            if dr and dr > 0:
+                monthly_return_pct = (_math.pow(1 + dr, 30) - 1) * 100
+                annual_return_pct_display = (_math.pow(1 + dr, 365) - 1) * 100
+            break
 
     profit_color = "#10b981" if profit_usd >= 0 else "#ef4444"
     profit_sign = "+" if profit_usd >= 0 else ""
@@ -582,6 +594,30 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
                              margin: 5px 0 0 0;">{adj_sign}${abs(adjusted_growth):,.2f}</p>
                     <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
                         excl. deposits</p>
+                </td>
+            </tr>"""
+
+    # Projected return row (only rendered when data available)
+    return_row = ""
+    if monthly_return_pct is not None:
+        return_color = "#10b981" if monthly_return_pct >= 0 else "#ef4444"
+        return_row = f"""
+            <tr>
+                <td style="width: 50%; padding: 12px; background-color: #1e293b;
+                           border: 1px solid #334155;">
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">Projected Monthly Return</p>
+                    <p style="color: {return_color}; font-size: 20px; font-weight: 700;
+                             margin: 5px 0 0 0;">+{monthly_return_pct:.2f}%</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
+                        based on 30-day avg</p>
+                </td>
+                <td style="width: 50%; padding: 12px; background-color: #1e293b;
+                           border: 1px solid #334155;">
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">Projected Annual Return</p>
+                    <p style="color: {return_color}; font-size: 20px; font-weight: 700;
+                             margin: 5px 0 0 0;">+{annual_return_pct_display:.1f}%</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
+                        compound annualized</p>
                 </td>
             </tr>"""
 
@@ -626,7 +662,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
                     <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
                         of closed trades</p>
                 </td>
-            </tr>{deposit_row}
+            </tr>{deposit_row}{return_row}
         </table>
     </div>"""
 

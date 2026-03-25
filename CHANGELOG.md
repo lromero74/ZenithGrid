@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.2] - 2026-03-25
+
+### Added
+- **Projected Monthly & Annual Return in Key Metrics** — the HTML, PDF, and email report Key Metrics section now shows the projected monthly return (%) and compound-annualized return (%) derived from your 30-day trading history. This is the same growth rate used to project savings target funding, tithe amounts, and income coverage.
+
+### Fixed
+- **Savings targets no longer show partial funding when higher-priority expenses are uncovered** — a savings goal will now be marked "Blocked" (indigo badge) when any expense ranked above it in your priority list is uncovered or only partially covered. The system correctly recognises that uncovered expenses have first claim on all resources, so the savings target should not reserve capital until those obligations can be met.
+- **Growth rate for savings targets was stuck at a stale value** — the Goals page was computing the account return rate using a sum of recent daily snapshots instead of the latest single snapshot. This inflated the denominator and produced an artificially low rate (e.g. 6.9% when the true compound rate was much higher). Now the most recent snapshot is used, matching the Dashboard Portfolio Totals calculation.
+
 ## [v2.139.1] - 2026-03-25
 
 ### Fixed

@@ -162,6 +162,17 @@ def _build_pdf_metrics_table(pdf, report_data: Dict):
             ("Market Value Effect",
              f"{mve_sign}${abs(pdf_mve):,.2f}")
         )
+    # Projected return from 30-day trading history (from first expenses goal)
+    import math as _math
+    for _g in report_data.get("goals", []):
+        if _g.get("goal_type") == "expenses":
+            _dr = _g.get("daily_return_rate")
+            if _dr and _dr > 0:
+                _mo = (_math.pow(1 + _dr, 30) - 1) * 100
+                _yr = (_math.pow(1 + _dr, 365) - 1) * 100
+                metrics.append(("Proj. Monthly Return", f"+{_mo:.2f}%"))
+                metrics.append(("Proj. Annual Return", f"+{_yr:.1f}%"))
+            break
 
     pdf.set_font("Helvetica", "", 10)
     for label, value in metrics:

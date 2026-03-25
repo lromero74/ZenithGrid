@@ -339,6 +339,11 @@ def _build_savings_status_badge(entry: dict) -> str:
             '<span style="background:#7f1d1d; color:#fca5a5; padding:1px 6px;'
             ' border-radius:4px; font-size:10px; font-weight:600;">Past Due</span>'
         )
+    elif status == "blocked":
+        return (
+            '<span style="background:#1e1b4b; color:#a5b4fc; padding:1px 6px;'
+            ' border-radius:4px; font-size:10px; font-weight:600;">Blocked</span>'
+        )
     elif status == "partial":
         pct = entry.get("coverage_pct", 0)
         return (
@@ -607,10 +612,14 @@ def _build_expense_coverage_html(
             # Condensed savings target row — full detail is in the Savings Targets section
             st_name = row_item.get("name", "")
             recur = " ↻" if row_item.get("is_recurring") else ""
+            st_status = row_item.get("status", "")
             cap_req = row_item.get("capital_required", 0) or 0
             dyn_res = row_item.get("dynamic_reserved", row_item.get("current_balance", 0)) or 0
             cap_gap = row_item.get("capital_gap", max(0.0, cap_req - dyn_res)) or 0
-            if cap_gap <= 0 and cap_req > 0:
+            if st_status == "blocked":
+                res_text = f'Blocked&nbsp;(need&nbsp;{prefix}{cap_req:{fmt}})'
+                res_color = "#a5b4fc"
+            elif cap_gap <= 0 and cap_req > 0:
                 res_text = f'Reserved:&nbsp;{prefix}{dyn_res:{fmt}}&nbsp;✓'
                 res_color = "#6ee7b7"
             elif cap_req > 0:

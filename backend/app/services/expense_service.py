@@ -390,6 +390,10 @@ def compute_expense_coverage(
     remaining_balance = account_balance
     current_income = income_after_tax
     blocked = False  # True when a savings target is underfunded — nothing passes below
+    # True once any expense above is partial or uncovered (income exhausted).
+    # A savings target should not reserve capital when higher-priority expenses
+    # cannot be covered — those expenses have first claim on all resources.
+    has_uncovered_expense_above = False
 
     normalized = []  # final expense entries
     savings_entries = []  # final savings target entries
@@ -407,8 +411,11 @@ def compute_expense_coverage(
             )
             cap_req = entry["capital_required"]
 
-            if blocked:
-                # A prior savings target is underfunded — nothing available here
+            if blocked or has_uncovered_expense_above:
+                # Either a prior savings target is underfunded, OR income has been
+                # exhausted by higher-priority uncovered expenses — don't reserve.
+                # A savings target should not claim capital when expenses ranked
+                # above it in the priority list cannot be covered.
                 dynamic_reserved = 0.0
             else:
                 dynamic_reserved = min(cap_req, remaining_balance)
@@ -449,6 +456,10 @@ def compute_expense_coverage(
             # Determine coverage status
             if entry.get("status") == "past_due":
                 pass
+            elif has_uncovered_expense_above or (blocked and dynamic_reserved == 0):
+                # Gated by uncovered expenses above (or a prior underfunded savings target)
+                entry["status"] = "blocked"
+                entry["coverage_pct"] = 0.0
             elif cap_gap <= 0:
                 entry["status"] = "funded"
                 entry["coverage_pct"] = 100.0
@@ -503,9 +514,11 @@ def compute_expense_coverage(
                 entry["shortfall"] = round(amt - current_income, 2)
                 partial_item = entry
                 current_income = 0
+                has_uncovered_expense_above = True  # income exhausted mid-item
             else:
                 entry["status"] = "uncovered"
                 entry["coverage_pct"] = 0.0
+                has_uncovered_expense_above = True  # income already gone
                 if next_uncovered_item is None and partial_item is not None:
                     next_uncovered_item = entry
 

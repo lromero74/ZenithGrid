@@ -159,7 +159,11 @@ function SortableExpenseRow({
             <>
               <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
               {/* Capital reservation framing — dynamic based on sort position */}
-              {item.capital_required != null ? (
+              {item.waterfall_status === 'blocked' ? (
+                <span className="text-indigo-300 font-medium">
+                  Blocked — need {prefix}{(item.capital_required ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+              ) : item.capital_required != null ? (
                 item.capital_gap === 0 ? (
                   <span className="text-emerald-400 font-medium">
                     {item.dynamic_reserved != null
