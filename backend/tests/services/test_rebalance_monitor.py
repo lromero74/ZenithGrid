@@ -225,6 +225,98 @@ class TestPlanTrades:
         # Can never sell more than the $200 of free USD
         assert total_sold <= 200.0
 
+    def test_with_aggregate_corrects_direction_when_free_diverges(self):
+        """Bug fix: when bots hold BTC in positions, free BTC wallet is inflated.
+        Aggregate BTC is LOW (underweight) but free BTC appears HIGH.
+        Without aggregate, plan_trades would SELL BTC (wrong direction).
+        With aggregate, it correctly BUYs BTC and SELLs overweight USDC.
+        """
+        from app.services.rebalance_monitor import plan_trades
+
+        BTC_PRICE = 100_000.0
+
+        # Aggregate (free + locked-in-positions): BTC at 35%, USDC at 58%, USD at 7%
+        # BTC: 0.35 BTC = $35K aggregate (ETH-BTC positions etc.)
+        # USDC: 58_000 USDC aggregate (free $18K + $40K in BTC-USDC position values)
+        # USD: $7K aggregate (free)
+        aggregate = {"USD": 7_000.0, "BTC": 0.35, "ETH": 0.0, "USDC": 58_000.0}
+        # Total aggregate = 7000 + 35000 + 58000 = $100K
+
+        # Free balances: BTC is HIGH (wallet holds BTC from all bots, which is
+        # DEDUCTED from aggregate to avoid double-counting)
+        # USDC is LOW (spent buying BTC via BTC-USDC bots)
+        free_balances = {
+            "USD": 6_950.0,    # ~$7K (above min reserve)
+            "BTC": 0.45,       # $45K free BTC in wallet (bots' acquired BTC)
+            "ETH": 0.0,
+            "USDC": 18_000.0,  # $18K free (40K was spent on BTC-USDC positions)
+        }
+
+        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0}
+        prices = {"BTC-USD": BTC_PRICE, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        # Without aggregate: free BTC=45K/69950 = 64% >> target 50% → SELLS BTC (WRONG)
+        #                    free USDC=18K/69950 = 26% << target 50% → BUYS USDC (WRONG)
+        trades_wrong = plan_trades(free_balances, targets, prices)
+        btc_sells_wrong = [t for t in trades_wrong if t["from_currency"] == "BTC"]
+        usdc_buys_wrong = [t for t in trades_wrong if t["to_currency"] == "USDC"]
+        # Confirms the old behavior was wrong
+        assert len(btc_sells_wrong) > 0 or len(usdc_buys_wrong) > 0
+
+        # With aggregate: aggregate BTC=35K/100K = 35% << target 50% → BUY BTC (CORRECT)
+        #                 aggregate USDC=58K/100K = 58% >> target 50% → SELL USDC (CORRECT)
+        trades = plan_trades(free_balances, targets, prices, aggregate=aggregate)
+
+        # Must NOT sell BTC (aggregate BTC is underweight)
+        btc_sells = [t for t in trades if t["from_currency"] == "BTC"]
+        assert len(btc_sells) == 0, f"Should not sell BTC (underweight in aggregate): {trades}"
+
+        # Must NOT buy USDC (aggregate USDC is overweight)
+        usdc_buys = [t for t in trades if t["to_currency"] == "USDC"]
+        assert len(usdc_buys) == 0, f"Should not buy USDC (overweight in aggregate): {trades}"
+
+        # SHOULD buy BTC (aggregate underweight by $15K)
+        btc_buys = [t for t in trades if t["to_currency"] == "BTC"]
+        assert len(btc_buys) > 0, "Should buy BTC to close the aggregate gap"
+
+        # SHOULD sell USDC (aggregate overweight by $8K, and free USDC is available)
+        usdc_sells = [t for t in trades if t["from_currency"] == "USDC"]
+        assert len(usdc_sells) > 0, "Should sell excess USDC to buy BTC"
+
+    def test_with_aggregate_sells_cap_to_free_even_if_aggregate_overweight(self):
+        """Edge case: aggregate says sell $50K of USDC but only $10K is free.
+        Should sell only $10K (what's actually available).
+        """
+        from app.services.rebalance_monitor import plan_trades
+
+        aggregate = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 58_000.0}
+        free_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 10_000.0}
+        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0}
+        prices = {"BTC-USD": 100_000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_trades(free_balances, targets, prices, aggregate=aggregate)
+
+        total_sold = sum(t["usd_amount"] for t in trades if t["from_currency"] == "USDC")
+        assert total_sold <= 10_000.0, "Cannot sell more USDC than is free"
+
+    def test_without_aggregate_backward_compat(self):
+        """Backward compat: aggregate=None falls back to free-balance-only mode (existing behavior)."""
+        from app.services.rebalance_monitor import plan_trades
+
+        free_balances = {"USD": 10_000.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0}
+        targets = {"usd_pct": 50.0, "btc_pct": 30.0, "eth_pct": 20.0, "usdc_pct": 0.0}
+        prices = {"BTC-USD": 100_000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades_no_agg = plan_trades(free_balances, targets, prices)
+        trades_none = plan_trades(free_balances, targets, prices, aggregate=None)
+
+        # Both paths produce identical results
+        assert len(trades_no_agg) == len(trades_none)
+        for t1, t2 in zip(trades_no_agg, trades_none):
+            assert t1["from_currency"] == t2["from_currency"]
+            assert t1["to_currency"] == t2["to_currency"]
+            assert t1["usd_amount"] == pytest.approx(t2["usd_amount"])
+
 
 # ---------------------------------------------------------------------------
 # RebalanceMonitor._process_account (integration-level)

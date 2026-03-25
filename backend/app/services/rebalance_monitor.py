@@ -171,27 +171,50 @@ def plan_trades(
     targets: Dict[str, float],
     prices: Dict[str, float],
     min_trade_pct: float = DEFAULT_MIN_TRADE_PCT,
+    aggregate: Optional[Dict[str, float]] = None,
 ) -> List[dict]:
     """Plan trades to rebalance from current to target allocations.
 
+    Deltas are computed against the AGGREGATE portfolio (free + locked in positions)
+    when `aggregate` is provided. This ensures trades move in the correct direction
+    even when bot positions cause free balances to diverge from aggregate totals.
+    For example, BTC acquired by bots inflates the free BTC wallet but is deducted
+    from the BTC aggregate to avoid double-counting — without aggregate-awareness,
+    plan_trades would (incorrectly) see free BTC as overweight and sell it.
+
     All trade amounts are in USD-equivalent terms, even for BTC↔ETH trades.
-    Trades below min_trade_pct (% of total portfolio) are skipped to avoid
+    Trades below min_trade_pct (% of total free portfolio) are skipped to avoid
     micro-trading. A hard floor of EXCHANGE_MIN_USD ($10) also applies.
+
+    Args:
+        free_balances: Tradeable balances by currency (native units).
+        targets: Target allocation percentages {"usd_pct", "btc_pct", ...}.
+        prices: Current market prices {"BTC-USD", "ETH-USD", "USDC-USD"}.
+        min_trade_pct: Minimum trade size as % of total free portfolio.
+        aggregate: Optional full portfolio balances (free + locked in positions).
+            When provided, deltas are computed from aggregate so direction and
+            magnitude are correct. When None, falls back to free-balance-only mode.
 
     Returns a list of trade dicts:
         {"from_currency": str, "to_currency": str, "usd_amount": float,
          "product_id": str, "side": str}
     """
-    current = calculate_current_allocations(free_balances, prices)
-    total = current["total_value_usd"]
+    # Reference balances for computing deltas: aggregate if available, else free
+    ref_balances = aggregate if aggregate is not None else free_balances
+    ref_current = calculate_current_allocations(ref_balances, prices)
+    total_ref = ref_current["total_value_usd"]
 
-    if total <= 0:
+    free_current = calculate_current_allocations(free_balances, prices)
+    total_free = free_current["total_value_usd"]
+
+    if total_ref <= 0 or total_free <= 0:
         return []
 
-    # Convert percentage minimum to USD, with exchange floor
-    min_trade_usd = max(total * min_trade_pct / 100.0, EXCHANGE_MIN_USD)
+    # Minimum trade size based on what's actually tradeable (free portfolio)
+    min_trade_usd = max(total_free * min_trade_pct / 100.0, EXCHANGE_MIN_USD)
 
-    # Calculate USD-denominated delta for each currency
+    # Calculate USD-denominated delta for each currency relative to reference
+    # (aggregate when provided, else free).
     # Positive delta = underweight (need to buy), negative = overweight (need to sell)
     currencies = [
         ("USD", targets["usd_pct"]),
@@ -200,7 +223,7 @@ def plan_trades(
         ("USDC", targets["usdc_pct"]),
     ]
 
-    # USD value of each currency's free balance
+    # USD value of each currency's FREE balance (caps sell amounts)
     free_values = {
         "USD": free_balances.get("USD", 0.0),
         "BTC": free_balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0),
@@ -210,8 +233,8 @@ def plan_trades(
 
     deltas = {}
     for currency, target_pct in currencies:
-        current_pct = current[f"{currency.lower()}_pct"]
-        delta_usd = (target_pct - current_pct) / 100 * total
+        current_pct = ref_current[f"{currency.lower()}_pct"]
+        delta_usd = (target_pct - current_pct) / 100 * total_ref
         deltas[currency] = delta_usd
 
     # Identify overweight (sell) and underweight (buy) currencies
@@ -625,10 +648,25 @@ class RebalanceMonitor:
                 for c in free_balances
             }
 
+            agg_current = calculate_current_allocations(aggregate, prices)
+            logger.debug(
+                f"Rebalance plan inputs — account {account.name}: "
+                f"aggregate USD={agg_current['usd_pct']:.1f}% "
+                f"BTC={agg_current['btc_pct']:.1f}% "
+                f"ETH={agg_current['eth_pct']:.1f}% "
+                f"USDC={agg_current['usdc_pct']:.1f}% "
+                f"(total ${agg_current['total_value_usd']:.0f}); "
+                f"rebalanceable USD={rebalanceable.get('USD', 0):.2f} "
+                f"BTC={rebalanceable.get('BTC', 0):.6f} "
+                f"USDC={rebalanceable.get('USDC', 0):.2f}"
+            )
+
             min_trade = account.rebalance_min_trade_pct
             min_pct = min_trade if min_trade is not None else DEFAULT_MIN_TRADE_PCT
             trades = plan_trades(
-                rebalanceable, targets, prices, min_trade_pct=min_pct
+                rebalanceable, targets, prices,
+                min_trade_pct=min_pct,
+                aggregate=aggregate,
             )
 
             if not trades:

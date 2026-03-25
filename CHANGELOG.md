@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.141.3] - 2026-03-25
+
+### Fixed
+- **Portfolio rebalancer now trades in the correct direction** — when bots hold open positions, the free wallet balance diverges significantly from the true aggregate portfolio value. Previously, `plan_trades` computed trade direction from free balances only: BTC acquired by trading bots inflates the free BTC wallet (even though it's deducted from BTC aggregate to avoid double-counting), and USDC spent on open positions reduces the free USDC balance. This caused the rebalancer to see free BTC as overweight (→ sell BTC) and free USDC as underweight (→ buy USDC) — the exact opposite of what aggregate drift analysis indicated. Trade planning now uses aggregate portfolio values to determine direction and magnitude, while still capping sell amounts to available free balances. The net result: trades move the portfolio toward aggregate targets in a single cycle rather than fighting the drift.
+
 ## [v2.141.2] - 2026-03-25
 
 ### Fixed
