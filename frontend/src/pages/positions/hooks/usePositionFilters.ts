@@ -1,11 +1,27 @@
 import { useState, useMemo, useEffect } from 'react'
 import type { Position } from '../../../types'
 
+export type GroupByMode = 'none' | 'category' | 'market' | 'bot' | 'pair'
+
 interface UsePositionFiltersProps {
   positionsWithPnL: (Position & { _cachedPnL?: any })[]
+  bots?: { id: number; name: string }[]
 }
 
-export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps) => {
+const COIN_CATEGORY_LABELS: Record<string, string> = {
+  APPROVED: 'Approved',
+  BORDERLINE: 'Borderline',
+  QUESTIONABLE: 'Questionable',
+  MEME: 'Meme',
+  BLACKLISTED: 'Blacklisted',
+}
+
+export function getCategoryLabel(category: string | null | undefined): string {
+  if (!category) return 'Uncategorized'
+  return COIN_CATEGORY_LABELS[category] ?? category
+}
+
+export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFiltersProps) => {
   // Filtering and sorting state - persisted to localStorage
   const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
     try { const v = localStorage.getItem('zenith-positions-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
@@ -16,6 +32,12 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
   const [filterPair, setFilterPair] = useState<string>(() => {
     try { return localStorage.getItem('zenith-positions-filter-pair') || 'all' } catch { return 'all' }
   })
+  const [filterCategory, setFilterCategory] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-positions-filter-category') || 'all' } catch { return 'all' }
+  })
+  const [groupBy, setGroupBy] = useState<GroupByMode>(() => {
+    try { return (localStorage.getItem('zenith-positions-group-by') as GroupByMode) || 'none' } catch { return 'none' }
+  })
   const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair' | 'bot'>(() => {
     try { return (localStorage.getItem('zenith-positions-sort-by') as 'created' | 'pnl' | 'invested' | 'pair' | 'bot') || 'created' } catch { return 'created' }
   })
@@ -23,40 +45,72 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
     try { return (localStorage.getItem('zenith-positions-sort-order') as 'asc' | 'desc') || 'desc' } catch { return 'desc' }
   })
 
-  // Persist filter/sort state
+  // Pagination
+  const [pageSize, setPageSize] = useState<10 | 100>(() => {
+    try { const v = localStorage.getItem('zenith-positions-page-size'); return v === '100' ? 100 : 10 } catch { return 10 }
+  })
+  const [currentPage, setCurrentPage] = useState(1)
+
+  // Persist filter/sort/pagination state
   useEffect(() => { try { localStorage.setItem('zenith-positions-filter-bot', String(filterBot)) } catch { /* ignored */ } }, [filterBot])
   useEffect(() => { try { localStorage.setItem('zenith-positions-filter-market', filterMarket) } catch { /* ignored */ } }, [filterMarket])
   useEffect(() => { try { localStorage.setItem('zenith-positions-filter-pair', filterPair) } catch { /* ignored */ } }, [filterPair])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-filter-category', filterCategory) } catch { /* ignored */ } }, [filterCategory])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-group-by', groupBy) } catch { /* ignored */ } }, [groupBy])
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-by', sortBy) } catch { /* ignored */ } }, [sortBy])
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-order', sortOrder) } catch { /* ignored */ } }, [sortOrder])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-page-size', String(pageSize)) } catch { /* ignored */ } }, [pageSize])
 
-  // Apply filters and sorting
-  // Use memoized positionsWithPnL instead of recalculating
-  const openPositions = useMemo(() => {
+  // Reset to page 1 when filters or page size change
+  useEffect(() => { setCurrentPage(1) }, [filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, pageSize])
+
+  // Get group key for a position
+  const getGroupKey = (p: Position & { _cachedPnL?: any }): string => {
+    switch (groupBy) {
+      case 'category': return p.coin_category || 'Uncategorized'
+      case 'market': return (p.product_id || 'ETH-BTC').split('-')[1] || 'Other'
+      case 'bot': {
+        const bot = bots?.find(b => b.id === p.bot_id)
+        return bot ? bot.name : (p.bot_id ? `Bot #${p.bot_id}` : 'No Bot')
+      }
+      case 'pair': return p.product_id || 'Unknown'
+      default: return ''
+    }
+  }
+
+  // All filtered + sorted open positions (before pagination)
+  const filteredPositions = useMemo(() => {
     return positionsWithPnL.filter(p => {
       if (p.status !== 'open') return false
 
-      // Filter by bot
       if (filterBot !== 'all' && p.bot_id !== filterBot) return false
 
-      // Filter by market (USD-based or BTC-based)
       if (filterMarket !== 'all') {
         const quoteCurrency = (p.product_id || 'ETH-BTC').split('-')[1]
         if (filterMarket === 'USD' && quoteCurrency !== 'USD') return false
         if (filterMarket === 'BTC' && quoteCurrency !== 'BTC') return false
       }
 
-      // Filter by specific pair
       if (filterPair !== 'all' && p.product_id !== filterPair) return false
+
+      if (filterCategory !== 'all') {
+        const cat = p.coin_category || 'Uncategorized'
+        if (cat !== filterCategory) return false
+      }
 
       return true
     }).sort((a, b) => {
-      let aVal: any, bVal: any
+      // When groupBy is active: sort by group key first, then by secondary sort within group
+      if (groupBy !== 'none') {
+        const gA = getGroupKey(a)
+        const gB = getGroupKey(b)
+        if (gA < gB) return -1
+        if (gA > gB) return 1
+      }
 
+      let aVal: any, bVal: any
       switch (sortBy) {
         case 'created':
-          // For closed positions, sort by closed_at (most recent closure first)
-          // For open positions, sort by opened_at
           aVal = a.status === 'closed' && a.closed_at
             ? new Date(a.closed_at).getTime()
             : new Date(a.opened_at).getTime()
@@ -65,7 +119,6 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
             : new Date(b.opened_at).getTime()
           break
         case 'pnl':
-          // Use cached P&L instead of recalculating
           aVal = a._cachedPnL?.percent || 0
           bVal = b._cachedPnL?.percent || 0
           break
@@ -86,44 +139,64 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
           bVal = 0
       }
 
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1
-      } else {
-        return aVal < bVal ? 1 : -1
-      }
+      if (sortOrder === 'asc') return aVal > bVal ? 1 : -1
+      return aVal < bVal ? 1 : -1
     })
-  }, [positionsWithPnL, filterBot, filterMarket, filterPair, sortBy, sortOrder])
+  }, [positionsWithPnL, filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, bots])
 
-  // Get unique pairs for filter dropdown
+  // Paginated slice
+  const totalCount = filteredPositions.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const pageStart = (safePage - 1) * pageSize
+  const openPositions = filteredPositions.slice(pageStart, pageStart + pageSize)
+
+  // Get unique pairs and categories for filter dropdowns
   const uniquePairs = useMemo(() => {
-    const allPositions = positionsWithPnL.filter(p => p.status === 'open')
-    return Array.from(new Set(allPositions.map(p => p.product_id || 'ETH-BTC')))
+    const allOpen = positionsWithPnL.filter(p => p.status === 'open')
+    return Array.from(new Set(allOpen.map(p => p.product_id || 'ETH-BTC')))
+  }, [positionsWithPnL])
+
+  const uniqueCategories = useMemo(() => {
+    const allOpen = positionsWithPnL.filter(p => p.status === 'open')
+    const cats = new Set(allOpen.map(p => p.coin_category || 'Uncategorized'))
+    return Array.from(cats).sort()
   }, [positionsWithPnL])
 
   const clearFilters = () => {
     setFilterBot('all')
     setFilterMarket('all')
     setFilterPair('all')
+    setFilterCategory('all')
   }
 
   return {
     // Filter state
-    filterBot,
-    setFilterBot,
-    filterMarket,
-    setFilterMarket,
-    filterPair,
-    setFilterPair,
+    filterBot, setFilterBot,
+    filterMarket, setFilterMarket,
+    filterPair, setFilterPair,
+    filterCategory, setFilterCategory,
 
-    // Sort state
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
+    // Group/sort state
+    groupBy, setGroupBy,
+    sortBy, setSortBy,
+    sortOrder, setSortOrder,
+
+    // Pagination state
+    pageSize, setPageSize,
+    currentPage,
+    setCurrentPage,
+    totalCount,
+    totalPages,
 
     // Filtered data
     openPositions,
+    filteredPositions,
     uniquePairs,
+    uniqueCategories,
+
+    // Helpers
+    getGroupKey,
 
     // Actions
     clearFilters,

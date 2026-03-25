@@ -16,6 +16,20 @@ from app.models import Account, Bot, User
 
 
 # =============================================================================
+# Clear module-level TTL caches before each test to prevent cross-test leakage
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def clear_accounts_router_caches():
+    """Clear TTL caches in accounts_router before each test."""
+    import app.routers.accounts_router as ar
+    ar._TTL_REBALANCE_STATUS.clear()
+    ar._TTL_DUST_SWEEP.clear()
+    yield
+
+
+# =============================================================================
 # Fixtures
 # =============================================================================
 
@@ -218,6 +232,10 @@ class TestCreateAccount:
     @patch("app.routers.accounts_router.create_exchange_account", new_callable=AsyncMock)
     async def test_create_account_success(self, mock_create, db_session, test_user):
         """Happy path: creates account via service layer."""
+        # Mark as superuser to bypass the privileged-group check (which would trigger
+        # a lazy load of user.groups, causing MissingGreenlet outside async context).
+        test_user.is_superuser = True
+
         mock_account = Account(
             id=5, user_id=test_user.id, name="New Account",
             type="cex", exchange="coinbase", is_default=False, is_active=True,
@@ -242,6 +260,8 @@ class TestCreateAccount:
         self, mock_create, db_session, test_user,
     ):
         """Failure case: unexpected service error raises 500."""
+        # Mark as superuser to bypass the privileged-group check (lazy load outside async context).
+        test_user.is_superuser = True
         mock_create.side_effect = RuntimeError("Unexpected error")
 
         from app.routers.accounts_router import create_account, AccountCreate
@@ -924,3 +944,210 @@ class TestRebalanceStatus:
 
         # RUNE value = 100 * 0.000030 * 50000 = 150 USD
         assert result["total_value_usd"] == pytest.approx(150.0)
+
+
+# =============================================================================
+# Allocation includes open position market values (live accounts)
+# =============================================================================
+
+
+class TestAllocationIncludesOpenPositions:
+    """Verify live-account allocation adds open position market values to quote buckets.
+
+    Each test creates its own user + account inline (not using shared fixtures) to
+    avoid cross-test position leakage when the in-memory SQLite engine is shared.
+    """
+
+    async def _make_account(self, db_session, email_suffix: str):
+        """Helper: create a fresh user + CEX account for each test."""
+        user = User(
+            email=f"alloc_{email_suffix}@test.com",
+            hashed_password="hashed", is_active=True,
+        )
+        db_session.add(user)
+        await db_session.flush()
+        account = Account(
+            user_id=user.id, name=f"Alloc {email_suffix}",
+            type="cex", exchange="coinbase", is_default=True, is_active=True,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+        return user, account
+
+    @pytest.mark.asyncio
+    async def test_usd_position_value_added_to_usd_bucket(self, db_session):
+        """Happy path: open USD-pair position value is included in USD allocation bucket."""
+        from app.models import Position
+        from app.routers.accounts_router import get_rebalance_status
+        user, account = await self._make_account(db_session, "usd")
+
+        # $0 free USD, but 1 ETH open position at $2000 each → $2000 in the USD bucket
+        pos = Position(
+            account_id=account.id,
+            product_id="ETH-USD",
+            status="open",
+            direction="long",
+            total_base_acquired=1.0,
+            entry_price=1800.0,
+            initial_quote_balance=2000.0,
+            max_quote_allowed=2000.0,
+            total_quote_spent=2000.0,
+            average_buy_price=2000.0,
+            opened_at=datetime.utcnow(),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_current_price = AsyncMock(
+            side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
+        )
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=user,
+            )
+
+        # $2000 from open ETH-USD position should appear in USD allocation
+        assert result["total_value_usd"] == pytest.approx(2000.0, abs=1.0)
+        assert result["current_usd_pct"] == pytest.approx(100.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_btc_position_value_added_to_btc_bucket(self, db_session):
+        """Happy path: open BTC-pair position value is included in BTC allocation bucket."""
+        from app.models import Position
+        from app.routers.accounts_router import get_rebalance_status
+        user, account = await self._make_account(db_session, "btc")
+
+        # 0.01 free BTC, plus 1 ETH open at 0.05 BTC each → 0.05 BTC in position
+        pos = Position(
+            account_id=account.id,
+            product_id="ETH-BTC",
+            status="open",
+            direction="long",
+            total_base_acquired=1.0,
+            entry_price=0.05,
+            initial_quote_balance=0.05,
+            max_quote_allowed=0.05,
+            total_quote_spent=0.05,
+            average_buy_price=0.05,
+            opened_at=datetime.utcnow(),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=0.01)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
+
+        async def mock_price_btc(product_id):
+            prices = {"BTC-USD": 50000.0, "ETH-USD": 2500.0, "ETH-BTC": 0.05, "USDC-USD": 1.0}
+            return prices.get(product_id, 0.0)
+
+        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_btc)
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=user,
+            )
+
+        # BTC bucket = (0.01 free + 0.05 from position) * 50000 = $3000
+        assert result["total_value_usd"] == pytest.approx(3000.0, abs=1.0)
+        assert result["current_btc_pct"] == pytest.approx(100.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_closed_positions_not_counted(self, db_session):
+        """Edge case: closed positions are NOT added to allocation buckets."""
+        from app.models import Position
+        from app.routers.accounts_router import get_rebalance_status
+        user, account = await self._make_account(db_session, "closed")
+
+        pos = Position(
+            account_id=account.id,
+            product_id="ETH-USD",
+            status="closed",
+            direction="long",
+            total_base_acquired=1.0,
+            entry_price=2000.0,
+            initial_quote_balance=2000.0,
+            max_quote_allowed=2000.0,
+            total_quote_spent=2000.0,
+            average_buy_price=2000.0,
+            opened_at=datetime.utcnow(),
+            closed_at=datetime.utcnow(),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=100.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_current_price = AsyncMock(
+            side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
+        )
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=user,
+            )
+
+        # Only $100 free USD; closed position value should NOT be included
+        assert result["total_value_usd"] == pytest.approx(100.0, abs=1.0)
+
+    @pytest.mark.asyncio
+    async def test_position_price_fallback_to_entry_price(self, db_session):
+        """Edge case: when live price fetch fails, falls back to position entry_price."""
+        from app.models import Position
+        from app.routers.accounts_router import get_rebalance_status
+        user, account = await self._make_account(db_session, "fallback")
+
+        pos = Position(
+            account_id=account.id,
+            product_id="LINK-USD",
+            status="open",
+            direction="long",
+            total_base_acquired=10.0,
+            entry_price=15.0,  # fallback price
+            initial_quote_balance=150.0,
+            max_quote_allowed=150.0,
+            total_quote_spent=150.0,
+            average_buy_price=15.0,
+            opened_at=datetime.utcnow(),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_usd_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_btc_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
+
+        async def mock_price_fallback(product_id):
+            # LINK-USD fetch fails (simulates API error)
+            if product_id == "LINK-USD":
+                raise Exception("price unavailable")
+            return {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(product_id, 0.0)
+
+        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_fallback)
+
+        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_coinbase
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=user,
+            )
+
+        # 10 tokens * $15 entry = $150 in USD bucket via fallback
+        assert result["total_value_usd"] == pytest.approx(150.0, abs=1.0)

@@ -31,13 +31,14 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Financial Goals**: Set USD or BTC targets with deadlines, tracked via daily snapshots and trend analysis
 - **AI-Powered Insights**: Multi-provider AI analysis in email reports (Claude, GPT, Gemini, Grok, Groq)
 - **Expense Coverage Waterfall**: Three sort modes (smallest-first, largest-first, custom drag-to-reorder) for prioritizing expense coverage; waterfall shows which expenses income covers, which are partial, and which are uncovered
-- **Savings Targets**: Track lump-sum savings goals alongside regular expenses — vacation fund, car, emergency fund. Uses PMT formula to calculate required monthly contribution based on target amount, target date, current balance, and assumed annual growth rate. Multiple targets per goal, each with its own progress bar and on-track status. Recurring targets automatically restart after each cycle.
+- **Savings Targets**: Track lump-sum savings goals alongside regular expenses — vacation fund, car, emergency fund. Uses PMT formula to calculate required monthly contribution based on target amount, target date, current balance, and assumed annual growth rate. Multiple targets per goal, each with its own progress bar and on-track status. Recurring targets automatically restart after each cycle. Savings targets are rendered in PDF reports.
+- **Accurate Rebalance Allocations**: Live account rebalance status includes open position market values when computing allocation percentages, not just free balances.
 - **Expense Goal Lookahead**: Next-period preview to project whether goals are on track
 - **Account-Scoped Reports**: Filter reports by paper trading vs live accounts
 - **Email Delivery**: Automated delivery via AWS SES
 
 ### 📊 Professional Dashboard
-- **Deal Management**: Active positions with real-time P&L
+- **Deal Management**: Active positions with real-time P&L, filterable by coin category, groupable by category with section headers, paginated (10 or 100 per page) with total filtered count
 - **TradingView Charts**: Professional candlestick charts with indicators
 - **Position Markers**: Entry price, TP/SL lines, safety order levels
 - **Account Value Charts**: Historical BTC + USD value lines with split view by quote currency
@@ -314,6 +315,7 @@ python3 update.py --yes
 | **MFA / 2FA** | ✅ | ✅ **TOTP + Email MFA** |
 | **HTTPS / SSL** | ✅ | ✅ **Let's Encrypt auto-renewing** |
 | **Category Filtering** | ❌ | ✅ **5 categories** |
+| **Position Category Filter + Grouping** | ❌ | ✅ **Filter, group, and paginate open positions by category** |
 | **Scheduled Email Reports** | ❌ | ✅ **Daily/weekly/monthly/quarterly/yearly** |
 | **Financial Goal Tracking** | ❌ | ✅ **USD & BTC targets with deadlines** |
 | **Expense & Savings Waterfall** | ❌ | ✅ **Coverage analysis + PMT savings planning** |
@@ -420,6 +422,9 @@ python3 update.py --yes
 - [x] **Savings targets** (PMT-based contribution planning alongside expenses)
 - [x] **Account sharing** (observer + co-manager roles with revocable access)
 - [x] **Account value charting** (historical lines + split view)
+- [x] **Position category filter, grouping, and pagination** (filter by coin category, group with headers, paginated list)
+- [x] **Savings targets in PDF reports** (savings targets section rendered in generated PDF reports)
+- [x] **Accurate rebalance allocations** (open position market values included in live account allocation percentages)
 - [x] **Transfer sync** (deposit/withdrawal history from exchange)
 - [x] **Account-scoped filtering** (paper vs live isolation)
 - [ ] **Enhanced sentiment analysis** (Twitter/X, social signals)

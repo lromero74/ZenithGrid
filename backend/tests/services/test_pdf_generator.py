@@ -561,3 +561,135 @@ class TestRenderExpenseChangesPdf:
         }
         _render_expense_changes_pdf(pdf, changes, "$", "USD")
         # Should not crash and should advance the cursor
+
+
+# ---------------------------------------------------------------------------
+# _build_pdf_savings_targets
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPdfSavingsTargets:
+    """Tests for _build_pdf_savings_targets()"""
+
+    def _make_pdf(self):
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "", 10)
+        return pdf
+
+    def test_empty_list_is_noop(self):
+        """Edge case: empty savings_targets list does nothing to PDF cursor."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        y_before = pdf.get_y()
+        _build_pdf_savings_targets(pdf, [], "$", "monthly")
+        assert pdf.get_y() == y_before
+
+    def test_on_track_target_renders_section(self):
+        """Happy path: on-track target (cap_gap<=0) renders 'Reserved' status."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        y_before = pdf.get_y()
+        targets = [
+            {
+                "name": "Car Fund",
+                "target_amount": 30000,
+                "target_date": "2029-01-01",
+                "is_recurring": False,
+                "capital_required": 900.0,
+                "dynamic_reserved": 900.0,
+                "capital_gap": 0.0,
+                "waterfall_status": "on_track",
+            }
+        ]
+        _build_pdf_savings_targets(pdf, targets, "$", "monthly")
+        # Cursor should have advanced
+        assert pdf.get_y() > y_before
+
+    def test_behind_target_renders_funded_pct(self):
+        """Happy path: behind target (cap_gap>0) renders percentage funded."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        targets = [
+            {
+                "name": "Vacation",
+                "target_amount": 5000,
+                "target_date": "2027-06-01",
+                "is_recurring": False,
+                "capital_required": 2000.0,
+                "dynamic_reserved": 500.0,
+                "capital_gap": 1500.0,
+                "waterfall_status": "partial",
+            }
+        ]
+        # Should not raise
+        _build_pdf_savings_targets(pdf, targets, "$", "monthly")
+
+    def test_blocked_target_renders_blocked_status(self):
+        """Edge case: blocked target shows 'Blocked' status text."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        targets = [
+            {
+                "name": "House Down Payment",
+                "target_amount": 100000,
+                "target_date": "2030-01-01",
+                "is_recurring": False,
+                "capital_required": 80000.0,
+                "dynamic_reserved": 0.0,
+                "capital_gap": 80000.0,
+                "waterfall_status": "blocked",
+            }
+        ]
+        _build_pdf_savings_targets(pdf, targets, "$", "monthly")
+        # Should render without raising
+
+    def test_recurring_target_appends_recurring_label(self):
+        """Edge case: recurring target gets '(recurring)' appended to name in row data."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        y_before = pdf.get_y()
+        targets = [
+            {
+                "name": "Cruise",
+                "target_amount": 8000,
+                "target_date": "2026-12-01",
+                "is_recurring": True,
+                "capital_required": 500.0,
+                "dynamic_reserved": 500.0,
+                "capital_gap": 0.0,
+                "waterfall_status": "on_track",
+            }
+        ]
+        _build_pdf_savings_targets(pdf, targets, "$", "monthly")
+        assert pdf.get_y() > y_before
+
+    def test_multiple_targets_all_render(self):
+        """Happy path: multiple targets with mixed statuses all render."""
+        from app.services.report_generator_service.pdf_generator import _build_pdf_savings_targets
+
+        pdf = self._make_pdf()
+        targets = [
+            {
+                "name": "Car",
+                "target_amount": 30000, "target_date": "2029-01-01",
+                "is_recurring": False, "capital_required": 900.0,
+                "dynamic_reserved": 900.0, "capital_gap": 0.0,
+                "waterfall_status": "on_track",
+            },
+            {
+                "name": "Vacation",
+                "target_amount": 5000, "target_date": "2027-06-01",
+                "is_recurring": True, "capital_required": 2000.0,
+                "dynamic_reserved": 500.0, "capital_gap": 1500.0,
+                "waterfall_status": "partial",
+            },
+        ]
+        _build_pdf_savings_targets(pdf, targets, "$", "monthly")
+        # Should not raise

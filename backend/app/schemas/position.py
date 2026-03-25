@@ -41,6 +41,8 @@ class PositionResponse(BaseModel):
     limit_order_details: Optional["LimitOrderDetails"] = None  # Details of limit close order
     is_blacklisted: bool = False  # Whether the coin is in the blacklist
     blacklist_reason: Optional[str] = None  # Reason the coin is blacklisted (if applicable)
+    # Coin category from blacklist (APPROVED/BORDERLINE/QUESTIONABLE/MEME/BLACKLISTED)
+    coin_category: Optional[str] = None
     computed_max_budget: Optional[float] = None  # Pre-computed resize budget for UI
 
     class Config:

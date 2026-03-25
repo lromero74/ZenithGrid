@@ -30,7 +30,8 @@ router = APIRouter()
 async def get_positions(
     response: Response,
     status: Optional[str] = None,
-    limit: int = Query(50, ge=1, le=1000),
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -56,11 +57,11 @@ async def get_positions(
     if status:
         query = query.where(Position.status == status)
         if status == "closed":
-            query = query.order_by(desc(Position.closed_at)).limit(limit)
+            query = query.order_by(desc(Position.closed_at)).offset(offset).limit(limit)
         else:
-            query = query.order_by(desc(Position.opened_at)).limit(limit)
+            query = query.order_by(desc(Position.opened_at)).offset(offset).limit(limit)
     else:
-        query = query.order_by(desc(Position.opened_at)).limit(limit)
+        query = query.order_by(desc(Position.opened_at)).offset(offset).limit(limit)
 
     result = await db.execute(query)
     positions = result.scalars().all()
@@ -108,11 +109,20 @@ async def get_positions(
             pos_response.first_buy_price = earliest.price
             pos_response.last_buy_price = latest.price
 
-        # Check if position's coin is blacklisted
+        # Attach coin category from blacklist (category is embedded in reason prefix)
         base_symbol = pos.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
         if base_symbol in blacklist_map:
+            reason = blacklist_map[base_symbol]
             pos_response.is_blacklisted = True
-            pos_response.blacklist_reason = blacklist_map[base_symbol]
+            pos_response.blacklist_reason = reason
+            # Extract category tag from reason prefix (e.g., "[APPROVED] good coin" → "APPROVED")
+            from app.routers.blacklist_router import VALID_CATEGORIES
+            for cat in VALID_CATEGORIES:
+                if reason and reason.startswith(f"[{cat}]"):
+                    pos_response.coin_category = cat
+                    break
+            else:
+                pos_response.coin_category = "BLACKLISTED"
 
         # Compute resize budget for open positions
         if pos.status == "open":
@@ -430,8 +440,6 @@ async def get_realized_pnl(
     - QTD (quarter to date - since 1st of current quarter)
     - YTD (year to date - since January 1st of current year)
     """
-    from datetime import datetime, timedelta
-
     now = datetime.utcnow()
     # Start of today (midnight UTC)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)

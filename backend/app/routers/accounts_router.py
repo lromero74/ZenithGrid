@@ -1291,11 +1291,11 @@ async def get_rebalance_status(
             real_total = standard_total + altcoin_total
             alloc = _compute_allocation(balances, prices, total_override=real_total if real_total > 0 else None)
         else:
-            # Live account: use raw currency balances (physical holdings).
-            # calculate_aggregate_quote_value gives a "market deployment" view
-            # (deducting base assets from other-market bots) which confusingly
-            # shows 99% USD for users who physically hold 99% BTC. Physical
-            # holdings are what users expect to see in the allocation chart.
+            # Live account: use physical holdings + open position values.
+            # Free balances alone undercount the allocation (e.g., a user with
+            # $0 free USD but $500 in USD-pair open positions would show 0% USD).
+            # We add open position market values to their respective quote-currency
+            # bucket, mirroring the paper-trading path above.
             coinbase = await get_coinbase_for_account(account)
 
             async def _safe_balance(getter, fallback: float = 0.0) -> float:
@@ -1310,9 +1310,7 @@ async def get_rebalance_status(
                 except Exception:
                     return fallback
 
-            # Fetch all balances and prices in parallel — previously 7 sequential
-            # calls each with a 30s httpx timeout, so one hung call could blow
-            # past the frontend's 45s Axios timeout.
+            # Fetch all balances and prices in parallel
             (
                 usd_bal, btc_bal, eth_bal, usdc_bal,
                 btc_price, eth_price, usdc_price,
@@ -1326,10 +1324,37 @@ async def get_rebalance_status(
                 _safe_price("USDC-USD", fallback=1.0),
             )
 
-            raw_balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal}
+            balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal}
             prices = {"BTC-USD": btc_price, "ETH-USD": eth_price, "USDC-USD": usdc_price}
 
-            alloc = _compute_allocation(raw_balances, prices)
+            # Add open position market values to their quote-currency bucket
+            from app.models import Position as _Position
+            pos_result = await db.execute(
+                select(_Position).where(
+                    _Position.account_id == account_id,
+                    _Position.status == "open",
+                    _Position.direction == "long",
+                )
+            )
+            open_positions = pos_result.scalars().all()
+            for pos in open_positions:
+                pid = pos.product_id or ""
+                parts = pid.split("-") if pid else []
+                if len(parts) != 2:
+                    continue
+                _, quote_cur = parts[0], parts[1]
+                base_qty = pos.total_base_acquired or 0.0
+                if base_qty <= 0:
+                    continue
+                try:
+                    price_val = float(await coinbase.get_current_price(pid))
+                except Exception:
+                    price_val = pos.entry_price or 0.0
+                position_value = base_qty * price_val
+                if quote_cur in balances:
+                    balances[quote_cur] = balances.get(quote_cur, 0.0) + position_value
+
+            alloc = _compute_allocation(balances, prices)
 
         t_usd = account.rebalance_target_usd_pct
         t_btc = account.rebalance_target_btc_pct
