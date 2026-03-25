@@ -1224,14 +1224,21 @@ async def get_rebalance_status(
 
     try:
         if account.is_paper_trading:
-            # Paper trading: read balances from JSON, use public prices
+            # Paper trading: read balances from JSON, use public prices.
+            #
+            # Unlike live accounts, paper_balances already reflects deployed capital:
+            # when a paper trade buys ALGO with BTC, BTC decreases and ALGO appears as
+            # a free balance.  The open-position DB records are accounting entries that
+            # reference the same coins — not additional assets.  Adding position values
+            # on top of free balances would double-count.
+            #
+            # Correct approach: fold each free altcoin into its quote-currency bucket
+            # (USD, BTC, ETH, or USDC) based on which pair it is being traded in, then
+            # compute allocation from just those 4 buckets so percentages sum to 100%.
             balances = json.loads(account.paper_balances) if account.paper_balances else {}
             prices = await get_public_prices()
-            btc_usd = prices.get("BTC-USD", 0.0)
 
-            # Add the current value of open positions to the respective quote-currency
-            # bucket.  paper_balances only holds FREE (uninvested) funds; open positions
-            # have deployed capital that must be included for correct allocation %.
+            # Build coin → quote-currency map from open positions
             from app.models import Position as _Position
             pos_result = await db.execute(
                 select(_Position).where(
@@ -1241,55 +1248,41 @@ async def get_rebalance_status(
                 )
             )
             open_positions = pos_result.scalars().all()
-            from app.coinbase_api import public_market_data
+            coin_quote: dict = {}
             for pos in open_positions:
-                pid = pos.product_id or ""
-                parts = pid.split("-") if pid else []
-                if len(parts) != 2:
-                    continue
-                _, quote_cur = parts[0], parts[1]
-                base_qty = pos.total_base_acquired or 0.0
-                if base_qty <= 0:
-                    continue
-                # Try to get current price; fall back to entry_price
-                try:
-                    price_val = float(await public_market_data.get_current_price(pid))
-                except Exception:
-                    price_val = pos.entry_price or 0.0
-                position_value = base_qty * price_val
-                if quote_cur == "USD":
-                    balances["USD"] = balances.get("USD", 0.0) + position_value
-                elif quote_cur == "BTC":
-                    balances["BTC"] = balances.get("BTC", 0.0) + position_value
-                elif quote_cur == "ETH":
-                    balances["ETH"] = balances.get("ETH", 0.0) + position_value
-                elif quote_cur == "USDC":
-                    balances["USDC"] = balances.get("USDC", 0.0) + position_value
+                parts = (pos.product_id or "").split("-")
+                if len(parts) == 2:
+                    base, quote = parts
+                    coin_quote[base] = quote  # last open position wins; good enough
 
-            # Compute value of altcoins not covered by get_public_prices (USD/BTC/ETH/USDC)
+            # Fold each free altcoin into its quote-currency bucket
             known_currencies = {"USD", "BTC", "ETH", "USDC", "USDT"}
-            standard_total = (
-                balances.get("USD", 0.0)
-                + balances.get("BTC", 0.0) * btc_usd
-                + balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
-                + balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
-                + balances.get("USDT", 0.0)
-            )
-            altcoin_total = 0.0
-            for currency, amount in balances.items():
-                if currency not in known_currencies and amount > 0:
-                    try:
-                        coin_price = float(await public_market_data.get_current_price(f"{currency}-USD"))
-                        altcoin_total += amount * coin_price
-                    except Exception:
+            from app.coinbase_api import public_market_data
+            for currency, amount in list(balances.items()):
+                if currency in known_currencies or amount <= 0:
+                    continue
+                quote = coin_quote.get(currency, "USD")
+                try:
+                    pair = f"{currency}-{quote}"
+                    rate = float(await public_market_data.get_current_price(pair))
+                    if quote in ("BTC", "ETH", "USDC"):
+                        # rate is in quote units; add native quote amount
+                        balances[quote] = balances.get(quote, 0.0) + amount * rate
+                    else:
+                        # USD (or unknown): add USD value directly
+                        balances["USD"] = balances.get("USD", 0.0) + amount * rate
+                except Exception:
+                    # Try USD fallback for BTC-quoted coins whose price lookup failed
+                    if quote != "USD":
                         try:
-                            btc_price = float(await public_market_data.get_current_price(f"{currency}-BTC"))
-                            altcoin_total += amount * btc_price * btc_usd
+                            usd_rate = float(await public_market_data.get_current_price(
+                                f"{currency}-USD"
+                            ))
+                            balances["USD"] = balances.get("USD", 0.0) + amount * usd_rate
                         except Exception:
-                            pass
+                            pass  # unpriceable coin; omit from total
 
-            real_total = standard_total + altcoin_total
-            alloc = _compute_allocation(balances, prices, total_override=real_total if real_total > 0 else None)
+            alloc = _compute_allocation(balances, prices)
         else:
             # Live account: use physical holdings + open position values.
             # Free balances alone undercount the allocation (e.g., a user with
@@ -1452,15 +1445,22 @@ async def get_dust_sweep_settings(
 
         prices = await get_public_prices()
         threshold = account.dust_sweep_threshold_usd or 5.0
+        from app.coinbase_api import public_market_data
 
-        for coin, amount in balances.items():
-            if coin in TARGET_CURRENCIES or amount <= 0:
-                continue
+        # Collect altcoins to price, sorted by balance descending so we price
+        # the most likely candidates first.  Cap at 40 price lookups to avoid
+        # sequential-API timeouts on accounts with many small balances.
+        altcoins = sorted(
+            [(coin, amt) for coin, amt in balances.items()
+             if coin not in TARGET_CURRENCIES and amt > 0],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:40]
+
+        for coin, amount in altcoins:
             usd_price = prices.get(f"{coin}-USD", 0.0)
             if usd_price <= 0:
-                # Try fetching price for this coin
                 try:
-                    from app.coinbase_api import public_market_data
                     usd_price = float(
                         await public_market_data.get_current_price(f"{coin}-USD")
                     )

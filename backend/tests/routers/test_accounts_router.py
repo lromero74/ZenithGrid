@@ -909,28 +909,42 @@ class TestRebalanceStatus:
         assert result["current_btc_pct"] == pytest.approx(round(5000 / 7100 * 100, 2))
 
     @pytest.mark.asyncio
-    async def test_paper_account_altcoin_btc_fallback_pricing(
+    async def test_paper_account_altcoin_btc_pair_valued_in_btc_bucket(
         self, db_session, test_user,
     ):
-        """Paper altcoin falls back to BTC-pair pricing when no USD pair exists."""
+        """Free altcoin from a BTC-pair open position is folded into the BTC bucket.
+
+        When an open RUNE-BTC position exists, the code classifies free RUNE as
+        BTC-denominated.  RUNE-BTC rate × free RUNE quantity is added (in BTC units)
+        to the BTC bucket, which is then converted to USD via BTC-USD.
+        """
         import json
-        # RUNE=100, no RUNE-USD pair but RUNE-BTC=0.000030 @ BTC=50000 → RUNE-USD=1.50
+        from app.models.trading import Position
+
         account = Account(
             id=13, user_id=test_user.id, name="Altcoin BTC-pair Paper",
             type="cex", is_paper_trading=True,
-            paper_balances=json.dumps({"USD": 0.0, "RUNE": 100.0}),
+            paper_balances=json.dumps({"USD": 0.0, "BTC": 0.0, "RUNE": 100.0}),
             created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
 
+        # Open RUNE-BTC position so coin_quote["RUNE"] = "BTC"
+        pos = Position(
+            account_id=account.id, user_id=test_user.id,
+            product_id="RUNE-BTC", status="open", direction="long",
+            total_base_acquired=100.0,
+            opened_at=datetime.utcnow(),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
         from app.routers.accounts_router import get_rebalance_status
 
         async def coin_price_side_effect(product_id):
-            if product_id == "RUNE-USD":
-                raise Exception("No USD pair")
             if product_id == "RUNE-BTC":
-                return 0.000030
+                return 0.000030  # RUNE-BTC price
             raise Exception(f"Unexpected product: {product_id}")
 
         with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices, \
@@ -942,8 +956,9 @@ class TestRebalanceStatus:
                 account_id=account.id, db=db_session, current_user=test_user,
             )
 
-        # RUNE value = 100 * 0.000030 * 50000 = 150 USD
+        # RUNE → BTC bucket: 100 * 0.000030 = 0.003 BTC → 0.003 * 50000 = $150 USD
         assert result["total_value_usd"] == pytest.approx(150.0)
+        assert result["current_btc_pct"] == pytest.approx(100.0)
 
 
 # =============================================================================

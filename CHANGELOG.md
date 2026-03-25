@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.141.1] - 2026-03-25
+
+### Fixed
+- **Paper trading allocation now sums to 100%** — the previous fix double-counted deployed capital: open positions were added to the BTC/USD bucket AND the same coins appeared in the altcoin total used as the denominator. The allocation now folds each free altcoin into its quote-currency bucket (BTC for BTC-pair trades, USD for USD-pair trades) without using open position values separately, so percentages always sum to 100%.
+- **Dust sweep settings no longer times out** — loading the Settings page for accounts with many altcoin balances could exceed the 45-second browser timeout because the endpoint was making one sequential Coinbase price API call per altcoin. Now caps at 40 price lookups (sorted by balance descending) to keep the response fast.
+- **Coin icon 429 errors on pages with many positions** — nginx was rate-limiting `/api/coin-icons/` requests under the general `/api/` zone (30 req/s burst=50). A dedicated location block now exempts coin icons from rate limiting entirely, since they are served from disk cache and do not touch the database.
+
 ## [v2.141.0] - 2026-03-25
 
 ### Added
