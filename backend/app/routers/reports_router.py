@@ -7,6 +7,7 @@ and viewing/downloading generated reports.
 
 import json
 import logging
+import math
 from datetime import datetime
 from typing import List, Optional
 
@@ -691,13 +692,117 @@ async def get_expense_categories(
     return await get_user_expense_categories(db, current_user.id)
 
 
+async def _get_user_trading_metrics(
+    db: AsyncSession, user_id: int, is_btc: bool = False
+) -> tuple:
+    """
+    Return (annual_return_pct, account_balance) for a user.
+
+    Uses closed positions (30-day window) for the return rate and
+    AccountValueSnapshot for the current balance. Compound-annualizes
+    the daily rate consistent with Dashboard Portfolio Totals.
+    """
+    from datetime import timedelta
+    from app.models.trading import Position
+    from app.models.reporting import AccountValueSnapshot
+    from sqlalchemy import func
+
+    now = datetime.utcnow()
+    lookback_days = 30
+    cutoff = now - timedelta(days=lookback_days)
+
+    profit_col = Position.profit_usd if not is_btc else Position.profit_quote
+    r_profit = await db.execute(
+        select(func.sum(profit_col)).where(
+            Position.user_id == user_id,
+            Position.status == "closed",
+            Position.closed_at >= cutoff,
+        )
+    )
+    total_profit = r_profit.scalar() or 0.0
+
+    value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
+    r_value = await db.execute(
+        select(func.sum(value_col)).where(
+            AccountValueSnapshot.user_id == user_id,
+            AccountValueSnapshot.snapshot_date >= now - timedelta(days=2),
+        )
+    )
+    account_balance = r_value.scalar() or 0.0
+
+    if total_profit <= 0 or account_balance <= 0:
+        return 0.0, account_balance
+
+    daily_rate = (total_profit / lookback_days) / account_balance
+    annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    return round(annual_pct, 4), account_balance
+
+
+async def _get_user_annual_return_pct(db: AsyncSession, user_id: int, is_btc: bool = False) -> float:
+    """
+    Estimate the user's compound-annualized account return, aligned with the
+    Dashboard Portfolio Totals calculation.
+
+    Uses the same approach as report_data_service: average daily PnL from the
+    last 30 days of closed positions divided by current account value = daily
+    return rate. Annualizes via compound formula: (1 + daily_rate)^365 - 1.
+
+    Returns 0.0 if insufficient data.
+    """
+    from datetime import timedelta
+    from app.models.trading import Position
+    from app.models.reporting import AccountValueSnapshot
+    from sqlalchemy import func
+
+    now = datetime.utcnow()
+    lookback_days = 30
+    cutoff = now - timedelta(days=lookback_days)
+
+    # 30-day closed positions profit
+    profit_col = Position.profit_usd if not is_btc else Position.profit_quote
+    r_profit = await db.execute(
+        select(func.sum(profit_col)).where(
+            Position.user_id == user_id,
+            Position.status == "closed",
+            Position.closed_at >= cutoff,
+        )
+    )
+    total_profit = r_profit.scalar() or 0.0
+    if total_profit <= 0:
+        return 0.0
+
+    # Current account value from most recent snapshots
+    value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
+    r_value = await db.execute(
+        select(func.sum(value_col)).where(
+            AccountValueSnapshot.user_id == user_id,
+            AccountValueSnapshot.snapshot_date >= now - timedelta(days=2),
+        )
+    )
+    account_value = r_value.scalar() or 0.0
+    if account_value <= 0:
+        return 0.0
+
+    daily_rate = (total_profit / lookback_days) / account_value
+    # Compound annualization: (1 + daily_rate)^365 - 1, matching Dashboard compounded row
+    annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    return round(annual_pct, 4)
+
+
 @router.get("/goals/{goal_id}/expenses")
 async def list_expense_items(
     goal_id: int,
     db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
-    """List all expense items for a goal."""
+    """List all expense items for a goal with live waterfall coverage.
+
+    Runs the unified waterfall so each item shows its dynamic_reserved amount
+    (what's actually available from the account balance given its sort position)
+    and income_earmarked (how much monthly income the reservation consumes).
+    """
+    from app.services.expense_service import compute_expense_coverage
+
     goal = await _get_accessible_goal(db, goal_id, current_user.id)
     result = await db.execute(
         select(ExpenseItem)
@@ -705,7 +810,53 @@ async def list_expense_items(
         .order_by(ExpenseItem.sort_order, ExpenseItem.created_at)
     )
     items = result.scalars().all()
-    return [_expense_item_to_dict(i, goal.expense_period) for i in items]
+    is_btc = goal.target_currency == "BTC"
+    tax_pct = goal.tax_withholding_pct or 0.0
+
+    annual_return_pct, account_balance = await _get_user_trading_metrics(
+        db, goal.user_id, is_btc=is_btc
+    )
+
+    # Compute projected monthly income from account balance and growth rate
+    if account_balance > 0 and annual_return_pct > 0:
+        monthly_rate = math.pow(1 + annual_return_pct / 100, 1 / 12) - 1
+        projected_monthly = account_balance * monthly_rate
+    else:
+        projected_monthly = 0.0
+
+    # Run unified waterfall to get dynamic reservation fields per item
+    coverage = compute_expense_coverage(
+        items, goal.expense_period or "monthly", projected_monthly, tax_pct,
+        sort_mode="custom",
+        account_annual_return_pct=annual_return_pct,
+        account_balance=account_balance,
+    )
+
+    # Build a lookup of item_id → waterfall dynamic fields
+    waterfall_by_id: dict = {}
+    for entry in coverage.get("items", []) + coverage.get("savings_targets", []):
+        if entry.get("id"):
+            waterfall_by_id[entry["id"]] = entry
+
+    enriched = []
+    for item in items:
+        d = _expense_item_to_dict(item, goal.expense_period, annual_return_pct, tax_pct)
+        if item.id in waterfall_by_id:
+            wf = waterfall_by_id[item.id]
+            # Overlay dynamic waterfall fields
+            d["dynamic_reserved"] = wf.get("dynamic_reserved", 0.0)
+            d["income_earmarked"] = wf.get("income_earmarked", 0.0)
+            d["dynamic_on_track"] = wf.get("dynamic_on_track", False)
+            d["waterfall_status"] = wf.get("status", "unknown")
+            d["waterfall_coverage_pct"] = wf.get("coverage_pct", 0.0)
+            if item.item_type == "savings_target":
+                # Use waterfall-computed gap (based on dynamic_reserved, not stored balance)
+                d["capital_gap"] = wf.get("capital_gap", d.get("capital_gap", 0.0))
+                d["capital_required"] = wf.get("capital_required", d.get("capital_required", 0.0))
+                d["monthly_contribution"] = wf.get("monthly_contribution", 0.0)
+        enriched.append(d)
+
+    return enriched
 
 
 @router.post("/goals/{goal_id}/expenses")
@@ -942,8 +1093,19 @@ async def _get_accessible_report(
     return report
 
 
-def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
-    """Convert an ExpenseItem to a dict for API responses."""
+def _expense_item_to_dict(
+    item: ExpenseItem,
+    period: str = None,
+    account_annual_return_pct: float = 0.0,
+    tax_pct: float = 0.0,
+) -> dict:
+    """Convert an ExpenseItem to a dict for API responses.
+
+    For savings targets, uses assumed_growth_rate_pct if set, otherwise
+    falls back to account_annual_return_pct (live return from closed positions).
+    Returns capital_required (PV today needed for compound growth to target) and
+    capital_gap (how much more must be reserved) alongside monthly_contribution.
+    """
     from app.services.expense_service import normalize_item_to_period
 
     item_type = getattr(item, "item_type", "expense") or "expense"
@@ -979,20 +1141,40 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
     }
     if period:
         if item_type == "savings_target":
-            from app.services.expense_service import compute_monthly_savings_contribution
+            from app.services.expense_service import (
+                compute_monthly_savings_contribution,
+                compute_savings_capital_required,
+                normalize_monthly_to_period,
+            )
             from datetime import date as _date
             target_date = getattr(item, "savings_target_date", None)
             target_amount = getattr(item, "savings_target_amount", 0.0) or 0.0
             current_balance = getattr(item, "savings_current_balance", 0.0) or 0.0
-            growth_rate = getattr(item, "assumed_growth_rate_pct", 0.0) or 0.0
+            is_recurring = getattr(item, "savings_is_recurring", False) or False
+            item_rate = getattr(item, "assumed_growth_rate_pct", None)
+            # Item override wins; fall back to live account return rate
+            growth_rate = item_rate if (item_rate is not None and item_rate > 0) else account_annual_return_pct
+            d["effective_growth_rate_pct"] = round(growth_rate, 4)
+            d["growth_rate_source"] = "override" if (item_rate is not None and item_rate > 0) else "account"
+            capital_required = compute_savings_capital_required(
+                target_amount=target_amount,
+                target_date=target_date or _date.today(),
+                annual_growth_rate_pct=growth_rate,
+                tax_pct=tax_pct,
+                is_recurring=is_recurring,
+                current_balance=current_balance,
+            )
+            d["capital_required"] = round(capital_required, 2)
+            d["capital_gap"] = round(max(0.0, capital_required - current_balance), 2)
             monthly = compute_monthly_savings_contribution(
                 target_amount=target_amount,
                 target_date=target_date or _date.today(),
                 current_balance=current_balance,
                 annual_growth_rate_pct=growth_rate,
-                tax_pct=0.0,
+                tax_pct=tax_pct,
+                is_recurring=is_recurring,
             )
-            from app.services.expense_service import normalize_monthly_to_period
+            d["monthly_contribution"] = round(monthly, 2)
             d["normalized_amount"] = round(normalize_monthly_to_period(monthly, period), 2)
         else:
             d["normalized_amount"] = round(normalize_item_to_period(item, period), 2)

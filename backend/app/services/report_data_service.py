@@ -9,6 +9,7 @@ Gathers metrics for report generation:
 """
 
 import logging
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -627,13 +628,16 @@ async def _compute_expenses_goal_progress(
         projected_income_compound = account_value * (
             (1 + daily_return_rate) ** period_days - 1
         )
-    account_annual_return_pct = daily_return_rate * 365 * 100
+    # Compound annualization: (1 + daily_rate)^365 - 1, consistent with Dashboard projections
+    account_annual_return_pct = (math.pow(1 + daily_return_rate, 365) - 1) * 100 if daily_return_rate > 0 else 0.0
 
     # Run coverage waterfall using user-defined order, passing live account return
+    # and full account balance so savings targets can reserve dynamically in sort order
     coverage = compute_expense_coverage(
         expense_items, expense_period, projected_income, tax_pct,
         sort_mode="custom",
         account_annual_return_pct=account_annual_return_pct,
+        account_balance=account_value,
     )
 
     # Compound projection already computed above

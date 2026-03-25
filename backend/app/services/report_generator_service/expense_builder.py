@@ -314,6 +314,8 @@ def _build_expense_status_badge(item: dict) -> str:
     elif status == "partial":
         cp = item.get("coverage_pct", 0)
         badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", _fmt_coverage_pct(cp)
+    elif status == "blocked":
+        badge_bg, badge_color, badge_text = "#1e1b4b", "#a5b4fc", "Blocked"
     else:
         badge_bg, badge_color, badge_text = "#7f1d1d", "#fca5a5", "Uncovered"
     return (
@@ -321,6 +323,166 @@ def _build_expense_status_badge(item: dict) -> str:
         f' padding: 1px 6px; border-radius: 4px; font-size: 10px;'
         f' font-weight: 600;">{badge_text}</span>'
     )
+
+
+def _build_savings_status_badge(entry: dict) -> str:
+    """Return an HTML badge for a savings target's status."""
+    status = entry.get("status", "pending")
+    on_track = entry.get("dynamic_on_track", False) or entry.get("savings_on_track", False)
+    if status == "funded" or on_track:
+        return (
+            '<span style="background:#065f46; color:#6ee7b7; padding:1px 6px;'
+            ' border-radius:4px; font-size:10px; font-weight:600;">On Track</span>'
+        )
+    elif status == "past_due":
+        return (
+            '<span style="background:#7f1d1d; color:#fca5a5; padding:1px 6px;'
+            ' border-radius:4px; font-size:10px; font-weight:600;">Past Due</span>'
+        )
+    elif status == "partial":
+        pct = entry.get("coverage_pct", 0)
+        return (
+            f'<span style="background:#78350f; color:#fcd34d; padding:1px 6px;'
+            f' border-radius:4px; font-size:10px; font-weight:600;">'
+            f'Behind ({_fmt_coverage_pct(pct)})</span>'
+        )
+    else:
+        return (
+            '<span style="background:#78350f; color:#fcd34d; padding:1px 6px;'
+            ' border-radius:4px; font-size:10px; font-weight:600;">Behind</span>'
+        )
+
+
+def _build_savings_targets_html(
+    savings_targets: list, prefix: str, fmt: str, currency: str,
+    period: str, coverage: dict,
+) -> str:
+    """Build the Savings Targets section rendered below the expense table.
+
+    Uses capital-reservation framing:
+    - "Reserved: $X ✓" when dynamic_reserved >= capital_required (funded by growth)
+    - "Need $X | Reserved $Y | Gap $Z" when behind
+    - Growth rate source badge (auto = from live account return)
+    """
+    if not savings_targets:
+        return ""
+
+    rows = ""
+    for entry in savings_targets:
+        name = entry.get("name", "")
+        target_amt = entry.get("target_amount", 0)
+        target_date = entry.get("target_date", "")
+        cap_req = entry.get("capital_required", 0)
+        dynamic_res = entry.get("dynamic_reserved", entry.get("current_balance", 0))
+        cap_gap = entry.get("capital_gap", max(0.0, cap_req - dynamic_res))
+        months_remaining = entry.get("months_remaining", 0)
+        growth_rate = entry.get("assumed_growth_rate_pct", 0) or 0
+        rate_source = entry.get("growth_rate_source", "account")
+        monthly_contrib = entry.get("monthly_contribution", 0)
+        is_recurring = entry.get("is_recurring", False)
+        on_track = cap_gap <= 0
+        badge = _build_savings_status_badge(entry)
+
+        # Rate label
+        if growth_rate > 0:
+            rate_src = " (auto)" if rate_source == "account" else " (override)"
+            rate_label = f'<span style="color:#94a3b8; font-size:10px;">{growth_rate:.1f}%/yr{rate_src}</span>'
+        else:
+            rate_label = '<span style="color:#64748b; font-size:10px;">no growth rate</span>'
+
+        # Target date + recurrence hint
+        date_str = target_date[:7] if target_date else "?"
+        recur_hint = " ↻" if is_recurring else ""
+
+        # Reservation status line
+        if on_track:
+            res_html = (
+                f'<span style="color:#6ee7b7; font-size:11px;">'
+                f'Reserved: {prefix}{dynamic_res:{fmt}} ✓&nbsp;—&nbsp;funded by growth</span>'
+            )
+        elif cap_req > 0:
+            res_parts = [
+                f'<span style="color:#94a3b8;">Need&nbsp;{prefix}{cap_req:{fmt}}</span>'
+            ]
+            if dynamic_res > 0:
+                res_parts.append(
+                    f'<span style="color:#94a3b8;">reserved&nbsp;{prefix}{dynamic_res:{fmt}}</span>'
+                )
+            res_parts.append(
+                f'<span style="color:#fbbf24;">gap&nbsp;{prefix}{cap_gap:{fmt}}</span>'
+            )
+            if monthly_contrib > 0:
+                res_parts.append(
+                    f'<span style="color:#94a3b8;">'
+                    f'or&nbsp;{prefix}{monthly_contrib:{fmt}}/mo&nbsp;from&nbsp;income</span>'
+                )
+            res_html = (
+                '&nbsp;<span style="color:#475569;">|</span>&nbsp;'.join(res_parts)
+            )
+        else:
+            res_html = '<span style="color:#64748b; font-size:11px;">no target date</span>'
+
+        rows += f"""
+            <tr>
+                <td style="padding:5px 6px 5px 0; vertical-align:top;">
+                    <div style="color:#f1f5f9; font-size:12px; font-weight:600;">
+                        {name}{recur_hint}</div>
+                    <div style="color:#94a3b8; font-size:10px; margin-top:1px;">
+                        Goal: {prefix}{target_amt:{fmt}} by {date_str}
+                        &nbsp;·&nbsp;{months_remaining}mo&nbsp;·&nbsp;{rate_label}
+                    </div>
+                </td>
+                <td style="padding:5px 0; vertical-align:top; font-size:11px;">
+                    {res_html}
+                </td>
+                <td style="padding:5px 0 5px 8px; vertical-align:top; text-align:right; white-space:nowrap;">
+                    {badge}
+                </td>
+            </tr>"""
+
+    total_savings = coverage.get("total_savings_contributions", 0)
+    income_earmarked = coverage.get("income_earmarked_for_savings", 0)
+    free_balance = coverage.get("free_balance", None)
+
+    footer_parts = []
+    if income_earmarked > 0:
+        footer_parts.append(
+            f'Income earmarked for savings: {prefix}{income_earmarked:{fmt}} {currency}/{period}'
+        )
+    if free_balance is not None:
+        footer_parts.append(
+            f'Free balance after reservations: {prefix}{free_balance:{fmt}} {currency}'
+        )
+    footer_html = ""
+    if footer_parts:
+        footer_html = (
+            '<div style="margin-top:8px; padding-top:8px; border-top:1px solid #334155;'
+            ' color:#64748b; font-size:10px;">'
+            + '&nbsp;&nbsp;·&nbsp;&nbsp;'.join(footer_parts)
+            + '</div>'
+        )
+
+    _ = total_savings  # available if needed for future summary line
+
+    return f"""
+        <div style="margin-top:14px; padding-top:10px; border-top:2px solid #1e3a5f;">
+            <div style="color:#10b981; font-size:11px; font-weight:700; margin-bottom:6px;
+                        text-transform:uppercase; letter-spacing:0.05em;">
+                &#127383; Savings Targets
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <tr>
+                    <th style="padding:2px 0; color:#64748b; font-size:10px; text-align:left;
+                               font-weight:600; width:45%;">Goal</th>
+                    <th style="padding:2px 0; color:#64748b; font-size:10px; text-align:left;
+                               font-weight:600;">Reservation</th>
+                    <th style="padding:2px 0; color:#64748b; font-size:10px; text-align:right;
+                               font-weight:600; width:80px;">Status</th>
+                </tr>
+                {rows}
+            </table>
+            {footer_html}
+        </div>"""
 
 
 def _build_expense_changes_html(
@@ -425,9 +587,11 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
 def _build_expense_coverage_html(
     g: Dict[str, Any], coverage: Dict[str, Any], items: list,
     prefix: str, fmt: str, currency: str, period: str, tax_pct: float,
+    savings_targets: Optional[list] = None,
 ) -> str:
-    """Build the Coverage tab: summary stats, item table, deposit hints, changes."""
+    """Build the Coverage tab: summary stats, item table, savings targets, deposit hints, changes."""
     total_exp = coverage.get("total_expenses", 0)
+    total_claims = coverage.get("total_claims", total_exp)
     income_at = coverage.get("income_after_tax", 0)
     covered = coverage.get("covered_count", 0)
     total = coverage.get("total_count", 0)
@@ -473,6 +637,29 @@ def _build_expense_coverage_html(
         g.get("expense_changes"), prefix, fmt,
     )
 
+    savings_html = _build_savings_targets_html(
+        savings_targets or [], prefix, fmt, currency, period, coverage,
+    )
+
+    # Show "Total Claims" row only when there are savings targets
+    claims_row = ""
+    if savings_targets:
+        surplus = income_at - total_claims
+        surplus_color = "#6ee7b7" if surplus >= 0 else "#fca5a5"
+        surplus_sign = "+" if surplus >= 0 else ""
+        claims_row = f"""
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Total Claims (exp + savings)</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{total_claims:{fmt}} {currency}/{period}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Surplus / Shortfall</td>
+                    <td style="padding: 4px 0; color: {surplus_color}; text-align: right;
+                               font-weight: 600;">
+                        {surplus_sign}{prefix}{abs(surplus):{fmt}} {currency}/{period}</td>
+                </tr>"""
+
     return f"""
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;
                           margin-bottom: 10px;">
@@ -485,7 +672,7 @@ def _build_expense_coverage_html(
                     <td style="padding: 4px 0; color: #94a3b8;">Income After Tax</td>
                     <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
                         {prefix}{income_at:{fmt}} {currency}/{period}</td>
-                </tr>{tax_line}
+                </tr>{tax_line}{claims_row}
                 <tr>
                     <td style="padding: 4px 0; color: #94a3b8;">Items Covered</td>
                     <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
@@ -506,6 +693,7 @@ def _build_expense_coverage_html(
                 </tr>
                 {item_rows}
             </table>
+            {savings_html}
             {changes_html}
             {dep_line}"""
 
@@ -852,10 +1040,11 @@ def _build_expenses_goal_card(
     tax_pct = g.get("tax_withholding_pct", 0)
     goal_id = g.get("id", 0)
     items = coverage.get("items", [])
+    savings_targets = coverage.get("savings_targets", [])
     total_exp = coverage.get("total_expenses", 0)
 
     coverage_content = _build_expense_coverage_html(
-        g, coverage, items, prefix, fmt, currency, period, tax_pct,
+        g, coverage, items, prefix, fmt, currency, period, tax_pct, savings_targets,
     )
     upcoming_content = _build_expense_upcoming_html(
         items, prefix, fmt, schedule_meta,

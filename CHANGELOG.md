@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.0] - 2026-03-25
+
+### Changed
+- **Savings targets are now capital reservations, not monthly contributions** — the system now shows how much of your account balance needs to be set aside today ("capital required") so compound growth reaches your goal by the target date. If your current balance already covers the required reservation, it shows "Reserved: $X ✓ — funded by growth" with zero income claim. Only when the balance is insufficient does it calculate a monthly income contribution for the shortfall.
+- **Sort order determines savings priority** — placing a savings target above expenses in your list means it has first claim on your account balance. The income available for expenses below it is reduced by the income that the reserved capital would have generated. Move a target lower and it gets whatever balance remains after higher-priority items.
+- **Growth rate uses compound annualization** — the savings growth rate is now calculated as `(1 + daily_rate)^365 − 1`, matching the "Compounded" row on the Dashboard Portfolio Totals, rather than the simpler linear annualization used previously.
+- **Recurring + tax gross-up** — recurring savings targets now correctly gross up the withdrawal for taxes and preserve the rollover principal so the next cycle can restart. For example, if you need $30k after taxes every 2 years and want to keep $500 in the account to restart, the system targets `($30k / (1 − tax%)) + $500` as the FV.
+- **"Currently Saved" field renamed** to "Recurring rollover reserve" with a note clarifying its purpose: it sets the principal to preserve after withdrawal for recurring goals. Actual reservation is determined dynamically by position in the list.
+
+### Added
+- **Savings targets in HTML reports** — the Coverage tab now includes a Savings Targets section below the expense table with per-target reservation status, growth rate (with "auto" badge when using live account return), and on-track/behind badges. Summary stats gain a Total Claims row and a Surplus/Shortfall line when savings targets are present.
+- **"Blocked" status for expenses** — if an underfunded savings target sits above an expense in your list, that expense is now marked "Blocked" (indigo badge) in both the editor and the HTML report, making the priority chain visible.
+
 ## [v2.138.1] - 2026-03-24
 
 ### Changed

@@ -536,7 +536,18 @@ export interface ExpenseItem {
   savings_is_recurring?: boolean
   savings_recurrence_months?: number | null
   assumed_growth_rate_pct?: number | null
+  effective_growth_rate_pct?: number | null
+  growth_rate_source?: 'override' | 'account'
   savings_current_balance?: number
+  // Computed fields (returned by list endpoint with unified waterfall)
+  capital_required?: number   // PV: what must be reserved today for compound growth to reach target
+  capital_gap?: number        // max(0, capital_required - dynamic_reserved)
+  monthly_contribution?: number  // PMT: monthly income needed if capital_gap > 0
+  dynamic_reserved?: number   // Amount actually reserved from account balance at this sort position
+  income_earmarked?: number   // Monthly income earmarked for this savings reservation
+  dynamic_on_track?: boolean  // True when dynamic_reserved >= capital_required
+  waterfall_status?: string   // covered | partial | uncovered | funded | blocked | past_due
+  waterfall_coverage_pct?: number
 }
 
 export type ScheduleType = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'

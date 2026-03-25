@@ -154,19 +154,50 @@ function SortableExpenseRow({
           )}
           <span className="font-medium text-white truncate">{item.name}</span>
         </div>
-        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
           {item.item_type === 'savings_target' ? (
             <>
               <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
-              {item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
-                <span className="text-emerald-400">
-                  {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+              {/* Capital reservation framing — dynamic based on sort position */}
+              {item.capital_required != null ? (
+                item.capital_gap === 0 ? (
+                  <span className="text-emerald-400 font-medium">
+                    {item.dynamic_reserved != null
+                      ? `Reserved: ${prefix}${(item.dynamic_reserved).toLocaleString(undefined, { maximumFractionDigits: 0 })} ✓`
+                      : 'Funded by growth'}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-slate-500">|</span>
+                    <span>Need: {prefix}{(item.capital_required).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    {item.dynamic_reserved != null && item.dynamic_reserved > 0 && (
+                      <span className="text-slate-400">
+                        reserved: {prefix}{(item.dynamic_reserved).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </span>
+                    )}
+                    <span className="text-amber-400">
+                      gap: {prefix}{(item.capital_gap ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                    {(item.monthly_contribution ?? 0) > 0 && (
+                      <span className="text-slate-400">
+                        or {prefix}{(item.monthly_contribution ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo from income
+                      </span>
+                    )}
+                  </>
+                )
+              ) : (
+                item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
+                  <span className="text-emerald-400">
+                    {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+                  </span>
+                )
+              )}
+              {item.effective_growth_rate_pct != null && item.effective_growth_rate_pct > 0 && (
+                <span className="text-[10px] text-slate-500">
+                  @ {item.effective_growth_rate_pct.toFixed(1)}%/yr
+                  {item.growth_rate_source === 'account' && <span className="text-emerald-500/70"> (auto)</span>}
                 </span>
               )}
-              <span className="text-slate-500">|</span>
-              <span className="text-emerald-400">
-                {prefix}{(item.normalized_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{periodLabel} contribution
-              </span>
             </>
           ) : (
             <>
@@ -706,7 +737,10 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Currently Saved ({currency})</label>
+              <label className="block text-xs text-slate-400 mb-1">
+                Recurring rollover reserve ({currency})
+                <span className="ml-1 text-[10px] text-slate-500">for recurring goals</span>
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -716,6 +750,10 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
                 placeholder="0"
                 className={`w-full ${inputCls} placeholder-slate-500`}
               />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Recurring: principal to preserve for the next cycle after withdrawal.
+                Position in list determines what is dynamically reserved from your account balance.
+              </p>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">
@@ -1018,19 +1056,42 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
             )}
             <span className="font-medium text-white truncate">{item.name}</span>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
             {isSavingsItem ? (
               <>
                 <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
-                {item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
-                  <span className="text-emerald-400">
-                    {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+                {item.capital_required != null ? (
+                  item.capital_gap === 0 ? (
+                    <span className="text-emerald-400 font-medium">
+                      {item.dynamic_reserved != null
+                        ? `Reserved: ${prefix}${(item.dynamic_reserved).toLocaleString(undefined, { maximumFractionDigits: 0 })} ✓`
+                        : 'Funded by growth'}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-slate-500">|</span>
+                      <span>Need: {prefix}{(item.capital_required).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                      {item.dynamic_reserved != null && item.dynamic_reserved > 0 && (
+                        <span className="text-slate-400">
+                          reserved: {prefix}{(item.dynamic_reserved).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        </span>
+                      )}
+                      <span className="text-amber-400">gap: {prefix}{(item.capital_gap ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </>
+                  )
+                ) : (
+                  item.savings_current_balance != null && item.savings_target_amount != null && item.savings_target_amount > 0 && (
+                    <span className="text-emerald-400">
+                      {Math.round((item.savings_current_balance / item.savings_target_amount) * 100)}% saved
+                    </span>
+                  )
+                )}
+                {item.effective_growth_rate_pct != null && item.effective_growth_rate_pct > 0 && (
+                  <span className="text-[10px] text-slate-500">
+                    @ {item.effective_growth_rate_pct.toFixed(1)}%/yr
+                    {item.growth_rate_source === 'account' && <span className="text-emerald-500/70"> (auto)</span>}
                   </span>
                 )}
-                <span className="text-slate-500">|</span>
-                <span className="text-emerald-400">
-                  {prefix}{(item.normalized_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{periodLabel} contribution
-                </span>
               </>
             ) : (
               <>
