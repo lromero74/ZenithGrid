@@ -88,8 +88,10 @@ async def start_bot(
             detail=f"Cannot start bot: {reason}. Disable seasonality tracking to override."
         )
 
+    now = datetime.utcnow()
     bot.is_active = True
-    bot.updated_at = datetime.utcnow()
+    bot.last_started_at = now
+    bot.updated_at = now
 
     await db.commit()
 
@@ -122,8 +124,15 @@ async def stop_bot(
     if not bot.is_active:
         return {"message": f"Bot '{bot.name}' is already inactive"}
 
+    now = datetime.utcnow()
+    # Accumulate time from the current run session before clearing last_started_at
+    if bot.last_started_at is not None:
+        elapsed = (now - bot.last_started_at).total_seconds()
+        bot.total_running_seconds = (bot.total_running_seconds or 0.0) + elapsed
+        bot.last_started_at = None
+
     bot.is_active = False
-    bot.updated_at = datetime.utcnow()
+    bot.updated_at = now
 
     await db.commit()
 

@@ -104,6 +104,7 @@ export default function Positions() {
     currentPage, setCurrentPage,
     totalCount, totalPages,
     openPositions,
+    filteredPositions,
     uniquePairs,
     uniqueCategories,
     getGroupKey,
@@ -251,8 +252,8 @@ export default function Positions() {
     [bots]
   )
 
-  // Calculate overall statistics
-  const stats = useMemo(() => calculateOverallStats(openPositions), [openPositions])
+  // Calculate overall statistics across ALL filtered positions (not just current page)
+  const stats = useMemo(() => calculateOverallStats(filteredPositions), [filteredPositions])
 
   return (
     <div className="space-y-6">

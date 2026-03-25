@@ -97,6 +97,7 @@ export const BotListItem = memo(function BotListItem({
   const [currentTimeframeIndex, setCurrentTimeframeIndex] = useState(0)
   const [isPnlExpanded, setIsPnlExpanded] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(true)
+  const [useActiveRate, setUseActiveRate] = useState(false)
   const timeframes = ['day', 'week', 'month', 'year']
 
   // PnL carousel: auto-scrolls through timeframes using CSS translateY.
@@ -226,14 +227,23 @@ export const BotListItem = memo(function BotListItem({
       <td className="hidden md:table-cell px-1 sm:px-2 py-2 text-right">
         <div className="flex flex-col items-end">
           <div className="text-xs text-slate-400">
-            {(bot as any).closed_positions_count || 0} closed
-            {(bot as any).closed_today_count > 0 && (
-              <span className="text-slate-500 ml-1">({(bot as any).closed_today_count} today)</span>
+            {bot.closed_positions_count || 0} closed
+            {(bot.closed_today_count ?? 0) > 0 && (
+              <span className="text-slate-500 ml-1">({bot.closed_today_count} today)</span>
             )}
           </div>
           <div className="text-xs text-slate-500">
-            {((bot as any).trades_per_day || 0).toFixed(2)} trades/day
+            {(bot.trades_per_day || 0).toFixed(2)} trades/day
           </div>
+          {(bot.aggregate_running_days ?? 0) > 0 ? (
+            <div className="text-[10px] text-slate-600" title={`Calendar days: ${(bot.calendar_days ?? 0).toFixed(1)}`}>
+              {(bot.aggregate_running_days ?? 0).toFixed(1)}d active
+            </div>
+          ) : (bot.calendar_days ?? 0) > 0 ? (
+            <div className="text-[10px] text-slate-600">
+              {(bot.calendar_days ?? 0).toFixed(1)}d old
+            </div>
+          ) : null}
         </div>
       </td>
 
@@ -285,8 +295,16 @@ export const BotListItem = memo(function BotListItem({
       {/* Projected PnL */}
       <td className="hidden lg:table-cell px-1 sm:px-2 py-2 text-right">
         {(() => {
-          const dailyPnlUsd = (bot as any).avg_daily_pnl_usd || 0
-          const dailyPnlBtc = (bot as any).avg_daily_pnl_btc || 0
+          const calDailyUsd = bot.avg_daily_pnl_usd || 0
+          const calDailyBtc = bot.avg_daily_pnl_btc || 0
+          const activeDailyUsd = bot.avg_daily_pnl_usd_active || 0
+          const activeDailyBtc = bot.avg_daily_pnl_btc_active || 0
+
+          // Has meaningful active-day data (bot has run for at least 0.01 days)
+          const hasActiveData = (bot.aggregate_running_days ?? 0) >= 0.01
+
+          const dailyPnlUsd = useActiveRate && hasActiveData ? activeDailyUsd : calDailyUsd
+          const dailyPnlBtc = useActiveRate && hasActiveData ? activeDailyBtc : calDailyBtc
 
           // Use simple linear projection (no compounding)
           const projectPnl = (days: number) => ({
@@ -310,7 +328,7 @@ export const BotListItem = memo(function BotListItem({
           const isNegative = dailyPnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
-          const quoteCurrency = (bot as any).quote_currency || 'BTC'
+          const quoteCurrency = bot.quote_currency || 'BTC'
           const isUsd = quoteCurrency === 'USD'
 
           const renderBox = (projection: typeof projections[0]) => (
@@ -328,6 +346,24 @@ export const BotListItem = memo(function BotListItem({
           return (
             <div className="flex items-start gap-1">
               <div className="text-[10px] flex-1 min-w-0">
+                {/* Rate mode toggle (cal / active) — only shown when bot has run time */}
+                {hasActiveData && (
+                  <div className="flex justify-end mb-0.5">
+                    <button
+                      onClick={() => setUseActiveRate(!useActiveRate)}
+                      className={`text-[9px] px-1 py-0 rounded border transition-colors ${
+                        useActiveRate
+                          ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                          : 'bg-slate-700/50 border-slate-600/50 text-slate-400 hover:text-slate-300'
+                      }`}
+                      title={useActiveRate
+                        ? `Per active day (${(bot.aggregate_running_days ?? 0).toFixed(1)}d running) — click for calendar`
+                        : `Per calendar day (${(bot.calendar_days ?? 0).toFixed(1)}d) — click for active`}
+                    >
+                      {useActiveRate ? 'active' : 'cal'}
+                    </button>
+                  </div>
+                )}
                 {isPnlExpanded ? (
                   // Show all boxes when expanded
                   <div className="space-y-1">
@@ -354,7 +390,7 @@ export const BotListItem = memo(function BotListItem({
                   </div>
                 )}
               </div>
-              {/* Toggle button */}
+              {/* Expand/collapse toggle */}
               <button
                 onClick={() => {
                   setIsPnlExpanded(!isPnlExpanded)

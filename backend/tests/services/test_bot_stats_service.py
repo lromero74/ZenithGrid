@@ -174,6 +174,17 @@ def _make_position(
     return pos
 
 
+def _make_bot(days_old: float = 10, total_running_seconds: float = 0.0,
+              is_active: bool = False, last_started_at=None) -> MagicMock:
+    """Helper: create a bot mock with all running-time fields set."""
+    bot = MagicMock()
+    bot.created_at = datetime.utcnow() - timedelta(days=days_old)
+    bot.total_running_seconds = total_running_seconds
+    bot.is_active = is_active
+    bot.last_started_at = last_started_at
+    return bot
+
+
 class TestCalculateBotPnl:
     """Tests for calculate_bot_pnl()."""
 
@@ -181,8 +192,7 @@ class TestCalculateBotPnl:
         """Happy path: PnL for USD-denominated positions."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=10)
+        bot = _make_bot(days_old=10)
 
         closed = [
             _make_position(profit_usd=50.0, total_quote_spent=500.0,
@@ -202,8 +212,7 @@ class TestCalculateBotPnl:
         """Edge case: no closed positions returns zeros."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=5)
+        bot = _make_bot(days_old=5)
 
         result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
 
@@ -216,8 +225,7 @@ class TestCalculateBotPnl:
         """Happy path: BTC-denominated pairs use profit_quote for BTC PnL."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=1)
+        bot = _make_bot(days_old=1)
 
         closed = [
             _make_position(
@@ -237,8 +245,7 @@ class TestCalculateBotPnl:
         """Edge case: 7d projection only considers recent positions."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=30)
+        bot = _make_bot(days_old=30)
 
         old_pos = _make_position(
             profit_usd=100.0,
@@ -266,8 +273,7 @@ class TestCalculateBotPnl:
         """Edge case: missing BTC price defaults to 100000."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=1)
+        bot = _make_bot(days_old=1)
 
         closed = [
             _make_position(
@@ -284,6 +290,64 @@ class TestCalculateBotPnl:
         # Should use fallback 100000.0
         expected_btc_pnl = 200.0 / 100000.0
         assert result["total_pnl_btc"] == pytest.approx(expected_btc_pnl)
+
+    def test_aggregate_running_days_from_stored_seconds_when_stopped(self):
+        """Bot that was stopped: aggregate_running_days from total_running_seconds only."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = MagicMock()
+        bot.created_at = datetime.utcnow() - timedelta(days=10)
+        bot.total_running_seconds = 86400.0 * 3  # 3 days stored
+        bot.is_active = False
+        bot.last_started_at = None
+
+        result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
+
+        assert result["aggregate_running_days"] == pytest.approx(3.0, rel=0.01)
+
+    def test_aggregate_running_days_includes_current_session(self):
+        """Active bot: aggregate_running_days adds current session to stored seconds."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        now = datetime.utcnow()
+        bot = MagicMock()
+        bot.created_at = now - timedelta(days=10)
+        bot.total_running_seconds = 86400.0 * 2  # 2 days previously accumulated
+        bot.is_active = True
+        bot.last_started_at = now - timedelta(hours=12)  # 12-hour current session
+
+        result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
+
+        # 2 days + 0.5 days = 2.5 days
+        assert result["aggregate_running_days"] == pytest.approx(2.5, rel=0.01)
+
+    def test_aggregate_running_days_zero_when_never_started(self):
+        """Bot that was never started: aggregate_running_days is 0."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = MagicMock()
+        bot.created_at = datetime.utcnow() - timedelta(days=5)
+        bot.total_running_seconds = 0.0
+        bot.is_active = False
+        bot.last_started_at = None
+
+        result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
+
+        assert result["aggregate_running_days"] == 0.0
+
+    def test_calendar_days_since_creation_returned(self):
+        """calendar_days reflects full time since bot was created."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = MagicMock()
+        bot.created_at = datetime.utcnow() - timedelta(days=7)
+        bot.total_running_seconds = 0.0
+        bot.is_active = False
+        bot.last_started_at = None
+
+        result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
+
+        assert result["calendar_days"] == pytest.approx(7.0, rel=0.05)
 
 
 # ---------------------------------------------------------------------------
