@@ -114,8 +114,12 @@ def compute_savings_capital_required(
     if r == 0.0:
         return gross_target
 
-    # PV = FV / (1 + r)^n
-    return gross_target / math.pow(1 + r, n)
+    # PV = FV / (1 + r)^n — guard against overflow for extreme rate values
+    try:
+        return gross_target / math.pow(1 + r, n)
+    except OverflowError:
+        # Rate is so extreme that PV rounds to ~0 (compound growth covers it immediately)
+        return 0.0
 
 
 def _compute_gross_target(

@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.3] - 2026-03-25
+
+### Fixed
+- **Expense goal target now computed dynamically from items** — the "$X/monthly" total shown on each Expenses goal card is now always recalculated live from the current active items instead of reading a potentially stale cached value. Goals that were stuck showing "$1/mo" will now display the correct sum.
+- **500 error on Manage Items fixed** — a math overflow crash (`OverflowError: math range error`) could occur when the account snapshot query returned an inflated value, causing the savings target capital-required calculation to receive an astronomically large growth rate. The snapshot query now correctly sums the latest per-account values (one row per account, not multiple snapshots), and an explicit overflow guard returns 0 for any rate that would exceed float range.
+
 ## [v2.139.2] - 2026-03-25
 
 ### Added

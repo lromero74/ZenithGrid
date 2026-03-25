@@ -1059,6 +1059,28 @@ class TestComputeSavingsCapitalRequired:
         )
         assert result == 0.0
 
+    def test_pv_extreme_rate_does_not_raise_overflow(self):
+        """An astronomically large growth rate must return 0.0, not crash.
+
+        This guards against the OverflowError that occurs when the account_balance
+        denominator is incorrectly computed (e.g. summing multiple snapshots instead
+        of one), yielding a daily_rate that's thousands of percent.
+        math.pow(1 + r, n) would overflow float range → OverflowError.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_savings_capital_required
+
+        target_date = date.today() + timedelta(days=365)
+        # 1e30 %/year causes math.pow to overflow float range — guard must catch it
+        result = compute_savings_capital_required(
+            target_amount=10000.0,
+            target_date=target_date,
+            annual_growth_rate_pct=1e30,
+        )
+        assert result == 0.0, (
+            f"Expected 0.0 for extreme rate (OverflowError guard), got {result}"
+        )
+
     def test_pv_higher_rate_means_lower_capital_required(self):
         """Higher growth rate → lower capital needed today (stronger discounting)."""
         from datetime import date, timedelta

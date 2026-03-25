@@ -339,10 +339,25 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         state = sa_inspect(goal)
         if "expense_items" not in state.unloaded:
             items = goal.expense_items or []
-            d["expense_item_count"] = len(items)
+            active_items = [i for i in items if getattr(i, "is_active", True)]
+            d["expense_item_count"] = len(active_items)
             d["savings_target_count"] = sum(
-                1 for i in items if getattr(i, "item_type", "expense") == "savings_target"
+                1 for i in active_items if getattr(i, "item_type", "expense") == "savings_target"
             )
+            # Recompute target_value from items instead of trusting stale cached value.
+            # Only fixed-amount expense items contribute; savings targets (amount=0)
+            # and percent_of_income items are excluded from this total.
+            from app.services.expense_service import normalize_to_monthly, normalize_monthly_to_period
+            period = goal.expense_period or "monthly"
+            total_monthly = sum(
+                normalize_to_monthly(i.amount, i.frequency, getattr(i, "frequency_n", None))
+                for i in active_items
+                if (getattr(i, "amount_mode", "fixed") or "fixed") == "fixed"
+                and (getattr(i, "item_type", "expense") or "expense") == "expense"
+                and i.amount > 0
+            )
+            if total_monthly > 0:
+                d["target_value"] = round(normalize_monthly_to_period(total_monthly, period), 2)
         else:
             d["expense_item_count"] = 0
             d["savings_target_count"] = 0
@@ -722,13 +737,22 @@ async def _get_user_trading_metrics(
     total_profit = r_profit.scalar() or 0.0
 
     value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
-    # Use the most recent single snapshot as the account balance denominator.
-    # Using SUM over a window would inflate the balance (multiple snapshots/day)
-    # and falsely deflate the computed daily rate.
-    r_value = await db.execute(
-        select(value_col).where(
+    # Get the most recent snapshot date for this user, then sum all per-account
+    # values from that date. AccountValueSnapshot is per-account, so we need the
+    # sum across accounts as of the same timestamp to get total portfolio value.
+    r_date = await db.execute(
+        select(func.max(AccountValueSnapshot.snapshot_date)).where(
             AccountValueSnapshot.user_id == user_id,
-        ).order_by(AccountValueSnapshot.snapshot_date.desc()).limit(1)
+        )
+    )
+    latest_date = r_date.scalar()
+    if latest_date is None:
+        return 0.0, 0.0
+    r_value = await db.execute(
+        select(func.sum(value_col)).where(
+            AccountValueSnapshot.user_id == user_id,
+            AccountValueSnapshot.snapshot_date == latest_date,
+        )
     )
     account_balance = r_value.scalar() or 0.0
 
@@ -736,7 +760,10 @@ async def _get_user_trading_metrics(
         return 0.0, account_balance
 
     daily_rate = (total_profit / lookback_days) / account_balance
-    annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    try:
+        annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    except OverflowError:
+        annual_pct = 0.0
     return round(annual_pct, 4), account_balance
 
 
