@@ -227,6 +227,9 @@ export const BotListItem = memo(function BotListItem({
         <div className="flex flex-col items-end">
           <div className="text-xs text-slate-400">
             {(bot as any).closed_positions_count || 0} closed
+            {(bot as any).closed_today_count > 0 && (
+              <span className="text-slate-500 ml-1">({(bot as any).closed_today_count} today)</span>
+            )}
           </div>
           <div className="text-xs text-slate-500">
             {((bot as any).trades_per_day || 0).toFixed(2)} trades/day

@@ -436,3 +436,64 @@ class TestCalculateBudgetUtilization:
 
         # 10 * 0.03 = 0.3 BTC in position / 0.5 reserved = 60%
         assert result["budget_utilization_percentage"] == pytest.approx(60.0)
+
+
+# ---------------------------------------------------------------------------
+# closed_today_count logic (inline in bot_crud_router, tested here as a unit)
+# ---------------------------------------------------------------------------
+
+
+class TestClosedTodayCount:
+    """Tests for the 'closed today' filtering logic used in list_bots()."""
+
+    def _make_position(self, closed_at):
+        pos = MagicMock()
+        pos.status = "closed"
+        pos.closed_at = closed_at
+        return pos
+
+    def _count_closed_today(self, closed_positions):
+        """Mirror of the logic in bot_crud_router.list_bots()."""
+        from datetime import timezone
+        today_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        return [
+            p for p in closed_positions
+            if p.closed_at and p.closed_at.replace(tzinfo=timezone.utc) >= today_utc
+        ]
+
+    def test_position_closed_today_is_counted(self):
+        """Happy path: position closed a few minutes ago is included."""
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        pos = self._make_position(now.replace(tzinfo=None))  # naive UTC as stored
+        result = self._count_closed_today([pos])
+        assert len(result) == 1
+
+    def test_position_closed_yesterday_not_counted(self):
+        """Happy path: position closed yesterday is excluded."""
+        from datetime import timezone
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        pos = self._make_position(yesterday.replace(tzinfo=None))
+        result = self._count_closed_today([pos])
+        assert len(result) == 0
+
+    def test_position_with_no_closed_at_excluded(self):
+        """Edge case: position with closed_at=None should not appear in today count."""
+        pos = MagicMock()
+        pos.closed_at = None
+        result = self._count_closed_today([pos])
+        assert len(result) == 0
+
+    def test_mixed_positions_only_counts_today(self):
+        """Edge case: mix of today/yesterday — only today's are counted."""
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        today_pos = self._make_position(now.replace(tzinfo=None))
+        old_pos = self._make_position((now - timedelta(days=2)).replace(tzinfo=None))
+        result = self._count_closed_today([today_pos, old_pos])
+        assert len(result) == 1
+
+    def test_empty_positions_returns_zero(self):
+        """Edge case: no positions → zero today."""
+        result = self._count_closed_today([])
+        assert len(result) == 0

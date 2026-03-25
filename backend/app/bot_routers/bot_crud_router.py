@@ -6,7 +6,7 @@ Also includes bot stats and clone operations.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -260,6 +260,12 @@ async def list_bots(
         open_positions = [p for p in all_positions if p.status == "open"]
         closed_positions = [p for p in all_positions if p.status == "closed"]
 
+        today_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        closed_today = [
+            p for p in closed_positions
+            if p.closed_at and p.closed_at.replace(tzinfo=timezone.utc) >= today_utc
+        ]
+
         pnl = calculate_bot_pnl(bot, closed_positions, open_positions, projection_timeframe)
         budget = calculate_budget_utilization(
             bot, open_positions, position_prices, aggregate_btc_value, aggregate_usd_value,
@@ -269,6 +275,7 @@ async def list_bots(
         bot_response.open_positions_count = len(open_positions)
         bot_response.total_positions_count = len(all_positions)
         bot_response.closed_positions_count = len(closed_positions)
+        bot_response.closed_today_count = len(closed_today)
         bot_response.trades_per_day = pnl["trades_per_day"]
         bot_response.total_pnl_usd = pnl["total_pnl_usd"]
         bot_response.total_pnl_btc = pnl["total_pnl_btc"]

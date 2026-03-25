@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 from app.middleware.public_rate_limit import (
     PublicEndpointRateLimiter,
     _PUBLIC_PREFIXES,
+    _COIN_ICON_PREFIX,
     _MAX_REQUESTS,
     _WINDOW,
     _STALE_SECONDS,
@@ -99,6 +100,44 @@ def middleware(inner_app):
 # ---------------------------------------------------------------------------
 # Non-matching paths and scopes — should pass through
 # ---------------------------------------------------------------------------
+
+
+class TestCoinIconsExemption:
+    """Coin icon requests must never be rate-limited (disk-cached, high volume)."""
+
+    @pytest.mark.asyncio
+    async def test_coin_icon_passes_through_without_recording_timestamp(self, middleware):
+        """Happy path: /api/coin-icons/ should bypass the rate limiter entirely."""
+        scope = _make_scope(path="/api/coin-icons/btc", client_ip="10.1.1.1")
+        receive = AsyncMock()
+        send = AsyncMock()
+
+        await middleware(scope, receive, send)
+
+        # Inner app reached (200), no timestamp recorded
+        assert send.called
+        assert "10.1.1.1" not in PublicEndpointRateLimiter._ip_timestamps
+
+    @pytest.mark.asyncio
+    async def test_coin_icon_never_returns_429_even_after_many_requests(self, middleware):
+        """Edge case: more than _MAX_REQUESTS coin-icon calls must all succeed (no 429)."""
+        receive = AsyncMock()
+
+        for _ in range(_MAX_REQUESTS + 10):
+            scope = _make_scope(path="/api/coin-icons/eth", client_ip="10.1.1.2")
+            send = AsyncMock()
+            await middleware(scope, receive, send)
+            start_calls = [c for c in send.call_args_list
+                           if c[0][0].get("type") == "http.response.start"]
+            assert start_calls[0][0][0]["status"] == 200
+
+    def test_coin_icon_prefix_not_in_public_prefixes(self):
+        """Structural: coin-icon prefix must be absent from _PUBLIC_PREFIXES list."""
+        assert _COIN_ICON_PREFIX not in _PUBLIC_PREFIXES
+
+    def test_coin_icon_prefix_constant_is_correct(self):
+        """Sanity: constant must match the actual endpoint prefix."""
+        assert _COIN_ICON_PREFIX == "/api/coin-icons/"
 
 
 class TestPassThrough:

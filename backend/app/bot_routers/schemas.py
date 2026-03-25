@@ -59,6 +59,7 @@ class BotResponse(BaseModel):
     open_positions_count: int = 0
     total_positions_count: int = 0
     closed_positions_count: int = 0
+    closed_today_count: int = 0
     trades_per_day: float = 0.0
     total_pnl_usd: float = 0.0
     total_pnl_btc: float = 0.0

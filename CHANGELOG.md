@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.140.0] - 2026-03-25
+
+### Added
+- **"# today" in Bots Trade Stats column** — each bot now shows how many positions it closed today (UTC) in parentheses next to the all-time closed count. Only shown when at least one trade was closed today.
+
+### Fixed
+- **Coin icon 429 errors eliminated** — coin icons are served from a local disk cache and no longer pass through the public IP rate limiter. Pages with many positions (or many different coins) were triggering the 120 req/min limit, causing icons to fail to load with "429 Too Many Requests". Icons now load unconditionally.
+
 ## [v2.139.5] - 2026-03-25
 
 ### Added

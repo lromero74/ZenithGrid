@@ -16,13 +16,15 @@ _PUBLIC_PREFIXES = (
     "/api/prices/",
     "/api/candles",
     "/api/coins",
-    "/api/coin-icons/",
     "/api/market/btc-usd-price",
     "/api/market/eth-usd-price",
     "/api/product-precision/",
     "/api/version",
     "/api/brand",
 )
+# Coin icons are served from disk cache — exclude from rate limiting to avoid
+# 429s on pages with many positions/coins loading simultaneously.
+_COIN_ICON_PREFIX = "/api/coin-icons/"
 
 _MAX_REQUESTS = 120   # per window
 _WINDOW = 60.0        # 60 seconds
@@ -43,7 +45,7 @@ class PublicEndpointRateLimiter:
             return
 
         path: str = scope.get("path", "")
-        if not any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+        if path.startswith(_COIN_ICON_PREFIX) or not any(path.startswith(p) for p in _PUBLIC_PREFIXES):
             await self.app(scope, receive, send)
             return
 
