@@ -78,6 +78,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
   const btcSeriesRef = useRef<any>(null)
   const usdSeriesRef = useRef<any>(null)
   const [chartVersion, setChartVersion] = useState(0)
+  const [maxDataSpanDays, setMaxDataSpanDays] = useState(0)
   const { selectedAccount } = useAccount()
 
   // Determine if we should include paper trading accounts
@@ -126,6 +127,21 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
     refetchInterval: 300000,
     enabled: !!selectedAccount,
   })
+
+  // Reset max data span when account or mode changes so stale history doesn't persist
+  useEffect(() => {
+    setMaxDataSpanDays(0)
+  }, [accountId, includePaperTrading])
+
+  // Track the widest span ever seen so that switching to a shorter time range
+  // does not disable the longer time range buttons (API only returns N days of data
+  // for the selected range, but the buttons should reflect total available history).
+  useEffect(() => {
+    if (!history || history.length === 0) return
+    const dates = history.map(d => new Date(d.date).getTime())
+    const span = Math.ceil((Date.now() - Math.min(...dates)) / (1000 * 60 * 60 * 24))
+    setMaxDataSpanDays(prev => Math.max(prev, span))
+  }, [history])
 
   const toggleCategory = useCallback((cat: MarkerCategory) => {
     setVisibleMarkers(prev => {
@@ -320,21 +336,13 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
     }
   }, [history, chartMode, liveBtcValue, liveUsdValue])
 
-  // Calculate which time range buttons should be enabled based on data span
+  // Calculate which time range buttons should be enabled based on max seen data span.
+  // Uses maxDataSpanDays (the widest range ever fetched) rather than the current history
+  // slice, so selecting a short range does not disable the longer buttons.
   const getEnabledTimeRanges = (): Set<TimeRange> => {
     const enabled = new Set<TimeRange>(['all'])
+    if (maxDataSpanDays === 0) return enabled
 
-    if (!history || history.length === 0) {
-      return enabled
-    }
-
-    // Find the earliest date in the data
-    const dates = history.map(d => new Date(d.date).getTime())
-    const earliestDate = new Date(Math.min(...dates))
-    const now = new Date()
-    const dataSpanDays = Math.ceil((now.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    // Time range thresholds in days
     const thresholds: { range: TimeRange; days: number }[] = [
       { range: '7d', days: 7 },
       { range: '14d', days: 14 },
@@ -344,10 +352,10 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
       { range: '1y', days: 365 },
     ]
 
-    // Find the first threshold that covers all data
+    // Find the first threshold that covers all available data
     let firstCoveringDays = Infinity
     for (const { days } of thresholds) {
-      if (days >= dataSpanDays) {
+      if (days >= maxDataSpanDays) {
         firstCoveringDays = days
         break
       }

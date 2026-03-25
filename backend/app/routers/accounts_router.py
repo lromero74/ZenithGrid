@@ -1227,11 +1227,47 @@ async def get_rebalance_status(
             # Paper trading: read balances from JSON, use public prices
             balances = json.loads(account.paper_balances) if account.paper_balances else {}
             prices = await get_public_prices()
+            btc_usd = prices.get("BTC-USD", 0.0)
+
+            # Add the current value of open positions to the respective quote-currency
+            # bucket.  paper_balances only holds FREE (uninvested) funds; open positions
+            # have deployed capital that must be included for correct allocation %.
+            from app.models import Position as _Position
+            pos_result = await db.execute(
+                select(_Position).where(
+                    _Position.account_id == account_id,
+                    _Position.status == "open",
+                    _Position.direction == "long",
+                )
+            )
+            open_positions = pos_result.scalars().all()
+            from app.coinbase_api import public_market_data
+            for pos in open_positions:
+                pid = pos.product_id or ""
+                parts = pid.split("-") if pid else []
+                if len(parts) != 2:
+                    continue
+                _, quote_cur = parts[0], parts[1]
+                base_qty = pos.total_base_acquired or 0.0
+                if base_qty <= 0:
+                    continue
+                # Try to get current price; fall back to entry_price
+                try:
+                    price_val = float(await public_market_data.get_current_price(pid))
+                except Exception:
+                    price_val = pos.entry_price or 0.0
+                position_value = base_qty * price_val
+                if quote_cur == "USD":
+                    balances["USD"] = balances.get("USD", 0.0) + position_value
+                elif quote_cur == "BTC":
+                    balances["BTC"] = balances.get("BTC", 0.0) + position_value
+                elif quote_cur == "ETH":
+                    balances["ETH"] = balances.get("ETH", 0.0) + position_value
+                elif quote_cur == "USDC":
+                    balances["USDC"] = balances.get("USDC", 0.0) + position_value
 
             # Compute value of altcoins not covered by get_public_prices (USD/BTC/ETH/USDC)
-            from app.coinbase_api import public_market_data
             known_currencies = {"USD", "BTC", "ETH", "USDC", "USDT"}
-            btc_usd = prices.get("BTC-USD", 0.0)
             standard_total = (
                 balances.get("USD", 0.0)
                 + balances.get("BTC", 0.0) * btc_usd

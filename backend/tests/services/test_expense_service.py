@@ -783,3 +783,482 @@ def _mock_savings_item(name: str, target_amount: float, target_date,
     item.assumed_growth_rate_pct = growth_rate
     item.savings_current_balance = current_balance
     return item
+
+
+# ---------------------------------------------------------------------------
+# New tests: savings waterfall with account_balance > 0
+# ---------------------------------------------------------------------------
+
+class TestComputeExpenseCoverageWithAccountBalance:
+    """Tests for compute_expense_coverage when account_balance > 0.
+
+    When account_balance is provided, savings targets reserve capital from the
+    balance pool. The income earmarked for those reserved reserves is then
+    subtracted from current_income before expenses are evaluated.
+    """
+
+    def test_savings_target_before_expense_reserves_from_balance(self):
+        """Savings target BEFORE an expense reserves capital from account_balance.
+
+        The reserved capital earmarks a portion of income (dynamic_reserved *
+        income_rate), which reduces the income available to subsequent expenses.
+        The savings target itself should be 'funded' when the balance fully
+        covers capital_required.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # account_balance = $50000, annual return = 12% (1%/mo).
+        # Savings target: $10000 in ~12 months → capital_required ≈ $8874.
+        # At 12% annual: income_rate = income_after_tax / account_balance.
+        # income = $5000/mo (post-tax), income_rate = 5000/50000 = 0.1.
+        # dynamic_reserved ≈ 8874, income_earmarked ≈ 887.
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Rent", 1000, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=5000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=50000.0,
+        )
+
+        st = result["savings_targets"][0]
+        # Capital fully covered by account balance → funded
+        assert st["status"] == "funded"
+        assert st["dynamic_reserved"] > 0
+        assert st["income_earmarked"] > 0
+        # income_earmarked = dynamic_reserved * income_rate (= dynamic_reserved * 5000/50000)
+        expected_earmarked = pytest.approx(st["dynamic_reserved"] * (5000.0 / 50000.0), rel=0.01)
+        assert st["income_earmarked"] == expected_earmarked
+        # free_balance should be reduced by dynamic_reserved
+        assert result["free_balance"] == pytest.approx(50000.0 - st["dynamic_reserved"], rel=0.01)
+
+    def test_savings_target_before_expense_reduces_available_income(self):
+        """Income earmarked by a savings reservation reduces what expenses can use.
+
+        With a tight income, the earmarked portion should leave the expense
+        with less income than it would have without the savings target.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # income = $600/mo. account_balance = $10000, annual return = 12%.
+        # income_rate = 600 / 10000 = 0.06.
+        # Savings target: $5000 in 12 months. capital_required ≈ 5000/(1.01)^12 ≈ 4437.
+        # dynamic_reserved = 4437, income_earmarked = 4437 * 0.06 ≈ 266.
+        # Remaining income for expenses = 600 - 266 = 334.
+        # Expense = $400/mo → partial (334/400 = 83.5%).
+        savings = _mock_savings_item(
+            name="Vacation",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Rent", 400, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=600.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=10000.0,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["income_earmarked"] > 0
+        # Expense should not be fully covered because some income is earmarked
+        expense_entry = result["items"][0]
+        assert expense_entry["coverage_pct"] < 100.0
+
+    def test_savings_target_zero_balance_falls_back_to_income_coverage(self):
+        """When account_balance = 0, savings target uses income-based coverage.
+
+        The savings target must NOT set blocked=True and must NOT block
+        expenses below it. Coverage falls back to income-based logic.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="Emergency Fund",
+            target_amount=3000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=0.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Netflix", 15, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=5000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=0.0,
+            account_balance=0.0,
+        )
+
+        # With no account_balance, the savings target must NOT block the expense
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] != "blocked", (
+            "Expense after savings target with account_balance=0 must not be blocked"
+        )
+        # income_rate is 0 when account_balance=0 → no income earmarked
+        st = result["savings_targets"][0]
+        assert st["income_earmarked"] == 0.0
+
+    def test_savings_target_capital_gap_blocks_items_below(self):
+        """When cap_gap > 0 and account_balance > 0, items below are blocked.
+
+        If the account balance is insufficient to cover capital_required,
+        blocked=True is set and all subsequent items get status='blocked'.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # account_balance = $1000, but savings needs ~$8874 capital.
+        # dynamic_reserved = min(8874, 1000) = 1000; cap_gap = 7874 > 0 → blocked.
+        savings = _mock_savings_item(
+            name="House DP",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense1 = _mock_item("Netflix", 15, "monthly", sort_order=1)
+        expense2 = _mock_item("Gym", 50, "monthly", sort_order=2)
+
+        result = compute_expense_coverage(
+            [savings, expense1, expense2],
+            period="monthly",
+            projected_income=5000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=1000.0,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] > 0
+        # Both expenses below the underfunded savings target must be blocked
+        for item in result["items"]:
+            assert item["status"] == "blocked", (
+                f"Expected '{item['name']}' to be blocked but got '{item['status']}'"
+            )
+
+    def test_savings_target_cap_gap_zero_does_not_block(self):
+        """When cap_gap = 0, the savings target is funded and items below are NOT blocked."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # account_balance = $100000 — more than enough to cover any reasonable PV.
+        savings = _mock_savings_item(
+            name="Car Fund",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Netflix", 15, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [savings, expense],
+            period="monthly",
+            projected_income=5000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=100000.0,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] == 0.0
+        assert st["status"] == "funded"
+        # The expense below must not be blocked
+        assert result["items"][0]["status"] != "blocked"
+
+
+class TestComputeSavingsCapitalRequired:
+    """Tests for the PV formula in compute_savings_capital_required."""
+
+    def test_pv_formula_known_value(self):
+        """PV = FV / (1+r)^n for target=$10000 in 12 months at 12% annual.
+
+        monthly rate = 12%/12 = 1% = 0.01
+        n = 12 months (approximately, using 365 days / 30.4375)
+        PV = 10000 / (1.01)^12 ≈ 8874.49
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_savings_capital_required
+        import math
+
+        # Use exactly 365 days so n ≈ 365/30.4375 ≈ 11.99 months
+        target_date = date.today() + timedelta(days=365)
+        result = compute_savings_capital_required(
+            target_amount=10000.0,
+            target_date=target_date,
+            annual_growth_rate_pct=12.0,
+            tax_pct=0.0,
+            is_recurring=False,
+            current_balance=0.0,
+        )
+        # Expected: 10000 / (1.01)^(365/30.4375)
+        _DAYS_PER_MONTH = 30.4375
+        n = 365 / _DAYS_PER_MONTH
+        expected = 10000.0 / math.pow(1.01, n)
+        assert result == pytest.approx(expected, rel=0.001)
+        # Sanity-check that it's near the textbook 8874.49 for exactly 12 months
+        assert 8800.0 < result < 8950.0
+
+    def test_pv_zero_rate_returns_gross_target(self):
+        """At 0% growth rate, PV equals the gross target (no discounting)."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_savings_capital_required
+
+        target_date = date.today() + timedelta(days=365)
+        result = compute_savings_capital_required(
+            target_amount=10000.0,
+            target_date=target_date,
+            annual_growth_rate_pct=0.0,
+            tax_pct=0.0,
+        )
+        assert result == pytest.approx(10000.0)
+
+    def test_pv_past_date_returns_zero(self):
+        """If target_date is in the past, capital_required = 0."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_savings_capital_required
+
+        past_date = date.today() - timedelta(days=1)
+        result = compute_savings_capital_required(
+            target_amount=10000.0,
+            target_date=past_date,
+            annual_growth_rate_pct=12.0,
+        )
+        assert result == 0.0
+
+    def test_pv_higher_rate_means_lower_capital_required(self):
+        """Higher growth rate → lower capital needed today (stronger discounting)."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_savings_capital_required
+
+        target_date = date.today() + timedelta(days=365)
+        low = compute_savings_capital_required(
+            target_amount=10000.0, target_date=target_date,
+            annual_growth_rate_pct=1.0,
+        )
+        high = compute_savings_capital_required(
+            target_amount=10000.0, target_date=target_date,
+            annual_growth_rate_pct=20.0,
+        )
+        assert high < low
+
+
+class TestComputeGrossTarget:
+    """Tests for _compute_gross_target — recurring savings with tax."""
+
+    def test_recurring_with_tax_adds_balance(self):
+        """Recurring target with tax: gross = target/(1-tax) + current_balance.
+
+        target=$1000, tax=10%, current_balance=$500
+        gross = 1000/(1-0.1) + 500 = 1111.11 + 500 = 1611.11
+        """
+        from app.services.expense_service import _compute_gross_target
+
+        result = _compute_gross_target(
+            target_amount=1000.0,
+            tax_pct=10.0,
+            is_recurring=True,
+            current_balance=500.0,
+        )
+        assert result == pytest.approx(1611.11, rel=0.001)
+
+    def test_non_recurring_with_tax_no_balance_added(self):
+        """Non-recurring with tax: gross = target/(1-tax), balance ignored."""
+        from app.services.expense_service import _compute_gross_target
+
+        result = _compute_gross_target(
+            target_amount=1000.0,
+            tax_pct=10.0,
+            is_recurring=False,
+            current_balance=500.0,
+        )
+        # Should NOT add current_balance
+        assert result == pytest.approx(1111.11, rel=0.001)
+        assert result < 1500.0
+
+    def test_recurring_no_tax_adds_balance(self):
+        """Recurring with no tax: gross = target + current_balance."""
+        from app.services.expense_service import _compute_gross_target
+
+        result = _compute_gross_target(
+            target_amount=1000.0,
+            tax_pct=0.0,
+            is_recurring=True,
+            current_balance=500.0,
+        )
+        assert result == pytest.approx(1500.0)
+
+    def test_non_recurring_no_tax_returns_target(self):
+        """Non-recurring, no tax: gross = target_amount exactly."""
+        from app.services.expense_service import _compute_gross_target
+
+        result = _compute_gross_target(
+            target_amount=1000.0,
+            tax_pct=0.0,
+            is_recurring=False,
+            current_balance=500.0,
+        )
+        assert result == pytest.approx(1000.0)
+
+    def test_zero_balance_recurring_with_tax(self):
+        """Recurring with tax and zero balance: gross = target/(1-tax)."""
+        from app.services.expense_service import _compute_gross_target
+
+        result = _compute_gross_target(
+            target_amount=1000.0,
+            tax_pct=25.0,
+            is_recurring=True,
+            current_balance=0.0,
+        )
+        # 1000 / (1 - 0.25) = 1333.33
+        assert result == pytest.approx(1333.33, rel=0.001)
+
+
+class TestCustomSortSavingsTargetPlacement:
+    """Tests for custom sort_mode: savings target position affects blocking direction.
+
+    Blocking only flows FORWARD (downward) from a savings target. Expenses
+    that appear BEFORE the savings target in sort order are evaluated before
+    blocked is ever set — so they must NOT be blocked.
+    """
+
+    def test_savings_target_after_expenses_does_not_block_those_expenses(self):
+        """Expenses sorted BEFORE an underfunded savings target are not blocked.
+
+        With custom sort: expense at sort_order=0, savings at sort_order=1.
+        The expense runs through the waterfall first. Even if the savings target
+        later sets blocked=True, the expense has already been evaluated and
+        should retain its actual coverage status.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        # account_balance = $500 — insufficient to cover capital_required for $10000 target.
+        expense = _mock_item("Rent", 500, "monthly", sort_order=0)
+        savings = _mock_savings_item(
+            name="House DP",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=1,
+        )
+
+        result = compute_expense_coverage(
+            [expense, savings],
+            period="monthly",
+            projected_income=2000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=500.0,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] > 0, "Savings target should have a capital gap"
+
+        # The expense came BEFORE the savings target; it must not be blocked
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] != "blocked", (
+            f"Expense at sort_order=0 must not be blocked by savings at sort_order=1; "
+            f"got status='{expense_entry['status']}'"
+        )
+        assert expense_entry["status"] == "covered"
+
+    def test_savings_target_before_expense_blocks_items_below_when_underfunded(self):
+        """With custom sort, savings at sort_order=0 BEFORE expense at sort_order=1
+        blocks the expense when the savings target is underfunded.
+
+        This is the mirror of the previous test — position determines blocking.
+        """
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        savings = _mock_savings_item(
+            name="House DP",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=0,
+        )
+        expense = _mock_item("Rent", 500, "monthly", sort_order=1)
+
+        result = compute_expense_coverage(
+            [expense, savings],
+            period="monthly",
+            projected_income=2000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=500.0,
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] > 0
+
+        expense_entry = result["items"][0]
+        assert expense_entry["status"] == "blocked"
+
+    def test_savings_target_after_multiple_expenses_does_not_block_any_of_them(self):
+        """Multiple expenses placed before the savings target are all unaffected."""
+        from datetime import date, timedelta
+        from app.services.expense_service import compute_expense_coverage
+
+        expense1 = _mock_item("Netflix", 15, "monthly", sort_order=0)
+        expense2 = _mock_item("Gym", 50, "monthly", sort_order=1)
+        savings = _mock_savings_item(
+            name="House DP",
+            target_amount=50000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            sort_order=2,
+        )
+
+        result = compute_expense_coverage(
+            [expense1, expense2, savings],
+            period="monthly",
+            projected_income=5000.0,
+            tax_pct=0.0,
+            sort_mode="custom",
+            account_annual_return_pct=12.0,
+            account_balance=1000.0,  # Insufficient for $50k target
+        )
+
+        st = result["savings_targets"][0]
+        assert st["capital_gap"] > 0
+
+        for item in result["items"]:
+            assert item["status"] != "blocked", (
+                f"'{item['name']}' (before the savings target) must not be blocked"
+            )

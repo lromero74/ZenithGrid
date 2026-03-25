@@ -596,30 +596,67 @@ def _build_expense_coverage_html(
     covered = coverage.get("covered_count", 0)
     total = coverage.get("total_count", 0)
 
+    # Merge expense items and savings targets by sort_order for interleaved display
+    _expense_rows = [("expense", e) for e in items]
+    _savings_rows = [("savings", s) for s in (savings_targets or [])]
+    _all_rows = sorted(_expense_rows + _savings_rows, key=lambda x: x[1].get("sort_order", 0))
+
     item_rows = ""
-    for item in items:
-        norm = item.get("normalized_amount", 0)
-        if item.get("amount_mode") == "percent_of_income":
-            pct_val = item.get("percent_of_income", 0)
-            basis_lbl = item.get("percent_basis", "pre_tax")
-            basis_str = "pre-tax" if basis_lbl == "pre_tax" else "post-tax"
-            amt_html = (
-                f'{prefix}{norm:{fmt}}'
-                f'<br><span style="color:#94a3b8;font-size:10px;">'
-                f'{pct_val:g}% {basis_str}</span>'
-            )
+    for row_type, row_item in _all_rows:
+        if row_type == "savings":
+            # Condensed savings target row — full detail is in the Savings Targets section
+            st_name = row_item.get("name", "")
+            recur = " ↻" if row_item.get("is_recurring") else ""
+            cap_req = row_item.get("capital_required", 0) or 0
+            dyn_res = row_item.get("dynamic_reserved", row_item.get("current_balance", 0)) or 0
+            cap_gap = row_item.get("capital_gap", max(0.0, cap_req - dyn_res)) or 0
+            if cap_gap <= 0 and cap_req > 0:
+                res_text = f'Reserved:&nbsp;{prefix}{dyn_res:{fmt}}&nbsp;✓'
+                res_color = "#6ee7b7"
+            elif cap_req > 0:
+                funded_pct = round(dyn_res / cap_req * 100, 0) if cap_req > 0 else 0
+                res_text = (
+                    f'{funded_pct:.0f}%&nbsp;funded&nbsp;'
+                    f'({prefix}{dyn_res:{fmt}}&nbsp;/&nbsp;{prefix}{cap_req:{fmt}})'
+                )
+                res_color = "#fbbf24"
+            else:
+                res_text = "no target set"
+                res_color = "#64748b"
+            item_rows += f"""
+            <tr style="background-color:#0a2a1f;">
+                <td style="padding: 4px 0; font-size: 10px; font-weight:600;">
+                    <span style="color:#10b981;">&#128180;&nbsp;Savings</span></td>
+                <td style="padding: 4px 0; color: #6ee7b7; font-size: 12px; font-weight:600;">
+                    {st_name}{recur}</td>
+                <td style="padding: 4px 0; text-align: right; font-size: 11px; color:{res_color};">
+                    {res_text}</td>
+                <td style="padding: 4px 6px; text-align: center;">
+                    {_build_savings_status_badge(row_item)}</td>
+            </tr>"""
         else:
-            amt_html = f"{prefix}{norm:{fmt}}"
-        item_rows += f"""
+            norm = row_item.get("normalized_amount", 0)
+            if row_item.get("amount_mode") == "percent_of_income":
+                pct_val = row_item.get("percent_of_income", 0)
+                basis_lbl = row_item.get("percent_basis", "pre_tax")
+                basis_str = "pre-tax" if basis_lbl == "pre_tax" else "post-tax"
+                amt_html = (
+                    f'{prefix}{norm:{fmt}}'
+                    f'<br><span style="color:#94a3b8;font-size:10px;">'
+                    f'{pct_val:g}% {basis_str}</span>'
+                )
+            else:
+                amt_html = f"{prefix}{norm:{fmt}}"
+            item_rows += f"""
             <tr>
                 <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
-                    {item.get('category', '')}</td>
+                    {row_item.get('category', '')}</td>
                 <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
-                    {_expense_name_html(item)}</td>
+                    {_expense_name_html(row_item)}</td>
                 <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
                     {amt_html}</td>
                 <td style="padding: 4px 6px; text-align: center;">
-                    {_build_expense_status_badge(item)}</td>
+                    {_build_expense_status_badge(row_item)}</td>
             </tr>"""
 
     dep_line = _build_deposit_hints_html(g, coverage, prefix, fmt, currency)
@@ -1038,7 +1075,7 @@ def _build_expenses_goal_card(
     prefix = "" if currency == "BTC" else "$"
     period = g.get("expense_period", "monthly")
     tax_pct = g.get("tax_withholding_pct", 0)
-    goal_id = g.get("id", 0)
+    goal_id = g.get("goal_id") or g.get("id") or 0
     items = coverage.get("items", [])
     savings_targets = coverage.get("savings_targets", [])
     total_exp = coverage.get("total_expenses", 0)

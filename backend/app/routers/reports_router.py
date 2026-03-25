@@ -849,6 +849,10 @@ async def list_expense_items(
             d["dynamic_on_track"] = wf.get("dynamic_on_track", False)
             d["waterfall_status"] = wf.get("status", "unknown")
             d["waterfall_coverage_pct"] = wf.get("coverage_pct", 0.0)
+            # Use waterfall normalized_amount for all items — it has the correct value
+            # for percent_of_income items (calculated against projected_income).
+            if "normalized_amount" in wf:
+                d["normalized_amount"] = wf["normalized_amount"]
             if item.item_type == "savings_target":
                 # Use waterfall-computed gap (based on dynamic_reserved, not stored balance)
                 d["capital_gap"] = wf.get("capital_gap", d.get("capital_gap", 0.0))

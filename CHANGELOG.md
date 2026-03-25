@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.139.1] - 2026-03-25
+
+### Fixed
+- **Expenses goal tabs no longer bleed between goals** — when you have two or more Expenses goals, clicking the Coverage/Upcoming/Projections tabs in one goal was activating the wrong tab in the other. Each goal now gets its own unique CSS IDs so their tab controls are fully independent.
+- **Savings targets shown in priority order within the coverage table** — savings goals now appear interleaved with expense rows at their correct position in the sort order. Each savings row shows what percentage of the capital reservation is currently funded (e.g. "63% funded ($619 / $980)") so you can see at a glance where the funding pipeline stands.
+- **Tithes and percent-of-income items no longer show $0** — items calculated as a percentage of projected income were displaying $0 in the Manage Expenses panel because the normalized amount was being re-computed outside the waterfall. Now the waterfall-computed amount (which has access to projected income) is used consistently.
+- **Account Value Over Time chart timeframe buttons stay enabled** — selecting a short time range (e.g. 7D) was graying out longer ranges like 30D and 3M even when the account has 90+ days of data. The chart now remembers the widest data span it has ever loaded for the current account, so timeframe buttons stay enabled correctly.
+- **Paper trading allocation now includes open positions** — the rebalance status panel was counting only free (uninvested) balances, making allocations look like they didn't add up to 100%. Open long positions are now valued at current market prices and added to their quote-currency bucket.
+
 ## [v2.139.0] - 2026-03-25
 
 ### Changed
