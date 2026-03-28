@@ -89,12 +89,20 @@ export function BotFormModal({
   if (!showModal) return null
 
   // Helper: get market from pair ID (e.g., "ETH-BTC" -> "BTC")
-  const getMarket = (pairId: string) =>
-    pairId.split('-')[1]
-  const selectedMarket =
-    formData.product_ids.length > 0
-      ? getMarket(formData.product_ids[0])
-      : null
+  const getMarket = (pairId: string) => pairId.split('-')[1]
+
+  // Detect the primary selected market based on existing selections
+  const selectedMarket = useMemo(() => {
+    if (formData.product_ids.length === 0) return null
+    // Use frequency map to find the most common quote currency
+    const counts: Record<string, number> = {}
+    formData.product_ids.forEach(id => {
+      const m = getMarket(id)
+      counts[m] = (counts[m] || 0) + 1
+    })
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+  }, [formData.product_ids])
+
   const isMarketLocked = formData.product_ids.length >= 2
 
   const handlePairToggle = (
@@ -812,11 +820,12 @@ function MarketFilterButtons({
             key={market}
             type="button"
             onClick={() => {
+              const defaultPair = market === 'BTC' ? 'ETH-BTC' : `BTC-${market}`
               setFormData({
                 ...formData,
                 product_ids: marketPairs,
                 product_id:
-                  marketPairs[0] || 'ETH-BTC',
+                  marketPairs[0] || defaultPair,
               })
             }}
             disabled={isDisabled}

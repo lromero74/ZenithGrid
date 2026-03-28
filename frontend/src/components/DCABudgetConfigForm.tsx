@@ -380,7 +380,7 @@ function DCABudgetConfigForm({
               type="number"
               {...numericProps(config.max_concurrent_deals, 1, v => updateConfig('max_concurrent_deals', v), true)}
               min="1"
-              max="20"
+              max="1000"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
@@ -663,7 +663,7 @@ function DCABudgetConfigForm({
               type="number"
               {...numericProps(config.max_safety_orders, 5, v => updateConfig('max_safety_orders', v), true)}
               min="1"
-              max="20"
+              max="100"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
           </div>

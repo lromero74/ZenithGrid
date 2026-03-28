@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.144.0] - 2026-03-27
+
+### Added
+- **Dynamic Max Deals calculation** — the Max Concurrent Deals limit in the bot editor is now calculated dynamically based on the number of selected trading pairs and the allowed simultaneous deals per pair (up to a system maximum of 1000).
+- **Over-allocation support** — bots can now be configured with up to 150% budget allocation, allowing for intentional over-allocation of portfolio capital.
+
+### Fixed
+- **Market selection accuracy** — improved the logic for detecting the active market (USD vs USDC) in the bot editor. The modal now correctly identifies the primary market based on all selected pairs, preventing accidental resets to USD when USDC was intended.
+- **Safety Order limits** — increased the maximum number of allowed DCA safety orders from 20 to 100.
+
 ## [v2.143.1] - 2026-03-27
 
 ### Fixed

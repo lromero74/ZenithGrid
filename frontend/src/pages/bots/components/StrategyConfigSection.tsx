@@ -383,6 +383,10 @@ function StrategyParameterGroups({
         p.name === 'max_simultaneous_same_pair'
     )
 
+  const maxSimSamePairValue = formData.strategy_config.max_simultaneous_same_pair || 1
+  const numSelectedPairs = formData.product_ids.length || 1 // Fallback to 1 if none selected yet
+  const effectiveMaxDeals = numSelectedPairs * maxSimSamePairValue
+
   // Group display order
   const alwaysShowGroups = [
     'Control Mode',
@@ -529,15 +533,16 @@ function StrategyParameterGroups({
                   'Max Concurrent Positions'}
                 <span className="text-slate-400 text-xs ml-2">
                   ({maxConcurrentDealsParam.min_value} -{' '}
-                  {maxConcurrentDealsParam.max_value})
+                  {effectiveMaxDeals})
                 </span>
               </label>
               <p className="text-xs text-slate-400 mb-2">
                 {maxConcurrentDealsParam.description}
               </p>
-              {renderParameterInput(
-                maxConcurrentDealsParam
-              )}
+              {renderParameterInput({
+                ...maxConcurrentDealsParam,
+                max_value: effectiveMaxDeals
+              })}
             </div>
           )}
 
@@ -548,10 +553,7 @@ function StrategyParameterGroups({
                 {maxSimSamePairParam.display_name ||
                   'Max Simultaneous Deals (Same Pair)'}
                 <span className="text-slate-400 text-xs ml-1">
-                  (1 -{' '}
-                  {formData.strategy_config
-                    .max_concurrent_deals || 1}
-                  )
+                  (1 - 100)
                 </span>
                 <span
                   className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-600 text-slate-300 text-xs cursor-help"
@@ -563,7 +565,10 @@ function StrategyParameterGroups({
               <p className="text-xs text-slate-400 mb-2">
                 {maxSimSamePairParam.description}
               </p>
-              {renderParameterInput(maxSimSamePairParam)}
+              {renderParameterInput({
+                ...maxSimSamePairParam,
+                max_value: 100
+              })}
             </div>
           )}
 
@@ -585,7 +590,7 @@ function StrategyParameterGroups({
                   type="number"
                   step="0.1"
                   min="0"
-                  max="100"
+                  max="150"
                   value={
                     formData.budget_percentage ===
                       undefined ||
@@ -623,7 +628,7 @@ function StrategyParameterGroups({
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Recommended: 33% for 3 bots, 50% for 2
-                bots, 100% for 1 bot
+                bots, 100% for 1 bot. Max 150%.
               </p>
             </div>
           )}

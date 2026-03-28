@@ -43,7 +43,7 @@ export function BudgetSection({
               type="number"
               step="0.1"
               min="0"
-              max="100"
+              max="150"
               value={
                 formData.budget_percentage ===
                   undefined ||
@@ -81,7 +81,7 @@ export function BudgetSection({
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Recommended: 33% for 3 bots, 50% for 2 bots,
-            100% for 1 bot
+            100% for 1 bot. Max 150% (over-allocated).
           </p>
         </div>
 

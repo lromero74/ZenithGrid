@@ -9,13 +9,13 @@ INDICATOR_PARAMS = [
     # ── Deal Management ───────────────────────────────────────────────────
     {"name": "max_concurrent_deals", "display_name": "Max Concurrent Deals",
      "description": "Maximum positions that can be open at the same time",
-     "type": "int", "default": 1, "min_value": 1, "max_value": 20,
+     "type": "int", "default": 1, "min_value": 1, "max_value": 1000,
      "group": "Deal Management"},
     {"name": "max_simultaneous_same_pair", "display_name": "Max Simultaneous Deals (Same Pair)",
      "description": ("Maximum concurrent positions allowed on the same trading pair."
                      " New deals open only after all existing deals have used all"
                      " their safety orders."),
-     "type": "int", "default": 1, "min_value": 1, "max_value": 20,
+     "type": "int", "default": 1, "min_value": 1, "max_value": 1000,
      "group": "Deal Management"},
     {"name": "deal_cooldown_seconds", "display_name": "Deal Cooldown (seconds)",
      "description": ("Wait time before opening a new deal on the same pair"
@@ -44,7 +44,7 @@ INDICATOR_PARAMS = [
     # ── Safety Orders (DCA) ───────────────────────────────────────────────
     {"name": "max_safety_orders", "display_name": "Max Safety Orders",
      "description": "Maximum number of DCA safety orders",
-     "type": "int", "default": 5, "min_value": 0, "max_value": 20,
+     "type": "int", "default": 5, "min_value": 0, "max_value": 100,
      "group": "Safety Orders"},
     {"name": "safety_order_type", "display_name": "Safety Order Type",
      "description": "How to calculate safety order size",
