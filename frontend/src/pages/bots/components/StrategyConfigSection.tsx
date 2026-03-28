@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import type { StrategyParameter } from '../../../types'
 import DCABudgetConfigForm from '../../../components/DCABudgetConfigForm'
 import PhaseConditionSelector from '../../../components/PhaseConditionSelector'
