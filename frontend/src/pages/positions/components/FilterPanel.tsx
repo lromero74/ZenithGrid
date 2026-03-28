@@ -15,8 +15,10 @@ interface FilterPanelProps {
   groupBy: GroupByMode
   setGroupBy: (value: GroupByMode) => void
   bots: Bot[] | undefined
-  uniquePairs: string[]
-  uniqueCategories: string[]
+  uniqueMarkets: { value: 'USD' | 'BTC'; count: number }[]
+  uniqueBots: { id: number; name: string; count: number }[]
+  uniquePairs: { value: string; count: number }[]
+  uniqueCategories: { value: string; label: string; count: number }[]
   onClearFilters: () => void
 }
 
@@ -26,7 +28,8 @@ export const FilterPanel = ({
   filterPair, setFilterPair,
   filterCategory, setFilterCategory,
   groupBy, setGroupBy,
-  bots,
+  uniqueMarkets,
+  uniqueBots,
   uniquePairs,
   uniqueCategories,
   onClearFilters,
@@ -53,8 +56,16 @@ export const FilterPanel = ({
             className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Markets</option>
-            <option value="USD">USD Markets</option>
-            <option value="BTC">BTC Markets</option>
+            {uniqueMarkets.map(m => (
+              <option 
+                key={m.value} 
+                value={m.value}
+                disabled={m.count === 0}
+                className={m.count === 0 ? 'text-slate-500' : ''}
+              >
+                {m.value} Markets {m.count > 0 ? `(${m.count})` : ''}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -67,8 +78,15 @@ export const FilterPanel = ({
             className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Bots</option>
-            {bots?.map(bot => (
-              <option key={bot.id} value={bot.id}>{bot.name}</option>
+            {uniqueBots.map(bot => (
+              <option 
+                key={bot.id} 
+                value={bot.id}
+                disabled={bot.count === 0}
+                className={bot.count === 0 ? 'text-slate-500' : ''}
+              >
+                {bot.name} {bot.count > 0 ? `(${bot.count})` : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -83,7 +101,14 @@ export const FilterPanel = ({
           >
             <option value="all">All Pairs</option>
             {uniquePairs.map(pair => (
-              <option key={pair} value={pair}>{pair}</option>
+              <option 
+                key={pair.value} 
+                value={pair.value}
+                disabled={pair.count === 0}
+                className={pair.count === 0 ? 'text-slate-500' : ''}
+              >
+                {pair.value} {pair.count > 0 ? `(${pair.count})` : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -98,7 +123,14 @@ export const FilterPanel = ({
           >
             <option value="all">All Categories</option>
             {uniqueCategories.map(cat => (
-              <option key={cat} value={cat}>{getCategoryLabel(cat)}</option>
+              <option 
+                key={cat.value} 
+                value={cat.value}
+                disabled={cat.count === 0}
+                className={cat.count === 0 ? 'text-slate-500' : ''}
+              >
+                {cat.label} {cat.count > 0 ? `(${cat.count})` : ''}
+              </option>
             ))}
           </select>
         </div>

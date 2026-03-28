@@ -100,6 +100,7 @@ class TestInProcessBroadcast:
         event = OrderFillEvent(
             fill_type="sell_order",
             product_id="BTC-USD",
+            bot_name="Alpha Bot",
             base_amount=0.001,
             quote_amount=100.0,
             price=100_000.0,
@@ -131,54 +132,13 @@ class TestModuleSingleton:
         assert backend._manager is custom_manager
 
 
-class TestRedisBroadcastStub:
+class TestRedisBroadcast:
 
     @pytest.mark.asyncio
     async def test_redis_broadcast_is_importable(self):
         """Happy path: RedisBroadcast class is importable."""
         from app.services.broadcast_backend import RedisBroadcast
         assert RedisBroadcast is not None
-
-    @pytest.mark.asyncio
-    async def test_redis_broadcast_raises_on_broadcast(self):
-        """Failure: RedisBroadcast.broadcast raises NotImplementedError."""
-        from app.services.broadcast_backend import RedisBroadcast
-        stub = RedisBroadcast()
-        with pytest.raises(NotImplementedError):
-            await stub.broadcast({"type": "test"})
-
-    @pytest.mark.asyncio
-    async def test_redis_broadcast_raises_on_send_to_user(self):
-        """Failure: RedisBroadcast.send_to_user raises NotImplementedError."""
-        from app.services.broadcast_backend import RedisBroadcast
-        stub = RedisBroadcast()
-        with pytest.raises(NotImplementedError):
-            await stub.send_to_user(1, {"type": "test"})
-
-    @pytest.mark.asyncio
-    async def test_redis_broadcast_raises_on_send_to_room(self):
-        """Failure: RedisBroadcast.send_to_room raises NotImplementedError."""
-        from app.services.broadcast_backend import RedisBroadcast
-        stub = RedisBroadcast()
-        with pytest.raises(NotImplementedError):
-            await stub.send_to_room({1, 2}, {"type": "test"})
-
-    @pytest.mark.asyncio
-    async def test_redis_broadcast_raises_on_broadcast_order_fill(self):
-        """Failure: RedisBroadcast.broadcast_order_fill raises NotImplementedError."""
-        from app.services.broadcast_backend import RedisBroadcast
-        from app.services.websocket_manager import OrderFillEvent
-        stub = RedisBroadcast()
-        event = OrderFillEvent(
-            fill_type="base_order",
-            product_id="ETH-USD",
-            base_amount=0.1,
-            quote_amount=50.0,
-            price=500.0,
-            position_id=3,
-        )
-        with pytest.raises(NotImplementedError):
-            await stub.broadcast_order_fill(event)
 
     def test_redis_broadcast_satisfies_protocol(self):
         """Edge case: RedisBroadcast also satisfies BroadcastBackend Protocol."""

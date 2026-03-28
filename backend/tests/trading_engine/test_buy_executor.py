@@ -120,7 +120,7 @@ def _patch_externals():
 
     with (
         patch("app.trading_engine.buy_executor.shutdown_manager", sm),
-        patch("app.trading_engine.buy_executor.ws_manager", AsyncMock()),
+        patch("app.trading_engine.buy_executor.broadcast_backend", AsyncMock()),
         patch("app.trading_engine.buy_executor.log_order_to_history", new_callable=AsyncMock),
         patch("app.trading_engine.buy_executor.validate_order_size", new_callable=AsyncMock, return_value=(True, None)),
         patch("app.trading_engine.fill_reconciler.get_base_precision", return_value=8),

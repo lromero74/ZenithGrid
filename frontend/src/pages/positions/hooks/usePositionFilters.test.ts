@@ -327,9 +327,9 @@ describe('usePositionFilters uniquePairs', () => {
     )
 
     expect(result.current.uniquePairs).toHaveLength(2)
-    expect(result.current.uniquePairs).toContain('ETH-USD')
-    expect(result.current.uniquePairs).toContain('SOL-USD')
-    expect(result.current.uniquePairs).not.toContain('BTC-USD')
+    expect(result.current.uniquePairs).toContainEqual({ value: 'ETH-USD', count: 2 })
+    expect(result.current.uniquePairs).toContainEqual({ value: 'SOL-USD', count: 1 })
+    expect(result.current.uniquePairs.map(p => p.value)).not.toContain('BTC-USD')
   })
 
   test('defaults product_id to ETH-BTC when missing', () => {
@@ -341,7 +341,7 @@ describe('usePositionFilters uniquePairs', () => {
       usePositionFilters({ positionsWithPnL: positions })
     )
 
-    expect(result.current.uniquePairs).toContain('ETH-BTC')
+    expect(result.current.uniquePairs).toContainEqual({ value: 'ETH-BTC', count: 1 })
   })
 })
 

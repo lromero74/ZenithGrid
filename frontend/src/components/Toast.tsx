@@ -13,6 +13,7 @@ export interface ToastData {
   type: ToastType
   title: string
   message: string
+  botName?: string
   productId?: string
   amount?: string
   price?: string
@@ -29,7 +30,7 @@ interface ToastProps {
   onDismiss: (id: string) => void
 }
 
-const TOAST_DURATION = 8000 // 8 seconds
+const TOAST_DURATION = 16000 // 16 seconds (2x long)
 
 export function Toast({ toast, onDismiss }: ToastProps) {
   const [isExiting, setIsExiting] = useState(false)
@@ -175,6 +176,13 @@ export function Toast({ toast, onDismiss }: ToastProps) {
             <p className="mt-1 text-sm text-slate-300">
               {toast.message}
             </p>
+
+            {/* Bot Name Badge */}
+            {toast.botName && (
+              <div className="mt-2 inline-block px-1.5 py-0.5 bg-slate-800/50 rounded text-[10px] font-medium text-slate-400 border border-slate-700/50">
+                Bot: {toast.botName}
+              </div>
+            )}
 
             {/* Action button */}
             {toast.actionLabel && toast.onAction && (

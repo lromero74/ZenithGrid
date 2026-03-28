@@ -115,52 +115,100 @@ function ClosedPositions() {
   )
 
   // Cascading filters: each dropdown's options are filtered by the OTHER selections
-  // uniquePairs = pairs available given current bot + market selection
-  const uniquePairs = useMemo(() => {
-    const pairSet = new Set<string>()
-    if (activeTab === 'closed') {
-      allClosedPositions.forEach((p: Position) => {
-        if (!p.product_id) return
-        if (filterBot !== 'all' && p.bot_id !== filterBot) return
-        if (!matchesMarket(p.product_id, filterMarket)) return
-        pairSet.add(p.product_id)
-      })
-    } else {
-      failedOrders.forEach((o: any) => {
-        if (!o.product_id) return
-        if (filterBot !== 'all') {
-          const botName = botNameById.get(filterBot as number)
-          if (!botName || o.bot_name !== botName) return
-        }
-        if (!matchesMarket(o.product_id, filterMarket)) return
-        pairSet.add(o.product_id)
-      })
-    }
-    return Array.from(pairSet).sort()
-  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterMarket, botNameById])
+  const uniqueMarkets = useMemo(() => {
+    const markets: ('USD' | 'BTC')[] = ['USD', 'BTC']
+    return markets.map(m => {
+      let count = 0
+      if (activeTab === 'closed') {
+        count = allClosedPositions.filter((p: Position) => {
+          if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+          if (filterPair !== 'all' && p.product_id !== filterPair) return false
+          return matchesMarket(p.product_id || '', m)
+        }).length
+      } else {
+        count = failedOrders.filter((o: any) => {
+          if (filterBot !== 'all') {
+            const botName = botNameById.get(filterBot as number)
+            if (!botName || o.bot_name !== botName) return false
+          }
+          if (filterPair !== 'all' && o.product_id !== filterPair) return false
+          return matchesMarket(o.product_id || '', m)
+        }).length
+      }
+      return { value: m, count }
+    })
+  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterPair, botNameById])
 
-  // availableBots = bots that have data given current market + pair selection
-  const availableBots = useMemo(() => {
-    if (!bots) return undefined
+  const uniqueBots = useMemo(() => {
     const botIdSet = new Set<number>()
     if (activeTab === 'closed') {
-      allClosedPositions.forEach((p: Position) => {
-        if (!p.bot_id) return
-        if (filterPair !== 'all' && p.product_id !== filterPair) return
-        if (!matchesMarket(p.product_id || '', filterMarket)) return
-        botIdSet.add(p.bot_id)
-      })
+      allClosedPositions.forEach((p: Position) => { if (p.bot_id) botIdSet.add(p.bot_id) })
     } else {
       failedOrders.forEach((o: any) => {
-        if (!o.bot_name) return
-        if (filterPair !== 'all' && o.product_id !== filterPair) return
-        if (!matchesMarket(o.product_id || '', filterMarket)) return
         const botId = botIdByName.get(o.bot_name)
         if (botId !== undefined) botIdSet.add(botId)
       })
     }
-    return bots.filter(b => botIdSet.has(b.id))
-  }, [bots, allClosedPositions, failedOrders, activeTab, filterPair, filterMarket, botIdByName])
+    
+    return Array.from(botIdSet).map(id => {
+      const bot = bots?.find(b => b.id === id)
+      let count = 0
+      if (activeTab === 'closed') {
+        count = allClosedPositions.filter((p: Position) => {
+          if (p.bot_id !== id) return false
+          if (!matchesMarket(p.product_id || '', filterMarket)) return false
+          if (filterPair !== 'all' && p.product_id !== filterPair) return false
+          return true
+        }).length
+      } else {
+        const botName = botNameById.get(id)
+        count = failedOrders.filter((o: any) => {
+          if (o.bot_name !== botName) return false
+          if (!matchesMarket(o.product_id || '', filterMarket)) return false
+          if (filterPair !== 'all' && o.product_id !== filterPair) return false
+          return true
+        }).length
+      }
+      return { id, name: bot?.name || `Bot #${id}`, count }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }, [bots, allClosedPositions, failedOrders, activeTab, filterPair, filterMarket, botIdByName, botNameById])
+
+  const uniquePairs = useMemo(() => {
+    const pairSet = new Set<string>()
+    if (activeTab === 'closed') {
+      allClosedPositions.forEach((p: Position) => { if (p.product_id) pairSet.add(p.product_id) })
+    } else {
+      failedOrders.forEach((o: any) => { if (o.product_id) pairSet.add(o.product_id) })
+    }
+
+    return Array.from(pairSet).map(pair => {
+      let count = 0
+      if (activeTab === 'closed') {
+        count = allClosedPositions.filter((p: Position) => {
+          if (p.product_id !== pair) return false
+          if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+          if (!matchesMarket(p.product_id || '', filterMarket)) return false
+          return true
+        }).length
+      } else {
+        count = failedOrders.filter((o: any) => {
+          if (o.product_id !== pair) return false
+          if (filterBot !== 'all') {
+            const botName = botNameById.get(filterBot as number)
+            if (!botName || o.bot_name !== botName) return false
+          }
+          if (!matchesMarket(o.product_id || '', filterMarket)) return false
+          return true
+        }).length
+      }
+      return { value: pair, count }
+    }).sort((a, b) => {
+      const [baseA, quoteA] = a.value.split('-')
+      const [baseB, quoteB] = b.value.split('-')
+      if (quoteA !== quoteB) return quoteA.localeCompare(quoteB)
+      return baseA.localeCompare(baseB)
+    })
+  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterMarket, botNameById])
 
   // Filter closed positions (all three filters applied)
   const filteredClosedPositions = useMemo(() => {
@@ -195,16 +243,16 @@ function ClosedPositions() {
 
   // Auto-reset stale selections when options change
   useEffect(() => {
-    if (filterPair !== 'all' && !uniquePairs.includes(filterPair)) {
+    if (filterPair !== 'all' && !uniquePairs.some(p => p.value === filterPair)) {
       setFilterPair('all')
     }
   }, [uniquePairs, filterPair])
 
   useEffect(() => {
-    if (filterBot !== 'all' && availableBots && !availableBots.some(b => b.id === filterBot)) {
+    if (filterBot !== 'all' && !uniqueBots.some(b => b.id === filterBot)) {
       setFilterBot('all')
     }
-  }, [availableBots, filterBot])
+  }, [uniqueBots, filterBot])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -454,7 +502,9 @@ function ClosedPositions() {
             setFilterCategory={() => {}}
             groupBy="none"
             setGroupBy={() => {}}
-            bots={availableBots}
+            bots={bots}
+            uniqueMarkets={uniqueMarkets}
+            uniqueBots={uniqueBots}
             uniquePairs={uniquePairs}
             uniqueCategories={[]}
             onClearFilters={clearFilters}

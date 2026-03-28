@@ -198,6 +198,7 @@ class TestRedisBroadcast:
         event = OrderFillEvent(
             user_id=5, position_id=10,
             fill_type="sell_order", product_id="BTC-USD",
+            bot_name="Alpha Bot",
             base_amount=0.001, quote_amount=50.0, price=50000.0,
         )
         with patch("app.redis_client.get_redis", return_value=mock_redis):
@@ -206,6 +207,7 @@ class TestRedisBroadcast:
         assert channel == "ws:user:5"
         data = json.loads(payload)
         assert data["type"] == "order_fill"
+        assert data["bot_name"] == "Alpha Bot"
 
     def test_implements_broadcast_backend_protocol(self):
         """Happy path: RedisBroadcast satisfies the BroadcastBackend protocol."""

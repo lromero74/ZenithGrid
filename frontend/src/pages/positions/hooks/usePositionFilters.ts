@@ -151,17 +151,79 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   const pageStart = (safePage - 1) * pageSize
   const openPositions = filteredPositions.slice(pageStart, pageStart + pageSize)
 
-  // Get unique pairs and categories for filter dropdowns
+  // Helper for market matching
+  const matchesMarket = (productId: string | undefined, market: 'all' | 'USD' | 'BTC') => {
+    if (market === 'all') return true
+    const quoteCurrency = (productId || 'ETH-BTC').split('-')[1]
+    return quoteCurrency === market
+  }
+
+  // Dynamic filter options with counts relative to OTHER active filters
+  const uniqueMarkets = useMemo(() => {
+    const markets: ('USD' | 'BTC')[] = ['USD', 'BTC']
+    return markets.map(m => {
+      const count = positionsWithPnL.filter(p => {
+        if (p.status !== 'open') return false
+        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+        if (filterPair !== 'all' && p.product_id !== filterPair) return false
+        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
+        return matchesMarket(p.product_id, m)
+      }).length
+      return { value: m, count }
+    })
+  }, [positionsWithPnL, filterBot, filterPair, filterCategory])
+
+  const uniqueBots = useMemo(() => {
+    const botIds = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open' && p.bot_id).map(p => p.bot_id as number)))
+    return botIds.map(id => {
+      const bot = bots?.find(b => b.id === id)
+      const count = positionsWithPnL.filter(p => {
+        if (p.status !== 'open') return false
+        if (p.bot_id !== id) return false
+        if (!matchesMarket(p.product_id, filterMarket)) return false
+        if (filterPair !== 'all' && p.product_id !== filterPair) return false
+        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
+        return true
+      }).length
+      return { id, name: bot?.name || `Bot #${id}`, count }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }, [positionsWithPnL, filterMarket, filterPair, filterCategory, bots])
+
   const uniquePairs = useMemo(() => {
-    const allOpen = positionsWithPnL.filter(p => p.status === 'open')
-    return Array.from(new Set(allOpen.map(p => p.product_id || 'ETH-BTC')))
-  }, [positionsWithPnL])
+    const pairs = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open').map(p => p.product_id || 'ETH-BTC')))
+    return pairs.map(pair => {
+      const count = positionsWithPnL.filter(p => {
+        if (p.status !== 'open') return false
+        if ((p.product_id || 'ETH-BTC') !== pair) return false
+        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+        if (!matchesMarket(p.product_id, filterMarket)) return false
+        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
+        return true
+      }).length
+      return { value: pair, count }
+    }).sort((a, b) => {
+      const [baseA, quoteA] = a.value.split('-')
+      const [baseB, quoteB] = b.value.split('-')
+      // Sort by quote (market) first, then base (coin)
+      if (quoteA !== quoteB) return quoteA.localeCompare(quoteB)
+      return baseA.localeCompare(baseB)
+    })
+  }, [positionsWithPnL, filterBot, filterMarket, filterCategory])
 
   const uniqueCategories = useMemo(() => {
-    const allOpen = positionsWithPnL.filter(p => p.status === 'open')
-    const cats = new Set(allOpen.map(p => p.coin_category || 'Uncategorized'))
-    return Array.from(cats).sort()
-  }, [positionsWithPnL])
+    const cats = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open').map(p => p.coin_category || 'Uncategorized')))
+    return cats.map(cat => {
+      const count = positionsWithPnL.filter(p => {
+        if (p.status !== 'open') return false
+        if ((p.coin_category || 'Uncategorized') !== cat) return false
+        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+        if (!matchesMarket(p.product_id, filterMarket)) return false
+        if (filterPair !== 'all' && p.product_id !== filterPair) return false
+        return true
+      }).length
+      return { value: cat, label: getCategoryLabel(cat), count }
+    }).sort((a, b) => a.label.localeCompare(b.label))
+  }, [positionsWithPnL, filterBot, filterMarket, filterPair])
 
   const clearFilters = () => {
     setFilterBot('all')
@@ -192,6 +254,8 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
     // Filtered data
     openPositions,
     filteredPositions,
+    uniqueMarkets,
+    uniqueBots,
     uniquePairs,
     uniqueCategories,
 

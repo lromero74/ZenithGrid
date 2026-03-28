@@ -11,6 +11,7 @@ interface OrderFillEvent {
   type: 'order_fill'
   fill_type: 'base_order' | 'dca_order' | 'sell_order' | 'partial_fill'
   product_id: string
+  bot_name?: string
   base_amount: number
   quote_amount: number
   price: number
@@ -202,6 +203,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       type: toastType,
       title,
       message,
+      botName: event.bot_name,
       productId: event.product_id,
       amount,
       price,

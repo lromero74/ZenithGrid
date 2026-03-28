@@ -239,6 +239,7 @@ async def _post_buy_operations(
         await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type=fill_type,
             product_id=product_id,
+            bot_name=bot.name,
             base_amount=actual_base_amount,
             quote_amount=actual_quote_amount,
             price=actual_price,
@@ -818,6 +819,7 @@ async def execute_buy_close_short(
         await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type="close_short",
             product_id=product_id,
+            bot_name=bot.name,
             base_amount=filled_size,
             quote_amount=usd_spent_to_close,
             price=average_filled_price,

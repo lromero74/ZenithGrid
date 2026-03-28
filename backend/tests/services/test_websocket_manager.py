@@ -170,6 +170,7 @@ class TestBroadcastOrderFill:
         await mgr.broadcast_order_fill(OrderFillEvent(
             fill_type="base_order",
             product_id="BTC-USD",
+            bot_name="Alpha Bot",
             base_amount=0.001,
             quote_amount=50.0,
             price=50000.0,
@@ -184,6 +185,7 @@ class TestBroadcastOrderFill:
         assert msg["type"] == "order_fill"
         assert msg["fill_type"] == "base_order"
         assert msg["product_id"] == "BTC-USD"
+        assert msg["bot_name"] == "Alpha Bot"
         assert msg["base_amount"] == 0.001
         assert msg["quote_amount"] == 50.0
         assert msg["price"] == 50000.0

@@ -34,6 +34,7 @@ class OrderFillEvent:
     quote_amount: float
     price: float
     position_id: int
+    bot_name: Optional[str] = None
     profit: Optional[float] = None
     profit_percentage: Optional[float] = None
     user_id: Optional[int] = None
@@ -187,6 +188,7 @@ class WebSocketManager:
             "type": "order_fill",
             "fill_type": event.fill_type,
             "product_id": event.product_id,
+            "bot_name": event.bot_name,
             "base_amount": event.base_amount,
             "quote_amount": event.quote_amount,
             "price": event.price,

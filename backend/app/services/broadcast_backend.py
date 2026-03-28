@@ -147,6 +147,7 @@ class RedisBroadcast:
             "type": "order_fill",
             "fill_type": event.fill_type,
             "product_id": event.product_id,
+            "bot_name": event.bot_name,
             "base_amount": event.base_amount,
             "quote_amount": event.quote_amount,
             "price": event.price,

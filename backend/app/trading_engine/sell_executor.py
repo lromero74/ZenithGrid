@@ -508,17 +508,17 @@ async def execute_sell_short(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await broadcast_backend.broadcast({
-            "type": "order_fill",
-            "fill_type": "short_sell",
-            "product_id": product_id,
-            "base_amount": actual_base_sold,
-            "quote_amount": quote_received,
-            "price": actual_price,
-            "position_id": position.id,
-            "is_paper_trading": is_paper,
-            "timestamp": datetime.utcnow().isoformat(),
-        }, user_id=position.user_id)
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
+            fill_type="short_sell",
+            product_id=product_id,
+            bot_name=bot.name,
+            base_amount=actual_base_sold,
+            quote_amount=quote_received,
+            price=actual_price,
+            position_id=position.id,
+            user_id=position.user_id,
+            is_paper_trading=is_paper,
+        ))
     except Exception as e:
         logger.warning(f"Failed to broadcast short sell WebSocket notification: {e}")
 
@@ -883,6 +883,7 @@ async def execute_sell(
         await broadcast_backend.broadcast_order_fill(OrderFillEvent(
             fill_type="sell_order",
             product_id=product_id,
+            bot_name=bot.name,
             base_amount=actual_base_sold,
             quote_amount=quote_received,
             price=actual_price,

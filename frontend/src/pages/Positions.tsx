@@ -327,6 +327,8 @@ export default function Positions() {
           groupBy={groupBy}
           setGroupBy={setGroupBy}
           bots={bots}
+          uniqueMarkets={uniqueMarkets}
+          uniqueBots={uniqueBots}
           uniquePairs={uniquePairs}
           uniqueCategories={uniqueCategories}
           onClearFilters={clearFilters}

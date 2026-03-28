@@ -130,6 +130,14 @@ class LimitOrderMonitor:
                     )
                     self.db.add(trade)
 
+                    # Fetch bot name for notification
+                    from app.models import Bot
+                    bot_name = None
+                    if position.bot_id:
+                        bot_query = select(Bot.name).where(Bot.id == position.bot_id)
+                        bot_name_result = await self.db.execute(bot_query)
+                        bot_name = bot_name_result.scalars().first()
+
                     # Broadcast partial fill notification
                     is_paper = (hasattr(self.exchange, 'is_paper_trading')
                                 and callable(self.exchange.is_paper_trading)
@@ -137,6 +145,7 @@ class LimitOrderMonitor:
                     await broadcast_backend.broadcast_order_fill(OrderFillEvent(
                         fill_type="partial_fill",
                         product_id=position.product_id,
+                        bot_name=bot_name,
                         base_amount=new_fill_size,
                         quote_amount=new_fill_value,
                         price=avg_fill_price,
@@ -559,6 +568,7 @@ class LimitOrderMonitor:
                 position.limit_close_order_id = None
 
                 # Return reserved balance to bot if position has a bot
+                bot_name = None
                 if position.bot_id:
                     from app.models import Bot
 
@@ -567,6 +577,7 @@ class LimitOrderMonitor:
                     bot = bot_result.scalars().first()
 
                     if bot:
+                        bot_name = bot.name
                         quote_currency = position.get_quote_currency()
                         if quote_currency == "BTC":
                             bot.reserved_btc_balance = max(0, bot.reserved_btc_balance - position.initial_quote_balance)
@@ -583,6 +594,7 @@ class LimitOrderMonitor:
                 await broadcast_backend.broadcast_order_fill(OrderFillEvent(
                     fill_type="sell_order",
                     product_id=position.product_id,
+                    bot_name=bot_name,
                     base_amount=filled_size,
                     quote_amount=filled_value,
                     price=avg_fill_price,
