@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.143.0] - 2026-03-27
+
+### Added
+- **Bot names in trade toasts** — WebSocket fill notifications (Buy, DCA, Close) now display the name of the bot that executed the trade, making it easier to track multi-bot activity.
+- **Dynamic filter counts on Positions & History** — filter dropdowns (Market, Bot, Pair, Category) now show the number of matching items in parentheses. Counts update dynamically based on other active selections.
+- **Improved filter sorting** — filter items are now sorted alphabetically. Trading pairs are sorted by quote currency (USD, then BTC) and then by base currency.
+- **Automatic timezone detection** — the app now detects your browser's timezone and translates all date/time entries (especially on the History page) to your local time automatically.
+
+### Changed
+- **Linger duration for trade toasts** — trade-related notification toasts now stay on screen for 16 seconds (2x longer than before) to give you more time to review the details.
+
 ## [v2.142.0] - 2026-03-25
 
 ### Added
