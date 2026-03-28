@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.143.1] - 2026-03-27
+
+### Fixed
+- **Positions Page crash** — fixed a `ReferenceError` where dynamic filters were being used before being properly destructured from their hook.
+
 ## [v2.143.0] - 2026-03-27
 
 ### Added

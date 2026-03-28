@@ -105,6 +105,8 @@ export default function Positions() {
     totalCount, totalPages,
     openPositions,
     filteredPositions,
+    uniqueMarkets,
+    uniqueBots,
     uniquePairs,
     uniqueCategories,
     getGroupKey,
