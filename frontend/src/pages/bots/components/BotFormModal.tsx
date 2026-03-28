@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { Bot } from '../../../types'
 import DexConfigSection from '../../../components/DexConfigSection'
 import type {
