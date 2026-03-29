@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.144.9] - 2026-03-27
+
+### Added
+- **Over-allocation Warning** — added a prominent visual warning in the Bot Editor when the budget percentage exceeds 100%. This ensures users are aware of the intentional over-allocation of capital while still allowing it up to the 150% limit.
+
 ## [v2.144.8] - 2026-03-27
 
 ### Added
