@@ -610,7 +610,7 @@ class RebalanceMonitor:
             # capital locked in open positions (grouped by quote currency).
             # This matches the UI rebalance-status display and the portfolio
             # breakdown from the Coinbase API.
-            # Do NOT use calculate_aggregate_quote_value: it returns the accounts-API
+            # Do NOT use calculate_market_budget: it returns the accounts-API
             # available_balance which diverges significantly from the portfolio
             # breakdown value (e.g., $59 vs $411 for BTC with open positions).
             pos_result = await db.execute(

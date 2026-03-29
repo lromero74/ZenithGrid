@@ -45,7 +45,7 @@ class StubExchangeClient(ExchangeClient):
     async def calculate_aggregate_usd_value(self):
         return 0.0
 
-    async def calculate_aggregate_quote_value(self, quote_currency, bypass_cache=False):
+    async def calculate_market_budget(self, quote_currency, bypass_cache=False):
         return 0.0
 
     async def list_products(self):

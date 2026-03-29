@@ -298,7 +298,7 @@ async def _calculate_budget(
         # Bot uses percentage-based budgeting - calculate aggregate value
         # CRITICAL: Only considers assets in this bot's quote currency market
         # (e.g., USD bot gets 20% of USD only, not USDC or BTC)
-        aggregate_value = await exchange.calculate_aggregate_quote_value(
+        aggregate_value = await exchange.calculate_market_budget(
             quote_currency, bypass_cache=True
         )
         logger.debug(f"Aggregate {quote_currency} value: {aggregate_value}")
@@ -453,15 +453,18 @@ async def _decide_buy(
         if position is None:  # Only check when considering opening a NEW position
             if open_positions_count is None:
                 open_positions_count = await get_open_positions_count(db, bot)
-            
+
             # Use soft ceiling if enabled, otherwise use fixed max_concurrent_deals
             max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
-            
+
             logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
 
             if open_positions_count >= max_deals:
                 should_buy = False
-                ceiling_type = "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling") else "Max concurrent deals"
+                ceiling_type = (
+                    "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
+                    else "Max concurrent deals"
+                )
                 buy_reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
                 logger.debug(f"Should buy: FALSE - {buy_reason}")
             else:

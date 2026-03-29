@@ -1538,8 +1538,8 @@ class TestSessionMakerInjection:
         assert injected_sm.called  # injected sm was used
 
     @pytest.mark.asyncio
-    async def test_calculate_aggregate_quote_value_uses_injected_session_maker(self):
-        """calculate_aggregate_quote_value uses injected session_maker, not global."""
+    async def test_calculate_market_budget_uses_injected_session_maker(self):
+        """calculate_market_budget uses injected session_maker, not global."""
         account = self._make_account()
 
         mock_result = MagicMock()
@@ -1561,7 +1561,7 @@ class TestSessionMakerInjection:
         client = PaperTradingClient(account=account, session_maker=injected_sm)
 
         with patch("app.database.async_session_maker") as global_sm:
-            result = await client.calculate_aggregate_quote_value("USD")
+            result = await client.calculate_market_budget("USD")
             global_sm.assert_not_called()
 
         assert injected_calls, "injected session_maker was not called"

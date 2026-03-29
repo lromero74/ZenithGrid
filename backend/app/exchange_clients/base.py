@@ -145,7 +145,7 @@ class ExchangeClient(ABC):
         pass
 
     @abstractmethod
-    async def calculate_aggregate_quote_value(
+    async def calculate_market_budget(
         self, quote_currency: str, bypass_cache: bool = False
     ) -> float:
         """

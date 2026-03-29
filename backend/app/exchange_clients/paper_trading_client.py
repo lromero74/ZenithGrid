@@ -676,7 +676,7 @@ class PaperTradingClient(ExchangeClient):
 
         return total_usd
 
-    async def calculate_aggregate_quote_value(
+    async def calculate_market_budget(
         self, quote_currency: str, bypass_cache: bool = False
     ) -> float:
         """Calculate value for a specific quote currency (budget allocation).

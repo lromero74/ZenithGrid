@@ -60,7 +60,7 @@ def _make_monitor():
     monitor.exchange.get_current_price = AsyncMock(return_value=50000.0)
     monitor.exchange.create_market_sell_order = AsyncMock(return_value={"order_id": "sell-123"})
     monitor.exchange.create_market_buy_order = AsyncMock(return_value={"order_id": "buy-456"})
-    monitor.exchange.calculate_aggregate_quote_value = AsyncMock(return_value=10000.0)
+    monitor.exchange.calculate_market_budget = AsyncMock(return_value=10000.0)
     return monitor
 
 
@@ -374,7 +374,7 @@ class TestBullFlagEntry:
     async def test_position_size_below_minimum_skipped(self, db_session):
         """When calculated position size < $10, entry is skipped."""
         monitor = _make_monitor()
-        monitor.exchange.calculate_aggregate_quote_value = AsyncMock(return_value=100.0)
+        monitor.exchange.calculate_market_budget = AsyncMock(return_value=100.0)
 
         bot = _make_bot(strategy_config={
             "max_concurrent_positions": 5,

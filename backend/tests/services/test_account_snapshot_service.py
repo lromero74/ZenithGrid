@@ -246,10 +246,10 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=125000.0)
         mock_client.get_current_price = AsyncMock(return_value=130000.0)
-        # calculate_aggregate_quote_value drives the portions (by-quote-currency view)
+        # calculate_market_budget drives the portions (by-quote-currency view)
         async def quote_value_side_effect(currency, bypass_cache=False):
             return {"BTC": 0.5, "USD": 60000.0}.get(currency, 0.0)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
+        mock_client.calculate_market_budget = AsyncMock(
             side_effect=quote_value_side_effect
         )
 
@@ -271,7 +271,7 @@ class TestCaptureAccountSnapshot:
         assert len(snaps) == 1
         assert snaps[0].total_value_btc == pytest.approx(2.5)
         assert snaps[0].total_value_usd == pytest.approx(125000.0)
-        # Portions come from calculate_aggregate_quote_value
+        # Portions come from calculate_market_budget
         assert snaps[0].usd_portion_usd == pytest.approx(60000.0)
         assert snaps[0].btc_portion_btc == pytest.approx(0.5)
 
@@ -319,7 +319,7 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
         mock_client.get_current_price = AsyncMock(return_value=100000.0)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
+        mock_client.calculate_market_budget = AsyncMock(
             side_effect=lambda c, bypass_cache=False: {"BTC": 0.0, "USD": 50000.0}.get(c, 0.0)
         )
 
@@ -334,7 +334,7 @@ class TestCaptureAccountSnapshot:
         # Update mock values
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=100000.0)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
+        mock_client.calculate_market_budget = AsyncMock(
             side_effect=lambda c, bypass_cache=False: {"BTC": 0.0, "USD": 100000.0}.get(c, 0.0)
         )
 
@@ -445,7 +445,7 @@ class TestCaptureAccountSnapshot:
 
     @pytest.mark.asyncio
     async def test_paper_btc_portion_includes_open_position_value(self, db_session):
-        """BTC portion must use calculate_aggregate_quote_value, not just free BTC balance.
+        """BTC portion must use calculate_market_budget, not just free BTC balance.
 
         When BTC-quote bots deploy BTC to buy altcoins, the free BTC balance
         decreases but the open position values make up for it. btc_portion_btc
@@ -460,12 +460,12 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=0.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=40000.0)
         mock_client.get_current_price = AsyncMock(return_value=80000.0)
-        # calculate_aggregate_quote_value returns per-market deployment values:
+        # calculate_market_budget returns per-market deployment values:
         # BTC market: 0.1 free + 0.4 in open ETH-BTC positions = 0.5 BTC total
         # USD market: $40,000 free USD (no open USD positions)
         async def quote_value_side_effect(currency, bypass_cache=False):
             return {"BTC": 0.5, "USD": 40000.0}.get(currency, 0.0)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
+        mock_client.calculate_market_budget = AsyncMock(
             side_effect=quote_value_side_effect
         )
         # Free BTC balance is only 0.1 (rest is deployed in open positions)
@@ -491,7 +491,7 @@ class TestCaptureAccountSnapshot:
             f"Expected btc_portion_btc=0.5 (aggregate_quote_value), "
             f"got {snaps[0].btc_portion_btc} (just free BTC balance — bug!)"
         )
-        # usd_portion must come from calculate_aggregate_quote_value("USD")
+        # usd_portion must come from calculate_market_budget("USD")
         assert snaps[0].usd_portion_usd == pytest.approx(40000.0)
 
 

@@ -382,7 +382,7 @@ class TestListBots:
         async def _agg_quote(currency, **kwargs):
             return 0.5 if currency == "BTC" else 50000.0
 
-        mock_paper_client.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        mock_paper_client.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
 
         with patch(
             "app.bot_routers.bot_crud_router.get_coinbase_from_db",

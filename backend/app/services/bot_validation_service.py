@@ -106,10 +106,10 @@ async def validate_bidirectional_budget_config(
     # Get balances and aggregate values per quote currency
     try:
         # Use per-market aggregate for budget (not total portfolio)
-        aggregate_usd_value = await exchange.calculate_aggregate_quote_value(
+        aggregate_usd_value = await exchange.calculate_market_budget(
             "USD", bypass_cache=True
         )
-        aggregate_btc_value = await exchange.calculate_aggregate_quote_value(
+        aggregate_btc_value = await exchange.calculate_market_budget(
             "BTC", bypass_cache=True
         )
         current_btc_price = await exchange.get_btc_usd_price()
