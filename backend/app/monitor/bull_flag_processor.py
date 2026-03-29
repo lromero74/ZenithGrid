@@ -177,7 +177,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                 else:
                     # Get aggregate value for this bot's quote currency
                     quote_currency = bot.get_quote_currency()
-                    aggregate_val = await monitor.exchange.calculate_aggregate_quote_value(
+                    aggregate_val = await monitor.exchange.calculate_market_budget(
                         quote_currency
                     )
                     budget_pct = bot.strategy_config.get("budget_percentage", 5.0)

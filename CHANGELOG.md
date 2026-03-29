@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.145.2] - 2026-03-29
+
+### Changed
+- **Renamed `calculate_aggregate_quote_value` → `calculate_market_budget`** across the entire codebase (17 source files, 12 test files). The old name implied a portfolio-wide aggregate, but the function computes the bot budget for one specific quote-currency market (free balance + capital deployed in open positions for that market's pairs). The new name makes the distinction clear and prevents misuse like the v2.141.3 rebalancer regression.
+- **Fixed pre-existing test mocks** in `test_account_balance_api.py` — tests were patching `sqlite3.connect` but the implementation uses SQLAlchemy's `get_sync_engine()`. Updated all 9 affected tests; the two "with-positions" tests now actually verify position values are included.
+
 ## [v2.145.1] - 2026-03-29
 
 ### Fixed

@@ -29,7 +29,7 @@ async def _calculate_batch_budget(monitor, bot: Bot, open_positions: list) -> di
     quote_currency = bot.get_quote_currency()
 
     try:
-        aggregate_value = await monitor.exchange.calculate_aggregate_quote_value(
+        aggregate_value = await monitor.exchange.calculate_market_budget(
             quote_currency, bypass_cache=True
         )
     except Exception as e:
@@ -316,7 +316,7 @@ async def _execute_batch_analysis(
     # Calculate per-position budget for AI analysis
     max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
     quote_currency = bot.get_quote_currency()
-    aggregate_value = await monitor.exchange.calculate_aggregate_quote_value(quote_currency)
+    aggregate_value = await monitor.exchange.calculate_market_budget(quote_currency)
     total_bot_budget = bot.get_reserved_balance(aggregate_value)
 
     if bot.split_budget_across_pairs and max_concurrent_deals > 0:

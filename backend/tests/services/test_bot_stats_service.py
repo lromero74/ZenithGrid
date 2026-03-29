@@ -28,7 +28,7 @@ class TestFetchAggregateValues:
         async def _agg_quote(currency, **kwargs):
             return 1.5 if currency == "BTC" else 75000.0
 
-        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        coinbase.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val == 1.5
@@ -45,12 +45,12 @@ class TestFetchAggregateValues:
         async def _agg_quote(currency, **kwargs):
             return 5000.0 if currency == "USD" else 0.5
 
-        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        coinbase.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
-        # Should use calculate_aggregate_quote_value, not calculate_aggregate_usd_value
-        coinbase.calculate_aggregate_quote_value.assert_any_call("BTC")
-        coinbase.calculate_aggregate_quote_value.assert_any_call("USD")
+        # Should use calculate_market_budget, not calculate_aggregate_usd_value
+        coinbase.calculate_market_budget.assert_any_call("BTC")
+        coinbase.calculate_market_budget.assert_any_call("USD")
         assert usd_val == 5000.0
         assert btc_val == 0.5
 
@@ -66,7 +66,7 @@ class TestFetchAggregateValues:
                 raise Exception("API error")
             return 75000.0
 
-        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        coinbase.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val is None
@@ -78,7 +78,7 @@ class TestFetchAggregateValues:
         from app.services.bot_stats_service import fetch_aggregate_values
 
         coinbase = AsyncMock()
-        coinbase.calculate_aggregate_quote_value = AsyncMock(side_effect=Exception("err"))
+        coinbase.calculate_market_budget = AsyncMock(side_effect=Exception("err"))
 
         btc_val, usd_val = await fetch_aggregate_values(coinbase)
         assert btc_val is None

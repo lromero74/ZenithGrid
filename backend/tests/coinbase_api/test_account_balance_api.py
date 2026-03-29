@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.coinbase_api.account_balance_api import (
     calculate_aggregate_btc_value,
-    calculate_aggregate_quote_value,
+    calculate_market_budget,
     calculate_aggregate_usd_value,
     get_account,
     get_accounts,
@@ -502,6 +502,16 @@ class TestInvalidateBalanceCache:
 class TestCalculateAggregateBtcValue:
     """Tests for calculate_aggregate_btc_value()"""
 
+    def _mock_engine(self, rows, base_held=0.0):
+        """Return a patched get_sync_engine context where conn.execute yields rows."""
+        mock_conn = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = rows
+        mock_conn.execute.return_value = mock_result
+        mock_engine = MagicMock()
+        mock_engine.return_value.connect.return_value.__enter__.return_value = mock_conn
+        return patch("app.database.get_sync_engine", mock_engine)
+
     @pytest.mark.asyncio
     async def test_returns_available_btc_when_no_db(self):
         """Happy path: returns available BTC balance when DB lookup has no positions."""
@@ -512,14 +522,7 @@ class TestCalculateAggregateBtcValue:
             "cursor": "",
         })
 
-        # sqlite3 is imported locally inside the function, so patch at stdlib level
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_cursor.fetchall.return_value = []
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
+        with self._mock_engine([]):
             result = await calculate_aggregate_btc_value(
                 mock_request, "hmac", account_id=60, bypass_cache=True
             )
@@ -537,16 +540,7 @@ class TestCalculateAggregateBtcValue:
         })
         mock_price_func = AsyncMock(return_value=0.05)  # 0.05 BTC per unit
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor_obj = MagicMock()
-            # product_id, total_base_acquired, average_buy_price
-            mock_cursor_obj.fetchall.return_value = [
-                ("ETH-BTC", "10.0", "0.04"),
-            ]
-            mock_conn.cursor.return_value = mock_cursor_obj
-            mock_connect.return_value = mock_conn
-
+        with self._mock_engine([("ETH-BTC", "10.0", "0.04")]):
             result = await calculate_aggregate_btc_value(
                 mock_request, "hmac",
                 get_current_price_func=mock_price_func,
@@ -566,15 +560,7 @@ class TestCalculateAggregateBtcValue:
             "cursor": "",
         })
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor_obj = MagicMock()
-            mock_cursor_obj.fetchall.return_value = [
-                ("ETH-BTC", "5.0", "0.03"),
-            ]
-            mock_conn.cursor.return_value = mock_cursor_obj
-            mock_connect.return_value = mock_conn
-
+        with self._mock_engine([("ETH-BTC", "5.0", "0.03")]):
             result = await calculate_aggregate_btc_value(
                 mock_request, "hmac",
                 get_current_price_func=None,
@@ -608,8 +594,8 @@ class TestCalculateAggregateBtcValue:
             "cursor": "",
         })
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_connect.side_effect = Exception("DB file not found")
+        with patch("app.database.get_sync_engine") as mock_engine:
+            mock_engine.side_effect = Exception("DB unavailable")
 
             result = await calculate_aggregate_btc_value(
                 mock_request, "hmac", account_id=64, bypass_cache=True
@@ -820,12 +806,24 @@ class TestGetCurrencyBalance:
 
 
 # ---------------------------------------------------------------------------
-# calculate_aggregate_quote_value
+# calculate_market_budget
 # ---------------------------------------------------------------------------
 
 
 class TestCalculateAggregateQuoteValue:
-    """Tests for calculate_aggregate_quote_value() — per-quote budget allocation."""
+    """Tests for calculate_market_budget() — per-quote budget allocation."""
+
+    def _mock_engine(self, positions_rows, base_held=0.0):
+        """Patch get_sync_engine so conn.execute returns positions then base_held."""
+        mock_conn = MagicMock()
+        positions_result = MagicMock()
+        positions_result.fetchall.return_value = positions_rows
+        base_result = MagicMock()
+        base_result.scalar.return_value = base_held
+        mock_conn.execute.side_effect = [positions_result, base_result]
+        mock_engine = MagicMock()
+        mock_engine.return_value.connect.return_value.__enter__.return_value = mock_conn
+        return patch("app.database.get_sync_engine", mock_engine)
 
     @pytest.mark.asyncio
     async def test_usd_only_returns_usd_balance(self):
@@ -840,14 +838,8 @@ class TestCalculateAggregateQuoteValue:
         })
         mock_price = AsyncMock(return_value=50000.0)
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_cursor.fetchall.return_value = []  # No open positions
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
-            result = await calculate_aggregate_quote_value(
+        with self._mock_engine([]):
+            result = await calculate_market_budget(
                 mock_request, "USD", mock_price,
                 bypass_cache=True, account_id=200
             )
@@ -867,14 +859,8 @@ class TestCalculateAggregateQuoteValue:
         })
         mock_price = AsyncMock(return_value=50000.0)
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_cursor.fetchall.return_value = []
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
-            result = await calculate_aggregate_quote_value(
+        with self._mock_engine([]):
+            result = await calculate_market_budget(
                 mock_request, "USDC", mock_price,
                 bypass_cache=True, account_id=201
             )
@@ -883,7 +869,7 @@ class TestCalculateAggregateQuoteValue:
 
     @pytest.mark.asyncio
     async def test_btc_includes_position_values(self):
-        """Happy path: BTC aggregate includes balance + open BTC-pair positions."""
+        """Happy path: BTC budget includes free balance + open BTC-pair positions."""
         mock_request = AsyncMock(return_value={
             "accounts": [
                 {"currency": "BTC", "available_balance": {"value": "1.0"}},
@@ -893,17 +879,8 @@ class TestCalculateAggregateQuoteValue:
         # ETH-BTC price = 0.05
         mock_price = AsyncMock(return_value=0.05)
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            # One open position: 10 ETH in ETH-BTC pair
-            mock_cursor.fetchall.return_value = [
-                ("ETH-BTC", 10.0, 0.04),
-            ]
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
-            result = await calculate_aggregate_quote_value(
+        with self._mock_engine([("ETH-BTC", 10.0, 0.04)]):
+            result = await calculate_market_budget(
                 mock_request, "BTC", mock_price,
                 bypass_cache=True, account_id=202
             )
@@ -919,7 +896,7 @@ class TestCalculateAggregateQuoteValue:
 
         mock_request = AsyncMock()  # Should not be called
 
-        result = await calculate_aggregate_quote_value(
+        result = await calculate_market_budget(
             mock_request, "USD", None,
             bypass_cache=False, account_id=203
         )
@@ -940,14 +917,8 @@ class TestCalculateAggregateQuoteValue:
             "cursor": "",
         })
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_cursor.fetchall.return_value = []
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
-            result = await calculate_aggregate_quote_value(
+        with self._mock_engine([]):
+            result = await calculate_market_budget(
                 mock_request, "USD", None,
                 bypass_cache=True, account_id=204
             )
@@ -964,17 +935,8 @@ class TestCalculateAggregateQuoteValue:
             "cursor": "",
         })
 
-        with patch("sqlite3.connect") as mock_connect:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            # Position: 5 ETH at avg price 0.04 BTC
-            mock_cursor.fetchall.return_value = [
-                ("ETH-BTC", 5.0, 0.04),
-            ]
-            mock_conn.cursor.return_value = mock_cursor
-            mock_connect.return_value = mock_conn
-
-            result = await calculate_aggregate_quote_value(
+        with self._mock_engine([("ETH-BTC", 5.0, 0.04)]):
+            result = await calculate_market_budget(
                 mock_request, "BTC", None,  # No price func
                 bypass_cache=True, account_id=205
             )

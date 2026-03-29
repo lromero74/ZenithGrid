@@ -86,7 +86,7 @@ def _make_exchange():
     exchange.get_current_price = AsyncMock(return_value=0.051)
     exchange.get_btc_balance = AsyncMock(return_value=0.5)
     exchange.get_usd_balance = AsyncMock(return_value=1000.0)
-    exchange.calculate_aggregate_quote_value = AsyncMock(return_value=0.5)
+    exchange.calculate_market_budget = AsyncMock(return_value=0.5)
     exchange.get_product_stats = AsyncMock(return_value={"volume_24h": 100.0})
     exchange.is_paper_trading = MagicMock(return_value=False)
     return exchange

@@ -248,7 +248,7 @@ async def get_currency_balance(
     """Get balance for a specific currency (cached).
 
     Unlike the specific get_usd_balance/get_btc_balance functions, this works for
-    ANY currency. Used by calculate_aggregate_quote_value for per-market budget allocation.
+    ANY currency. Used by calculate_market_budget for per-market bot budgets.
 
     Args:
         request_func: Function to make API requests
@@ -543,19 +543,23 @@ async def calculate_aggregate_usd_value(
         raise Exception(f"Failed to calculate aggregate USD value: accounts API failed ({e})")
 
 
-async def calculate_aggregate_quote_value(
+async def calculate_market_budget(
     request_func: Callable, quote_currency: str,
     get_current_price_func: Callable = None,
     bypass_cache: bool = False, account_id: Optional[int] = None
 ) -> float:
     """
-    Calculate total value in a specific quote currency for budget allocation.
+    Calculate the bot budget for a specific quote-currency market.
 
-    Returns: raw balance for exactly that currency + current liquidation value
-    of open positions denominated in that currency's pairs (e.g., %-USD for USD).
+    Returns: free balance for that currency + liquidation value of open bot
+    positions denominated in that currency's pairs (e.g., %-BTC for BTC).
 
-    This is NOT the total portfolio value — it's only the assets in this market.
-    Coinbase treats USD, USDC, and USDT as separate markets.
+    This is the per-market budget view used for bot budget allocation and
+    utilisation reporting. It is NOT the portfolio-wide holding of that asset
+    (use get_btc_balance / get_portfolio_breakdown for that).
+
+    Example: for BTC it returns the BTC wallet balance + value of ETH-BTC,
+    SOL-BTC etc. positions — NOT the total BTC held across all portfolios.
 
     Args:
         request_func: Function to make API requests
@@ -565,7 +569,7 @@ async def calculate_aggregate_quote_value(
         account_id: Scoping key for per-user cache isolation
 
     Returns:
-        Total value in the specified quote currency
+        Total market budget in the specified quote currency's native units
     """
     import asyncio
 

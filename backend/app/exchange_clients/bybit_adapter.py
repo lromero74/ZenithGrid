@@ -135,7 +135,7 @@ class ByBitAdapter(ExchangeClient):
         """
         return await self.get_equity()
 
-    async def calculate_aggregate_quote_value(
+    async def calculate_market_budget(
         self, quote_currency: str, bypass_cache: bool = False
     ) -> float:
         """Bybit is USDT-settled — return equity for USDT, 0 otherwise."""

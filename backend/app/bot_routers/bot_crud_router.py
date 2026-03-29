@@ -731,7 +731,7 @@ async def get_bot_stats(
         coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
         quote_currency = bot.get_quote_currency()
 
-        aggregate_value = await coinbase.calculate_aggregate_quote_value(
+        aggregate_value = await coinbase.calculate_market_budget(
             quote_currency
         )
 

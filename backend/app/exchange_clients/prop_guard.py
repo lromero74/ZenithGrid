@@ -611,10 +611,10 @@ class PropGuardClient(ExchangeClient):
     async def calculate_aggregate_usd_value(self) -> float:
         return await self._inner.calculate_aggregate_usd_value()
 
-    async def calculate_aggregate_quote_value(
+    async def calculate_market_budget(
         self, quote_currency: str, bypass_cache: bool = False
     ) -> float:
-        return await self._inner.calculate_aggregate_quote_value(
+        return await self._inner.calculate_market_budget(
             quote_currency, bypass_cache
         )
 

@@ -68,7 +68,7 @@ def _make_position(pos_id=1, bot_id=1, product_id="ETH-BTC", status="open", tota
 def _make_monitor():
     monitor = MagicMock()
     monitor.exchange = MagicMock()
-    monitor.exchange.calculate_aggregate_quote_value = AsyncMock(return_value=0.5)
+    monitor.exchange.calculate_market_budget = AsyncMock(return_value=0.5)
     monitor.exchange.get_btc_balance = AsyncMock(return_value=0.3)
     monitor.exchange.get_usd_balance = AsyncMock(return_value=5000.0)
     monitor.exchange.get_product_stats = AsyncMock(return_value={"volume_24h": 200.0})
@@ -276,7 +276,7 @@ class TestBatchAnalyzerCapacity:
         # Make balance very low so has_actual_balance = False
         monitor.exchange.get_btc_balance = AsyncMock(return_value=0.0000001)
         # First call (bypass_cache=True) returns low value, second call for per_position_budget
-        monitor.exchange.calculate_aggregate_quote_value = AsyncMock(return_value=0.0000001)
+        monitor.exchange.calculate_market_budget = AsyncMock(return_value=0.0000001)
 
         bot = _make_bot(
             product_ids=["ETH-BTC", "SOL-BTC"],

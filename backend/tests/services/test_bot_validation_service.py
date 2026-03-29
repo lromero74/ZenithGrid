@@ -129,7 +129,7 @@ class TestValidateBidirectionalBudgetConfig:
 
         async def _agg_quote(currency, bypass_cache=False):
             return {"USD": 10000.0, "BTC": 0.5}.get(currency, 0.0)
-        mock_exchange.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        mock_exchange.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
         mock_exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         mock_get_exchange.return_value = mock_exchange
         mock_validate.return_value = (True, "")
@@ -203,7 +203,7 @@ class TestValidateBidirectionalBudgetConfig:
 
         async def _agg_quote(currency, bypass_cache=False):
             return {"USD": 10000.0, "BTC": 0.5}.get(currency, 0.0)
-        mock_exchange.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        mock_exchange.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
         mock_exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         mock_get_exchange.return_value = mock_exchange
 
@@ -235,7 +235,7 @@ class TestValidateBidirectionalBudgetConfig:
 
         async def _agg_quote(currency, bypass_cache=False):
             return {"USD": 1000.0, "BTC": 0.001}.get(currency, 0.0)
-        mock_exchange.calculate_aggregate_quote_value = AsyncMock(side_effect=_agg_quote)
+        mock_exchange.calculate_market_budget = AsyncMock(side_effect=_agg_quote)
         mock_exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         mock_get_exchange.return_value = mock_exchange
         mock_validate.return_value = (False, "Insufficient USD for long side.")

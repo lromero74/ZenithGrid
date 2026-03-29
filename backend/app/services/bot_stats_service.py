@@ -21,20 +21,20 @@ logger = logging.getLogger(__name__)
 async def fetch_aggregate_values(coinbase) -> Tuple[Optional[float], Optional[float]]:
     """Fetch BTC and USD aggregate budget values for bot budget allocation.
 
-    Uses calculate_aggregate_quote_value (free currency + positions in that
+    Uses calculate_market_budget (free currency + positions in that
     currency's pairs) — NOT calculate_aggregate_usd_value which returns the
     total portfolio value including all assets converted to USD.
     """
     async def fetch_btc():
         try:
-            return await coinbase.calculate_aggregate_quote_value("BTC")
+            return await coinbase.calculate_market_budget("BTC")
         except Exception as e:
             logger.warning(f"Could not calculate aggregate BTC value: {e}")
             return None
 
     async def fetch_usd():
         try:
-            return await coinbase.calculate_aggregate_quote_value("USD")
+            return await coinbase.calculate_market_budget("USD")
         except Exception as e:
             logger.warning(f"Could not calculate aggregate USD value: {e}")
             return None

@@ -77,12 +77,12 @@ async def capture_account_snapshot(db: AsyncSession, account: Account, session_m
                 pass
 
             # Compute quote-currency deployment portions.
-            # Use calculate_aggregate_quote_value (free balance + open position
+            # Use calculate_market_budget (free balance + open position
             # values) so btc_portion_btc doesn't shrink as BTC bots deploy
             # capital into altcoins — the position values offset the drop in
             # free BTC balance.
-            btc_portion_btc = await client.calculate_aggregate_quote_value("BTC")
-            usd_portion_usd = await client.calculate_aggregate_quote_value("USD")
+            btc_portion_btc = await client.calculate_market_budget("BTC")
+            usd_portion_usd = await client.calculate_market_budget("USD")
 
             # Compute unrealized PnL from open positions
             pos_result = await db.execute(

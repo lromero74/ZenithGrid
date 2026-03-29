@@ -325,11 +325,11 @@ class TestPlanTrades:
 
 class TestPortfolioCompositionView:
     """Tests verifying that drift detection uses free_balances + locked capital,
-    not calculate_aggregate_quote_value (which returns a different, smaller value)."""
+    not calculate_market_budget (which returns a different, smaller value)."""
 
     @pytest.mark.asyncio
     async def test_portfolio_composition_sells_overweight_btc(self):
-        """Regression: v2.141.3 used calculate_aggregate_quote_value("BTC") which
+        """Regression: v2.141.3 used calculate_market_budget("BTC") which
         returned only the wallet account available_balance (~$59) instead of the
         true portfolio BTC value (~$411 from portfolio breakdown).
         The rebalancer incorrectly saw BTC as underweight and bought MORE BTC.
@@ -413,8 +413,8 @@ class TestPortfolioCompositionView:
         #   BTC% = 411/656 = 62.7% >> 50% target → SELL BTC ✓
         #   USDC% = 244.36/656 = 37.2% << 50% target → BUY USDC ✓
 
-        # The fixed code must NOT call calculate_aggregate_quote_value (that was the bug)
-        mock_client.calculate_aggregate_quote_value.assert_not_called()
+        # The fixed code must NOT call calculate_market_budget (that was the bug)
+        mock_client.calculate_market_budget.assert_not_called()
 
         # Must place at least one trade (drift exceeds 5% threshold)
         assert mock_client.create_market_order.call_count >= 1, (
@@ -484,8 +484,8 @@ class TestPortfolioCompositionView:
         # 50% USD / 50% BTC — perfectly balanced, no trades
         mock_client.buy_with_usd.assert_not_called()
         mock_client.create_market_order.assert_not_called()
-        # Must not use the old calculate_aggregate_quote_value approach
-        mock_client.calculate_aggregate_quote_value.assert_not_called()
+        # Must not use the old calculate_market_budget approach
+        mock_client.calculate_market_budget.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_reserve_subtracted_from_portfolio_for_targets(self):
