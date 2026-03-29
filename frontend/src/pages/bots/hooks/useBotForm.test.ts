@@ -510,4 +510,68 @@ describe('useBotForm', () => {
       }))
     })
   })
+
+  test('auto-correct includes max_simultaneous_same_pair cap when both exceed effectiveMaxDeals', async () => {
+    // Scenario: 1 pair, max_simultaneous_same_pair: 3, max_concurrent_deals: 10.
+    // effectiveMaxDeals = 1 * 3 = 3 (pairs * per-pair limit).
+    // Auto-correct fires: max_concurrent_deals 10 → 3.
+    // max_simultaneous_same_pair: 3 == effectiveMaxDeals so it stays at 3 (valid).
+    const setFormData = vi.fn()
+    vi.mocked(blacklistApi.getAll).mockResolvedValue([
+      { id: 1, symbol: 'BTC', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+    ])
+
+    const formData = createFormData({
+      product_ids: ['BTC-USD'],
+      strategy_config: {
+        allowed_categories: ['APPROVED'],
+        max_simultaneous_same_pair: 3,
+        max_concurrent_deals: 10,
+      }
+    })
+
+    const props = createDefaultProps({ showModal: true, formData, setFormData })
+    renderHook(() => useBotForm(props))
+
+    await waitFor(() => {
+      expect(setFormData).toHaveBeenCalledWith(expect.objectContaining({
+        strategy_config: expect.objectContaining({
+          max_concurrent_deals: 3, // Clamped to effectiveMaxDeals (1 pair * 3 per pair)
+        })
+      }))
+    })
+
+    // max_simultaneous_same_pair should remain unchanged (3 <= effectiveMaxDeals 3)
+    const call = vi.mocked(setFormData).mock.calls[0][0] as any
+    expect(call.strategy_config.max_simultaneous_same_pair).toBe(3)
+  })
+
+  test('auto-correct does not fire when max_concurrent_deals is within limit', async () => {
+    const setFormData = vi.fn()
+    vi.mocked(blacklistApi.getAll).mockResolvedValue([
+      { id: 1, symbol: 'BTC', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 2, symbol: 'ETH', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 3, symbol: 'SOL', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+    ])
+
+    const formData = createFormData({
+      product_ids: ['BTC-USD', 'ETH-USD', 'SOL-USD'],
+      strategy_config: {
+        allowed_categories: ['APPROVED'],
+        max_simultaneous_same_pair: 1,
+        max_concurrent_deals: 3, // Exactly at effectiveMaxDeals (3 coins * 1 = 3)
+      }
+    })
+
+    const props = createDefaultProps({ showModal: true, formData, setFormData })
+    renderHook(() => useBotForm(props))
+
+    // Wait for categories to load (effect fires)
+    await waitFor(() => {
+      expect(blacklistApi.getAll).toHaveBeenCalled()
+    })
+
+    // setFormData should NOT have been called for auto-correction
+    expect(setFormData).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import type { Bot, StrategyParameter } from '../../../types'
 import { blacklistApi, BlacklistEntry } from '../../../services/api'
@@ -150,21 +150,34 @@ export function useBotForm({
     return count * maxSimSamePair
   }, [showModal, formData.product_ids, formData.product_id, formData.strategy_config?.allowed_categories, formData.strategy_config?.max_simultaneous_same_pair, coinCategories, TRADING_PAIRS])
 
-  // Auto-correct max_concurrent_deals if it exceeds effective maximum
+  // Keep a ref to the latest formData so the auto-correct effect can read it
+  // without subscribing to every formData change (avoids cascading renders).
+  const formDataRef = useRef(formData)
+  formDataRef.current = formData
+
+  // Auto-correct max_concurrent_deals if it exceeds effective maximum.
+  // Also caps max_simultaneous_same_pair so both fields stay consistent.
   useEffect(() => {
     if (!showModal) return
 
-    const currentMax = formData.strategy_config?.max_concurrent_deals
-    if (currentMax !== undefined && currentMax > effectiveMaxDeals) {
-      setFormData({
-        ...formData,
-        strategy_config: {
-          ...formData.strategy_config,
-          max_concurrent_deals: effectiveMaxDeals
-        }
-      })
+    const currentConfig = formDataRef.current.strategy_config
+    const currentMax = currentConfig?.max_concurrent_deals
+    if (currentMax === undefined || currentMax <= effectiveMaxDeals) return
+
+    const updates: Record<string, number> = { max_concurrent_deals: effectiveMaxDeals }
+    const maxSimSamePair = currentConfig?.max_simultaneous_same_pair
+    if (maxSimSamePair !== undefined && maxSimSamePair > effectiveMaxDeals) {
+      updates.max_simultaneous_same_pair = effectiveMaxDeals
     }
-  }, [showModal, effectiveMaxDeals, formData, setFormData])
+
+    setFormData({
+      ...formDataRef.current,
+      strategy_config: {
+        ...formDataRef.current.strategy_config,
+        ...updates,
+      },
+    })
+  }, [showModal, effectiveMaxDeals, setFormData])
 
   const loadTemplate = useCallback((templateId: number) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

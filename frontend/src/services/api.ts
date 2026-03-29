@@ -1045,3 +1045,16 @@ export const donationsApi = {
   updateGoal: (target: number) =>
     api.put('/donations/goal', { target }).then(r => r.data),
 };
+
+export const botValidationApi = {
+  /**
+   * Returns the largest minimum order size (in quote currency) among the
+   * selected product IDs. Used to power the soft ceiling preview in the
+   * DCA budget form.
+   */
+  getWorstCaseMinimum: (productIds: string[]) =>
+    api.post<{ max_min_quote: number }>('/bot-validation/get-worst-case-minimum', {
+      product_ids: productIds,
+      strategy_config: {},
+    }).then((res) => res.data),
+};

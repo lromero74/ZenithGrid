@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { botValidationApi } from '../services/api'
 import AdvancedConditionBuilder, {
   ConditionExpression,
   createEmptyExpression,
@@ -14,6 +15,7 @@ interface DCABudgetConfigFormProps {
   aggregateUsdValue?: number  // Total USD value for min percentage calculation
   // Bot-level budget fields for DCA calculator
   budgetPercentage?: number  // Bot's budget as % of total portfolio
+  productIds?: string[]  // Selected trading pair IDs — used to fetch worst-case exchange minimum
   numPairs?: number  // Number of trading pairs
   splitBudget?: boolean  // Whether to split budget across pairs
   maxConcurrentDeals?: number  // Max number of simultaneous positions
@@ -245,6 +247,7 @@ function DCABudgetConfigForm({
   aggregateBtcValue,
   aggregateUsdValue,
   budgetPercentage,
+  productIds,
   numPairs: _numPairs,
   splitBudget: _splitBudget,
   maxConcurrentDeals,
@@ -255,23 +258,33 @@ function DCABudgetConfigForm({
   const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [worstCaseMin, setWorstCaseMin] = useState<number>(0)
 
-  // Fetch worst-case minimum for selected coins
+  // Stable key for the selected product list — avoids re-fetching on every render
+  // when the parent creates a new array reference with the same contents.
+  const productIdsKey = useMemo(
+    () => (productIds || []).join(','),
+    [productIds]
+  )
+
+  // Fetch worst-case minimum order size from the exchange for selected pairs.
+  // This powers the accurate soft-ceiling preview below.
   useEffect(() => {
-    if (!_numPairs || _numPairs === 0) return
+    if (!productIdsKey) return
 
     const fetchMin = async () => {
       try {
-        // Need to find product_ids from parent context or pass them in
-        // For now, we assume we can't easily get them without changing props
-        // But we can use the quoteCurrency to estimate
-        const fallback = quoteCurrency === 'BTC' ? 0.0001 : 1.0
-        setWorstCaseMin(fallback)
+        const result = await botValidationApi.getWorstCaseMinimum(
+          productIdsKey.split(',')
+        )
+        setWorstCaseMin(result.max_min_quote)
       } catch (err) {
         console.error('Failed to fetch worst case min:', err)
+        // Fall back to known exchange floor values on error
+        const fallback = quoteCurrency === 'BTC' ? 0.0001 : 1.0
+        setWorstCaseMin(fallback)
       }
     }
     fetchMin()
-  }, [_numPairs, quoteCurrency])
+  }, [productIdsKey, quoteCurrency])
 
   // Clean up timeouts on unmount
   useEffect(() => {

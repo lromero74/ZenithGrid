@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.145.3] - 2026-03-29
+
+### Fixed
+- **Soft ceiling preview now uses real exchange minimums** — the bot editor's "Current effective ceiling" display was using a hardcoded fallback (0.0001 BTC / $1 USD) instead of the actual exchange minimum order size for your selected pairs. It now fetches the real worst-case minimum from the exchange so the soft ceiling preview reflects accurate numbers.
+- **Auto-correct no longer re-runs on every form keystroke** — the automatic correction that clamps `Max Concurrent Deals` to the effective ceiling was subscribing to all form data changes, causing it to re-evaluate on every field edit. It now only runs when the effective ceiling itself changes.
+- **Auto-correct also fixes `Max Simultaneous Deals (Same Pair)` if needed** — when the auto-correct reduces `Max Concurrent Deals`, it now also reduces `Max Simultaneous Deals (Same Pair)` if that value would exceed the new limit.
+
 ## [v2.145.2] - 2026-03-29
 
 ### Changed

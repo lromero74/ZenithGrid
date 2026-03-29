@@ -296,6 +296,7 @@ export function StrategyConfigSection({
             aggregateData?.aggregate_usd_value
           }
           budgetPercentage={formData.budget_percentage}
+          productIds={formData.product_ids}
           numPairs={formData.product_ids.length}
           splitBudget={formData.split_budget_across_pairs}
           maxConcurrentDeals={
