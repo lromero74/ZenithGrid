@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.144.8] - 2026-03-27
+
+### Added
+- **Unit tests for Max Deals Clamping** — added automated test cases to verify the intelligent clamping logic for "Max Concurrent Deals", ensuring it correctly calculates and enforces limits based on selected pairs, categories, and simultaneous deal settings.
+
 ## [v2.144.7] - 2026-03-27
 
 ### Added

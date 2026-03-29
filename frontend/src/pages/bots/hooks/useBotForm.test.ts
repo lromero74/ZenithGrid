@@ -56,6 +56,7 @@ function createDefaultProps(overrides: Record<string, any> = {}) {
     editingBot: null as Bot | null,
     templates: [] as any[],
     strategies: [] as any[],
+    TRADING_PAIRS: [] as any[],
     validationErrors: [] as ValidationError[],
     selectedAccount: { id: 1, name: 'Test Account' },
     createBot: { mutate: vi.fn() },
@@ -417,5 +418,96 @@ describe('useBotForm', () => {
       expect.objectContaining({ type: 'error', title: 'No Pair Selected' }),
     )
     expect(createBot.mutate).not.toHaveBeenCalled()
+  })
+
+  // ---- effectiveMaxDeals & clamping ----
+
+  test('calculates effectiveMaxDeals based on selected pairs and categories', async () => {
+    vi.mocked(blacklistApi.getAll).mockResolvedValue([
+      { id: 1, symbol: 'BTC', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 2, symbol: 'ETH', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 3, symbol: 'DOGE', reason: '[MEME]', created_at: '2025-01-01', user_override_category: null },
+    ])
+
+    const formData = createFormData({
+      product_ids: ['BTC-USD', 'ETH-USD', 'DOGE-USD'],
+      strategy_config: {
+        allowed_categories: ['APPROVED'],
+        max_simultaneous_same_pair: 2,
+      }
+    })
+
+    const props = createDefaultProps({ showModal: true, formData })
+    const { result } = renderHook(() => useBotForm(props))
+
+    // Wait for categories to load
+    await waitFor(() => {
+      expect(result.current.coinCategoryData.coinCategories.BTC).toBe('APPROVED')
+    })
+
+    // 2 approved coins * 2 per pair = 4
+    expect(result.current.effectiveMaxDeals).toBe(4)
+  })
+
+  test('calculates effectiveMaxDeals based on market pairs when none selected', async () => {
+    vi.mocked(blacklistApi.getAll).mockResolvedValue([
+      { id: 1, symbol: 'BTC', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 2, symbol: 'ETH', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+      { id: 3, symbol: 'SOL', reason: '[MEME]', created_at: '2025-01-01', user_override_category: null },
+    ])
+
+    const tradingPairs = [
+      { value: 'BTC-USD', label: 'BTC/USD', group: 'USD', base: 'BTC' },
+      { value: 'ETH-USD', label: 'ETH/USD', group: 'USD', base: 'ETH' },
+      { value: 'SOL-USD', label: 'SOL/USD', group: 'USD', base: 'SOL' },
+      { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC', base: 'ETH' },
+    ]
+
+    const formData = createFormData({
+      product_id: 'BTC-USD', // Detect market USD from here
+      product_ids: [],
+      strategy_config: {
+        allowed_categories: ['APPROVED'],
+        max_simultaneous_same_pair: 1,
+      }
+    })
+
+    const props = createDefaultProps({ showModal: true, formData, TRADING_PAIRS: tradingPairs })
+    const { result } = renderHook(() => useBotForm(props))
+
+    await waitFor(() => {
+      expect(result.current.coinCategoryData.coinCategories.BTC).toBe('APPROVED')
+    })
+
+    // USD market has BTC and ETH as approved. SOL is MEME.
+    // 2 approved coins * 1 per pair = 2
+    expect(result.current.effectiveMaxDeals).toBe(2)
+  })
+
+  test('auto-corrects max_concurrent_deals when it exceeds effectiveMaxDeals', async () => {
+    const setFormData = vi.fn()
+    vi.mocked(blacklistApi.getAll).mockResolvedValue([
+      { id: 1, symbol: 'BTC', reason: '[APPROVED]', created_at: '2025-01-01', user_override_category: null },
+    ])
+
+    const formData = createFormData({
+      product_ids: ['BTC-USD'],
+      strategy_config: {
+        allowed_categories: ['APPROVED'],
+        max_simultaneous_same_pair: 1,
+        max_concurrent_deals: 10, // INSANE VALUE
+      }
+    })
+
+    const props = createDefaultProps({ showModal: true, formData, setFormData })
+    renderHook(() => useBotForm(props))
+
+    await waitFor(() => {
+      expect(setFormData).toHaveBeenCalledWith(expect.objectContaining({
+        strategy_config: expect.objectContaining({
+          max_concurrent_deals: 1 // Clamped to 1 (1 coin * 1 per pair)
+        })
+      }))
+    })
   })
 })
