@@ -17,6 +17,7 @@ interface DCABudgetConfigFormProps {
   numPairs?: number  // Number of trading pairs
   splitBudget?: boolean  // Whether to split budget across pairs
   maxConcurrentDeals?: number  // Max number of simultaneous positions
+  effectiveMaxDeals?: number // Sensible maximum for deals
 }
 
 // Exchange minimum order sizes
@@ -215,7 +216,8 @@ function DCABudgetConfigForm({
   budgetPercentage,
   numPairs: _numPairs,
   splitBudget: _splitBudget,
-  maxConcurrentDeals
+  maxConcurrentDeals,
+  effectiveMaxDeals
 }: DCABudgetConfigFormProps) {
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
@@ -380,7 +382,7 @@ function DCABudgetConfigForm({
               type="number"
               {...numericProps(config.max_concurrent_deals, 1, v => updateConfig('max_concurrent_deals', v), true)}
               min="1"
-              max="1000"
+              max={effectiveMaxDeals || 1000}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">

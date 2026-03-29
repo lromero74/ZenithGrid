@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.144.7] - 2026-03-27
+
+### Added
+- **Intelligent Max Deals Clamping** — the Bot Editor now automatically corrects "Max Concurrent Deals" to a sensible maximum based on the specific coins and categories selected for the bot. The limit is calculated as: `(Coins in Allowed Categories) * (Max Simultaneous Deals per Pair)`. This prevents "insane" values that would otherwise cause validation timeouts.
+
 ## [v2.144.6] - 2026-03-27
 
 ### Fixed

@@ -15,6 +15,7 @@ interface StrategyConfigSectionProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   aggregateData: any
   isPaperTrading?: boolean
+  effectiveMaxDeals: number
 }
 
 /**
@@ -239,6 +240,7 @@ export function StrategyConfigSection({
   handleParamChange,
   aggregateData,
   isPaperTrading,
+  effectiveMaxDeals,
 }: StrategyConfigSectionProps) {
   if (
     !selectedStrategy ||
@@ -299,6 +301,7 @@ export function StrategyConfigSection({
           maxConcurrentDeals={
             formData.strategy_config.max_concurrent_deals
           }
+          effectiveMaxDeals={effectiveMaxDeals}
         />
       ) : selectedStrategy.parameters.length > 0 ? (
         <StrategyParameterGroups
@@ -308,6 +311,7 @@ export function StrategyConfigSection({
           handleParamChange={handleParamChange}
           renderParameterInput={renderParameterInput}
           isPaperTrading={isPaperTrading}
+          effectiveMaxDeals={effectiveMaxDeals}
         />
       ) : null}
     </div>
@@ -325,6 +329,7 @@ function StrategyParameterGroups({
   handleParamChange,
   renderParameterInput,
   isPaperTrading,
+  effectiveMaxDeals,
 }: {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
@@ -336,6 +341,7 @@ function StrategyParameterGroups({
     param: StrategyParameter
   ) => React.ReactNode
   isPaperTrading?: boolean
+  effectiveMaxDeals: number
 }) {
   const useManualSizing =
     formData.strategy_config.use_manual_sizing === true
@@ -382,10 +388,6 @@ function StrategyParameterGroups({
       (p: StrategyParameter) =>
         p.name === 'max_simultaneous_same_pair'
     )
-
-  const maxSimSamePairValue = formData.strategy_config.max_simultaneous_same_pair || 1
-  const numSelectedPairs = formData.product_ids.length || 1 // Fallback to 1 if none selected yet
-  const effectiveMaxDeals = numSelectedPairs * maxSimSamePairValue
 
   // Group display order
   const alwaysShowGroups = [

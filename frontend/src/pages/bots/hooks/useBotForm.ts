@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import type { Bot, StrategyParameter } from '../../../types'
 import { blacklistApi, BlacklistEntry } from '../../../services/api'
 import type {
   BotFormData,
   ValidationError,
+  TradingPair,
 } from '../../../components/bots'
 
 interface UseBotFormProps {
@@ -16,6 +17,7 @@ interface UseBotFormProps {
   templates: any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   strategies: any[]
+  TRADING_PAIRS: TradingPair[]
   validationErrors: ValidationError[]
   selectedAccount: {
     id: number
@@ -42,6 +44,7 @@ export function useBotForm({
   editingBot,
   templates,
   strategies,
+  TRADING_PAIRS,
   validationErrors,
   selectedAccount,
   createBot,
@@ -114,6 +117,54 @@ export function useBotForm({
       fetchCategories()
     }
   }, [showModal])
+
+  // Calculate sensible maximum for concurrent deals
+  const effectiveMaxDeals = useMemo(() => {
+    if (!showModal) return 1
+
+    const allowedCategories = formData.strategy_config?.allowed_categories || ['APPROVED', 'BORDERLINE']
+    const maxSimSamePair = formData.strategy_config?.max_simultaneous_same_pair || 1
+
+    // If specific pairs are selected, count them (filtered by category)
+    if (formData.product_ids.length > 0) {
+      const effectivePairs = formData.product_ids.filter(pairId => {
+        const baseCurrency = pairId.split('-')[0]
+        const category = coinCategories[baseCurrency] || 'APPROVED'
+        return allowedCategories.includes(category)
+      })
+      const count = effectivePairs.length || 1
+      return count * maxSimSamePair
+    }
+
+    // If no pairs selected, but market buttons are used ("BTC all", etc)
+    // the sensible max is the count of ALL pairs in that market that match categories.
+    // We detect the market from the legacy product_id or default to BTC.
+    const currentMarket = formData.product_id?.split('-')[1] || 'BTC'
+    const potentialPairs = TRADING_PAIRS.filter(p => {
+      if (p.group !== currentMarket) return false
+      const category = coinCategories[p.base] || 'APPROVED'
+      return allowedCategories.includes(category)
+    })
+
+    const count = potentialPairs.length || 1
+    return count * maxSimSamePair
+  }, [showModal, formData.product_ids, formData.product_id, formData.strategy_config?.allowed_categories, formData.strategy_config?.max_simultaneous_same_pair, coinCategories, TRADING_PAIRS])
+
+  // Auto-correct max_concurrent_deals if it exceeds effective maximum
+  useEffect(() => {
+    if (!showModal) return
+
+    const currentMax = formData.strategy_config?.max_concurrent_deals
+    if (currentMax !== undefined && currentMax > effectiveMaxDeals) {
+      setFormData({
+        ...formData,
+        strategy_config: {
+          ...formData.strategy_config,
+          max_concurrent_deals: effectiveMaxDeals
+        }
+      })
+    }
+  }, [showModal, effectiveMaxDeals, formData, setFormData])
 
   const loadTemplate = useCallback((templateId: number) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,6 +351,7 @@ export function useBotForm({
 
   return {
     coinCategoryData,
+    effectiveMaxDeals,
     loadTemplate,
     handleStrategyChange,
     handleParamChange,

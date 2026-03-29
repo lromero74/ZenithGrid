@@ -70,6 +70,7 @@ export function BotFormModal({
 }: BotFormModalProps) {
   const {
     coinCategoryData,
+    effectiveMaxDeals,
     loadTemplate,
     handleStrategyChange,
     handleParamChange,
@@ -81,6 +82,7 @@ export function BotFormModal({
     editingBot,
     templates,
     strategies,
+    TRADING_PAIRS,
     validationErrors,
     selectedAccount,
     createBot,
@@ -399,7 +401,8 @@ export function BotFormModal({
               selectedStrategy={selectedStrategy}
               handleParamChange={handleParamChange}
               aggregateData={aggregateData}
-              isPaperTrading={selectedAccount?.is_paper_trading}
+              isPaperTrading={selectedAccount?.type === 'paper'}
+              effectiveMaxDeals={effectiveMaxDeals}
             />
           </fieldset>
 
