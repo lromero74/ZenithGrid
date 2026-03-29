@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Account
+from app.models import Account, Position
 from app.precision import format_base_amount
 from app.services.exchange_service import get_exchange_client_for_account
 
@@ -606,22 +606,33 @@ class RebalanceMonitor:
                 self._account_timers[account.id] = datetime.utcnow()
                 return
 
-            # Phase 2: Percentage-based rebalancing (only if drifted)
-            # Use aggregate values (free + positions) for drift detection
-            aggregate = {}
-            for currency in ("USD", "BTC", "ETH", "USDC"):
-                try:
-                    aggregate[currency] = float(
-                        await client.calculate_aggregate_quote_value(currency)
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Rebalance: could not get aggregate {currency} "
-                        f"for account {account.id}: {e}"
-                    )
-                    aggregate[currency] = 0.0
+            # Phase 2: Build portfolio-composition view — free_balances +
+            # capital locked in open positions (grouped by quote currency).
+            # This matches the UI rebalance-status display and the portfolio
+            # breakdown from the Coinbase API.
+            # Do NOT use calculate_aggregate_quote_value: it returns the accounts-API
+            # available_balance which diverges significantly from the portfolio
+            # breakdown value (e.g., $59 vs $411 for BTC with open positions).
+            pos_result = await db.execute(
+                select(Position).where(
+                    Position.account_id == account.id,
+                    Position.status == "open",
+                )
+            )
+            open_positions_list = pos_result.scalars().all()
 
-            current = calculate_current_allocations(aggregate, prices)
+            portfolio_balances: Dict[str, float] = dict(free_balances)
+            for pos in open_positions_list:
+                pid = pos.product_id or ""
+                parts = pid.split("-")
+                if len(parts) != 2:
+                    continue
+                _, quote_cur = parts
+                if quote_cur not in portfolio_balances:
+                    continue
+                portfolio_balances[quote_cur] += pos.total_quote_spent or 0.0
+
+            current = calculate_current_allocations(portfolio_balances, prices)
             targets = {
                 "usd_pct": account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
                 "btc_pct": account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
@@ -642,16 +653,23 @@ class RebalanceMonitor:
                 self._account_timers[account.id] = datetime.utcnow()
                 return
 
-            # Subtract reserves from free balances for rebalancing
+            # Subtract reserves from free balances (what's actually tradeable)
             rebalanceable = {
                 c: max(0.0, free_balances[c] - min_balances[c])
                 for c in free_balances
             }
 
-            agg_current = calculate_current_allocations(aggregate, prices)
+            # Reserve-adjusted portfolio for direction/magnitude reference.
+            # Targets apply to the investable portion only (portfolio minus reserves).
+            rebalanceable_agg: Dict[str, float] = {
+                c: max(0.0, portfolio_balances.get(c, 0.0) - min_balances.get(c, 0.0))
+                for c in portfolio_balances
+            }
+
+            agg_current = calculate_current_allocations(rebalanceable_agg, prices)
             logger.debug(
                 f"Rebalance plan inputs — account {account.name}: "
-                f"aggregate USD={agg_current['usd_pct']:.1f}% "
+                f"portfolio USD={agg_current['usd_pct']:.1f}% "
                 f"BTC={agg_current['btc_pct']:.1f}% "
                 f"ETH={agg_current['eth_pct']:.1f}% "
                 f"USDC={agg_current['usdc_pct']:.1f}% "
@@ -666,7 +684,7 @@ class RebalanceMonitor:
             trades = plan_trades(
                 rebalanceable, targets, prices,
                 min_trade_pct=min_pct,
-                aggregate=aggregate,
+                aggregate=rebalanceable_agg,
             )
 
             if not trades:

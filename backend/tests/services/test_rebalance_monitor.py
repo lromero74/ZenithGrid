@@ -319,6 +319,242 @@ class TestPlanTrades:
 
 
 # ---------------------------------------------------------------------------
+# Portfolio-composition view (portfolio_balances = free + locked in positions)
+# ---------------------------------------------------------------------------
+
+
+class TestPortfolioCompositionView:
+    """Tests verifying that drift detection uses free_balances + locked capital,
+    not calculate_aggregate_quote_value (which returns a different, smaller value)."""
+
+    @pytest.mark.asyncio
+    async def test_portfolio_composition_sells_overweight_btc(self):
+        """Regression: v2.141.3 used calculate_aggregate_quote_value("BTC") which
+        returned only the wallet account available_balance (~$59) instead of the
+        true portfolio BTC value (~$411 from portfolio breakdown).
+        The rebalancer incorrectly saw BTC as underweight and bought MORE BTC.
+
+        Fix: build portfolio_balances = free_balances + total_quote_spent from
+        open positions grouped by quote currency. This matches the UI view.
+        With BTC=58% (overweight vs 50% target) the rebalancer must SELL BTC.
+        """
+        from app.services.rebalance_monitor import RebalanceMonitor
+        from unittest.mock import MagicMock
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Coinbase Primary"
+        account.rebalance_enabled = True
+        account.rebalance_target_usd_pct = 0.0
+        account.rebalance_target_btc_pct = 50.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 50.0
+        account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 1.0
+        account.min_balance_usd = 50.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+
+        BTC_PRICE = 70_900.0
+
+        # Free balances: large free BTC (portfolio breakdown), tiny free USDC
+        # (USDC capital is locked in open bot positions)
+        mock_client = AsyncMock()
+        mock_client.get_usd_balance = AsyncMock(return_value=50.78)
+        mock_client.get_btc_balance = AsyncMock(return_value=0.005796)   # ~$411
+        mock_client.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_client.get_usdc_balance = AsyncMock(return_value=0.36)
+        mock_client.get_current_price = AsyncMock(
+            side_effect=lambda p: {
+                "BTC-USD": BTC_PRICE, "ETH-USD": 1800.0, "USDC-USD": 1.0
+            }.get(p, 0.0)
+        )
+        mock_client.create_market_order = AsyncMock(return_value={
+            "success_response": {"order_id": "sell-btc-001"}
+        })
+
+        # Open positions: 22 USDC-pair positions locking up ~$244 of USDC capital
+        mock_pos1 = MagicMock()
+        mock_pos1.product_id = "ETH-USDC"
+        mock_pos1.total_quote_spent = 100.0
+
+        mock_pos2 = MagicMock()
+        mock_pos2.product_id = "SOL-USDC"
+        mock_pos2.total_quote_spent = 144.0
+
+        mock_pos3 = MagicMock()
+        mock_pos3.product_id = "MORPHO-USDC"
+        mock_pos3.total_quote_spent = 0.0  # Edge: zero spend handled gracefully
+
+        # DB mock: positions query returns our open positions
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_pos1, mock_pos2, mock_pos3]
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=mock_result)
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=mock_client
+        ):
+            await monitor._process_account(account, db)
+
+        # Portfolio view after fix:
+        #   free: BTC=$411, USDC=$0.36, USD=$50.78
+        #   locked: USDC=$244
+        #   portfolio_balances: BTC=0.005796 (~$411), USDC=244.36, USD=50.78
+        #   rebalanceable_agg (minus USD reserve): BTC=$411, USDC=$244.36, USD=$0.78
+        #   total rebalanceable = ~$656
+        #   BTC% = 411/656 = 62.7% >> 50% target → SELL BTC ✓
+        #   USDC% = 244.36/656 = 37.2% << 50% target → BUY USDC ✓
+
+        # The fixed code must NOT call calculate_aggregate_quote_value (that was the bug)
+        mock_client.calculate_aggregate_quote_value.assert_not_called()
+
+        # Must place at least one trade (drift exceeds 5% threshold)
+        assert mock_client.create_market_order.call_count >= 1, (
+            "Should have executed at least one rebalance trade"
+        )
+
+        # All trades must be BTC sells (BTC→USDC), NOT BTC buys
+        for call in mock_client.create_market_order.call_args_list:
+            kwargs = call[1] if call[1] else {}
+            args = call[0]
+            product_id = kwargs.get("product_id") or (args[0] if args else "")
+            side = kwargs.get("side") or (args[1] if len(args) > 1 else "")
+            if product_id in ("BTC-USDC", "BTC-USD"):
+                assert side == "SELL", (
+                    f"BTC trade should be SELL (BTC overweight), got {side} for {product_id}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_portfolio_composition_with_no_open_positions(self):
+        """When no open positions exist, portfolio_balances == free_balances."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+
+        account = MagicMock()
+        account.id = 2
+        account.name = "Fresh Account"
+        account.rebalance_enabled = True
+        account.rebalance_target_usd_pct = 50.0
+        account.rebalance_target_btc_pct = 50.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+        account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+
+        # Balanced account — should not trigger rebalance
+        mock_client = AsyncMock()
+        mock_client.get_usd_balance = AsyncMock(return_value=5000.0)
+        mock_client.get_btc_balance = AsyncMock(return_value=0.05)   # $5000 at $100K
+        mock_client.get_eth_balance = AsyncMock(return_value=0.0)
+        mock_client.get_usdc_balance = AsyncMock(return_value=0.0)
+        mock_client.get_current_price = AsyncMock(
+            side_effect=lambda p: {
+                "BTC-USD": 100_000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0
+            }.get(p, 0.0)
+        )
+
+        # Empty positions result
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=mock_result)
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=mock_client
+        ):
+            await monitor._process_account(account, db)
+
+        # 50% USD / 50% BTC — perfectly balanced, no trades
+        mock_client.buy_with_usd.assert_not_called()
+        mock_client.create_market_order.assert_not_called()
+        # Must not use the old calculate_aggregate_quote_value approach
+        mock_client.calculate_aggregate_quote_value.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reserve_subtracted_from_portfolio_for_targets(self):
+        """Min-balance reserves are excluded from the rebalanceable pool.
+        With $50 USD reserve and BTC/USDC targets of 50% each, the targets
+        should apply to (total - $50), not to total — so BTC and USDC each
+        aim for 50% of ~$655, not 50% of ~$705.
+        """
+        from app.services.rebalance_monitor import (
+            plan_trades,
+        )
+
+        BTC_PRICE = 70_900.0
+        prices = {"BTC-USD": BTC_PRICE, "ETH-USD": 1800.0, "USDC-USD": 1.0}
+
+        # portfolio_balances after positions are added:
+        portfolio_balances = {
+            "USD": 50.78,
+            "BTC": 0.005796,   # ~$411 at $70,900
+            "ETH": 0.0,
+            "USDC": 244.36,    # free $0.36 + $244 locked in positions
+        }
+        min_balances = {"USD": 50.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0}
+        free_balances = {
+            "USD": 50.78,
+            "BTC": 0.005796,
+            "ETH": 0.0,
+            "USDC": 0.36,
+        }
+
+        # rebalanceable_agg: portfolio minus reserves
+        rebalanceable_agg = {
+            c: max(0.0, portfolio_balances.get(c, 0.0) - min_balances.get(c, 0.0))
+            for c in portfolio_balances
+        }
+        # rebalanceable: free minus reserves (what can actually be traded)
+        rebalanceable = {
+            c: max(0.0, free_balances.get(c, 0.0) - min_balances.get(c, 0.0))
+            for c in free_balances
+        }
+
+        targets = {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0}
+
+        trades = plan_trades(
+            rebalanceable, targets, prices,
+            min_trade_pct=1.0,
+            aggregate=rebalanceable_agg,
+        )
+
+        # rebalanceable_agg total ≈ $0.78 + $411 + $244.36 = $656.14
+        # BTC target = 50% of $656.14 = $328.07
+        # Current BTC = $411 → overweight by ~$83 → should SELL BTC
+        btc_sells = [t for t in trades if t["from_currency"] == "BTC"]
+        assert len(btc_sells) > 0, f"Should sell BTC (overweight), got: {trades}"
+
+        # USDC target = 50% of $656.14 = $328.07
+        # Current USDC (rebalanceable) = $244.36 → underweight → should BUY USDC
+        usdc_buys = [t for t in trades if t["to_currency"] == "USDC"]
+        assert len(usdc_buys) > 0, f"Should buy USDC (underweight), got: {trades}"
+
+        # Sell amount ≈ $83 (not $383 which would be wrong without reserve adjustment)
+        total_sold_btc_usd = sum(t["usd_amount"] for t in btc_sells)
+        assert total_sold_btc_usd < 200.0, (
+            f"BTC sell amount ${total_sold_btc_usd:.0f} is too large — "
+            "reserve adjustment is not being applied correctly"
+        )
+
+
+# ---------------------------------------------------------------------------
 # RebalanceMonitor._process_account (integration-level)
 # ---------------------------------------------------------------------------
 
@@ -372,14 +608,13 @@ class TestRebalanceMonitorProcess:
         account.dust_sweep_threshold_usd = 5.0
         account.dust_last_sweep_at = None
 
+        _empty = MagicMock()
+        _empty.scalars.return_value.all.return_value = []
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=_empty)
 
         mock_client = AsyncMock()
-        # Aggregate values: all USD (drift detected via aggregate)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
-            side_effect=lambda c: 10000.0 if c == "USD" else 0.0
-        )
-        # Free balances: all USD (used for trade planning)
+        # Free balances: all USD (used for both drift detection and trade planning)
         mock_client.get_usd_balance = AsyncMock(return_value=10000.0)
         mock_client.get_btc_balance = AsyncMock(return_value=0.0)
         mock_client.get_eth_balance = AsyncMock(return_value=0.0)
@@ -424,22 +659,16 @@ class TestRebalanceMonitorProcess:
         account.dust_sweep_threshold_usd = 5.0
         account.dust_last_sweep_at = None
 
+        _empty = MagicMock()
+        _empty.scalars.return_value.all.return_value = []
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=_empty)
 
         mock_client = AsyncMock()
-        # Aggregate values roughly balanced
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
-            side_effect=lambda c: (
-                3400.0 if c == "USD"
-                else 0.033 if c == "BTC"
-                else 1.32 if c == "ETH"
-                else 0.0
-            )
-        )
         mock_client.get_current_price = AsyncMock(
             side_effect=lambda p: {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}.get(p, 0.0)
         )
-        # Free balances are fetched first (for top-up check)
+        # Free balances (no positions — balanced portfolio)
         mock_client.get_usd_balance = AsyncMock(return_value=3400.0)
         mock_client.get_btc_balance = AsyncMock(return_value=0.033)
         mock_client.get_eth_balance = AsyncMock(return_value=1.32)
@@ -481,13 +710,13 @@ class TestRebalanceMonitorProcess:
         account.dust_sweep_threshold_usd = 5.0
         account.dust_last_sweep_at = None
 
+        _empty = MagicMock()
+        _empty.scalars.return_value.all.return_value = []
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=_empty)
 
         mock_client = AsyncMock()
         # Portfolio: $500 USD, 0 BTC — should sell $490 USD to BTC (keeping $10 reserve)
-        mock_client.calculate_aggregate_quote_value = AsyncMock(
-            side_effect=lambda c: 500.0 if c == "USD" else 0.0
-        )
         mock_client.get_usd_balance = AsyncMock(return_value=500.0)
         mock_client.get_btc_balance = AsyncMock(return_value=0.0)
         mock_client.get_eth_balance = AsyncMock(return_value=0.0)

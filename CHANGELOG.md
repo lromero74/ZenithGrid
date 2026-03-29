@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.145.1] - 2026-03-29
+
+### Fixed
+- **Rebalancer direction bug** — fixed a critical regression where the portfolio rebalancer was computing allocations using the wrong data source, causing it to see BTC as severely underweight (~17%) when it was actually overweight (~58%). The root cause was using the Coinbase accounts-API available balance (~$59) instead of the portfolio-breakdown view (~$411), which includes all assets. The rebalancer now builds its allocation view the same way the UI does: free balances plus capital locked in open bot positions. This also fixes the reserve math so that 50%/50% targets correctly apply to the investable balance (portfolio minus reserves), not the full portfolio total.
+
 ## [v2.145.0] - 2026-03-27
 
 ### Added
