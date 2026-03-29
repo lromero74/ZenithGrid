@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.144.5] - 2026-03-27
+
+### Fixed
+- **Exhaustive wiring check** — performed a full TypeScript compilation check across the entire frontend to ensure all new features (dynamic filters, enhanced toasts, and timezone detection) are correctly imported and wired.
+
 ## [v2.144.4] - 2026-03-27
 
 ### Fixed
