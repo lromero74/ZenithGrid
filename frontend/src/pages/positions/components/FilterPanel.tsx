@@ -1,7 +1,6 @@
 import { X } from 'lucide-react'
 import type { Bot } from '../../../types'
 import type { GroupByMode } from '../hooks/usePositionFilters'
-import { getCategoryLabel } from '../hooks/usePositionFilters'
 
 interface FilterPanelProps {
   filterBot: number | 'all'
