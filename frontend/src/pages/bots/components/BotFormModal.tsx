@@ -87,8 +87,6 @@ export function BotFormModal({
     updateBot,
   })
 
-  if (!showModal) return null
-
   // Helper: get market from pair ID (e.g., "ETH-BTC" -> "BTC")
   const getMarket = (pairId: string) => pairId.split('-')[1]
 
@@ -103,6 +101,8 @@ export function BotFormModal({
     })
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
   }, [formData.product_ids])
+
+  if (!showModal) return null
 
   const isMarketLocked = formData.product_ids.length >= 2
 
