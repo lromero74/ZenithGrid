@@ -358,6 +358,69 @@ async def _calculate_budget(
     return quote_balance, aggregate_value
 
 
+async def calculate_soft_ceiling(
+    ctx: TradeContext, aggregate_value: float,
+) -> int:
+    """Calculate the 'soft ceiling' for concurrent deals based on budget.
+
+    Determines how many deals the bot can safely open while ensuring every deal
+    (including all safety orders) can meet the exchange's minimum order size
+    for the 'most expensive' coin in the bot's selected pairs.
+    """
+    bot, strategy, exchange = ctx.bot, ctx.strategy, ctx.exchange
+    if not bot.strategy_config.get("enable_soft_ceiling", False):
+        return strategy.config.get("max_concurrent_deals", 1)
+
+    # 1. Total bot budget
+    total_budget = bot.get_reserved_balance(aggregate_value)
+    if total_budget <= 0:
+        return 1
+
+    # 2. Get DCA multiplier (total capital needed for 1 full deal cycle relative to base order)
+    from app.strategies.safety_order_calculator import get_total_multiplier
+    multiplier = get_total_multiplier(strategy.config)
+
+    # 3. Find the largest minimum order size among ALL selected pairs
+    # (The 'worst case' coin that dictates our ceiling)
+    from app.order_validation import get_product_minimums
+    max_min_quote = 0.0
+    product_ids = bot.product_ids or [bot.product_id]
+
+    for pid in product_ids:
+        try:
+            min_info = await get_product_minimums(exchange, pid)
+            min_quote = float(min_info.get("quote_min_size", 0.0001))
+            if min_quote > max_min_quote:
+                max_min_quote = min_quote
+        except Exception as e:
+            logger.warning(f"Failed to get minimums for {pid} during soft ceiling calc: {e}")
+
+    if max_min_quote <= 0:
+        max_min_quote = 1.0  # Fallback for USD pairs
+
+    # 4. Calculate required budget for ONE deal of the 'worst case' coin
+    # Each base/safety order must be at least max_min_quote.
+    # In auto-calculate mode, they are roughly equal if scales are 1.0.
+    # Safe estimate: 1 deal needs (max_min_quote * multiplier)
+    required_per_deal = max_min_quote * multiplier
+
+    # 5. Effective max deals = Total Budget / Required per deal
+    import math
+    soft_max = math.floor(total_budget / required_per_deal)
+
+    # 6. Clamp between 1 and user-specified max
+    user_max = strategy.config.get("max_concurrent_deals", 1)
+    effective_max = max(1, min(soft_max, user_max))
+
+    logger.info(
+        f"  🏠 Soft Ceiling: budget={total_budget:.2f}, "
+        f"min_req={max_min_quote:.2f}, mult={multiplier:.1f}, "
+        f"calc_max={soft_max}, user_max={user_max} -> result={effective_max}"
+    )
+
+    return effective_max
+
+
 async def _decide_buy(
     ctx: TradeContext, signal_data: Dict[str, Any],
     position: Optional[Position], quote_balance: float,
@@ -390,12 +453,16 @@ async def _decide_buy(
         if position is None:  # Only check when considering opening a NEW position
             if open_positions_count is None:
                 open_positions_count = await get_open_positions_count(db, bot)
-            max_deals = strategy.config.get("max_concurrent_deals", 1)
+            
+            # Use soft ceiling if enabled, otherwise use fixed max_concurrent_deals
+            max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
+            
             logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
 
             if open_positions_count >= max_deals:
                 should_buy = False
-                buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
+                ceiling_type = "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling") else "Max concurrent deals"
+                buy_reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
                 logger.debug(f"Should buy: FALSE - {buy_reason}")
             else:
                 # Check deal cooldown for this pair

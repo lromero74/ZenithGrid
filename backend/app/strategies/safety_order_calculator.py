@@ -11,6 +11,44 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+def get_total_multiplier(config: Dict) -> float:
+    """Calculate the total multiplier for a full DCA cycle (base + all safety orders).
+
+    Example: If base is 1.0 and SO is 0.5 of base with 2 SOs, total multiplier is 1.0 + 0.5 + 0.5 = 2.0.
+    Accounting for volume scaling using the same geometric series logic as calculate_base_order_size.
+    """
+    max_safety_orders = config.get("max_safety_orders", 0)
+    if max_safety_orders <= 0:
+        return 1.0
+
+    volume_scale = config.get("safety_order_volume_scale", 1.0)
+    safety_order_type = config.get("safety_order_type", "percentage_of_base")
+
+    if safety_order_type == "percentage_of_base":
+        so_percentage = config.get("safety_order_percentage", 50.0) / 100.0
+        # Geometric series sum: 1 + so_pct * (v^0 + v^1 + ... + v^(n-1))
+        if volume_scale == 1.0:
+            return 1.0 + so_percentage * max_safety_orders
+        else:
+            return 1.0 + so_percentage * (volume_scale ** max_safety_orders - 1) / (volume_scale - 1)
+
+    elif safety_order_type in ["fixed", "fixed_btc"]:
+        # If auto_calculate is on, SO = Base. Otherwise it's fixed.
+        # But for the purpose of a soft ceiling multiplier, we assume auto-calculate
+        # style scaling (where SO is derived from base) to find the ratio.
+        # Base (1.0) + SO1 (1.0) + SO2..SOn (geometric)
+        total = 2.0
+        n = max_safety_orders
+        if n > 1:
+            if volume_scale == 1.0:
+                total += (n - 1)
+            else:
+                total += volume_scale * (volume_scale ** (n - 1) - 1) / (volume_scale - 1)
+        return total
+
+    return 1.0 + (max_safety_orders * 0.5)  # Fallback
+
+
 def calculate_base_order_size(config: Dict, balance: float) -> float:
     """Calculate base order size based on configuration.
 

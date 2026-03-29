@@ -85,6 +85,40 @@ async def _get_exchange_client(db: AsyncSession, user_id: int):
     return None, None
 
 
+@router.post("/get-worst-case-minimum")
+async def get_worst_case_minimum(
+    request: ValidateBotConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Find the largest minimum order size (in quote currency) among selected products.
+    Used for UI 'soft ceiling' feedback.
+    """
+    client, account = await _get_exchange_client(db, current_user.id)
+    if not client:
+        raise HTTPException(
+            status_code=400,
+            detail="No active exchange or paper trading account found.",
+        )
+
+    max_min_quote = 0.0
+    for product_id in request.product_ids:
+        try:
+            from app.order_validation import get_product_minimums
+            min_info = await get_product_minimums(client, product_id)
+            min_quote = float(min_info.get("quote_min_size", 0.0001))
+            if min_quote > max_min_quote:
+                max_min_quote = min_quote
+        except Exception:
+            continue
+
+    if max_min_quote <= 0:
+        max_min_quote = 1.0  # Fallback for USD
+
+    return {"max_min_quote": max_min_quote}
+
+
 @router.post("/validate-config", response_model=ValidateBotConfigResponse)
 async def validate_bot_config(
     request: ValidateBotConfigRequest,

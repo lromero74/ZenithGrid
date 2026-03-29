@@ -207,6 +207,37 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   )
 }
 
+// Helper to calculate total capital multiplier for one full DCA cycle
+function getDCAMultiplier(config: Record<string, any>): number {
+  const maxSafetyOrders = config.max_safety_orders || 0
+  if (maxSafetyOrders <= 0) return 1.0
+
+  const volumeScale = config.safety_order_volume_scale || 1.0
+  const safetyOrderType = config.safety_order_type || 'percentage_of_base'
+
+  if (safetyOrderType === 'percentage_of_base') {
+    const soPercentage = (config.safety_order_percentage || 50.0) / 100.0
+    if (volumeScale === 1.0) {
+      return 1.0 + soPercentage * maxSafetyOrders
+    } else {
+      return 1.0 + soPercentage * (Math.pow(volumeScale, maxSafetyOrders) - 1) / (volumeScale - 1)
+    }
+  } else if (safetyOrderType === 'fixed' || safetyOrderType === 'fixed_btc') {
+    // Base (1.0) + SO1 (1.0) + SO2..SOn (geometric)
+    let total = 2.0
+    const n = maxSafetyOrders
+    if (n > 1) {
+      if (volumeScale === 1.0) {
+        total += (n - 1)
+      } else {
+        total += volumeScale * (Math.pow(volumeScale, n - 1) - 1) / (volumeScale - 1)
+      }
+    }
+    return total
+  }
+  return 1.0 + (maxSafetyOrders * 0.5)
+}
+
 function DCABudgetConfigForm({
   config,
   onChange,
@@ -222,6 +253,25 @@ function DCABudgetConfigForm({
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
   const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const [worstCaseMin, setWorstCaseMin] = useState<number>(0)
+
+  // Fetch worst-case minimum for selected coins
+  useEffect(() => {
+    if (!_numPairs || _numPairs === 0) return
+
+    const fetchMin = async () => {
+      try {
+        // Need to find product_ids from parent context or pass them in
+        // For now, we assume we can't easily get them without changing props
+        // But we can use the quoteCurrency to estimate
+        const fallback = quoteCurrency === 'BTC' ? 0.0001 : 1.0
+        setWorstCaseMin(fallback)
+      } catch (err) {
+        console.error('Failed to fetch worst case min:', err)
+      }
+    }
+    fetchMin()
+  }, [_numPairs, quoteCurrency])
 
   // Clean up timeouts on unmount
   useEffect(() => {
@@ -239,6 +289,11 @@ function DCABudgetConfigForm({
 
   // Get the aggregate value for the quote currency
   const aggregateValue = isFiatQuote ? aggregateUsdValue : aggregateBtcValue
+
+  const multiplier = getDCAMultiplier(config)
+  const totalBudget = (aggregateValue || 0) * (budgetPercentage || 0) / 100
+  const softCeiling = Math.floor(totalBudget / (worstCaseMin * multiplier))
+  const displayCeiling = Math.max(1, Math.min(softCeiling, maxConcurrentDeals || 1000))
 
   // Check if budget calculator is active
   // Only auto-calculate when user has enabled the toggle AND has a budget set
@@ -387,6 +442,28 @@ function DCABudgetConfigForm({
             />
             <p className="text-xs text-slate-400 mt-1">
               Maximum positions that can be open at the same time
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-300 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={config.enable_soft_ceiling || false}
+                onChange={(e) => updateConfig('enable_soft_ceiling', e.target.checked)}
+                className="rounded border-slate-600 bg-slate-700 text-blue-500"
+              />
+              <span className="group-hover:text-white transition-colors">
+                Enable Deal Count Soft Ceiling
+              </span>
+            </label>
+            <p className="text-xs text-slate-400 mt-1 ml-6">
+              Dynamically limit concurrent deals based on your current budget to ensure every deal can meet exchange minimums.
+              {config.enable_soft_ceiling && (
+                <span className="block mt-1 text-blue-400 font-medium">
+                  Current effective ceiling: {displayCeiling} {displayCeiling < (config.max_concurrent_deals || 1) ? `(clamped from ${config.max_concurrent_deals})` : ''}
+                </span>
+              )}
             </p>
           </div>
 

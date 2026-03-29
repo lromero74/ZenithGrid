@@ -11,6 +11,12 @@ INDICATOR_PARAMS = [
      "description": "Maximum positions that can be open at the same time",
      "type": "int", "default": 1, "min_value": 1, "max_value": 1000,
      "group": "Deal Management"},
+    {"name": "enable_soft_ceiling", "display_name": "Enable Deal Soft Ceiling",
+     "description": ("Automatically limit concurrent deals based on your current budget "
+                     "to ensure every deal can meet exchange minimums. "
+                     "Ceiling grows as your balance increases."),
+     "type": "bool", "default": False,
+     "group": "Deal Management"},
     {"name": "max_simultaneous_same_pair", "display_name": "Max Simultaneous Deals (Same Pair)",
      "description": ("Maximum concurrent positions allowed on the same trading pair."
                      " New deals open only after all existing deals have used all"

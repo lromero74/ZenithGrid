@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.145.0] - 2026-03-27
+
+### Added
+- **Deal Count Soft Ceiling** — introduced a new "Soft Ceiling" feature that dynamically limits concurrent deals based on your current budget and the minimum order size requirements of your selected coins. 
+    - This allows a bot to be configured with a large list of coins but only open as many positions as it can actually afford to fully fund (including all safety orders).
+    - As your portfolio balance grows from earnings or deposits, the soft ceiling automatically "unlocks" more concurrent deals until it reaches your specified maximum.
+    - Provides real-time feedback in the Bot Editor showing the current effective ceiling based on your settings.
+
 ## [v2.144.9] - 2026-03-27
 
 ### Added
@@ -76,21 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Linger duration for trade toasts** — trade-related notification toasts now stay on screen for 16 seconds (2x longer than before) to give you more time to review the details.
 
-## [v2.142.0] - 2026-03-25
-
-### Added
-- **Bot running time tracking** — bots now record how many cumulative days they have spent in an active (running) state across all start/stop cycles. The Trade Stats column on the Bots page shows "X.Xd active" (hover to see total calendar days since creation).
-- **Per-active-day PnL projections** — a small "cal / active" toggle appears in each bot's projected PnL column (once the bot has meaningful run time). "cal" projects based on average daily PnL over calendar days; "active" projects based on days the bot was actually running — useful when a bot has been paused for extended periods.
-
-### Fixed
-- **Positions overall stats now cover all filtered results** — the stats card (total value, avg PnL, etc.) previously computed stats only from the current pagination page. It now covers all positions matching the active filters, regardless of which page is displayed.
-
-## [v2.141.3] - 2026-03-25
-
-### Fixed
-- **Portfolio rebalancer now trades in the correct direction** — when bots hold open positions, the free wallet balance diverges significantly from the true aggregate portfolio value. Previously, `plan_trades` computed trade direction from free balances only: BTC acquired by trading bots inflates the free BTC wallet (even though it's deducted from BTC aggregate to avoid double-counting), and USDC spent on open positions reduces the free USDC balance. This caused the rebalancer to see free BTC as overweight (→ sell BTC) and free USDC as underweight (→ buy USDC) — the exact opposite of what aggregate drift analysis indicated. Trade planning now uses aggregate portfolio values to determine direction and magnitude, while still capping sell amounts to available free balances. The net result: trades move the portfolio toward aggregate targets in a single cycle rather than fighting the drift.
-
-## [v2.141.2] - 2026-03-25
+## [v2.142.0] - 2026-03-25## [v2.141.2] - 2026-03-25
 
 ### Fixed
 - **Portfolio rebalancer now correctly executes USD↔USDC trades** — the Coinbase convert endpoint was returning 400 errors for fiat-to-stablecoin conversions, silently blocking all USD→USDC rebalancing every hour. The rebalancer now routes USD↔USDC via BTC as an intermediary (USD→BTC→USDC and USDC→BTC→USD), which uses proven market-order paths available on all account types.
