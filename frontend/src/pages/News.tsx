@@ -13,9 +13,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Newspaper, RefreshCw, Clock, Video, TrendingUp, Settings } from 'lucide-react'
+import { Newspaper, RefreshCw, Clock, Video, Settings } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
-import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
@@ -292,15 +291,6 @@ export default function News() {
             <span className="text-sm">Refresh</span>
           </button>
         </div>
-      </div>
-
-      {/* Market Sentiment Section */}
-      <div className="space-y-4">
-        <div className="flex items-center space-x-3">
-          <TrendingUp className="w-6 h-6 text-green-400" />
-          <h2 className="text-xl font-bold text-white">Market Sentiment</h2>
-        </div>
-        <MarketSentimentCards isUserEngaged={isUserEngaged} />
       </div>
 
       {/* News Section */}

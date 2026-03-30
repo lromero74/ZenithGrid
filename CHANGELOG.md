@@ -5,10 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.1] - 2026-03-30
+
+### Fixed
+- **Market Sentiment carousel removed from News page** — it was mistakenly left on the News page after being moved to Dashboard. It now lives exclusively on the Dashboard.
+
 ## [v2.149.0] - 2026-03-30
 
 ### Added
-- **Market Sentiment carousel is now on the Dashboard** — the full sentiment carousel (Fear & Greed, BTC Dominance, Altseason index, etc.) now appears at the top of the Dashboard page, giving an at-a-glance market overview without having to visit the News page. It remains on the News page as well.
+- **Market Sentiment carousel moved to Dashboard** — the full sentiment carousel (Fear & Greed, BTC Dominance, Altseason index, etc.) now appears at the top of the Dashboard page. It has been removed from the News page.
 
 ### Changed
 - **Projection basis is now remembered across pages and reloads** — the time-range selector on the Portfolio Totals section (Dashboard) and the PnL chart (Bots page) now share and persist the same preference in localStorage. Navigating between pages no longer resets it to "All-time"; the chart also initializes from the stored value instead of always defaulting to "All-time".
