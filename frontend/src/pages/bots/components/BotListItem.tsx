@@ -97,7 +97,9 @@ export const BotListItem = memo(function BotListItem({
   const [currentTimeframeIndex, setCurrentTimeframeIndex] = useState(0)
   const [isPnlExpanded, setIsPnlExpanded] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(true)
-  const [useActiveRate, setUseActiveRate] = useState(false)
+  const [useActiveRate, setUseActiveRate] = useState(() => {
+    try { return localStorage.getItem('zenith-pnl-use-active-rate') === 'true' } catch { return false }
+  })
   const timeframes = ['day', 'week', 'month', 'year']
 
   // PnL carousel: auto-scrolls through timeframes using CSS translateY.
@@ -358,7 +360,11 @@ export const BotListItem = memo(function BotListItem({
                 {hasActiveData && (
                   <div className="flex justify-end mb-0.5">
                     <button
-                      onClick={() => setUseActiveRate(!useActiveRate)}
+                      onClick={() => {
+                        const next = !useActiveRate
+                        setUseActiveRate(next)
+                        try { localStorage.setItem('zenith-pnl-use-active-rate', String(next)) } catch { /* ignored */ }
+                      }}
                       className={`text-[9px] px-1 py-0 rounded border transition-colors ${
                         useActiveRate
                           ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'

@@ -89,7 +89,9 @@ const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay
 
 export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
-  const [timeRange, setTimeRange] = useState<TimeRange>('all')
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    try { return (localStorage.getItem('zenith-bots-projection-basis') as TimeRange) || 'all' } catch { return 'all' }
+  })
   const [currencyDisplay, setCurrencyDisplay] = useState<CurrencyDisplay>('both')
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -106,8 +108,13 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     return () => { cancelled = true }
   }, [])
 
-  // Notify parent when timeRange changes
+  // Notify parent when timeRange changes (skip initial mount to avoid stomping localStorage)
+  const isFirstRender = useRef(true)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     if (onTimeRangeChange) {
       onTimeRangeChange(timeRange)
     }

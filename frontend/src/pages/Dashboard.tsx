@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useNotifications } from '../contexts/NotificationContext'
 import { AccountValueChart } from '../components/AccountValueChart'
+import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { usePermission } from '../hooks/usePermission'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
@@ -236,6 +237,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {/* Market Sentiment */}
+      <MarketSentimentCards isUserEngaged={false} />
 
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

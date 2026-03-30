@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { FlaskConical, Plus, Minus, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { FlaskConical, Plus, Minus, RotateCcw, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authFetch } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
@@ -46,6 +46,11 @@ export function PaperTradingManager() {
 
   // Reset state
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+
+  // Virtual Balances collapse state (persisted)
+  const [balancesOpen, setBalancesOpen] = useState(() => {
+    try { return localStorage.getItem('zenith-paper-balances-open') !== 'false' } catch { return true }
+  })
 
   useEffect(() => {
     loadPaperAccount()
@@ -241,17 +246,29 @@ export function PaperTradingManager() {
 
       {/* Virtual Balances */}
       <div className="mb-6">
-        <h4 className="text-sm font-medium text-slate-400 mb-3">Virtual Balances</h4>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Object.entries(paperAccount.balances).map(([currency, balance]) => (
-            <div key={currency} className="p-4 bg-slate-700/50 rounded-lg">
-              <p className="text-xs text-slate-400 mb-1">{currency}</p>
-              <p className="text-lg font-mono font-semibold text-white">
-                {balance.toLocaleString(undefined, { minimumFractionDigits: currency === 'USD' ? 2 : 8, maximumFractionDigits: currency === 'USD' ? 2 : 8 })}
-              </p>
-            </div>
-          ))}
-        </div>
+        <button
+          onClick={() => {
+            const next = !balancesOpen
+            setBalancesOpen(next)
+            try { localStorage.setItem('zenith-paper-balances-open', String(next)) } catch { /* ignored */ }
+          }}
+          className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors mb-3"
+        >
+          {balancesOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          Virtual Balances
+        </button>
+        {balancesOpen && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {Object.entries(paperAccount.balances).map(([currency, balance]) => (
+              <div key={currency} className="p-4 bg-slate-700/50 rounded-lg">
+                <p className="text-xs text-slate-400 mb-1">{currency}</p>
+                <p className="text-lg font-mono font-semibold text-white">
+                  {balance.toLocaleString(undefined, { minimumFractionDigits: currency === 'USD' ? 2 : 8, maximumFractionDigits: currency === 'USD' ? 2 : 8 })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}

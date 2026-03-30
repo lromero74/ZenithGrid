@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.0] - 2026-03-30
+
+### Added
+- **Market Sentiment carousel is now on the Dashboard** — the full sentiment carousel (Fear & Greed, BTC Dominance, Altseason index, etc.) now appears at the top of the Dashboard page, giving an at-a-glance market overview without having to visit the News page. It remains on the News page as well.
+
+### Changed
+- **Projection basis is now remembered across pages and reloads** — the time-range selector on the Portfolio Totals section (Dashboard) and the PnL chart (Bots page) now share and persist the same preference in localStorage. Navigating between pages no longer resets it to "All-time"; the chart also initializes from the stored value instead of always defaulting to "All-time".
+- **Bots table Projected PnL cal/active toggle is now remembered** — the "cal" / "active" rate toggle on each bot's projected PnL column persists across page reloads and navigation. All bots share the same preference.
+
+### Fixed
+- **Settings → Paper Trading "Virtual Balances" is now collapsible** — the balance grid can be collapsed to save screen space. The expanded/collapsed state is remembered across reloads and navigation.
+
 ## [v2.148.2] - 2026-03-30
 
 ### Fixed
