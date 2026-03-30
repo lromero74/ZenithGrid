@@ -913,104 +913,156 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                     </div>
                     {status ? (
                       <div>
-                        {chartView === 'pie' ? (
-                          <div className="flex items-center justify-center gap-4">
-                            <div className="w-[140px] h-[140px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={CURRENCIES.map(c => ({
-                                      name: c.label,
-                                      value: status[`current_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus] as number,
-                                      color: CURRENCY_HEX[c.label],
-                                    })).filter(d => d.value > 0)}
-                                    cx="50%" cy="50%"
-                                    innerRadius={35} outerRadius={60}
-                                    paddingAngle={2} dataKey="value" strokeWidth={0}
-                                  >
-                                    {CURRENCIES.map(c => ({
-                                      name: c.label,
-                                      value: status[`current_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus] as number,
-                                      color: CURRENCY_HEX[c.label],
-                                    })).filter(d => d.value > 0).map((entry, i) => (
-                                      <Cell key={i} fill={entry.color} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '6px' }}
-                                    itemStyle={{ color: '#e2e8f0' }}
-                                    formatter={(value: number) => [`${value.toFixed(1)}%`, '']}
-                                    labelFormatter={(name: string) => name}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className="space-y-2">
-                              {CURRENCIES.map(c => {
-                                const currentPct = status[`current_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus] as number
-                                return (
+                        {(() => {
+                          const deployFrac = status.total_value_usd > 0
+                            ? Math.min(1, status.deployable_value_usd / status.total_value_usd)
+                            : 1
+                          // current_*_pct are % of deployable — scale each to % of total for display
+                          const perCurrency = CURRENCIES.map(c => {
+                            const resPctKey = `reserve_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus
+                            return {
+                              ...c,
+                              deployDisplayPct: parseFloat(((status[`current_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus] as number) * deployFrac).toFixed(1)),
+                              targetDisplayPct: parseFloat((rb[c.key] * deployFrac).toFixed(1)),
+                              reserveDisplayPct: parseFloat(((status[resPctKey] as number) || 0).toFixed(1)),
+                            }
+                          })
+                          const hasAnyReserveInChart = perCurrency.some(c => c.reserveDisplayPct > 0)
+
+                          // Build pie data: interleaved deployable + reserve slices per currency
+                          const pieData = perCurrency.flatMap(c => [
+                            ...(c.deployDisplayPct > 0 ? [{ name: c.label, value: c.deployDisplayPct, color: CURRENCY_HEX[c.label], isReserve: false }] : []),
+                            ...(c.reserveDisplayPct > 0 ? [{ name: `${c.label} (reserved)`, value: c.reserveDisplayPct, color: CURRENCY_HEX[c.label], isReserve: true }] : []),
+                          ])
+
+                          return chartView === 'pie' ? (
+                            <div className="flex items-center justify-center gap-4">
+                              <div className="w-[140px] h-[140px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={pieData}
+                                      cx="50%" cy="50%"
+                                      innerRadius={35} outerRadius={60}
+                                      paddingAngle={2} dataKey="value" strokeWidth={0}
+                                    >
+                                      {pieData.map((entry, i) => (
+                                        <Cell key={i} fill={entry.isReserve ? `${entry.color}66` : entry.color} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '6px' }}
+                                      itemStyle={{ color: '#e2e8f0' }}
+                                      formatter={(value: number) => [`${value.toFixed(1)}%`, '']}
+                                      labelFormatter={(name: string) => name}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                              <div className="space-y-2">
+                                {perCurrency.map(c => (
                                   <div key={c.key} className="flex items-center gap-2">
                                     <div className={`w-3 h-3 rounded-full ${c.bgColor}`} />
-                                    <span className={`${c.color} font-mono text-sm`}>{currentPct}%</span>
+                                    <span className={`${c.color} font-mono text-sm`}>
+                                      {c.deployDisplayPct.toFixed(1)}%
+                                      {c.reserveDisplayPct > 0 && (
+                                        <span className="text-[10px] ml-0.5" style={{ color: `${CURRENCY_HEX[c.label]}88` }}>
+                                          +{c.reserveDisplayPct.toFixed(1)}%
+                                        </span>
+                                      )}
+                                    </span>
                                     <span className="text-xs text-slate-500">{c.label}</span>
-                                    <span className="text-xs text-slate-600">target {rb[c.key]}%</span>
+                                    <span className="text-xs text-slate-600">target {c.targetDisplayPct.toFixed(1)}%</span>
                                   </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <div>
-                              <div className="text-[10px] text-slate-500 mb-1">CURRENT</div>
-                              <div className="h-7 rounded overflow-hidden flex relative">
-                                {CURRENCIES.map(c => {
-                                  const pct = status[`current_${c.label.toLowerCase()}_pct` as keyof RebalanceStatus] as number
-                                  return pct > 0 ? (
-                                    <div
-                                      key={c.key}
-                                      className="flex items-center justify-center text-[10px] font-mono text-white transition-all"
-                                      style={{ width: `${pct}%`, backgroundColor: `${CURRENCY_HEX[c.label]}cc` }}
-                                    >
-                                      {pct >= 8 && `${pct}%`}
-                                    </div>
-                                  ) : null
-                                })}
+                                ))}
                               </div>
                             </div>
-                            <div>
-                              <div className="text-[10px] text-slate-500 mb-1">TARGET</div>
-                              <div className="h-7 rounded overflow-hidden flex">
-                                {CURRENCIES.map(c => {
-                                  const pct = rb[c.key]
-                                  return pct > 0 ? (
-                                    <div
-                                      key={c.key}
-                                      className="flex items-center justify-center text-[10px] font-mono transition-all"
-                                      style={{
-                                        width: `${pct}%`,
-                                        backgroundColor: `${CURRENCY_HEX[c.label]}30`,
-                                        borderColor: `${CURRENCY_HEX[c.label]}80`,
-                                        color: `${CURRENCY_HEX[c.label]}cc`,
-                                        border: `1px solid ${CURRENCY_HEX[c.label]}80`,
-                                      }}
-                                    >
-                                      {pct >= 8 && `${pct}%`}
-                                    </div>
-                                  ) : null
-                                })}
+                          ) : (
+                            <div className="space-y-2">
+                              <div>
+                                <div className="text-[10px] text-slate-500 mb-1">CURRENT</div>
+                                <div className="h-7 rounded overflow-hidden flex">
+                                  {perCurrency.flatMap(c => [
+                                    c.deployDisplayPct > 0 && (
+                                      <div
+                                        key={`${c.key}-deploy`}
+                                        className="flex items-center justify-center text-[10px] font-mono text-white transition-all"
+                                        style={{ width: `${c.deployDisplayPct}%`, backgroundColor: `${CURRENCY_HEX[c.label]}cc` }}
+                                      >
+                                        {c.deployDisplayPct >= 8 && `${c.deployDisplayPct}%`}
+                                      </div>
+                                    ),
+                                    c.reserveDisplayPct > 0 && (
+                                      <div
+                                        key={`${c.key}-reserve`}
+                                        className="flex items-center justify-center text-[10px] font-mono transition-all"
+                                        style={{
+                                          width: `${c.reserveDisplayPct}%`,
+                                          backgroundColor: `${CURRENCY_HEX[c.label]}44`,
+                                          borderTop: `2px dashed ${CURRENCY_HEX[c.label]}cc`,
+                                          borderBottom: `2px dashed ${CURRENCY_HEX[c.label]}cc`,
+                                          color: `${CURRENCY_HEX[c.label]}cc`,
+                                        }}
+                                      >
+                                        {c.reserveDisplayPct >= 8 && `${c.reserveDisplayPct}%`}
+                                      </div>
+                                    ),
+                                  ])}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] text-slate-500 mb-1">TARGET</div>
+                                <div className="h-7 rounded overflow-hidden flex">
+                                  {perCurrency.flatMap(c => [
+                                    c.targetDisplayPct > 0 && (
+                                      <div
+                                        key={`${c.key}-target`}
+                                        className="flex items-center justify-center text-[10px] font-mono transition-all"
+                                        style={{
+                                          width: `${c.targetDisplayPct}%`,
+                                          backgroundColor: `${CURRENCY_HEX[c.label]}30`,
+                                          border: `1px solid ${CURRENCY_HEX[c.label]}80`,
+                                          color: `${CURRENCY_HEX[c.label]}cc`,
+                                        }}
+                                      >
+                                        {c.targetDisplayPct >= 8 && `${c.targetDisplayPct}%`}
+                                      </div>
+                                    ),
+                                    c.reserveDisplayPct > 0 && (
+                                      <div
+                                        key={`${c.key}-reserve`}
+                                        className="flex items-center justify-center text-[10px] font-mono transition-all"
+                                        style={{
+                                          width: `${c.reserveDisplayPct}%`,
+                                          backgroundColor: `${CURRENCY_HEX[c.label]}22`,
+                                          borderTop: `2px dashed ${CURRENCY_HEX[c.label]}80`,
+                                          borderBottom: `2px dashed ${CURRENCY_HEX[c.label]}80`,
+                                          color: `${CURRENCY_HEX[c.label]}88`,
+                                        }}
+                                      >
+                                        {c.reserveDisplayPct >= 8 && `${c.reserveDisplayPct}%`}
+                                      </div>
+                                    ),
+                                  ])}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+                                {CURRENCIES.map(c => (
+                                  <span key={c.key} className="flex items-center gap-1 text-[10px]">
+                                    <span className={`w-2.5 h-2.5 rounded-sm ${c.bgColor} inline-block`} />
+                                    <span className="text-slate-400">{c.label}</span>
+                                  </span>
+                                ))}
+                                {hasAnyReserveInChart && (
+                                  <span className="flex items-center gap-1 text-[10px]">
+                                    <span className="w-2.5 h-2.5 rounded-sm inline-block border border-dashed border-slate-400 bg-slate-700" />
+                                    <span className="text-slate-400">Reserved (same color, dashed)</span>
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <div className="flex justify-center gap-4 mt-1">
-                              {CURRENCIES.map(c => (
-                                <span key={c.key} className="flex items-center gap-1 text-[10px]">
-                                  <span className={`w-2.5 h-2.5 rounded-sm ${c.bgColor} inline-block`} />
-                                  <span className="text-slate-400">{c.label}</span>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                         <div className="text-xs text-slate-500 text-center mt-2">
                           Total value: ${status.total_value_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </div>

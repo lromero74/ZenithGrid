@@ -1381,6 +1381,15 @@ async def get_rebalance_status(
         }
         _deploy_alloc = _compute_allocation(_deployable_balances, prices)
 
+        # Per-currency reserve as % of total portfolio (for chart display)
+        def _pct_of_total(usd_val: float) -> float:
+            return round(usd_val / _total * 100, 2) if _total > 0 else 0.0
+
+        _reserve_pct_usd = _pct_of_total(account.min_balance_usd or 0.0)
+        _reserve_pct_btc = _pct_of_total((account.min_balance_btc or 0.0) * _btc_p)
+        _reserve_pct_eth = _pct_of_total((account.min_balance_eth or 0.0) * _eth_p)
+        _reserve_pct_usdc = _pct_of_total(account.min_balance_usdc or 0.0)
+
         response_data = {
             "account_id": account_id,
             # current_*_pct = % of deployable pool (matches the target frame)
@@ -1400,6 +1409,11 @@ async def get_rebalance_status(
             "min_balance_usdc": account.min_balance_usdc or 0.0,
             "reserve_value_usd": _reserve_usd,
             "deployable_value_usd": _deployable,
+            # Per-currency reserve as % of total portfolio (for colored reserve segments in charts)
+            "reserve_usd_pct": _reserve_pct_usd,
+            "reserve_btc_pct": _reserve_pct_btc,
+            "reserve_eth_pct": _reserve_pct_eth,
+            "reserve_usdc_pct": _reserve_pct_usdc,
         }
         if not account.is_paper_trading:
             _TTL_REBALANCE_STATUS[account_id] = (time.monotonic(), response_data)

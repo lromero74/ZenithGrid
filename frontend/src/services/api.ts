@@ -655,6 +655,10 @@ export interface RebalanceStatus {
   min_balance_usdc: number;
   reserve_value_usd: number;    // Sum of all reserves converted to USD
   deployable_value_usd: number; // total_value_usd minus reserve_value_usd
+  reserve_usd_pct: number;      // USD reserve as % of total portfolio
+  reserve_btc_pct: number;      // BTC reserve as % of total portfolio
+  reserve_eth_pct: number;      // ETH reserve as % of total portfolio
+  reserve_usdc_pct: number;     // USDC reserve as % of total portfolio
 }
 
 export const rebalanceApi = {
