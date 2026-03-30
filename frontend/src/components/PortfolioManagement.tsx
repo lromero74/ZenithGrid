@@ -709,30 +709,67 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
               {mode === 'rebalance' && rb && (
                 <div className="space-y-5">
                   {/* Allocation bar */}
-                  <div className="h-3 rounded-full overflow-hidden flex">
-                    {CURRENCIES.map(({ key, bgColor }) => (
-                      <div key={key} className={`${bgColor} transition-all`} style={{ width: `${rb[key]}%` }} />
-                    ))}
-                  </div>
+                  {(() => {
+                    const deployFrac = (status && status.total_value_usd > 0)
+                      ? Math.min(1, status.deployable_value_usd / status.total_value_usd)
+                      : 1
+                    const reservePct = Math.max(0, (1 - deployFrac) * 100)
+                    return (
+                      <div className="h-3 rounded-full overflow-hidden flex">
+                        {CURRENCIES.map(({ key, bgColor }) => (
+                          <div
+                            key={key}
+                            className={`${bgColor} transition-all`}
+                            style={{ width: `${rb[key] * deployFrac}%` }}
+                          />
+                        ))}
+                        {reservePct > 0 && (
+                          <div
+                            className="bg-slate-600 transition-all"
+                            style={{ width: `${reservePct}%` }}
+                            title={`${reservePct.toFixed(1)}% reserved`}
+                          />
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Sliders */}
-                  <div className="space-y-3">
-                    {CURRENCIES.map(({ key, label, color }) => (
-                      <div key={key} className="flex items-center gap-3">
-                        <span className={`w-10 text-sm font-medium ${color}`}>{label}</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={rb[key]}
-                          onChange={(e) => handleSliderChange(account.id, key, parseInt(e.target.value))}
-                          disabled={!canWriteAccount}
-                          className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
-                        />
-                        <span className="w-12 text-right text-sm text-white font-mono">{rb[key]}%</span>
+                  {(() => {
+                    const deployFrac = (status && status.total_value_usd > 0)
+                      ? Math.min(1, status.deployable_value_usd / status.total_value_usd)
+                      : 1
+                    const hasReserve = hasAnyReserve(rb) && deployFrac < 1
+                    return (
+                      <div className="space-y-3">
+                        {CURRENCIES.map(({ key, label, color }) => {
+                          const effectivePct = (rb[key] * deployFrac)
+                          return (
+                            <div key={key} className="flex items-center gap-3">
+                              <span className={`w-10 text-sm font-medium ${color}`}>{label}</span>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={rb[key]}
+                                onChange={(e) => handleSliderChange(account.id, key, parseInt(e.target.value))}
+                                disabled={!canWriteAccount}
+                                className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400"
+                              />
+                              {hasReserve ? (
+                                <span className="w-20 text-right text-sm font-mono leading-tight">
+                                  <span className="text-white">{effectivePct.toFixed(1)}%</span>
+                                  <span className="text-slate-500 text-xs"> ({rb[key]}%)</span>
+                                </span>
+                              ) : (
+                                <span className="w-12 text-right text-sm text-white font-mono">{rb[key]}%</span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })()}
                   {/* Deployable pool context — shown when reserves exist */}
                   {hasAnyReserve(rb) && status && (
                     <p className="text-xs text-slate-400 mt-1">

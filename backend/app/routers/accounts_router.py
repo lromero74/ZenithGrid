@@ -1354,7 +1354,7 @@ async def get_rebalance_status(
         t_eth = account.rebalance_target_eth_pct
         t_usdc = account.rebalance_target_usdc_pct
 
-        # Compute reserve value in USD so the UI can show "deployable balance" context
+        # Compute reserve value in USD (needed for deployable context)
         _p = prices if isinstance(prices, dict) else {}
         _btc_p = _p.get("BTC-USD", 0.0)
         _eth_p = _p.get("ETH-USD", 0.0)
@@ -1368,9 +1368,27 @@ async def get_rebalance_status(
         _total = alloc.get("total_value_usd", 0.0)
         _deployable = round(max(0.0, _total - _reserve_usd), 2)
 
+        # Current allocation as % of deployable pool (reserves subtracted).
+        # Targets are stored as ratios of the deployable pool, so using the same
+        # denominator means current and target percentages can actually converge.
+        # Without this, a $50 USD reserve on a $1,000 portfolio makes BTC max out
+        # at 47.5% even when target is 50%, so they'd never match in the display.
+        _deployable_balances = {
+            "USD": max(0.0, balances.get("USD", 0.0) - (account.min_balance_usd or 0.0)),
+            "BTC": max(0.0, balances.get("BTC", 0.0) - (account.min_balance_btc or 0.0)),
+            "ETH": max(0.0, balances.get("ETH", 0.0) - (account.min_balance_eth or 0.0)),
+            "USDC": max(0.0, balances.get("USDC", 0.0) - (account.min_balance_usdc or 0.0)),
+        }
+        _deploy_alloc = _compute_allocation(_deployable_balances, prices)
+
         response_data = {
             "account_id": account_id,
-            **alloc,
+            # current_*_pct = % of deployable pool (matches the target frame)
+            "current_usd_pct": _deploy_alloc["current_usd_pct"],
+            "current_btc_pct": _deploy_alloc["current_btc_pct"],
+            "current_eth_pct": _deploy_alloc["current_eth_pct"],
+            "current_usdc_pct": _deploy_alloc["current_usdc_pct"],
+            "total_value_usd": _total,               # full portfolio for context
             "target_usd_pct": t_usd if t_usd is not None else 34.0,
             "target_btc_pct": t_btc if t_btc is not None else 33.0,
             "target_eth_pct": t_eth if t_eth is not None else 33.0,

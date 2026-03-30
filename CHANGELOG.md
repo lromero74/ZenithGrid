@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.147.2] - 2026-03-30
+
+### Changed
+- **Rebalancer sliders now show effective portfolio percentage** — when minimum balance reserves are configured, each slider's label shows the real portfolio impact (e.g., "47.5%") alongside the stored target ratio (50%) in grey, so you can see exactly what percentage of your total portfolio will be in each currency after reserves are accounted for. Previously, the label only showed the stored ratio, which could never actually be reached when a reserve was in place.
+- **Allocation bar reflects the reserve** — the colored target allocation bar now scales the currency segments to the deployable portion of your portfolio, with a grey segment representing the reserved balance at the right end. This makes it visually clear that the currency targets fill only the deployable fraction, not the full bar.
+- **Current allocation in rebalancer status uses deployable pool** — the current allocation percentages shown in the rebalancer status view (pie chart and progress bars) now compare against the deployable pool rather than the full portfolio, so current and target percentages are in the same frame and can actually converge.
+
 ## [v2.147.1] - 2026-03-30
 
 ### Fixed
