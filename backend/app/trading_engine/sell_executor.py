@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.currency_utils import get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
-from app.product_precision import get_base_precision
+from app.product_precision import ensure_product_precision, get_base_precision
 from app.services.shutdown_manager import shutdown_manager
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
@@ -329,6 +329,9 @@ async def execute_sell_short(
     # Execute market sell order (immediate execution)
     logger.info(f"  Executing SHORT SELL: {base_amount:.8f} BTC @ {current_price:.8f}")
 
+    # Ensure precision data is cached for this product (fetches from API if missing)
+    await ensure_product_precision(product_id)
+
     # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
     precision = get_base_precision(product_id)
     base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
@@ -558,6 +561,9 @@ async def execute_limit_sell(
     Returns:
         PendingOrder record
     """
+    # Ensure precision data is cached for this product (fetches from API if missing)
+    await ensure_product_precision(product_id)
+
     # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
     precision = get_base_precision(product_id)
     base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
@@ -704,6 +710,9 @@ async def execute_sell(
 
     # Execute market order (default behavior or fallback)
     logger.info(f"  Executing MARKET close order @ {current_price:.8f}")
+
+    # Ensure precision data is cached for this product (fetches from API if missing)
+    await ensure_product_precision(product_id)
 
     # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
     precision = get_base_precision(product_id)

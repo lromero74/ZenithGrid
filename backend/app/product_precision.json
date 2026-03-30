@@ -4113,5 +4113,35 @@
     "quote_increment": "0.0001",
     "quote_decimals": 4,
     "base_increment": "0.01"
+  },
+  "RAY-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BOBBOB-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "JUPITER-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "JUPITER-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "RAY-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BIRB-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
   }
 }

@@ -3,11 +3,18 @@ Product precision specifications from Coinbase API.
 
 Each trading pair has specific increment requirements for quote and base amounts.
 This module provides a lookup system to ensure orders meet Coinbase's precision requirements.
+
+Missing products are fetched from the Coinbase public API on demand by
+ensure_product_precision() and written back to product_precision.json so future
+calls are served from the file without a network round-trip.
 """
 
 import json
+import logging
 import os
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 # Cache for precision data
 _PRECISION_CACHE: Optional[Dict] = None
@@ -128,6 +135,54 @@ def format_quote_amount_for_product(amount: float, product_id: str) -> str:
     # Format with 8 decimal places (standard for crypto display)
     # This pads with trailing zeros if needed
     return f"{rounded:.8f}"
+
+
+async def ensure_product_precision(product_id: str) -> None:
+    """
+    If product_id is missing from product_precision.json, fetch its increment
+    data from the Coinbase public API and persist it so future calls are fast.
+
+    Safe to call from async sell/buy paths. No-op if already in the cache.
+    """
+    precision_data = get_precision_data()
+    if product_id in precision_data:
+        return  # Already known
+
+    try:
+        from app.coinbase_api.public_market_data import get_product as _fetch_product
+        product = await _fetch_product(product_id)
+        base_inc = product.get("base_increment", "")
+        quote_inc = product.get("quote_increment", "")
+        if not base_inc:
+            logger.warning("ensure_product_precision: no base_increment for %s", product_id)
+            return
+
+        def _count_decimals(inc: str) -> int:
+            if "." in inc:
+                return len(inc.split(".")[1].rstrip("0")) or 0
+            return 0
+
+        entry = {
+            "quote_increment": quote_inc,
+            "quote_decimals": _count_decimals(quote_inc),
+            "base_increment": base_inc,
+        }
+        precision_data[product_id] = entry
+        logger.info(
+            "ensure_product_precision: fetched %s base_increment=%s quote_increment=%s",
+            product_id, base_inc, quote_inc,
+        )
+
+        # Persist back to JSON so restarts don't need to re-fetch
+        json_path = os.path.join(os.path.dirname(__file__), "product_precision.json")
+        try:
+            with open(json_path, "w") as f:
+                json.dump(precision_data, f, indent=2)
+        except OSError as e:
+            logger.warning("ensure_product_precision: could not write JSON: %s", e)
+
+    except Exception as e:
+        logger.warning("ensure_product_precision: failed for %s: %s", product_id, e)
 
 
 def format_base_amount_for_product(amount: float, product_id: str) -> str:

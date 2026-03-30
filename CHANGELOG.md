@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.148.1] - 2026-03-30
+
+### Fixed
+- **JUPITER sell orders no longer fail with INVALID_SIZE_PRECISION** — JUPITER-USD/USDC requires at most 1 decimal place (`base_increment=0.1`), but the precision cache didn't have an entry for it and defaulted to 8. Added JUPITER-USD, JUPITER-USDC, RAY-USD, RAY-USDC, BOBBOB-USD, and BIRB-USD to the precision table.
+- **New coins auto-populate precision on first sell** — the sell executor now calls `ensure_product_precision()` before rounding any order size. If a product is missing from the local precision cache, it fetches the correct `base_increment` from the Coinbase public API, uses it immediately, and writes it back to disk so future restarts don't need to re-fetch.
+
 ## [v2.148.0] - 2026-03-30
 
 ### Added
