@@ -35,7 +35,7 @@ DUST_SWEEP_INTERVAL_DAYS = 30
 
 # {account_id: (timestamp, {"agg_current": {...}, "targets": {...}, "threshold": float})}
 _allocation_cache: Dict[int, Tuple[datetime, dict]] = {}
-_CACHE_TTL_SECONDS = 90  # Valid for one full check interval + buffer
+_CACHE_TTL_SECONDS = 21600  # 6 hours — covers the longest rebalancer check interval (4h) + buffer
 
 
 def set_account_gate_data(account_id: int, data: dict) -> None:

@@ -24,7 +24,10 @@ from app.constants import (
     PAIR_PROCESSING_DELAY_SECONDS,
     compute_dynamic_concurrency,
 )
-from app.services.rebalance_monitor import quote_is_overweight as _quote_is_overweight
+from app.services.rebalance_monitor import (
+    get_account_gate_data as _get_account_gate_data,
+    quote_is_overweight as _quote_is_overweight,
+)
 from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.paper_trading_client import simulate_slippage_ctx
@@ -546,29 +549,35 @@ class MultiBotMonitor:
                 _first_pair = trading_pairs[0] if trading_pairs else ""
                 _parts = _first_pair.split("-")
                 _quote_cur = _parts[1] if len(_parts) == 2 else None
-                if _quote_cur and _quote_is_overweight(bot.account_id, _quote_cur):
-                    before = len(trading_pairs)
-                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
-                    _rebalancer_gated_bots.add(bot.id)
-                    if len(trading_pairs) < before:
-                        logger.info(
-                            f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
-                            f"blocking new base orders ({before - len(trading_pairs)} pair(s) held back)"
-                        )
-                        # Write a scanner log entry so the user can see gate activity
-                        from app.models import ScannerLog
-                        db.add(ScannerLog(
-                            bot_id=bot.id,
-                            product_id=_quote_cur,
-                            scan_type="rebalancer_gate",
-                            decision="blocked",
-                            reason=f"{_quote_cur} overweight — new base orders blocked until rebalanced",
-                        ))
-                        await db.flush()
-                    if not trading_pairs:
-                        return {"action": "skip", "reason": "Rebalancer gate: no open positions to manage"}
-                else:
-                    _rebalancer_gated_bots.discard(bot.id)
+                # Only act when fresh allocation data is available from the rebalancer.
+                # If the cache has expired (e.g., between check intervals), leave the
+                # gated state unchanged rather than failing open and dropping the badge.
+                _gate_data = _get_account_gate_data(bot.account_id) if _quote_cur else None
+                if _gate_data is not None and _quote_cur:
+                    if _quote_is_overweight(bot.account_id, _quote_cur):
+                        before = len(trading_pairs)
+                        trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                        _rebalancer_gated_bots.add(bot.id)
+                        if len(trading_pairs) < before:
+                            logger.info(
+                                f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
+                                f"blocking new base orders ({before - len(trading_pairs)} pair(s) held back)"
+                            )
+                            # Write a scanner log entry so the user can see gate activity
+                            from app.models import ScannerLog
+                            db.add(ScannerLog(
+                                bot_id=bot.id,
+                                product_id=_quote_cur,
+                                scan_type="rebalancer_gate",
+                                decision="blocked",
+                                reason=f"{_quote_cur} overweight — new base orders blocked until rebalanced",
+                            ))
+                            await db.flush()
+                        if not trading_pairs:
+                            return {"action": "skip", "reason": "Rebalancer gate: no open positions to manage"}
+                    else:
+                        # Fresh data says not overweight — clear the gate
+                        _rebalancer_gated_bots.discard(bot.id)
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis

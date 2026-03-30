@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.147.1] - 2026-03-30
+
+### Fixed
+- **Rebalancer badge no longer disappears between rebalancer check cycles** — the gate's in-memory state was being cleared every time the per-bot cycle ran and the allocation cache had expired (90 s TTL vs. 15–240 min rebalancer intervals). The badge would flash off on the next bot tick even though the portfolio was still overweight. Fixed by: (1) extending the cache TTL to 6 hours, and (2) only clearing the gated state when fresh allocation data from the rebalancer explicitly confirms the currency is back within target — stale or missing cache no longer resets the gate.
+
 ## [v2.147.0] - 2026-03-30
 
 ### Added

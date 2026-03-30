@@ -35,10 +35,12 @@ class TestAllocationCache:
         from app.services.rebalance_monitor import set_account_gate_data, get_account_gate_data, _CACHE_TTL_SECONDS
         payload = {"agg_current": {}, "targets": {}, "threshold": 5.0}
         set_account_gate_data(2, payload)
-        # Artificially age the cache entry
+        # Artificially age the cache entry past the TTL
         from app.services import rebalance_monitor
         ts, data = rebalance_monitor._allocation_cache[2]
-        rebalance_monitor._allocation_cache[2] = (ts - timedelta(seconds=_CACHE_TTL_SECONDS + 1), data)
+        rebalance_monitor._allocation_cache[2] = (
+            ts - timedelta(seconds=_CACHE_TTL_SECONDS + 1), data
+        )
         assert get_account_gate_data(2) is None
 
     def test_fresh_cache_not_expired(self):
