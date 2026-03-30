@@ -120,6 +120,7 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user,
         )
         assert len(result) == 1
@@ -148,6 +149,7 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user,
         )
         assert result == []
@@ -175,6 +177,7 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user,
         )
         assert len(result) == 1
@@ -201,6 +204,7 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user1,
         )
         assert len(result) == 1  # Only user1's position
@@ -222,9 +226,68 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user,
         )
         assert "no-cache" in response_mock.headers.get("Cache-Control", "")
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_filters_by_account_id(self, mock_resize, db_session):
+        """Happy path: account_id param returns only that account's positions."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account1 = await _create_user_with_account(db_session, "user1@example.com")
+        account2 = Account(
+            user_id=user.id, name="Account 2", type="cex",
+            exchange="coinbase", is_active=True,
+        )
+        db_session.add(account2)
+        await db_session.flush()
+
+        pos1 = await _create_position(db_session, account1, status="open", product_id="ETH-BTC")
+        await _create_position(db_session, account2, status="open", product_id="SOL-USDC")
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            account_id=account1.id,
+            db=db_session,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].id == pos1.id
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_account_id_filter_rejects_inaccessible_account(self, mock_resize, db_session):
+        """Failure case: account_id belonging to a different user returns 403."""
+        from fastapi import HTTPException
+        from app.position_routers.position_query_router import get_positions
+
+        user1, account1 = await _create_user_with_account(db_session, "owner@example.com")
+        user2, _ = await _create_user_with_account(db_session, "intruder@example.com")
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_positions(
+                response=response_mock,
+                status="open",
+                limit=50,
+                offset=0,
+                account_id=account1.id,  # user2 does not own this account
+                db=db_session,
+                current_user=user2,
+            )
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
@@ -255,6 +318,7 @@ class TestGetPositions:
             limit=50,
             offset=0,
             db=db_session,
+            account_id=None,
             current_user=user,
         )
         assert len(result) == 1
@@ -909,7 +973,8 @@ class TestCoinCategoryFromBlacklist:
         response_mock = MagicMock()
         response_mock.headers = {}
         result = await get_positions(
-            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 1
         assert result[0].coin_category == "APPROVED"
@@ -933,7 +998,8 @@ class TestCoinCategoryFromBlacklist:
         response_mock = MagicMock()
         response_mock.headers = {}
         result = await get_positions(
-            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 1
         assert result[0].coin_category == "MEME"
@@ -956,7 +1022,8 @@ class TestCoinCategoryFromBlacklist:
         response_mock = MagicMock()
         response_mock.headers = {}
         result = await get_positions(
-            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 1
         assert result[0].coin_category == "BLACKLISTED"
@@ -973,7 +1040,8 @@ class TestCoinCategoryFromBlacklist:
         response_mock = MagicMock()
         response_mock.headers = {}
         result = await get_positions(
-            response=response_mock, status=None, limit=50, offset=0, db=db_session, current_user=user,
+            response=response_mock, status=None, limit=50, offset=0, db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 1
         assert result[0].coin_category is None
@@ -1009,7 +1077,8 @@ class TestGetPositionsPagination:
         # With offset=2, should get 3 positions (oldest 3 since order is desc by opened_at)
         result = await get_positions(
             response=response_mock, status=None, limit=50, offset=2,
-            db=db_session, current_user=user,
+            db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 3
 
@@ -1028,7 +1097,8 @@ class TestGetPositionsPagination:
 
         result = await get_positions(
             response=response_mock, status=None, limit=3, offset=0,
-            db=db_session, current_user=user,
+            db=db_session, account_id=None,
+            current_user=user,
         )
         assert len(result) == 3
 
@@ -1046,6 +1116,7 @@ class TestGetPositionsPagination:
 
         result = await get_positions(
             response=response_mock, status=None, limit=50, offset=999,
-            db=db_session, current_user=user,
+            db=db_session, account_id=None,
+            current_user=user,
         )
         assert result == []

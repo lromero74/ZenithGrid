@@ -26,8 +26,8 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
     try { const v = localStorage.getItem('zenith-positions-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
   })
-  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>(() => {
-    try { return (localStorage.getItem('zenith-positions-filter-market') as 'all' | 'USD' | 'BTC') || 'all' } catch { return 'all' }
+  const [filterMarket, setFilterMarket] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-positions-filter-market') || 'all' } catch { return 'all' }
   })
   const [filterPair, setFilterPair] = useState<string>(() => {
     try { return localStorage.getItem('zenith-positions-filter-pair') || 'all' } catch { return 'all' }
@@ -87,8 +87,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
 
       if (filterMarket !== 'all') {
         const quoteCurrency = (p.product_id || 'ETH-BTC').split('-')[1]
-        if (filterMarket === 'USD' && quoteCurrency !== 'USD') return false
-        if (filterMarket === 'BTC' && quoteCurrency !== 'BTC') return false
+        if (quoteCurrency !== filterMarket) return false
       }
 
       if (filterPair !== 'all' && p.product_id !== filterPair) return false
@@ -152,16 +151,24 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   const openPositions = filteredPositions.slice(pageStart, pageStart + pageSize)
 
   // Helper for market matching
-  const matchesMarket = (productId: string | undefined, market: 'all' | 'USD' | 'BTC') => {
+  const matchesMarket = (productId: string | undefined, market: string) => {
     if (market === 'all') return true
     const quoteCurrency = (productId || 'ETH-BTC').split('-')[1]
     return quoteCurrency === market
   }
 
-  // Dynamic filter options with counts relative to OTHER active filters
+  // Dynamic filter options — derived from actual open positions, not a hardcoded list
   const uniqueMarkets = useMemo(() => {
-    const markets: ('USD' | 'BTC')[] = ['USD', 'BTC']
-    return markets.map(m => {
+    // Collect the set of quote currencies present in open positions
+    const marketSet = new Set<string>()
+    positionsWithPnL.forEach(p => {
+      if (p.status === 'open') {
+        const quote = (p.product_id || 'ETH-BTC').split('-')[1]
+        if (quote) marketSet.add(quote)
+      }
+    })
+
+    return Array.from(marketSet).sort().map(m => {
       const count = positionsWithPnL.filter(p => {
         if (p.status !== 'open') return false
         if (filterBot !== 'all' && p.bot_id !== filterBot) return false

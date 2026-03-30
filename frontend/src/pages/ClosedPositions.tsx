@@ -23,8 +23,8 @@ function ClosedPositions() {
   const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
     try { const v = localStorage.getItem('zenith-history-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
   })
-  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>(() => {
-    try { return (localStorage.getItem('zenith-history-filter-market') as 'all' | 'USD' | 'BTC') || 'all' } catch { return 'all' }
+  const [filterMarket, setFilterMarket] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-history-filter-market') || 'all' } catch { return 'all' }
   })
   const [filterPair, setFilterPair] = useState<string>(() => {
     try { return localStorage.getItem('zenith-history-filter-pair') || 'all' } catch { return 'all' }
@@ -94,7 +94,7 @@ function ClosedPositions() {
   const allClosedPositions = useMemo(() => allPositions || [], [allPositions])
 
   // Helper: check if a product_id matches the market filter
-  const matchesMarket = (productId: string, market: 'all' | 'USD' | 'BTC') => {
+  const matchesMarket = (productId: string, market: string) => {
     if (market === 'all') return true
     const quote = productId?.split('-')[1] || ''
     return quote === market
@@ -116,8 +116,21 @@ function ClosedPositions() {
 
   // Cascading filters: each dropdown's options are filtered by the OTHER selections
   const uniqueMarkets = useMemo(() => {
-    const markets: ('USD' | 'BTC')[] = ['USD', 'BTC']
-    return markets.map(m => {
+    // Derive market list dynamically from actual data
+    const marketSet = new Set<string>()
+    if (activeTab === 'closed') {
+      allClosedPositions.forEach((p: Position) => {
+        const quote = (p.product_id || 'ETH-BTC').split('-')[1]
+        if (quote) marketSet.add(quote)
+      })
+    } else {
+      failedOrders.forEach((o: any) => {
+        const quote = (o.product_id || 'ETH-BTC').split('-')[1]
+        if (quote) marketSet.add(quote)
+      })
+    }
+
+    return Array.from(marketSet).sort().map(m => {
       let count = 0
       if (activeTab === 'closed') {
         count = allClosedPositions.filter((p: Position) => {

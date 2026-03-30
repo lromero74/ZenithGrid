@@ -5,8 +5,8 @@ import type { GroupByMode } from '../hooks/usePositionFilters'
 interface FilterPanelProps {
   filterBot: number | 'all'
   setFilterBot: (value: number | 'all') => void
-  filterMarket: 'all' | 'USD' | 'BTC'
-  setFilterMarket: (value: 'all' | 'USD' | 'BTC') => void
+  filterMarket: string
+  setFilterMarket: (value: string) => void
   filterPair: string
   setFilterPair: (value: string) => void
   filterCategory: string
@@ -14,7 +14,7 @@ interface FilterPanelProps {
   groupBy: GroupByMode
   setGroupBy: (value: GroupByMode) => void
   bots: Bot[] | undefined
-  uniqueMarkets: { value: 'USD' | 'BTC'; count: number }[]
+  uniqueMarkets: { value: string; count: number }[]
   uniqueBots: { id: number; name: string; count: number }[]
   uniquePairs: { value: string; count: number }[]
   uniqueCategories: { value: string; label: string; count: number }[]
@@ -51,7 +51,7 @@ export const FilterPanel = ({
           <label className="block text-xs font-medium text-slate-400 mb-1.5">Market</label>
           <select
             value={filterMarket}
-            onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
+            onChange={(e) => setFilterMarket(e.target.value)}
             className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Markets</option>

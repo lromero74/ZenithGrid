@@ -345,6 +345,95 @@ describe('usePositionFilters uniquePairs', () => {
   })
 })
 
+describe('usePositionFilters uniqueMarkets — dynamic from positions', () => {
+  test('includes only markets that have actual open positions', () => {
+    const positions = [
+      makePosition({ id: 1, status: 'open', product_id: 'ETH-USDC' }),
+      makePosition({ id: 2, status: 'open', product_id: 'SOL-USDC' }),
+    ]
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: positions })
+    )
+
+    const markets = result.current.uniqueMarkets.map(m => m.value)
+    expect(markets).toContain('USDC')
+    expect(markets).not.toContain('USD')
+    expect(markets).not.toContain('BTC')
+  })
+
+  test('includes USDC and BTC markets with correct counts', () => {
+    const positions = [
+      makePosition({ id: 1, status: 'open', product_id: 'ETH-USDC' }),
+      makePosition({ id: 2, status: 'open', product_id: 'SOL-USDC' }),
+      makePosition({ id: 3, status: 'open', product_id: 'ETH-BTC' }),
+    ]
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: positions })
+    )
+
+    const usdcMarket = result.current.uniqueMarkets.find(m => m.value === 'USDC')
+    expect(usdcMarket).toBeDefined()
+    expect(usdcMarket?.count).toBe(2)
+
+    const btcMarket = result.current.uniqueMarkets.find(m => m.value === 'BTC')
+    expect(btcMarket).toBeDefined()
+    expect(btcMarket?.count).toBe(1)
+  })
+
+  test('does not include markets with no open positions', () => {
+    const positions = [
+      makePosition({ id: 1, status: 'open', product_id: 'ETH-USDC' }),
+      makePosition({ id: 2, status: 'closed', product_id: 'ETH-BTC', closed_at: '2025-01-01' }),
+    ]
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: positions })
+    )
+
+    const markets = result.current.uniqueMarkets.map(m => m.value)
+    expect(markets).toContain('USDC')
+    expect(markets).not.toContain('BTC') // closed position — not in uniqueMarkets
+  })
+
+  test('filtering by USDC shows only USDC positions', () => {
+    const positions = [
+      makePosition({ id: 1, status: 'open', product_id: 'ETH-USDC' }),
+      makePosition({ id: 2, status: 'open', product_id: 'SOL-USDC' }),
+      makePosition({ id: 3, status: 'open', product_id: 'ETH-BTC' }),
+      makePosition({ id: 4, status: 'open', product_id: 'BTC-USD' }),
+    ]
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: positions })
+    )
+
+    act(() => { result.current.setFilterMarket('USDC') })
+
+    const ids = result.current.openPositions.map(p => p.id)
+    expect(ids).toContain(1)
+    expect(ids).toContain(2)
+    expect(ids).not.toContain(3)
+    expect(ids).not.toContain(4)
+  })
+
+  test('uniqueMarkets shows correct counts across all markets with bot filter active', () => {
+    const positions = [
+      makePosition({ id: 1, status: 'open', product_id: 'ETH-USDC', bot_id: 1 }),
+      makePosition({ id: 2, status: 'open', product_id: 'ETH-BTC', bot_id: 1 }),
+      makePosition({ id: 3, status: 'open', product_id: 'SOL-BTC', bot_id: 2 }),
+    ]
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: positions })
+    )
+
+    // Filter by bot 1 — counts should reflect bot 1's positions only
+    act(() => { result.current.setFilterBot(1) })
+
+    const btcCount = result.current.uniqueMarkets.find(m => m.value === 'BTC')?.count
+    expect(btcCount).toBe(1) // Only bot 1's BTC position
+    const usdcCount = result.current.uniqueMarkets.find(m => m.value === 'USDC')?.count
+    expect(usdcCount).toBe(1) // Only bot 1's USDC position
+  })
+})
+
 describe('usePositionFilters clearFilters', () => {
   test('resets bot, market, and pair filters to all', () => {
     const { result } = renderHook(() =>

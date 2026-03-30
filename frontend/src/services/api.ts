@@ -201,8 +201,10 @@ export interface UpdatePositionSettingsRequest {
 }
 
 export const positionsApi = {
-  getAll: (status?: string, limit = 500) =>
-    api.get<Position[]>('/positions/', { params: { status, limit } }).then((res) => res.data),
+  getAll: (status?: string, limit = 500, accountId?: number) =>
+    api.get<Position[]>('/positions/', {
+      params: { status, limit, ...(accountId != null ? { account_id: accountId } : {}) }
+    }).then((res) => res.data),
   getById: (id: number) =>
     api.get<Position>(`/positions/${id}`).then((res) => res.data),
   getTrades: (id: number) =>

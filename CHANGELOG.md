@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.146.0] - 2026-03-30
+
+### Fixed
+- **Market filter on Positions page now shows your actual markets** — the filter dropdown was hardcoded to only show "USD" and "BTC" options. It now derives options dynamically from your open positions, so USDC (and any other quote currency) appears automatically. The same fix applies to Trade History.
+- **Market filter options no longer show as disabled** — USD and BTC were showing as greyed-out and unclickable when you only had USDC positions, because they had a count of zero. Now only markets that actually have positions appear.
+- **Missing positions on Positions page** — if you had open positions spread across many accounts, only the 100 most recently-opened were being fetched (across all accounts combined), which could silently drop older positions from the view. The page now fetches positions for the selected account specifically, so all your positions for that account are always shown.
+
 ## [v2.145.3] - 2026-03-29
 
 ### Fixed

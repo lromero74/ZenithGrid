@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, authFetch, api } from '../../../services/api'
 import { useState, useEffect, useMemo } from 'react'
-import type { Position } from '../../../types'
 import { calculateUnrealizedPnL } from '../helpers'
 
 interface UsePositionsDataProps {
@@ -11,18 +10,16 @@ interface UsePositionsDataProps {
 export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) => {
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
 
-  // Fetch all open positions (filtered by account)
+  // Fetch open positions for the selected account.
+  // Passing account_id to the backend avoids fetching all accounts' positions
+  // and hitting the limit — especially important when the user has many open
+  // positions across multiple accounts.
   const { data: allPositions, refetch: refetchPositions } = useQuery({
     queryKey: ['positions', 'open', selectedAccountId],
-    queryFn: () => positionsApi.getAll('open', 100),
+    queryFn: () => positionsApi.getAll('open', 1000, selectedAccountId),
     refetchInterval: 5000, // Update every 5 seconds for active deals
     refetchOnMount: 'always', // Always fetch fresh data on mount (don't show stale cache)
     staleTime: 0, // Treat cached data as immediately stale
-    select: (data) => {
-      if (!selectedAccountId) return data
-      // Filter by account_id
-      return data.filter((p: Position) => p.account_id === selectedAccountId)
-    },
   })
 
   // Fetch all bots to display bot names (filtered by account)

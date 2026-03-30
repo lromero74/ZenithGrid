@@ -32,10 +32,11 @@ async def get_positions(
     status: Optional[str] = None,
     limit: int = Query(500, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    account_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get positions with optional status filter"""
+    """Get positions with optional status and account_id filters."""
     # Prevent browser HTTP caching of position data (force fresh data on every request)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -46,13 +47,18 @@ async def get_positions(
         selectinload(Position.pending_orders)
     )
 
-    # Get user's account IDs
+    # Get user's account IDs (owned + shared)
     user_account_ids = await accessible_account_ids(db, current_user.id)
-    if user_account_ids:
-        query = query.where(Position.account_id.in_(user_account_ids))
-    else:
-        # User has no accounts, return empty
+    if not user_account_ids:
         return []
+
+    if account_id is not None:
+        # Caller requested a specific account — verify access first
+        if account_id not in user_account_ids:
+            raise HTTPException(status_code=403, detail="Access to this account is not permitted")
+        query = query.where(Position.account_id == account_id)
+    else:
+        query = query.where(Position.account_id.in_(user_account_ids))
 
     if status:
         query = query.where(Position.status == status)
