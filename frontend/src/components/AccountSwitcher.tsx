@@ -11,8 +11,9 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Plus, Building2, Wallet, Check, Settings, Users } from 'lucide-react'
+import { ChevronDown, Plus, Building2, Wallet, Check, Settings, Users, FlaskConical } from 'lucide-react'
 import { useAccount, getChainName, Account } from '../contexts/AccountContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission'
 
 interface AccountSwitcherProps {
@@ -31,6 +32,8 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
     getOwnedAccounts,
     getSharedAccounts,
   } = useAccount()
+  const { user } = useAuth()
+  const isSuperuser = user?.is_superuser ?? false
   const canWriteAccounts = usePermission('accounts', 'write')
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -60,16 +63,22 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
     setIsOpen(false)
   }
 
-  // Partition accounts — exclude paper trading from main dropdown
-  const ownedAccounts = getOwnedAccounts().filter((a) => !a.is_paper_trading)
-  const sharedAccounts = getSharedAccounts().filter((a) => !a.is_paper_trading)
+  // Owners always see their own accounts (including paper trading).
+  // Admins (superusers) also see paper trading accounts they manage via membership.
+  // Other shared accounts hide paper trading (non-admin members shouldn't see demo accounts).
+  const ownedAccounts = getOwnedAccounts()
+  const sharedAccounts = getSharedAccounts().filter(
+    (a) => !a.is_paper_trading || isSuperuser
+  )
 
-  // Separate CEX/DEX within owned
-  const ownedCex = ownedAccounts.filter((a) => a.type === 'cex')
-  const ownedDex = ownedAccounts.filter((a) => a.type === 'dex')
+  // Separate real vs paper within owned, then CEX/DEX within real
+  const ownedPaper = ownedAccounts.filter((a) => a.is_paper_trading)
+  const ownedRealAccounts = ownedAccounts.filter((a) => !a.is_paper_trading)
+  const ownedCex = ownedRealAccounts.filter((a) => a.type === 'cex')
+  const ownedDex = ownedRealAccounts.filter((a) => a.type === 'dex')
 
-  // Hide account switcher when paper trading is active
-  if (selectedAccount?.is_paper_trading === true) return <></>
+  // Hide account switcher when paper trading is active ONLY for non-owners and non-admins
+  if (selectedAccount?.is_paper_trading === true && !isOwner(selectedAccount) && !isSuperuser) return <></>
 
   if (isLoading) {
     return (
@@ -182,6 +191,25 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
               </div>
             )}
 
+            {/* Paper Trading (owned) */}
+            {ownedPaper.length > 0 && (
+              <div className={`p-2 ${(ownedCex.length > 0 || ownedDex.length > 0) ? 'border-t border-slate-700' : ''}`}>
+                <div className="flex items-center space-x-2 px-2 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <FlaskConical className="w-3 h-3" />
+                  <span>Paper Trading</span>
+                </div>
+                {ownedPaper.map((account) => (
+                  <AccountOption
+                    key={account.id}
+                    account={account}
+                    isSelected={selectedAccount?.id === account.id}
+                    onSelect={() => handleSelect(account.id)}
+                    isPaper
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Shared With You */}
             {sharedAccounts.length > 0 && (
               <div className={`p-2 ${(ownedCex.length > 0 || ownedDex.length > 0) ? 'border-t border-slate-700' : ''}`}>
@@ -250,20 +278,25 @@ interface AccountOptionProps {
   isSelected: boolean
   onSelect: () => void
   isShared?: boolean
+  isPaper?: boolean
 }
 
-function AccountOption({ account, isSelected, onSelect, isShared }: AccountOptionProps) {
+function AccountOption({ account, isSelected, onSelect, isShared, isPaper }: AccountOptionProps) {
   return (
     <button
       onClick={onSelect}
       className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-colors ${
         isSelected
-          ? isShared ? 'bg-violet-600/20 text-violet-200' : 'bg-blue-600/20 text-blue-300'
+          ? isShared ? 'bg-violet-600/20 text-violet-200'
+            : isPaper ? 'bg-emerald-600/20 text-emerald-200'
+            : 'bg-blue-600/20 text-blue-300'
           : 'text-slate-300 hover:bg-slate-700'
       }`}
     >
       <div className="flex items-center space-x-3 min-w-0">
-        {account.type === 'cex' ? (
+        {isPaper ? (
+          <FlaskConical className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+        ) : account.type === 'cex' ? (
           <Building2 className={`w-5 h-5 flex-shrink-0 ${isShared ? 'text-violet-400' : 'text-blue-400'}`} />
         ) : (
           <Wallet className={`w-5 h-5 flex-shrink-0 ${isShared ? 'text-violet-400' : 'text-orange-400'}`} />
@@ -302,7 +335,9 @@ function AccountOption({ account, isSelected, onSelect, isShared }: AccountOptio
         </div>
       </div>
 
-      {isSelected && <Check className={`w-4 h-4 flex-shrink-0 ${isShared ? 'text-violet-400' : 'text-blue-400'}`} />}
+      {isSelected && <Check className={`w-4 h-4 flex-shrink-0 ${
+        isShared ? 'text-violet-400' : isPaper ? 'text-emerald-400' : 'text-blue-400'
+      }`} />}
     </button>
   )
 }
