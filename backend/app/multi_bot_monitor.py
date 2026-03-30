@@ -24,6 +24,7 @@ from app.constants import (
     PAIR_PROCESSING_DELAY_SECONDS,
     compute_dynamic_concurrency,
 )
+from app.services.rebalance_monitor import quote_is_overweight as _quote_is_overweight
 from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.paper_trading_client import simulate_slippage_ctx
@@ -45,6 +46,15 @@ logger = logging.getLogger(__name__)
 
 # Module-level reference to the active monitor instance (set in __init__)
 _active_monitor_instance: Optional["MultiBotMonitor"] = None
+
+# Bot IDs gated by the rebalancer on their most recent cycle (in-memory, resets on restart)
+_rebalancer_gated_bots: set = set()
+
+
+def is_rebalancer_gated(bot_id: int) -> bool:
+    """Return True if this bot was restricted to DCA-only on its last cycle."""
+    return bot_id in _rebalancer_gated_bots
+
 
 # Per-task exchange client context (each asyncio.Task gets its own copy)
 # This allows parallel bot processing without shared mutable state
@@ -524,6 +534,41 @@ class MultiBotMonitor:
                 if len(trading_pairs) == 0:
                     logger.info("  ℹ️  No open positions to manage - skipping analysis")
                     return {"action": "skip", "reason": "Bot stopped with no open positions"}
+
+            # Rebalancer gate: if the account is rebalancing and this bot's quote
+            # currency is overweight, block new base orders by restricting to pairs
+            # with existing positions only (DCA safety orders + take-profits still run).
+            # Grid bots are exempt — their entry range is planned at creation time.
+            if (bot.strategy_type != "grid"
+                    and bot.account_id is not None
+                    and trading_pairs):
+                # Extract quote currency from the first trading pair (e.g. "BTC-USDC" → "USDC")
+                _first_pair = trading_pairs[0] if trading_pairs else ""
+                _parts = _first_pair.split("-")
+                _quote_cur = _parts[1] if len(_parts) == 2 else None
+                if _quote_cur and _quote_is_overweight(bot.account_id, _quote_cur):
+                    before = len(trading_pairs)
+                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                    _rebalancer_gated_bots.add(bot.id)
+                    if len(trading_pairs) < before:
+                        logger.info(
+                            f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
+                            f"blocking new base orders ({before - len(trading_pairs)} pair(s) held back)"
+                        )
+                        # Write a scanner log entry so the user can see gate activity
+                        from app.models import ScannerLog
+                        db.add(ScannerLog(
+                            bot_id=bot.id,
+                            product_id=_quote_cur,
+                            scan_type="rebalancer_gate",
+                            decision="blocked",
+                            reason=f"{_quote_cur} overweight — new base orders blocked until rebalanced",
+                        ))
+                        await db.flush()
+                    if not trading_pairs:
+                        return {"action": "skip", "reason": "Rebalancer gate: no open positions to manage"}
+                else:
+                    _rebalancer_gated_bots.discard(bot.id)
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis

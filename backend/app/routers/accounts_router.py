@@ -1353,6 +1353,21 @@ async def get_rebalance_status(
         t_btc = account.rebalance_target_btc_pct
         t_eth = account.rebalance_target_eth_pct
         t_usdc = account.rebalance_target_usdc_pct
+
+        # Compute reserve value in USD so the UI can show "deployable balance" context
+        _p = prices if isinstance(prices, dict) else {}
+        _btc_p = _p.get("BTC-USD", 0.0)
+        _eth_p = _p.get("ETH-USD", 0.0)
+        _reserve_usd = round(
+            (account.min_balance_usd or 0.0)
+            + (account.min_balance_btc or 0.0) * _btc_p
+            + (account.min_balance_eth or 0.0) * _eth_p
+            + (account.min_balance_usdc or 0.0),
+            2,
+        )
+        _total = alloc.get("total_value_usd", 0.0)
+        _deployable = round(max(0.0, _total - _reserve_usd), 2)
+
         response_data = {
             "account_id": account_id,
             **alloc,
@@ -1365,6 +1380,8 @@ async def get_rebalance_status(
             "min_balance_btc": account.min_balance_btc or 0.0,
             "min_balance_eth": account.min_balance_eth or 0.0,
             "min_balance_usdc": account.min_balance_usdc or 0.0,
+            "reserve_value_usd": _reserve_usd,
+            "deployable_value_usd": _deployable,
         }
         if not account.is_paper_trading:
             _TTL_REBALANCE_STATUS[account_id] = (time.monotonic(), response_data)

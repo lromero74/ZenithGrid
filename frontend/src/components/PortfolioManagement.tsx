@@ -733,6 +733,16 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
                       </div>
                     ))}
                   </div>
+                  {/* Deployable pool context — shown when reserves exist */}
+                  {hasAnyReserve(rb) && status && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Targets are % of your deployable balance
+                      {status.deployable_value_usd > 0 && (
+                        <> (${status.deployable_value_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })} of ${status.total_value_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })} total — ${status.reserve_value_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })} reserved)</>
+                      )}.
+                      Bots in overweight currencies are paused until rebalancing restores the target.
+                    </p>
+                  )}
 
                   {/* Settings row */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -18,6 +18,7 @@ from app.database import get_db
 from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.multi_bot_monitor import is_rebalancer_gated
 from app.services.account_access import accessible_account_ids, manager_account_ids, manager_accounts_filter
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import get_coinbase_from_db
@@ -290,6 +291,7 @@ async def list_bots(
         bot_response.budget_utilization_percentage = budget["budget_utilization_percentage"]
         bot_response.win_rate = pnl["win_rate"]
         bot_response.quote_currency = bot.get_quote_currency()
+        bot_response.rebalancer_gated = is_rebalancer_gated(bot.id)
         bot_responses.append(bot_response)
 
     return bot_responses

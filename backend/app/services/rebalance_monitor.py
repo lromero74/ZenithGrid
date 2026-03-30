@@ -29,6 +29,50 @@ DEFAULT_MIN_TRADE_PCT = 5.0  # Default: only trade if shift is >= 5% of portfoli
 TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
 DUST_SWEEP_INTERVAL_DAYS = 30
 
+# ---------------------------------------------------------------------------
+# Per-account allocation cache (written by rebalance monitor, read by bot gate)
+# ---------------------------------------------------------------------------
+
+# {account_id: (timestamp, {"agg_current": {...}, "targets": {...}, "threshold": float})}
+_allocation_cache: Dict[int, Tuple[datetime, dict]] = {}
+_CACHE_TTL_SECONDS = 90  # Valid for one full check interval + buffer
+
+
+def set_account_gate_data(account_id: int, data: dict) -> None:
+    """Store fresh allocation data for the bot-gate lookup."""
+    _allocation_cache[account_id] = (datetime.utcnow(), data)
+
+
+def get_account_gate_data(account_id: int) -> Optional[dict]:
+    """Return cached allocation data. None if missing or older than TTL."""
+    entry = _allocation_cache.get(account_id)
+    if not entry:
+        return None
+    ts, payload = entry
+    if (datetime.utcnow() - ts).total_seconds() > _CACHE_TTL_SECONDS:
+        return None
+    return payload
+
+
+def quote_is_overweight(account_id: int, quote_currency: str) -> bool:
+    """Check if a bot's quote currency is overweight for the given account.
+
+    Uses the deployable-pool allocation (reserves already subtracted) so that
+    reserve balances don't count as driftable allocation.
+
+    Returns False (fail-open) when no fresh cache data is available.
+    """
+    gate_data = get_account_gate_data(account_id)
+    if not gate_data:
+        return False
+    agg_current = gate_data.get("agg_current", {})
+    targets = gate_data.get("targets", {})
+    threshold = gate_data.get("threshold", 5.0)
+    key = f"{quote_currency.lower()}_pct"
+    current_pct = agg_current.get(key, 0.0)
+    target_pct = targets.get(key, 0.0)
+    return current_pct > target_pct + threshold
+
 
 def calculate_current_allocations(
     free_balances: Dict[str, float],
@@ -632,7 +676,6 @@ class RebalanceMonitor:
                     continue
                 portfolio_balances[quote_cur] += pos.total_quote_spent or 0.0
 
-            current = calculate_current_allocations(portfolio_balances, prices)
             targets = {
                 "usd_pct": account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
                 "btc_pct": account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
@@ -642,17 +685,6 @@ class RebalanceMonitor:
             drift_thresh = account.rebalance_drift_threshold_pct
             threshold = drift_thresh if drift_thresh is not None else 5.0
 
-            if not needs_rebalance(current, targets, threshold):
-                logger.debug(
-                    f"Rebalance: account {account.name} within threshold "
-                    f"(USD={current['usd_pct']:.1f}%, "
-                    f"BTC={current['btc_pct']:.1f}%, "
-                    f"ETH={current['eth_pct']:.1f}%, "
-                    f"USDC={current['usdc_pct']:.1f}%)"
-                )
-                self._account_timers[account.id] = datetime.utcnow()
-                return
-
             # Subtract reserves from free balances (what's actually tradeable)
             rebalanceable = {
                 c: max(0.0, free_balances[c] - min_balances[c])
@@ -661,12 +693,36 @@ class RebalanceMonitor:
 
             # Reserve-adjusted portfolio for direction/magnitude reference.
             # Targets apply to the investable portion only (portfolio minus reserves).
+            # Drift detection uses this too — reserve balances don't count as driftable
+            # allocation, so comparing full-portfolio % against targets would produce
+            # false positives when a reserve is held in an "untargeted" currency.
             rebalanceable_agg: Dict[str, float] = {
                 c: max(0.0, portfolio_balances.get(c, 0.0) - min_balances.get(c, 0.0))
                 for c in portfolio_balances
             }
 
             agg_current = calculate_current_allocations(rebalanceable_agg, prices)
+
+            # Populate the bot-gate cache so multi_bot_monitor can check overweight
+            # status without extra exchange calls.
+            set_account_gate_data(account.id, {
+                "agg_current": agg_current,
+                "targets": targets,
+                "threshold": threshold,
+            })
+
+            if not needs_rebalance(agg_current, targets, threshold):
+                logger.debug(
+                    f"Rebalance: account {account.name} within threshold "
+                    f"(USD={agg_current['usd_pct']:.1f}%, "
+                    f"BTC={agg_current['btc_pct']:.1f}%, "
+                    f"ETH={agg_current['eth_pct']:.1f}%, "
+                    f"USDC={agg_current['usdc_pct']:.1f}%)"
+                )
+                self._account_timers[account.id] = datetime.utcnow()
+                return
+
+            current = calculate_current_allocations(portfolio_balances, prices)
             logger.debug(
                 f"Rebalance plan inputs — account {account.name}: "
                 f"portfolio USD={agg_current['usd_pct']:.1f}% "

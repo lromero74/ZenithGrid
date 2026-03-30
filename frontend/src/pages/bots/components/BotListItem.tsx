@@ -154,6 +154,14 @@ export const BotListItem = memo(function BotListItem({
                 💰
               </span>
             )}
+            {(bot as any).rebalancer_gated && (
+              <span
+                className="px-1 py-0.5 text-[9px] font-semibold bg-orange-500/20 text-orange-300 rounded"
+                title="Rebalancer active — new base orders paused until quote currency rebalances"
+              >
+                ⏸ Rebalancer
+              </span>
+            )}
           </div>
           {bot.description && (
             <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">

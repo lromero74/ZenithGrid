@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.147.0] - 2026-03-30
+
+### Added
+- **Rebalancer gate for bot base orders** — when an account's rebalancer is active and a bot's quote currency is overweight (above target + drift threshold), the bot is restricted to managing existing positions only (DCA safety orders and take-profits still run). New base orders are blocked until the currency rebalances back to within the target range. Grid bots are exempt since their full range is planned at creation time.
+- **"⏸ Rebalancer" badge on bot cards** — bots currently gated by the rebalancer show a small orange badge next to their name so you can see at a glance which bots are waiting for rebalancing to complete.
+- **Scanner log entries for rebalancer gate events** — each time a bot is gated, a scanner log entry is written showing which quote currency is overweight and that new base orders are being held back.
+- **Deployable pool context on rebalancer sliders** — when minimum balance reserves are configured, a note appears under the target allocation sliders explaining that percentages apply to the deployable balance (total portfolio minus reserves), with the exact dollar amounts shown.
+
+### Fixed
+- **Rebalancer drift detection now ignores reserve balances** — previously, a reserve held in a currency with a 0% target (e.g., a $50 USD buffer when USD target is 0%) could trigger a false-positive drift and cause unnecessary rebalance trades. Drift is now measured against the deployable portfolio (after subtracting reserves), matching how the rebalancer actually executes trades.
+
 ## [v2.146.2] - 2026-03-30
 
 ### Changed

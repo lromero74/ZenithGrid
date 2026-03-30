@@ -76,6 +76,7 @@ class BotResponse(BaseModel):
     quote_currency: str = "BTC"  # Quote currency for this bot's pairs (BTC or USD)
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
+    rebalancer_gated: bool = False  # True when bot was gated on last cycle due to overweight quote
 
     class Config:
         from_attributes = True

@@ -653,6 +653,8 @@ export interface RebalanceStatus {
   min_balance_btc: number;
   min_balance_eth: number;
   min_balance_usdc: number;
+  reserve_value_usd: number;    // Sum of all reserves converted to USD
+  deployable_value_usd: number; // total_value_usd minus reserve_value_usd
 }
 
 export const rebalanceApi = {

@@ -255,6 +255,7 @@ export interface Bot {
   aggregate_running_days?: number;  // Total days bot has been in running state
   calendar_days?: number;  // Calendar days since bot creation
   win_rate?: number;
+  rebalancer_gated?: boolean;  // True when last cycle was restricted due to overweight quote currency
 }
 
 export interface BotCreate {
