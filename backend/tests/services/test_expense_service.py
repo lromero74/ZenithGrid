@@ -1762,3 +1762,97 @@ class TestDepositCoachingFields:
         # Classic expense path coaching is set
         assert result.get("partial_item_name") == "Food"
         assert (result.get("partial_item_shortfall") or 0) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: gross_target exposure in _build_savings_target_entry
+# ---------------------------------------------------------------------------
+
+class TestBuildSavingsTargetEntryGrossTarget:
+    """Tests verifying that _build_savings_target_entry exposes gross_target
+    so callers can show both the spend target and the total-to-accumulate.
+
+    Written TDD — these fail until gross_target is added to the return dict.
+    """
+
+    def test_no_tax_no_recurrence_gross_equals_target(self):
+        """Without tax or recurrence gross_target == savings_target_amount."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Vacation",
+            target_amount=2000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=3000.0, tax_pct=0.0
+        )
+        assert "gross_target" in result, "gross_target must be present in result"
+        assert result["gross_target"] == pytest.approx(2000.0, abs=0.01)
+
+    def test_with_tax_gross_target_inflated(self):
+        """With 20% tax: gross_target = target_amount / 0.8."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Car",
+            target_amount=10000.0,
+            target_date=date.today() + timedelta(days=730),
+            current_balance=0.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=5000.0, tax_pct=20.0
+        )
+        assert "gross_target" in result
+        # gross_withdrawal = 10000 / (1 - 0.20) = 12500
+        assert result["gross_target"] == pytest.approx(12500.0, abs=0.01)
+
+    def test_recurring_no_tax_gross_includes_principal(self):
+        """Recurring with no tax: gross_target = target_amount + current_balance."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Annual trip",
+            target_amount=3000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=1000.0,
+            growth_rate=8.0,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=4000.0, tax_pct=0.0
+        )
+        assert "gross_target" in result
+        # gross_target = 3000 + 1000 (preserve principal)
+        assert result["gross_target"] == pytest.approx(4000.0, abs=0.01)
+
+    def test_recurring_with_tax_gross_target_combines_both(self):
+        """Recurring + tax: gross_target = (target / (1-tax)) + current_balance."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Annual bonus spend",
+            target_amount=5000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=500.0,
+            growth_rate=8.0,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=6000.0, tax_pct=25.0
+        )
+        assert "gross_target" in result
+        # gross_withdrawal = 5000 / (1 - 0.25) = 6666.67
+        # gross_target = 6666.67 + 500 = 7166.67
+        assert result["gross_target"] == pytest.approx(7166.67, abs=0.01)

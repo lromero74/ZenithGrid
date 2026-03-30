@@ -1202,6 +1202,7 @@ def _expense_item_to_dict(
     if period:
         if item_type == "savings_target":
             from app.services.expense_service import (
+                _compute_gross_target,
                 compute_monthly_savings_contribution,
                 compute_savings_capital_required,
                 normalize_monthly_to_period,
@@ -1216,6 +1217,12 @@ def _expense_item_to_dict(
             growth_rate = item_rate if (item_rate is not None and item_rate > 0) else account_annual_return_pct
             d["effective_growth_rate_pct"] = round(growth_rate, 4)
             d["growth_rate_source"] = "override" if (item_rate is not None and item_rate > 0) else "account"
+            # gross_target = total to accumulate by deadline (includes tax gross-up and
+            # principal preservation). Exposed alongside target_amount (spend) so the
+            # UI can show the user why the accumulation target exceeds their spend target.
+            d["gross_target"] = round(
+                _compute_gross_target(target_amount, tax_pct, is_recurring, current_balance), 2
+            )
             capital_required = compute_savings_capital_required(
                 target_amount=target_amount,
                 target_date=target_date or _date.today(),

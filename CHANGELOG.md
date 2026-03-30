@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.146.2] - 2026-03-30
+
+### Changed
+- **Savings target line items now show your actual spend target alongside the accumulation total** — when tax withholding or principal preservation (recurring targets) inflate the amount you need to accumulate, line items in the expense editor and the emailed report now display "Spend: $X → accumulate: $Y" so you can always see exactly what you planned to spend vs. what needs to be in the account.
+
 ## [v2.146.1] - 2026-03-30
 
 ### Fixed

@@ -555,6 +555,7 @@ export interface ExpenseItem {
   growth_rate_source?: 'override' | 'account'
   savings_current_balance?: number
   // Computed fields (returned by list endpoint with unified waterfall)
+  gross_target?: number       // Total to accumulate by deadline (includes tax gross-up + principal for recurring)
   capital_required?: number   // PV: what must be reserved today for compound growth to reach target
   capital_gap?: number        // max(0, capital_required - dynamic_reserved)
   monthly_contribution?: number  // PMT: monthly income needed if capital_gap > 0

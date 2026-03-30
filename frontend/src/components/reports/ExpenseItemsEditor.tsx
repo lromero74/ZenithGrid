@@ -157,7 +157,13 @@ function SortableExpenseRow({
         <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
           {item.item_type === 'savings_target' ? (
             <>
-              <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
+              <span>
+                Spend: {prefix}{(item.savings_target_amount || 0).toLocaleString()}
+                {item.gross_target != null && item.gross_target > (item.savings_target_amount || 0) + 0.01 && (
+                  <span className="text-slate-500"> → accumulate: {prefix}{item.gross_target.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                )}
+                {' '}by {item.savings_target_date || '?'}
+              </span>
               {/* Capital reservation framing — dynamic based on sort position */}
               {item.waterfall_status === 'blocked' ? (
                 <span className="text-indigo-300 font-medium">
@@ -1065,7 +1071,13 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
           <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
             {isSavingsItem ? (
               <>
-                <span>Goal: {prefix}{(item.savings_target_amount || 0).toLocaleString()} by {item.savings_target_date || '?'}</span>
+                <span>
+                  Spend: {prefix}{(item.savings_target_amount || 0).toLocaleString()}
+                  {item.gross_target != null && item.gross_target > (item.savings_target_amount || 0) + 0.01 && (
+                    <span className="text-slate-500"> → accumulate: {prefix}{item.gross_target.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  )}
+                  {' '}by {item.savings_target_date || '?'}
+                </span>
                 {item.capital_required != null ? (
                   item.capital_gap === 0 ? (
                     <span className="text-emerald-400 font-medium">

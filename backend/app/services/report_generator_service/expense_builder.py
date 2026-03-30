@@ -358,6 +358,14 @@ def _build_savings_status_badge(entry: dict) -> str:
         )
 
 
+def _spend_line(prefix: str, fmt: str, target_amt: float, gross_target: float) -> str:
+    """Return 'Spend: $X' or 'Spend: $X → accumulate: $Y' when gross > spend."""
+    base = f"Spend:&nbsp;{prefix}{target_amt:{fmt}}"
+    if gross_target > target_amt + 0.01:
+        return f"{base}&nbsp;&rarr;&nbsp;accumulate:&nbsp;{prefix}{gross_target:{fmt}}"
+    return base
+
+
 def _build_savings_targets_html(
     savings_targets: list, prefix: str, fmt: str, currency: str,
     period: str, coverage: dict,
@@ -376,6 +384,7 @@ def _build_savings_targets_html(
     for entry in savings_targets:
         name = entry.get("name", "")
         target_amt = entry.get("target_amount", 0)
+        gross_target = entry.get("gross_target", target_amt)
         target_date = entry.get("target_date", "")
         cap_req = entry.get("capital_required", 0)
         dynamic_res = entry.get("dynamic_reserved", entry.get("current_balance", 0))
@@ -433,7 +442,7 @@ def _build_savings_targets_html(
                     <div style="color:#f1f5f9; font-size:12px; font-weight:600;">
                         {name}{recur_hint}</div>
                     <div style="color:#94a3b8; font-size:10px; margin-top:1px;">
-                        Goal: {prefix}{target_amt:{fmt}} by {date_str}
+                        {_spend_line(prefix, fmt, target_amt, gross_target)} by {date_str}
                         &nbsp;·&nbsp;{months_remaining}mo&nbsp;·&nbsp;{rate_label}
                     </div>
                 </td>

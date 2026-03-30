@@ -229,6 +229,11 @@ def _build_savings_target_entry(
     if target_date and target_date > today:
         months_remaining = round((target_date - today).days / _DAYS_PER_MONTH)
 
+    # Gross target = total to accumulate by deadline (includes tax gross-up and
+    # principal preservation for recurring targets). Exposed so callers can show
+    # the user both their spend target and the total-to-accumulate.
+    gross_target = _compute_gross_target(target_amount, tax_pct, is_recurring, current_balance)
+
     # Capital required TODAY (PV) for compound growth to reach gross target by deadline.
     capital_required = compute_savings_capital_required(
         target_amount=target_amount,
@@ -274,6 +279,7 @@ def _build_savings_target_entry(
         "name": item.name,
         "category": getattr(item, "category", "Savings"),
         "target_amount": round(target_amount, 2),
+        "gross_target": round(gross_target, 2),
         "target_date": target_date.isoformat() if target_date else None,
         "current_balance": round(current_balance, 2),
         "capital_required": round(capital_required, 2),
