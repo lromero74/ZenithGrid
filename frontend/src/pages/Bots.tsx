@@ -70,6 +70,7 @@ function Bots() {
     strategies,
     portfolio,
     aggregateData,
+    rebalanceStatus,
     templates,
     TRADING_PAIRS
   } = useBotsData({ selectedAccount, projectionTimeframe: projectionBasis })
@@ -643,6 +644,7 @@ function Bots() {
         updateBot={updateBot}
         resetForm={resetForm}
         aggregateData={aggregateData}
+        rebalanceStatus={rebalanceStatus ?? undefined}
         readOnly={readOnly}
         readOnlyTitle={readOnlyTitle}
       />

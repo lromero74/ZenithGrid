@@ -158,6 +158,7 @@ git checkout -b feature/my-feature    # Branch from main
 - In prod mode, use `./bot.sh restart --prod` — don't combine `--prod` with `--back-end`
 - **Frontend-only changes in prod mode**: use `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend serves static files from disk, so new bundles are live immediately.
 - **Never restart unnecessarily** — it disrupts the running trading bot
+- **Do NOT restart before `/shipit`** — `/shipit` always restarts as its final deploy step. Restarting mid-session to test changes and then running `/shipit` causes a double restart for no benefit.
 
 ## Database & Migrations
 

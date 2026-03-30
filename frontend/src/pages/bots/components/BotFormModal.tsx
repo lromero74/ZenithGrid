@@ -7,6 +7,7 @@ import type {
   ValidationError,
   TradingPair,
 } from '../../../components/bots'
+import type { RebalanceStatus } from '../../../services/api'
 import { useBotForm } from '../hooks/useBotForm'
 import { StrategyConfigSection } from './StrategyConfigSection'
 import {
@@ -44,6 +45,7 @@ interface BotFormModalProps {
   resetForm: () => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   aggregateData: any
+  rebalanceStatus?: RebalanceStatus
   readOnly?: boolean
   readOnlyTitle?: string
 }
@@ -65,6 +67,7 @@ export function BotFormModal({
   updateBot,
   resetForm,
   aggregateData,
+  rebalanceStatus,
   readOnly = false,
   readOnlyTitle,
 }: BotFormModalProps) {
@@ -401,6 +404,7 @@ export function BotFormModal({
               selectedStrategy={selectedStrategy}
               handleParamChange={handleParamChange}
               aggregateData={aggregateData}
+              rebalanceStatus={rebalanceStatus}
               isPaperTrading={selectedAccount?.type === 'paper'}
               effectiveMaxDeals={effectiveMaxDeals}
             />

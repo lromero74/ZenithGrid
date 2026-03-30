@@ -1,9 +1,10 @@
 import React from 'react'
-import type { StrategyParameter } from '../../../types'
+import type { StrategyParameter, AggregateValue } from '../../../types'
 import DCABudgetConfigForm from '../../../components/DCABudgetConfigForm'
 import PhaseConditionSelector from '../../../components/PhaseConditionSelector'
 import { isParameterVisible } from '../../../components/bots'
 import type { BotFormData } from '../../../components/bots'
+import type { RebalanceStatus } from '../../../services/api'
 
 interface StrategyConfigSectionProps {
   formData: BotFormData
@@ -12,10 +13,97 @@ interface StrategyConfigSectionProps {
   selectedStrategy: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleParamChange: (paramName: string, value: any) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  aggregateData: any
+  aggregateData?: AggregateValue
+  rebalanceStatus?: RebalanceStatus
   isPaperTrading?: boolean
   effectiveMaxDeals: number
+}
+
+/**
+ * Compute the effective aggregate values for DCA budget calculations,
+ * accounting for configured reserves and rebalancer target allocations.
+ *
+ * When the rebalancer is enabled, the deployable value (total minus ALL
+ * reserves) is sliced by the target percentage for the bot's quote
+ * currency — giving the user's intended capital for that market.
+ *
+ * When the rebalancer is disabled, reserves are still subtracted from
+ * the raw aggregate so the displayed budget never exceeds what can
+ * actually be deployed.
+ */
+export function computeEffectiveAggregateValues(
+  quoteCurrency: string,
+  aggregateData: AggregateValue | undefined,
+  rebalanceStatus: RebalanceStatus | undefined,
+): { effectiveUsdValue: number; effectiveBtcValue: number } {
+  const rawUsd = aggregateData?.aggregate_usd_value ?? 0
+  const rawBtc = aggregateData?.aggregate_btc_value ?? 0
+  const btcPrice = aggregateData?.btc_usd_price ?? 0
+
+  if (!rebalanceStatus) {
+    return { effectiveUsdValue: rawUsd, effectiveBtcValue: rawBtc }
+  }
+
+  const quote = quoteCurrency.toUpperCase()
+
+  if (rebalanceStatus.rebalance_enabled) {
+    // Deployable value already has ALL reserves deducted
+    const deployable = rebalanceStatus.deployable_value_usd
+    const total = rebalanceStatus.total_value_usd
+
+    // Pick target and current allocation % for this currency
+    let targetPct = 0
+    let currentPct = 0
+    if (quote === 'USD') {
+      targetPct = rebalanceStatus.target_usd_pct
+      currentPct = rebalanceStatus.current_usd_pct
+    } else if (quote === 'BTC') {
+      targetPct = rebalanceStatus.target_btc_pct
+      currentPct = rebalanceStatus.current_btc_pct
+    } else if (quote === 'ETH') {
+      targetPct = rebalanceStatus.target_eth_pct
+      currentPct = rebalanceStatus.current_eth_pct
+    } else if (quote === 'USDC' || quote === 'USDT') {
+      targetPct = rebalanceStatus.target_usdc_pct
+      currentPct = rebalanceStatus.current_usdc_pct
+    } else {
+      targetPct = rebalanceStatus.target_usd_pct
+      currentPct = rebalanceStatus.current_usd_pct
+    }
+
+    // Cap at the lesser of target and current allocation:
+    // if the rebalance target hasn't been reached yet, use current
+    // (can't deploy capital that isn't in this currency yet)
+    const targetUsd = deployable * targetPct / 100
+    const currentUsd = total * currentPct / 100
+    const allocatedUsd = Math.min(targetUsd, currentUsd)
+
+    if (quote === 'BTC') {
+      return {
+        effectiveUsdValue: allocatedUsd,
+        effectiveBtcValue: btcPrice > 0 ? allocatedUsd / btcPrice : 0,
+      }
+    }
+    return { effectiveUsdValue: allocatedUsd, effectiveBtcValue: rawBtc }
+  }
+
+  // Rebalancer disabled — subtract only the relevant reserve
+  if (quote === 'BTC') {
+    const reserve = rebalanceStatus.min_balance_btc ?? 0
+    return {
+      effectiveUsdValue: rawUsd,
+      effectiveBtcValue: Math.max(0, rawBtc - reserve),
+    }
+  }
+
+  // USD / USDC / USDT / default
+  const reserveUsd = quote === 'USDC' || quote === 'USDT'
+    ? (rebalanceStatus.min_balance_usdc ?? 0)
+    : (rebalanceStatus.min_balance_usd ?? 0)
+  return {
+    effectiveUsdValue: Math.max(0, rawUsd - reserveUsd),
+    effectiveBtcValue: rawBtc,
+  }
 }
 
 /**
@@ -239,6 +327,7 @@ export function StrategyConfigSection({
   selectedStrategy,
   handleParamChange,
   aggregateData,
+  rebalanceStatus,
   isPaperTrading,
   effectiveMaxDeals,
 }: StrategyConfigSectionProps) {
@@ -250,6 +339,16 @@ export function StrategyConfigSection({
   ) {
     return null
   }
+
+  const quoteCurrency = formData.product_ids.length > 0
+    ? formData.product_ids[0].split('-')[1]
+    : 'BTC'
+
+  const { effectiveUsdValue, effectiveBtcValue } = computeEffectiveAggregateValues(
+    quoteCurrency,
+    aggregateData,
+    rebalanceStatus,
+  )
 
   // Helper to render a single parameter input
   const renderParameterInput = (
@@ -284,17 +383,9 @@ export function StrategyConfigSection({
               strategy_config: newConfig,
             })
           }
-          quoteCurrency={
-            formData.product_ids.length > 0
-              ? formData.product_ids[0].split('-')[1]
-              : 'BTC'
-          }
-          aggregateBtcValue={
-            aggregateData?.aggregate_btc_value
-          }
-          aggregateUsdValue={
-            aggregateData?.aggregate_usd_value
-          }
+          quoteCurrency={quoteCurrency}
+          aggregateBtcValue={effectiveBtcValue}
+          aggregateUsdValue={effectiveUsdValue}
           budgetPercentage={formData.budget_percentage}
           productIds={formData.product_ids}
           numPairs={formData.product_ids.length}

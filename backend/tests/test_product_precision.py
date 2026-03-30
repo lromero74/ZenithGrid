@@ -232,3 +232,87 @@ class TestFormatBaseAmountForProduct:
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         result = pp.format_base_amount_for_product(0.0, "DASH-BTC")
         assert result == "0.00000000"
+
+
+# ---------------------------------------------------------------------------
+# ensure_product_precision
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureProductPrecision:
+    """Tests for ensure_product_precision().
+
+    The function does a lazy local import inside the async call:
+        from app.coinbase_api.public_market_data import get_product as _fetch_product
+    So we patch the source: app.coinbase_api.public_market_data.get_product
+    """
+
+    @pytest.mark.asyncio
+    async def test_noop_when_product_already_known(self):
+        """Happy path: already-cached product causes no API call."""
+        pp._PRECISION_CACHE = dict(SAMPLE_PRECISION_DATA)
+        with patch("app.coinbase_api.public_market_data.get_product") as mock_fetch:
+            await pp.ensure_product_precision("DASH-BTC")
+        mock_fetch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetches_and_caches_unknown_product(self):
+        """Happy path: unknown product is fetched and added to in-memory cache."""
+        from unittest.mock import AsyncMock
+        pp._PRECISION_CACHE = {}
+        api_response = {"base_increment": "0.01", "quote_increment": "0.000001"}
+
+        with patch("app.coinbase_api.public_market_data.get_product", AsyncMock(return_value=api_response)):
+            with patch("builtins.open", mock_open()):
+                await pp.ensure_product_precision("NEWCOIN-USD")
+
+        assert "NEWCOIN-USD" in pp._PRECISION_CACHE
+        entry = pp._PRECISION_CACHE["NEWCOIN-USD"]
+        assert entry["base_increment"] == "0.01"
+        assert entry["quote_increment"] == "0.000001"
+        assert entry["quote_decimals"] == 6
+
+    @pytest.mark.asyncio
+    async def test_handles_fetch_error_gracefully(self):
+        """Failure case: API exception is caught — no crash, cache unchanged."""
+        from unittest.mock import AsyncMock
+        pp._PRECISION_CACHE = {}
+
+        with patch(
+            "app.coinbase_api.public_market_data.get_product",
+            AsyncMock(side_effect=Exception("network error")),
+        ):
+            await pp.ensure_product_precision("FAIL-USD")  # must not raise
+
+        assert "FAIL-USD" not in pp._PRECISION_CACHE
+
+    @pytest.mark.asyncio
+    async def test_skips_entry_when_base_increment_missing(self):
+        """Edge case: empty base_increment in API response → no cache entry added."""
+        from unittest.mock import AsyncMock
+        pp._PRECISION_CACHE = {}
+
+        with patch(
+            "app.coinbase_api.public_market_data.get_product",
+            AsyncMock(return_value={"base_increment": "", "quote_increment": "0.01"}),
+        ):
+            await pp.ensure_product_precision("NOBASE-USD")
+
+        assert "NOBASE-USD" not in pp._PRECISION_CACHE
+
+    @pytest.mark.asyncio
+    async def test_integer_base_increment_yields_zero_decimals(self):
+        """Edge case: base_increment='1' → quote_decimals computed from quote_increment."""
+        from unittest.mock import AsyncMock
+        pp._PRECISION_CACHE = {}
+
+        with patch(
+            "app.coinbase_api.public_market_data.get_product",
+            AsyncMock(return_value={"base_increment": "1", "quote_increment": "0.01"}),
+        ):
+            with patch("builtins.open", mock_open()):
+                await pp.ensure_product_precision("BOBBOB-USD")
+
+        assert "BOBBOB-USD" in pp._PRECISION_CACHE
+        assert pp._PRECISION_CACHE["BOBBOB-USD"]["base_increment"] == "1"
+        assert pp._PRECISION_CACHE["BOBBOB-USD"]["quote_decimals"] == 2

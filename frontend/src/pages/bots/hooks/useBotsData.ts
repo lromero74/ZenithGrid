@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { botsApi, templatesApi, accountApi, authFetch, api } from '../../../services/api'
+import { botsApi, templatesApi, accountApi, rebalanceApi, authFetch, api } from '../../../services/api'
 import type { Bot } from '../../../types'
 import { convertProductsToTradingPairs, DEFAULT_TRADING_PAIRS, type TradingPair } from '../../../components/bots'
 import { TimeRange } from '../../../components/PnLChart'
@@ -54,6 +54,14 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     refetchInterval: 60000, // Update every 60 seconds
   })
 
+  // Fetch rebalance status for reserve-aware budget calculations
+  const { data: rebalanceStatus } = useQuery({
+    queryKey: ['rebalance-status', selectedAccount?.id],
+    queryFn: () => selectedAccount ? rebalanceApi.getStatus(selectedAccount.id) : null,
+    enabled: !!selectedAccount,
+    refetchInterval: 60000,
+  })
+
   // Fetch available templates
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
@@ -87,6 +95,7 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     portfolio,
     portfolioLoading,
     aggregateData,
+    rebalanceStatus,
     templates,
     productsData,
     TRADING_PAIRS

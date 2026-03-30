@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.148.2] - 2026-03-30
+
+### Fixed
+- **Max Simultaneous Capital now respects reserves and rebalancer target allocations** — the DCA budget summary in the bot edit form previously computed capital against the raw total portfolio value, ignoring any configured reserve amounts and rebalancer currency targets. It now uses the deployable value (total minus all reserves) sliced by the target allocation percentage for the bot's quote currency. If the rebalance target hasn't been reached yet, it caps at the current allocation so the display never overstates available capital; if the portfolio is overweight, it caps at the target so smaller deals help rebalance it back down.
+
+### Added
+- Unit tests for `computeEffectiveAggregateValues` covering rebalancer enabled/disabled, reserves, at-target, not-yet-reached, and overweight scenarios (15 frontend tests).
+- Unit tests for `ensure_product_precision` covering happy path, fetch error handling, missing base_increment, and integer increments (5 backend tests).
+
 ## [v2.148.1] - 2026-03-30
 
 ### Fixed
