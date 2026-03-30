@@ -101,6 +101,24 @@ class TestStartBot:
         assert bot.is_active is True
 
     @pytest.mark.asyncio
+    async def test_start_bot_sets_last_started_at(self, db_session):
+        """Happy path: start_bot records last_started_at timestamp."""
+        from app.bot_routers.bot_control_router import start_bot
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+
+        before = datetime.utcnow()
+        bot = await _make_bot(db_session, user, is_active=False)
+        assert bot.last_started_at is None  # Not set before start
+
+        await start_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        assert bot.last_started_at is not None
+        assert bot.last_started_at >= before
+
+    @pytest.mark.asyncio
     async def test_start_bot_already_active(self, db_session):
         """Edge case: starting an already active bot returns 'already active' message."""
         from app.bot_routers.bot_control_router import start_bot
@@ -222,6 +240,100 @@ class TestStopBot:
         result = await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
 
         assert "stopped successfully" in result["message"]
+        assert bot.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_stop_bot_accumulates_running_time(self, db_session):
+        """Happy path: stopping a bot with last_started_at set accumulates elapsed seconds."""
+        from app.bot_routers.bot_control_router import stop_bot
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+
+        bot = await _make_bot(db_session, user, is_active=True)
+        # Simulate bot was started 1 hour ago
+        bot.last_started_at = datetime.utcnow() - timedelta(hours=1)
+        bot.total_running_seconds = 0.0
+        await db_session.flush()
+
+        await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        # Should have accumulated ~3600 seconds (allow 10s tolerance)
+        assert bot.total_running_seconds == pytest.approx(3600, abs=10)
+        assert bot.last_started_at is None  # Cleared after stop
+
+    @pytest.mark.asyncio
+    async def test_stop_bot_accumulates_on_top_of_existing_seconds(self, db_session):
+        """Edge case: accumulated time adds to previous total_running_seconds (not reset)."""
+        from app.bot_routers.bot_control_router import stop_bot
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+
+        bot = await _make_bot(db_session, user, is_active=True)
+        # Simulate bot previously ran for 3.5 days, then was started 0.4 days ago
+        bot.total_running_seconds = 3.5 * 86400  # 302400 seconds
+        bot.last_started_at = datetime.utcnow() - timedelta(days=0.4)
+        await db_session.flush()
+
+        await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        expected_min = (3.5 + 0.4) * 86400 - 10
+        assert bot.total_running_seconds >= expected_min
+        assert bot.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_stop_bot_null_last_started_at_does_not_corrupt_total(self, db_session):
+        """Edge case: bot stopped with last_started_at=NULL (pre-migration) preserves existing total."""
+        from app.bot_routers.bot_control_router import stop_bot
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+
+        # Pre-migration scenario: bot active but last_started_at was never set
+        bot = await _make_bot(db_session, user, is_active=True)
+        bot.last_started_at = None
+        bot.total_running_seconds = 50000.0  # Some pre-existing value
+        await db_session.flush()
+
+        await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        # total_running_seconds should still be 50000 (not 0, not corrupted)
+        assert bot.total_running_seconds == pytest.approx(50000.0)
+        assert bot.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_start_stop_start_stop_accumulates_correctly(self, db_session):
+        """Integration: multiple start/stop cycles accumulate total running time."""
+        from app.bot_routers.bot_control_router import start_bot, stop_bot
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+
+        bot = await _make_bot(db_session, user, is_active=False)
+        bot.total_running_seconds = 0.0
+
+        # First run: simulate 3.5 days
+        await start_bot(bot_id=bot.id, db=db_session, current_user=user)
+        bot.last_started_at = datetime.utcnow() - timedelta(days=3.5)
+        await db_session.flush()
+        await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        after_first_stop = bot.total_running_seconds
+        assert after_first_stop == pytest.approx(3.5 * 86400, abs=10)
+
+        # Second run: simulate 0.4 days
+        await start_bot(bot_id=bot.id, db=db_session, current_user=user)
+        bot.last_started_at = datetime.utcnow() - timedelta(days=0.4)
+        await db_session.flush()
+        await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
+
+        total = bot.total_running_seconds
+        assert total == pytest.approx((3.5 + 0.4) * 86400, abs=10)
         assert bot.is_active is False
 
     @pytest.mark.asyncio

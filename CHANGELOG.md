@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.146.1] - 2026-03-30
+
+### Fixed
+- **Days Active no longer resets to 0 after stopping and restarting a bot** — bots that were running when the tracking columns were first added had no recorded start time, so when stopped, zero elapsed time was accumulated and the counter reset to 0 on the next start/stop cycle. A one-time migration backfills the start time for all currently-active bots so the counter continues correctly from here.
+
 ## [v2.146.0] - 2026-03-30
 
 ### Fixed
