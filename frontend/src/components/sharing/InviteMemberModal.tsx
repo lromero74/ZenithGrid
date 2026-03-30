@@ -26,8 +26,8 @@ const ROLE_OPTIONS = [
     color: 'blue',
   },
   {
-    value: 'observer',
-    label: 'Observer',
+    value: 'shadow',
+    label: 'Shadow',
     icon: Eye,
     description: 'Read-only access — view balances, bots, positions, and reports. Cannot execute any trades or changes.',
     color: 'slate',
@@ -36,7 +36,7 @@ const ROLE_OPTIONS = [
 
 export function InviteMemberModal({ accountId, accountName, onClose, onSuccess }: InviteMemberModalProps) {
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'manager' | 'observer'>('observer')
+  const [role, setRole] = useState<'manager' | 'shadow'>('shadow')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

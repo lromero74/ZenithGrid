@@ -80,8 +80,8 @@ export default function Reports() {
   const { selectedAccount } = useAccount()
   const canWriteReportsRaw = usePermission('reports', 'write')
   const canDeleteReportsRaw = usePermission('reports', 'delete')
-  // Observers on shared accounts have read-only access regardless of RBAC permissions
-  const isObserverAccount = selectedAccount?.membership_role === 'observer'
+  // Shadow members on shared accounts have read-only access regardless of RBAC permissions
+  const isObserverAccount = selectedAccount?.membership_role === 'shadow'
   const canWriteReports = canWriteReportsRaw && !isObserverAccount
   const canDeleteReports = canDeleteReportsRaw && !isObserverAccount
 

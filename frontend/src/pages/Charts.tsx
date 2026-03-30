@@ -145,8 +145,8 @@ function Charts() {
           {selectedAccount && (
             <p className="text-sm text-slate-400 mt-0.5">
               {selectedAccount.name}
-              {selectedAccount.membership_role === 'observer' && (
-                <span className="ml-2 text-xs text-violet-400">(Observer)</span>
+              {selectedAccount.membership_role === 'shadow' && (
+                <span className="ml-2 text-xs text-violet-400">(Shadow)</span>
               )}
             </p>
           )}

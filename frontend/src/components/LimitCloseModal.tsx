@@ -788,7 +788,7 @@ export function LimitCloseModal({
                   : 'bg-blue-600 hover:bg-blue-700'
             }`}
             disabled={isSubmitting || !ticker || readOnly}
-            title={readOnly ? 'View only — observers cannot place orders' : undefined}
+            title={readOnly ? 'View only — shadow members cannot place orders' : undefined}
           >
             {readOnly
               ? 'View Only'

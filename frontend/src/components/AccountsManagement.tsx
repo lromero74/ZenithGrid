@@ -646,8 +646,8 @@ function AccountRow({
               <PropGuardStatus account={account} />
             )}
 
-            {/* Account Sharing — not shown to observers (read-only access, no management UI) */}
-            {account.membership_role !== 'observer' && (
+            {/* Account Sharing — not shown to shadow members (read-only access, no management UI) */}
+            {account.membership_role !== 'shadow' && (
               <AccountSharingPanel
                 accountId={account.id}
                 accountName={account.name}

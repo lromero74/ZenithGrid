@@ -56,7 +56,7 @@ export interface Account {
   bot_count: number
 
   // Sharing fields — absent/null means the current user owns this account
-  membership_role?: 'manager' | 'observer' | null
+  membership_role?: 'manager' | 'shadow' | null
   shared_by?: string | null        // Display name of owner (non-owners only)
   member_count?: number            // Active non-owner members
 }
@@ -65,7 +65,7 @@ export interface PendingInvitation {
   token: string
   account_name: string
   invited_by: string
-  role: 'manager' | 'observer'
+  role: 'manager' | 'shadow'
   expires_at: string
 }
 

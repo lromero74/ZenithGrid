@@ -264,7 +264,7 @@ ACCOUNT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         Perm.REPORTS_READ,
         Perm.TEMPLATES_READ,
     },
-    "observer": {
+    "shadow": {
         Perm.ACCOUNTS_READ,
         Perm.BOTS_READ,
         Perm.POSITIONS_READ,
@@ -273,7 +273,7 @@ ACCOUNT_ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
 }
 
-_ROLE_ORDER = {"observer": 0, "manager": 1, "owner": 2}
+_ROLE_ORDER = {"shadow": 0, "manager": 1, "owner": 2}
 
 
 async def get_account_role(
@@ -287,7 +287,7 @@ async def get_account_role(
     Returns:
         'owner'    — account.user_id == current_user.id
         'manager'  — active, non-expired membership with role='manager'
-        'observer' — active, non-expired membership with role='observer'
+        'shadow'   — active, non-expired membership with role='shadow'
         None       — no access (account not found or user has no membership)
     """
     from app.models import Account
@@ -301,6 +301,10 @@ async def get_account_role(
     if owner_id is None:
         return None  # Account doesn't exist
     if owner_id == current_user.id:
+        return "owner"
+
+    # Superusers have owner-level access to all accounts (mirrors require_permission bypass)
+    if current_user.is_superuser:
         return "owner"
 
     # Check for an active membership
@@ -318,13 +322,13 @@ async def get_account_role(
     return membership.role
 
 
-def require_account_access(min_role: str = "observer"):
+def require_account_access(min_role: str = "shadow"):
     """
     Dependency factory: require at least `min_role` on the target account.
 
-    Role hierarchy (lowest to highest): observer < manager < owner
+    Role hierarchy (lowest to highest): shadow < manager < owner
 
-    The injected value is the user's actual role string ('owner', 'manager', or 'observer').
+    The injected value is the user's actual role string ('owner', 'manager', or 'shadow').
     Raises 404 if account does not exist (or user has no access), 403 if role insufficient.
 
     Usage:
@@ -332,7 +336,7 @@ def require_account_access(min_role: str = "observer"):
         async def remove_member(
             account_id: int,
             uid: int,
-            role: str = Depends(require_account_access("observer")),
+            role: str = Depends(require_account_access("shadow")),
             current_user: User = Depends(get_current_user),
             ...
         ):

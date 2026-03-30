@@ -32,7 +32,7 @@ import {
 
 export default function Positions() {
   const { selectedAccount } = useAccount()
-  const isObserver = selectedAccount?.membership_role === 'observer'
+  const isObserver = selectedAccount?.membership_role === 'shadow'
   const canWritePositions = usePermission('positions', 'write') && !isObserver
   const confirm = useConfirm()
   const { addToast } = useNotifications()

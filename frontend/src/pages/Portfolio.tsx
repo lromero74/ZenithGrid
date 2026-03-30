@@ -71,7 +71,7 @@ function Portfolio() {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const { addToast } = useNotifications()
-  const isObserver = selectedAccount?.membership_role === 'observer'
+  const isObserver = selectedAccount?.membership_role === 'shadow'
   const canWriteAccounts = usePermission('accounts', 'write') && !isObserver
 
   // Fetch portfolio with optional cache bypass

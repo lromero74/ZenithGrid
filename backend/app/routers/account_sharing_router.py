@@ -33,11 +33,11 @@ router = APIRouter(tags=["account-sharing"])
 
 class InviteRequest(BaseModel):
     email: EmailStr
-    role: str = Field(..., pattern="^(manager|observer)$")
+    role: str = Field(..., pattern="^(manager|shadow)$")
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str = Field(..., pattern="^(manager|observer)$")
+    role: str = Field(..., pattern="^(manager|shadow)$")
 
 
 # =============================================================================
@@ -136,7 +136,7 @@ async def invite_member(
 @router.get("/api/accounts/{account_id}/sharing/members")
 async def list_members(
     account_id: int,
-    account_role: str = Depends(require_account_access("observer")),
+    account_role: str = Depends(require_account_access("shadow")),
     db: AsyncSession = Depends(get_db),
 ):
     """List all active members of this account. Any role can view."""
@@ -178,7 +178,7 @@ async def update_member_role(
 async def remove_member(
     account_id: int,
     target_user_id: int,
-    account_role: str = Depends(require_account_access("observer")),
+    account_role: str = Depends(require_account_access("shadow")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

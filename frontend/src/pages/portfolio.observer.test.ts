@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest'
 
-// Tests for observer-mode sell button visibility logic in Portfolio.tsx
+// Tests for shadow-mode sell button visibility logic in Portfolio.tsx
 
-describe('Portfolio observer sell button visibility', () => {
+describe('Portfolio shadow sell button visibility', () => {
   function shouldShowSellButton(isObserver: boolean, canSell: boolean): boolean {
     return !isObserver && canSell
   }
 
-  it('hides sell-to-USD button for observers', () => {
+  it('hides sell-to-USD button for shadow members', () => {
     expect(shouldShowSellButton(true, true)).toBe(false)
   })
 
-  it('hides sell-to-BTC button for observers', () => {
+  it('hides sell-to-BTC button for shadow members', () => {
     expect(shouldShowSellButton(true, true)).toBe(false)
   })
 
@@ -24,13 +24,13 @@ describe('Portfolio observer sell button visibility', () => {
   })
 
   describe('canWriteAccounts derivation', () => {
-    it('is false when observer regardless of RBAC', () => {
+    it('is false when shadow regardless of RBAC', () => {
       const rbacCanWrite = true
       const isObserver = true
       expect(rbacCanWrite && !isObserver).toBe(false)
     })
 
-    it('is true when RBAC allows and not observer', () => {
+    it('is true when RBAC allows and not shadow', () => {
       const rbacCanWrite = true
       const isObserver = false
       expect(rbacCanWrite && !isObserver).toBe(true)

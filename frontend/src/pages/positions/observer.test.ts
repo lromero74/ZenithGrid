@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 
-// Test the observer guard logic for modal open handlers in Positions.tsx.
+// Test the shadow-mode guard logic for modal open handlers in Positions.tsx.
 // These are extracted as pure functions matching the exact pattern used in the component.
 
 function makeOpenAddFundsModal(isObserver: boolean) {
@@ -40,15 +40,15 @@ function makeHandleOpenEditSettings(isObserver: boolean) {
 
 const fakePosition = { id: 1, notes: 'hello' }
 
-describe('Positions observer modal guards', () => {
+describe('Positions shadow modal guards', () => {
   describe('openAddFundsModal', () => {
-    it('does not open modal when observer', () => {
+    it('does not open modal when shadow', () => {
       const { handler, setShowAddFundsModal } = makeOpenAddFundsModal(true)
       handler(fakePosition)
       expect(setShowAddFundsModal).not.toHaveBeenCalled()
     })
 
-    it('opens modal when not observer', () => {
+    it('opens modal when not shadow', () => {
       const { handler, setShowAddFundsModal } = makeOpenAddFundsModal(false)
       handler(fakePosition)
       expect(setShowAddFundsModal).toHaveBeenCalledWith(true)
@@ -56,13 +56,13 @@ describe('Positions observer modal guards', () => {
   })
 
   describe('openNotesModal', () => {
-    it('does not open modal when observer', () => {
+    it('does not open modal when shadow', () => {
       const { handler, setShowNotesModal } = makeOpenNotesModal(true)
       handler(fakePosition)
       expect(setShowNotesModal).not.toHaveBeenCalled()
     })
 
-    it('opens modal when not observer', () => {
+    it('opens modal when not shadow', () => {
       const { handler, setShowNotesModal } = makeOpenNotesModal(false)
       handler(fakePosition)
       expect(setShowNotesModal).toHaveBeenCalledWith(true)
@@ -70,13 +70,13 @@ describe('Positions observer modal guards', () => {
   })
 
   describe('handleOpenEditSettings', () => {
-    it('does not open modal when observer', () => {
+    it('does not open modal when shadow', () => {
       const { handler, setShowEditSettingsModal } = makeHandleOpenEditSettings(true)
       handler(fakePosition)
       expect(setShowEditSettingsModal).not.toHaveBeenCalled()
     })
 
-    it('opens modal when not observer', () => {
+    it('opens modal when not shadow', () => {
       const { handler, setShowEditSettingsModal } = makeHandleOpenEditSettings(false)
       handler(fakePosition)
       expect(setShowEditSettingsModal).toHaveBeenCalledWith(true)
@@ -84,14 +84,14 @@ describe('Positions observer modal guards', () => {
   })
 
   describe('canWritePositions derivation', () => {
-    it('is false when observer regardless of RBAC', () => {
+    it('is false when shadow regardless of RBAC', () => {
       const rbacCanWrite = true
       const isObserver = true
       const canWrite = rbacCanWrite && !isObserver
       expect(canWrite).toBe(false)
     })
 
-    it('is true when RBAC allows and not observer', () => {
+    it('is true when RBAC allows and not shadow', () => {
       const rbacCanWrite = true
       const isObserver = false
       const canWrite = rbacCanWrite && !isObserver
@@ -100,14 +100,14 @@ describe('Positions observer modal guards', () => {
   })
 
   describe('Resize All Budgets visibility', () => {
-    it('is hidden for observers', () => {
+    it('is hidden for shadow members', () => {
       const isObserver = true
       const openPositionsLength = 3
       const shouldShow = openPositionsLength > 0 && !isObserver
       expect(shouldShow).toBe(false)
     })
 
-    it('is visible for non-observers with open positions', () => {
+    it('is visible for non-shadow members with open positions', () => {
       const isObserver = false
       const openPositionsLength = 3
       const shouldShow = openPositionsLength > 0 && !isObserver

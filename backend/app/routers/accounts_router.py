@@ -175,7 +175,7 @@ class AccountResponse(BaseModel):
     bot_count: int = 0
 
     # Sharing fields — null/absent means the current user owns this account
-    membership_role: Optional[str] = None   # 'manager' | 'observer' | None (owner)
+    membership_role: Optional[str] = None   # 'manager' | 'shadow' | None (owner)
     shared_by: Optional[str] = None         # Display name of the account owner (non-owners only)
     member_count: int = 0                   # Number of active non-owner members
 

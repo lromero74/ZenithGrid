@@ -15,7 +15,7 @@ interface Member {
   user_id: number
   email: string
   display_name: string | null
-  role: 'manager' | 'observer'
+  role: 'manager' | 'shadow'
   joined_at: string
   expires_at: string | null
   invited_by: string | null
@@ -24,7 +24,7 @@ interface Member {
 interface PendingOutboundInvitation {
   id: number
   invited_email: string
-  role: 'manager' | 'observer'
+  role: 'manager' | 'shadow'
   expires_at: string
   created_at: string
 }
@@ -32,14 +32,14 @@ interface PendingOutboundInvitation {
 interface AccountSharingPanelProps {
   accountId: number
   accountName: string
-  membershipRole: 'owner' | 'manager' | 'observer'
+  membershipRole: 'owner' | 'manager' | 'shadow'
   currentUserId: number
   onLeave?: () => void
 }
 
 const ROLE_LABELS: Record<string, string> = {
   manager: 'Manager',
-  observer: 'Observer',
+  shadow: 'Shadow',
 }
 
 export function AccountSharingPanel({
@@ -84,7 +84,7 @@ export function AccountSharingPanel({
     fetchData()
   }, [fetchData])
 
-  const handleChangeRole = async (userId: number, newRole: 'manager' | 'observer') => {
+  const handleChangeRole = async (userId: number, newRole: 'manager' | 'shadow') => {
     setUpdatingMember(userId)
     try {
       const res = await authFetch(`/api/accounts/${accountId}/sharing/members/${userId}`, {
@@ -295,7 +295,7 @@ interface MemberRowProps {
   member: Member
   isOwner: boolean
   isUpdating: boolean
-  onChangeRole: (userId: number, role: 'manager' | 'observer') => void
+  onChangeRole: (userId: number, role: 'manager' | 'shadow') => void
   onRemove: (userId: number, email: string) => void
 }
 
@@ -337,7 +337,7 @@ function MemberRow({ member, isOwner, isUpdating, onChangeRole, onRemove }: Memb
             </button>
             {roleOpen && (
               <div className="absolute right-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 overflow-hidden">
-                {(['manager', 'observer'] as const).map((r) => (
+                {(['manager', 'shadow'] as const).map((r) => (
                   <button
                     key={r}
                     onClick={() => {

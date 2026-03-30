@@ -170,7 +170,7 @@ export function BotFormModal({
           {readOnly && (
             <p className="text-xs text-violet-400 mt-1 flex items-center gap-1">
               <span>👁</span>
-              Read-Only — observer access
+              Read-Only — shadow access
             </p>
           )}
         </div>

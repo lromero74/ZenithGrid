@@ -10,7 +10,7 @@ Business logic for account co-management:
 Security invariants enforced here:
   - invited_email must match current_user.email on accept/decline
   - Tokens are single-use (is_pending checks all termination states)
-  - Only 'manager' and 'observer' roles can be granted (not 'owner')
+  - Only 'manager' and 'shadow' roles can be granted (not 'owner')
   - Account owner (account.user_id) cannot be removed via membership delete
 """
 
@@ -25,7 +25,7 @@ from app.models import Account, User
 from app.models.sharing import AccountInvitation, AccountMembership, AccountMembershipEvent
 
 INVITATION_TTL_DAYS = 7
-_VALID_ROLES = frozenset(("manager", "observer"))
+_VALID_ROLES = frozenset(("manager", "shadow"))
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ async def create_invitation(
     or duplicate pending invitation.
     """
     if role not in _VALID_ROLES:
-        raise ValueError(f"Invalid role: {role!r}. Must be 'manager' or 'observer'.")
+        raise ValueError(f"Invalid role: {role!r}. Must be 'manager' or 'shadow'.")
 
     normalized_email = invited_email.lower().strip()
 
@@ -282,7 +282,7 @@ async def update_member_role(
     Raises ValueError for invalid role or membership not found.
     """
     if new_role not in _VALID_ROLES:
-        raise ValueError(f"Invalid role: {new_role!r}. Must be 'manager' or 'observer'.")
+        raise ValueError(f"Invalid role: {new_role!r}. Must be 'manager' or 'shadow'.")
 
     result = await db.execute(
         select(AccountMembership).where(

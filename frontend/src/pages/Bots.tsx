@@ -231,7 +231,7 @@ function Bots() {
 
   const handleOpenEdit = (bot: Bot) => {
     setEditingBot(bot)
-    const isObserverAccount = selectedAccount?.membership_role === 'observer'
+    const isObserverAccount = selectedAccount?.membership_role === 'shadow'
     const forceReadOnly = !canWriteBots || isObserverAccount
     setReadOnly(forceReadOnly)
     setReadOnlyTitle(forceReadOnly ? `View Bot: ${bot.name}` : '')
@@ -614,7 +614,7 @@ function Bots() {
                     setIndicatorLogsBotId={setIndicatorLogsBotId}
                     setScannerLogsBotId={setScannerLogsBotId}
                     portfolio={portfolio}
-                    canWrite={canWriteBots && selectedAccount?.membership_role !== 'observer'}
+                    canWrite={canWriteBots && selectedAccount?.membership_role !== 'shadow'}
                   />
                 ))}
               </tbody>

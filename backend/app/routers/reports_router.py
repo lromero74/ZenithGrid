@@ -30,7 +30,7 @@ from app.models import (
     ReportSchedule,
     User,
 )
-from app.services.account_access import accessible_accounts_filter
+from app.services.account_access import accessible_accounts_filter, manager_account_ids, manager_accounts_filter
 
 logger = logging.getLogger(__name__)
 
@@ -524,8 +524,10 @@ async def create_goal(
     if body.target_type == "expenses":
         target_value = body.target_value  # Will be recalculated when items are added
 
+    write_uid = await _resolve_write_user_id(db, current_user, body.account_id)
+
     goal = ReportGoal(
-        user_id=current_user.id,
+        user_id=write_uid,
         account_id=body.account_id,
         name=body.name,
         target_type=body.target_type,
@@ -558,15 +560,7 @@ async def update_goal(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Update an existing goal."""
-    result = await db.execute(
-        select(ReportGoal).where(
-            ReportGoal.id == goal_id,
-            ReportGoal.user_id == current_user.id,
-        )
-    )
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = await _get_writable_goal(db, goal_id, current_user)
 
     from dateutil.relativedelta import relativedelta
 
@@ -607,15 +601,7 @@ async def delete_goal(
     current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a goal."""
-    result = await db.execute(
-        select(ReportGoal).where(
-            ReportGoal.id == goal_id,
-            ReportGoal.user_id == current_user.id,
-        )
-    )
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = await _get_writable_goal(db, goal_id, current_user)
 
     await db.delete(goal)
     await db.commit()
@@ -639,15 +625,7 @@ async def get_goal_trend(
     )
     from sqlalchemy import func as sa_func
 
-    result = await db.execute(
-        select(ReportGoal).where(
-            ReportGoal.id == goal_id,
-            ReportGoal.user_id == current_user.id,
-        )
-    )
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = await _get_accessible_goal(db, goal_id, current_user.id)
 
     if goal.target_type == "income":
         raise HTTPException(
@@ -929,7 +907,7 @@ async def create_expense_item(
     """Add an expense item to a goal."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_user_goal(db, goal_id, current_user.id)
+    goal = await _get_writable_goal(db, goal_id, current_user)
     if goal.target_type != "expenses":
         raise HTTPException(
             status_code=400, detail="Can only add expense items to expenses goals"
@@ -945,7 +923,7 @@ async def create_expense_item(
 
     item = ExpenseItem(
         goal_id=goal.id,
-        user_id=current_user.id,
+        user_id=goal.user_id,  # attribute to goal owner so members see it
         category=body.category,
         name=body.name,
         amount=body.amount,
@@ -987,13 +965,12 @@ async def reorder_expense_items(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Set sort_order for expense items based on provided ID order."""
-    goal = await _get_user_goal(db, goal_id, current_user.id)
+    goal = await _get_writable_goal(db, goal_id, current_user)
 
-    # Fetch all items for this goal owned by this user
+    # Fetch all items for this goal
     result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.goal_id == goal.id,
-            ExpenseItem.user_id == current_user.id,
         )
     )
     items_by_id = {item.id: item for item in result.scalars().all()}
@@ -1025,12 +1002,11 @@ async def update_expense_item(
     """Update an expense item."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_user_goal(db, goal_id, current_user.id)
+    goal = await _get_writable_goal(db, goal_id, current_user)
     result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.id == item_id,
             ExpenseItem.goal_id == goal.id,
-            ExpenseItem.user_id == current_user.id,
         )
     )
     item = result.scalar_one_or_none()
@@ -1069,12 +1045,11 @@ async def delete_expense_item(
     """Delete an expense item."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_user_goal(db, goal_id, current_user.id)
+    goal = await _get_writable_goal(db, goal_id, current_user)
     result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.id == item_id,
             ExpenseItem.goal_id == goal.id,
-            ExpenseItem.user_id == current_user.id,
         )
     )
     item = result.scalar_one_or_none()
@@ -1151,6 +1126,85 @@ async def _get_accessible_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+
+async def _resolve_write_user_id(
+    db: AsyncSession, current_user: User, account_id: Optional[int],
+) -> int:
+    """
+    Return the user_id to store on report objects created for a shared account.
+
+    When a manager creates goals, schedules, or expense items on another user's
+    account, the record is attributed to the account OWNER so that the owner
+    (and other members) see it via _resolve_report_user_id.
+
+    - Own account or no account_id → returns current_user.id
+    - Manager on another account    → returns account.user_id (the owner)
+    - No write access               → raises 403
+    """
+    if account_id is None:
+        return current_user.id
+    result = await db.execute(
+        select(Account.user_id).where(
+            Account.id == account_id,
+            manager_accounts_filter(current_user.id),
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=403, detail="Insufficient access to account")
+    return row[0]
+
+
+async def _get_writable_goal(
+    db: AsyncSession, goal_id: int, current_user: User,
+) -> ReportGoal:
+    """
+    Fetch a goal the user can write to.
+
+    Grants write access when the user owns the goal OR holds manager/owner
+    membership on the goal's account.  Raises 404 if not readable at all,
+    403 if readable but not writable.
+    """
+    goal = await _get_accessible_goal(db, goal_id, current_user.id)
+    if goal.user_id == current_user.id:
+        return goal
+    mgr_ids = await manager_account_ids(db, current_user.id)
+    if goal.account_id not in mgr_ids:
+        raise HTTPException(status_code=403, detail="Insufficient access to modify this goal")
+    return goal
+
+
+async def _get_writable_schedule(
+    db: AsyncSession, schedule_id: int, current_user: User,
+) -> tuple:
+    """
+    Fetch a schedule the user can write to.
+
+    Returns (schedule, effective_user_id) where effective_user_id is the
+    schedule owner's user_id — pass it to service functions that accept user_id
+    to look up records.
+
+    Grants write access when the user owns the schedule OR holds manager/owner
+    membership on the schedule's account.  Raises 404 / 403 accordingly.
+    """
+    result = await db.execute(
+        select(ReportSchedule)
+        .where(ReportSchedule.id == schedule_id)
+        .options(selectinload(ReportSchedule.goal_links))
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    if schedule.user_id == current_user.id:
+        return schedule, current_user.id
+
+    mgr_ids = await manager_account_ids(db, current_user.id)
+    if schedule.account_id not in mgr_ids:
+        raise HTTPException(status_code=403, detail="Insufficient access to schedule")
+
+    return schedule, schedule.user_id
 
 
 def _expense_item_to_dict(
@@ -1279,7 +1333,8 @@ async def create_schedule(
 ) -> dict:
     """Create a new report schedule."""
     from app.services.report_schedule_service import create_schedule_record
-    schedule = await create_schedule_record(db, current_user.id, body)
+    write_uid = await _resolve_write_user_id(db, current_user, body.account_id)
+    schedule = await create_schedule_record(db, write_uid, body)
     return _schedule_to_dict(schedule)
 
 
@@ -1292,7 +1347,8 @@ async def update_schedule(
 ) -> dict:
     """Update an existing report schedule."""
     from app.services.report_schedule_service import update_schedule_record
-    schedule = await update_schedule_record(db, current_user.id, schedule_id, body)
+    _schedule, effective_uid = await _get_writable_schedule(db, schedule_id, current_user)
+    schedule = await update_schedule_record(db, effective_uid, schedule_id, body)
     return _schedule_to_dict(schedule)
 
 
@@ -1303,16 +1359,7 @@ async def delete_schedule(
     current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a report schedule."""
-    result = await db.execute(
-        select(ReportSchedule).where(
-            ReportSchedule.id == schedule_id,
-            ReportSchedule.user_id == current_user.id,
-        )
-    )
-    schedule = result.scalar_one_or_none()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-
+    schedule, _uid = await _get_writable_schedule(db, schedule_id, current_user)
     await db.delete(schedule)
     await db.commit()
     return {"detail": "Schedule deleted"}
@@ -1458,17 +1505,7 @@ async def generate_report(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Manually trigger report generation for a schedule."""
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(
-            ReportSchedule.id == body.schedule_id,
-            ReportSchedule.user_id == current_user.id,
-        )
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one_or_none()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    schedule, _uid = await _get_writable_schedule(db, body.schedule_id, current_user)
 
     # Generate the report (ad-hoc — don't advance schedule timing)
     from app.services.report_scheduler import generate_report_for_schedule
@@ -1486,17 +1523,7 @@ async def preview_report(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Preview a report without saving or emailing."""
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(
-            ReportSchedule.id == body.schedule_id,
-            ReportSchedule.user_id == current_user.id,
-        )
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one_or_none()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    schedule, _uid = await _get_writable_schedule(db, body.schedule_id, current_user)
 
     from app.services.report_scheduler import generate_report_for_schedule
     report = await generate_report_for_schedule(

@@ -9,7 +9,7 @@ Membership roles:
   manager  — read + write access: can start/stop bots, add bots, manage positions,
              view all data including operational settings (auto-buy, rebalance, dust sweep);
              cannot touch credentials or invite/remove members
-  observer — read-only: balances, bots, positions, reports, logs, and operational settings
+  shadow   — read-only: balances, bots, positions, reports, logs, and operational settings
              (auto-buy thresholds, rebalance config, dust sweep config)
 """
 
@@ -68,7 +68,7 @@ def manager_accounts_filter(current_user_id: int):
 
 async def accessible_account_ids(db: AsyncSession, current_user_id: int) -> List[int]:
     """
-    Return all account IDs accessible to the user (any role: owner, manager, observer).
+    Return all account IDs accessible to the user (any role: owner, manager, shadow).
     Used for read-only queries on bots, positions, logs, etc.
     """
     result = await db.execute(

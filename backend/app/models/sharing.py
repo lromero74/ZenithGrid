@@ -3,7 +3,7 @@ Account sharing models: memberships, invitations, audit events.
 
 All tables live in the auth schema (co-located with users/RBAC).
 Ownership is always determined by account.user_id — these models
-cover non-owner access only (role in: 'manager', 'observer').
+cover non-owner access only (role in: 'manager', 'shadow').
 """
 
 from datetime import datetime
@@ -21,7 +21,7 @@ class AccountMembership(Base):
     Roles:
       manager  — read + write: start/stop bots, add/edit/delete bots, cancel/close positions,
                  view all data including operational settings; cannot touch credentials or invites
-      observer — read-only: balances, bots, positions, reports, logs, and operational settings
+      shadow   — read-only: balances, bots, positions, reports, logs, and operational settings
                  (auto-buy thresholds, rebalance configuration, dust sweep settings)
 
     The account owner is identified by account.user_id — no 'owner' row here.
@@ -36,7 +36,7 @@ class AccountMembership(Base):
     user_id = Column(
         Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    role = Column(String(20), nullable=False)  # 'manager' | 'observer'
+    role = Column(String(20), nullable=False)  # 'manager' | 'shadow'
     invited_by_user_id = Column(
         Integer, ForeignKey("auth.users.id", ondelete="SET NULL"), nullable=True
     )
@@ -75,7 +75,7 @@ class AccountInvitation(Base):
     invited_by_user_id = Column(
         Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
     )
-    role = Column(String(20), nullable=False)  # 'manager' | 'observer'
+    role = Column(String(20), nullable=False)  # 'manager' | 'shadow'
     token = Column(String(64), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)

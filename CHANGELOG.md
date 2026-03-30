@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.148.0] - 2026-03-30
+
+### Added
+- **Superuser (admin) has manager access to all demo accounts** — the platform admin account now has manager-level access to the Observer/demo paper-trading accounts, allowing bots, goals, expense items, and report schedules to be configured on those accounts without requiring a separate login.
+
+### Changed
+- **Account sharing role renamed from "Observer" to "Shadow"** — to avoid confusion with the "Observers" RBAC group used for demo users, the read-only account-sharing role is now called "Shadow". Existing shadow members and pending invitations have been updated automatically. The banner now reads "Shadow Mode" when viewing a shared account with read-only access.
+
 ## [v2.147.3] - 2026-03-30
 
 ### Fixed

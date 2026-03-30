@@ -1,14 +1,14 @@
 import { Eye } from 'lucide-react'
 
-interface ObserverModeBannerProps {
+interface ShadowModeBannerProps {
   accountName: string
   ownerName?: string | null
 }
 
-export function ObserverModeBanner({ accountName, ownerName }: ObserverModeBannerProps) {
+export function ShadowModeBanner({ accountName, ownerName }: ShadowModeBannerProps) {
   const label = ownerName
-    ? `Observer Mode — Viewing ${ownerName}'s account "${accountName}" (Read-Only)`
-    : `Observer Mode — Viewing ${accountName} (Read-Only)`
+    ? `Shadow Mode — Viewing ${ownerName}'s account "${accountName}" (Read-Only)`
+    : `Shadow Mode — Viewing ${accountName} (Read-Only)`
 
   return (
     <div className="bg-violet-900/50 border-b border-violet-600/50">

@@ -25,7 +25,7 @@ interface Account {
   name: string
   type: string
   exchange?: string
-  membership_role?: 'manager' | 'observer' | null
+  membership_role?: 'manager' | 'shadow' | null
 }
 
 interface PortfolioManagementProps {
@@ -558,7 +558,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           const rb = rebalanceSettings[account.id]
           if (!ab && !rb) return null
 
-          const isObserver = account.membership_role === 'observer'
+          const isObserver = account.membership_role === 'shadow'
           const canWriteAccount = canWrite && !isObserver
           const mode = getMode(account.id)
           const status = statuses[account.id]

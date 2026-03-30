@@ -22,7 +22,7 @@ function BotFormModalHeader({ readOnly, readOnlyTitle, editingBot }: {
       {readOnly && (
         <p className="text-xs text-violet-400 mt-1 flex items-center gap-1">
           <span>👁</span>
-          Read-Only — observer access
+          Read-Only — shadow access
         </p>
       )}
     </div>
@@ -32,12 +32,12 @@ function BotFormModalHeader({ readOnly, readOnlyTitle, editingBot }: {
 describe('BotFormModal header — observer read-only indicator', () => {
   it('shows read-only badge when readOnly=true', () => {
     render(<BotFormModalHeader readOnly={true} readOnlyTitle="View Bot: My Bot" />)
-    expect(screen.getByText(/Read-Only — observer access/i)).toBeInTheDocument()
+    expect(screen.getByText(/Read-Only — shadow access/i)).toBeInTheDocument()
   })
 
   it('does not show read-only badge when readOnly=false', () => {
     render(<BotFormModalHeader readOnly={false} />)
-    expect(screen.queryByText(/Read-Only — observer access/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read-Only — shadow access/i)).not.toBeInTheDocument()
   })
 
   it('shows the readOnlyTitle when readOnly=true', () => {

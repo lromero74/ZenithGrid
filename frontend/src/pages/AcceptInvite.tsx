@@ -33,7 +33,7 @@ interface InvitationPreview {
   invitation_id: number
   account_name: string
   invited_by: string
-  role: 'manager' | 'observer'
+  role: 'manager' | 'shadow'
   expires_at: string
 }
 

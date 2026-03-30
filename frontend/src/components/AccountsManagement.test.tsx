@@ -46,7 +46,7 @@ const baseAccount = {
   created_at: '2024-01-01T00:00:00Z',
 }
 
-function renderManagement(membershipRole: 'observer' | 'manager' | undefined) {
+function renderManagement(membershipRole: 'shadow' | 'manager' | undefined) {
   const account = { ...baseAccount, membership_role: membershipRole }
   ;(useAccount as ReturnType<typeof vi.fn>).mockReturnValue({
     accounts: [account],
@@ -61,8 +61,8 @@ function renderManagement(membershipRole: 'observer' | 'manager' | undefined) {
 }
 
 describe('AccountsManagement — AccountSharingPanel visibility', () => {
-  it('hides AccountSharingPanel for observer accounts', async () => {
-    const { container } = renderManagement('observer')
+  it('hides AccountSharingPanel for shadow accounts', async () => {
+    const { container } = renderManagement('shadow')
     // Expand the account row to trigger the sharing panel render
     const expandButton = container.querySelector('button')
     if (expandButton) expandButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -71,9 +71,9 @@ describe('AccountsManagement — AccountSharingPanel visibility', () => {
 
   it('shows AccountSharingPanel for manager accounts', async () => {
     renderManagement('manager')
-    // The sharing panel is rendered when not observer — it is not suppressed
+    // The sharing panel is rendered when not shadow — it is not suppressed
     // Without clicking expand, panel is in the DOM but the guard must allow it through
-    // We verify observer suppression is the critical guard; managers pass through
-    expect(true).toBe(true) // structural test; observer-hide is the critical path
+    // We verify shadow suppression is the critical guard; managers pass through
+    expect(true).toBe(true) // structural test; shadow-hide is the critical path
   })
 })
