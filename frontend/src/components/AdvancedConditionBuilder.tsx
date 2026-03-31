@@ -63,6 +63,7 @@ export interface Condition {
   lookback_candles?: number
   bounce_pct?: number
   crack_pct?: number
+  base_timeframe?: Timeframe
 }
 
 // Risk preset defaults for AI indicators
@@ -366,6 +367,7 @@ function AdvancedConditionBuilder({
                       newCond.lookback_candles = 100
                       newCond.bounce_pct = 3.0
                       newCond.crack_pct = 2.0
+                      newCond.base_timeframe = 'ONE_HOUR'
                       break
                     case 'gap_fill_pct':
                       newCond.operator = 'less_than'
@@ -525,44 +527,60 @@ function AdvancedConditionBuilder({
 
           {/* QFL specific params */}
           {condition.type === 'qfl_crack' && (
-            <div className="flex items-center gap-2 bg-slate-800/50 p-1.5 rounded border border-slate-600 ml-2">
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 uppercase font-bold">Lookback:</span>
-                <input
-                  type="number"
-                  value={condition.lookback_candles || 100}
-                  onChange={(e) => updateCondition(group.id, condition.id, { lookback_candles: parseInt(e.target.value) })}
-                  className="w-12 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
-                  min={20}
-                  max={500}
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 uppercase font-bold">Bounce:</span>
-                <div className="flex items-center gap-0.5">
+            <div className="flex flex-col gap-2 bg-slate-800/50 p-1.5 rounded border border-slate-600 ml-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Base TF:</span>
+                  <select
+                    value={condition.base_timeframe || 'ONE_HOUR'}
+                    onChange={(e) => updateCondition(group.id, condition.id, { base_timeframe: e.target.value as Timeframe })}
+                    className="bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                  >
+                    {Object.entries(TIMEFRAMES).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Lookback:</span>
                   <input
                     type="number"
-                    value={condition.bounce_pct || 3.0}
-                    onChange={(e) => updateCondition(group.id, condition.id, { bounce_pct: parseFloat(e.target.value) })}
-                    className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
-                    step={0.5}
-                    min={0.5}
+                    value={condition.lookback_candles || 100}
+                    onChange={(e) => updateCondition(group.id, condition.id, { lookback_candles: parseInt(e.target.value) })}
+                    className="w-12 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                    min={20}
+                    max={500}
                   />
-                  <span className="text-[10px] text-slate-500">%</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 uppercase font-bold">Crack:</span>
-                <div className="flex items-center gap-0.5">
-                  <input
-                    type="number"
-                    value={condition.crack_pct || 2.0}
-                    onChange={(e) => updateCondition(group.id, condition.id, { crack_pct: parseFloat(e.target.value) })}
-                    className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
-                    step={0.1}
-                    min={0.1}
-                  />
-                  <span className="text-[10px] text-slate-500">%</span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Bounce:</span>
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="number"
+                      value={condition.bounce_pct || 3.0}
+                      onChange={(e) => updateCondition(group.id, condition.id, { bounce_pct: parseFloat(e.target.value) })}
+                      className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                      step={0.5}
+                      min={0.5}
+                    />
+                    <span className="text-[10px] text-slate-500">%</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Crack:</span>
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="number"
+                      value={condition.crack_pct || 2.0}
+                      onChange={(e) => updateCondition(group.id, condition.id, { crack_pct: parseFloat(e.target.value) })}
+                      className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                      step={0.1}
+                      min={0.1}
+                    />
+                    <span className="text-[10px] text-slate-500">%</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -706,7 +724,8 @@ function AdvancedConditionBuilder({
         } else if (c.type === 'qfl_crack') {
           const bounce = c.bounce_pct || 3.0
           const crack = c.crack_pct || 2.0
-          condStr = `QFL_CRACK[b≥${bounce}%,c≥${crack}%]=Active`
+          const btf = TIMEFRAMES[c.base_timeframe || 'ONE_HOUR'] || '?'
+          condStr = `QFL_CRACK[base:${btf},b≥${bounce}%,c≥${crack}%]=Active`
         } else if (CONDITION_TYPES[c.type]?.isAggregate) {
           condStr = `${c.type.toUpperCase()}=Active`
         } else {

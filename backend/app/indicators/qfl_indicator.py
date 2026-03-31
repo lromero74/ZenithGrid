@@ -28,7 +28,8 @@ _DEFAULT_PIVOT_WINDOW = 3     # candles on each side to confirm a pivot low
 class QFLParams:
     """Parameters for QFL indicator evaluation."""
 
-    timeframe: str = "ONE_HOUR"
+    base_timeframe: str = "ONE_HOUR"          # timeframe to find support bases
+    crack_timeframe: str = "FIFTEEN_MINUTE"   # timeframe to detect price crack
     lookback_candles: int = _DEFAULT_LOOKBACK
     bounce_pct: float = _DEFAULT_BOUNCE_PCT
     crack_pct: float = _DEFAULT_CRACK_PCT
@@ -36,8 +37,11 @@ class QFLParams:
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "QFLParams":
+        # timeframe key is used for backwards compatibility (crack detection timeframe)
+        default_tf = config.get("timeframe", "ONE_HOUR")
         return cls(
-            timeframe=config.get("timeframe", "ONE_HOUR"),
+            base_timeframe=config.get("qfl_base_timeframe", "ONE_HOUR"),
+            crack_timeframe=config.get("qfl_crack_timeframe", default_tf),
             lookback_candles=int(config.get("qfl_lookback_candles", _DEFAULT_LOOKBACK)),
             bounce_pct=float(config.get("qfl_bounce_pct", _DEFAULT_BOUNCE_PCT)),
             crack_pct=float(config.get("qfl_crack_pct", _DEFAULT_CRACK_PCT)),
@@ -125,41 +129,66 @@ class QFLIndicatorEvaluator:
         self,
         candles: List[Dict[str, Any]],
         params: Optional[QFLParams] = None,
+        base_candles: Optional[List[Dict[str, Any]]] = None,
     ) -> QFLResult:
         """
         Evaluate QFL crack indicator.
 
         Args:
-            candles: Candle data including the current (incomplete) candle as last entry.
+            candles: Candle data for crack detection (lower TF).
+                     Includes the current (incomplete) candle as last entry.
             params: QFL parameters.
+            base_candles: Optional candle data for base identification (higher TF).
+                          If None, bases are identified from 'candles'.
 
         Returns:
             QFLResult with signal (0 or 1) and supporting data.
         """
+        from app.constants import CANDLE_CACHE_TTL
+
         if params is None:
             params = QFLParams()
 
-        min_candles = params.pivot_window * 2 + 2
-        if not candles or len(candles) < min_candles:
+        # Enforce Base TF >= Crack TF (pro setup validation)
+        base_seconds = CANDLE_CACHE_TTL.get(params.base_timeframe, 3600)
+        crack_seconds = CANDLE_CACHE_TTL.get(params.crack_timeframe, 3600)
+        if base_seconds < crack_seconds:
             return QFLResult(
                 signal=0, bases=[],
-                rejection_reason=f"Need ≥{min_candles} candles, got {len(candles) if candles else 0}"
+                rejection_reason=f"Invalid setup: Base timeframe ({params.base_timeframe}) "
+                                 f"must be \u2265 Crack timeframe ({params.crack_timeframe})"
             )
+
+        min_candles = params.pivot_window * 2 + 2
+
+        # Use provided base_candles if available, otherwise use candles
+        target_base_candles = base_candles if base_candles is not None else candles
+        if not target_base_candles or len(target_base_candles) < min_candles:
+            return QFLResult(
+                signal=0, bases=[],
+                rejection_reason=f"Base candles: Need \u2265{min_candles}, got {len(target_base_candles) if target_base_candles else 0}"
+            )
+
+        if not candles:
+            return QFLResult(signal=0, bases=[], rejection_reason="No crack detection candles provided")
 
         # Use the live price from the current (incomplete) candle for crack detection
         current_price = float(candles[-1]["close"])
 
-        # Find bases from closed candles (exclude the incomplete current candle)
-        closed = candles[:-1]
+        # Find bases from closed candles
+        # If using separate base_candles, we assume they are already 'closed' enough
+        # (the monitor typically passes full history for higher TF)
+        closed_base = target_base_candles[:-1] if base_candles is None else target_base_candles
+
         # Apply lookback limit
-        history = closed[-params.lookback_candles:] if params.lookback_candles < len(closed) else closed
+        history = closed_base[-params.lookback_candles:] if params.lookback_candles < len(closed_base) else closed_base
 
         bases = _find_bases(history, params.bounce_pct, params.pivot_window)
 
         if not bases:
             return QFLResult(
                 signal=0, bases=[],
-                rejection_reason=f"No QFL bases found in last {len(history)} candles "
+                rejection_reason=f"No QFL bases found in last {len(history)} {params.base_timeframe} candles "
                                  f"(bounce_pct={params.bounce_pct}%)"
             )
 

@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.150.2] - 2026-03-31
+
+### Added
+- **Multi-Timeframe QFL Support**: The QFL (Quick Fingers Luke) indicator now supports separate timeframes for **Base Identification** and **Crack Detection**. This allows "pro" setups like finding strong support on 1h/4h candles while triggering entries on 5m/15m candles for faster execution.
+- **QFL Validation**: Added backend enforcement to ensure the Base timeframe is greater than or equal to the Crack timeframe.
+
 ## [v2.150.1] - 2026-03-31
 
 ### Fixed

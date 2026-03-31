@@ -739,6 +739,13 @@ class PhaseConditionEvaluator:
                 required.add(f"{timeframe}_vwap")
                 required.add(f"{timeframe}_price")
 
+            elif condition_type == "qfl_crack":
+                # Multi-timeframe QFL: Base timeframe for identification,
+                # timeframe (crack) for detection. Both need candles.
+                base_timeframe = condition.get("base_timeframe", timeframe)
+                required.add(f"{base_timeframe}_price")  # Needed for base identification
+                required.add(f"{timeframe}_price")       # Needed for crack detection
+
             # Aggregate indicators (ai_buy, ai_sell, bull_flag, vwap_bounce_up,
             # vwap_bounce_down) don't need specific indicator values — evaluated separately
 

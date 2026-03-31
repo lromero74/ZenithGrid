@@ -448,18 +448,26 @@ class IndicatorBasedStrategy(TradingStrategy):
         """
         Calculate QFL (Quick Fingers Luke) crack indicator.
 
-        Uses the timeframe from the first qfl_crack condition found in any phase.
+        Supports multi-timeframe: Base identification (higher TF) and 
+        Crack detection (lower TF).
         Mutates current_indicators in place.
         """
         # Determine timeframe and config params from the first matching condition
-        timeframe = "ONE_HOUR"
+        base_timeframe = "ONE_HOUR"
+        crack_timeframe = "FIFTEEN_MINUTE"
         config_overrides: Dict[str, Any] = {}
+        
         for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
             for cond in self._flatten_conditions(cond_list):
                 if cond.get("type") == "qfl_crack":
-                    timeframe = cond.get("timeframe", "ONE_HOUR")
+                    # Default timeframe in condition is the crack (signal) timeframe
+                    crack_timeframe = cond.get("timeframe", "FIFTEEN_MINUTE")
+                    # Optional base_timeframe for identifying bases
+                    base_timeframe = cond.get("base_timeframe", cond.get("timeframe", "ONE_HOUR"))
+                    
                     config_overrides = {
-                        "timeframe": timeframe,
+                        "qfl_base_timeframe": base_timeframe,
+                        "qfl_crack_timeframe": crack_timeframe,
                         "qfl_lookback_candles": cond.get("lookback_candles", 100),
                         "qfl_bounce_pct": cond.get("bounce_pct", 3.0),
                         "qfl_crack_pct": cond.get("crack_pct", 2.0),
@@ -468,8 +476,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                     break
 
         params = QFLParams.from_config({**self.config, **config_overrides})
-        tf_candles = candles_by_timeframe.get(timeframe, candles)
-        result = self.qfl_evaluator.evaluate(tf_candles, params)
+        
+        # Get candles for both timeframes
+        crack_candles = candles_by_timeframe.get(crack_timeframe, candles)
+        base_candles = candles_by_timeframe.get(base_timeframe) # Might be same as crack
+        
+        # If base_timeframe is same as crack_timeframe, pass None to evaluate() 
+        # to use internal single-tf logic
+        effective_base_candles = base_candles if base_timeframe != crack_timeframe else None
+        
+        result = self.qfl_evaluator.evaluate(crack_candles, params, base_candles=effective_base_candles)
         current_indicators["qfl_crack"] = result.signal
 
     def _get_dca_reference_price(self, position: Any, buy_trades: List) -> float:
