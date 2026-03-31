@@ -271,6 +271,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               type: 'info',
               title: 'Account Invitation',
               message: `${data.invited_by} invited you to ${data.role === 'manager' ? 'manage' : 'observe'} "${data.account_name}"`,
+              actionLabel: 'Review',
+              onAction: () => { window.location.href = `/accept-invite?token=${data.token}` },
             })
             // Trigger a refresh of pending invitations in AccountContext
             window.dispatchEvent(new CustomEvent('account:invitation_received'))

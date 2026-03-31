@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.150.4] - 2026-03-31
+
+### Fixed
+- **Account invitation toast**: The real-time notification for incoming account invitations now includes a "Review" button that takes the user directly to the invitation acceptance page.
+
 ## [v2.150.3] - 2026-03-31
 
 ### Fixed
