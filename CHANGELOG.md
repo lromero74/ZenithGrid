@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.7] - 2026-03-31
+
+### Fixed
+- Budget column now shows deal slot usage (`current/max deals`) alongside `% in use`, turning amber when all slots are full. Bots with Soft Ceiling enabled show a purple **SC** badge.
+- `update.py --changelog` no longer shows duplicate entries when a merge commit and feature commit share the same message.
+
 ## [v2.149.6] - 2026-03-31
 
 ### Added

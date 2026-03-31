@@ -357,9 +357,15 @@ def show_changelog(project_root, changelog_arg):
             print(f"{marker}")
 
         if result.stdout:
+            seen_subjects = set()
             for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    print(f"  {Colors.YELLOW}•{Colors.ENDC} {line.strip()}")
+                subject = line.strip()
+                if subject and subject not in seen_subjects:
+                    # Skip bare merge commits (e.g. "Merge branch 'feature/x' into main")
+                    if subject.startswith('Merge ') and '/' in subject.split(':')[0]:
+                        continue
+                    seen_subjects.add(subject)
+                    print(f"  {Colors.YELLOW}•{Colors.ENDC} {subject}")
         else:
             print(f"  {Colors.BLUE}(no commits){Colors.ENDC}")
         print()

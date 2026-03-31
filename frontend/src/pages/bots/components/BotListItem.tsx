@@ -426,17 +426,35 @@ export const BotListItem = memo(function BotListItem({
 
       {/* Budget */}
       <td className="hidden lg:table-cell px-1 sm:px-2 py-2 w-20">
-        <div className="flex flex-col gap-1">
-          <span className="text-sm text-emerald-400 font-medium whitespace-nowrap">
-            {bot.budget_percentage}%
-          </span>
-          {/* Budget Utilization */}
-          {bot.budget_utilization_percentage !== undefined && (
-            <div className="text-[10px] text-slate-400 whitespace-nowrap">
-              {bot.budget_utilization_percentage.toFixed(1)}% in use
+        {(() => {
+          const maxDeals = (bot.strategy_config as any)?.max_concurrent_deals
+            || (bot.strategy_config as any)?.max_concurrent_positions
+            || 1
+          const softCeilingEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
+          const openCount = bot.open_positions_count ?? 0
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-emerald-400 font-medium whitespace-nowrap">
+                {bot.budget_percentage}%
+              </span>
+              {/* Budget Utilization */}
+              {bot.budget_utilization_percentage !== undefined && bot.budget_utilization_percentage > 0 && (
+                <div className="text-[10px] text-slate-400 whitespace-nowrap">
+                  {bot.budget_utilization_percentage.toFixed(1)}% in use
+                </div>
+              )}
+              {/* Deal slot usage */}
+              <div className="flex items-center gap-1 text-[10px] whitespace-nowrap">
+                <span className={openCount >= maxDeals ? 'text-amber-400' : 'text-slate-500'}>
+                  {openCount}/{maxDeals} deals
+                </span>
+                {softCeilingEnabled && (
+                  <span className="text-purple-400 font-semibold" title="Soft ceiling active — deal cap adjusts based on available budget">SC</span>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+          )
+        })()}
       </td>
 
       {/* Status Toggle */}
