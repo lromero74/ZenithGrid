@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi.responses import FileResponse
@@ -530,13 +530,14 @@ async def get_dashboard(
         profit_result = await db.execute(profit_query)
         total_profit_btc = profit_result.scalar() or 0.0
 
-        # Win rate via SQL aggregation instead of materializing all rows
+        # Win rate via SQL aggregation — exclude manual closes (user intervention)
         win_rate_query = select(
             func.count(Position.id),
             func.count(case((Position.profit_btc > 0, 1))),
         ).where(
             Position.status == "closed",
             Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+            or_(Position.exit_reason.is_(None), Position.exit_reason != "manual"),
         )
         wr_result = await db.execute(win_rate_query)
         total_closed, win_count = wr_result.one()

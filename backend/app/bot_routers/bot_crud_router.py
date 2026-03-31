@@ -715,9 +715,10 @@ async def get_bot_stats(
     # Calculate total profit
     total_profit = sum(p.profit_quote for p in closed_positions if p.profit_quote)
 
-    # Calculate win rate
-    winning_positions = [p for p in closed_positions if p.profit_quote and p.profit_quote > 0]
-    win_rate = (len(winning_positions) / len(closed_positions) * 100) if closed_positions else 0.0
+    # Win rate: exclude manual closes (user intervention) from both numerator and denominator
+    bot_driven_positions = [p for p in closed_positions if p.exit_reason != "manual"]
+    winning_positions = [p for p in bot_driven_positions if p.profit_quote and p.profit_quote > 0]
+    win_rate = (len(winning_positions) / len(bot_driven_positions) * 100) if bot_driven_positions else 0.0
 
     # Check if bot has insufficient funds for new positions and calculate budget utilization
     insufficient_funds = False

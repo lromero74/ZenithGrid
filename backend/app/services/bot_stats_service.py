@@ -118,8 +118,8 @@ def calculate_bot_pnl(
             recent_pnl_usd += profit_usd
             recent_pnl_btc += profit_btc
 
-        # Win count (S10: generator count replaced with single-pass accumulator)
-        if pos.profit_usd is not None and pos.profit_usd > 0:
+        # Win count: only bot-driven closes with positive profit
+        if pos.exit_reason != "manual" and pos.profit_usd is not None and pos.profit_usd > 0:
             winning_count += 1
 
         # Capital deployed
@@ -143,8 +143,9 @@ def calculate_bot_pnl(
     days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
     trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
 
-    # Win rate
-    win_rate = (winning_count / len(closed_positions) * 100) if closed_positions else 0.0
+    # Win rate: exclude manual closes (user intervention) from denominator
+    bot_driven_positions = [p for p in closed_positions if p.exit_reason != "manual"]
+    win_rate = (winning_count / len(bot_driven_positions) * 100) if bot_driven_positions else 0.0
 
     # PnL percentage
     total_pnl_percentage = (

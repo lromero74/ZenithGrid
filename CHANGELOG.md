@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.5] - 2026-03-31
+
+### Fixed
+- Win rate no longer counts manually force-closed deals — only bot-driven closes (take profit, stop loss, trailing stops) factor into win rate. Manual closes are now tagged with `exit_reason = "manual"` and excluded from the denominator and numerator across all win rate calculations (bots list, bot detail, positions stats, dashboard).
+
 ## [v2.149.4] - 2026-03-31
 
 ### Fixed

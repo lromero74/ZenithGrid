@@ -159,6 +159,7 @@ def _make_position(
     total_quote_spent=100.0,
     closed_at=None,
     status="closed",
+    exit_reason=None,
 ):
     """Helper to create a mock Position."""
     pos = MagicMock()
@@ -170,6 +171,7 @@ def _make_position(
     pos.total_quote_spent = total_quote_spent
     pos.closed_at = closed_at or datetime.utcnow()
     pos.status = status
+    pos.exit_reason = exit_reason
     pos.total_base_acquired = 0.0
     return pos
 
@@ -334,6 +336,55 @@ class TestCalculateBotPnl:
         result = calculate_bot_pnl(bot, closed_positions=[], open_positions=[])
 
         assert result["aggregate_running_days"] == 0.0
+
+    def test_win_rate_excludes_manual_closes(self):
+        """Manual force-closes should not count in win rate numerator or denominator."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = _make_bot(days_old=10)
+
+        # 2 bot-driven wins + 1 manual close at profit (excluded) + 1 manual close at loss (excluded)
+        closed = [
+            _make_position(profit_usd=50.0, total_quote_spent=500.0),
+            _make_position(profit_usd=30.0, total_quote_spent=300.0),
+            _make_position(profit_usd=20.0, total_quote_spent=200.0, exit_reason="manual"),
+            _make_position(profit_usd=-15.0, total_quote_spent=150.0, exit_reason="manual"),
+        ]
+
+        result = calculate_bot_pnl(bot, closed, open_positions=[])
+
+        # Only 2 bot-driven positions in denominator, both wins → 100%
+        assert result["win_rate"] == pytest.approx(100.0)
+
+    def test_win_rate_manual_close_at_loss_not_counted(self):
+        """Manual close at a loss should not reduce win rate."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = _make_bot(days_old=5)
+
+        closed = [
+            _make_position(profit_usd=100.0, total_quote_spent=1000.0),
+            _make_position(profit_usd=-50.0, total_quote_spent=500.0, exit_reason="manual"),
+        ]
+
+        result = calculate_bot_pnl(bot, closed, open_positions=[])
+
+        # Only the bot-driven win counts — 1/1 = 100%
+        assert result["win_rate"] == pytest.approx(100.0)
+
+    def test_win_rate_all_manual_closes_returns_zero(self):
+        """If all closed positions are manual, win rate is 0 (no bot-driven data)."""
+        from app.services.bot_stats_service import calculate_bot_pnl
+
+        bot = _make_bot(days_old=5)
+
+        closed = [
+            _make_position(profit_usd=50.0, total_quote_spent=500.0, exit_reason="manual"),
+        ]
+
+        result = calculate_bot_pnl(bot, closed, open_positions=[])
+
+        assert result["win_rate"] == 0.0
 
     def test_calendar_days_since_creation_returned(self):
         """calendar_days reflects full time since bot was created."""

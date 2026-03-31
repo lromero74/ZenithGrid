@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -375,10 +375,11 @@ async def get_completed_trades_stats(
     if not user_account_ids:
         return empty_stats
 
-    # Build conditions for closed positions
+    # Build conditions for closed positions — exclude manual closes from win rate stats
     conditions = [
         Position.status == "closed",
         Position.account_id.in_(user_account_ids),
+        or_(Position.exit_reason.is_(None), Position.exit_reason != "manual"),
     ]
     if account_id is not None:
         conditions.append(Position.account_id == account_id)
