@@ -1149,6 +1149,9 @@ async def update_rebalance_settings(
     await db.commit()
     await db.refresh(account)
 
+    # Clear cached status so the next fetch reflects the new reserve settings
+    _TTL_REBALANCE_STATUS.pop(account_id, None)
+
     return _build_rebalance_response(account)
 
 
@@ -1381,14 +1384,25 @@ async def get_rebalance_status(
         }
         _deploy_alloc = _compute_allocation(_deployable_balances, prices)
 
-        # Per-currency reserve as % of total portfolio (for chart display)
+        # Per-currency reserve as % of total portfolio (for chart display).
+        # Cap each reserve at the actual balance — if you set a $100 reserve but
+        # only have $50, only $50 is effectively reserved and the chart should
+        # reflect that rather than showing an impossible >100% reservation.
         def _pct_of_total(usd_val: float) -> float:
             return round(usd_val / _total * 100, 2) if _total > 0 else 0.0
 
-        _reserve_pct_usd = _pct_of_total(account.min_balance_usd or 0.0)
-        _reserve_pct_btc = _pct_of_total((account.min_balance_btc or 0.0) * _btc_p)
-        _reserve_pct_eth = _pct_of_total((account.min_balance_eth or 0.0) * _eth_p)
-        _reserve_pct_usdc = _pct_of_total(account.min_balance_usdc or 0.0)
+        _reserve_pct_usd = _pct_of_total(
+            min(account.min_balance_usd or 0.0, balances.get("USD", 0.0))
+        )
+        _reserve_pct_btc = _pct_of_total(
+            min(account.min_balance_btc or 0.0, balances.get("BTC", 0.0)) * _btc_p
+        )
+        _reserve_pct_eth = _pct_of_total(
+            min(account.min_balance_eth or 0.0, balances.get("ETH", 0.0)) * _eth_p
+        )
+        _reserve_pct_usdc = _pct_of_total(
+            min(account.min_balance_usdc or 0.0, balances.get("USDC", 0.0))
+        )
 
         response_data = {
             "account_id": account_id,

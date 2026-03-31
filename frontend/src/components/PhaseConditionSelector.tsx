@@ -7,6 +7,7 @@ export type ConditionType =
   | 'bb_percent'
   | 'ema_cross'
   | 'sma_cross'
+  | 'vwap'
   | 'price_change'
   | 'stochastic'
   | 'volume'
@@ -14,6 +15,9 @@ export type ConditionType =
   | 'ai_buy'
   | 'ai_sell'
   | 'bull_flag'
+  | 'vwap_bounce_up'
+  | 'vwap_bounce_down'
+  | 'qfl_crack'
 
 export type Operator = 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'crossing_above' | 'crossing_below' | 'increasing' | 'decreasing'
 
@@ -44,6 +48,10 @@ export interface PhaseCondition {
   slow_period?: number
   signal_period?: number
   std_dev?: number
+  // QFL-specific
+  lookback_candles?: number
+  bounce_pct?: number
+  crack_pct?: number
 }
 
 interface PhaseConditionSelectorProps {
@@ -78,6 +86,10 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
     label: 'SMA Cross',
     description: 'Price crossing simple moving average',
   },
+  vwap: {
+    label: 'VWAP',
+    description: 'Price vs. Volume-Weighted Average Price. Use crossing/above/below operators.',
+  },
   price_change: {
     label: 'Price Change %',
     description: 'Percentage change from previous candle',
@@ -104,6 +116,21 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   bull_flag: {
     label: 'Bull Flag Pattern',
     description: 'Technical pattern detection. Returns 1 when bull flag is identified.',
+    isAggregate: true,
+  },
+  vwap_bounce_up: {
+    label: 'VWAP Bounce Up',
+    description: 'Bullish: price retested VWAP from above (wick touch) and last closed candle closed back above.',
+    isAggregate: true,
+  },
+  vwap_bounce_down: {
+    label: 'VWAP Bounce Down',
+    description: 'Bearish: price retested VWAP from below (wick touch) and last closed candle closed back below.',
+    isAggregate: true,
+  },
+  qfl_crack: {
+    label: 'QFL Crack (Quick Fingers Luke)',
+    description: 'Fires when price cracks below a historically validated support base. Classic panic-buy entry.',
     isAggregate: true,
   },
 }
@@ -210,6 +237,10 @@ function PhaseConditionSelector({
               newCondition.operator = 'crossing_above'
               newCondition.value = 0
               break
+            case 'vwap':
+              newCondition.operator = 'crossing_above'
+              newCondition.value = 0
+              break
             case 'stochastic':
               newCondition.period = 14
               newCondition.operator = 'less_than'
@@ -227,8 +258,17 @@ function PhaseConditionSelector({
             case 'ai_buy':
             case 'ai_sell':
             case 'bull_flag':
+            case 'vwap_bounce_up':
+            case 'vwap_bounce_down':
               newCondition.operator = 'greater_than'
               newCondition.value = 0  // > 0 means signal is active (equals 1)
+              break
+            case 'qfl_crack':
+              newCondition.operator = 'greater_than'
+              newCondition.value = 0
+              newCondition.lookback_candles = 100
+              newCondition.bounce_pct = 3.0
+              newCondition.crack_pct = 2.0
               break
           }
 
@@ -511,6 +551,24 @@ function PhaseConditionSelector({
           </>
         )
 
+      case 'vwap':
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-slate-300">Price</span>
+            <select
+              value={condition.operator}
+              onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+              className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
+            >
+              <option value="greater_than">Above (&gt;)</option>
+              <option value="less_than">Below (&lt;)</option>
+              <option value="crossing_above">Crossing Above</option>
+              <option value="crossing_below">Crossing Below</option>
+            </select>
+            <span className="text-sm text-slate-300">VWAP</span>
+          </div>
+        )
+
       case 'stochastic':
         return (
           <>
@@ -671,6 +729,80 @@ function PhaseConditionSelector({
             </span>
           </div>
         )
+
+      case 'vwap_bounce_up':
+        return (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-green-400 font-medium">▲ Bullish VWAP Bounce</span>
+              <span className="text-sm text-green-400 font-medium">= Active (1)</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Fires when: penultimate closed candle's <strong>low ≤ VWAP</strong> (wick retest) and
+              last closed candle's <strong>close &gt; VWAP</strong> (bounce confirmation).
+            </p>
+          </div>
+        )
+
+      case 'vwap_bounce_down':
+        return (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-red-400 font-medium">▼ Bearish VWAP Bounce</span>
+              <span className="text-sm text-red-400 font-medium">= Active (1)</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Fires when: penultimate closed candle's <strong>high ≥ VWAP</strong> (wick retest) and
+              last closed candle's <strong>close &lt; VWAP</strong> (bounce confirmation).
+            </p>
+          </div>
+        )
+
+      case 'qfl_crack':
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-amber-400 font-medium">⚡ QFL Crack</span>
+              <span className="text-sm text-amber-400 font-medium">= Active (1)</span>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-slate-400 whitespace-nowrap">Lookback candles:</label>
+                <input
+                  type="number"
+                  value={condition.lookback_candles ?? 100}
+                  onChange={(e) => updateCondition(condition.id, { lookback_candles: parseInt(e.target.value) })}
+                  min="20" max="500" step="10"
+                  className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-slate-400 whitespace-nowrap">Min bounce %:</label>
+                <input
+                  type="number"
+                  value={condition.bounce_pct ?? 3.0}
+                  onChange={(e) => updateCondition(condition.id, { bounce_pct: parseFloat(e.target.value) })}
+                  min="0.5" max="20" step="0.5"
+                  className="w-16 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-slate-400 whitespace-nowrap">Crack %:</label>
+                <input
+                  type="number"
+                  value={condition.crack_pct ?? 2.0}
+                  onChange={(e) => updateCondition(condition.id, { crack_pct: parseFloat(e.target.value) })}
+                  min="0.1" max="20" step="0.1"
+                  className="w-16 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Fires when price drops <strong>{condition.crack_pct ?? 2}%</strong> below a base that bounced
+              at least <strong>{condition.bounce_pct ?? 3}%</strong> (scans last <strong>{condition.lookback_candles ?? 100}</strong> candles).
+            </p>
+          </div>
+        )
     }
   }
 
@@ -697,6 +829,8 @@ function PhaseConditionSelector({
         return `[${tf}] Price ${op} EMA(${condition.period})`
       case 'sma_cross':
         return `[${tf}] Price ${op} SMA(${condition.period})`
+      case 'vwap':
+        return `[${tf}] Price ${op} VWAP`
       case 'stochastic':
         return isDirectional
           ? `[${tf}] Stochastic(${condition.period}) ${op}${strengthLabel}`
@@ -714,6 +848,12 @@ function PhaseConditionSelector({
         return `[${tf}] AI Sell Signal = Active`
       case 'bull_flag':
         return `[${tf}] Bull Flag Pattern = Active`
+      case 'vwap_bounce_up':
+        return `[${tf}] VWAP Bounce Up = Active`
+      case 'vwap_bounce_down':
+        return `[${tf}] VWAP Bounce Down = Active`
+      case 'qfl_crack':
+        return `[${tf}] QFL Crack (bounce≥${condition.bounce_pct ?? 3}%, crack≥${condition.crack_pct ?? 2}%) = Active`
       default:
         return 'Unknown condition'
     }

@@ -22,7 +22,12 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
-from app.indicators import AISpotOpinionEvaluator, AISpotOpinionParams, BullFlagIndicatorEvaluator
+from app.indicators import (
+    AISpotOpinionEvaluator, AISpotOpinionParams,
+    BullFlagIndicatorEvaluator,
+    VWAPBounceIndicatorEvaluator, VWAPBounceParams,
+    QFLIndicatorEvaluator, QFLParams,
+)
 from app.indicators.bull_flag_indicator import BullFlagParams
 from app.phase_conditions import PhaseConditionEvaluator
 from app.strategies import (
@@ -75,6 +80,8 @@ class IndicatorBasedStrategy(TradingStrategy):
         self.phase_evaluator = PhaseConditionEvaluator(self.indicator_calculator)
         self.ai_evaluator = AISpotOpinionEvaluator()
         self.bull_flag_evaluator = BullFlagIndicatorEvaluator()
+        self.vwap_bounce_evaluator = VWAPBounceIndicatorEvaluator()
+        self.qfl_evaluator = QFLIndicatorEvaluator()
 
         # Get phase conditions from config
         self.base_order_conditions = self.config.get("base_order_conditions", [])
@@ -167,6 +174,9 @@ class IndicatorBasedStrategy(TradingStrategy):
             "ai_buy": False,
             "ai_sell": False,
             "bull_flag": False,
+            "vwap_bounce_up": False,
+            "vwap_bounce_down": False,
+            "qfl_crack": False,
             "ai_params": None,  # First AI condition's params
         }
 
@@ -199,6 +209,12 @@ class IndicatorBasedStrategy(TradingStrategy):
                 needs["ai_sell"] = True
             elif indicator == "bull_flag":
                 needs["bull_flag"] = True
+            elif indicator == "vwap_bounce_up":
+                needs["vwap_bounce_up"] = True
+            elif indicator == "vwap_bounce_down":
+                needs["vwap_bounce_down"] = True
+            elif indicator == "qfl_crack":
+                needs["qfl_crack"] = True
 
         return needs
 
@@ -390,6 +406,71 @@ class IndicatorBasedStrategy(TradingStrategy):
             current_indicators["bull_flag_entry"] = bf_result.entry_price
             current_indicators["bull_flag_stop"] = bf_result.stop_loss
             current_indicators["bull_flag_target"] = bf_result.take_profit_target
+
+    def _calculate_vwap_bounce_indicators(
+        self,
+        candles_by_timeframe: Dict[str, List[Dict[str, Any]]],
+        candles: List[Dict[str, Any]],
+        needs: Dict[str, Any],
+        current_indicators: Dict[str, Any],
+    ) -> None:
+        """
+        Calculate VWAP bounce pattern indicators.
+
+        Uses the timeframe from the first vwap_bounce_* condition found in any phase.
+        Mutates current_indicators in place.
+        """
+        # Determine timeframe from the first matching condition
+        timeframe = "FIVE_MINUTE"
+        for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
+            for cond in self._flatten_conditions(cond_list):
+                if cond.get("type") in ("vwap_bounce_up", "vwap_bounce_down"):
+                    timeframe = cond.get("timeframe", "FIVE_MINUTE")
+                    break
+
+        params = VWAPBounceParams(timeframe=timeframe)
+        tf_candles = candles_by_timeframe.get(timeframe, candles)
+
+        if needs["vwap_bounce_up"]:
+            result = self.vwap_bounce_evaluator.evaluate_bounce_up(tf_candles, params)
+            current_indicators["vwap_bounce_up"] = result.signal
+
+        if needs["vwap_bounce_down"]:
+            result = self.vwap_bounce_evaluator.evaluate_bounce_down(tf_candles, params)
+            current_indicators["vwap_bounce_down"] = result.signal
+
+    def _calculate_qfl_indicators(
+        self,
+        candles_by_timeframe: Dict[str, List[Dict[str, Any]]],
+        candles: List[Dict[str, Any]],
+        current_indicators: Dict[str, Any],
+    ) -> None:
+        """
+        Calculate QFL (Quick Fingers Luke) crack indicator.
+
+        Uses the timeframe from the first qfl_crack condition found in any phase.
+        Mutates current_indicators in place.
+        """
+        # Determine timeframe and config params from the first matching condition
+        timeframe = "ONE_HOUR"
+        config_overrides: Dict[str, Any] = {}
+        for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
+            for cond in self._flatten_conditions(cond_list):
+                if cond.get("type") == "qfl_crack":
+                    timeframe = cond.get("timeframe", "ONE_HOUR")
+                    config_overrides = {
+                        "timeframe": timeframe,
+                        "qfl_lookback_candles": cond.get("lookback_candles", 100),
+                        "qfl_bounce_pct": cond.get("bounce_pct", 3.0),
+                        "qfl_crack_pct": cond.get("crack_pct", 2.0),
+                        "qfl_pivot_window": cond.get("pivot_window", 3),
+                    }
+                    break
+
+        params = QFLParams.from_config({**self.config, **config_overrides})
+        tf_candles = candles_by_timeframe.get(timeframe, candles)
+        result = self.qfl_evaluator.evaluate(tf_candles, params)
+        current_indicators["qfl_crack"] = result.signal
 
     def _get_dca_reference_price(self, position: Any, buy_trades: List) -> float:
         """
@@ -599,6 +680,14 @@ class IndicatorBasedStrategy(TradingStrategy):
             self._calculate_bull_flag_indicators(
                 candles_by_timeframe, candles, current_price, current_indicators
             )
+
+        if needs["vwap_bounce_up"] or needs["vwap_bounce_down"]:
+            self._calculate_vwap_bounce_indicators(
+                candles_by_timeframe, candles, needs, current_indicators
+            )
+
+        if needs["qfl_crack"]:
+            self._calculate_qfl_indicators(candles_by_timeframe, candles, current_indicators)
 
         # Add current price
         current_indicators["price"] = current_price

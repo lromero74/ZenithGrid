@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.150.0] - 2026-03-31
+
+### Added
+- **VWAP indicator** in the bot condition builder. Select "VWAP" as a condition type and use operators like "Above", "Below", "Crossing Above", or "Crossing Below" — works exactly like EMA/SMA cross conditions.
+- **VWAP Bounce Up** pattern indicator: fires when the penultimate closed candle's wick touched or crossed below VWAP, and the most recent closed candle closed back above it (bullish retest confirmation).
+- **VWAP Bounce Down** pattern indicator: fires when the penultimate closed candle's wick touched or crossed above VWAP, and the most recent closed candle closed back below it (bearish retest confirmation).
+- **QFL Crack (Quick Fingers Luke)** indicator: scans historical candles to identify validated support bases (pivot lows followed by a significant bounce), then signals when price cracks below a base. Configurable lookback candles, minimum bounce %, and crack % — displayed live in the condition builder.
+
+### Fixed
+- **Portfolio Management → Current Allocation**: reserved amount now correctly reflects the actual balance available to reserve. Previously, setting a $100 reserve while only having $50 would show "$100 reserved" immediately — now it shows the actual $50 in effect. The chart updates immediately after saving instead of requiring a manual refresh.
+
 ## [v2.149.9] - 2026-03-31
 
 ### Changed

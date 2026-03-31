@@ -551,7 +551,20 @@ class PhaseConditionEvaluator:
         elif condition_type == "gap_fill_pct":
             return indicators.get(f"{timeframe}_gap_fill_pct")
 
-        elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
+        elif condition_type == "vwap":
+            # Returns price - VWAP so operators work intuitively:
+            #   crossing_above 0  → price just crossed above VWAP
+            #   crossing_below 0  → price just crossed below VWAP
+            #   greater_than 0    → price is currently above VWAP
+            #   less_than 0       → price is currently below VWAP
+            price = indicators.get(f"{timeframe}_price")
+            vwap = indicators.get(f"{timeframe}_vwap")
+            if price is None or vwap is None:
+                return None
+            return price - vwap
+
+        elif condition_type in ["ai_buy", "ai_sell", "bull_flag",
+                                "vwap_bounce_up", "vwap_bounce_down", "qfl_crack"]:
             # Aggregate indicators don't use timeframe prefix
             return indicators.get(condition_type)
 
@@ -629,7 +642,15 @@ class PhaseConditionEvaluator:
         elif condition_type == "gap_fill_pct":
             return indicators.get(f"prev_{timeframe}_gap_fill_pct")
 
-        elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
+        elif condition_type == "vwap":
+            price = indicators.get(f"prev_{timeframe}_price")
+            vwap = indicators.get(f"prev_{timeframe}_vwap")
+            if price is None or vwap is None:
+                return None
+            return price - vwap
+
+        elif condition_type in ["ai_buy", "ai_sell", "bull_flag",
+                                "vwap_bounce_up", "vwap_bounce_down", "qfl_crack"]:
             # Aggregate indicators - prev values not typically needed for crossing
             return indicators.get(f"prev_{condition_type}")
 
@@ -714,7 +735,11 @@ class PhaseConditionEvaluator:
             elif condition_type == "gap_fill_pct":
                 required.add(f"{timeframe}_gap_fill_pct")
 
-            # Aggregate indicators (ai_buy, ai_sell, bull_flag) don't need
-            # specific indicator values - they're evaluated separately
+            elif condition_type == "vwap":
+                required.add(f"{timeframe}_vwap")
+                required.add(f"{timeframe}_price")
+
+            # Aggregate indicators (ai_buy, ai_sell, bull_flag, vwap_bounce_up,
+            # vwap_bounce_down) don't need specific indicator values — evaluated separately
 
         return required

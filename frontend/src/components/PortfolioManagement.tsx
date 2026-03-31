@@ -411,6 +411,8 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       })
       setMessage({ type: 'success', text: `Rebalance settings saved for ${cexAccounts.find(a => a.id === accountId)?.name}` })
       setTimeout(() => setMessage(null), 3000)
+      // Refresh status so Current Allocation reflects the new reserve settings immediately
+      fetchStatus(accountId)
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' })
     } finally {
