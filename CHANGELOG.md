@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.1] - 2026-03-31
+
+### Changed
+- **Active Trades column — SC computation**: Soft ceiling effective max is now computed client-side using the same formula as the bot edit modal, so the correct number is always visible immediately — no waiting for a background monitor cycle.
+
+### Fixed
+- **Active Trades column — SC warmup**: Removed the broken backend warmup that was returning incorrect values (used free balance instead of full account aggregate). Client-side computation matches what the edit modal shows.
+
 ## [v2.154.0] - 2026-03-31
 
 ### Changed
