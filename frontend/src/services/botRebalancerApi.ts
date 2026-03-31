@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { authFetch } from './api'
 
 export interface RebalancerBot {
   id: number
@@ -28,8 +28,12 @@ export interface RebalancerSavePayload {
   bots: Array<{ bot_id: number; enabled: boolean; target_pct: number }>
 }
 
-export const getRebalancerState = (accountId: number) =>
-  axios.get<RebalancerCurrencyGroup[]>(`/api/bots/rebalancer?account_id=${accountId}`)
+export const getRebalancerState = (accountId: number): Promise<RebalancerCurrencyGroup[]> =>
+  authFetch(`/api/bots/rebalancer?account_id=${accountId}`).then((r) => r.json())
 
-export const saveRebalancerGroup = (payload: RebalancerSavePayload) =>
-  axios.put('/api/bots/rebalancer', payload)
+export const saveRebalancerGroup = (payload: RebalancerSavePayload): Promise<RebalancerCurrencyGroup[]> =>
+  authFetch('/api/bots/rebalancer', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then((r) => r.json())

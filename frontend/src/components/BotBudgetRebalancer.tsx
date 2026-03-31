@@ -61,7 +61,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
     try {
       const res = await getRebalancerState(accountId)
       setGroups(
-        res.data.map((g) => ({
+        res.map((g) => ({
           base_currency: g.base_currency,
           max_total_pct: g.max_total_pct,
           overweight_tolerance_pct: g.overweight_tolerance_pct,
@@ -192,7 +192,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
       await fetchState()
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        (err as { detail?: string })?.detail ??
         'Save failed.'
       addToast({ type: 'error', title: 'Save Failed', message: msg })
     } finally {
