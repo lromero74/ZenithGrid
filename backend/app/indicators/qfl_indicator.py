@@ -166,7 +166,10 @@ class QFLIndicatorEvaluator:
         if not target_base_candles or len(target_base_candles) < min_candles:
             return QFLResult(
                 signal=0, bases=[],
-                rejection_reason=f"Base candles: Need \u2265{min_candles}, got {len(target_base_candles) if target_base_candles else 0}"
+                rejection_reason=(
+                    f"Base candles: Need \u2265{min_candles}, "
+                    f"got {len(target_base_candles) if target_base_candles else 0}"
+                )
             )
 
         if not candles:

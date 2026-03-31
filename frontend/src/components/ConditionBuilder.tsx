@@ -95,6 +95,25 @@ const INDICATORS: Record<IndicatorType, { label: string; params: string[]; isAgg
     isAggregate: true,
     description: 'Bull flag pattern detection (returns 0 or 1)'
   },
+  vwap: { label: 'VWAP', params: [] },
+  vwap_bounce_up: {
+    label: 'VWAP Bounce Up',
+    params: [],
+    isAggregate: true,
+    description: 'Bullish VWAP bounce pattern (returns 0 or 1)'
+  },
+  vwap_bounce_down: {
+    label: 'VWAP Bounce Down',
+    params: [],
+    isAggregate: true,
+    description: 'Bearish VWAP bounce pattern (returns 0 or 1)'
+  },
+  qfl_crack: {
+    label: 'QFL Crack',
+    params: [],
+    isAggregate: true,
+    description: 'Quick Fingers Luke: price cracks below support base (returns 0 or 1)'
+  },
 }
 
 const OPERATORS: Record<ComparisonOperator, string> = {

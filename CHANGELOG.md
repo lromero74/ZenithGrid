@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.150.3] - 2026-03-31
+
+### Fixed
+- **QFL Indicator — Base TF selector in basic condition builder**: The "Base Timeframe" dropdown for multi-timeframe QFL setup was only available in the advanced condition builder. It is now also present in the standard condition builder, matching the advanced builder's feature set.
+- **QFL Indicator — Silent fallback on missing base candles**: When the configured Base Timeframe candles are not yet available, the system now logs a warning rather than silently falling back, making misconfigured setups easier to diagnose.
+- **QFL Indicator — Lint and code quality**: Removed trailing whitespace and fixed a line length violation in the QFL implementation introduced in v2.150.2.
+- **Dead configuration removed**: Removed the `vwap_bounce_timeframe` strategy config parameter, which was registered but had no effect — VWAP bounce timeframe is correctly controlled by the per-condition timeframe selector.
+- **ConditionBuilder type safety**: Added missing VWAP, VWAP Bounce, and QFL entries to the indicator metadata map in `ConditionBuilder.tsx`, resolving a TypeScript type error.
+
+### Added
+- **QFL multi-timeframe tests**: Added 5 new tests covering the `base_candles` code path, the invalid-setup rejection (base TF < crack TF), and fallback behavior.
+
 ## [v2.150.2] - 2026-03-31
 
 ### Added

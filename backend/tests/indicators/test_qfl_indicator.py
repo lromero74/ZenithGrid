@@ -81,7 +81,8 @@ class TestQFLEvaluate:
     def setup_method(self):
         self.evaluator = QFLIndicatorEvaluator()
         self.params = QFLParams(
-            timeframe="ONE_HOUR",
+            base_timeframe="ONE_HOUR",
+            crack_timeframe="ONE_HOUR",
             lookback_candles=200,
             bounce_pct=3.0,
             crack_pct=2.0,
@@ -170,6 +171,86 @@ class TestQFLEvaluate:
 
 
 # ---------------------------------------------------------------------------
+# Multi-timeframe evaluate() — base_candles kwarg
+# ---------------------------------------------------------------------------
+
+
+class TestQFLMultiTimeframe:
+    def setup_method(self):
+        self.evaluator = QFLIndicatorEvaluator()
+        self.params = QFLParams(
+            base_timeframe="ONE_HOUR",
+            crack_timeframe="FIFTEEN_MINUTE",
+            lookback_candles=200,
+            bounce_pct=5.0,
+            crack_pct=2.0,
+            pivot_window=2,
+        )
+
+    def _base_candles_with_clear_base(self):
+        """Higher-TF candles containing a validated base at 95."""
+        return (
+            [_make_candle(103, 101, 102)] * 3
+            + [_make_candle(97, 95, 96)]
+            + [_make_candle(106, 96, 104)]
+            + [_make_candle(115, 104, 113)]
+            + [_make_candle(112, 109, 110)] * 5
+        )
+
+    def test_base_candles_used_for_base_identification(self):
+        """
+        base_candles has a clear base at 95 with a strong bounce.
+        crack_candles (lower TF) has a crack to 92 — well below 95 * 0.98.
+        Signal should fire using the base from base_candles.
+        """
+        base_candles = self._base_candles_with_clear_base()
+        # crack_candles are flat at 110 (no base would be found here alone)
+        crack_candles = [_make_candle(112, 109, 110)] * 5 + [_make_candle(95, 91, 92)]
+
+        result = self.evaluator.evaluate(crack_candles, self.params, base_candles=base_candles)
+        assert result.signal == 1
+        assert result.cracked_base == pytest.approx(95.0)
+
+    def test_no_base_candles_falls_back_to_crack_candles(self):
+        """When base_candles is None, evaluate() uses crack_candles for base detection."""
+        candles = self._base_candles_with_clear_base() + [_make_candle(95, 91, 92)]
+        result = self.evaluator.evaluate(candles, self.params, base_candles=None)
+        assert result.signal == 1
+
+    def test_invalid_setup_base_tf_shorter_than_crack_tf_returns_zero(self):
+        """
+        base_timeframe < crack_timeframe is an invalid setup.
+        QFLParams with base=FIFTEEN_MINUTE, crack=ONE_HOUR should be rejected.
+        """
+        invalid_params = QFLParams(
+            base_timeframe="FIFTEEN_MINUTE",
+            crack_timeframe="ONE_HOUR",
+            lookback_candles=100,
+            bounce_pct=3.0,
+            crack_pct=2.0,
+        )
+        candles = self._base_candles_with_clear_base() + [_make_candle(95, 91, 92)]
+        result = self.evaluator.evaluate(candles, invalid_params)
+        assert result.signal == 0
+        assert result.rejection_reason is not None
+        assert "Invalid setup" in result.rejection_reason
+
+    def test_empty_base_candles_returns_zero(self):
+        """Passing an empty base_candles list returns 0 with a rejection reason."""
+        crack_candles = [_make_candle(95, 91, 92)]
+        result = self.evaluator.evaluate(crack_candles, self.params, base_candles=[])
+        assert result.signal == 0
+        assert result.rejection_reason is not None
+
+    def test_sufficient_base_candles_insufficient_crack_candles(self):
+        """Signal requires both candle sets to be present."""
+        base_candles = self._base_candles_with_clear_base()
+        result = self.evaluator.evaluate([], self.params, base_candles=base_candles)
+        assert result.signal == 0
+        assert result.rejection_reason is not None
+
+
+# ---------------------------------------------------------------------------
 # QFLParams
 # ---------------------------------------------------------------------------
 
@@ -177,19 +258,22 @@ class TestQFLEvaluate:
 class TestQFLParams:
     def test_defaults(self):
         params = QFLParams()
-        assert params.timeframe == "ONE_HOUR"
+        assert params.base_timeframe == "ONE_HOUR"
+        assert params.crack_timeframe == "FIFTEEN_MINUTE"
         assert params.bounce_pct == 3.0
         assert params.crack_pct == 2.0
         assert params.lookback_candles == 100
 
     def test_from_config(self):
         params = QFLParams.from_config({
-            "timeframe": "FOUR_HOUR",
+            "qfl_base_timeframe": "FOUR_HOUR",
+            "qfl_crack_timeframe": "FIFTEEN_MINUTE",
             "qfl_bounce_pct": 5.0,
             "qfl_crack_pct": 3.0,
             "qfl_lookback_candles": 200,
         })
-        assert params.timeframe == "FOUR_HOUR"
+        assert params.base_timeframe == "FOUR_HOUR"
+        assert params.crack_timeframe == "FIFTEEN_MINUTE"
         assert params.bounce_pct == 5.0
         assert params.crack_pct == 3.0
         assert params.lookback_candles == 200
