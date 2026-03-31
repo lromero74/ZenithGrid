@@ -460,7 +460,7 @@ async def _decide_buy(
             # Persist the computed value so the bot list can display it
             if bot.strategy_config.get("enable_soft_ceiling", False):
                 bot.soft_ceiling_effective_max = max_deals
-                await db.flush()
+                await db.commit()
 
             logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
 

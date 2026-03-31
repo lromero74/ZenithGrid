@@ -678,7 +678,7 @@ class MultiBotMonitor:
                             strategy=strategy,
                         )
                         bot.soft_ceiling_effective_max = await calculate_soft_ceiling(_sc_ctx, _agg or 0.0)
-                        await db.flush()
+                        await db.commit()
                         logger.info(f"  🏠 SC warmup: {bot.name} effective max = {bot.soft_ceiling_effective_max}")
                 except Exception as _e:
                     logger.debug(f"SC warmup skipped for {bot.name}: {_e}")
