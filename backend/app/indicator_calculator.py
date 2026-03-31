@@ -12,6 +12,7 @@ Supports:
 - Bollinger Bands
 - Stochastic Oscillator
 - Volume
+- VWAP (Volume-Weighted Average Price)
 """
 
 import math
@@ -143,6 +144,11 @@ class IndicatorCalculator:
                 value = self.calculate_rsi(volumes, period)
                 if value is not None:
                     indicators[indicator_key] = value
+
+            elif indicator_key == "vwap":
+                value = self.calculate_vwap(highs, lows, closes, volumes)
+                if value is not None:
+                    indicators["vwap"] = value
 
             elif indicator_key == "gap_fill_pct":
                 # Count synthetic/filler candles as a percentage
@@ -371,6 +377,26 @@ class IndicatorCalculator:
         d_value = sum(k_values[-d_period:]) / d_period
 
         return k_value, d_value
+
+    def calculate_vwap(
+        self, highs: List[float], lows: List[float], closes: List[float], volumes: List[float]
+    ) -> float | None:
+        """
+        Calculate VWAP (Volume-Weighted Average Price) over all provided candles.
+
+        VWAP = sum(typical_price * volume) / sum(volume)
+        Typical price = (high + low + close) / 3
+        """
+        if not highs or len(highs) != len(volumes) or not any(v > 0 for v in volumes):
+            return None
+
+        cumulative_tp_vol = 0.0
+        cumulative_vol = 0.0
+        for h, l, c, v in zip(highs, lows, closes, volumes):
+            cumulative_tp_vol += ((h + l + c) / 3.0) * v
+            cumulative_vol += v
+
+        return cumulative_tp_vol / cumulative_vol if cumulative_vol > 0 else None
 
     def extract_required_indicators(self, conditions_config: Dict[str, Any]) -> Set[str]:
         """

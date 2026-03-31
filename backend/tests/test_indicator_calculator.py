@@ -560,3 +560,43 @@ class TestGetIndicatorKey:
     def test_unknown_indicator(self, calc):
         """Failure: unknown indicator returns 'unknown'."""
         assert calc._get_indicator_key({"indicator": "foobar"}) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# calculate_vwap
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateVwap:
+    """Tests for calculate_vwap()."""
+
+    def test_single_candle(self, calc):
+        """Happy path: single candle VWAP equals its typical price."""
+        result = calc.calculate_vwap([105.0], [95.0], [100.0], [1000.0])
+        assert result == pytest.approx(100.0)  # tp = (105+95+100)/3 = 100
+
+    def test_equal_volume_two_candles(self, calc):
+        """Equal-weight average of two typical prices."""
+        # tp1 = (12+10+11)/3 = 11, tp2 = (14+12+13)/3 = 13
+        result = calc.calculate_vwap([12.0, 14.0], [10.0, 12.0], [11.0, 13.0], [200.0, 200.0])
+        assert result == pytest.approx(12.0)
+
+    def test_higher_volume_skews_vwap(self, calc):
+        # tp1=9 vol=100, tp2=19 vol=900 → VWAP = (9*100 + 19*900)/1000 = 18
+        result = calc.calculate_vwap([10.0, 20.0], [8.0, 18.0], [9.0, 19.0], [100.0, 900.0])
+        assert result == pytest.approx(18.0)
+
+    def test_zero_volume_returns_none(self, calc):
+        """Edge: all-zero volume should return None."""
+        result = calc.calculate_vwap([100.0], [100.0], [100.0], [0.0])
+        assert result is None
+
+    def test_empty_lists_returns_none(self, calc):
+        result = calc.calculate_vwap([], [], [], [])
+        assert result is None
+
+    def test_calculate_all_indicators_includes_vwap(self, calc, sample_candle_list):
+        """Integration: calculate_all_indicators returns vwap when requested."""
+        result = calc.calculate_all_indicators(sample_candle_list, {"vwap"})
+        assert "vwap" in result
+        assert result["vwap"] > 0
