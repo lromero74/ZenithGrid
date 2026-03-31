@@ -671,7 +671,7 @@ class MultiBotMonitor:
                     from app.trading_engine.signal_processor import calculate_soft_ceiling
                     _quote = trading_pairs[0].split("-")[1] if "-" in trading_pairs[0] else None
                     if _quote:
-                        _agg = await self.exchange.calculate_market_budget(bot, _quote)
+                        _agg = await self.exchange.calculate_market_budget(_quote)
                         _sc_ctx = TradeContext(
                             db=db, exchange=self.exchange, trading_client=None,  # type: ignore[arg-type]
                             bot=bot, product_id=trading_pairs[0], current_price=0.0,
