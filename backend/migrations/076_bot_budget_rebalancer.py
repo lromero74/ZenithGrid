@@ -57,6 +57,10 @@ def _run_postgres(cur, conn):
     )
 
 
+if __name__ == "__main__":
+    run()
+
+
 def _run_sqlite(cur, conn):
     safe_add_column(conn, "bots", "bot_rebalancer_enabled BOOLEAN NOT NULL DEFAULT 0")
     safe_add_column(conn, "bots", "bot_rebalancer_target_pct FLOAT NOT NULL DEFAULT 0.0")
