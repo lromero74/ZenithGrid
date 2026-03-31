@@ -225,20 +225,22 @@ export const BotListItem = memo(function BotListItem({
             const scMax = (bot as any).soft_ceiling_effective_max as number | null | undefined
             const displayMax = scEnabled && scMax != null ? scMax : configuredMax
             return (
-              <div className="text-sm whitespace-nowrap">
-                <span className="text-blue-400 font-medium">{bot.open_positions_count ?? 0}</span>
-                <span className="text-slate-500"> / </span>
-                <span className="text-slate-400">{displayMax}</span>
-                {scEnabled && scMax != null && (
-                  <div className="text-[10px] text-purple-400 whitespace-nowrap" title={`Soft ceiling active — effective cap is ${scMax}, configured max is ${configuredMax}`}>
-                    SC: Max {configuredMax}
-                  </div>
-                )}
-                {scEnabled && scMax == null && (
-                  <div className="text-[10px] text-purple-400 whitespace-nowrap" title="Soft ceiling enabled — waiting for first signal cycle">
-                    SC
-                  </div>
-                )}
+              <div className="whitespace-nowrap">
+                <div className="text-sm">
+                  <span className="text-blue-400 font-medium">{bot.open_positions_count ?? 0}</span>
+                  <span className="text-slate-500"> / </span>
+                  <span className="text-slate-400">{displayMax}</span>
+                  {scEnabled && scMax != null && (
+                    <span className="text-purple-400" title={`Soft ceiling active — effective cap is ${scMax}, configured max is ${configuredMax}`}>
+                      {' '}(SC: Max {configuredMax})
+                    </span>
+                  )}
+                  {scEnabled && scMax == null && (
+                    <span className="text-purple-400" title="Soft ceiling enabled — waiting for first signal cycle">
+                      {' '}(SC)
+                    </span>
+                  )}
+                </div>
               </div>
             )
           })()
