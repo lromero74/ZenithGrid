@@ -681,7 +681,7 @@ class MultiBotMonitor:
                         await db.commit()
                         logger.info(f"  🏠 SC warmup: {bot.name} effective max = {bot.soft_ceiling_effective_max}")
                 except Exception as _e:
-                    logger.debug(f"SC warmup skipped for {bot.name}: {_e}")
+                    logger.warning(f"SC warmup failed for {bot.name}: {type(_e).__name__}: {_e}")
 
             supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
             logger.debug(f"Supports batch: {supports_batch}")
