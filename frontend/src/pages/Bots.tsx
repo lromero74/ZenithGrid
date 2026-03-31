@@ -25,6 +25,7 @@ import { SampleBotsSection } from './bots/components/SampleBotsSection'
 import type { SampleBot } from './bots/data/sampleBots'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
+import { BotBudgetRebalancer } from '../components/BotBudgetRebalancer'
 
 function Bots() {
   const location = useLocation()
@@ -863,6 +864,10 @@ function Bots() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedAccount?.id && (
+        <BotBudgetRebalancer accountId={selectedAccount.id} />
       )}
     </div>
   )

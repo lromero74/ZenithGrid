@@ -3,11 +3,13 @@ import type { BotFormData } from '../../../components/bots'
 interface BudgetSectionProps {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
+  rebalancerLocked?: boolean
 }
 
 export function BudgetSection({
   formData,
   setFormData,
+  rebalancerLocked,
 }: BudgetSectionProps) {
   return (
     <div className="border-b border-slate-700 pb-6">
@@ -38,47 +40,57 @@ export function BudgetSection({
               (% of aggregate portfolio)
             </span>
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="150"
-              value={
-                formData.budget_percentage ===
-                  undefined ||
-                formData.budget_percentage === null
-                  ? ''
-                  : formData.budget_percentage
-              }
-              onChange={(e) => {
-                const val = e.target.value
-                setFormData({
-                  ...formData,
-                  budget_percentage:
-                    val === ''
-                      ? undefined
-                      : parseFloat(val),
-                })
-              }}
-              onBlur={(e) => {
-                if (
-                  e.target.value === '' ||
-                  isNaN(parseFloat(e.target.value))
-                ) {
+          {rebalancerLocked ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded border border-slate-600 bg-slate-800 text-slate-400 text-sm font-mono">
+              <span>&#x1F512;</span>
+              <span>{formData.budget_percentage ?? 0}%</span>
+              <span className="text-xs ml-2 text-slate-500">
+                Managed by Bot Budget Rebalancer
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="150"
+                value={
+                  formData.budget_percentage ===
+                    undefined ||
+                  formData.budget_percentage === null
+                    ? ''
+                    : formData.budget_percentage
+                }
+                onChange={(e) => {
+                  const val = e.target.value
                   setFormData({
                     ...formData,
-                    budget_percentage: 0,
+                    budget_percentage:
+                      val === ''
+                        ? undefined
+                        : parseFloat(val),
                   })
-                }
-              }}
-              className="flex-1 rounded border border-emerald-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-              placeholder="0.0"
-            />
-            <span className="text-emerald-400 font-medium">
-              %
-            </span>
-          </div>
+                }}
+                onBlur={(e) => {
+                  if (
+                    e.target.value === '' ||
+                    isNaN(parseFloat(e.target.value))
+                  ) {
+                    setFormData({
+                      ...formData,
+                      budget_percentage: 0,
+                    })
+                  }
+                }}
+                className="flex-1 rounded border border-emerald-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                placeholder="0.0"
+              />
+              <span className="text-emerald-400 font-medium">
+                %
+              </span>
+            </div>
+          )}
           <p className="text-xs text-slate-400 mt-1">
             Recommended: 33% for 3 bots, 50% for 2 bots,
             100% for 1 bot. Max 150% (over-allocated).

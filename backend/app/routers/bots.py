@@ -13,10 +13,14 @@ from app.bot_routers import bot_ai_logs_router
 from app.bot_routers import bot_indicator_logs_router
 from app.bot_routers import bot_scanner_logs_router
 from app.bot_routers import bot_validation_router
+from app.bot_routers.bot_rebalancer_router import router as bot_rebalancer_router
 
 router = APIRouter(prefix="/api/bots", tags=["bots"])
 
 # Include all sub-routers
+# NOTE: bot_rebalancer_router must come before bot_crud_router to prevent
+# the /{bot_id} wildcard route from consuming the /rebalancer path.
+router.include_router(bot_rebalancer_router)
 router.include_router(bot_crud_router.router)
 router.include_router(bot_control_router.router)
 router.include_router(bot_ai_logs_router.router)
