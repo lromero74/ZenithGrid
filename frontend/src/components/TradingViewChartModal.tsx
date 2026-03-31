@@ -38,6 +38,17 @@ declare global {
   }
 }
 
+const TV_INTERVALS = [
+  { label: '1m', value: '1' },
+  { label: '5m', value: '5' },
+  { label: '15m', value: '15' },
+  { label: '30m', value: '30' },
+  { label: '1h', value: '60' },
+  { label: '4h', value: '240' },
+  { label: '1d', value: 'D' },
+  { label: '1W', value: 'W' },
+]
+
 export default function TradingViewChartModal({
   isOpen,
   onClose,
@@ -48,6 +59,12 @@ export default function TradingViewChartModal({
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetRef = useRef<any>(null)
   const [isWidgetLoading, setIsWidgetLoading] = useState(false)
+  const [interval, setIntervalValue] = useState<string>(() => {
+    try { return localStorage.getItem('tv-chart-interval') || '15' } catch { return '15' }
+  })
+  const [heikinAshi, setHeikinAshi] = useState<boolean>(() => {
+    try { return localStorage.getItem('tv-chart-heikin-ashi') === 'true' } catch { return false }
+  })
 
   useEffect(() => {
     // Prevent body scroll when modal is open + Escape key to dismiss
@@ -92,33 +109,21 @@ export default function TradingViewChartModal({
       const tvQuote = (exchange === 'bybit' && quote === 'USD') ? 'USDT' : quote
       const tvSymbol = `${tvPrefix}:${base}${tvQuote}`
 
-      // Get saved chart settings from localStorage
-      const savedSettings = localStorage.getItem(`chart_settings_${symbol}`)
-      const settings = savedSettings ? JSON.parse(savedSettings) : {
-        interval: 'D',  // Default to daily chart
-        studies: ['BB@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
-        theme: 'dark'
-      }
-
       const widget = new window.TradingView.widget({
         container_id: containerRef.current.id,
         autosize: true,
         symbol: tvSymbol,
-        interval: settings.interval || 'D',
+        interval,
         timezone: 'Etc/UTC',
         theme: 'dark',
-        style: '1',
+        style: heikinAshi ? '8' : '1',
         locale: 'en',
         toolbar_bg: '#1e293b',
         enable_publishing: false,
         hide_side_toolbar: false,
         allow_symbol_change: true,
         save_image: true,
-        studies: settings.studies || [
-          'BB@tv-basicstudies',
-          'RSI@tv-basicstudies',
-          'MACD@tv-basicstudies'
-        ],
+        studies: ['BB@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
         show_popup_button: true,
         popup_width: '1000',
         popup_height: '650',
@@ -134,7 +139,6 @@ export default function TradingViewChartModal({
       try {
         widget.onChartReady(() => setIsWidgetLoading(false))
       } catch {
-        // Fallback: clear loading after a timeout if onChartReady isn't available
         setTimeout(() => setIsWidgetLoading(false), 3000)
       }
     }
@@ -145,14 +149,13 @@ export default function TradingViewChartModal({
           if (typeof widgetRef.current.remove === 'function') {
             widgetRef.current.remove()
           }
-        } catch (error) {
+        } catch {
           // Silently ignore cleanup errors
-          // TradingView widget cleanup skipped
         }
         widgetRef.current = null
       }
     }
-  }, [isOpen, symbol, position])
+  }, [isOpen, symbol, position, interval, heikinAshi])
 
   if (!isOpen) return null
 
@@ -200,6 +203,39 @@ export default function TradingViewChartModal({
           </button>
         </div>
 
+        {/* Chart Controls */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 flex-wrap">
+          {TV_INTERVALS.map(tf => (
+            <button
+              key={tf.value}
+              onClick={() => {
+                setIntervalValue(tf.value)
+                try { localStorage.setItem('tv-chart-interval', tf.value) } catch {}
+              }}
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                interval === tf.value
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              {tf.label}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-slate-600" />
+          <button
+            onClick={() => {
+              const next = !heikinAshi
+              setHeikinAshi(next)
+              try { localStorage.setItem('tv-chart-heikin-ashi', String(next)) } catch {}
+            }}
+            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+              heikinAshi ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            Heikin-Ashi
+          </button>
+        </div>
+
         {/* TradingView Chart Container */}
         <div className="flex-1 relative">
           <div
@@ -223,7 +259,7 @@ export default function TradingViewChartModal({
         {/* Footer with tips */}
         <div className="p-3 border-t border-slate-700 text-xs text-slate-500">
           <p>
-            💡 Your chart settings (timeframe, indicators, drawings) are automatically saved for this pair
+            💡 Timeframe and Heikin-Ashi setting are remembered across all pairs. Indicators and drawings persist within TradingView's session.
           </p>
         </div>
       </div>
