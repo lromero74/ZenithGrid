@@ -133,6 +133,9 @@ async def force_close_position(
 
         strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
 
+        # Mark as manual close BEFORE execute_sell so it's included in the commit
+        position.exit_reason = "manual"
+
         # Execute sell using trading engine
         engine = StrategyTradingEngine(
             db=db, exchange=exchange, bot=bot, strategy=strategy, product_id=position.product_id
