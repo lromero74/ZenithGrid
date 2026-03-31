@@ -596,48 +596,65 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       })))
       positionLinesRef.current.push(takeProfitSeries)
 
-      // Stop Loss line (only if position is open)
-      if (position.status === 'open') {
-        const stopLossPrice = position.average_buy_price * 0.98
-        const stopLossSeries = chartRef.current.addLineSeries({
-          color: '#ef4444',
-          lineWidth: 2,
-          lineStyle: 2,
-          priceLineVisible: false,
-          lastValueVisible: true,
-          title: 'SL',
-          priceFormat: priceFormat,
-        })
+      // Use strategy_config_snapshot (frozen at open time) as primary source;
+      // fall back to live bot config if snapshot is absent (very old positions).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfgSnapshot: Record<string, any> = position.strategy_config_snapshot || bot?.strategy_config || {}
 
-        stopLossSeries.setData(chartData.map((c) => ({
-          time: c.time as Time,
-          value: stopLossPrice,
-        })))
-        positionLinesRef.current.push(stopLossSeries)
+      // Stop Loss line — only when stop loss is actually configured
+      if (position.status === 'open') {
+        const stopLossEnabled = cfgSnapshot.stop_loss_enabled === true
+        const stopLossPct = Number(cfgSnapshot.stop_loss_percentage || 0)
+        if (stopLossEnabled && stopLossPct > 0) {
+          const stopLossPrice = position.average_buy_price * (1 - stopLossPct / 100)
+          const stopLossSeries = chartRef.current.addLineSeries({
+            color: '#ef4444',
+            lineWidth: 2,
+            lineStyle: 2,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            title: `SL ${stopLossPct}%`,
+            priceFormat: priceFormat,
+          })
+          stopLossSeries.setData(chartData.map((c) => ({
+            time: c.time as Time,
+            value: stopLossPrice,
+          })))
+          positionLinesRef.current.push(stopLossSeries)
+        }
       }
 
-      // Safety Order price levels — O(d) via price lines (no per-candle data needed)
-      if (bot && position.status === 'open' && mainSeriesRef.current) {
-        const config = bot.strategy_config
-        const priceDeviation = config.price_deviation || 2.0
-        const stepScale = config.safety_order_step_scale || 1.0
-        const maxSafetyOrders = config.max_safety_orders || 5
+      // Safety Order price levels — only remaining (not yet triggered) SOs
+      if (position.status === 'open' && mainSeriesRef.current) {
+        const priceDeviation = Number(cfgSnapshot.price_deviation || 0)
+        const stepScale = Number(cfgSnapshot.safety_order_step_scale || 1.0)
+        const maxSafetyOrders = Number(cfgSnapshot.max_safety_orders || 0)
 
-        let cumulativeDeviation = priceDeviation
-        for (let i = 0; i < maxSafetyOrders; i++) {
-          const soPrice = position.average_buy_price * (1 - cumulativeDeviation / 100)
+        // SO trigger prices are measured from the initial base-order entry price,
+        // not the DCA-averaged price.
+        const basePriceForSO = position.first_buy_price || position.average_buy_price
 
-          const priceLine = mainSeriesRef.current.createPriceLine({
-            price: soPrice,
-            color: '#64748b',
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: false,
-            title: `SO${i + 1}`,
-          })
-          soPriceLinesRef.current.push(priceLine)
+        // trade_count = 1 (base order) + number of SOs that have already filled
+        const soTriggered = Math.max(0, (position.trade_count || 1) - 1)
 
-          cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
+        if (priceDeviation > 0 && maxSafetyOrders > 0) {
+          let cumulativeDeviation = priceDeviation
+          for (let i = 0; i < maxSafetyOrders; i++) {
+            // Only draw SOs that haven't triggered yet
+            if (i >= soTriggered) {
+              const soPrice = basePriceForSO * (1 - cumulativeDeviation / 100)
+              const priceLine = mainSeriesRef.current.createPriceLine({
+                price: soPrice,
+                color: '#64748b',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: `SO${i + 1}`,
+              })
+              soPriceLinesRef.current.push(priceLine)
+            }
+            cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
+          }
         }
       }
 
