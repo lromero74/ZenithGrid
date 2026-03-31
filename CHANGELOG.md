@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.6] - 2026-03-31
+
+### Added
+- Sample Bot cards now show an **Edit** button for superusers — opens the form in fully editable mode without the "(Copy)" name suffix, making it easy to tweak and test configs.
+- Superusers can now update and delete default/system bot templates via the API.
+
+### Fixed
+- Chart settings (timeframe, chart type, Heikin-Ashi) are now remembered across opens — no more resetting to defaults every time you open a pair chart.
+
 ## [v2.149.5] - 2026-03-31
 
 ### Fixed
