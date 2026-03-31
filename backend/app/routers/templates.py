@@ -157,18 +157,19 @@ async def update_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update template configuration"""
+    """Update template configuration. Superusers can edit default templates."""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
-    # Only allow updating own templates
-    query = query.where(BotTemplate.user_id == current_user.id)
+    # Superusers can edit any template; others can only edit their own non-default templates
+    if not current_user.is_superuser:
+        query = query.where(BotTemplate.user_id == current_user.id)
     result = await db.execute(query)
     template = result.scalars().first()
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # Don't allow editing default templates
-    if template.is_default:
+    # Non-superusers cannot edit default templates
+    if template.is_default and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Cannot edit default templates")
 
     # Update fields
@@ -217,18 +218,19 @@ async def delete_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a template"""
+    """Delete a template. Superusers can delete default templates."""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
-    # Only allow deleting own templates
-    query = query.where(BotTemplate.user_id == current_user.id)
+    # Superusers can delete any template; others can only delete their own
+    if not current_user.is_superuser:
+        query = query.where(BotTemplate.user_id == current_user.id)
     result = await db.execute(query)
     template = result.scalars().first()
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # Don't allow deleting default templates
-    if template.is_default:
+    # Non-superusers cannot delete default templates
+    if template.is_default and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Cannot delete default templates")
 
     await db.delete(template)

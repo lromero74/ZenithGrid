@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Eye, Copy, Cpu, TrendingUp, BarChart3, Brain } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, Copy, Pencil, Cpu, TrendingUp, BarChart3, Brain } from 'lucide-react'
 import { SAMPLE_BOTS, type SampleBot } from '../data/sampleBots'
 
 interface SampleBotsSectionProps {
   onView: (sample: SampleBot) => void
   onCopy: (sample: SampleBot) => void
+  onEdit?: (sample: SampleBot) => void
   canWrite?: boolean
 }
 
@@ -20,7 +21,7 @@ function getStrategyIcon(sampleId: string) {
   return key ? STRATEGY_ICONS[key] : Cpu
 }
 
-export function SampleBotsSection({ onView, onCopy, canWrite = true }: SampleBotsSectionProps) {
+export function SampleBotsSection({ onView, onCopy, onEdit, canWrite = true }: SampleBotsSectionProps) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem('zenith-sample-bots-collapsed') === 'true'
@@ -62,7 +63,7 @@ export function SampleBotsSection({ onView, onCopy, canWrite = true }: SampleBot
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {btcBots.map(bot => (
-                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} canWrite={canWrite} />
+                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} onEdit={onEdit} canWrite={canWrite} />
               ))}
             </div>
           </div>
@@ -75,7 +76,7 @@ export function SampleBotsSection({ onView, onCopy, canWrite = true }: SampleBot
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {usdBots.map(bot => (
-                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} canWrite={canWrite} />
+                <SampleBotCard key={bot.id} bot={bot} onView={onView} onCopy={onCopy} onEdit={onEdit} canWrite={canWrite} />
               ))}
             </div>
           </div>
@@ -89,11 +90,13 @@ function SampleBotCard({
   bot,
   onView,
   onCopy,
+  onEdit,
   canWrite = true,
 }: {
   bot: SampleBot
   onView: (bot: SampleBot) => void
   onCopy: (bot: SampleBot) => void
+  onEdit?: (bot: SampleBot) => void
   canWrite?: boolean
 }) {
   const Icon = getStrategyIcon(bot.id)
@@ -135,6 +138,15 @@ function SampleBotCard({
           <Eye className="w-3 h-3" />
           View
         </button>
+        {canWrite && onEdit && (
+          <button
+            onClick={() => onEdit(bot)}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium text-amber-400 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/40 rounded transition-colors"
+            title="Edit (admin)"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
         {canWrite && (
           <button
             onClick={() => onCopy(bot)}

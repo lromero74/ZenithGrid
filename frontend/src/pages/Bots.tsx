@@ -24,11 +24,14 @@ import { BotListItem } from './bots/components/BotListItem'
 import { SampleBotsSection } from './bots/components/SampleBotsSection'
 import type { SampleBot } from './bots/data/sampleBots'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
 
 function Bots() {
   const location = useLocation()
   const { selectedAccount, accounts } = useAccount()
   const canWriteBots = usePermission('bots', 'write')
+  const { user } = useAuth()
+  const isSuperuser = user?.is_superuser ?? false
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const [showModal, setShowModal] = useState(false)
@@ -452,6 +455,22 @@ function Bots() {
     setShowModal(true)
   }
 
+  // Superuser-only: open sample bot config in fully editable form (no "(Copy)" suffix)
+  const handleSampleEdit = (sample: SampleBot) => {
+    const fd = { ...sample.formData }
+    fd.exchange_type = selectedAccount?.type === 'dex' ? 'dex' : 'cex'
+    if (sample.selectAllMarket) {
+      const marketPairs = TRADING_PAIRS.filter(p => p.group === sample.selectAllMarket).map(p => p.value)
+      fd.product_ids = marketPairs
+      fd.product_id = marketPairs[0] || fd.product_id
+    }
+    setFormData(fd)
+    setEditingBot(null)
+    setReadOnly(false)
+    setReadOnlyTitle('')
+    setShowModal(true)
+  }
+
   if (botsLoading && bots.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -521,7 +540,12 @@ function Bots() {
       </div>
 
       {/* Sample Bots */}
-      <SampleBotsSection onView={handleSampleView} onCopy={handleSampleCopy} canWrite={canWriteBots} />
+      <SampleBotsSection
+        onView={handleSampleView}
+        onCopy={handleSampleCopy}
+        onEdit={isSuperuser ? handleSampleEdit : undefined}
+        canWrite={canWriteBots}
+      />
 
       {/* Bot List Table */}
       {bots.length === 0 ? (
