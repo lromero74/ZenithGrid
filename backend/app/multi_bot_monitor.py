@@ -660,6 +660,29 @@ class MultiBotMonitor:
             strategy_config_with_user = {**bot.strategy_config, "user_id": bot.user_id}
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config_with_user)
             logger.debug("Strategy instance created")
+
+            # Warm up soft_ceiling_effective_max for display if not yet computed (e.g. after restart).
+            # Only runs once (when None); the signal processor keeps it current thereafter.
+            if (bot.strategy_config.get("enable_soft_ceiling", False)
+                    and bot.soft_ceiling_effective_max is None
+                    and trading_pairs):
+                try:
+                    from app.trading_engine.trade_context import TradeContext
+                    from app.trading_engine.signal_processor import calculate_soft_ceiling
+                    _quote = trading_pairs[0].split("-")[1] if "-" in trading_pairs[0] else None
+                    if _quote:
+                        _agg = await self.exchange.calculate_market_budget(bot, _quote)
+                        _sc_ctx = TradeContext(
+                            db=db, exchange=self.exchange, trading_client=None,  # type: ignore[arg-type]
+                            bot=bot, product_id=trading_pairs[0], current_price=0.0,
+                            strategy=strategy,
+                        )
+                        bot.soft_ceiling_effective_max = await calculate_soft_ceiling(_sc_ctx, _agg or 0.0)
+                        await db.flush()
+                        logger.info(f"  🏠 SC warmup: {bot.name} effective max = {bot.soft_ceiling_effective_max}")
+                except Exception as _e:
+                    logger.debug(f"SC warmup skipped for {bot.name}: {_e}")
+
             supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
             logger.debug(f"Supports batch: {supports_batch}")
 

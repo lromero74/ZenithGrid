@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.0] - 2026-03-31
+
+### Changed
+- **Active Trades column — SC format**: Soft ceiling now displays inline as `14/22 (SC: Max 50)` — current open / SC-computed cap / configured max — all on one line. Before the first cycle the denominator shows the configured max with `(SC)` as placeholder.
+
+### Fixed
+- **Soft ceiling warmup**: The SC-computed effective max is now computed on the first monitor cycle after restart (when the stored value is missing), so the correct number appears without waiting for a natural buy-signal evaluation.
+
 ## [v2.153.0] - 2026-03-31
 
 ### Changed
