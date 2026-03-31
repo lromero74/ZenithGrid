@@ -23,12 +23,16 @@ export type IndicatorType =
   | 'bollinger_lower'
   | 'stochastic_k'
   | 'stochastic_d'
+  | 'vwap'
   | 'volume'
   | 'volume_rsi'
   // Aggregate indicators (return 0 or 1)
   | 'ai_buy'
   | 'ai_sell'
   | 'bull_flag'
+  | 'vwap_bounce_up'
+  | 'vwap_bounce_down'
+  | 'qfl_crack'
 
 export type LogicOperator = 'and' | 'or'
 

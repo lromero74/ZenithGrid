@@ -13,6 +13,7 @@ export type ConditionType =
   | 'bb_percent'
   | 'ema_cross'
   | 'sma_cross'
+  | 'vwap'
   | 'price_change'
   | 'stochastic'
   | 'volume'
@@ -20,6 +21,9 @@ export type ConditionType =
   | 'ai_buy'
   | 'ai_sell'
   | 'bull_flag'
+  | 'vwap_bounce_up'
+  | 'vwap_bounce_down'
+  | 'qfl_crack'
   | 'gap_fill_pct'
 
 export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below' | 'equal' | 'increasing' | 'decreasing'
@@ -55,6 +59,10 @@ export interface Condition {
   // AI indicator specific params
   risk_preset?: RiskPreset
   ai_provider?: AIProvider
+  // QFL specific params
+  lookback_candles?: number
+  bounce_pct?: number
+  crack_pct?: number
 }
 
 // Risk preset defaults for AI indicators
@@ -115,6 +123,7 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   bb_percent: { label: 'BB%', description: 'Bollinger Band % (0-100)' },
   ema_cross: { label: 'EMA Cross', description: 'Price vs EMA' },
   sma_cross: { label: 'SMA Cross', description: 'Price vs SMA' },
+  vwap: { label: 'VWAP', description: 'Volume-Weighted Average Price' },
   price_change: { label: 'Price Change %', description: '% change from previous candle' },
   stochastic: { label: 'Stochastic', description: 'Stochastic oscillator (0-100)' },
   volume: { label: 'Volume', description: 'Trading volume' },
@@ -122,6 +131,9 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   ai_buy: { label: 'AI Buy', description: 'AI buy signal = 1', isAggregate: true },
   ai_sell: { label: 'AI Sell', description: 'AI sell signal = 1', isAggregate: true },
   bull_flag: { label: 'Bull Flag', description: 'Pattern detected = 1', isAggregate: true },
+  vwap_bounce_up: { label: 'VWAP Bounce Up', description: 'Bullish: retest VWAP from above + bounce', isAggregate: true },
+  vwap_bounce_down: { label: 'VWAP Bounce Down', description: 'Bearish: retest VWAP from below + bounce', isAggregate: true },
+  qfl_crack: { label: 'QFL Crack', description: 'Quick Fingers Luke: price cracks below a support base', isAggregate: true },
   gap_fill_pct: { label: 'Gap Fill %', description: 'Percentage of synthetic/filler candles (0-100). High values = unreliable data' },
 }
 
@@ -146,7 +158,7 @@ const STRENGTH_LEVELS: Record<string, { label: string; value: number }> = {
 
 // Indicators that support increasing/decreasing
 const DIRECTIONAL_INDICATORS: ConditionType[] = [
-  'rsi', 'volume_rsi', 'macd', 'stochastic', 'bb_percent', 'price_change',
+  'rsi', 'vwap', 'volume_rsi', 'macd', 'stochastic', 'bb_percent', 'price_change',
 ]
 
 const TIMEFRAMES: Record<Timeframe, string> = {
@@ -331,6 +343,10 @@ function AdvancedConditionBuilder({
                       newCond.operator = 'greater_than'
                       newCond.value = 70
                       break
+                    case 'vwap':
+                      newCond.operator = 'crossing_above'
+                      newCond.value = 0
+                      break
                     case 'ai_buy':
                     case 'ai_sell':
                       newCond.operator = 'equal'
@@ -339,8 +355,17 @@ function AdvancedConditionBuilder({
                       newCond.ai_provider = 'claude'
                       break
                     case 'bull_flag':
+                    case 'vwap_bounce_up':
+                    case 'vwap_bounce_down':
                       newCond.operator = 'equal'
                       newCond.value = 1
+                      break
+                    case 'qfl_crack':
+                      newCond.operator = 'equal'
+                      newCond.value = 1
+                      newCond.lookback_candles = 100
+                      newCond.bounce_pct = 3.0
+                      newCond.crack_pct = 2.0
                       break
                     case 'gap_fill_pct':
                       newCond.operator = 'less_than'
@@ -498,6 +523,51 @@ function AdvancedConditionBuilder({
             <span className="text-green-400 text-sm font-medium">= Active</span>
           )}
 
+          {/* QFL specific params */}
+          {condition.type === 'qfl_crack' && (
+            <div className="flex items-center gap-2 bg-slate-800/50 p-1.5 rounded border border-slate-600 ml-2">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Lookback:</span>
+                <input
+                  type="number"
+                  value={condition.lookback_candles || 100}
+                  onChange={(e) => updateCondition(group.id, condition.id, { lookback_candles: parseInt(e.target.value) })}
+                  className="w-12 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                  min={20}
+                  max={500}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Bounce:</span>
+                <div className="flex items-center gap-0.5">
+                  <input
+                    type="number"
+                    value={condition.bounce_pct || 3.0}
+                    onChange={(e) => updateCondition(group.id, condition.id, { bounce_pct: parseFloat(e.target.value) })}
+                    className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                    step={0.5}
+                    min={0.5}
+                  />
+                  <span className="text-[10px] text-slate-500">%</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Crack:</span>
+                <div className="flex items-center gap-0.5">
+                  <input
+                    type="number"
+                    value={condition.crack_pct || 2.0}
+                    onChange={(e) => updateCondition(group.id, condition.id, { crack_pct: parseFloat(e.target.value) })}
+                    className="w-10 bg-slate-600 text-white px-1 py-0.5 rounded text-xs border border-slate-500"
+                    step={0.1}
+                    min={0.1}
+                  />
+                  <span className="text-[10px] text-slate-500">%</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* AI indicator specific params */}
           {(condition.type === 'ai_buy' || condition.type === 'ai_sell') && (
             <>
@@ -626,22 +696,27 @@ function AdvancedConditionBuilder({
     return expression.groups.map((group, gi) => {
       const groupStr = group.conditions.map((c, ci) => {
         const negateStr = c.negate ? 'NOT ' : ''
-        const tf = TIMEFRAMES[c.timeframe]
+        const tf = TIMEFRAMES[c.timeframe] || '?'
         let condStr: string
         if (c.type === 'ai_buy' || c.type === 'ai_sell') {
-          // Include risk preset for AI indicators
+          // Include risk preset and provider for AI indicators
           const preset = c.risk_preset || 'moderate'
           const provider = c.ai_provider || 'claude'
-          condStr = `${c.type.toUpperCase()}[${preset}/${provider}]=1`
+          condStr = `${c.type.toUpperCase()}[${preset}/${provider}]=Active`
+        } else if (c.type === 'qfl_crack') {
+          const bounce = c.bounce_pct || 3.0
+          const crack = c.crack_pct || 2.0
+          condStr = `QFL_CRACK[b≥${bounce}%,c≥${crack}%]=Active`
         } else if (CONDITION_TYPES[c.type]?.isAggregate) {
-          condStr = `${c.type.toUpperCase()}=1`
+          condStr = `${c.type.toUpperCase()}=Active`
         } else {
           if (c.operator === 'increasing' || c.operator === 'decreasing') {
             const dir = c.operator === 'increasing' ? '↑' : '↓'
             const strength = c.value > 0 ? ` (>${c.value}%)` : ''
             condStr = `${c.type}${dir}${strength}`
           } else {
-            condStr = `${c.type}${c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator === 'equal' ? '=' : c.operator}${c.value}`
+            const op = OPERATORS[c.operator] || c.operator
+            condStr = `${c.type}${op}${c.value}`
           }
         }
         const connector = ci > 0 ? ` ${group.logic.toUpperCase()} ` : ''

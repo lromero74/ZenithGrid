@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.150.1] - 2026-03-31
+
+### Fixed
+- **Bot Form → Indicator Selection**: Fixed a bug where newly added VWAP, VWAP Bounce, and QFL indicators were not selectable in the indicator-based strategy condition builder. Added support for these indicators and their specific parameters (lookback, bounce %, crack %) to the advanced condition builder.
+- **Bot Form → UI Consistency**: Synced `Volume RSI` and `Gap Fill %` indicators across all condition builder components to ensure consistent availability.
+
 ## [v2.150.0] - 2026-03-31
 
 ### Added

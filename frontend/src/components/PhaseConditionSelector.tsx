@@ -11,6 +11,8 @@ export type ConditionType =
   | 'price_change'
   | 'stochastic'
   | 'volume'
+  | 'volume_rsi'
+  | 'gap_fill_pct'
   // Aggregate indicators (return 0 or 1)
   | 'ai_buy'
   | 'ai_sell'
@@ -101,6 +103,14 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   volume: {
     label: 'Volume',
     description: 'Trading volume threshold',
+  },
+  volume_rsi: {
+    label: 'Volume RSI',
+    description: 'RSI applied to volume (0-100). >70 = volume surging, <30 = volume drying up.',
+  },
+  gap_fill_pct: {
+    label: 'Gap Fill %',
+    description: 'Percentage of synthetic/filler candles (0-100). High values = unreliable data.',
   },
   // Aggregate indicators (return 0 or 1)
   ai_buy: {
@@ -253,6 +263,15 @@ function PhaseConditionSelector({
             case 'volume':
               newCondition.operator = 'greater_than'
               newCondition.value = 1000000
+              break
+            case 'volume_rsi':
+              newCondition.period = 14
+              newCondition.operator = 'greater_than'
+              newCondition.value = 70
+              break
+            case 'gap_fill_pct':
+              newCondition.operator = 'less_than'
+              newCondition.value = 50
               break
             // Aggregate indicators (return 0 or 1, compare to 1 for "is active")
             case 'ai_buy':
@@ -712,6 +731,123 @@ function PhaseConditionSelector({
           </div>
         )
 
+      case 'volume_rsi':
+        return (
+          <>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-400">Period:</label>
+              <input
+                type="number"
+                value={condition.period || 14}
+                onChange={(e) =>
+                  updateCondition(condition.id, { period: parseInt(e.target.value) })
+                }
+                min="5"
+                max="100"
+                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={condition.operator}
+                onChange={(e) => {
+                  const newOp = e.target.value as Operator
+                  const updates: Partial<PhaseCondition> = { operator: newOp }
+                  if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                      condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                    updates.value = 0
+                  }
+                  updateCondition(condition.id, updates)
+                }}
+                className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
+              >
+                <option value="greater_than">&gt;</option>
+                <option value="greater_equal">≥</option>
+                <option value="less_than">&lt;</option>
+                <option value="less_equal">≤</option>
+                <option value="crossing_above">Crossing Above</option>
+                <option value="crossing_below">Crossing Below</option>
+                <option value="increasing">Increasing</option>
+                <option value="decreasing">Decreasing</option>
+              </select>
+              {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+                <select
+                  value={condition.value || 0}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Minimum % change strength"
+                >
+                  {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                    <option key={key} value={value}>{label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              )}
+            </div>
+          </>
+        )
+
+      case 'gap_fill_pct':
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-300">Gap fill</span>
+            <select
+              value={condition.operator}
+              onChange={(e) => {
+                const newOp = e.target.value as Operator
+                const updates: Partial<PhaseCondition> = { operator: newOp }
+                if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                    condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                  updates.value = 0
+                }
+                updateCondition(condition.id, updates)
+              }}
+              className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
+            >
+              <option value="greater_than">&gt;</option>
+              <option value="greater_equal">≥</option>
+              <option value="less_than">&lt;</option>
+              <option value="less_equal">≤</option>
+              <option value="crossing_above">Crossing Above</option>
+              <option value="crossing_below">Crossing Below</option>
+              <option value="increasing">Increasing</option>
+              <option value="decreasing">Decreasing</option>
+            </select>
+            {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+              <select
+                value={condition.value || 0}
+                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                title="Minimum % change strength"
+              >
+                {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                  <option key={key} value={value}>{label}</option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  step="0.1"
+                  className="w-24 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+                <span className="text-xs text-slate-400">%</span>
+              </>
+            )}
+          </div>
+        )
+
       // Aggregate indicators (return 0 or 1)
       case 'ai_buy':
       case 'ai_sell':
@@ -841,6 +977,14 @@ function PhaseConditionSelector({
           : `[${tf}] Price Change ${op} ${condition.value}%`
       case 'volume':
         return `[${tf}] Volume ${op} ${condition.value}`
+      case 'volume_rsi':
+        return isDirectional
+          ? `[${tf}] Volume RSI(${condition.period || 14}) ${op}${strengthLabel}`
+          : `[${tf}] Volume RSI(${condition.period || 14}) ${op} ${condition.value}`
+      case 'gap_fill_pct':
+        return isDirectional
+          ? `[${tf}] Gap Fill % ${op}${strengthLabel}`
+          : `[${tf}] Gap Fill % ${op} ${condition.value}%`
       // Aggregate indicators
       case 'ai_buy':
         return `[${tf}] AI Buy Signal = Active`
