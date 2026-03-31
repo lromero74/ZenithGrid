@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.153.0] - 2026-03-31
+
+### Changed
+- **Active Trades column**: When Soft Ceiling is enabled, the column now shows the SC-computed effective cap as the denominator (e.g. `14/22`) with a `SC: Max 50` sub-label showing the configured hard max. Before the first signal cycle the column shows `SC` as a placeholder.
+- **Budget column**: Removed the redundant `N/M deals SC` line — deal slot info is now shown exclusively in the Active Trades column.
+
 ## [v2.152.0] - 2026-03-31
 
 ### Added

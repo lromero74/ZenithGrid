@@ -177,6 +177,9 @@ class Bot(Base):
     bot_rebalancer_enabled = Column(Boolean, default=False)  # Participating in the rebalancer
     bot_rebalancer_target_pct = Column(Float, default=0.0)   # Slider value set by rebalancer
 
+    # Soft Ceiling — last computed effective max deals (written by signal_processor on each cycle)
+    soft_ceiling_effective_max = Column(Integer, nullable=True)
+
     # Bidirectional DCA Grid Bot - Budget Reservations
     # These track RESERVED amounts for bidirectional bots (even with 0 open positions)
     # DCA bots wait for signals, so capital must be reserved upfront

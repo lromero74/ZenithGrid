@@ -82,6 +82,7 @@ class BotResponse(BaseModel):
     bot_rebalancer_enabled: bool = False  # Participating in the bot budget rebalancer
     bot_rebalancer_target_pct: float = 0.0  # Target allocation % set by rebalancer slider
     rebalancer_bot_overweight: bool = False  # True when deployed > target + tolerance
+    soft_ceiling_effective_max: Optional[int] = None  # Last computed SC deal cap (None = SC disabled or not yet run)
 
     class Config:
         from_attributes = True

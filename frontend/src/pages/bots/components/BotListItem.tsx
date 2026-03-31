@@ -219,15 +219,29 @@ export const BotListItem = memo(function BotListItem({
       {/* Active Trades */}
       <td className="hidden sm:table-cell px-0.5 sm:px-1 py-2 w-16">
         {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
-          <div className="text-sm whitespace-nowrap">
-            <span className="text-blue-400 font-medium">
-              {bot.open_positions_count ?? 0}
-            </span>
-            <span className="text-slate-500"> / </span>
-            <span className="text-slate-400">
-              {bot.strategy_config.max_concurrent_deals || bot.strategy_config.max_concurrent_positions}
-            </span>
-          </div>
+          (() => {
+            const configuredMax = bot.strategy_config.max_concurrent_deals || bot.strategy_config.max_concurrent_positions
+            const scEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
+            const scMax = (bot as any).soft_ceiling_effective_max as number | null | undefined
+            const displayMax = scEnabled && scMax != null ? scMax : configuredMax
+            return (
+              <div className="text-sm whitespace-nowrap">
+                <span className="text-blue-400 font-medium">{bot.open_positions_count ?? 0}</span>
+                <span className="text-slate-500"> / </span>
+                <span className="text-slate-400">{displayMax}</span>
+                {scEnabled && scMax != null && (
+                  <div className="text-[10px] text-purple-400 whitespace-nowrap" title={`Soft ceiling active — effective cap is ${scMax}, configured max is ${configuredMax}`}>
+                    SC: Max {configuredMax}
+                  </div>
+                )}
+                {scEnabled && scMax == null && (
+                  <div className="text-[10px] text-purple-400 whitespace-nowrap" title="Soft ceiling enabled — waiting for first signal cycle">
+                    SC
+                  </div>
+                )}
+              </div>
+            )
+          })()
         ) : (
           <span className="text-sm text-slate-500">—</span>
         )}
@@ -427,11 +441,6 @@ export const BotListItem = memo(function BotListItem({
       {/* Budget */}
       <td className="hidden lg:table-cell px-1 sm:px-2 py-2 w-20">
         {(() => {
-          const maxDeals = (bot.strategy_config as any)?.max_concurrent_deals
-            || (bot.strategy_config as any)?.max_concurrent_positions
-            || 1
-          const softCeilingEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
-          const openCount = bot.open_positions_count ?? 0
           return (
             <div className="flex flex-col gap-0.5">
               <span className="text-sm text-emerald-400 font-medium whitespace-nowrap">
@@ -443,15 +452,6 @@ export const BotListItem = memo(function BotListItem({
                   {bot.budget_utilization_percentage.toFixed(1)}% in use
                 </div>
               )}
-              {/* Deal slot usage */}
-              <div className="flex items-center gap-1 text-[10px] whitespace-nowrap">
-                <span className={openCount >= maxDeals ? 'text-amber-400' : 'text-slate-500'}>
-                  {openCount}/{maxDeals} deals
-                </span>
-                {softCeilingEnabled && (
-                  <span className="text-purple-400 font-semibold" title="Soft ceiling active — deal cap adjusts based on available budget">SC</span>
-                )}
-              </div>
             </div>
           )
         })()}

@@ -457,6 +457,11 @@ async def _decide_buy(
             # Use soft ceiling if enabled, otherwise use fixed max_concurrent_deals
             max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
 
+            # Persist the computed value so the bot list can display it
+            if bot.strategy_config.get("enable_soft_ceiling", False):
+                bot.soft_ceiling_effective_max = max_deals
+                await db.flush()
+
             logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
 
             if open_positions_count >= max_deals:
