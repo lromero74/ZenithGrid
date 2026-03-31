@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.151.0] - 2026-03-31
+
+### Added
+- **Bot Budget Rebalancer**: New panel on the Bots page that lets you distribute your total budget allocation across bots in each currency group (USDC, BTC, etc.) using sliders. Set each bot's target allocation percentage, configure a max total cap (up to 150%), and save — the rebalancer writes the budget percentage directly onto each participating bot.
+- **Overweight gating**: Bots whose deployed capital exceeds their target allocation (plus a configurable tolerance) are automatically soft-blocked from opening new base orders until they come back within range. Overweight bots display a badge in the bot list.
+
 ## [v2.150.4] - 2026-03-31
 
 ### Fixed

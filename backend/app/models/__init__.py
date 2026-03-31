@@ -14,6 +14,7 @@ from app.models.auth import (
 )
 from app.models.trading import (
     Account, Bot, BotProduct, BotTemplate, BotTemplateProduct,
+    BotRebalancerGroup,
     Position, Trade, Signal, PendingOrder, OrderHistory, BlacklistedCoin,
 )
 from app.models.content import (
@@ -49,6 +50,7 @@ __all__ = [
     "RateLimitAttempt",
     # Trading
     "Account", "Bot", "BotProduct", "BotTemplate", "BotTemplateProduct",
+    "BotRebalancerGroup",
     "Position", "Trade", "Signal", "PendingOrder", "OrderHistory", "BlacklistedCoin",
     # Content
     "AIProviderCredential", "NewsArticle", "VideoArticle", "ContentSource",

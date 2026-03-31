@@ -394,6 +394,7 @@ export function BotFormModal({
               <BudgetSection
                 formData={formData}
                 setFormData={setFormData}
+                rebalancerLocked={formData.bot_rebalancer_enabled === true}
               />
             )}
 

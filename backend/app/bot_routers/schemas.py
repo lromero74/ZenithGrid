@@ -37,6 +37,8 @@ class BotUpdate(BaseModel):
     reserved_btc_balance: Optional[float] = None
     reserved_usd_balance: Optional[float] = None
     budget_percentage: Optional[float] = None
+    bot_rebalancer_enabled: Optional[bool] = None
+    bot_rebalancer_target_pct: Optional[float] = None
 
 
 class BotResponse(BaseModel):
@@ -77,6 +79,9 @@ class BotResponse(BaseModel):
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
     rebalancer_gated: bool = False  # True when bot was gated on last cycle due to overweight quote
+    bot_rebalancer_enabled: bool = False  # Participating in the bot budget rebalancer
+    bot_rebalancer_target_pct: float = 0.0  # Target allocation % set by rebalancer slider
+    rebalancer_bot_overweight: bool = False  # True when deployed > target + tolerance
 
     class Config:
         from_attributes = True
@@ -179,3 +184,33 @@ class ValidateBotConfigResponse(BaseModel):
     is_valid: bool
     warnings: List[ValidationWarning]
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Bot Budget Rebalancer schemas
+# ---------------------------------------------------------------------------
+
+class BotRebalancerGroupResponse(BaseModel):
+    account_id: int
+    base_currency: str
+    max_total_pct: float
+    overweight_tolerance_pct: float
+    enabled: bool
+
+    class Config:
+        from_attributes = True
+
+
+class BotRebalancerBotSlot(BaseModel):
+    """Per-bot allocation in the rebalancer save request."""
+    bot_id: int
+    enabled: bool       # participates in rebalancer?
+    target_pct: float   # slider value (0..max_total_pct)
+
+
+class BotRebalancerSaveRequest(BaseModel):
+    account_id: int
+    base_currency: str
+    max_total_pct: float                    # group-level max (1..150)
+    overweight_tolerance_pct: float = 5.0   # % above target before gating kicks in
+    bots: List[BotRebalancerBotSlot]

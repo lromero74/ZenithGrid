@@ -20,6 +20,9 @@ export interface BotFormData {
   dex_router?: string  // DEX router contract address
   wallet_private_key?: string  // Wallet private key for DEX
   rpc_url?: string  // RPC endpoint URL
+  // Bot Budget Rebalancer
+  bot_rebalancer_enabled?: boolean  // Participating in the bot budget rebalancer
+  bot_rebalancer_target_pct?: number  // Target allocation % set by rebalancer slider
 }
 
 export interface ValidationWarning {

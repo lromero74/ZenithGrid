@@ -53,10 +53,22 @@ _active_monitor_instance: Optional["MultiBotMonitor"] = None
 # Bot IDs gated by the rebalancer on their most recent cycle (in-memory, resets on restart)
 _rebalancer_gated_bots: set = set()
 
+# Bot IDs currently overweight per the bot budget rebalancer (in-memory, resets on restart)
+_rebalancer_bot_overweight: set = set()
+
+# TTL cache for BotRebalancerGroup lookups: (account_id, base_currency) -> (group, timestamp)
+_rebalancer_group_cache: Dict[tuple, Any] = {}
+_REBALANCER_GROUP_CACHE_TTL = 60  # seconds
+
 
 def is_rebalancer_gated(bot_id: int) -> bool:
     """Return True if this bot was restricted to DCA-only on its last cycle."""
     return bot_id in _rebalancer_gated_bots
+
+
+def is_rebalancer_bot_overweight(bot_id: int) -> bool:
+    """Return True if this bot is currently overweight per the bot budget rebalancer."""
+    return bot_id in _rebalancer_bot_overweight
 
 
 # Per-task exchange client context (each asyncio.Task gets its own copy)
@@ -74,6 +86,32 @@ def clear_monitor_exchange_cache(account_id: Optional[int] = None):
         _active_monitor_instance._exchange_cache.pop(account_id, None)
     else:
         _active_monitor_instance._exchange_cache.clear()
+
+
+async def _get_bot_rebalancer_group(
+    db: AsyncSession,
+    account_id: int,
+    base_currency: str,
+) -> Optional[Any]:
+    """Load a BotRebalancerGroup with a short TTL cache to avoid per-bot DB hits every cycle."""
+    import time
+    cache_key = (account_id, base_currency)
+    cached = _rebalancer_group_cache.get(cache_key)
+    if cached is not None:
+        group, ts = cached
+        if time.monotonic() - ts < _REBALANCER_GROUP_CACHE_TTL:
+            return group
+
+    from app.models.trading import BotRebalancerGroup
+    result = await db.execute(
+        select(BotRebalancerGroup).where(
+            BotRebalancerGroup.account_id == account_id,
+            BotRebalancerGroup.base_currency == base_currency,
+        )
+    )
+    group = result.scalar_one_or_none()
+    _rebalancer_group_cache[cache_key] = (group, time.monotonic())
+    return group
 
 
 async def filter_pairs_by_allowed_categories(
@@ -578,6 +616,41 @@ class MultiBotMonitor:
                     else:
                         # Fresh data says not overweight — clear the gate
                         _rebalancer_gated_bots.discard(bot.id)
+
+            # Bot-level rebalancer overweight gate
+            # Blocks new base orders when this bot's actual deployed capital exceeds
+            # its target allocation + tolerance.  Grid bots and bots with no target are exempt.
+            if (bot.bot_rebalancer_enabled
+                    and bot.strategy_type != "grid"
+                    and bot.bot_rebalancer_target_pct > 0
+                    and bot.account_id is not None):
+                _group = await _get_bot_rebalancer_group(
+                    db, bot.account_id, bot.get_quote_currency()
+                )
+                _tolerance = _group.overweight_tolerance_pct if _group else 5.0
+                # Without live portfolio values in the monitor, we approximate actual_pct
+                # from budget_utilization_percentage (set by the bot list endpoint).
+                # If not yet available, default to 0 (no gating until data is fresh).
+                _budget_util = getattr(bot, '_monitor_budget_utilization', 0.0) or 0.0
+                _actual_pct = (
+                    _budget_util * (bot.budget_percentage / 100.0)
+                    if bot.budget_percentage > 0 else 0.0
+                )
+                if _actual_pct > bot.bot_rebalancer_target_pct + _tolerance:
+                    _rebalancer_bot_overweight.add(bot.id)
+                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                    logger.info(
+                        f"  ⏸ Bot rebalancer: {bot.name} is overweight "
+                        f"({_actual_pct:.1f}% > target {bot.bot_rebalancer_target_pct:.1f}%"
+                        f" + tolerance {_tolerance:.1f}%), blocking new base orders"
+                    )
+                    if not trading_pairs:
+                        return {
+                            "action": "skip",
+                            "reason": "Bot rebalancer: overweight — awaiting position wind-down",
+                        }
+                else:
+                    _rebalancer_bot_overweight.discard(bot.id)
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis

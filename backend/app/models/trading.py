@@ -173,6 +173,10 @@ class Bot(Base):
     reserved_usd_balance = Column(Float, default=0.0)  # USD reserved for this bot (legacy)
     budget_percentage = Column(Float, default=0.0)  # % of aggregate BTC value (preferred method)
 
+    # Bot Budget Rebalancer
+    bot_rebalancer_enabled = Column(Boolean, default=False)  # Participating in the rebalancer
+    bot_rebalancer_target_pct = Column(Float, default=0.0)   # Slider value set by rebalancer
+
     # Bidirectional DCA Grid Bot - Budget Reservations
     # These track RESERVED amounts for bidirectional bots (even with 0 open positions)
     # DCA bots wait for signals, so capital must be reserved upfront
@@ -312,6 +316,23 @@ class Bot(Base):
                     total_btc += usd_amount / current_btc_price
 
         return total_btc
+
+
+class BotRebalancerGroup(Base):
+    """Per-account, per-currency rebalancer group settings."""
+    __tablename__ = "bot_rebalancer_groups"
+    __table_args__ = (
+        UniqueConstraint("account_id", "base_currency", name="uq_rebalancer_group"),
+        {'schema': 'trading'},
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=False, index=True)
+    base_currency = Column(String(20), nullable=False)
+    max_total_pct = Column(Float, default=100.0)
+    overweight_tolerance_pct = Column(Float, default=5.0)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class BotProduct(Base):
