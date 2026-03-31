@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.152.0] - 2026-03-31
+
+### Added
+- **Rebalancer slider lock**: Pin individual bot allocations in the Bot Budget Rebalancer so they stay fixed while you slide others. Locked bots show a blue border and lock icon; unlocked bots absorb the redistribution proportionally.
+
+### Fixed
+- **Rebalancer auth**: The rebalancer API was using axios without auth headers, causing 401 errors. Switched to `authFetch`.
+- **Rebalancer number inputs**: Backspace now works correctly in the Max Total Allocation and Overweight Tolerance fields — values are parsed and clamped only when you leave the field.
+
 ## [v2.151.0] - 2026-03-31
 
 ### Added
