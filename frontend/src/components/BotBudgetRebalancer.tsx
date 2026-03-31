@@ -39,6 +39,9 @@ interface GroupState {
   slots: BotSlotState[]
   expanded: boolean
   saving: boolean
+  // Raw string drafts while user is typing — avoids clamping fighting backspace
+  maxTotalDraft: string
+  toleranceDraft: string
 }
 
 function buildSlots(group: RebalancerCurrencyGroup): BotSlotState[] {
@@ -75,6 +78,8 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
           slots: buildSlots(g),
           expanded: false,
           saving: false,
+          maxTotalDraft: String(g.max_total_pct),
+          toleranceDraft: String(g.overweight_tolerance_pct),
         }))
       )
     } catch (err) {
@@ -95,13 +100,24 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
     )
   }
 
-  function updateGroupField(
-    idx: number,
-    field: 'max_total_pct' | 'overweight_tolerance_pct',
-    value: number
-  ) {
+  function updateDraft(idx: number, field: 'maxTotalDraft' | 'toleranceDraft', raw: string) {
     setGroups((prev) =>
-      prev.map((g, i) => (i === idx ? { ...g, [field]: value } : g))
+      prev.map((g, i) => (i === idx ? { ...g, [field]: raw } : g))
+    )
+  }
+
+  function commitDraft(idx: number, field: 'maxTotalDraft' | 'toleranceDraft') {
+    setGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== idx) return g
+        if (field === 'maxTotalDraft') {
+          const v = Math.min(150, Math.max(1, parseFloat(g.maxTotalDraft) || 100))
+          return { ...g, max_total_pct: v, maxTotalDraft: String(v) }
+        } else {
+          const v = Math.min(50, Math.max(0, parseFloat(g.toleranceDraft) || 5))
+          return { ...g, overweight_tolerance_pct: v, toleranceDraft: String(v) }
+        }
+      })
     )
   }
 
@@ -387,14 +403,9 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                         min={1}
                         max={150}
                         step={1}
-                        value={group.max_total_pct}
-                        onChange={(e) =>
-                          updateGroupField(
-                            groupIdx,
-                            'max_total_pct',
-                            Math.min(150, Math.max(1, parseFloat(e.target.value) || 100))
-                          )
-                        }
+                        value={group.maxTotalDraft}
+                        onChange={(e) => updateDraft(groupIdx, 'maxTotalDraft', e.target.value)}
+                        onBlur={() => commitDraft(groupIdx, 'maxTotalDraft')}
                         className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-white text-sm font-mono"
                       />
                       <p className="text-xs text-slate-500 mt-0.5">
@@ -410,14 +421,9 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                         min={0}
                         max={50}
                         step={0.5}
-                        value={group.overweight_tolerance_pct}
-                        onChange={(e) =>
-                          updateGroupField(
-                            groupIdx,
-                            'overweight_tolerance_pct',
-                            Math.min(50, Math.max(0, parseFloat(e.target.value) || 5))
-                          )
-                        }
+                        value={group.toleranceDraft}
+                        onChange={(e) => updateDraft(groupIdx, 'toleranceDraft', e.target.value)}
+                        onBlur={() => commitDraft(groupIdx, 'toleranceDraft')}
                         className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-white text-sm font-mono"
                       />
                       <p className="text-xs text-slate-500 mt-0.5">
