@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.9] - 2026-03-31
+
+### Changed
+- TV Chart controls overhaul: replaced TradingView's built-in top toolbar with our own persistent header bar. Interval (1m–1M), chart type (Candles, Heikin-Ashi, Bars, Line, Area, Baseline, HLC Area, Renko, Line Break, Kagi, P&F), and indicators (18 built-in studies across Trend/Momentum/Volume categories) are all saved to localStorage and restored on every open. TradingView's side toolbar (drawing tools) is preserved.
+
 ## [v2.149.8] - 2026-03-31
 
 ### Added
