@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.149.4] - 2026-03-31
+
+### Fixed
+- **Deal chart Safety Order lines now respect the configured DCA target reference** — the SO trigger price lines now honor the bot's "DCA Target Reference" setting (Base Order, Average Price, or Last Buy Price), matching exactly how the engine decides when to place the next safety order. For "Base Order" bots all remaining SO levels are drawn since they're fixed at open time; for "Average Price" and "Last Buy" bots only the immediately-next SO is shown (since the reference shifts after each fill). This option is already available in the bot edit form under Safety Orders.
+
 ## [v2.149.3] - 2026-03-31
 
 ### Fixed

@@ -624,36 +624,62 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         }
       }
 
-      // Safety Order price levels — only remaining (not yet triggered) SOs
+      // Safety Order price levels — only remaining (not yet triggered) SOs.
+      //
+      // The reference price for SO trigger calculation mirrors the backend strategy:
+      //   dca_target_reference = "base_order"    → first buy price (all future SO prices known upfront)
+      //   dca_target_reference = "last_buy"      → most recent buy price
+      //   dca_target_reference = "average_price" → current average buy price (default)
+      //
+      // For "base_order" we can draw all remaining SO levels since they're fixed.
+      // For "last_buy" and "average_price" the reference shifts after every fill, so we
+      // only draw the NEXT SO (the one that will trigger next from the current reference).
       if (position.status === 'open' && mainSeriesRef.current) {
         const priceDeviation = Number(cfgSnapshot.price_deviation || 0)
         const stepScale = Number(cfgSnapshot.safety_order_step_scale || 1.0)
         const maxSafetyOrders = Number(cfgSnapshot.max_safety_orders || 0)
+        const dcaReference = (cfgSnapshot.dca_target_reference as string) || 'average_price'
 
-        // SO trigger prices are measured from the initial base-order entry price,
-        // not the DCA-averaged price.
-        const basePriceForSO = position.first_buy_price || position.average_buy_price
-
-        // trade_count = 1 (base order) + number of SOs that have already filled
+        // trade_count = 1 (base order) + safety orders already triggered
         const soTriggered = Math.max(0, (position.trade_count || 1) - 1)
+        const soRemaining = maxSafetyOrders - soTriggered
 
-        if (priceDeviation > 0 && maxSafetyOrders > 0) {
-          let cumulativeDeviation = priceDeviation
-          for (let i = 0; i < maxSafetyOrders; i++) {
-            // Only draw SOs that haven't triggered yet
-            if (i >= soTriggered) {
-              const soPrice = basePriceForSO * (1 - cumulativeDeviation / 100)
-              const priceLine = mainSeriesRef.current.createPriceLine({
-                price: soPrice,
-                color: '#64748b',
-                lineWidth: 1,
-                lineStyle: LineStyle.Dashed,
-                axisLabelVisible: true,
-                title: `SO${i + 1}`,
-              })
-              soPriceLinesRef.current.push(priceLine)
+        if (priceDeviation > 0 && soRemaining > 0) {
+          if (dcaReference === 'base_order') {
+            // All future SO prices are fixed from the initial entry — draw all remaining.
+            const basePrice = position.first_buy_price || position.average_buy_price
+            let cumulativeDeviation = priceDeviation
+            for (let i = 0; i < maxSafetyOrders; i++) {
+              if (i >= soTriggered) {
+                const soPrice = basePrice * (1 - cumulativeDeviation / 100)
+                const priceLine = mainSeriesRef.current.createPriceLine({
+                  price: soPrice,
+                  color: '#64748b',
+                  lineWidth: 1,
+                  lineStyle: LineStyle.Dashed,
+                  axisLabelVisible: true,
+                  title: `SO${i + 1}`,
+                })
+                soPriceLinesRef.current.push(priceLine)
+              }
+              cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
             }
-            cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
+          } else {
+            // "average_price" or "last_buy": reference changes after each fill,
+            // so only draw the immediately-next SO trigger price.
+            const refPrice = dcaReference === 'last_buy'
+              ? (position.last_buy_price || position.average_buy_price)
+              : position.average_buy_price
+            const nextSOPrice = refPrice * (1 - priceDeviation / 100)
+            const priceLine = mainSeriesRef.current.createPriceLine({
+              price: nextSOPrice,
+              color: '#64748b',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `SO${soTriggered + 1}`,
+            })
+            soPriceLinesRef.current.push(priceLine)
           }
         }
       }
