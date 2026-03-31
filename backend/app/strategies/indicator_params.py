@@ -174,13 +174,7 @@ INDICATOR_PARAMS = [
      "description": "Minimum percentage gain required in the pole",
      "type": "float", "default": 3.0, "min_value": 1.0, "max_value": 20.0,
      "group": "Bull Flag"},
-    # ── VWAP Bounce ───────────────────────────────────────────────────────
-    {"name": "vwap_bounce_timeframe", "display_name": "VWAP Bounce Timeframe",
-     "description": "Timeframe for VWAP bounce detection",
-     "type": "str", "default": "FIVE_MINUTE",
-     "options": ["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "ONE_HOUR"],
-     "group": "VWAP Bounce"},
-    # ── Quick Finger Luc (QFL) ────────────────────────────────────────────
+    # ── Quick Fingers Luke (QFL) ──────────────────────────────────────────
     {"name": "qfl_base_timeframe", "display_name": "QFL Base Timeframe",
      "description": "Timeframe used to identify support bases (higher = stronger bases)",
      "type": "str", "default": "ONE_HOUR",

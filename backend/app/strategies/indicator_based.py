@@ -448,7 +448,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         """
         Calculate QFL (Quick Fingers Luke) crack indicator.
 
-        Supports multi-timeframe: Base identification (higher TF) and 
+        Supports multi-timeframe: Base identification (higher TF) and
         Crack detection (lower TF).
         Mutates current_indicators in place.
         """
@@ -456,15 +456,15 @@ class IndicatorBasedStrategy(TradingStrategy):
         base_timeframe = "ONE_HOUR"
         crack_timeframe = "FIFTEEN_MINUTE"
         config_overrides: Dict[str, Any] = {}
-        
+
         for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
             for cond in self._flatten_conditions(cond_list):
                 if cond.get("type") == "qfl_crack":
                     # Default timeframe in condition is the crack (signal) timeframe
                     crack_timeframe = cond.get("timeframe", "FIFTEEN_MINUTE")
-                    # Optional base_timeframe for identifying bases
+                    # Optional base_timeframe for identifying bases on a higher TF
                     base_timeframe = cond.get("base_timeframe", cond.get("timeframe", "ONE_HOUR"))
-                    
+
                     config_overrides = {
                         "qfl_base_timeframe": base_timeframe,
                         "qfl_crack_timeframe": crack_timeframe,
@@ -476,15 +476,20 @@ class IndicatorBasedStrategy(TradingStrategy):
                     break
 
         params = QFLParams.from_config({**self.config, **config_overrides})
-        
+
         # Get candles for both timeframes
         crack_candles = candles_by_timeframe.get(crack_timeframe, candles)
-        base_candles = candles_by_timeframe.get(base_timeframe) # Might be same as crack
-        
-        # If base_timeframe is same as crack_timeframe, pass None to evaluate() 
-        # to use internal single-tf logic
+        base_candles = candles_by_timeframe.get(base_timeframe)  # None if same TF or not fetched
+
+        if base_timeframe != crack_timeframe and base_candles is None:
+            logger.warning(
+                f"QFL: base_timeframe={base_timeframe} candles not available in candles_by_timeframe; "
+                f"falling back to crack_timeframe={crack_timeframe} candles for base identification"
+            )
+
+        # If base_timeframe is same as crack_timeframe, pass None so evaluate() uses single-TF logic
         effective_base_candles = base_candles if base_timeframe != crack_timeframe else None
-        
+
         result = self.qfl_evaluator.evaluate(crack_candles, params, base_candles=effective_base_candles)
         current_indicators["qfl_crack"] = result.signal
 

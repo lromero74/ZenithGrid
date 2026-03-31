@@ -54,6 +54,7 @@ export interface PhaseCondition {
   lookback_candles?: number
   bounce_pct?: number
   crack_pct?: number
+  base_timeframe?: Timeframe
 }
 
 interface PhaseConditionSelectorProps {
@@ -288,6 +289,7 @@ function PhaseConditionSelector({
               newCondition.lookback_candles = 100
               newCondition.bounce_pct = 3.0
               newCondition.crack_pct = 2.0
+              newCondition.base_timeframe = 'ONE_HOUR'
               break
           }
 
@@ -903,7 +905,20 @@ function PhaseConditionSelector({
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5">
-                <label className="text-xs text-slate-400 whitespace-nowrap">Lookback candles:</label>
+                <label className="text-xs text-slate-400 whitespace-nowrap">Base TF:</label>
+                <select
+                  value={condition.base_timeframe || 'ONE_HOUR'}
+                  onChange={(e) => updateCondition(condition.id, { base_timeframe: e.target.value as Timeframe })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Timeframe for identifying support bases (use a higher TF than the condition timeframe for the pro setup)"
+                >
+                  {Object.entries(TIMEFRAMES).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-slate-400 whitespace-nowrap">Lookback:</label>
                 <input
                   type="number"
                   value={condition.lookback_candles ?? 100}
@@ -934,7 +949,8 @@ function PhaseConditionSelector({
               </div>
             </div>
             <p className="text-xs text-slate-400">
-              Fires when price drops <strong>{condition.crack_pct ?? 2}%</strong> below a base that bounced
+              Fires when price drops <strong>{condition.crack_pct ?? 2}%</strong> below a base
+              (identified on <strong>{TIMEFRAMES[condition.base_timeframe || 'ONE_HOUR']}</strong>) that bounced
               at least <strong>{condition.bounce_pct ?? 3}%</strong> (scans last <strong>{condition.lookback_candles ?? 100}</strong> candles).
             </p>
           </div>
@@ -996,8 +1012,10 @@ function PhaseConditionSelector({
         return `[${tf}] VWAP Bounce Up = Active`
       case 'vwap_bounce_down':
         return `[${tf}] VWAP Bounce Down = Active`
-      case 'qfl_crack':
-        return `[${tf}] QFL Crack (bounce≥${condition.bounce_pct ?? 3}%, crack≥${condition.crack_pct ?? 2}%) = Active`
+      case 'qfl_crack': {
+        const btf = TIMEFRAMES[condition.base_timeframe || 'ONE_HOUR']
+        return `[${tf}] QFL Crack (base:${btf}, bounce≥${condition.bounce_pct ?? 3}%, crack≥${condition.crack_pct ?? 2}%) = Active`
+      }
       default:
         return 'Unknown condition'
     }
