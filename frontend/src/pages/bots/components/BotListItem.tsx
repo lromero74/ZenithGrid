@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { Bot } from '../../../types'
+import { Bot, AggregateValue } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
+import { RebalanceStatus } from '../../../services/api'
 import { Edit, Eye, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import { useConfirm } from '../../../contexts/ConfirmContext'
+import { computeEffectiveAggregateValues, calculateSoftCeiling, EXCHANGE_MINIMUMS } from '../../../components/bots'
 
 interface BotListItemProps {
   bot: Bot
@@ -28,6 +30,8 @@ interface BotListItemProps {
   setIndicatorLogsBotId: (id: number | null) => void
   setScannerLogsBotId: (id: number | null) => void
   portfolio?: any
+  aggregateData?: AggregateValue
+  rebalanceStatus?: RebalanceStatus
   botsFetching?: boolean
   canWrite?: boolean
 }
@@ -53,6 +57,9 @@ export const BotListItem = memo(function BotListItem({
   setAiLogsBotId,
   setIndicatorLogsBotId,
   setScannerLogsBotId,
+  portfolio,
+  aggregateData,
+  rebalanceStatus,
   canWrite = true,
 }: BotListItemProps) {
   const { addToast } = useNotifications()
@@ -218,27 +225,78 @@ export const BotListItem = memo(function BotListItem({
 
       {/* Active Trades */}
       <td className="hidden sm:table-cell px-0.5 sm:px-1 py-2 w-16">
-        {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
+        {bot.strategy_config?.max_concurrent_deals ||
+        bot.strategy_config?.max_concurrent_positions ? (
           (() => {
-            const configuredMax = bot.strategy_config.max_concurrent_deals || bot.strategy_config.max_concurrent_positions
+            const configuredMax =
+              bot.strategy_config.max_concurrent_deals ||
+              bot.strategy_config.max_concurrent_positions
             const scEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
-            // Use the backend-computed value — signal_processor writes it each evaluation cycle
-            // using real exchange minimums, so it's always accurate once evaluated.
-            const scMax = scEnabled ? ((bot as any).soft_ceiling_effective_max as number | null | undefined) ?? null : null
-            const displayMax = scEnabled && scMax != null && scMax < configuredMax ? scMax : configuredMax
+
+            // 1. Try to use the backend-computed value if available
+            let scMax = scEnabled
+              ? ((bot as any).soft_ceiling_effective_max as
+                  | number
+                  | null
+                  | undefined) ?? null
+              : null
+
+            // 2. If backend hasn't computed it yet, try to compute it on the frontend
+            // This ensures we show the same number as the edit modal immediately.
+            if (scEnabled && scMax == null && aggregateData) {
+              const quoteCurrency =
+                botPairs.length > 0 ? botPairs[0].split('-')[1] : 'BTC'
+              const { effectiveUsdValue, effectiveBtcValue } =
+                computeEffectiveAggregateValues(
+                  quoteCurrency,
+                  aggregateData,
+                  rebalanceStatus
+                )
+              const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(
+                quoteCurrency
+              )
+              const aggregateValue = isFiatQuote
+                ? effectiveUsdValue
+                : effectiveBtcValue
+              const worstCaseMin =
+                EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] ||
+                (isFiatQuote ? 1.0 : 0.0001)
+
+              scMax = calculateSoftCeiling(
+                bot.strategy_config,
+                aggregateValue,
+                bot.budget_percentage || 0,
+                worstCaseMin,
+                configuredMax
+              )
+            }
+
+            const displayMax =
+              scEnabled && scMax != null && scMax < configuredMax
+                ? scMax
+                : configuredMax
+
             return (
               <div className="whitespace-nowrap">
                 <div className="text-sm">
-                  <span className="text-blue-400 font-medium">{bot.open_positions_count ?? 0}</span>
+                  <span className="text-blue-400 font-medium">
+                    {bot.open_positions_count ?? 0}
+                  </span>
                   <span className="text-slate-500"> / </span>
                   <span className="text-slate-400">{displayMax}</span>
                   {scEnabled && scMax != null && scMax < configuredMax && (
-                    <span className="text-purple-400" title={`Soft ceiling active — effective cap is ${scMax}, configured max is ${configuredMax}`}>
+                    <span
+                      className="text-purple-400"
+                      title={`Soft ceiling active — effective cap is ${scMax}, configured max is ${configuredMax}`}
+                    >
                       {' '}(SC: Max {configuredMax})
                     </span>
                   )}
                   {scEnabled && (scMax == null || scMax >= configuredMax) && (
-                    <span className="text-purple-400" title="Soft ceiling enabled — waiting for next evaluation cycle">
+                    <span
+                      className="text-purple-400"
+                      title="Soft ceiling enabled — waiting for next evaluation cycle"
+                    >
                       {' '}(SC)
                     </span>
                   )}

@@ -37,7 +37,7 @@ type PortfolioMode = 'off' | 'autobuy' | 'rebalance'
 // ─── Rebalance constants ─────────────────────────────────────────────────────
 
 interface CurrencySlider {
-  key: 'target_usd_pct' | 'target_btc_pct' | 'target_eth_pct' | 'target_usdc_pct'
+  key: 'target_usd_pct' | 'target_btc_pct' | 'target_eth_pct' | 'target_usdc_pct' | 'target_usdt_pct'
   label: string
   color: string
   bgColor: string
@@ -48,10 +48,11 @@ const CURRENCIES: CurrencySlider[] = [
   { key: 'target_btc_pct', label: 'BTC', color: 'text-orange-400', bgColor: 'bg-orange-500' },
   { key: 'target_eth_pct', label: 'ETH', color: 'text-blue-400', bgColor: 'bg-blue-500' },
   { key: 'target_usdc_pct', label: 'USDC', color: 'text-cyan-400', bgColor: 'bg-cyan-500' },
+  { key: 'target_usdt_pct', label: 'USDT', color: 'text-teal-400', bgColor: 'bg-teal-500' },
 ]
 
 const CURRENCY_HEX: Record<string, string> = {
-  USD: '#22c55e', BTC: '#f97316', ETH: '#3b82f6', USDC: '#06b6d4',
+  USD: '#22c55e', BTC: '#f97316', ETH: '#3b82f6', USDC: '#06b6d4', USDT: '#14b8a6',
 }
 
 const MIN_BALANCE_CONFIG: Record<string, { key: keyof RebalanceSettings; step: string; placeholder: string }> = {
@@ -59,6 +60,7 @@ const MIN_BALANCE_CONFIG: Record<string, { key: keyof RebalanceSettings; step: s
   BTC: { key: 'min_balance_btc', step: '0.001', placeholder: '0.000' },
   ETH: { key: 'min_balance_eth', step: '0.01', placeholder: '0.00' },
   USDC: { key: 'min_balance_usdc', step: '1', placeholder: '0.00' },
+  USDT: { key: 'min_balance_usdt', step: '1', placeholder: '0.00' },
 }
 
 const INTERVAL_OPTIONS = [

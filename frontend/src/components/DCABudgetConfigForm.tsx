@@ -6,6 +6,7 @@ import AdvancedConditionBuilder, {
   Condition,
 } from './AdvancedConditionBuilder'
 import { ConditionType } from './PhaseConditionSelector'
+import { getDCAMultiplier, EXCHANGE_MINIMUMS } from './bots'
 
 interface DCABudgetConfigFormProps {
   config: Record<string, any>
@@ -20,15 +21,6 @@ interface DCABudgetConfigFormProps {
   splitBudget?: boolean  // Whether to split budget across pairs
   maxConcurrentDeals?: number  // Max number of simultaneous positions
   effectiveMaxDeals?: number // Sensible maximum for deals
-}
-
-// Exchange minimum order sizes
-const EXCHANGE_MINIMUMS = {
-  BTC: 0.0001,  // 0.0001 BTC minimum for BTC pairs
-  USD: 1.0,     // $1 minimum for USD pairs
-  USDC: 1.0,    // $1 minimum for USDC pairs
-  USDT: 1.0,    // $1 minimum for USDT pairs
-  EUR: 1.0,     // 1 EUR minimum for EUR pairs
 }
 
 // Safe number parsing that returns undefined for invalid input (instead of NaN)
@@ -207,37 +199,6 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   return expression.groups.some(group =>
     group.conditions?.some(c => c.type === 'bull_flag')
   )
-}
-
-// Helper to calculate total capital multiplier for one full DCA cycle
-function getDCAMultiplier(config: Record<string, any>): number {
-  const maxSafetyOrders = config.max_safety_orders || 0
-  if (maxSafetyOrders <= 0) return 1.0
-
-  const volumeScale = config.safety_order_volume_scale || 1.0
-  const safetyOrderType = config.safety_order_type || 'percentage_of_base'
-
-  if (safetyOrderType === 'percentage_of_base') {
-    const soPercentage = (config.safety_order_percentage || 50.0) / 100.0
-    if (volumeScale === 1.0) {
-      return 1.0 + soPercentage * maxSafetyOrders
-    } else {
-      return 1.0 + soPercentage * (Math.pow(volumeScale, maxSafetyOrders) - 1) / (volumeScale - 1)
-    }
-  } else if (safetyOrderType === 'fixed' || safetyOrderType === 'fixed_btc') {
-    // Base (1.0) + SO1 (1.0) + SO2..SOn (geometric)
-    let total = 2.0
-    const n = maxSafetyOrders
-    if (n > 1) {
-      if (volumeScale === 1.0) {
-        total += (n - 1)
-      } else {
-        total += volumeScale * (Math.pow(volumeScale, n - 1) - 1) / (volumeScale - 1)
-      }
-    }
-    return total
-  }
-  return 1.0 + (maxSafetyOrders * 0.5)
 }
 
 function DCABudgetConfigForm({

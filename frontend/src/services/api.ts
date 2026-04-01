@@ -628,6 +628,7 @@ export interface RebalanceSettings {
   target_btc_pct: number;
   target_eth_pct: number;
   target_usdc_pct: number;
+  target_usdt_pct: number;
   drift_threshold_pct: number;
   check_interval_minutes: number;
   min_trade_pct: number;
@@ -635,6 +636,7 @@ export interface RebalanceSettings {
   min_balance_btc: number;
   min_balance_eth: number;
   min_balance_usdc: number;
+  min_balance_usdt: number;
 }
 
 export interface RebalanceStatus {
@@ -643,22 +645,26 @@ export interface RebalanceStatus {
   current_btc_pct: number;
   current_eth_pct: number;
   current_usdc_pct: number;
+  current_usdt_pct: number;
   total_value_usd: number;
   target_usd_pct: number;
   target_btc_pct: number;
   target_eth_pct: number;
   target_usdc_pct: number;
+  target_usdt_pct: number;
   rebalance_enabled: boolean;
   min_balance_usd: number;
   min_balance_btc: number;
   min_balance_eth: number;
   min_balance_usdc: number;
+  min_balance_usdt: number;
   reserve_value_usd: number;    // Sum of all reserves converted to USD
   deployable_value_usd: number; // total_value_usd minus reserve_value_usd
   reserve_usd_pct: number;      // USD reserve as % of total portfolio
   reserve_btc_pct: number;      // BTC reserve as % of total portfolio
   reserve_eth_pct: number;      // ETH reserve as % of total portfolio
   reserve_usdc_pct: number;     // USDC reserve as % of total portfolio
+  reserve_usdt_pct: number;     // USDT reserve as % of total portfolio
 }
 
 export const rebalanceApi = {

@@ -233,6 +233,7 @@ class RebalanceSettingsResponse(BaseModel):
     target_btc_pct: float
     target_eth_pct: float
     target_usdc_pct: float
+    target_usdt_pct: float
     drift_threshold_pct: float
     check_interval_minutes: int
     min_trade_pct: float
@@ -240,6 +241,7 @@ class RebalanceSettingsResponse(BaseModel):
     min_balance_btc: float
     min_balance_eth: float
     min_balance_usdc: float
+    min_balance_usdt: float
 
 
 class RebalanceSettingsUpdate(BaseModel):
@@ -249,6 +251,7 @@ class RebalanceSettingsUpdate(BaseModel):
     target_btc_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     target_eth_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     target_usdc_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+    target_usdt_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     drift_threshold_pct: Optional[float] = Field(None, ge=1.0, le=10.0)
     check_interval_minutes: Optional[int] = Field(None, ge=15, le=1440)
     min_trade_pct: Optional[float] = Field(None, ge=1.0, le=25.0)
@@ -256,6 +259,7 @@ class RebalanceSettingsUpdate(BaseModel):
     min_balance_btc: Optional[float] = Field(None, ge=0.0)
     min_balance_eth: Optional[float] = Field(None, ge=0.0)
     min_balance_usdc: Optional[float] = Field(None, ge=0.0)
+    min_balance_usdt: Optional[float] = Field(None, ge=0.0)
 
 
 # =============================================================================
@@ -1075,6 +1079,7 @@ def _build_rebalance_response(account) -> RebalanceSettingsResponse:
         target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
         target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
         target_usdc_pct=account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
+        target_usdt_pct=account.rebalance_target_usdt_pct if account.rebalance_target_usdt_pct is not None else 0.0,
         drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
         check_interval_minutes=account.rebalance_check_interval_minutes or 60,
         min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
@@ -1082,6 +1087,7 @@ def _build_rebalance_response(account) -> RebalanceSettingsResponse:
         min_balance_btc=account.min_balance_btc or 0.0,
         min_balance_eth=account.min_balance_eth or 0.0,
         min_balance_usdc=account.min_balance_usdc or 0.0,
+        min_balance_usdt=account.min_balance_usdt or 0.0,
     )
 
 
@@ -1108,8 +1114,10 @@ async def update_rebalance_settings(
     eth = settings.target_eth_pct if settings.target_eth_pct is not None else account.rebalance_target_eth_pct or 33.0
     usdc = (settings.target_usdc_pct if settings.target_usdc_pct is not None
             else account.rebalance_target_usdc_pct or 0.0)
+    usdt = (settings.target_usdt_pct if settings.target_usdt_pct is not None
+            else account.rebalance_target_usdt_pct or 0.0)
 
-    pct_total = usd + btc + eth + usdc
+    pct_total = usd + btc + eth + usdc + usdt
     if abs(pct_total - 100.0) > 0.1:
         raise HTTPException(
             status_code=400,
@@ -1131,6 +1139,8 @@ async def update_rebalance_settings(
         account.rebalance_target_eth_pct = settings.target_eth_pct
     if settings.target_usdc_pct is not None:
         account.rebalance_target_usdc_pct = settings.target_usdc_pct
+    if settings.target_usdt_pct is not None:
+        account.rebalance_target_usdt_pct = settings.target_usdt_pct
     if settings.drift_threshold_pct is not None:
         account.rebalance_drift_threshold_pct = settings.drift_threshold_pct
     if settings.check_interval_minutes is not None:
@@ -1145,6 +1155,8 @@ async def update_rebalance_settings(
         account.min_balance_eth = settings.min_balance_eth
     if settings.min_balance_usdc is not None:
         account.min_balance_usdc = settings.min_balance_usdc
+    if settings.min_balance_usdt is not None:
+        account.min_balance_usdt = settings.min_balance_usdt
 
     await db.commit()
     await db.refresh(account)
@@ -1159,11 +1171,11 @@ async def get_public_prices() -> dict:
     """Fetch current prices from public Coinbase API (no auth needed)."""
     from app.coinbase_api import public_market_data
     prices = {}
-    for product_id in ("BTC-USD", "ETH-USD", "USDC-USD"):
+    for product_id in ("BTC-USD", "ETH-USD", "USDC-USD", "USDT-USD"):
         try:
             prices[product_id] = float(await public_market_data.get_current_price(product_id))
         except Exception:
-            prices[product_id] = 1.0 if product_id == "USDC-USD" else 0.0
+            prices[product_id] = 1.0 if product_id in ("USDC-USD", "USDT-USD") else 0.0
     return prices
 
 
@@ -1178,21 +1190,24 @@ def _compute_allocation(balances: dict, prices: dict, total_override: float | No
     btc_value = balances.get("BTC", 0.0) * prices.get("BTC-USD", 0.0)
     eth_value = balances.get("ETH", 0.0) * prices.get("ETH-USD", 0.0)
     usdc_value = balances.get("USDC", 0.0) * prices.get("USDC-USD", 1.0)
-    total = total_override if total_override is not None else (usd_value + btc_value + eth_value + usdc_value)
+    usdt_value = balances.get("USDT", 0.0) * prices.get("USDT-USD", 1.0)
+    total = total_override if total_override is not None else (usd_value + btc_value + eth_value + usdc_value + usdt_value)
 
     if total > 0:
         usd_pct = round(usd_value / total * 100, 2)
         btc_pct = round(btc_value / total * 100, 2)
         eth_pct = round(eth_value / total * 100, 2)
         usdc_pct = round(usdc_value / total * 100, 2)
+        usdt_pct = round(usdt_value / total * 100, 2)
     else:
-        usd_pct = btc_pct = eth_pct = usdc_pct = 0.0
+        usd_pct = btc_pct = eth_pct = usdc_pct = usdt_pct = 0.0
 
     return {
         "current_usd_pct": usd_pct,
         "current_btc_pct": btc_pct,
         "current_eth_pct": eth_pct,
         "current_usdc_pct": usdc_pct,
+        "current_usdt_pct": usdt_pct,
         "total_value_usd": round(total, 2),
     }
 
@@ -1308,20 +1323,22 @@ async def get_rebalance_status(
 
             # Fetch all balances and prices in parallel
             (
-                usd_bal, btc_bal, eth_bal, usdc_bal,
-                btc_price, eth_price, usdc_price,
+                usd_bal, btc_bal, eth_bal, usdc_bal, usdt_bal,
+                btc_price, eth_price, usdc_price, usdt_price,
             ) = await asyncio.gather(
                 _safe_balance(coinbase.get_usd_balance),
                 _safe_balance(coinbase.get_btc_balance),
                 _safe_balance(coinbase.get_eth_balance),
                 _safe_balance(coinbase.get_usdc_balance),
+                _safe_balance(coinbase.get_usdt_balance),
                 _safe_price("BTC-USD"),
                 _safe_price("ETH-USD"),
                 _safe_price("USDC-USD", fallback=1.0),
+                _safe_price("USDT-USD", fallback=1.0),
             )
 
-            balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal}
-            prices = {"BTC-USD": btc_price, "ETH-USD": eth_price, "USDC-USD": usdc_price}
+            balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal, "USDT": usdt_bal}
+            prices = {"BTC-USD": btc_price, "ETH-USD": eth_price, "USDC-USD": usdc_price, "USDT-USD": usdt_price}
 
             # Add open position market values to their quote-currency bucket
             from app.models import Position as _Position
@@ -1356,6 +1373,7 @@ async def get_rebalance_status(
         t_btc = account.rebalance_target_btc_pct
         t_eth = account.rebalance_target_eth_pct
         t_usdc = account.rebalance_target_usdc_pct
+        t_usdt = account.rebalance_target_usdt_pct
 
         # Compute reserve value in USD (needed for deployable context)
         _p = prices if isinstance(prices, dict) else {}
@@ -1365,7 +1383,8 @@ async def get_rebalance_status(
             (account.min_balance_usd or 0.0)
             + (account.min_balance_btc or 0.0) * _btc_p
             + (account.min_balance_eth or 0.0) * _eth_p
-            + (account.min_balance_usdc or 0.0),
+            + (account.min_balance_usdc or 0.0)
+            + (account.min_balance_usdt or 0.0),
             2,
         )
         _total = alloc.get("total_value_usd", 0.0)
@@ -1381,6 +1400,7 @@ async def get_rebalance_status(
             "BTC": max(0.0, balances.get("BTC", 0.0) - (account.min_balance_btc or 0.0)),
             "ETH": max(0.0, balances.get("ETH", 0.0) - (account.min_balance_eth or 0.0)),
             "USDC": max(0.0, balances.get("USDC", 0.0) - (account.min_balance_usdc or 0.0)),
+            "USDT": max(0.0, balances.get("USDT", 0.0) - (account.min_balance_usdt or 0.0)),
         }
         _deploy_alloc = _compute_allocation(_deployable_balances, prices)
 
@@ -1403,6 +1423,9 @@ async def get_rebalance_status(
         _reserve_pct_usdc = _pct_of_total(
             min(account.min_balance_usdc or 0.0, balances.get("USDC", 0.0))
         )
+        _reserve_pct_usdt = _pct_of_total(
+            min(account.min_balance_usdt or 0.0, balances.get("USDT", 0.0))
+        )
 
         response_data = {
             "account_id": account_id,
@@ -1411,16 +1434,19 @@ async def get_rebalance_status(
             "current_btc_pct": _deploy_alloc["current_btc_pct"],
             "current_eth_pct": _deploy_alloc["current_eth_pct"],
             "current_usdc_pct": _deploy_alloc["current_usdc_pct"],
+            "current_usdt_pct": _deploy_alloc["current_usdt_pct"],
             "total_value_usd": _total,               # full portfolio for context
             "target_usd_pct": t_usd if t_usd is not None else 34.0,
             "target_btc_pct": t_btc if t_btc is not None else 33.0,
             "target_eth_pct": t_eth if t_eth is not None else 33.0,
             "target_usdc_pct": t_usdc if t_usdc is not None else 0.0,
+            "target_usdt_pct": t_usdt if t_usdt is not None else 0.0,
             "rebalance_enabled": bool(account.rebalance_enabled),
             "min_balance_usd": account.min_balance_usd or 0.0,
             "min_balance_btc": account.min_balance_btc or 0.0,
             "min_balance_eth": account.min_balance_eth or 0.0,
             "min_balance_usdc": account.min_balance_usdc or 0.0,
+            "min_balance_usdt": account.min_balance_usdt or 0.0,
             "reserve_value_usd": _reserve_usd,
             "deployable_value_usd": _deployable,
             # Per-currency reserve as % of total portfolio (for colored reserve segments in charts)
@@ -1428,6 +1454,7 @@ async def get_rebalance_status(
             "reserve_btc_pct": _reserve_pct_btc,
             "reserve_eth_pct": _reserve_pct_eth,
             "reserve_usdc_pct": _reserve_pct_usdc,
+            "reserve_usdt_pct": _reserve_pct_usdt,
         }
         if not account.is_paper_trading:
             _TTL_REBALANCE_STATUS[account_id] = (time.monotonic(), response_data)
@@ -1451,7 +1478,7 @@ class DustSweepSettingsUpdate(BaseModel):
     threshold_usd: Optional[float] = Field(None, ge=1.0, le=1000.0)
 
 
-TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
+TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC", "USDT"}
 
 
 @router.get("/{account_id}/dust-sweep-settings")
