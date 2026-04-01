@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { Bot, AggregateValue } from '../../../types'
+import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
 import { Edit, Eye, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
@@ -30,7 +30,6 @@ interface BotListItemProps {
   portfolio?: any
   botsFetching?: boolean
   canWrite?: boolean
-  aggregateData?: AggregateValue
 }
 
 export const BotListItem = memo(function BotListItem({
@@ -55,7 +54,6 @@ export const BotListItem = memo(function BotListItem({
   setIndicatorLogsBotId,
   setScannerLogsBotId,
   canWrite = true,
-  aggregateData,
 }: BotListItemProps) {
   const { addToast } = useNotifications()
   const confirm = useConfirm()
@@ -224,41 +222,9 @@ export const BotListItem = memo(function BotListItem({
           (() => {
             const configuredMax = bot.strategy_config.max_concurrent_deals || bot.strategy_config.max_concurrent_positions
             const scEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
-            // Compute SC effective max client-side (same formula as the edit modal)
-            let scMax: number | null = null
-            if (scEnabled && aggregateData) {
-              const quoteCurrency = (bot.product_id || '').split('-')[1] || 'USDC'
-              const isFiat = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency.toUpperCase())
-              const aggregateValue = isFiat ? aggregateData.aggregate_usd_value : aggregateData.aggregate_btc_value
-              const budgetPct = (bot as any).budget_percentage as number | undefined
-              if (budgetPct && budgetPct > 0 && aggregateValue > 0) {
-                const totalBudget = aggregateValue * budgetPct / 100
-                const cfg = bot.strategy_config as any
-                const maxSO = cfg.max_safety_orders || 0
-                const volumeScale = cfg.safety_order_volume_scale || 1.0
-                const soType = cfg.safety_order_type || 'percentage_of_base'
-                let multiplier = 1.0
-                if (maxSO > 0) {
-                  if (soType === 'percentage_of_base') {
-                    const soPct = (cfg.safety_order_percentage || 50.0) / 100.0
-                    multiplier = volumeScale === 1.0
-                      ? 1.0 + soPct * maxSO
-                      : 1.0 + soPct * (Math.pow(volumeScale, maxSO) - 1) / (volumeScale - 1)
-                  } else if (soType === 'fixed' || soType === 'fixed_btc') {
-                    let total = 2.0
-                    if (maxSO > 1) {
-                      total += volumeScale === 1.0 ? (maxSO - 1) : volumeScale * (Math.pow(volumeScale, maxSO - 1) - 1) / (volumeScale - 1)
-                    }
-                    multiplier = total
-                  } else {
-                    multiplier = 1.0 + maxSO * 0.5
-                  }
-                }
-                const worstCaseMin = isFiat ? 1.0 : 0.0001
-                const softCeiling = Math.floor(totalBudget / (worstCaseMin * multiplier))
-                scMax = Math.max(1, Math.min(softCeiling, configuredMax))
-              }
-            }
+            // Use the backend-computed value — signal_processor writes it each evaluation cycle
+            // using real exchange minimums, so it's always accurate once evaluated.
+            const scMax = scEnabled ? ((bot as any).soft_ceiling_effective_max as number | null | undefined) ?? null : null
             const displayMax = scEnabled && scMax != null && scMax < configuredMax ? scMax : configuredMax
             return (
               <div className="whitespace-nowrap">
@@ -272,7 +238,7 @@ export const BotListItem = memo(function BotListItem({
                     </span>
                   )}
                   {scEnabled && (scMax == null || scMax >= configuredMax) && (
-                    <span className="text-purple-400" title="Soft ceiling enabled — budget supports full configured max">
+                    <span className="text-purple-400" title="Soft ceiling enabled — waiting for next evaluation cycle">
                       {' '}(SC)
                     </span>
                   )}

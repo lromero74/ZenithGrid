@@ -640,7 +640,6 @@ function Bots() {
                     setIndicatorLogsBotId={setIndicatorLogsBotId}
                     setScannerLogsBotId={setScannerLogsBotId}
                     portfolio={portfolio}
-                    aggregateData={aggregateData}
                     canWrite={canWriteBots && selectedAccount?.membership_role !== 'shadow'}
                   />
                 ))}

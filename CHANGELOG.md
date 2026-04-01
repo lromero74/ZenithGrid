@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.2] - 2026-04-01
+
+### Fixed
+- **Soft Ceiling display**: SC effective max now shows the correct number on the bot list. The budget calculation was silently ignoring the value of all open positions (returning only the free cash balance) because the raw SQL queries used unqualified table names that PostgreSQL couldn't resolve. Fixed by qualifying all table references with the `trading.` schema.
+- **Bot Budget Rebalancer rounding**: Sliders no longer save slightly off values (e.g. 32.53%/32.47% instead of 32.5%/32.5%). The distribution algorithm now corrects floating-point rounding error by assigning any remainder to the last adjusted slot.
+
 ## [v2.154.1] - 2026-03-31
 
 ### Changed

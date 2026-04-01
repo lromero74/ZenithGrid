@@ -356,7 +356,7 @@ async def calculate_aggregate_btc_value(
                 result = conn.execute(
                     text("""
                         SELECT p.product_id, p.total_base_acquired, p.average_buy_price
-                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        FROM trading.positions p JOIN trading.bots b ON p.bot_id = b.id
                         WHERE p.status = 'open' AND p.product_id LIKE '%-BTC' AND b.account_id = :acct_id
                     """),
                     {"acct_id": account_id}
@@ -365,7 +365,7 @@ async def calculate_aggregate_btc_value(
                 result = conn.execute(
                     text("""
                         SELECT product_id, total_base_acquired, average_buy_price
-                        FROM positions
+                        FROM trading.positions
                         WHERE status = 'open' AND product_id LIKE '%-BTC'
                     """)
                 )
@@ -601,7 +601,7 @@ async def calculate_market_budget(
                     text("""
                         SELECT p.product_id, p.total_base_acquired,
                                p.average_buy_price
-                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        FROM trading.positions p JOIN trading.bots b ON p.bot_id = b.id
                         WHERE p.status = 'open'
                           AND p.product_id LIKE :pattern
                           AND b.account_id = :acct_id
@@ -612,7 +612,7 @@ async def calculate_market_budget(
                 result = conn.execute(
                     text("""
                         SELECT product_id, total_base_acquired, average_buy_price
-                        FROM positions
+                        FROM trading.positions
                         WHERE status = 'open' AND product_id LIKE :pattern
                     """),
                     {"pattern": like_pattern}
@@ -630,7 +630,7 @@ async def calculate_market_budget(
                 base_result = conn.execute(
                     text("""
                         SELECT COALESCE(SUM(p.total_base_acquired), 0)
-                        FROM positions p JOIN bots b ON p.bot_id = b.id
+                        FROM trading.positions p JOIN trading.bots b ON p.bot_id = b.id
                         WHERE p.status = 'open'
                           AND p.product_id LIKE :pattern
                           AND b.account_id = :acct_id
@@ -641,7 +641,7 @@ async def calculate_market_budget(
                 base_result = conn.execute(
                     text("""
                         SELECT COALESCE(SUM(total_base_acquired), 0)
-                        FROM positions
+                        FROM trading.positions
                         WHERE status = 'open' AND product_id LIKE :pattern
                     """),
                     {"pattern": base_pattern}

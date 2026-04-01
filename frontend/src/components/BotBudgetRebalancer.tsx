@@ -178,18 +178,29 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
           )
         } else if (freeTotal > 0) {
           const scaleFactor = remainingForFree / freeTotal
+          // Round each free slot to 2dp, then fix rounding error on the last one
+          const rawValues = freeSlots.map((s) => Math.max(0, +(s.target_pct * scaleFactor).toFixed(2)))
+          const assignedSum = rawValues.reduce((a, b) => a + b, 0)
+          const remainder = +( remainingForFree - assignedSum).toFixed(2)
+          if (remainder !== 0) rawValues[rawValues.length - 1] = +(rawValues[rawValues.length - 1] + remainder).toFixed(2)
+          let freeIdx = 0
           newSlots = slots.map((s) => {
             if (s.bot_id === botId) return { ...s, target_pct: clamped }
             if (!s.enabled || s.locked) return s
-            return { ...s, target_pct: Math.max(0, +(s.target_pct * scaleFactor).toFixed(2)) }
+            return { ...s, target_pct: Math.max(0, rawValues[freeIdx++]) }
           })
         } else {
           // Free bots are all 0 — distribute remaining equally
-          const eachShare = remainingForFree / freeSlots.length
+          const eachShare = +(remainingForFree / freeSlots.length).toFixed(2)
+          const assignedSum = +(eachShare * freeSlots.length).toFixed(2)
+          const remainder = +(remainingForFree - assignedSum).toFixed(2)
+          let freeIdx = 0
           newSlots = slots.map((s) => {
             if (s.bot_id === botId) return { ...s, target_pct: clamped }
             if (!s.enabled || s.locked) return s
-            return { ...s, target_pct: +eachShare.toFixed(2) }
+            const extra = freeIdx === freeSlots.length - 1 ? remainder : 0
+            freeIdx++
+            return { ...s, target_pct: Math.max(0, +(eachShare + extra).toFixed(2)) }
           })
         }
 
