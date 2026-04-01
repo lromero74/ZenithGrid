@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.4] - 2026-03-31
+
+### Added
+- **Separate USDT Rebalancing**: USDT is now treated as a first-class citizen in the rebalancing system, separate from USDC. Users can now set independent target percentages and minimum balance reserves for both USDC and USDT.
+
+### Fixed
+- **Active Trades Column**: The "Active trades" column on the Bots page now correctly shows the Soft Ceiling (SC) preview (e.g., "13/24 (SC: Max 50)") even before the backend has performed its first evaluation cycle. It now uses the same calculation logic as the bot edit modal.
+- **Unified Calculation Logic**: Centralized DCA multiplier and budget calculations into a shared utility to ensure consistency between the bot list, edit modal, and strategy configuration sections.
+
 ## [v2.154.3] - 2026-04-01
 
 ### Fixed
