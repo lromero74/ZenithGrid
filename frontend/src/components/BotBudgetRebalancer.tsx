@@ -178,29 +178,31 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
           )
         } else if (freeTotal > 0) {
           const scaleFactor = remainingForFree / freeTotal
-          // Round each free slot to 2dp, then fix rounding error on the last one
-          const rawValues = freeSlots.map((s) => Math.max(0, +(s.target_pct * scaleFactor).toFixed(2)))
+          // Round to nearest 0.5 (slider step) so drift never accumulates
+          const snap = (v: number) => Math.round(v * 2) / 2
+          const rawValues = freeSlots.map((s) => Math.max(0, snap(s.target_pct * scaleFactor)))
           const assignedSum = rawValues.reduce((a, b) => a + b, 0)
-          const remainder = +( remainingForFree - assignedSum).toFixed(2)
-          if (remainder !== 0) rawValues[rawValues.length - 1] = +(rawValues[rawValues.length - 1] + remainder).toFixed(2)
+          const remainder = Math.round((remainingForFree - assignedSum) * 2) / 2
+          if (remainder !== 0) rawValues[rawValues.length - 1] = Math.max(0, rawValues[rawValues.length - 1] + remainder)
           let freeIdx = 0
           newSlots = slots.map((s) => {
             if (s.bot_id === botId) return { ...s, target_pct: clamped }
             if (!s.enabled || s.locked) return s
-            return { ...s, target_pct: Math.max(0, rawValues[freeIdx++]) }
+            return { ...s, target_pct: rawValues[freeIdx++] }
           })
         } else {
-          // Free bots are all 0 — distribute remaining equally
-          const eachShare = +(remainingForFree / freeSlots.length).toFixed(2)
-          const assignedSum = +(eachShare * freeSlots.length).toFixed(2)
-          const remainder = +(remainingForFree - assignedSum).toFixed(2)
+          // Free bots are all 0 — distribute remaining equally, snapped to 0.5 steps
+          const snap = (v: number) => Math.round(v * 2) / 2
+          const eachShare = snap(remainingForFree / freeSlots.length)
+          const assignedSum = eachShare * freeSlots.length
+          const remainder = Math.round((remainingForFree - assignedSum) * 2) / 2
           let freeIdx = 0
           newSlots = slots.map((s) => {
             if (s.bot_id === botId) return { ...s, target_pct: clamped }
             if (!s.enabled || s.locked) return s
             const extra = freeIdx === freeSlots.length - 1 ? remainder : 0
             freeIdx++
-            return { ...s, target_pct: Math.max(0, +(eachShare + extra).toFixed(2)) }
+            return { ...s, target_pct: Math.max(0, eachShare + extra) }
           })
         }
 
@@ -234,7 +236,8 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
         bots: g.slots.map((s) => ({
           bot_id: s.bot_id,
           enabled: s.enabled,
-          target_pct: s.target_pct,
+          // Snap to 0.5 step on save — cleans up any legacy sub-step values from DB
+          target_pct: Math.round(s.target_pct * 2) / 2,
         })),
       })
       addToast({

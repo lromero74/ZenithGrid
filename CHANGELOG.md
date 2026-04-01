@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.3] - 2026-04-01
+
+### Fixed
+- **Bot Budget Rebalancer rounding (again)**: Slider values now stay on exact 0.5% boundaries throughout — redistribution rounds to the nearest 0.5 instead of 0.01, so dragging one bot to 32.5% no longer causes adjacent bots to drift to 32.49%/15.01%. Saving also normalizes any legacy sub-step values already in the database to the nearest 0.5%.
+
 ## [v2.154.2] - 2026-04-01
 
 ### Fixed
