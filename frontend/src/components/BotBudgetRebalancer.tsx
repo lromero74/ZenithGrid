@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, Save, RefreshCw, Lock, LockOpen } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, Save, RefreshCw, Lock, LockOpen, Link, Link2 } from 'lucide-react'
 import {
   getRebalancerState,
   saveRebalancerGroup,
@@ -28,6 +28,7 @@ interface BotSlotState {
   enabled: boolean
   target_pct: number
   locked: boolean
+  bound: boolean
 }
 
 interface GroupState {
@@ -50,6 +51,7 @@ function buildSlots(group: RebalancerCurrencyGroup): BotSlotState[] {
     enabled: b.bot_rebalancer_enabled,
     target_pct: b.bot_rebalancer_target_pct,
     locked: false,
+    bound: false,
   }))
 }
 
@@ -128,7 +130,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
         return {
           ...g,
           slots: g.slots.map((s) =>
-            s.bot_id === botId ? { ...s, enabled: !s.enabled, locked: false } : s
+            s.bot_id === botId ? { ...s, enabled: !s.enabled, locked: false, bound: false } : s
           ),
         }
       })
@@ -142,7 +144,21 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
         return {
           ...g,
           slots: g.slots.map((s) =>
-            s.bot_id === botId ? { ...s, locked: !s.locked } : s
+            s.bot_id === botId ? { ...s, locked: !s.locked, bound: false } : s
+          ),
+        }
+      })
+    )
+  }
+
+  function toggleBotBound(groupIdx: number, botId: number) {
+    setGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== groupIdx) return g
+        return {
+          ...g,
+          slots: g.slots.map((s) =>
+            s.bot_id === botId ? { ...s, bound: !s.bound, locked: false } : s
           ),
         }
       })
@@ -156,52 +172,81 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
         const maxPct = g.max_total_pct
         const slots = g.slots
 
+        const currentSlot = slots.find((s) => s.bot_id === botId)
+        const isBound = currentSlot?.bound || false
+
+        // 1. Calculate the change for the dragged bot (and its bound partners)
         const clamped = Math.min(Math.max(0, newValue), maxPct)
 
-        // Locked enabled bots stay fixed; only unlocked enabled bots (excluding the dragged one) absorb change
-        const lockedTotal = slots
-          .filter((s) => s.enabled && s.locked && s.bot_id !== botId)
+        // Count how many bound bots we have (including this one)
+        const boundSlots = isBound ? slots.filter((s) => s.enabled && s.bound) : []
+        const numBound = boundSlots.length > 0 ? boundSlots.length : 1
+
+        // 2. Identify fixed (locked) and adjustable (unbound + unlocked) bots
+        // Bound bots are handled separately from "unlocked" redistribution logic
+        const fixedTotal = slots
+          .filter((s) => s.enabled && s.locked)
           .reduce((sum, s) => sum + s.target_pct, 0)
 
-        const freeSlots = slots.filter(
-          (s) => s.enabled && !s.locked && s.bot_id !== botId
+        const adjustableSlots = slots.filter(
+          (s) => s.enabled && !s.locked && (!isBound || !s.bound) && s.bot_id !== botId
         )
-        const freeTotal = freeSlots.reduce((sum, s) => sum + s.target_pct, 0)
-        const remainingForFree = Math.max(0, maxPct - clamped - lockedTotal)
+        const adjustableTotal = adjustableSlots.reduce((sum, s) => sum + s.target_pct, 0)
+
+        // 3. How much room is left after the dragged bot(s) and locked bots?
+        const totalForDraggedGroup = clamped * numBound
+        const remainingForAdjustable = Math.max(0, maxPct - totalForDraggedGroup - fixedTotal)
 
         let newSlots: BotSlotState[]
-        if (freeSlots.length === 0) {
-          // No free bots to absorb — just clamp to what locked + this allows
-          const maxAllowed = Math.max(0, maxPct - lockedTotal)
-          newSlots = slots.map((s) =>
-            s.bot_id === botId ? { ...s, target_pct: Math.min(clamped, maxAllowed) } : s
-          )
-        } else if (freeTotal > 0) {
-          const scaleFactor = remainingForFree / freeTotal
-          // Round to nearest 0.5 (slider step) so drift never accumulates
-          const snap = (v: number) => Math.round(v * 2) / 2
-          const rawValues = freeSlots.map((s) => Math.max(0, snap(s.target_pct * scaleFactor)))
-          const assignedSum = rawValues.reduce((a, b) => a + b, 0)
-          const remainder = Math.round((remainingForFree - assignedSum) * 2) / 2
-          if (remainder !== 0) rawValues[rawValues.length - 1] = Math.max(0, rawValues[rawValues.length - 1] + remainder)
-          let freeIdx = 0
+        const snap = (v: number) => Math.round(v * 2) / 2
+
+        if (adjustableSlots.length === 0) {
+          // No free bots to absorb — must clamp the dragged group to what's left
+          const maxAllowedForGroup = Math.max(0, maxPct - fixedTotal)
+          const maxAllowedPerBot = snap(maxAllowedForGroup / numBound)
+          const finalValue = Math.min(clamped, maxAllowedPerBot)
+
           newSlots = slots.map((s) => {
-            if (s.bot_id === botId) return { ...s, target_pct: clamped }
+            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
+              return { ...s, target_pct: finalValue }
+            }
+            return s
+          })
+        } else if (adjustableTotal > 0) {
+          const scaleFactor = remainingForAdjustable / adjustableTotal
+          const rawValues = adjustableSlots.map((s) => Math.max(0, snap(s.target_pct * scaleFactor)))
+          const assignedSum = rawValues.reduce((a, b) => a + b, 0)
+          const remainder = snap(remainingForAdjustable - assignedSum)
+
+          if (remainder !== 0) {
+            rawValues[rawValues.length - 1] = Math.max(0, rawValues[rawValues.length - 1] + remainder)
+          }
+
+          let adjIdx = 0
+          newSlots = slots.map((s) => {
+            // Dragged bot or its bound partners
+            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
+              return { ...s, target_pct: clamped }
+            }
+            // Locked bots stay fixed
             if (!s.enabled || s.locked) return s
-            return { ...s, target_pct: rawValues[freeIdx++] }
+            // Adjustable bots absorb the rest
+            return { ...s, target_pct: rawValues[adjIdx++] }
           })
         } else {
-          // Free bots are all 0 — distribute remaining equally, snapped to 0.5 steps
-          const snap = (v: number) => Math.round(v * 2) / 2
-          const eachShare = snap(remainingForFree / freeSlots.length)
-          const assignedSum = eachShare * freeSlots.length
-          const remainder = Math.round((remainingForFree - assignedSum) * 2) / 2
-          let freeIdx = 0
+          // Adjustable bots were all 0 — distribute remaining equally
+          const eachShare = snap(remainingForAdjustable / adjustableSlots.length)
+          const assignedSum = eachShare * adjustableSlots.length
+          const remainder = snap(remainingForAdjustable - assignedSum)
+
+          let adjIdx = 0
           newSlots = slots.map((s) => {
-            if (s.bot_id === botId) return { ...s, target_pct: clamped }
+            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
+              return { ...s, target_pct: clamped }
+            }
             if (!s.enabled || s.locked) return s
-            const extra = freeIdx === freeSlots.length - 1 ? remainder : 0
-            freeIdx++
+            const extra = adjIdx === adjustableSlots.length - 1 ? remainder : 0
+            adjIdx++
             return { ...s, target_pct: Math.max(0, eachShare + extra) }
           })
         }
@@ -315,6 +360,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
               group.slots.find((s) => s.bot_id === b.id)?.enabled
           )
           const anyLocked = group.slots.some((s) => s.enabled && s.locked)
+          const anyBound = group.slots.some((s) => s.enabled && s.bound)
 
           return (
             <div
@@ -343,7 +389,13 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                       Pinned
                     </span>
                   )}
+                  {anyBound && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-900/40 text-indigo-400 border border-indigo-700/50">
+                      Bound
+                    </span>
+                  )}
                 </div>
+
                 <div className="flex items-center gap-3">
                   <span
                     className={`text-sm font-mono ${
@@ -457,6 +509,8 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                           className={`flex flex-col gap-1.5 p-3 rounded border transition-colors ${
                             slot.locked
                               ? 'bg-blue-900/10 border-blue-700/40'
+                              : slot.bound
+                              ? 'bg-indigo-900/10 border-indigo-700/40'
                               : 'bg-slate-700/50 border-slate-600/50'
                           }`}
                         >
@@ -515,25 +569,44 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                                   ? 'opacity-40 cursor-not-allowed'
                                   : slot.locked
                                   ? 'opacity-60 cursor-not-allowed accent-blue-500'
+                                  : slot.bound
+                                  ? 'cursor-pointer accent-indigo-500'
                                   : 'cursor-pointer accent-emerald-500'
                               }`}
                             />
                             {slot.enabled && (
-                              <button
-                                onClick={() => toggleBotLocked(groupIdx, bot.id)}
-                                title={slot.locked ? 'Pinned — click to unpin' : 'Click to pin this allocation'}
-                                className={`shrink-0 p-1 rounded transition-colors ${
-                                  slot.locked
-                                    ? 'text-blue-400 hover:text-blue-300'
-                                    : 'text-slate-500 hover:text-slate-300'
-                                }`}
-                              >
-                                {slot.locked ? (
-                                  <Lock className="w-3.5 h-3.5" />
-                                ) : (
-                                  <LockOpen className="w-3.5 h-3.5" />
-                                )}
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => toggleBotBound(groupIdx, bot.id)}
+                                  title={slot.bound ? 'Bound — click to unbind' : 'Click to bind this slider with others'}
+                                  className={`p-1 rounded transition-colors ${
+                                    slot.bound
+                                      ? 'text-indigo-400 hover:text-indigo-300'
+                                      : 'text-slate-500 hover:text-slate-300'
+                                  }`}
+                                >
+                                  {slot.bound ? (
+                                    <Link className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Link2 className="w-3.5 h-3.5 opacity-60" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => toggleBotLocked(groupIdx, bot.id)}
+                                  title={slot.locked ? 'Pinned — click to unpin' : 'Click to pin this allocation'}
+                                  className={`p-1 rounded transition-colors ${
+                                    slot.locked
+                                      ? 'text-blue-400 hover:text-blue-300'
+                                      : 'text-slate-500 hover:text-slate-300'
+                                  }`}
+                                >
+                                  {slot.locked ? (
+                                    <Lock className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <LockOpen className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
