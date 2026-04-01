@@ -5,6 +5,10 @@ Separates USDT from USDC in rebalancing logic, treating it as its own
 asset with separate targets and reserves.
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from migrations.db_utils import get_migration_connection, safe_add_column
 
 
