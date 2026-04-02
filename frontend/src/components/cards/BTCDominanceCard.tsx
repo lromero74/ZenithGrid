@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { PieChart } from 'lucide-react'
-import { Sparkline } from '../Sparkline'
+import { Sparkline } from '../trading/Sparkline'
 import { InfoTooltip } from './InfoTooltip'
 import { CardLoading, CardError } from './CardStates'
 import type { BTCDominanceResponse } from '../../types'

@@ -3,7 +3,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { botsApi, templatesApi, accountApi, rebalanceApi, authFetch, api } from '../../../services/api'
 import type { Bot } from '../../../types'
 import { convertProductsToTradingPairs, DEFAULT_TRADING_PAIRS, type TradingPair } from '../../../components/bots'
-import { TimeRange } from '../../../components/PnLChart'
+import { TimeRange } from '../../../components/trading/PnLChart'
 
 interface UseBotsDataProps {
   selectedAccount: { id: number } | null

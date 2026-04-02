@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { TrendingUp } from 'lucide-react'
-import { Sparkline } from '../Sparkline'
+import { Sparkline } from '../trading/Sparkline'
 import { InfoTooltip } from './InfoTooltip'
 import { CardLoading, CardError } from './CardStates'
 import type { AltseasonIndexResponse } from '../../types'

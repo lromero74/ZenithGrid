@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Newspaper, RefreshCw, Clock, Video, Settings } from 'lucide-react'
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'

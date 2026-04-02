@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Gauge } from 'lucide-react'
-import { Sparkline } from '../Sparkline'
+import { Sparkline } from '../trading/Sparkline'
 import { getFearGreedColor } from '../../utils/marketSentiment'
 import { InfoTooltip } from './InfoTooltip'
 import { CardLoading, CardError } from './CardStates'

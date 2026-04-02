@@ -4,11 +4,11 @@ import { Bot } from '../types'
 import { Plus, Activity, Building2, Wallet, Upload, ClipboardPaste, X, CheckCircle, AlertCircle } from 'lucide-react'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
-import AIBotLogs from '../components/AIBotLogs'
+import AIBotLogs from '../components/settings/AIBotLogs'
 import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
-import { PnLChart, TimeRange } from '../components/PnLChart'
-import { SeasonalityToggle } from '../components/SeasonalityToggle'
+import { PnLChart, TimeRange } from '../components/trading/PnLChart'
+import { SeasonalityToggle } from '../components/settings/SeasonalityToggle'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import {
   type BotFormData,
@@ -25,7 +25,7 @@ import { SampleBotsSection } from './bots/components/SampleBotsSection'
 import type { SampleBot } from './bots/data/sampleBots'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
-import { BotBudgetRebalancer } from '../components/BotBudgetRebalancer'
+import { BotBudgetRebalancer } from '../components/account/BotBudgetRebalancer'
 
 function Bots() {
   const location = useLocation()

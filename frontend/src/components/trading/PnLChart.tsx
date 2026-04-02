@@ -1,0 +1,1086 @@
+import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
+import { TrendingUp } from 'lucide-react'
+import { LoadingSpinner } from '../shared/LoadingSpinner'
+import { authFetch } from '../../services/api'
+
+interface PnLDataPoint {
+  timestamp: string
+  date: string
+  cumulative_pnl_usd: number
+  cumulative_pnl_btc: number
+  profit_usd: number
+  profit_btc: number
+  product_id?: string
+  bot_id?: number
+  bot_name?: string
+}
+
+interface DailyPnL {
+  date: string
+  daily_pnl_usd: number
+  daily_pnl_btc: number
+  cumulative_pnl_usd: number
+  cumulative_pnl_btc: number
+}
+
+interface PairPnL {
+  pair: string
+  total_pnl_usd: number
+  total_pnl_btc: number
+}
+
+interface MostProfitableBot {
+  bot_id: number
+  bot_name: string
+  total_pnl_usd: number
+  total_pnl_btc: number
+}
+
+interface PnLTimeSeriesData {
+  summary: PnLDataPoint[]
+  by_day: DailyPnL[]
+  by_pair: PairPnL[]
+  active_trades: number
+  most_profitable_bot: MostProfitableBot | null
+}
+
+export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
+type TabType = 'summary' | 'by_day' | 'by_pair'
+type CurrencyDisplay = 'usd' | 'btc' | 'both'
+
+interface PnLChartProps {
+  accountId?: number
+  onTimeRangeChange?: (timeRange: TimeRange) => void
+}
+
+// Custom tooltip component
+const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay }: any) => {
+  if (!active || !payload || !payload.length) return null
+
+  const entry = payload[0].payload
+  const valueUSD = entry.daily_pnl_usd || entry.total_pnl_usd || 0
+  const valueBTC = entry.daily_pnl_btc || entry.total_pnl_btc || 0
+  const isProfit = valueUSD >= 0
+
+  return (
+    <div className="bg-slate-800 border-2 border-slate-600 rounded-lg p-3 shadow-lg">
+      <div className="text-slate-300 text-sm mb-2">
+        {labelFormatter ? labelFormatter(label) : label}
+      </div>
+      {currencyDisplay === 'both' ? (
+        <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+          {valueBTC.toFixed(6)} BTC / ${valueUSD.toFixed(2)}
+        </div>
+      ) : currencyDisplay === 'btc' ? (
+        <div className={`text-base font-semibold ${valueBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {valueBTC.toFixed(6)} BTC
+        </div>
+      ) : (
+        <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+          ${valueUSD.toFixed(2)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('summary')
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    try { return (localStorage.getItem('zenith-bots-projection-basis') as TimeRange) || 'all' } catch { return 'all' }
+  })
+  const [currencyDisplay, setCurrencyDisplay] = useState<CurrencyDisplay>('both')
+  const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+  const btcSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const usdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+
+  // Defer chart mount by two frames so ResponsiveContainer measures a valid container size
+  const [chartMounted, setChartMounted] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { if (!cancelled) setChartMounted(true) })
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Notify parent when timeRange changes (skip initial mount to avoid stomping localStorage)
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    if (onTimeRangeChange) {
+      onTimeRangeChange(timeRange)
+    }
+  }, [timeRange, onTimeRangeChange])
+
+  // Fetch P&L data (filtered by account)
+  const { data, isLoading } = useQuery<PnLTimeSeriesData>({
+    queryKey: ['pnl-timeseries', accountId],
+    queryFn: async () => {
+      const url = accountId
+        ? `/api/positions/pnl-timeseries?account_id=${accountId}`
+        : '/api/positions/pnl-timeseries'
+      const response = await authFetch(url)
+      if (!response.ok) throw new Error('Failed to fetch P&L data')
+      return response.json()
+    },
+    refetchInterval: 60000, // Refresh every minute
+  })
+
+  // Calculate which time range buttons should be enabled based on data span
+  const getEnabledTimeRanges = (): Set<TimeRange> => {
+    const enabled = new Set<TimeRange>(['all']) // 'all' is always enabled
+
+    if (!data || data.summary.length === 0) {
+      return enabled
+    }
+
+    // Find the earliest date in the data
+    const dates = data.summary.map(d => new Date(d.date).getTime())
+    const earliestDate = new Date(Math.min(...dates))
+    const now = new Date()
+    const dataSpanDays = Math.ceil((now.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    // Time range thresholds in days (ordered smallest to largest)
+    const thresholds: { range: TimeRange; days: number }[] = [
+      { range: '7d', days: 7 },
+      { range: '14d', days: 14 },
+      { range: '30d', days: 30 },
+      { range: '3m', days: 90 },
+      { range: '6m', days: 180 },
+      { range: '1y', days: 365 },
+    ]
+
+    // Find the first threshold that covers all data
+    let firstCoveringDays = Infinity
+    for (const { days } of thresholds) {
+      if (days >= dataSpanDays) {
+        firstCoveringDays = days
+        break
+      }
+    }
+
+    // Enable all buttons up to and including the first one that shows all data
+    // Disable buttons beyond that (they'd show the same as the covering one)
+    for (const { range, days } of thresholds) {
+      if (days <= firstCoveringDays) {
+        enabled.add(range)
+      }
+    }
+
+    return enabled
+  }
+
+  const enabledTimeRanges = getEnabledTimeRanges()
+
+  // Filter data by time range
+  const getFilteredData = () => {
+    if (!data) return []
+
+    const now = new Date()
+    const cutoffDate = new Date()
+
+    switch (timeRange) {
+      case '7d':
+        cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '14d':
+        cutoffDate.setDate(now.getDate() - 14)
+        break
+      case '30d':
+        cutoffDate.setDate(now.getDate() - 30)
+        break
+      case '3m':
+        cutoffDate.setMonth(now.getMonth() - 3)
+        break
+      case '6m':
+        cutoffDate.setMonth(now.getMonth() - 6)
+        break
+      case '1y':
+        cutoffDate.setFullYear(now.getFullYear() - 1)
+        break
+      case 'all':
+        return activeTab === 'summary' ? data.summary : activeTab === 'by_day' ? data.by_day : []
+    }
+
+    const filterByDate = (item: PnLDataPoint | DailyPnL) => {
+      const itemDate = new Date(item.date)
+      return itemDate >= cutoffDate
+    }
+
+    if (activeTab === 'summary') {
+      return data.summary.filter(filterByDate)
+    } else if (activeTab === 'by_day') {
+      return data.by_day.filter(filterByDate)
+    }
+
+    return []
+  }
+
+  // Helper to get YYYY-MM-DD string from a Date (using local date)
+  const toDateStr = (d: Date): string => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  // Helper to add days to a YYYY-MM-DD string
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr + 'T12:00:00Z') // Use noon UTC to avoid DST issues
+    d.setUTCDate(d.getUTCDate() + days)
+    return d.toISOString().split('T')[0]
+  }
+
+  // Get by_day data with all dates filled in (no gaps)
+  const getFilledByDayData = (): DailyPnL[] => {
+    if (!data || data.by_day.length === 0) return []
+
+    // Get today's date as YYYY-MM-DD string (local date)
+    const todayStr = toDateStr(new Date())
+
+    // Calculate cutoff date string based on time range
+    let cutoffStr: string
+    const now = new Date()
+    switch (timeRange) {
+      case '7d':
+        now.setDate(now.getDate() - 7)
+        cutoffStr = toDateStr(now)
+        break
+      case '14d':
+        now.setDate(now.getDate() - 14)
+        cutoffStr = toDateStr(now)
+        break
+      case '30d':
+        now.setDate(now.getDate() - 30)
+        cutoffStr = toDateStr(now)
+        break
+      case '3m':
+        now.setMonth(now.getMonth() - 3)
+        cutoffStr = toDateStr(now)
+        break
+      case '6m':
+        now.setMonth(now.getMonth() - 6)
+        cutoffStr = toDateStr(now)
+        break
+      case '1y':
+        now.setFullYear(now.getFullYear() - 1)
+        cutoffStr = toDateStr(now)
+        break
+      case 'all':
+      default:
+        cutoffStr = '1970-01-01'
+        break
+    }
+
+    // Build a map of existing daily data
+    const dailyMap = new Map<string, DailyPnL>()
+    data.by_day.forEach((day) => {
+      dailyMap.set(day.date, day)
+    })
+
+    // Get date range - from first trade (or cutoff) to today
+    const sortedDates = data.by_day.map(d => d.date).sort()
+    if (sortedDates.length === 0) return []
+
+    // Use string comparison for dates (YYYY-MM-DD format sorts correctly)
+    const firstDateStr = sortedDates[0] > cutoffStr ? sortedDates[0] : cutoffStr
+    const lastDateStr = sortedDates[sortedDates.length - 1] > todayStr ? sortedDates[sortedDates.length - 1] : todayStr
+
+    // Fill in all dates from first to last
+    const filledData: DailyPnL[] = []
+    let currentDateStr = firstDateStr
+    let runningCumulativePnL = 0
+
+    // Find cumulative PnL up to cutoff if not starting from beginning
+    if (timeRange !== 'all') {
+      for (const day of data.by_day) {
+        if (day.date < cutoffStr) {
+          runningCumulativePnL = day.cumulative_pnl_usd
+        }
+      }
+    }
+
+    while (currentDateStr <= lastDateStr) {
+      const existingData = dailyMap.get(currentDateStr)
+
+      if (existingData && existingData.date >= cutoffStr) {
+        runningCumulativePnL = existingData.cumulative_pnl_usd
+        filledData.push(existingData)
+      } else {
+        // No trade on this day - show 0 daily PnL, maintain cumulative
+        filledData.push({
+          date: currentDateStr,
+          daily_pnl_usd: 0,
+          daily_pnl_btc: 0,
+          cumulative_pnl_usd: runningCumulativePnL,
+          cumulative_pnl_btc: 0
+        })
+      }
+      currentDateStr = addDays(currentDateStr, 1)
+    }
+
+    return filledData
+  }
+
+  // Calculate stats - always use summary data for stats cards (tab-independent)
+  const calculateStats = () => {
+    if (!data || data.summary.length === 0) {
+      return {
+        totalPnLUSD: 0,
+        totalPnLBTC: 0,
+        closedTrades: 0,
+        bestPair: null as PairPnL | null,
+        worstPair: null as PairPnL | null,
+        filteredByPair: [] as PairPnL[],
+        filteredMostProfitableBot: null as MostProfitableBot | null
+      }
+    }
+
+    // Calculate cutoff date based on time range
+    const now = new Date()
+    const cutoffDate = new Date()
+    switch (timeRange) {
+      case '7d':
+        cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '14d':
+        cutoffDate.setDate(now.getDate() - 14)
+        break
+      case '30d':
+        cutoffDate.setDate(now.getDate() - 30)
+        break
+      case '3m':
+        cutoffDate.setMonth(now.getMonth() - 3)
+        break
+      case '6m':
+        cutoffDate.setMonth(now.getMonth() - 6)
+        break
+      case 'all':
+        cutoffDate.setTime(0) // Include all
+        break
+    }
+
+    // Always use summary data for stats (one entry per position, not per day/pair)
+    // This ensures stats are consistent regardless of which tab is active
+    const filteredSummary = data.summary.filter((item) => new Date(item.date) >= cutoffDate)
+
+    // Sum up profits for positions within the selected time range (not cumulative_pnl which is all-time running total)
+    const totalPnLUSD = filteredSummary.reduce((sum, item) => sum + item.profit_usd, 0)
+    const totalPnLBTC = filteredSummary.reduce((sum, item) => sum + item.profit_btc, 0)
+    const closedTrades = filteredSummary.length
+
+    // Calculate by_pair from filtered summary data (respects time range)
+    const pairPnLMap = new Map<string, { usd: number; btc: number }>()
+    filteredSummary.forEach((item) => {
+      if (item.product_id) {
+        const current = pairPnLMap.get(item.product_id) || { usd: 0, btc: 0 }
+        current.usd += item.profit_usd
+        current.btc += item.profit_btc
+        pairPnLMap.set(item.product_id, current)
+      }
+    })
+    const filteredByPair: PairPnL[] = Array.from(pairPnLMap.entries())
+      .map(([pair, pnl]) => ({
+        pair,
+        total_pnl_usd: Math.round(pnl.usd * 100) / 100,
+        total_pnl_btc: Math.round(pnl.btc * 100000000) / 100000000
+      }))
+      .sort((a, b) => b.total_pnl_usd - a.total_pnl_usd)
+
+    const bestPair = filteredByPair.length > 0 ? filteredByPair[0] : null
+    const worstPair = filteredByPair.length > 0 ? filteredByPair[filteredByPair.length - 1] : null
+
+    // Calculate most profitable bot from filtered summary (respects time range)
+    const botPnLMap = new Map<number, { total_pnl_usd: number; total_pnl_btc: number; bot_name: string }>()
+    filteredSummary.forEach((item) => {
+      if (item.bot_id) {
+        const current = botPnLMap.get(item.bot_id) || {
+          total_pnl_usd: 0,
+          total_pnl_btc: 0,
+          bot_name: item.bot_name || 'Unknown'
+        }
+        current.total_pnl_usd += item.profit_usd
+        current.total_pnl_btc += item.profit_btc
+        botPnLMap.set(item.bot_id, current)
+      }
+    })
+    const sortedBots = Array.from(botPnLMap.entries())
+      .map(([bot_id, { total_pnl_usd, total_pnl_btc, bot_name }]) => ({
+        bot_id,
+        bot_name,
+        total_pnl_usd: Math.round(total_pnl_usd * 100) / 100,
+        total_pnl_btc: Math.round(total_pnl_btc * 100000000) / 100000000
+      }))
+      .sort((a, b) => b.total_pnl_usd - a.total_pnl_usd)
+    const filteredMostProfitableBot = sortedBots.length > 0 ? sortedBots[0] : null
+
+    return { totalPnLUSD, totalPnLBTC, closedTrades, bestPair, worstPair, filteredByPair, filteredMostProfitableBot }
+  }
+
+  // Initialize chart - recreate when switching to summary tab or currency display changes
+  useEffect(() => {
+    if (!chartContainerRef.current || !data || activeTab !== 'summary') return
+
+    // Clean up existing chart if any
+    if (chartRef.current) {
+      try {
+        chartRef.current.remove()
+      } catch {
+        // Chart already disposed, ignore
+      }
+      chartRef.current = null
+      btcSeriesRef.current = null
+      usdSeriesRef.current = null
+    }
+
+    const chart = createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: chartContainerRef.current.clientHeight,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0f172a' },
+        textColor: '#94a3b8',
+      },
+      grid: {
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' },
+      },
+      crosshair: {
+        mode: 1,
+      },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        borderColor: '#1e293b',
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
+      rightPriceScale: {
+        visible: currencyDisplay === 'both' || currencyDisplay === 'usd',
+        borderColor: '#1e293b',
+      },
+      leftPriceScale: {
+        visible: currencyDisplay === 'both' || currencyDisplay === 'btc',
+        borderColor: '#1e293b',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      },
+    })
+
+    chartRef.current = chart
+
+    // Add BTC series if showing BTC or both
+    if (currencyDisplay === 'btc' || currencyDisplay === 'both') {
+      const btcSeries = chart.addLineSeries({
+        color: '#ff8800',
+        lineWidth: 2,
+        priceScaleId: 'left',
+        title: 'BTC',
+        priceFormat: {
+          type: 'custom',
+          minMove: 0.00000001,
+          formatter: (price: number) => price.toFixed(8),
+        },
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      btcSeriesRef.current = btcSeries
+    }
+
+    // Add USD series if showing USD or both
+    if (currencyDisplay === 'usd' || currencyDisplay === 'both') {
+      const usdSeries = chart.addLineSeries({
+        color: '#4ade80',
+        lineWidth: 2,
+        priceScaleId: 'right',
+        title: 'USD',
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      usdSeriesRef.current = usdSeries
+    }
+
+    // Handle resize
+    const handleResize = () => {
+      if (chartContainerRef.current && chart) {
+        chart.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        })
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      try {
+        if (chart) {
+          chart.remove()
+        }
+      } catch {
+        // Chart already disposed, ignore
+      }
+    }
+  }, [data, activeTab, currencyDisplay])
+
+  // Update chart data
+  useEffect(() => {
+    if (!data || activeTab !== 'summary') return
+    if (!btcSeriesRef.current && !usdSeriesRef.current) return
+
+    const filteredData = getFilteredData() as PnLDataPoint[]
+    if (filteredData.length === 0) return
+
+    // First, aggregate profits by day (multiple positions can close on same day)
+    const dailyProfitsUSD = new Map<string, number>()
+    const dailyProfitsBTC = new Map<string, number>()
+    filteredData.forEach((point) => {
+      const currentUSD = dailyProfitsUSD.get(point.date) || 0
+      const currentBTC = dailyProfitsBTC.get(point.date) || 0
+      dailyProfitsUSD.set(point.date, currentUSD + point.profit_usd)
+      dailyProfitsBTC.set(point.date, currentBTC + point.profit_btc)
+    })
+
+    // Calculate start date based on timeframe (show full window, not just from first trade)
+    const todayStr = toDateStr(new Date())
+    let firstDateStr: string
+
+    if (timeRange === 'all') {
+      // For 'all', use first trade date
+      const sortedDates = Array.from(dailyProfitsUSD.keys()).sort()
+      if (sortedDates.length === 0) return
+      firstDateStr = sortedDates[0]
+    } else {
+      // For specific timeframes, calculate start date from today
+      const now = new Date()
+      const startDate = new Date()
+
+      switch (timeRange) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7)
+          break
+        case '14d':
+          startDate.setDate(now.getDate() - 14)
+          break
+        case '30d':
+          startDate.setDate(now.getDate() - 30)
+          break
+        case '3m':
+          startDate.setMonth(now.getMonth() - 3)
+          break
+        case '6m':
+          startDate.setMonth(now.getMonth() - 6)
+          break
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1)
+          break
+      }
+
+      firstDateStr = toDateStr(startDate)
+    }
+
+    const lastDateStr = todayStr // Always end at today
+
+    // Fill in all dates from first to last (including days with no trades)
+    const allDates: string[] = []
+    let currentDateStr = firstDateStr
+    while (currentDateStr <= lastDateStr) {
+      allDates.push(currentDateStr)
+      currentDateStr = addDays(currentDateStr, 1)
+    }
+
+    // For non-"all" timeframes, start at 0 to show relative gains/losses within the window
+    // For "all", start at 0 naturally (no prior data)
+    let cumulativePnLUSD = 0
+    let cumulativePnLBTC = 0
+
+    // Build chart data with all dates, using 0 profit for missing days
+    const chartDataUSD = allDates.map((date) => {
+      const dailyProfit = dailyProfitsUSD.get(date) || 0
+      cumulativePnLUSD += dailyProfit
+      const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
+      return { time: timestamp, value: Math.round(cumulativePnLUSD * 100) / 100 }
+    })
+
+    const chartDataBTC = allDates.map((date) => {
+      const dailyProfit = dailyProfitsBTC.get(date) || 0
+      cumulativePnLBTC += dailyProfit
+      const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
+      return { time: timestamp, value: Math.round(cumulativePnLBTC * 100000000) / 100000000 }
+    })
+
+    // Update series data
+    if (btcSeriesRef.current) {
+      btcSeriesRef.current.setData(chartDataBTC)
+    }
+    if (usdSeriesRef.current) {
+      usdSeriesRef.current.setData(chartDataUSD)
+    }
+
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent()
+    }
+  }, [data, activeTab, timeRange, currencyDisplay])
+
+  const stats = calculateStats()
+
+  if (isLoading) {
+    return (
+      <div className="bg-slate-900 rounded-lg p-6">
+        <LoadingSpinner size="lg" text="Loading P&L data..." />
+      </div>
+    )
+  }
+
+  if (!data || data.summary.length === 0) {
+    return (
+      <div className="bg-slate-900 rounded-lg p-6">
+        <div className="text-center text-slate-400 py-12">
+          <TrendingUp className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+          <p>No closed positions yet</p>
+          <p className="text-sm mt-2">P&L chart will appear after your first closed trade</p>
+        </div>
+      </div>
+    )
+  }
+
+  const isProfit = stats.totalPnLUSD >= 0
+
+  return (
+    <div className="bg-slate-900 rounded-lg overflow-hidden">
+      {/* Time Range Pills */}
+      <div className="p-4 sm:p-6 border-b border-slate-800">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex gap-2 flex-wrap">
+            <span className="text-sm text-slate-400 self-center mr-2">Display:</span>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('both')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'both'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              Both
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('btc')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'btc'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              BTC
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('usd')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'usd'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              USD
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setTimeRange('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === 'all'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('7d')}
+            disabled={!enabledTimeRanges.has('7d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('7d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '7d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            7 days
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('14d')}
+            disabled={!enabledTimeRanges.has('14d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('14d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '14d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            14 days
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('30d')}
+            disabled={!enabledTimeRanges.has('30d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('30d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '30d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            30 days
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('3m')}
+            disabled={!enabledTimeRanges.has('3m')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('3m')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '3m'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            3 months
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('6m')}
+            disabled={!enabledTimeRanges.has('6m')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('6m')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '6m'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            6 months
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimeRange('1y')}
+            disabled={!enabledTimeRanges.has('1y')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('1y')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '1y'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            1 year
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards + Chart */}
+      <div className="p-4 sm:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6">
+        {/* Left sidebar - Stats Cards (horizontal grid on mobile, vertical sidebar on lg+) */}
+        <div className="grid grid-cols-2 lg:flex lg:flex-col gap-3 lg:w-72 lg:flex-shrink-0">
+          {/* Total P&L Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">PnL</div>
+            {currencyDisplay === 'both' ? (
+              <div className={`text-lg font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.totalPnLBTC >= 0 ? '' : ''}{stats.totalPnLBTC.toFixed(8)} BTC / ${stats.totalPnLUSD.toFixed(2)}
+              </div>
+            ) : currencyDisplay === 'btc' ? (
+              <div className={`text-2xl font-bold mb-2 ${stats.totalPnLBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.totalPnLBTC.toFixed(8)} BTC
+              </div>
+            ) : (
+              <div className={`text-2xl font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                ${stats.totalPnLUSD.toFixed(2)}
+              </div>
+            )}
+          </div>
+
+          {/* Closed Trades Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">Closed trades</div>
+            <div className="text-3xl font-bold text-white mb-1">{stats.closedTrades}</div>
+            <div className="text-xs text-slate-500">Active trades: {data.active_trades}</div>
+          </div>
+
+          {/* Best Pairs Card (filtered by time range) */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-3">Best pairs</div>
+            <div className="space-y-2">
+              {stats.filteredByPair.slice(0, 3).map((pair, index) => (
+                <div key={pair.pair} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">#{index + 1}</span>
+                  <span className="text-sm text-white flex-1">{pair.pair}</span>
+                  {currencyDisplay === 'both' ? (
+                    <span className={`text-xs font-semibold ${pair.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pair.total_pnl_btc.toFixed(6)} BTC / ${pair.total_pnl_usd.toFixed(2)}
+                    </span>
+                  ) : currencyDisplay === 'btc' ? (
+                    <span className={`text-sm font-semibold ${pair.total_pnl_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pair.total_pnl_btc.toFixed(6)} BTC
+                    </span>
+                  ) : (
+                    <span className={`text-sm font-semibold ${pair.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${pair.total_pnl_usd.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Most Profitable Bot Card (filtered by time range) */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">Most profitable bot</div>
+            {stats.filteredMostProfitableBot ? (
+              <>
+                {currencyDisplay === 'both' ? (
+                  <div className={`text-lg font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.filteredMostProfitableBot.total_pnl_btc.toFixed(6)} BTC / ${stats.filteredMostProfitableBot.total_pnl_usd.toFixed(2)}
+                  </div>
+                ) : currencyDisplay === 'btc' ? (
+                  <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.filteredMostProfitableBot.total_pnl_btc.toFixed(6)} BTC
+                  </div>
+                ) : (
+                  <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${stats.filteredMostProfitableBot.total_pnl_usd.toFixed(2)}
+                  </div>
+                )}
+                <div className="text-xs text-blue-400 truncate">{stats.filteredMostProfitableBot.bot_name}</div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500">No data</div>
+            )}
+          </div>
+        </div>
+
+        {/* Right side - Chart Type Tabs + Chart */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Chart Type Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('summary')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'summary'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Summary PnL
+            </button>
+            <button
+              onClick={() => setActiveTab('by_day')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'by_day'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              PnL by day
+            </button>
+            <button
+              onClick={() => setActiveTab('by_pair')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'by_pair'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              PnL by pair
+            </button>
+          </div>
+
+          {/* Chart Container — explicit height needed for ResponsiveContainer */}
+          <div className="flex-1 h-[300px]">
+        {activeTab === 'by_day' ? (
+          // Daily P&L bar chart - uses filled data to show all dates including days with no trades
+          chartMounted ? <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={getFilledByDayData()} margin={{ top: 5, right: 30, left: 20, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickFormatter={(date) => {
+                  const d = new Date(date)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
+                }}
+              />
+              {currencyDisplay === 'both' ? (
+                <>
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => value.toFixed(6)}
+                    label={{ value: 'BTC', angle: -90, position: 'insideLeft', fill: '#ff8800' }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => `$${value}`}
+                    label={{ value: 'USD', angle: 90, position: 'insideRight', fill: '#4ade80' }}
+                  />
+                </>
+              ) : (
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
+                />
+              )}
+              <Tooltip
+                content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(date: string) => new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} />}
+                cursor={false}
+              />
+              {currencyDisplay === 'both' && (
+                <Legend
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="square"
+                  formatter={(value) => <span style={{ color: '#94a3b8' }}>{value}</span>}
+                />
+              )}
+              {currencyDisplay === 'both' ? (
+                <>
+                  <Bar yAxisId="left" dataKey="daily_pnl_btc" name="BTC" radius={[4, 4, 0, 0]} fill="#ff8800">
+                    {getFilledByDayData().map((entry, index) => (
+                      <Cell
+                        key={`cell-btc-${index}`}
+                        fill={entry.daily_pnl_btc >= 0 ? '#ff8800' : '#cc6600'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar yAxisId="right" dataKey="daily_pnl_usd" name="USD" radius={[4, 4, 0, 0]} fill="#4ade80">
+                    {getFilledByDayData().map((entry, index) => (
+                      <Cell
+                        key={`cell-usd-${index}`}
+                        fill={entry.daily_pnl_usd >= 0 ? '#4ade80' : '#ef4444'}
+                      />
+                    ))}
+                  </Bar>
+                </>
+              ) : (
+                <Bar dataKey={currencyDisplay === 'btc' ? 'daily_pnl_btc' : 'daily_pnl_usd'} radius={[4, 4, 0, 0]}>
+                  {getFilledByDayData().map((entry, index) => {
+                    const value = currencyDisplay === 'btc' ? entry.daily_pnl_btc : entry.daily_pnl_usd
+                    return (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                      />
+                    )
+                  })}
+                </Bar>
+              )}
+            </BarChart>
+          </ResponsiveContainer> : null
+        ) : activeTab === 'by_pair' ? (
+          // Pair P&L bar chart (filtered by time range)
+          chartMounted ? <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={stats.filteredByPair} margin={{ top: 5, right: 30, left: 20, bottom: 80 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="pair"
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+              />
+              {currencyDisplay === 'both' ? (
+                <>
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => value.toFixed(6)}
+                    label={{ value: 'BTC', angle: -90, position: 'insideLeft', fill: '#ff8800' }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => `$${value}`}
+                    label={{ value: 'USD', angle: 90, position: 'insideRight', fill: '#4ade80' }}
+                  />
+                </>
+              ) : (
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
+                />
+              )}
+              <Tooltip
+                content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(pair: string) => pair} />}
+                cursor={false}
+              />
+              {currencyDisplay === 'both' && (
+                <Legend
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="square"
+                  formatter={(value) => <span style={{ color: '#94a3b8' }}>{value}</span>}
+                />
+              )}
+              {currencyDisplay === 'both' ? (
+                <>
+                  <Bar yAxisId="left" dataKey="total_pnl_btc" name="BTC" radius={[4, 4, 0, 0]} fill="#ff8800">
+                    {stats.filteredByPair.map((entry, index) => (
+                      <Cell
+                        key={`cell-btc-${index}`}
+                        fill={entry.total_pnl_btc >= 0 ? '#ff8800' : '#cc6600'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar yAxisId="right" dataKey="total_pnl_usd" name="USD" radius={[4, 4, 0, 0]} fill="#4ade80">
+                    {stats.filteredByPair.map((entry, index) => (
+                      <Cell
+                        key={`cell-usd-${index}`}
+                        fill={entry.total_pnl_usd >= 0 ? '#4ade80' : '#ef4444'}
+                      />
+                    ))}
+                  </Bar>
+                </>
+              ) : (
+                <Bar dataKey={currencyDisplay === 'btc' ? 'total_pnl_btc' : 'total_pnl_usd'} radius={[4, 4, 0, 0]}>
+                  {stats.filteredByPair.map((entry, index) => {
+                    const value = currencyDisplay === 'btc' ? entry.total_pnl_btc : entry.total_pnl_usd
+                    return (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                      />
+                    )
+                  })}
+              </Bar>
+              )}
+            </BarChart>
+          </ResponsiveContainer> : null
+        ) : (
+          // Area chart for summary (cumulative P&L)
+          <div ref={chartContainerRef} className="w-full h-full" />
+        )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

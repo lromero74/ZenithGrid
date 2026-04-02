@@ -5,7 +5,7 @@
  */
 
 import { X, ExternalLink, BookOpen, AlertCircle } from 'lucide-react'
-import { LoadingSpinner } from '../../../components/LoadingSpinner'
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner'
 import { formatRelativeTime } from '../../../components/news'
 import { NewsItem, CATEGORY_COLORS, ArticleContentResponse } from '../../../types/newsTypes'
 import { ArticleContent } from './ArticleContent'

@@ -1,4 +1,4 @@
-import { LoadingSpinner } from '../LoadingSpinner'
+import { LoadingSpinner } from '../shared/LoadingSpinner'
 
 export function CardLoading() {
   return (

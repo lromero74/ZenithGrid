@@ -8,7 +8,7 @@
 
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { GameHub } from './games/components/GameHub'
 import { GameInviteNotification } from './games/components/multiplayer/GameInviteNotification'
 import { FloatingSocialButton } from './games/components/social/FloatingSocialButton'

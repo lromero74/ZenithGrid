@@ -6,7 +6,7 @@ import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch, api } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { CandleData } from '../utils/indicators/types'
 

@@ -3,7 +3,7 @@ import { positionsApi, botsApi, orderHistoryApi, authFetch } from '../services/a
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import type { Trade, AIBotLog, Position, Bot } from '../types'
-import { LoadingSpinner } from '../components/LoadingSpinner'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'

@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Cpu } from 'lucide-react'
-import { Sparkline } from '../Sparkline'
+import { Sparkline } from '../trading/Sparkline'
 import { InfoTooltip } from './InfoTooltip'
 import { CardLoading, CardError } from './CardStates'
 import type { HashRateResponse } from '../../types'

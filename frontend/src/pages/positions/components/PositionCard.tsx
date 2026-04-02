@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, memo } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
-import CoinIcon from '../../../components/CoinIcon'
+import CoinIcon from '../../../components/shared/CoinIcon'
 import {
   getQuoteCurrency,
   formatBaseAmount,
@@ -11,7 +11,7 @@ import {
   DealChart,
   PriceBar,
 } from '../../../components/positions'
-import { GridVisualizer } from '../../../components/GridVisualizer'
+import { GridVisualizer } from '../../../components/trading/GridVisualizer'
 import { api, botsApi } from '../../../services/api'
 import { useConfirm } from '../../../contexts/ConfirmContext'
 import { useNotifications } from '../../../contexts/NotificationContext'
