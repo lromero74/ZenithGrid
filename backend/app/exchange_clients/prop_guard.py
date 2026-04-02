@@ -618,8 +618,8 @@ class PropGuardClient(ExchangeClient):
             quote_currency, bypass_cache
         )
 
-    async def list_products(self) -> List[Dict[str, Any]]:
-        return await self._inner.list_products()
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
+        return await self._inner.list_products(bypass_cache=bypass_cache)
 
     async def get_product(
         self, product_id: str = "ETH-BTC"

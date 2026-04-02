@@ -424,14 +424,14 @@ class PaperTradingClient(ExchangeClient):
             "paper_trading": True,
         }
 
-    async def get_products(self) -> List[Dict[str, Any]]:
+    async def get_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """Get available trading pairs from real exchange."""
         if self.real_client:
-            return await self.real_client.list_products()
+            return await self.real_client.list_products(bypass_cache=bypass_cache)
 
         try:
             from app.coinbase_api import public_market_data
-            return await public_market_data.list_products()
+            return await public_market_data.list_products(bypass_cache=bypass_cache)
         except Exception as e:
             logger.warning(f"Public API product list fetch failed: {e}")
             return []
@@ -714,9 +714,9 @@ class PaperTradingClient(ExchangeClient):
 
         return total
 
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """List available trading pairs from real exchange."""
-        return await self.get_products()
+        return await self.get_products(bypass_cache=bypass_cache)
 
     async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get product details from real exchange."""

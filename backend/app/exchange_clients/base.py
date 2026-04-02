@@ -172,7 +172,7 @@ class ExchangeClient(ABC):
     # ========================================
 
     @abstractmethod
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """
         List all available trading pairs.
 

@@ -279,9 +279,9 @@ class CoinbaseClient:
 
     # ===== Product & Market Data Methods =====
 
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """Get all available products/trading pairs"""
-        return await market_data_api.list_products(self._request)
+        return await market_data_api.list_products(self._request, bypass_cache=bypass_cache)
 
     async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get product details"""

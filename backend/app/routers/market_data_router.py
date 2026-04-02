@@ -251,6 +251,7 @@ async def get_candles(
 @router.get("/products")
 async def get_products(
     account_id: Optional[int] = Query(None, description="Account ID to fetch products for"),
+    force_refresh: bool = Query(False, description="Bypass cache and fetch fresh from exchange"),
     coinbase: CoinbaseClient = Depends(get_coinbase),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -272,14 +273,14 @@ async def get_products(
 
             exchange = await get_exchange_client_for_account(db, account_id)
             if exchange:
-                products = await exchange.list_products()
+                products = await exchange.list_products(bypass_cache=force_refresh)
             else:
                 logger.warning(f"Account {account_id} client unavailable, falling back to default")
-                products = await coinbase.list_products()
+                products = await coinbase.list_products(bypass_cache=force_refresh)
         else:
-            products = await coinbase.list_products()
+            products = await coinbase.list_products(bypass_cache=force_refresh)
 
-        # Filter to only USD, USDC, and BTC pairs that are tradeable
+        # Filter to only tradeable pairs (USD, USDC, USDT, ETH, BTC)
         filtered_products = []
         for product in products:
             product_id = product.get("product_id", "")
@@ -339,7 +340,7 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
     """
     Get unique coins (base currencies) available across all markets.
 
-    Returns coins that trade on USD, USDC, or BTC markets.
+    Returns coins that trade on USD, USDC, USDT, ETH, or BTC markets.
     Each coin appears once regardless of how many markets it trades on.
     Cached for 10 minutes — product listings rarely change.
     """
@@ -361,7 +362,7 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
             if status != "online":
                 continue
 
-            # Only include USD, USDC, and BTC pairs
+            # Only include tradeable pairs
             parts = product_id.rsplit("-", 1)
             quote = parts[1] if len(parts) == 2 and parts[1] in _TRADEABLE_QUOTES else None
 

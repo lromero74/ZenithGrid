@@ -147,7 +147,7 @@ class ByBitAdapter(ExchangeClient):
     # MARKET DATA
     # ==========================================================
 
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         resp = await self._client.get_instruments_info(category="linear")
         result = resp.get("result", {})
         products = []

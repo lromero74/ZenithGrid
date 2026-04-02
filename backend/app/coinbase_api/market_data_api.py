@@ -14,12 +14,15 @@ from app.constants import NEGATIVE_CACHE_TTL, PRICE_CACHE_TTL, PRODUCT_STATS_CAC
 logger = logging.getLogger(__name__)
 
 
-async def list_products(request_func: Callable) -> List[Dict[str, Any]]:
+async def list_products(request_func: Callable, bypass_cache: bool = False) -> List[Dict[str, Any]]:
     """Get all available products/trading pairs"""
 
     async def _fetch():
         result = await request_func("GET", "/api/v3/brokerage/products")
         return result.get("products", [])
+
+    if bypass_cache:
+        return await _fetch()
 
     # Single-flight: only one requester fetches when cache expires
     return await api_cache.get_or_fetch("all_products", _fetch, ttl_seconds=3600)

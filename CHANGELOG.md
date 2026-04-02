@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.7] - 2026-03-31
+
+### Added
+- **Full USDT & ETH Market Access**: Unlocked hundreds of USDT and ETH trading pairs in the backend by expanding `_TRADEABLE_QUOTES`.
+- **Cache Refresh**: Added `force_refresh` capability to the product listing endpoint to ensure new market pairs appear immediately without waiting for the 1-hour cache expiry.
+
+### Fixed
+- **Soft Ceiling Logic Expansion**: Expanded all budgeting and soft ceiling calculations to fully support ETH as a quote currency (including exchange minimums and aggregate portfolio values).
+
 ## [v2.154.6] - 2026-03-31
 
 ### Added

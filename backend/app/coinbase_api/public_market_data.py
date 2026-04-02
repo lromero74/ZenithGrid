@@ -92,12 +92,13 @@ async def _public_request(
 # Product list
 # ---------------------------------------------------------------------------
 
-async def list_products() -> List[Dict[str, Any]]:
+async def list_products(bypass_cache: bool = False) -> List[Dict[str, Any]]:
     """Fetch all products (cached 1 hour)."""
     cache_key = "all_products"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        return cached
+    if not bypass_cache:
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
     result = await _public_request("/api/v3/brokerage/market/products")
     products = result.get("products", [])
@@ -244,8 +245,8 @@ class PublicMarketDataClient:
     ``get_coinbase()`` can return this when no credentials are available.
     """
 
-    async def list_products(self) -> List[Dict[str, Any]]:
-        return await list_products()
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
+        return await list_products(bypass_cache=bypass_cache)
 
     async def get_current_price(self, product_id: str = "ETH-BTC") -> float:
         return await get_current_price(product_id)

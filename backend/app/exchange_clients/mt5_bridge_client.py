@@ -232,7 +232,7 @@ class MT5BridgeClient(ExchangeClient):
     # MARKET DATA
     # ==========================================================
 
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """Return a sensible default list for MT5 forex/crypto."""
         return [
             {
