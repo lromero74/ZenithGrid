@@ -32,7 +32,7 @@ from app.services.exchange_service import get_exchange_client_for_account
 logger = logging.getLogger(__name__)
 
 # Tradeable quote currencies for product filtering (frozenset for O(1) lookup)
-_TRADEABLE_QUOTES = frozenset({"USD", "USDC", "BTC"})
+_TRADEABLE_QUOTES = frozenset({"USD", "USDC", "BTC", "USDT", "ETH"})
 
 # Cache for expensive market data (product listings don't change often)
 _market_data_cache = SimpleCache()
@@ -320,8 +320,12 @@ async def get_products(
                 return "1_" + p["product_id"]
             elif p["quote_currency"] == "USDC":
                 return "2_" + p["product_id"]
-            else:  # BTC pairs
+            elif p["quote_currency"] == "USDT":
                 return "3_" + p["product_id"]
+            elif p["quote_currency"] == "ETH":
+                return "4_" + p["product_id"]
+            else:  # BTC pairs
+                return "5_" + p["product_id"]
 
         filtered_products.sort(key=sort_key)
 

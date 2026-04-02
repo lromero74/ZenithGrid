@@ -53,6 +53,10 @@ DEFAULT_MINIMUMS = {
         "quote_min_size": "10.00",
         "base_min_size": "0.001",
     },
+    "ETH": {
+        "quote_min_size": "0.001",
+        "base_min_size": "0.00000001",
+    },
 }
 
 

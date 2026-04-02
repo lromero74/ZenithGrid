@@ -837,7 +837,7 @@ function MarketFilterButtons({
 }) {
   return (
     <div className="flex flex-wrap gap-2 mb-3 px-1">
-      {['BTC', 'USD', 'USDC', 'USDT'].map((market) => {
+      {['BTC', 'USD', 'USDC', 'USDT', 'ETH'].map((market) => {
         const marketPairs = TRADING_PAIRS.filter(
           (p) => p.group === market
         ).map((p) => p.value)
@@ -893,7 +893,7 @@ function PairList({
 }) {
   return (
     <div className="border border-slate-600 border-t-0 rounded-b bg-slate-700 p-3 max-h-72 overflow-y-auto">
-      {['BTC', 'USD', 'USDC', 'USDT'].map((group) => {
+      {['BTC', 'USD', 'USDC', 'USDT', 'ETH'].map((group) => {
         const groupPairs = TRADING_PAIRS.filter(
           (p) => p.group === group
         )

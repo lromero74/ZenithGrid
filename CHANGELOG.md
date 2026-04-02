@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.6] - 2026-03-31
+
+### Added
+- **USDT and ETH Pair Selection**: Added "USDT All" and "ETH All" quick-filter buttons to the bot creation/edit modal. These pairs are now correctly grouped and available for all strategies.
+- **Improved Pair Filtering**: Updated backend to include USDT and ETH in the list of tradeable quote currencies, enabling hundreds of new trading pairs.
+
+### Fixed
+- **Bot Form Summary (Soft Ceiling)**: The summary block at the bottom of the edit modal now correctly bases its capital calculations on the clamped "Soft Ceiling" value instead of the unconstrained "Max Concurrent Deals" when enabled.
+
 ## [v2.154.5] - 2026-03-31
 
 ### Added
