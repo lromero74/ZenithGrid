@@ -167,6 +167,19 @@ function Portfolio() {
     }
   }
 
+  const [hideDust, setHideDust] = useState<boolean>(() => {
+    const stored = localStorage.getItem('portfolio:hideDust')
+    return stored === null ? true : stored === 'true'
+  })
+
+  const toggleHideDust = () => {
+    setHideDust(prev => {
+      const next = !prev
+      localStorage.setItem('portfolio:hideDust', String(next))
+      return next
+    })
+  }
+
   const [sortColumn, setSortColumn] = useState<SortColumn>('usd_value')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [chartModalAsset, setChartModalAsset] = useState<string | null>(null)
@@ -206,32 +219,41 @@ function Portfolio() {
       : <ArrowDown size={14} className="text-blue-400" />
   }
 
-  const sortedHoldings = useMemo(() => (portfolio?.holdings ?? []).slice().sort((a: Holding, b: Holding) => {
-    let compareValue = 0
+  const DUST_THRESHOLD_USD = 1.0
 
-    switch (sortColumn) {
-      case 'asset':
-        compareValue = a.asset.localeCompare(b.asset)
-        break
-      case 'total_balance':
-        compareValue = a.total_balance - b.total_balance
-        break
-      case 'usd_value':
-        compareValue = a.usd_value - b.usd_value
-        break
-      case 'btc_value':
-        compareValue = a.btc_value - b.btc_value
-        break
-      case 'percentage':
-        compareValue = a.percentage - b.percentage
-        break
-      case 'unrealized_pnl_usd':
-        compareValue = (a.unrealized_pnl_usd || 0) - (b.unrealized_pnl_usd || 0)
-        break
-    }
+  const sortedHoldings = useMemo(() => {
+    const all = portfolio?.holdings ?? []
+    const filtered = hideDust ? all.filter((h: Holding) => h.usd_value >= DUST_THRESHOLD_USD) : all
+    return filtered.slice().sort((a: Holding, b: Holding) => {
+      let compareValue = 0
+      switch (sortColumn) {
+        case 'asset':
+          compareValue = a.asset.localeCompare(b.asset)
+          break
+        case 'total_balance':
+          compareValue = a.total_balance - b.total_balance
+          break
+        case 'usd_value':
+          compareValue = a.usd_value - b.usd_value
+          break
+        case 'btc_value':
+          compareValue = a.btc_value - b.btc_value
+          break
+        case 'percentage':
+          compareValue = a.percentage - b.percentage
+          break
+        case 'unrealized_pnl_usd':
+          compareValue = (a.unrealized_pnl_usd || 0) - (b.unrealized_pnl_usd || 0)
+          break
+      }
+      return sortDirection === 'asc' ? compareValue : -compareValue
+    })
+  }, [portfolio?.holdings, sortColumn, sortDirection, hideDust])
 
-    return sortDirection === 'asc' ? compareValue : -compareValue
-  }), [portfolio?.holdings, sortColumn, sortDirection])
+  const dustCount = useMemo(() => {
+    const all = portfolio?.holdings ?? []
+    return all.filter((h: Holding) => h.usd_value < DUST_THRESHOLD_USD).length
+  }, [portfolio?.holdings])
 
   const openChartModal = (asset: string) => {
     setChartModalAsset(asset)
@@ -621,10 +643,21 @@ function Portfolio() {
 
         {/* Holdings Table */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-          <div className="p-4 border-b border-slate-700">
+          <div className="p-4 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">
-              Holdings ({portfolio.holdings_count})
+              Holdings ({sortedHoldings.length}{hideDust && dustCount > 0 ? ` of ${portfolio.holdings_count}` : ''})
             </h2>
+            <button
+              onClick={toggleHideDust}
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                hideDust
+                  ? 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
+                  : 'bg-amber-900/30 border-amber-700 text-amber-400 hover:bg-amber-900/50'
+              }`}
+              title={hideDust ? `Showing holdings ≥$1. Click to show all (${dustCount} dust hidden)` : 'Showing all holdings including dust (< $1)'}
+            >
+              {hideDust ? `Dust hidden${dustCount > 0 ? ` (${dustCount})` : ''}` : 'Show all'}
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -821,7 +854,14 @@ function Portfolio() {
 
           {sortedHoldings.length === 0 && (
             <div className="p-8 text-center text-slate-400">
-              No holdings found in your portfolio
+              {hideDust && dustCount > 0
+                ? `All ${dustCount} holding${dustCount === 1 ? '' : 's'} are dust (< $1). `
+                : 'No holdings found in your portfolio'}
+              {hideDust && dustCount > 0 && (
+                <button className="text-blue-400 hover:underline" onClick={toggleHideDust}>
+                  Show all
+                </button>
+              )}
             </div>
           )}
         </div>

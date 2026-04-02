@@ -23,7 +23,7 @@
     {
       "file": "pages/Portfolio.tsx",
       "route": "/portfolio",
-      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts; always fetches with force_fresh=true (bypasses backend cache); listens for portfolio:trade-completed DOM event (dispatched by NotificationContext on order fills) to trigger immediate refresh; 60-second polling interval"
+      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts; always fetches with force_fresh=true (bypasses backend cache); listens for portfolio:trade-completed DOM event (dispatched by NotificationContext on order fills) to trigger immediate refresh; 60-second polling interval; Holdings table has Hide Dust toggle: state hideDust (boolean, default true, persisted to localStorage key 'portfolio:hideDust'); dustCount useMemo counts holdings with usd_value < $1; sortedHoldings filters out dust rows when hideDust=true; toggle button label shows 'Dust hidden (N)' or 'Show all'; empty state message mentions dust when hideDust=true"
     },
     {
       "file": "pages/News.tsx",

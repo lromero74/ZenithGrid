@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.157.2] - 2026-04-02
+
+### Added
+- **Portfolio: Hide Dust toggle** — The Holdings table now has a "Dust hidden" / "Show all" button in the header. When enabled (default), holdings worth less than $1 USD are hidden. The count of hidden dust entries is shown in the button. The setting is remembered across page refreshes and navigation.
+
 ## [v2.157.1] - 2026-04-02
 
 ### Fixed
