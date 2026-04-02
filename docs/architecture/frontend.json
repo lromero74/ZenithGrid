@@ -13,7 +13,7 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter"
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal"
     },
     {
       "file": "pages/ClosedPositions.tsx",
@@ -127,6 +127,10 @@
       {
         "file": "components/SlippageWarningModal.tsx",
         "purpose": "Slippage impact warning before market close"
+      },
+      {
+        "file": "components/PanicSellModal.tsx",
+        "purpose": "Multi-step emergency liquidation wizard: configure (action, target currency, options checkboxes) → confirm (typed CONFIRM gate) → mfa (TOTP or email OTP input) → progress (live phase indicators polled via useQuery refetchInterval:1500ms) → done (completion summary); 14 tests in PanicSellModal.test.tsx"
       },
       {
         "file": "components/PositionLogsModal.tsx",
@@ -711,7 +715,7 @@
       },
       {
         "name": "positionsApi",
-        "purpose": "Position CRUD, trades, AI logs, settings, budget resize; getAll default limit raised to 500"
+        "purpose": "Position CRUD, trades, AI logs, settings, budget resize; getAll default limit raised to 500; panicSellSendMfa(), panicSell(), panicSellStatus() added for emergency liquidation flow"
       },
       {
         "name": "tradesApi",

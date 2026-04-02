@@ -3,7 +3,7 @@
     {
       "file": "routers/account_router.py",
       "prefix": "/api/account",
-      "purpose": "Account balances, aggregate value, portfolio operations"
+      "purpose": "Account balances, aggregate value, portfolio operations; target_currency validation uses SUPPORTED_TARGET_CURRENCIES from portfolio_conversion_service (BTC, USD, USDC, USDT, ETH)"
     },
     {
       "file": "routers/account_value_router.py",
@@ -83,7 +83,7 @@
     {
       "file": "routers/positions_router.py",
       "prefix": "/api/positions",
-      "purpose": "Aggregator for position sub-routers (queries, actions, limit orders, manual ops, perps)"
+      "purpose": "Aggregator for position sub-routers (queries, actions, limit orders, manual ops, perps, panic sell)"
     },
     {
       "file": "routers/seasonality_router.py",
@@ -217,6 +217,10 @@
       {
         "file": "position_routers/perps_router.py",
         "purpose": "Perpetual futures (INTX) position endpoints"
+      },
+      {
+        "file": "position_routers/panic_sell_router.py",
+        "purpose": "Emergency liquidation: POST /api/positions/panic-sell initiates background task with 4 phases (stop bots, cancel/sell open positions, stop rebalancers/auto-buy/zero reserves, trigger portfolio conversion); GET /api/positions/panic-sell-status/{task_id} polls in-memory _panic_tasks dict for phase progress; POST /api/positions/panic-sell-send-mfa sends email OTP or returns TOTP method; MFA verification required (TOTP or email OTP with token_type='action_mfa'); PanicSellRequest fields: account_id, action, target_currency, stop_bots, stop_portfolio_rebalancer, stop_bot_rebalancer, stop_auto_buy, zero_min_balances, mfa_code, confirm"
       },
       {
         "file": "position_routers/dependencies.py",
@@ -1328,7 +1332,7 @@
     },
     {
       "file": "services/portfolio_conversion_service.py",
-      "purpose": "Portfolio conversion with progress tracking",
+      "purpose": "Portfolio conversion with progress tracking; SUPPORTED_TARGET_CURRENCIES = {BTC, USD, USDC, USDT, ETH}; _FALLBACK_INTERMEDIATE dict defines intermediate routing for each target; _sell_currency_with_fallback and _convert_intermediate_currency extended to handle all 5 target currencies",
       "type": "trading"
     },
     {
