@@ -7,6 +7,7 @@ Read-only operations for trading accounts:
 - Settings reads (auto-buy, rebalance, dust sweep, perps)
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -840,15 +841,30 @@ async def get_dust_sweep_settings(
             reverse=True,
         )[:40]
 
-        for coin, amount in altcoins:
-            usd_price = prices.get(f"{coin}-USD", 0.0)
-            if usd_price <= 0:
+        # Fetch missing prices in parallel for altcoins not in the public prices cache
+        missing_price_coins = [
+            coin for coin, _ in altcoins if prices.get(f"{coin}-USD", 0.0) <= 0
+        ]
+        if missing_price_coins:
+            async def _safe_altcoin_price(coin: str) -> float:
                 try:
-                    usd_price = float(
+                    return float(
                         await public_market_data.get_current_price(f"{coin}-USD")
                     )
                 except Exception:
-                    continue
+                    return 0.0
+
+            fetched_prices = await asyncio.gather(*[
+                _safe_altcoin_price(coin) for coin in missing_price_coins
+            ])
+            for coin, price in zip(missing_price_coins, fetched_prices):
+                if price > 0:
+                    prices[f"{coin}-USD"] = price
+
+        for coin, amount in altcoins:
+            usd_price = prices.get(f"{coin}-USD", 0.0)
+            if usd_price <= 0:
+                continue
             usd_value = amount * usd_price
             if usd_value >= threshold:
                 dust_positions.append({
