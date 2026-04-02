@@ -18,6 +18,7 @@ from app.position_routers import position_query_router
 from app.position_routers import position_actions_router
 from app.position_routers import position_limit_orders_router
 from app.position_routers import position_manual_ops_router
+from app.position_routers import panic_sell_router
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
 
@@ -26,3 +27,4 @@ router.include_router(position_query_router.router)
 router.include_router(position_actions_router.router)
 router.include_router(position_limit_orders_router.router)
 router.include_router(position_manual_ops_router.router)
+router.include_router(panic_sell_router.router)

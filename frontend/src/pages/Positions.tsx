@@ -14,6 +14,7 @@ import { LimitCloseModal } from '../components/LimitCloseModal'
 import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
 import { AddFundsModal } from '../components/AddFundsModal'
+import { PanicSellModal } from '../components/PanicSellModal'
 import { positionsApi } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
 import { usePositionsData } from './positions/hooks/usePositionsData'
@@ -72,6 +73,7 @@ export default function Positions() {
   const [editSettingsPosition, setEditSettingsPosition] = useState<Position | null>(null)
   const [showTradeHistoryModal, setShowTradeHistoryModal] = useState(false)
   const [tradeHistoryPosition, setTradeHistoryPosition] = useState<Position | null>(null)
+  const [showPanicSell, setShowPanicSell] = useState(false)
 
   // Use custom hooks for data fetching
   const {
@@ -284,6 +286,15 @@ export default function Positions() {
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {totalCount} Active
             </div>
+            {canWritePositions && openPositions.length > 0 && selectedAccount && (
+              <button
+                onClick={() => setShowPanicSell(true)}
+                className="flex items-center gap-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1 rounded-full text-sm font-medium transition-colors"
+              >
+                <span>🚨</span>
+                <span>Panic Sell</span>
+              </button>
+            )}
             {openPositions.length > 0 && !isObserver && (
               <button
                 className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-3 py-1 rounded-full text-sm font-medium transition-colors"
@@ -683,6 +694,15 @@ export default function Positions() {
           setTradeHistoryPosition(null)
         }}
       />
+
+      {/* Panic Sell Modal */}
+      {showPanicSell && selectedAccount && (
+        <PanicSellModal
+          isOpen={showPanicSell}
+          onClose={() => setShowPanicSell(false)}
+          accountId={selectedAccount.id}
+        />
+      )}
     </div>
   )
 }

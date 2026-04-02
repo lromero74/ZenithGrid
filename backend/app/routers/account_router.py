@@ -151,8 +151,12 @@ async def sell_portfolio_to_base_currency(
     if not confirm:
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
 
-    if target_currency not in ["BTC", "USD"]:
-        raise HTTPException(status_code=400, detail="target_currency must be BTC or USD")
+    from app.services.portfolio_conversion_service import SUPPORTED_TARGET_CURRENCIES
+    if target_currency not in SUPPORTED_TARGET_CURRENCIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"target_currency must be one of: {', '.join(sorted(SUPPORTED_TARGET_CURRENCIES))}",
+        )
 
     # Get the specified account or user's default account
     if account_id:

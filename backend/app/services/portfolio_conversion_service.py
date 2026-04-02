@@ -10,6 +10,19 @@ from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
+# Supported target currencies for portfolio conversion
+SUPPORTED_TARGET_CURRENCIES = {"BTC", "USD", "USDC", "USDT", "ETH"}
+
+# For each non-USD target, the fallback intermediate is USD.
+# For USD target, the fallback intermediate is BTC.
+_FALLBACK_INTERMEDIATE = {
+    "BTC": "USD",
+    "USDC": "USD",
+    "USDT": "USD",
+    "ETH": "USD",
+    "USD": "BTC",
+}
+
 # In-memory storage for conversion progress
 # Key: task_id, Value: progress dict
 _conversion_tasks: Dict[str, Dict] = {}
@@ -102,12 +115,9 @@ async def _sell_currency_with_fallback(
     Raises:
         Exception if both direct and fallback fail.
     """
-    if target_currency == "BTC":
-        primary_pair = f"{currency}-BTC"
-        fallback_pair = f"{currency}-USD"
-    else:
-        primary_pair = f"{currency}-USD"
-        fallback_pair = f"{currency}-BTC"
+    primary_pair = f"{currency}-{target_currency}"
+    intermediate = _FALLBACK_INTERMEDIATE.get(target_currency, "USD")
+    fallback_pair = f"{currency}-{intermediate}"
 
     try:
         await exchange.create_market_order(
@@ -143,16 +153,26 @@ async def _convert_intermediate_currency(
         available = float(
             account.get("available_balance", {}).get("value", "0")
         )
-        min_amounts = {"USD": 1.0, "BTC": 0.00001}
+        min_amounts = {"USD": 1.0, "BTC": 0.00001, "USDC": 1.0, "USDT": 1.0, "ETH": 0.0001}
         if available <= min_amounts.get(from_currency, 0):
             return
 
         if from_currency == "USD":
+            # Buying target with USD (funds-based buy)
             spend_amount = round(available * 0.99, 2)
-            await exchange.create_market_order(
-                product_id="BTC-USD", side="BUY", funds=str(spend_amount),
-            )
-        else:
+            pair_map = {
+                "BTC": "BTC-USD",
+                "USDC": "USDC-USD",
+                "USDT": "USDT-USD",
+                "ETH": "ETH-USD",
+            }
+            product_id = pair_map.get(to_currency)
+            if product_id:
+                await exchange.create_market_order(
+                    product_id=product_id, side="BUY", funds=str(spend_amount),
+                )
+        elif from_currency == "BTC":
+            # Selling BTC to get USD (only intermediate path for USD target)
             await exchange.create_market_order(
                 product_id="BTC-USD", side="SELL", size=str(available),
             )
@@ -227,7 +247,8 @@ async def run_portfolio_conversion(
             sold_count = 0
             failed_count = 0
             errors = []
-            used_intermediate = {"USD": [], "BTC": []}
+            intermediate_currency = _FALLBACK_INTERMEDIATE.get(target_currency, "USD")
+            used_intermediate = False
 
             logger.info(
                 f"Task {task_id}: Starting portfolio conversion: "
@@ -244,11 +265,7 @@ async def run_portfolio_conversion(
                     )
                     sold_count += 1
                     if result == "intermediate":
-                        # Track which intermediate currency was used
-                        if target_currency == "BTC":
-                            used_intermediate["USD"].append(currency)
-                        else:
-                            used_intermediate["BTC"].append(currency)
+                        used_intermediate = True
                 except Exception as e:
                     failed_count += 1
                     errors.append(f"{currency} ({available:.8f}): {str(e)}")
@@ -260,14 +277,13 @@ async def run_portfolio_conversion(
                     message=f"Processing {idx}/{total_to_process} currencies..."
                 )
 
-            # Convert intermediate currency to final target
-            if target_currency == "BTC" and used_intermediate["USD"]:
-                update_task_progress(task_id, message="Converting USD to BTC...")
-                await _convert_intermediate_currency(exchange, "USD", "BTC", errors)
-
-            if target_currency == "USD" and used_intermediate["BTC"]:
-                update_task_progress(task_id, message="Converting BTC to USD...")
-                await _convert_intermediate_currency(exchange, "BTC", "USD", errors)
+            # Convert intermediate currency to final target (if any went through fallback)
+            if used_intermediate and intermediate_currency != target_currency:
+                update_task_progress(
+                    task_id,
+                    message=f"Converting {intermediate_currency} to {target_currency}..."
+                )
+                await _convert_intermediate_currency(exchange, intermediate_currency, target_currency, errors)
 
             success_rate = (
                 f"{int((sold_count / total_to_process) * 100)}%"

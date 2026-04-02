@@ -278,6 +278,51 @@ export const positionsApi = {
       alltime_profit_usd: number;
       alltime_profit_by_quote: Record<string, number>;
     }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
+
+  panicSellSendMfa: () =>
+    api.post<{ method: 'totp' | 'email' | 'none'; masked_email?: string }>(
+      '/positions/panic-sell-send-mfa',
+    ).then((res) => res.data),
+
+  panicSell: (request: {
+    account_id: number
+    action: 'cancel' | 'sell'
+    target_currency?: 'USD' | 'USDC' | 'USDT' | 'BTC' | 'ETH'
+    stop_bots?: boolean
+    stop_portfolio_rebalancer?: boolean
+    stop_bot_rebalancer?: boolean
+    stop_auto_buy?: boolean
+    zero_min_balances?: boolean
+    mfa_code?: string
+    confirm: boolean
+  }) =>
+    api.post<{ task_id: string; message: string; status_url: string }>(
+      '/positions/panic-sell',
+      request,
+    ).then((res) => res.data),
+
+  panicSellStatus: (taskId: string) =>
+    api.get<{
+      task_id: string
+      status: 'running' | 'completed' | 'failed'
+      phase: string
+      message: string
+      bots_stopped: number
+      positions_total: number
+      positions_current: number
+      positions_acted: number
+      positions_failed: number
+      portfolio_rebalancer_stopped: boolean
+      bot_rebalancer_groups_stopped: number
+      auto_buy_stopped: boolean
+      min_balances_zeroed: boolean
+      conversion_task_id: string | null
+      conversion_status_url: string | null
+      progress_pct: number
+      errors: string[]
+      started_at: string
+      completed_at: string | null
+    }>(`/positions/panic-sell-status/${taskId}`).then((res) => res.data),
 };
 
 export const tradesApi = {

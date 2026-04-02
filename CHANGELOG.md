@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.157.0] - 2026-04-02
+
+### Added
+- **Panic Sell — Emergency Liquidation**: A new "🚨 Panic Sell" button on the Positions page lets you immediately cancel or market-sell all open positions across every bot on your account in one action. Options include: converting all freed balances to a target currency (USD / USDC / USDT / BTC / ETH) using automatic intermediate-pair routing if a direct pair doesn't exist; stopping all active bots; disabling the portfolio rebalancer and bot rebalancer groups; disabling auto-buy BTC; and zeroing all minimum balance reserves so conversion can proceed fully. The operation runs as a background task with a live per-phase progress meter. Protected by MFA — requires your authenticator code (TOTP) or a one-time email code before execution.
+- **Portfolio Conversion: USDC, USDT, ETH targets**: The "Convert Portfolio" feature now supports USDC, USDT, and ETH as target currencies in addition to BTC and USD. Coins without a direct pair to the target are automatically routed through USD as an intermediate.
+
 ## [v2.156.1] - 2026-04-02
 
 ### Changed
