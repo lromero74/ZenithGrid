@@ -269,6 +269,21 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
       setRebalanceSettings(prev => ({ ...prev, [accountId]: { ...prev[accountId], enabled: true } }))
     }
 
+    // Write both settings to state AND the session cache so a page refresh
+    // within the 5-minute cache window reflects the new mode correctly.
+    const applyUpdates = (ab: AutoBuySettings, rb: RebalanceSettings) => {
+      setAutoBuySettings(prev => ({ ...prev, [accountId]: ab }))
+      setRebalanceSettings(prev => ({ ...prev, [accountId]: rb }))
+      if (_portfolioCache) {
+        _portfolioCache = {
+          ..._portfolioCache,
+          autoBuy: { ..._portfolioCache.autoBuy, [accountId]: ab },
+          rebalance: { ..._portfolioCache.rebalance, [accountId]: rb },
+        }
+        saveCache(_portfolioCache)
+      }
+    }
+
     try {
       if (newMode === 'off') {
         // Disable both
@@ -276,28 +291,25 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           autoBuyApi.updateSettings(accountId, { enabled: false }),
           rebalanceApi.updateSettings(accountId, { enabled: false }),
         ])
-        setAutoBuySettings(prev => ({ ...prev, [accountId]: updatedAb }))
-        setRebalanceSettings(prev => ({ ...prev, [accountId]: updatedRb }))
+        applyUpdates(updatedAb, updatedRb)
       } else if (newMode === 'autobuy') {
         // Enable auto-buy (backend auto-disables rebalancing)
         const updatedAb = await autoBuyApi.updateSettings(accountId, {
           ...autoBuySettings[accountId],
           enabled: true,
         })
-        setAutoBuySettings(prev => ({ ...prev, [accountId]: updatedAb }))
         // Refresh rebalance to reflect disabled state
         const updatedRb = await rebalanceApi.getSettings(accountId)
-        setRebalanceSettings(prev => ({ ...prev, [accountId]: updatedRb }))
+        applyUpdates(updatedAb, updatedRb)
       } else {
         // Enable rebalancing (backend auto-disables auto-buy)
         const updatedRb = await rebalanceApi.updateSettings(accountId, {
           ...rebalanceSettings[accountId],
           enabled: true,
         })
-        setRebalanceSettings(prev => ({ ...prev, [accountId]: updatedRb }))
         // Refresh auto-buy to reflect disabled state
         const updatedAb = await autoBuyApi.getSettings(accountId)
-        setAutoBuySettings(prev => ({ ...prev, [accountId]: updatedAb }))
+        applyUpdates(updatedAb, updatedRb)
       }
       const modeLabel = MODE_OPTIONS.find(m => m.value === newMode)?.label || newMode
       setMessage({ type: 'success', text: `${modeLabel} ${newMode === 'off' ? 'disabled' : 'enabled'} for ${accountName}` })
@@ -309,8 +321,7 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
           autoBuyApi.getSettings(accountId),
           rebalanceApi.getSettings(accountId),
         ])
-        setAutoBuySettings(prev => ({ ...prev, [accountId]: ab }))
-        setRebalanceSettings(prev => ({ ...prev, [accountId]: rb }))
+        applyUpdates(ab, rb)
       } catch { /* ignore reload error */ }
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change mode' })
     }
