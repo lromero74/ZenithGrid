@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.157.1] - 2026-04-02
+
+### Fixed
+- **Panic Sell: force market orders** — Panic sell now always forces a market order for each position, bypassing the bot's limit-order preference and profit-floor checks. Positions that had a pending limit close order are reset before selling so they are not skipped.
+- **Panic Sell: rebalancers disabled before sells** — Rebalancers, auto-buy, and minimum balance reserves are now disabled in a phase that runs *before* position selling begins, preventing the rebalancer from buying into other bases while sells are in progress.
+- **Manual force-close: slippage override** — When a bot's VWAP profit is below its take-profit floor, force-closing a position now shows a "Sell Below Target?" confirmation dialog instead of a dead-end error toast, letting you proceed or cancel.
+
 ## [v2.157.0] - 2026-04-02
 
 ### Added

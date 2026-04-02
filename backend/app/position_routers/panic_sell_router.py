@@ -312,7 +312,70 @@ async def _execute_panic_sell(
         await db.commit()
         _update_task(task_id, bots_stopped=bots_stopped)
 
-    # ── Phase 2: Cancel or sell all open positions ──────────────────────────
+    # ── Phase 2: Disable rebalancers, auto-buy, zero reserves ─────────────
+    # Must happen BEFORE position closing so rebalancers can't buy into other
+    # bases while sells are executing.
+    portfolio_rebalancer_stopped = False
+    bot_rebalancer_groups_stopped = 0
+    auto_buy_stopped = False
+    min_balances_zeroed = False
+
+    _update_task(task_id, phase="stopping_rebalancers", message="Disabling rebalancers and auto-buy...")
+
+    account_needs_update = stop_portfolio_rebalancer or stop_auto_buy or zero_min_balances
+    if account_needs_update:
+        account_result = await db.execute(select(Account).where(Account.id == account_id))
+        account = account_result.scalars().first()
+        if account:
+            if stop_portfolio_rebalancer and account.rebalance_enabled:
+                account.rebalance_enabled = False
+                portfolio_rebalancer_stopped = True
+
+            if stop_auto_buy:
+                account.auto_buy_enabled = False
+                account.auto_buy_usd_enabled = False
+                account.auto_buy_usdc_enabled = False
+                account.auto_buy_usdt_enabled = False
+                auto_buy_stopped = True
+
+            if zero_min_balances:
+                account.min_balance_usd = 0.0
+                account.min_balance_btc = 0.0
+                account.min_balance_eth = 0.0
+                account.min_balance_usdc = 0.0
+                account.min_balance_usdt = 0.0
+                min_balances_zeroed = True
+
+        try:
+            await db.commit()
+        except Exception as e:
+            errors.append(f"Failed to update account settings: {str(e)}")
+
+    if stop_bot_rebalancer:
+        try:
+            groups_result = await db.execute(
+                select(BotRebalancerGroup).where(
+                    BotRebalancerGroup.account_id == account_id,
+                    BotRebalancerGroup.enabled.is_(True),
+                )
+            )
+            groups = groups_result.scalars().all()
+            for group in groups:
+                group.enabled = False
+                bot_rebalancer_groups_stopped += 1
+            await db.commit()
+        except Exception as e:
+            errors.append(f"Failed to stop bot rebalancer groups: {str(e)}")
+
+    _update_task(
+        task_id,
+        portfolio_rebalancer_stopped=portfolio_rebalancer_stopped,
+        bot_rebalancer_groups_stopped=bot_rebalancer_groups_stopped,
+        auto_buy_stopped=auto_buy_stopped,
+        min_balances_zeroed=min_balances_zeroed,
+    )
+
+    # ── Phase 3: Cancel or sell all open positions ──────────────────────────
     _update_task(task_id, phase="closing_positions", message="Loading open positions...")
     positions_result = await db.execute(
         select(Position).where(
@@ -379,6 +442,11 @@ async def _execute_panic_sell(
                     raise ValueError(f"No price for {position.product_id}")
 
                 strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+                # Reset any pending limit close — panic sell always uses market orders
+                # so we don't want the sell_executor's early-return guard to block it.
+                if position.closing_via_limit:
+                    position.closing_via_limit = False
+                    position.limit_close_order_id = None
                 # Set exit_reason BEFORE execute_sell so panic-sold positions are
                 # excluded from win rate denominator (bot_stats_service.py line 147)
                 position.exit_reason = "manual"
@@ -387,7 +455,8 @@ async def _execute_panic_sell(
                     strategy=strategy, product_id=position.product_id,
                 )
                 await engine.execute_sell(
-                    position=position, current_price=current_price, signal_data=None
+                    position=position, current_price=current_price, signal_data=None,
+                    force_market=True,  # bypass _validate_market_fallback profit check
                 )
                 positions_acted += 1
             except Exception as e:
@@ -401,70 +470,6 @@ async def _execute_panic_sell(
                 positions_failed=positions_failed,
                 message=f"Selling {idx}/{total}...",
             )
-
-    # ── Phase 3: Stop rebalancers, auto-buy, zero reserves ─────────────────
-    portfolio_rebalancer_stopped = False
-    bot_rebalancer_groups_stopped = 0
-    auto_buy_stopped = False
-    min_balances_zeroed = False
-
-    _update_task(task_id, phase="stopping_rebalancers", message="Applying account settings...")
-
-    # Load account once for all account-level updates
-    account_needs_update = (
-        stop_portfolio_rebalancer or stop_auto_buy or zero_min_balances
-    )
-    if account_needs_update:
-        account_result = await db.execute(select(Account).where(Account.id == account_id))
-        account = account_result.scalars().first()
-        if account:
-            if stop_portfolio_rebalancer and account.rebalance_enabled:
-                account.rebalance_enabled = False
-                portfolio_rebalancer_stopped = True
-
-            if stop_auto_buy:
-                account.auto_buy_enabled = False
-                account.auto_buy_usd_enabled = False
-                account.auto_buy_usdc_enabled = False
-                account.auto_buy_usdt_enabled = False
-                auto_buy_stopped = True
-
-            if zero_min_balances:
-                account.min_balance_usd = 0.0
-                account.min_balance_btc = 0.0
-                account.min_balance_eth = 0.0
-                account.min_balance_usdc = 0.0
-                account.min_balance_usdt = 0.0
-                min_balances_zeroed = True
-
-        try:
-            await db.commit()
-        except Exception as e:
-            errors.append(f"Failed to update account settings: {str(e)}")
-
-    if stop_bot_rebalancer:
-        try:
-            groups_result = await db.execute(
-                select(BotRebalancerGroup).where(
-                    BotRebalancerGroup.account_id == account_id,
-                    BotRebalancerGroup.enabled.is_(True),
-                )
-            )
-            groups = groups_result.scalars().all()
-            for group in groups:
-                group.enabled = False
-                bot_rebalancer_groups_stopped += 1
-            await db.commit()
-        except Exception as e:
-            errors.append(f"Failed to stop bot rebalancer groups: {str(e)}")
-
-    _update_task(
-        task_id,
-        portfolio_rebalancer_stopped=portfolio_rebalancer_stopped,
-        bot_rebalancer_groups_stopped=bot_rebalancer_groups_stopped,
-        auto_buy_stopped=auto_buy_stopped,
-        min_balances_zeroed=min_balances_zeroed,
-    )
 
     # ── Phase 4: Trigger portfolio conversion (optional, sell only) ─────────
     conversion_task_id = None

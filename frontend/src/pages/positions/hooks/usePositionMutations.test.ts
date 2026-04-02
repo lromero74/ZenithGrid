@@ -107,10 +107,8 @@ describe('usePositionMutations handleClosePosition', () => {
       closeResult = await result.current.handleClosePosition(42)
     })
 
-    expect(closeResult).toEqual({ success: false, slippageBlocked: true })
-    expect(mockAddToast).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'error', title: 'Slippage Warning' })
-    )
+    expect(closeResult).toEqual({ success: false, slippageBlocked: true, slippageWarning: 'Slippage too high: 5.2%' })
+    expect(mockAddToast).not.toHaveBeenCalled()  // caller shows dialog instead of toast
     expect(refetch).not.toHaveBeenCalled()
   })
 

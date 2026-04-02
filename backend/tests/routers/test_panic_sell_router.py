@@ -766,3 +766,105 @@ class TestWinRateExclusion:
 
         assert len(profitable) == 2
         assert all(p.exit_reason != "manual" for p in profitable)
+
+
+# =============================================================================
+# Tests: sell action — force_market and closing_via_limit bypass
+# =============================================================================
+
+
+class TestPanicSellForceMarket:
+    @pytest.mark.asyncio
+    async def test_sell_action_passes_force_market_to_execute_sell(self, db_session):
+        """Panic sell passes force_market=True to engine.execute_sell so profit checks are bypassed."""
+        from app.position_routers.panic_sell_router import _execute_panic_sell, _init_task
+        import uuid
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+        account = await _make_account(db_session, user)
+        bot = await _make_bot(db_session, account, is_active=False)
+        await _make_position(db_session, bot, status="open")
+
+        task_id = str(uuid.uuid4())
+        _init_task(task_id)
+
+        execute_sell_calls = []
+
+        async def mock_execute_sell(position, current_price, signal_data=None, force_market=False):
+            execute_sell_calls.append({"force_market": force_market})
+            return (None, 0.0, 0.0)
+
+        mock_engine = MagicMock()
+        mock_engine.execute_sell = mock_execute_sell
+
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=100.0)
+
+        with patch("app.position_routers.panic_sell_router.get_exchange_client_for_account",
+                   new_callable=AsyncMock, return_value=mock_exchange):
+            with patch("app.trading_engine_v2.StrategyTradingEngine",
+                       return_value=mock_engine):
+                with patch("app.strategies.StrategyRegistry"):
+                    with patch("app.services.portfolio_conversion_service.run_portfolio_conversion"):
+                        await _execute_panic_sell(
+                            db_session, task_id, account.id, "sell", None,
+                            stop_bots=False, stop_portfolio_rebalancer=False,
+                            stop_bot_rebalancer=False, stop_auto_buy=False,
+                            zero_min_balances=False, user_id=user.id,
+                        )
+
+        assert len(execute_sell_calls) == 1
+        assert execute_sell_calls[0]["force_market"] is True
+
+    @pytest.mark.asyncio
+    async def test_sell_action_resets_closing_via_limit_before_sell(self, db_session):
+        """Panic sell resets closing_via_limit=False so positions locked in limit-close still sell."""
+        from app.position_routers.panic_sell_router import _execute_panic_sell, _init_task
+        import uuid
+
+        user = _make_user()
+        db_session.add(user)
+        await db_session.flush()
+        account = await _make_account(db_session, user)
+        bot = await _make_bot(db_session, account, is_active=False)
+        pos = await _make_position(db_session, bot, status="open")
+        # Simulate a pending limit close order
+        pos.closing_via_limit = True
+        pos.limit_close_order_id = "limit-order-123"
+        await db_session.flush()
+
+        task_id = str(uuid.uuid4())
+        _init_task(task_id)
+
+        sold_positions = []
+        closing_via_limit_at_sell_time = []
+
+        async def mock_execute_sell(position, current_price, signal_data=None, force_market=False):
+            sold_positions.append(position.id)
+            closing_via_limit_at_sell_time.append(position.closing_via_limit)
+            return (None, 0.0, 0.0)
+
+        mock_engine = MagicMock()
+        mock_engine.execute_sell = mock_execute_sell
+
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=100.0)
+
+        with patch("app.position_routers.panic_sell_router.get_exchange_client_for_account",
+                   new_callable=AsyncMock, return_value=mock_exchange):
+            with patch("app.trading_engine_v2.StrategyTradingEngine",
+                       return_value=mock_engine):
+                with patch("app.strategies.StrategyRegistry"):
+                    await _execute_panic_sell(
+                        db_session, task_id, account.id, "sell", None,
+                        stop_bots=False, stop_portfolio_rebalancer=False,
+                        stop_bot_rebalancer=False, stop_auto_buy=False,
+                        zero_min_balances=False, user_id=user.id,
+                    )
+
+        # Position was sold despite closing_via_limit=True
+        assert pos.id in sold_positions
+        # closing_via_limit was False at the time execute_sell was called
+        assert closing_via_limit_at_sell_time == [False]

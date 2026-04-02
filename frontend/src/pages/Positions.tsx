@@ -66,6 +66,9 @@ export default function Positions() {
     slippage_percentage: number
   } | null>(null)
   const [pendingMarketClosePositionId, setPendingMarketClosePositionId] = useState<number | null>(null)
+  const [showSlippageOverride, setShowSlippageOverride] = useState(false)
+  const [slippageOverrideWarning, setSlippageOverrideWarning] = useState<string>('')
+  const [slippageOverridePositionId, setSlippageOverridePositionId] = useState<number | null>(null)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
   const [notesText, setNotesText] = useState('')
@@ -157,6 +160,21 @@ export default function Positions() {
     const result = await performClosePosition(closeConfirmPositionId)
     if (result?.success) {
       setShowCloseConfirm(false)
+      setCloseConfirmPositionId(null)
+    } else if (result?.slippageBlocked) {
+      // VWAP profit is below TP floor — ask user to confirm selling at a loss
+      setShowCloseConfirm(false)
+      setSlippageOverridePositionId(closeConfirmPositionId)
+      setSlippageOverrideWarning(result.slippageWarning || 'Position profit is below the target floor.')
+      setShowSlippageOverride(true)
+    }
+  }
+
+  const handleSlippageOverrideConfirm = async () => {
+    setShowSlippageOverride(false)
+    const result = await performClosePosition(slippageOverridePositionId, true)
+    if (result?.success || !result?.slippageBlocked) {
+      setSlippageOverridePositionId(null)
       setCloseConfirmPositionId(null)
     }
   }
@@ -558,6 +576,38 @@ export default function Positions() {
         }}
         onConfirm={handleClosePositionClick}
       />
+
+      {/* Slippage Override Confirmation Modal */}
+      {showSlippageOverride && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4 border border-slate-600">
+            <h3 className="text-lg font-semibold text-white mb-2">Sell Below Target?</h3>
+            <p className="text-slate-300 text-sm mb-4">{slippageOverrideWarning}</p>
+            <p className="text-slate-400 text-sm mb-6">
+              This position's current profit is below the bot's target floor. Selling now will close it at a loss.
+              Continue anyway?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                className="px-4 py-2 rounded bg-slate-700 text-slate-300 hover:bg-slate-600"
+                onClick={() => {
+                  setShowSlippageOverride(false)
+                  setSlippageOverridePositionId(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500 font-medium"
+                onClick={handleSlippageOverrideConfirm}
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Selling...' : 'Sell Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Funds Modal */}
       {addFundsPosition && (

@@ -15,7 +15,7 @@ interface PanicSellModalProps {
 
 const CURRENCIES: TargetCurrency[] = ['USD', 'USDC', 'USDT', 'BTC', 'ETH']
 
-const PHASES = ['stopping_bots', 'closing_positions', 'stopping_rebalancers', 'converting', 'completed']
+const PHASES = ['stopping_bots', 'stopping_rebalancers', 'closing_positions', 'converting', 'completed']
 const PHASE_LABELS: Record<string, string> = {
   stopping_bots: 'Stopping bots',
   closing_positions: 'Closing positions',

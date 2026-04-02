@@ -13,7 +13,7 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal"
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true — state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag"
     },
     {
       "file": "pages/ClosedPositions.tsx",
@@ -130,7 +130,7 @@
       },
       {
         "file": "components/PanicSellModal.tsx",
-        "purpose": "Multi-step emergency liquidation wizard: configure (action, target currency, options checkboxes) → confirm (typed CONFIRM gate) → mfa (TOTP or email OTP input) → progress (live phase indicators polled via useQuery refetchInterval:1500ms) → done (completion summary); 14 tests in PanicSellModal.test.tsx"
+        "purpose": "Multi-step emergency liquidation wizard: configure (action, target currency, options checkboxes) → confirm (typed CONFIRM gate) → mfa (TOTP or email OTP input) → progress (live phase indicators polled via useQuery refetchInterval:1500ms) → done (completion summary); PHASES order matches backend: stopping_bots → stopping_rebalancers → closing_positions → converting → completed; 14 tests in PanicSellModal.test.tsx"
       },
       {
         "file": "components/PositionLogsModal.tsx",
@@ -665,7 +665,7 @@
         },
         {
           "file": "pages/positions/hooks/usePositionMutations.ts",
-          "purpose": "Close, add funds, update settings, save notes"
+          "purpose": "Close, add funds, update settings, save notes; when force-close response contains requires_confirmation:true, returns {success:false, slippageBlocked:true, slippageWarning} instead of showing an error toast — caller (Positions.tsx) handles this by showing the inline slippage override confirm dialog"
         },
         {
           "file": "pages/positions/hooks/usePositionTrades.ts",

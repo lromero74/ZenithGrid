@@ -163,11 +163,13 @@ class StrategyTradingEngine:
         )
 
     async def execute_sell(
-        self, position: Position, current_price: float, signal_data: Optional[Dict[str, Any]] = None
+        self, position: Position, current_price: float, signal_data: Optional[Dict[str, Any]] = None,
+        force_market: bool = False,
     ) -> Tuple[Optional[Trade], float, float]:
         """Delegate to sell_executor module"""
         return await sell_executor.execute_sell(
-            self.db, self.exchange, self.trading_client, self.bot, self.product_id, position, current_price, signal_data
+            self.db, self.exchange, self.trading_client, self.bot, self.product_id,
+            position, current_price, signal_data, force_market=force_market,
         )
 
     async def execute_limit_sell(

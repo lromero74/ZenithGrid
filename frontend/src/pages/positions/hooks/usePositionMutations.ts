@@ -17,9 +17,8 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
     try {
       const result = await positionsApi.close(closeConfirmPositionId, skipSlippageGuard)
       if (result.requires_confirmation) {
-        // Inline slippage guard blocked the close — show warning as toast
-        addToast({ type: 'error', title: 'Slippage Warning', message: result.slippage_warning || 'High slippage detected — use slippage check first' })
-        return { success: false, slippageBlocked: true }
+        // Inline slippage guard blocked the close — return warning so caller can show confirm dialog
+        return { success: false, slippageBlocked: true, slippageWarning: result.slippage_warning }
       }
       refetchPositions()
       addToast({ type: 'success', title: 'Position Closed', message: `Profit: ${(result.profit_quote ?? 0).toFixed(8)} (${(result.profit_percentage ?? 0).toFixed(2)}%)` })

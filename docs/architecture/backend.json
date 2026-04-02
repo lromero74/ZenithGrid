@@ -220,7 +220,7 @@
       },
       {
         "file": "position_routers/panic_sell_router.py",
-        "purpose": "Emergency liquidation: POST /api/positions/panic-sell initiates background task with 4 phases (stop bots, cancel/sell open positions, stop rebalancers/auto-buy/zero reserves, trigger portfolio conversion); GET /api/positions/panic-sell-status/{task_id} polls in-memory _panic_tasks dict for phase progress; POST /api/positions/panic-sell-send-mfa sends email OTP or returns TOTP method; MFA verification required (TOTP or email OTP with token_type='action_mfa'); PanicSellRequest fields: account_id, action, target_currency, stop_bots, stop_portfolio_rebalancer, stop_bot_rebalancer, stop_auto_buy, zero_min_balances, mfa_code, confirm"
+        "purpose": "Emergency liquidation: POST /api/positions/panic-sell initiates background task with 4 ordered phases: (1) stopping_bots — stop active bots, (2) stopping_rebalancers — disable rebalancers/auto-buy/zero reserves (must precede position closing so rebalancers cannot buy into other bases during sells), (3) closing_positions — cancel or market-sell open positions (resets closing_via_limit before selling; passes force_market=True to bypass profit check), (4) converting — optional portfolio conversion to target currency; GET /api/positions/panic-sell-status/{task_id} polls in-memory _panic_tasks dict for phase progress; POST /api/positions/panic-sell-send-mfa sends email OTP or returns TOTP method; MFA verification required (TOTP or email OTP with token_type='action_mfa'); PanicSellRequest fields: account_id, action, target_currency, stop_bots, stop_portfolio_rebalancer, stop_bot_rebalancer, stop_auto_buy, zero_min_balances, mfa_code, confirm"
       },
       {
         "file": "position_routers/dependencies.py",
@@ -1672,7 +1672,7 @@
     },
     {
       "file": "trading_engine_v2.py",
-      "purpose": "Strategy-based trading engine coordinator (StrategyTradingEngine) wrapping all trading engine modules"
+      "purpose": "Strategy-based trading engine coordinator (StrategyTradingEngine) wrapping all trading engine modules; execute_sell() accepts force_market: bool = False and forwards it to sell_executor.execute_sell() to bypass the market-fallback profit check (used by panic sell)"
     },
     {
       "file": "scheduler.py",
