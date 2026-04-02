@@ -201,15 +201,20 @@ git checkout -b feature/my-feature    # Branch from main
 Use `/shipit` command for the full process. Key ordering:
 
 1. Lint + review diffs
-2. Commit with changelog + version updates (same commit)
-3. Merge to main (--no-ff)
-4. **Tag BEFORE deploy** — version is read live from git tags
-5. Push main + tags
-6. Deploy:
+2. **Documentation BEFORE tag** — all of these must be in the same commit as the version bump:
+   - Run `architecture-sync` agent to update `docs/architecture/backend.json` and `frontend.json`
+   - Update `README.md` if user-facing features or setup steps changed
+   - Update `CHANGELOG.md` (user-facing plain language, Keep a Changelog format)
+   - Update `docs/architecture/index.json` version field
+3. Commit with all code + all documentation updates together
+4. Merge to main (--no-ff)
+5. **Tag BEFORE deploy** — version is read live from git tags
+6. Push main + tags
+7. Deploy:
    - **Frontend-only (prod mode)**: `./bot.sh build` — no restart needed. Backend reads git tags live and serves new dist/ from disk. Users get a toast prompting reload.
    - **Backend changes**: `./bot.sh restart --prod` (or `--dev --back-end`)
-7. Delete dev branch (local + remote)
-8. Verify: tag, services, no stale branches
+8. Delete dev branch (local + remote)
+9. Verify: tag, services, no stale branches
 
 Version references to update in the tag commit:
 
@@ -217,6 +222,9 @@ Version references to update in the tag commit:
 |------|-------|
 | `CHANGELOG.md` | `## [vX.Y.Z] - YYYY-MM-DD` section |
 | `docs/architecture/index.json` | `"version"` field |
+| `docs/architecture/backend.json` | new routers, models, services (via architecture-sync agent) |
+| `docs/architecture/frontend.json` | new pages, components, hooks (via architecture-sync agent) |
+| `README.md` | if user-facing features or setup steps changed |
 
 ## Commercialization Mindset
 
