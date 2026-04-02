@@ -159,77 +159,86 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
 
   // Dynamic filter options — derived from actual open positions, not a hardcoded list
   const uniqueMarkets = useMemo(() => {
-    // Collect the set of quote currencies present in open positions
-    const marketSet = new Set<string>()
-    positionsWithPnL.forEach(p => {
-      if (p.status === 'open') {
-        const quote = (p.product_id || 'ETH-BTC').split('-')[1]
-        if (quote) marketSet.add(quote)
-      }
-    })
-
-    return Array.from(marketSet).sort().map(m => {
-      const count = positionsWithPnL.filter(p => {
-        if (p.status !== 'open') return false
-        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
-        if (filterPair !== 'all' && p.product_id !== filterPair) return false
-        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
-        return matchesMarket(p.product_id, m)
-      }).length
-      return { value: m, count }
-    })
+    // Single-pass O(n): collect all markets and accumulate filtered counts in one loop.
+    // counts apply bot/pair/category filters but NOT the market filter (that's the "own" dimension).
+    const allMarkets = new Set<string>()
+    const counts = new Map<string, number>()
+    for (const p of positionsWithPnL) {
+      if (p.status !== 'open') continue
+      const quote = (p.product_id || 'ETH-BTC').split('-')[1]
+      if (!quote) continue
+      allMarkets.add(quote)
+      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
+      if (filterPair !== 'all' && p.product_id !== filterPair) continue
+      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
+      counts.set(quote, (counts.get(quote) ?? 0) + 1)
+    }
+    return Array.from(allMarkets).sort().map(m => ({ value: m, count: counts.get(m) ?? 0 }))
   }, [positionsWithPnL, filterBot, filterPair, filterCategory])
 
   const uniqueBots = useMemo(() => {
-    const botIds = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open' && p.bot_id).map(p => p.bot_id as number)))
-    return botIds.map(id => {
-      const bot = bots?.find(b => b.id === id)
-      const count = positionsWithPnL.filter(p => {
-        if (p.status !== 'open') return false
-        if (p.bot_id !== id) return false
-        if (!matchesMarket(p.product_id, filterMarket)) return false
-        if (filterPair !== 'all' && p.product_id !== filterPair) return false
-        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
-        return true
-      }).length
-      return { id, name: bot?.name || `Bot #${id}`, count }
-    }).sort((a, b) => a.name.localeCompare(b.name))
+    // Single-pass O(n): collect all bot IDs and accumulate filtered counts in one loop.
+    // counts apply market/pair/category filters but NOT the bot filter (own dimension).
+    const allBotIds = new Set<number>()
+    const counts = new Map<number, number>()
+    for (const p of positionsWithPnL) {
+      if (p.status !== 'open' || !p.bot_id) continue
+      allBotIds.add(p.bot_id)
+      if (!matchesMarket(p.product_id, filterMarket)) continue
+      if (filterPair !== 'all' && p.product_id !== filterPair) continue
+      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
+      counts.set(p.bot_id, (counts.get(p.bot_id) ?? 0) + 1)
+    }
+    return Array.from(allBotIds)
+      .map(id => {
+        const bot = bots?.find(b => b.id === id)
+        return { id, name: bot?.name || `Bot #${id}`, count: counts.get(id) ?? 0 }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
   }, [positionsWithPnL, filterMarket, filterPair, filterCategory, bots])
 
   const uniquePairs = useMemo(() => {
-    const pairs = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open').map(p => p.product_id || 'ETH-BTC')))
-    return pairs.map(pair => {
-      const count = positionsWithPnL.filter(p => {
-        if (p.status !== 'open') return false
-        if ((p.product_id || 'ETH-BTC') !== pair) return false
-        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
-        if (!matchesMarket(p.product_id, filterMarket)) return false
-        if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) return false
-        return true
-      }).length
-      return { value: pair, count }
-    }).sort((a, b) => {
-      const [baseA, quoteA] = a.value.split('-')
-      const [baseB, quoteB] = b.value.split('-')
-      // Sort by quote (market) first, then base (coin)
-      if (quoteA !== quoteB) return quoteA.localeCompare(quoteB)
-      return baseA.localeCompare(baseB)
-    })
+    // Single-pass O(n): collect all pairs and accumulate filtered counts in one loop.
+    // counts apply bot/market/category filters but NOT the pair filter (own dimension).
+    const allPairs = new Set<string>()
+    const counts = new Map<string, number>()
+    for (const p of positionsWithPnL) {
+      if (p.status !== 'open') continue
+      const pair = p.product_id || 'ETH-BTC'
+      allPairs.add(pair)
+      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
+      if (!matchesMarket(p.product_id, filterMarket)) continue
+      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
+      counts.set(pair, (counts.get(pair) ?? 0) + 1)
+    }
+    return Array.from(allPairs)
+      .map(pair => ({ value: pair, count: counts.get(pair) ?? 0 }))
+      .sort((a, b) => {
+        const [baseA, quoteA] = a.value.split('-')
+        const [baseB, quoteB] = b.value.split('-')
+        // Sort by quote (market) first, then base (coin)
+        if (quoteA !== quoteB) return quoteA.localeCompare(quoteB)
+        return baseA.localeCompare(baseB)
+      })
   }, [positionsWithPnL, filterBot, filterMarket, filterCategory])
 
   const uniqueCategories = useMemo(() => {
-    const cats = Array.from(new Set(positionsWithPnL.filter(p => p.status === 'open').map(p => p.coin_category || 'Uncategorized')))
-    return cats.map(cat => {
-      const count = positionsWithPnL.filter(p => {
-        if (p.status !== 'open') return false
-        if ((p.coin_category || 'Uncategorized') !== cat) return false
-        if (filterBot !== 'all' && p.bot_id !== filterBot) return false
-        if (!matchesMarket(p.product_id, filterMarket)) return false
-        if (filterPair !== 'all' && p.product_id !== filterPair) return false
-        return true
-      }).length
-      return { value: cat, label: getCategoryLabel(cat), count }
-    }).sort((a, b) => a.label.localeCompare(b.label))
+    // Single-pass O(n): collect all categories and accumulate filtered counts in one loop.
+    // counts apply bot/market/pair filters but NOT the category filter (own dimension).
+    const allCats = new Set<string>()
+    const counts = new Map<string, number>()
+    for (const p of positionsWithPnL) {
+      if (p.status !== 'open') continue
+      const cat = p.coin_category || 'Uncategorized'
+      allCats.add(cat)
+      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
+      if (!matchesMarket(p.product_id, filterMarket)) continue
+      if (filterPair !== 'all' && p.product_id !== filterPair) continue
+      counts.set(cat, (counts.get(cat) ?? 0) + 1)
+    }
+    return Array.from(allCats)
+      .map(cat => ({ value: cat, label: getCategoryLabel(cat), count: counts.get(cat) ?? 0 }))
+      .sort((a, b) => a.label.localeCompare(b.label))
   }, [positionsWithPnL, filterBot, filterMarket, filterPair])
 
   const clearFilters = () => {

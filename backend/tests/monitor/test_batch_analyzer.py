@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
-from app.monitor.batch_analyzer import process_bot_batch
+from app.monitor.batch_analyzer import process_bot_batch, _determine_pairs_to_analyze
 
 
 # ---------------------------------------------------------------------------
@@ -628,3 +628,141 @@ class TestBatchAnalyzerVolumeFilter:
 
         # LOW-BTC has an open position, so it should still be analyzed
         assert monitor.execute_trading_logic.call_count == 1
+
+
+# ===========================================================================
+# Class: TestDeterminePairsToAnalyze
+# ===========================================================================
+
+
+class TestDeterminePairsToAnalyze:
+    """Direct unit tests for _determine_pairs_to_analyze().
+
+    Verifies filtering logic for each branch (stopped, at-capacity,
+    insufficient-budget, normal) independently of the full batch pipeline.
+    These tests also document the contract before/after the DRY refactor
+    (hoisting pairs_with_positions out of the three elif branches).
+    """
+
+    def _make_budget_info(
+        self,
+        max_concurrent_deals=5,
+        has_budget_for_new=True,
+        quote_currency="BTC",
+        available_budget=0.5,
+        min_per_position=0.01,
+    ):
+        return {
+            "max_concurrent_deals": max_concurrent_deals,
+            "has_budget_for_new": has_budget_for_new,
+            "quote_currency": quote_currency,
+            "available_budget": available_budget,
+            "min_per_position": min_per_position,
+        }
+
+    @pytest.mark.asyncio
+    async def test_stopped_bot_returns_only_pairs_with_positions(self):
+        """Stopped bot: only pairs that have an open position are returned."""
+        bot = _make_bot(is_active=False)
+        open_positions = [
+            _make_position(product_id="ETH-BTC"),
+            _make_position(product_id="SOL-BTC"),
+        ]
+        trading_pairs = ["ETH-BTC", "SOL-BTC", "ADA-BTC"]
+        budget = self._make_budget_info(max_concurrent_deals=5)
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, open_positions, MagicMock(), budget
+        )
+
+        assert set(result) == {"ETH-BTC", "SOL-BTC"}
+        assert "ADA-BTC" not in result
+
+    @pytest.mark.asyncio
+    async def test_stopped_bot_no_positions_returns_empty(self):
+        """Stopped bot with no open positions returns an empty list."""
+        bot = _make_bot(is_active=False)
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, ["ETH-BTC", "SOL-BTC"], [], MagicMock(),
+            self._make_budget_info()
+        )
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_at_max_capacity_returns_only_position_pairs(self):
+        """At max concurrent deals, only pairs with open positions are returned."""
+        bot = _make_bot(is_active=True)
+        open_positions = [_make_position(product_id="ETH-BTC")]
+        trading_pairs = ["ETH-BTC", "SOL-BTC", "ADA-BTC"]
+        budget = self._make_budget_info(max_concurrent_deals=1)  # 1/1 = full
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, open_positions, MagicMock(), budget
+        )
+
+        assert result == ["ETH-BTC"]
+
+    @pytest.mark.asyncio
+    async def test_at_capacity_no_positions_returns_empty(self):
+        """At capacity with no open positions returns an empty list."""
+        bot = _make_bot(is_active=True)
+        trading_pairs = ["ETH-BTC"]
+        budget = self._make_budget_info(max_concurrent_deals=0)  # 0 allowed
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, [], MagicMock(), budget
+        )
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_insufficient_budget_returns_only_position_pairs(self):
+        """Insufficient funds: only pairs with existing positions are returned."""
+        bot = _make_bot(is_active=True)
+        open_positions = [_make_position(product_id="ETH-BTC")]
+        trading_pairs = ["ETH-BTC", "NEW-BTC"]
+        budget = self._make_budget_info(
+            max_concurrent_deals=5,
+            has_budget_for_new=False,
+            available_budget=0.000001,
+            min_per_position=0.01,
+        )
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, open_positions, MagicMock(), budget
+        )
+
+        assert result == ["ETH-BTC"]
+        assert "NEW-BTC" not in result
+
+    @pytest.mark.asyncio
+    async def test_normal_active_bot_returns_all_pairs(self):
+        """Normal active bot below capacity returns all trading pairs."""
+        bot = _make_bot(is_active=True)
+        trading_pairs = ["ETH-BTC", "SOL-BTC", "ADA-BTC"]
+        strategy = MagicMock()
+        strategy.config = {}  # no min_daily_volume
+        budget = self._make_budget_info(max_concurrent_deals=5, has_budget_for_new=True)
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, [], strategy, budget
+        )
+
+        assert set(result) == {"ETH-BTC", "SOL-BTC", "ADA-BTC"}
+
+    @pytest.mark.asyncio
+    async def test_position_with_none_product_id_excluded_from_set(self):
+        """Positions with None product_id do not pollute the pairs-with-positions set."""
+        bot = _make_bot(is_active=False)
+        open_positions = [
+            _make_position(product_id=None),   # should be ignored
+            _make_position(product_id="ETH-BTC"),
+        ]
+        trading_pairs = ["ETH-BTC", "SOL-BTC"]
+        budget = self._make_budget_info(max_concurrent_deals=5)
+
+        result = await _determine_pairs_to_analyze(
+            MagicMock(), bot, trading_pairs, open_positions, MagicMock(), budget
+        )
+
+        assert result == ["ETH-BTC"]
+        assert None not in result

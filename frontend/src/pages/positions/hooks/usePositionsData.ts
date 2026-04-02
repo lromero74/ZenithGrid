@@ -18,6 +18,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     queryKey: ['positions', 'open', selectedAccountId],
     queryFn: () => positionsApi.getAll('open', 1000, selectedAccountId),
     refetchInterval: 5000, // Update every 5 seconds for active deals
+    refetchIntervalInBackground: false, // Stop polling when tab is hidden
     refetchOnMount: 'always', // Always fetch fresh data on mount (don't show stale cache)
     staleTime: 0, // Treat cached data as immediately stale
   })
@@ -27,6 +28,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     queryKey: ['bots', selectedAccountId],
     queryFn: () => botsApi.getAll(),
     refetchInterval: 10000,
+    refetchIntervalInBackground: false, // Stop polling when tab is hidden
     refetchOnMount: 'always', // Always fetch fresh data on mount
     staleTime: 0, // Treat cached data as immediately stale
     select: (data) => {
