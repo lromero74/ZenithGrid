@@ -388,7 +388,7 @@
         "name",
         "description"
       ],
-      "purpose": "Granular permission using resource:action naming (e.g. bots:read, admin:users). All valid permission strings are enumerated in the Perm StrEnum (app/auth/dependencies.py) — use Perm constants in route declarations to prevent typos. Permissions cover: bots, positions, orders, accounts, reports, templates, settings, blacklist, news, system (monitor/restart/shutdown), admin (users/groups/roles/permissions), games (play/multiplayer), social (chat)."
+      "purpose": "Granular permission using resource:action naming (e.g. bots:read, admin:users). All valid permission strings are enumerated in the Perm StrEnum (app/auth/dependencies.py) \u2014 use Perm constants in route declarations to prevent typos. Permissions cover: bots, positions, orders, accounts, reports, templates, settings, blacklist, news, system (monitor/restart/shutdown), admin (users/groups/roles/permissions), games (play/multiplayer), social (chat)."
     },
     {
       "name": "ActiveSession",
@@ -835,7 +835,7 @@
         "schedule_type",
         "is_active"
       ],
-      "purpose": "Report delivery configuration — when and how reports are generated"
+      "purpose": "Report delivery configuration \u2014 when and how reports are generated"
     },
     {
       "name": "ReportScheduleGoal",
@@ -1258,7 +1258,7 @@
     },
     {
       "file": "services/expense_service.py",
-      "purpose": "Expense item normalization (frequency to period), PMT-formula monthly savings contribution calculation (compute_monthly_savings_contribution()), savings target entry builder (_build_savings_target_entry()), and two-pass coverage waterfall for expense-type goals: first pass sums expenses, second pass sums savings target contributions",
+      "purpose": "Expense item normalization (frequency to period), PMT-formula monthly savings contribution calculation (compute_monthly_savings_contribution()), savings target entry builder (_build_savings_target_entry()), and two-pass coverage waterfall for expense-type goals. Recurring savings targets use a self-sustaining hold model: _compute_self_sustaining_hold() computes the minimum seed to keep after each withdrawal so it compounds back to cover the next cycle without further contributions. _compute_gross_target() uses max(current_balance, self_sustaining_hold) as the hold component for recurring items.",
       "type": "analysis"
     },
     {
@@ -1358,7 +1358,7 @@
     },
     {
       "file": "services/report_generator_service/",
-      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts), pdf_generator (PDF generation with fpdf2, expense trend charts, savings targets section via _build_pdf_savings_targets())",
+      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts, savings target spend-line breakdown showing Spend \u00b7 Tax \u00b7 Hold \u2192 accumulate, Ready badge when fully funded), pdf_generator (PDF generation with fpdf2, savings targets section via _build_pdf_savings_targets())",
       "type": "analysis"
     },
     {
@@ -1744,10 +1744,10 @@
     },
     {
       "file": "middleware/intrusion_detect.py",
-      "purpose": "Scans POST/PUT/PATCH bodies and GET query strings for injection patterns (SQL, XSS, shell, path traversal); logs attempts and triggers fail2ban after threshold — does NOT block requests to avoid false positives on legitimate content"
+      "purpose": "Scans POST/PUT/PATCH bodies and GET query strings for injection patterns (SQL, XSS, shell, path traversal); logs attempts and triggers fail2ban after threshold \u2014 does NOT block requests to avoid false positives on legitimate content"
     }
   ],
-  "security_headers": "SecurityHeadersMiddleware (inline in main.py) sets X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin. CSP and HSTS are intentionally NOT set here — they are owned by nginx (tradebot.conf) to avoid header stacking that would break TradingView chart embeds.",
+  "security_headers": "SecurityHeadersMiddleware (inline in main.py) sets X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin. CSP and HSTS are intentionally NOT set here \u2014 they are owned by nginx (tradebot.conf) to avoid header stacking that would break TradingView chart embeds.",
   "utils": [
     {
       "file": "utils/candle_utils.py",
@@ -1878,151 +1878,151 @@
     {
       "name": "MultiBotMonitor",
       "interval": "Per-strategy (15min for AI, varies for others)",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Core bot loop: parallel price monitoring and strategy signal dispatch (Semaphore(5))"
     },
     {
       "name": "LimitOrderMonitor",
       "interval": "10 seconds",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Check pending limit orders for fills"
     },
     {
       "name": "OrderReconciliationMonitor",
       "interval": "60 seconds",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Auto-fix orphaned positions with missing fill data"
     },
     {
       "name": "MissingOrderDetector",
       "interval": "5 minutes",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Detect unrecorded orders from exchange"
     },
     {
       "name": "PerpsMonitor",
       "interval": "60 seconds",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Sync perpetual futures positions with exchange state"
     },
     {
       "name": "PropGuardMonitor",
       "interval": "30 seconds",
-      "scheduler_tier": "Tier 1 — asyncio.create_task (real-time trading)",
+      "scheduler_tier": "Tier 1 \u2014 asyncio.create_task (real-time trading)",
       "purpose": "Background equity monitoring for prop firm accounts"
     },
     {
       "name": "AutoBuyMonitor",
       "interval": "10 seconds (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Convert stablecoins to BTC when thresholds exceeded"
     },
     {
       "name": "RebalanceMonitor",
       "interval": "30 seconds (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Portfolio rebalance trigger monitoring"
     },
     {
       "name": "ReportScheduler",
       "interval": "15 minutes (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Check for due report schedules and generate reports"
     },
     {
       "name": "TransferSync",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Sync deposit/withdrawal transactions from Coinbase"
     },
     {
       "name": "AccountSnapshotCapture",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Capture account value snapshots for historical charts and goal progress snapshots"
     },
     {
       "name": "BanMonitor",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 2 — APScheduler near-realtime",
+      "scheduler_tier": "Tier 2 \u2014 APScheduler near-realtime",
       "purpose": "Banned IP monitoring with geo-lookup enrichment (country, ISP, city) via ip-api.com"
     },
     {
       "name": "TradingPairMonitor",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Sync trading pairs, remove delisted pairs from bots"
     },
     {
       "name": "ContentRefreshService",
       "interval": "News: 30min, Videos: 60min (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Fetch fresh news articles and YouTube videos"
     },
     {
       "name": "DebtCeilingMonitor",
       "interval": "Weekly (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Check for new US debt ceiling legislation"
     },
     {
       "name": "CoinReviewScheduler",
       "interval": "7 days (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Weekly AI-powered coin status review and categorization"
     },
     {
       "name": "DomainBlacklistService",
       "interval": "Weekly (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Domain-level blocking refresh for content sources that block our IP"
     },
     {
       "name": "DecisionLogCleanup",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove old AI decision logs"
     },
     {
       "name": "FailedConditionCleanup",
       "interval": "6 hours (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove noise indicator condition logs"
     },
     {
       "name": "FailedOrderCleanup",
       "interval": "6 hours (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove old failed order records"
     },
     {
       "name": "RevokedTokenCleanup",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove expired entries from revoked_tokens table"
     },
     {
       "name": "ReportCleanup",
       "interval": "Weekly (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove generated reports older than 2 years"
     },
     {
       "name": "SessionCleanup",
       "interval": "Daily (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Expire stale active sessions and delete old inactive session records"
     },
     {
       "name": "RateLimitAttemptCleanup",
       "interval": "Hourly (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Remove expired rate limit attempt records from database"
     },
     {
       "name": "InMemoryCacheCleanup",
       "interval": "5 minutes (APScheduler)",
-      "scheduler_tier": "Tier 3 — APScheduler batch",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Sweep all in-memory caches to prevent unbounded growth: price cache, chat/game rate-limit dicts, game rooms, monitor caches, auth rate limiters, public endpoint rate limiter, WebSocket stale connections"
     }
   ],

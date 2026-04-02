@@ -1,7 +1,7 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.154.7",
-  "updated": "2026-03-31",
+  "version": "v2.155.0",
+  "updated": "2026-04-02",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "split_files": {
     "backend": "docs/architecture/backend.json",

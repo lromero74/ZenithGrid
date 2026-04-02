@@ -57,7 +57,7 @@ export const BotListItem = memo(function BotListItem({
   setAiLogsBotId,
   setIndicatorLogsBotId,
   setScannerLogsBotId,
-  portfolio,
+  portfolio: _portfolio,
   aggregateData,
   rebalanceStatus,
   canWrite = true,

@@ -89,6 +89,7 @@ def compute_savings_capital_required(
     tax_pct: float = 0.0,
     is_recurring: bool = False,
     current_balance: float = 0.0,
+    recurrence_months: Optional[int] = None,
 ) -> float:
     """
     Calculate the Present Value (capital) that must be reserved in the account
@@ -96,7 +97,8 @@ def compute_savings_capital_required(
 
     PV = gross_target / (1 + monthly_rate)^n
 
-    For recurring targets with tax: gross_target includes tax + principal preservation.
+    For recurring targets: gross_target includes tax gross-up and the self-sustaining
+    hold (minimum seed that compounds back to the next withdrawal by itself).
     Returns 0.0 if target_date is in the past or already funded.
     """
     today = date.today()
@@ -108,7 +110,10 @@ def compute_savings_capital_required(
     if n <= 0:
         return 0.0
 
-    gross_target = _compute_gross_target(target_amount, tax_pct, is_recurring, current_balance)
+    gross_target = _compute_gross_target(
+        target_amount, tax_pct, is_recurring, current_balance,
+        annual_growth_rate_pct, recurrence_months
+    )
     r = annual_growth_rate_pct / 100.0 / 12.0
 
     if r == 0.0:
@@ -122,23 +127,60 @@ def compute_savings_capital_required(
         return 0.0
 
 
+def _compute_self_sustaining_hold(
+    gross_withdrawal: float,
+    annual_growth_rate_pct: float,
+    recurrence_months: Optional[int],
+) -> float:
+    """
+    Compute the minimum seed to keep after a recurring withdrawal so it compounds
+    back to (gross_withdrawal + hold) by the next cycle — no further contributions
+    needed.
+
+    Derived from: hold × (1+r)^n = gross_withdrawal + hold
+                  hold = gross_withdrawal / ((1+r)^n − 1)
+
+    Returns 0.0 if rate ≤ 0 or recurrence_months ≤ 0.
+    """
+    if not recurrence_months or recurrence_months <= 0:
+        return 0.0
+    r = annual_growth_rate_pct / 100.0 / 12.0
+    if r <= 0.0:
+        return 0.0
+    try:
+        factor = math.pow(1 + r, recurrence_months)
+        denominator = factor - 1.0
+        if denominator <= 0:
+            return 0.0
+        return gross_withdrawal / denominator
+    except OverflowError:
+        return 0.0
+
+
 def _compute_gross_target(
     target_amount: float,
     tax_pct: float,
     is_recurring: bool,
     current_balance: float,
+    annual_growth_rate_pct: float = 0.0,
+    recurrence_months: Optional[int] = None,
 ) -> float:
     """
     Compute the gross FV target that the account balance must reach.
 
     - Non-recurring, no tax: just target_amount
     - Non-recurring, with tax: target_amount / (1 - tax_pct/100) so after-tax = target
-    - Recurring, no tax: target_amount + current_balance (preserve principal for next cycle)
-    - Recurring, with tax: (target_amount / (1 - tax_pct/100)) + current_balance
+    - Recurring: gross_withdrawal + max(current_balance, self_sustaining_hold)
+      The hold is at least the self-sustaining seed so that after withdrawal the
+      remaining balance compounds back to the full target by the next cycle.
     """
     gross_withdrawal = target_amount / (1 - tax_pct / 100) if tax_pct > 0 else target_amount
     if is_recurring:
-        return gross_withdrawal + current_balance
+        self_sus_hold = _compute_self_sustaining_hold(
+            gross_withdrawal, annual_growth_rate_pct, recurrence_months
+        )
+        hold = max(current_balance, self_sus_hold)
+        return gross_withdrawal + hold
     return gross_withdrawal
 
 
@@ -149,6 +191,7 @@ def compute_monthly_savings_contribution(
     annual_growth_rate_pct: float,
     tax_pct: float,
     is_recurring: bool = False,
+    recurrence_months: Optional[int] = None,
 ) -> float:
     """
     Calculate the required monthly contribution from income to bridge any gap
@@ -157,8 +200,8 @@ def compute_monthly_savings_contribution(
     If current_balance already compounds to the gross target by target_date,
     returns 0.0 — no income contribution needed, growth alone is sufficient.
 
-    For recurring targets: gross target includes tax gross-up and principal
-    preservation so the cycle can restart after withdrawal.
+    For recurring targets: gross target includes tax gross-up and the self-sustaining
+    hold so the cycle restarts without additional contributions after the first cycle.
 
     Uses the standard PMT formula:
         PMT = r * (FV - PV*(1+r)^n) / ((1+r)^n - 1)
@@ -168,7 +211,10 @@ def compute_monthly_savings_contribution(
     if target_date <= today:
         return 0.0
 
-    gross_target = _compute_gross_target(target_amount, tax_pct, is_recurring, current_balance)
+    gross_target = _compute_gross_target(
+        target_amount, tax_pct, is_recurring, current_balance,
+        annual_growth_rate_pct, recurrence_months
+    )
 
     if current_balance >= gross_target:
         return 0.0
@@ -230,9 +276,25 @@ def _build_savings_target_entry(
         months_remaining = round((target_date - today).days / _DAYS_PER_MONTH)
 
     # Gross target = total to accumulate by deadline (includes tax gross-up and
-    # principal preservation for recurring targets). Exposed so callers can show
+    # self-sustaining hold for recurring targets). Exposed so callers can show
     # the user both their spend target and the total-to-accumulate.
-    gross_target = _compute_gross_target(target_amount, tax_pct, is_recurring, current_balance)
+    gross_target = _compute_gross_target(
+        target_amount, tax_pct, is_recurring, current_balance,
+        growth_rate, recurrence_months
+    )
+
+    # Breakdown components for the spend line in the report:
+    # tax_amount      = the tax gross-up added on top of spend (0 if no tax)
+    # recurrence_hold = hold = gross_target - gross_withdrawal (the self-sustaining seed,
+    #                   or current_balance if already larger). 0 if not recurring.
+    gross_withdrawal = target_amount / (1 - tax_pct / 100) if tax_pct > 0 else target_amount
+    tax_amount = round(gross_withdrawal - target_amount, 2)
+    recurrence_hold = round(gross_target - gross_withdrawal, 2) if is_recurring else 0.0
+
+    # Ready = the account can make the full withdrawal right now (spend + tax).
+    # For recurring items the leftover (current_balance - gross_withdrawal) becomes
+    # the new seed; for non-recurring this is equivalent to current_balance >= gross_target.
+    is_ready = current_balance >= gross_withdrawal
 
     # Capital required TODAY (PV) for compound growth to reach gross target by deadline.
     capital_required = compute_savings_capital_required(
@@ -242,11 +304,12 @@ def _build_savings_target_entry(
         tax_pct=tax_pct,
         is_recurring=is_recurring,
         current_balance=current_balance,
+        recurrence_months=recurrence_months,
     )
     capital_gap = max(0.0, capital_required - current_balance)
 
     # Monthly income contribution needed ONLY if current balance is insufficient.
-    # Accounts for tax gross-up and principal preservation (recurring).
+    # Accounts for tax gross-up and self-sustaining hold (recurring).
     monthly_contribution = compute_monthly_savings_contribution(
         target_amount=target_amount,
         target_date=target_date or today,
@@ -254,6 +317,7 @@ def _build_savings_target_entry(
         annual_growth_rate_pct=growth_rate,
         tax_pct=tax_pct,
         is_recurring=is_recurring,
+        recurrence_months=recurrence_months,
     )
 
     # Normalize monthly contribution to the goal period
@@ -293,6 +357,9 @@ def _build_savings_target_entry(
         "is_recurring": is_recurring,
         "recurrence_months": recurrence_months,
         "savings_on_track": savings_on_track,
+        "is_ready": is_ready,
+        "tax_amount": tax_amount,
+        "recurrence_hold": recurrence_hold,
         "sort_order": getattr(item, "sort_order", 0),
         "status": status,
         "coverage_pct": 0.0,  # set by waterfall pass below
@@ -455,6 +522,7 @@ def compute_expense_coverage(
                     annual_growth_rate_pct=entry["assumed_growth_rate_pct"],
                     tax_pct=tax_pct,
                     is_recurring=getattr(item, "savings_is_recurring", False),
+                    recurrence_months=getattr(item, "savings_recurrence_months", None),
                 )
                 entry["monthly_contribution"] = round(monthly_contribution, 2)
                 norm_contrib = normalize_monthly_to_period(monthly_contribution, period)

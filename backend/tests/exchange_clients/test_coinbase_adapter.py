@@ -237,6 +237,23 @@ class TestMarketDataMethods:
         result = await adapter.list_products()
         assert len(result) == 1
         assert result[0]["product_id"] == "BTC-USD"
+        mock_client.list_products.assert_called_once_with(bypass_cache=False)
+
+    @pytest.mark.asyncio
+    async def test_list_products_bypass_cache(self):
+        """Edge case: bypass_cache=True is forwarded to the underlying client.
+
+        Regression test for the bug where CoinbaseAdapter.list_products() did not
+        accept bypass_cache, causing a TypeError when the /products endpoint was
+        called with force_refresh=true, which silently returned a 500 and left the
+        bot edit modal with only DEFAULT_TRADING_PAIRS (~3 pairs).
+        """
+        mock_client = _make_mock_coinbase_client()
+        adapter = CoinbaseAdapter(mock_client)
+
+        result = await adapter.list_products(bypass_cache=True)
+        assert len(result) == 1
+        mock_client.list_products.assert_called_once_with(bypass_cache=True)
 
     @pytest.mark.asyncio
     async def test_get_ticker(self):

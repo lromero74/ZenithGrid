@@ -438,7 +438,7 @@
       },
       {
         "file": "components/sharing/ObserverModeBanner.tsx",
-        "purpose": "Sticky read-only banner displayed when the active account is a shared account observed by the current user; shows the owner's display name and account name, e.g. 'Observer Mode — Viewing Louis's account Main Trading (Read-Only)'; receives ownerName from App.tsx via selectedAccount.shared_by"
+        "purpose": "Sticky read-only banner displayed when the active account is a shared account observed by the current user; shows the owner's display name and account name, e.g. 'Observer Mode \u2014 Viewing Louis's account Main Trading (Read-Only)'; receives ownerName from App.tsx via selectedAccount.shared_by"
       }
     ],
     "layout_and_common": [
@@ -487,7 +487,7 @@
         },
         {
           "file": "components/positions/DealChart.tsx",
-          "purpose": "Buy/sell history visualization within position; safety order price lines rendered via createPriceLine O(d) instead of addLineSeries+setData O(d×n); tracks active lines in soPriceLinesRef; imports LineStyle from lightweight-charts"
+          "purpose": "Buy/sell history visualization within position; safety order price lines rendered via createPriceLine O(d) instead of addLineSeries+setData O(d\u00d7n); tracks active lines in soPriceLinesRef; imports LineStyle from lightweight-charts"
         },
         {
           "file": "components/positions/IndicatorModals.tsx",
@@ -495,7 +495,7 @@
         },
         {
           "file": "components/positions/PriceBar.tsx",
-          "purpose": "Price bar with entry/exit levels; DCA price calculation delegated to calculateDCAPrices() in positionUtils.ts (replaces former O(d²) nested loop)"
+          "purpose": "Price bar with entry/exit levels; DCA price calculation delegated to calculateDCAPrices() in positionUtils.ts (replaces former O(d\u00b2) nested loop)"
         },
         {
           "file": "components/positions/positionUtils.ts",
@@ -903,7 +903,7 @@
     },
     {
       "file": "constants/voices.ts",
-      "purpose": "TTS voice definitions (Microsoft Edge TTS Neural and Multilingual Neural voices including davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi added in v2.137), CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter — child voices are automatically swapped for adult voices when article content matches"
+      "purpose": "TTS voice definitions (Microsoft Edge TTS Neural and Multilingual Neural voices including davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi added in v2.137), CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter \u2014 child voices are automatically swapped for adult voices when article content matches"
     }
   ]
 }

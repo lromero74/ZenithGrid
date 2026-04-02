@@ -115,7 +115,7 @@ export const PositionCard = memo(function PositionCard({
   }
 
   return (
-    <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+    <div className="bg-slate-800 rounded-lg border border-slate-700">
       {/* Deal Row - Horizontal Layout */}
       <div
         className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
@@ -595,7 +595,7 @@ export const PositionCard = memo(function PositionCard({
 
       {/* Expandable Details Section (keep existing chart/details) */}
       {selectedPosition === position.id && (
-        <div className="border-t border-slate-700 bg-slate-900/50 p-6">
+        <div className="border-t border-slate-700 bg-slate-900/50 p-6 rounded-b-lg overflow-hidden">
           {/* Grid Trading Visualization */}
           {bot?.strategy_type === 'grid_trading' && bot?.strategy_config?.grid_state && currentPrice ? (
             <GridVisualizer

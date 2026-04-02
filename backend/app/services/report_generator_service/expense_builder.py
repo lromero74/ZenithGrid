@@ -329,6 +329,12 @@ def _build_savings_status_badge(entry: dict) -> str:
     """Return an HTML badge for a savings target's status."""
     status = entry.get("status", "pending")
     on_track = entry.get("dynamic_on_track", False) or entry.get("savings_on_track", False)
+    is_ready = entry.get("is_ready", False)
+    if is_ready:
+        return (
+            '<span style="background:#1e3a5f; color:#93c5fd; padding:1px 6px;'
+            ' border-radius:4px; font-size:10px; font-weight:600;">Ready</span>'
+        )
     if status == "funded" or on_track:
         return (
             '<span style="background:#065f46; color:#6ee7b7; padding:1px 6px;'
@@ -358,12 +364,27 @@ def _build_savings_status_badge(entry: dict) -> str:
         )
 
 
-def _spend_line(prefix: str, fmt: str, target_amt: float, gross_target: float) -> str:
-    """Return 'Spend: $X' or 'Spend: $X → accumulate: $Y' when gross > spend."""
+def _spend_line(prefix: str, fmt: str, target_amt: float, gross_target: float,
+                tax_amount: float = 0.0, recurrence_hold: float = 0.0) -> str:
+    """Return a spend summary line with optional Tax/Hold breakdown.
+
+    Plain:     Spend: $25.00
+    With tax:  Spend: $25.00 · Tax: $8.33 → accumulate: $33.33
+    Full:      Spend: $25.00 · Tax: $8.33 · Hold: $12.00 → accumulate: $45.33
+    """
     base = f"Spend:&nbsp;{prefix}{target_amt:{fmt}}"
-    if gross_target > target_amt + 0.01:
-        return f"{base}&nbsp;&rarr;&nbsp;accumulate:&nbsp;{prefix}{gross_target:{fmt}}"
-    return base
+    if gross_target <= target_amt + 0.01:
+        return base
+
+    parts = [base]
+    if tax_amount > 0.01:
+        parts.append(f"Tax:&nbsp;{prefix}{tax_amount:{fmt}}")
+    if recurrence_hold > 0.01:
+        parts.append(f"Hold:&nbsp;{prefix}{recurrence_hold:{fmt}}")
+    return (
+        "&nbsp;&middot;&nbsp;".join(parts)
+        + f"&nbsp;&rarr;&nbsp;accumulate:&nbsp;{prefix}{gross_target:{fmt}}"
+    )
 
 
 def _build_savings_targets_html(
@@ -394,6 +415,8 @@ def _build_savings_targets_html(
         rate_source = entry.get("growth_rate_source", "account")
         monthly_contrib = entry.get("monthly_contribution", 0)
         is_recurring = entry.get("is_recurring", False)
+        tax_amount = entry.get("tax_amount", 0.0)
+        recurrence_hold = entry.get("recurrence_hold", 0.0)
         on_track = cap_gap <= 0
         badge = _build_savings_status_badge(entry)
 
@@ -442,7 +465,7 @@ def _build_savings_targets_html(
                     <div style="color:#f1f5f9; font-size:12px; font-weight:600;">
                         {name}{recur_hint}</div>
                     <div style="color:#94a3b8; font-size:10px; margin-top:1px;">
-                        {_spend_line(prefix, fmt, target_amt, gross_target)} by {date_str}
+                        {_spend_line(prefix, fmt, target_amt, gross_target, tax_amount, recurrence_hold)} by {date_str}
                         &nbsp;·&nbsp;{months_remaining}mo&nbsp;·&nbsp;{rate_label}
                     </div>
                 </td>

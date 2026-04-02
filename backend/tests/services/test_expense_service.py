@@ -1814,8 +1814,9 @@ class TestBuildSavingsTargetEntryGrossTarget:
         # gross_withdrawal = 10000 / (1 - 0.20) = 12500
         assert result["gross_target"] == pytest.approx(12500.0, abs=0.01)
 
-    def test_recurring_no_tax_gross_includes_principal(self):
-        """Recurring with no tax: gross_target = target_amount + current_balance."""
+    def test_recurring_no_tax_gross_includes_self_sustaining_hold(self):
+        """Recurring with no tax: gross_target = target_amount + max(balance, self_sustaining_hold)."""
+        import math
         from datetime import date, timedelta
         from app.services.expense_service import _build_savings_target_entry
 
@@ -1832,11 +1833,14 @@ class TestBuildSavingsTargetEntryGrossTarget:
             item, period="monthly", income_after_tax=4000.0, tax_pct=0.0
         )
         assert "gross_target" in result
-        # gross_target = 3000 + 1000 (preserve principal)
-        assert result["gross_target"] == pytest.approx(4000.0, abs=0.01)
+        # self_sustaining_hold = 3000 / ((1.00667)^12 - 1) ≈ 36148 >> balance=1000
+        r = 8.0 / 100.0 / 12.0
+        expected_hold = 3000.0 / (math.pow(1 + r, 12) - 1)
+        assert result["gross_target"] == pytest.approx(3000.0 + expected_hold, rel=0.001)
 
     def test_recurring_with_tax_gross_target_combines_both(self):
-        """Recurring + tax: gross_target = (target / (1-tax)) + current_balance."""
+        """Recurring + tax: gross_target = gross_withdrawal + max(balance, self_sustaining_hold)."""
+        import math
         from datetime import date, timedelta
         from app.services.expense_service import _build_savings_target_entry
 
@@ -1853,6 +1857,354 @@ class TestBuildSavingsTargetEntryGrossTarget:
             item, period="monthly", income_after_tax=6000.0, tax_pct=25.0
         )
         assert "gross_target" in result
-        # gross_withdrawal = 5000 / (1 - 0.25) = 6666.67
-        # gross_target = 6666.67 + 500 = 7166.67
-        assert result["gross_target"] == pytest.approx(7166.67, abs=0.01)
+        # gross_withdrawal = 5000 / 0.75 = 6666.67
+        # self_sustaining_hold = 6666.67 / ((1.00667)^12 - 1) >> balance=500
+        r = 8.0 / 100.0 / 12.0
+        gross_w = 5000.0 / 0.75
+        expected_hold = gross_w / (math.pow(1 + r, 12) - 1)
+        assert result["gross_target"] == pytest.approx(gross_w + expected_hold, rel=0.001)
+
+
+class TestSavingsTargetEntryBreakdownFields:
+    """TDD: _build_savings_target_entry must expose tax_amount and recurrence_hold
+    so the report can render a breakdown like:
+      Spend: $25 · Tax: $3 · Hold: $12 → accumulate: $40
+    """
+
+    def test_no_tax_no_recurrence_both_zero(self):
+        """Happy path: no tax, not recurring — both breakdown fields are 0."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Vacation",
+            target_amount=1000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=0.0)
+        assert result["tax_amount"] == pytest.approx(0.0, abs=0.01)
+        assert result["recurrence_hold"] == pytest.approx(0.0, abs=0.01)
+
+    def test_with_tax_no_recurrence(self):
+        """Edge case: 20% tax adds to gross_target; recurrence_hold stays 0."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Laptop",
+            target_amount=2000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=20.0)
+        # gross_withdrawal = 2000 / 0.80 = 2500; tax = 500
+        assert result["tax_amount"] == pytest.approx(500.0, abs=0.01)
+        assert result["recurrence_hold"] == pytest.approx(0.0, abs=0.01)
+
+    def test_recurring_no_tax(self):
+        """Edge case: recurring with no tax — hold = self-sustaining seed (> balance), tax = 0."""
+        import math
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Annual sub",
+            target_amount=500.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=200.0,
+            growth_rate=8.0,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=2000.0, tax_pct=0.0)
+        # self_sustaining_hold = 500 / ((1.00667)^12 - 1) ≈ 6025; dominates over balance=200
+        r = 8.0 / 100.0 / 12.0
+        expected_hold = 500.0 / (math.pow(1 + r, 12) - 1)
+        assert result["tax_amount"] == pytest.approx(0.0, abs=0.01)
+        assert result["recurrence_hold"] == pytest.approx(expected_hold, rel=0.001)
+
+    def test_recurring_with_tax(self):
+        """Happy path: recurring + tax — self-sustaining hold dominates over current_balance."""
+        import math
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Zoho Mail",
+            target_amount=25.0,
+            target_date=date.today() + timedelta(days=270),
+            current_balance=12.0,
+            growth_rate=35.9,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=25.0)
+        # gross_withdrawal = 25 / 0.75 = 33.33; tax = 8.33
+        # self_sustaining_hold = 33.33 / ((1 + 35.9/1200)^12 - 1) ≈ 78.6; dominates over 12.0
+        gross_w = 25.0 / 0.75
+        r = 35.9 / 100.0 / 12.0
+        expected_hold = gross_w / (math.pow(1 + r, 12) - 1)
+        assert result["tax_amount"] == pytest.approx(gross_w - 25.0, abs=0.01)
+        assert result["recurrence_hold"] == pytest.approx(expected_hold, rel=0.001)
+        assert result["gross_target"] == pytest.approx(gross_w + expected_hold, rel=0.001)
+
+
+class TestSavingsReadyStatus:
+    """TDD: _build_savings_target_entry must expose is_ready=True when
+    current_balance >= gross_target (fully accumulated, can spend now).
+
+    'On Track' = on pace to accumulate by deadline.
+    'Ready'    = already holds the full gross_target; no more growth needed.
+    """
+
+    def test_not_ready_when_balance_below_gross_target(self):
+        """Happy path: balance below gross_target — not ready."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Car repair",
+            target_amount=1000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=500.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=0.0)
+        assert result["is_ready"] is False
+
+    def test_ready_when_balance_meets_gross_target(self):
+        """Happy path: balance == gross_target — is_ready=True."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Phone upgrade",
+            target_amount=800.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=800.0,  # exact match
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=0.0)
+        assert result["is_ready"] is True
+
+    def test_ready_when_balance_exceeds_gross_target(self):
+        """Edge case: balance > gross_target — still ready."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Emergency fund",
+            target_amount=1000.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=1200.0,
+            growth_rate=8.0,
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=0.0)
+        assert result["is_ready"] is True
+
+    def test_on_track_but_not_ready(self):
+        """Edge case: capital_gap <= 0 (on track) but balance < gross_target — not ready."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        # Low rate + short horizon so current_balance barely covers PV but not gross
+        item = _mock_savings_item(
+            name="Slow saver",
+            target_amount=1000.0,
+            target_date=date.today() + timedelta(days=30),
+            current_balance=990.0,  # close but below gross_target of 1000
+            growth_rate=0.0,        # no growth so PV = FV; 990 < 1000 means not on track
+            is_recurring=False,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=0.0)
+        assert result["is_ready"] is False
+
+    def test_ready_with_tax_and_recurrence_fully_funded(self):
+        """Happy path: recurring + tax, balance >= gross_target — is_ready=True."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        target = 25.0
+        tax_pct = 25.0
+        balance = 500.0  # well above gross_target
+        item = _mock_savings_item(
+            name="Zoho Mail",
+            target_amount=target,
+            target_date=date.today() + timedelta(days=270),
+            current_balance=balance,
+            growth_rate=35.9,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(item, period="monthly", income_after_tax=3000.0, tax_pct=tax_pct)
+        # gross_target = 25/0.75 + max(500, self_sustaining_hold) — balance=500 dominates
+        assert result["is_ready"] is True
+
+
+# ---------------------------------------------------------------------------
+# Self-sustaining hold for recurring savings targets
+# ---------------------------------------------------------------------------
+
+class TestSelfSustainingHold:
+    """TDD: _compute_self_sustaining_hold returns the minimum seed to keep
+    after a recurring withdrawal so it compounds back to (gross_withdrawal + hold)
+    by the next cycle — making the savings permanently self-sustaining.
+
+    Derived from: hold × (1+r)^n = gross_withdrawal + hold
+                  hold = gross_withdrawal / ((1+r)^n − 1)
+    """
+
+    def test_compounding_property(self):
+        """After keeping hold, it must compound back to gross_withdrawal + hold."""
+        import math
+        from app.services.expense_service import _compute_self_sustaining_hold
+
+        gross_w = 100.0
+        rate_pct = 12.0   # 1%/month
+        months = 12
+        hold = _compute_self_sustaining_hold(gross_w, rate_pct, months)
+        r = rate_pct / 100.0 / 12.0
+        # hold × (1+r)^n must equal gross_withdrawal + hold
+        assert hold * math.pow(1 + r, months) == pytest.approx(gross_w + hold, rel=0.001)
+
+    def test_zero_rate_returns_zero(self):
+        """Cannot be self-sustaining with 0% growth — hold is 0."""
+        from app.services.expense_service import _compute_self_sustaining_hold
+        assert _compute_self_sustaining_hold(100.0, 0.0, 12) == pytest.approx(0.0)
+
+    def test_zero_months_returns_zero(self):
+        """No recurrence period — no hold needed."""
+        from app.services.expense_service import _compute_self_sustaining_hold
+        assert _compute_self_sustaining_hold(100.0, 12.0, 0) == pytest.approx(0.0)
+
+    def test_none_months_returns_zero(self):
+        """None recurrence months — treated as non-recurring, no hold."""
+        from app.services.expense_service import _compute_self_sustaining_hold
+        assert _compute_self_sustaining_hold(100.0, 12.0, None) == pytest.approx(0.0)
+
+    def test_very_high_rate_hold_is_small(self):
+        """At 240% annual, the self-sustaining hold on $100 is tiny (<$20)."""
+        from app.services.expense_service import _compute_self_sustaining_hold
+        hold = _compute_self_sustaining_hold(100.0, 240.0, 12)
+        assert 0 < hold < 20.0
+
+    def test_low_rate_large_hold(self):
+        """At 8% annual, $500/yr withdrawal requires large perpetuity-like seed."""
+        from app.services.expense_service import _compute_self_sustaining_hold
+        # hold ≈ 500 / ((1.00667)^12 - 1) ≈ 6025
+        hold = _compute_self_sustaining_hold(500.0, 8.0, 12)
+        assert hold == pytest.approx(6025.0, rel=0.01)
+
+
+class TestRecurringSelfSustainingGrossTarget:
+    """TDD: _compute_gross_target for recurring items uses max(current_balance,
+    self_sustaining_hold) as the hold component."""
+
+    def test_zero_balance_uses_self_sustaining_hold(self):
+        """With zero balance and positive rate, hold = self-sustaining seed."""
+        from app.services.expense_service import _compute_gross_target
+        gross_target = _compute_gross_target(
+            target_amount=100.0,
+            tax_pct=0.0,
+            is_recurring=True,
+            current_balance=0.0,
+            annual_growth_rate_pct=12.0,
+            recurrence_months=12,
+        )
+        # self_sustaining_hold ≈ 100 / ((1.01)^12 - 1) ≈ 788
+        # gross_target = 100 + ~788 = ~888
+        assert gross_target > 100.0
+
+    def test_higher_balance_preserved(self):
+        """When current_balance > self_sustaining_hold, balance is used."""
+        from app.services.expense_service import _compute_gross_target
+        # $10000 >> any sensible hold for $100/yr at 12%
+        gross_target = _compute_gross_target(
+            target_amount=100.0,
+            tax_pct=0.0,
+            is_recurring=True,
+            current_balance=10000.0,
+            annual_growth_rate_pct=12.0,
+            recurrence_months=12,
+        )
+        assert gross_target == pytest.approx(10100.0, rel=0.001)
+
+    def test_non_recurring_unaffected(self):
+        """Non-recurring targets ignore hold entirely."""
+        from app.services.expense_service import _compute_gross_target
+        gross_target = _compute_gross_target(
+            target_amount=100.0,
+            tax_pct=0.0,
+            is_recurring=False,
+            current_balance=0.0,
+            annual_growth_rate_pct=12.0,
+            recurrence_months=12,
+        )
+        assert gross_target == pytest.approx(100.0)
+
+    def test_zero_rate_falls_back_to_balance(self):
+        """With zero rate, self-sustaining hold = 0; falls back to current_balance."""
+        from app.services.expense_service import _compute_gross_target
+        gross_target = _compute_gross_target(
+            target_amount=100.0,
+            tax_pct=0.0,
+            is_recurring=True,
+            current_balance=50.0,
+            annual_growth_rate_pct=0.0,
+            recurrence_months=12,
+        )
+        assert gross_target == pytest.approx(150.0)
+
+
+class TestRecurringSelfSustainingHoldInEntry:
+    """TDD: _build_savings_target_entry uses self-sustaining hold for
+    recurrence_hold when growth rate is positive."""
+
+    def test_zero_balance_recurring_with_rate_shows_positive_hold(self):
+        """Zero balance + growth rate → recurrence_hold reflects self-sustaining seed."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Yearly Sub",
+            target_amount=100.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=12.0,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=3000.0, tax_pct=0.0
+        )
+        # self_sustaining_hold ≈ 100 / ((1.01)^12 - 1) ≈ 788
+        assert result["recurrence_hold"] > 0.0
+        assert result["gross_target"] > 100.0
+
+    def test_zero_rate_zero_balance_no_hold(self):
+        """Without growth rate, hold stays 0 (cannot self-sustain from nothing)."""
+        from datetime import date, timedelta
+        from app.services.expense_service import _build_savings_target_entry
+
+        item = _mock_savings_item(
+            name="Monthly Fee",
+            target_amount=25.0,
+            target_date=date.today() + timedelta(days=365),
+            current_balance=0.0,
+            growth_rate=0.0,
+            is_recurring=True,
+            recurrence_months=12,
+        )
+        result = _build_savings_target_entry(
+            item, period="monthly", income_after_tax=3000.0, tax_pct=0.0
+        )
+        assert result["recurrence_hold"] == pytest.approx(0.0, abs=0.01)
+        assert result["gross_target"] == pytest.approx(25.0, abs=0.01)

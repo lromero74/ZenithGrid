@@ -386,7 +386,7 @@ class TestGetUniqueCoins:
 
     @pytest.mark.asyncio
     async def test_returns_unique_coins(self):
-        """Happy path: returns unique coin list."""
+        """Happy path: returns unique coin list (now includes USDT/ETH market pairs)."""
         from app.routers.market_data_router import get_unique_coins, _market_data_cache
 
         # Clear cache
@@ -397,7 +397,7 @@ class TestGetUniqueCoins:
             {"product_id": "ETH-USD", "base_currency_id": "ETH", "status": "online"},
             {"product_id": "ETH-BTC", "base_currency_id": "ETH", "status": "online"},
             {"product_id": "AAVE-USD", "base_currency_id": "AAVE", "status": "online"},
-            {"product_id": "DOGE-EUR", "base_currency_id": "DOGE", "status": "online"},  # Excluded: not USD/USDC/BTC
+            {"product_id": "DOGE-EUR", "base_currency_id": "DOGE", "status": "online"},  # Excluded: not tradeable quote
             {"product_id": "SOL-USD", "base_currency_id": "SOL", "status": "offline"},  # Excluded: offline
         ])
 
@@ -423,3 +423,137 @@ class TestGetUniqueCoins:
         with pytest.raises(HTTPException) as exc_info:
             await get_unique_coins(coinbase=mock_coinbase)
         assert exc_info.value.status_code == 500
+
+
+# =============================================================================
+# GET /api/products — product listing + filtering
+# =============================================================================
+
+
+def _make_raw_products():
+    """Realistic Coinbase product list for filter tests."""
+    return [
+        {"product_id": "BTC-USD",  "base_currency_id": "BTC", "quote_currency_id": "USD",  "display_name": "BTC/USD",  "status": "online"},
+        {"product_id": "ETH-USD",  "base_currency_id": "ETH", "quote_currency_id": "USD",  "display_name": "ETH/USD",  "status": "online"},
+        {"product_id": "SOL-USDC", "base_currency_id": "SOL", "quote_currency_id": "USDC", "display_name": "SOL/USDC", "status": "online"},
+        {"product_id": "DOT-USDT", "base_currency_id": "DOT", "quote_currency_id": "USDT", "display_name": "DOT/USDT", "status": "online"},
+        {"product_id": "SOL-ETH",  "base_currency_id": "SOL", "quote_currency_id": "ETH",  "display_name": "SOL/ETH",  "status": "online"},
+        {"product_id": "ETH-BTC",  "base_currency_id": "ETH", "quote_currency_id": "BTC",  "display_name": "ETH/BTC",  "status": "online"},
+        {"product_id": "DOGE-EUR", "base_currency_id": "DOGE", "quote_currency_id": "EUR", "display_name": "DOGE/EUR", "status": "online"},  # not tradeable
+        {"product_id": "LTC-USD",  "base_currency_id": "LTC", "quote_currency_id": "USD",  "display_name": "LTC/USD",  "status": "offline"},  # offline
+    ]
+
+
+class TestGetProducts:
+    """Tests for GET /api/products — product filtering and force_refresh."""
+
+    @pytest.mark.asyncio
+    async def test_happy_path_filters_tradeable_pairs(self):
+        """Happy path: only online USD/USDC/USDT/ETH/BTC pairs are returned."""
+        from app.routers.market_data_router import get_products
+        from unittest.mock import MagicMock
+
+        mock_coinbase = MagicMock()
+        mock_coinbase.list_products = AsyncMock(return_value=_make_raw_products())
+
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        result = await get_products(
+            account_id=None,
+            force_refresh=False,
+            coinbase=mock_coinbase,
+            db=mock_db,
+            current_user=mock_user,
+        )
+
+        ids = [p["product_id"] for p in result["products"]]
+        # Online tradeable pairs included
+        assert "BTC-USD" in ids
+        assert "ETH-USD" in ids
+        assert "SOL-USDC" in ids
+        assert "DOT-USDT" in ids
+        assert "SOL-ETH" in ids
+        assert "ETH-BTC" in ids
+        # Non-tradeable quote and offline excluded
+        assert "DOGE-EUR" not in ids
+        assert "LTC-USD" not in ids
+        assert result["count"] == 6
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_forwards_bypass_cache(self):
+        """Edge case: force_refresh=True passes bypass_cache=True to list_products.
+
+        Regression test: CoinbaseAdapter.list_products() did not accept bypass_cache,
+        causing TypeError → 500 → frontend fell back to DEFAULT_TRADING_PAIRS (~3 pairs).
+        """
+        from app.routers.market_data_router import get_products
+
+        mock_coinbase = MagicMock()
+        mock_coinbase.list_products = AsyncMock(return_value=[
+            {"product_id": "BTC-USD", "base_currency_id": "BTC", "quote_currency_id": "USD",
+             "display_name": "BTC/USD", "status": "online"},
+        ])
+
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        await get_products(
+            account_id=None,
+            force_refresh=True,
+            coinbase=mock_coinbase,
+            db=mock_db,
+            current_user=mock_user,
+        )
+
+        mock_coinbase.list_products.assert_called_once_with(bypass_cache=True)
+
+    @pytest.mark.asyncio
+    async def test_results_sorted_btc_usd_first(self):
+        """Happy path: BTC-USD sorts before other pairs."""
+        from app.routers.market_data_router import get_products
+
+        mock_coinbase = MagicMock()
+        mock_coinbase.list_products = AsyncMock(return_value=_make_raw_products())
+
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        result = await get_products(
+            account_id=None,
+            force_refresh=False,
+            coinbase=mock_coinbase,
+            db=mock_db,
+            current_user=mock_user,
+        )
+
+        assert result["products"][0]["product_id"] == "BTC-USD"
+
+    @pytest.mark.asyncio
+    async def test_usdt_eth_pairs_included_after_unlock(self):
+        """Happy path: USDT and ETH quote pairs are included (regression: previously filtered out)."""
+        from app.routers.market_data_router import get_products
+
+        mock_coinbase = MagicMock()
+        mock_coinbase.list_products = AsyncMock(return_value=[
+            {"product_id": "SOL-USDT", "base_currency_id": "SOL", "quote_currency_id": "USDT",
+             "display_name": "SOL/USDT", "status": "online"},
+            {"product_id": "BNB-ETH",  "base_currency_id": "BNB", "quote_currency_id": "ETH",
+             "display_name": "BNB/ETH",  "status": "online"},
+        ])
+
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+
+        result = await get_products(
+            account_id=None,
+            force_refresh=False,
+            coinbase=mock_coinbase,
+            db=mock_db,
+            current_user=mock_user,
+        )
+
+        ids = [p["product_id"] for p in result["products"]]
+        assert "SOL-USDT" in ids
+        assert "BNB-ETH" in ids
+        assert result["count"] == 2

@@ -126,9 +126,9 @@ class CoinbaseAdapter(ExchangeClient):
     # MARKET DATA METHODS
     # ========================================
 
-    async def list_products(self) -> List[Dict[str, Any]]:
+    async def list_products(self, bypass_cache: bool = False) -> List[Dict[str, Any]]:
         """List all available trading pairs."""
-        return await self._client.list_products()
+        return await self._client.list_products(bypass_cache=bypass_cache)
 
     async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get details for a specific trading pair."""

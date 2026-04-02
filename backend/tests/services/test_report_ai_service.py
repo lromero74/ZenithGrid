@@ -55,32 +55,35 @@ class TestGeminiClientWrapperKwargs:
 
     def test_forward_system_instruction(self):
         """GeminiClientWrapper.GenerativeModel must pass **kwargs to genai."""
+        import google.generativeai as genai
         from app.ai_service import GeminiClientWrapper
 
         wrapper = GeminiClientWrapper(api_key="fake-key")
-        mock_genai = MagicMock()
 
-        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+        # Patch attributes on the real module — works regardless of import order
+        with patch.object(genai, "configure") as mock_configure, \
+             patch.object(genai, "GenerativeModel") as mock_gen_model:
             wrapper.GenerativeModel(
                 "gemini-2.0-flash",
                 system_instruction="You are a helpful assistant.",
             )
-            mock_genai.configure.assert_called_once_with(api_key="fake-key")
-            mock_genai.GenerativeModel.assert_called_once_with(
+            mock_configure.assert_called_once_with(api_key="fake-key")
+            mock_gen_model.assert_called_once_with(
                 "gemini-2.0-flash",
                 system_instruction="You are a helpful assistant.",
             )
 
     def test_forward_no_extra_kwargs(self):
         """Works fine without extra kwargs too."""
+        import google.generativeai as genai
         from app.ai_service import GeminiClientWrapper
 
         wrapper = GeminiClientWrapper(api_key="fake-key")
-        mock_genai = MagicMock()
 
-        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+        with patch.object(genai, "configure"), \
+             patch.object(genai, "GenerativeModel") as mock_gen_model:
             wrapper.GenerativeModel("gemini-2.0-flash")
-            mock_genai.GenerativeModel.assert_called_once_with("gemini-2.0-flash")
+            mock_gen_model.assert_called_once_with("gemini-2.0-flash")
 
 
 # ---------------------------------------------------------------------------

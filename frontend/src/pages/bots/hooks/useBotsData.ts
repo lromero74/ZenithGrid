@@ -72,9 +72,7 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
   const { data: productsData } = useQuery({
     queryKey: ['available-products', selectedAccount?.id],
     queryFn: async () => {
-      const params: any = selectedAccount?.id ? { account_id: selectedAccount.id } : {}
-      // Force refresh once to pick up the new USDT/ETH pairs we just unlocked
-      params.force_refresh = true
+      const params = selectedAccount?.id ? { account_id: selectedAccount.id } : {}
       const response = await api.get('/products', { params })
       return response.data
     },

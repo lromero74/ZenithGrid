@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.155.0] - 2026-04-02
+
+### Added
+- **Self-Sustaining Recurring Savings**: Recurring savings targets now compute a minimum "hold" seed — the amount that, when kept after each withdrawal, compounds back to cover the next cycle's withdrawal (including tax) without any further contributions. The savings report breakdown now shows `Spend · Tax · Hold → accumulate` so you can see exactly what you're building toward.
+- **"Ready" Badge for Savings**: Savings targets that have accumulated enough to make their full withdrawal right now display a "Ready" badge instead of "On Track".
+
+### Fixed
+- **Missing Trading Pairs**: Hundreds of USDT and ETH trading pairs were disappearing from the bot edit modal due to a `bypass_cache` parameter that was not forwarded through the adapter layer — causing a fallback to a tiny default list. All pairs are restored.
+- **Savings Report Breakdown**: The spend line now correctly breaks out Tax and Hold components alongside the Spend amount.
+- **Coin Category Tooltip Clipping**: The coin categorization hover tooltip on deal cards was being clipped by the card frame. It now renders in front of the card.
+- **Product List Cache**: Removed a hardcoded `force_refresh=true` that was bypassing the product cache on every page load.
+- **Test Isolation**: Fixed `TestGeminiClientWrapperKwargs` tests that failed when run after other tests that had already imported `google.generativeai`.
+
 ## [v2.154.7] - 2026-03-31
 
 ### Added
