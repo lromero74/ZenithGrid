@@ -74,11 +74,13 @@ class IndicatorCalculator:
             # Not enough closed candles for meaningful indicator calculation
             return indicators
 
-        # Extract price arrays from CLOSED candles only
-        closes = [float(c["close"]) for c in closed_candles]
-        highs = [float(c["high"]) for c in closed_candles]
-        lows = [float(c["low"]) for c in closed_candles]
-        volumes = [float(c["volume"]) for c in closed_candles]
+        # Extract price arrays from CLOSED candles only — single pass for all four
+        closes, highs, lows, volumes = [], [], [], []
+        for c in closed_candles:
+            closes.append(float(c["close"]))
+            highs.append(float(c["high"]))
+            lows.append(float(c["low"]))
+            volumes.append(float(c["volume"]))
 
         # Calculate indicators based on what's required
         for indicator_key in required_indicators:

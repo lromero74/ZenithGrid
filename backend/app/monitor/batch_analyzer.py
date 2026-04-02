@@ -105,15 +105,16 @@ async def _determine_pairs_to_analyze(
 
     pairs_to_analyze = list(trading_pairs)
 
+    # Build once; reused in the three constrained branches below.
+    pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+
     if not bot.is_active:
-        pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
         pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
         logger.info(
             f"  ⏸️  Bot is STOPPED - analyzing only {len(pairs_to_analyze)}"
             " pairs with open positions for DCA/exit"
         )
     elif open_count >= max_concurrent_deals:
-        pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
         pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
         if len(pairs_to_analyze) < len(trading_pairs):
             logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
@@ -122,7 +123,6 @@ async def _determine_pairs_to_analyze(
             )
             logger.info(f"  ⏭️  Skipping {len(trading_pairs) - len(pairs_to_analyze)} pairs without positions")
     elif not has_budget_for_new:
-        pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
         pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
         logger.warning(
             f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f}"

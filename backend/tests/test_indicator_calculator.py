@@ -600,3 +600,72 @@ class TestCalculateVwap:
         result = calc.calculate_all_indicators(sample_candle_list, {"vwap"})
         assert "vwap" in result
         assert result["vwap"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Contract test: OHLCV extraction produces consistent arrays
+# ---------------------------------------------------------------------------
+
+
+class TestOHLCVExtraction:
+    """Contract test for the 4-array extraction in calculate_all_indicators().
+
+    Verifies that closes, highs, lows, and volumes are drawn from the same
+    closed candles and produce self-consistent indicator values.
+
+    These tests lock in the observable behaviour BEFORE the refactor that
+    merges the four list comprehensions into a single loop.
+    """
+
+    @pytest.fixture
+    def fixed_candles(self):
+        """Deterministic 30-candle list for reproducible assertions."""
+        candles = []
+        for i in range(30):
+            base = 100.0 + i * 2.0
+            candles.append({
+                "open":   base - 0.5,
+                "high":   base + 1.5,
+                "low":    base - 1.5,
+                "close":  base,
+                "volume": 200.0 + i * 10,
+            })
+        return candles
+
+    def test_price_matches_current_candle_close(self, calc, fixed_candles):
+        """price == current (live) candle close — candles[-1], not closed candles[-2]."""
+        result = calc.calculate_all_indicators(fixed_candles, set())
+        # indicators["price"] is set from candles[-1]["close"], not closed_candles[-1]
+        expected_price = float(fixed_candles[-1]["close"])
+        assert result["price"] == pytest.approx(expected_price)
+
+    def test_volume_matches_current_candle(self, calc, fixed_candles):
+        """volume == current (live) candle volume — candles[-1]."""
+        result = calc.calculate_all_indicators(fixed_candles, set())
+        expected_vol = float(fixed_candles[-1]["volume"])
+        assert result["volume"] == pytest.approx(expected_vol)
+
+    def test_stochastic_uses_highs_and_lows(self, calc, fixed_candles):
+        """stoch_k uses the high/low arrays; verifies they are correctly extracted."""
+        result = calc.calculate_all_indicators(fixed_candles, {"stoch_k_14_3"})
+        assert "stoch_k_14_3" in result
+        # Stochastic must be in [0, 100]
+        assert 0.0 <= result["stoch_k_14_3"] <= 100.0
+
+    def test_bollinger_bands_use_closes(self, calc, fixed_candles):
+        """BB middle == SMA of closes; confirms closes array is consistent."""
+        result = calc.calculate_all_indicators(fixed_candles, {"bb_upper_20_2", "sma_20"})
+        assert "bb_middle_20_2" in result
+        assert "sma_20" in result
+        # BB middle (SMA of last 20 closes) should equal SMA-20
+        assert result["bb_middle_20_2"] == pytest.approx(result["sma_20"], rel=1e-6)
+
+    def test_all_four_arrays_derived_from_closed_candles(self, calc, fixed_candles):
+        """End-to-end: requesting all indicator types exercises all four arrays."""
+        indicators_to_request = {"rsi_14", "sma_10", "stoch_k_14_3", "volume_rsi_14"}
+        result = calc.calculate_all_indicators(fixed_candles, indicators_to_request)
+        # All requested indicators should be present (enough data)
+        assert "rsi_14" in result
+        assert "sma_10" in result
+        assert "stoch_k_14_3" in result
+        assert "volume_rsi_14" in result
