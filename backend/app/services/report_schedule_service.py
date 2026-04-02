@@ -7,14 +7,14 @@ Separated from the router to keep router endpoints thin.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.exceptions import NotFoundError, ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ReportGoal, ReportSchedule, ReportScheduleGoal
+from app.models import Report, ReportGoal, ReportSchedule, ReportScheduleGoal
 from app.services.report_scheduler import build_periodicity_label, compute_next_run_flexible
 
 logger = logging.getLogger(__name__)
@@ -103,6 +103,8 @@ async def create_schedule_record(
         chart_horizon=getattr(body, "chart_horizon", "auto") or "auto",
         chart_lookahead_multiplier=getattr(body, "chart_lookahead_multiplier", 1.0) or 1.0,
         show_minimap=getattr(body, "show_minimap", True) if getattr(body, "show_minimap", True) is not None else True,
+        retention_count=getattr(body, "retention_count", None),
+        retention_days=getattr(body, "retention_days", None),
         recipients=recipients_data,
         ai_provider=body.ai_provider,
         generate_ai_summary=body.generate_ai_summary,
@@ -248,3 +250,60 @@ async def update_schedule_record(
         .options(selectinload(ReportSchedule.goal_links))
     )
     return result.scalar_one()
+
+
+async def apply_retention(schedule: ReportSchedule, db: AsyncSession) -> int:
+    """Delete old reports for a schedule based on its retention policy.
+
+    A report is deleted when BOTH applicable limits are exceeded:
+    - Only retention_count set: delete oldest when count > retention_count
+    - Only retention_days set: delete when age > retention_days
+    - Both set: delete only when BOTH conditions are true (more permissive)
+    - Neither set: no deletion
+
+    Returns the number of reports deleted.
+    """
+    if schedule.retention_count is None and schedule.retention_days is None:
+        return 0
+
+    result = await db.execute(
+        select(Report)
+        .where(Report.schedule_id == schedule.id)
+        .order_by(Report.created_at.asc())
+    )
+    reports = result.scalars().all()
+
+    if not reports:
+        return 0
+
+    n = len(reports)
+    cutoff = (
+        datetime.utcnow() - timedelta(days=schedule.retention_days)
+        if schedule.retention_days is not None else None
+    )
+
+    to_delete = []
+    for i, report in enumerate(reports):
+        count_exceeded = (
+            schedule.retention_count is not None
+            and i < n - schedule.retention_count
+        )
+        age_exceeded = (
+            cutoff is not None
+            and report.created_at < cutoff
+        )
+
+        if schedule.retention_count is not None and schedule.retention_days is not None:
+            # Both set: delete only when both limits are exceeded
+            if count_exceeded and age_exceeded:
+                to_delete.append(report)
+        elif count_exceeded or age_exceeded:
+            to_delete.append(report)
+
+    for report in to_delete:
+        await db.delete(report)
+
+    if to_delete:
+        await db.commit()
+
+    return len(to_delete)

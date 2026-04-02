@@ -7,14 +7,13 @@ Covers:
 - update_schedule_record: partial update with recomputation
 """
 
-import json
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.exceptions import NotFoundError, ValidationError
-from app.models import ReportGoal, ReportSchedule, ReportScheduleGoal, User
+from app.models import ReportGoal, ReportSchedule, User
 from app.services.report_schedule_service import (
     compute_next_run_for_new_schedule,
     create_schedule_record,
@@ -48,6 +47,8 @@ def _make_body(**overrides):
     body.chart_horizon = overrides.get("chart_horizon", "auto")
     body.chart_lookahead_multiplier = overrides.get("chart_lookahead_multiplier", 1.0)
     body.show_minimap = overrides.get("show_minimap", True)
+    body.retention_count = overrides.get("retention_count", None)
+    body.retention_days = overrides.get("retention_days", None)
 
     # Recipients
     r1 = MagicMock()
@@ -87,7 +88,7 @@ class TestComputeNextRunForNewSchedule:
             "app.services.report_schedule_service.compute_next_run_flexible",
             return_value=datetime(2026, 3, 2, 0, 0, 0),
         ) as mock_compute:
-            result = compute_next_run_for_new_schedule(body)
+            compute_next_run_for_new_schedule(body)
 
         assert mock_compute.called
         # The sched object should have schedule_type="weekly"
@@ -107,7 +108,7 @@ class TestComputeNextRunForNewSchedule:
             "app.services.report_schedule_service.compute_next_run_flexible",
             return_value=datetime(2026, 4, 1, 0, 0, 0),
         ) as mock_compute:
-            result = compute_next_run_for_new_schedule(body)
+            compute_next_run_for_new_schedule(body)
 
         sched = mock_compute.call_args[0][0]
         assert sched.quarter_start_month == 1
@@ -126,7 +127,7 @@ class TestComputeNextRunForNewSchedule:
             "app.services.report_schedule_service.compute_next_run_flexible",
             return_value=datetime(2026, 3, 1, 0, 0, 0),
         ) as mock_compute:
-            result = compute_next_run_for_new_schedule(body)
+            compute_next_run_for_new_schedule(body)
 
         sched = mock_compute.call_args[0][0]
         assert sched.lookback_value == 7
@@ -448,3 +449,139 @@ class TestUpdateScheduleRecord:
 
         # Periodicity should NOT be the user-supplied value
         assert result.periodicity == "Daily"  # Original unchanged (no schedule fields changed)
+
+
+# =============================================================================
+# apply_retention
+# =============================================================================
+
+
+class TestApplyRetention:
+    """TDD: apply_retention deletes old reports based on retention_count
+    and retention_days. Both are optional; both null = keep all.
+
+    Logic: a report is deleted when BOTH applicable limits are exceeded.
+    If only one limit is set, that limit governs alone.
+    """
+
+    def _make_schedule(self, retention_count=None, retention_days=None):
+        s = MagicMock(spec=ReportSchedule)
+        s.id = 1
+        s.retention_count = retention_count
+        s.retention_days = retention_days
+        return s
+
+    def _make_report(self, report_id, days_old):
+        from datetime import timedelta
+        r = MagicMock()
+        r.id = report_id
+        r.created_at = datetime.utcnow() - timedelta(days=days_old)
+        return r
+
+    @pytest.mark.asyncio
+    async def test_no_retention_keeps_all(self):
+        """Both limits null — no deletion."""
+        from app.services.report_schedule_service import apply_retention
+        schedule = self._make_schedule()
+        db = AsyncMock()
+        deleted = await apply_retention(schedule, db)
+        assert deleted == 0
+        db.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_count_only_keeps_last_n(self):
+        """retention_count=2 with 5 reports — oldest 3 deleted."""
+        from app.services.report_schedule_service import apply_retention
+
+        schedule = self._make_schedule(retention_count=2)
+        reports = [self._make_report(i, days_old=50 - i * 5) for i in range(5)]
+        # reports[0] is oldest (50 days), reports[4] is newest (30 days)
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = reports
+        db.execute.return_value = mock_result
+
+        deleted = await apply_retention(schedule, db)
+
+        assert deleted == 3
+        # Should have deleted the 3 oldest (indices 0,1,2)
+        assert db.delete.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_count_only_no_excess(self):
+        """retention_count=10 with 3 reports — nothing deleted."""
+        from app.services.report_schedule_service import apply_retention
+
+        schedule = self._make_schedule(retention_count=10)
+        reports = [self._make_report(i, days_old=10 - i) for i in range(3)]
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = reports
+        db.execute.return_value = mock_result
+
+        deleted = await apply_retention(schedule, db)
+        assert deleted == 0
+
+    @pytest.mark.asyncio
+    async def test_days_only_deletes_old(self):
+        """retention_days=30 — reports older than 30 days deleted."""
+        from app.services.report_schedule_service import apply_retention
+
+        schedule = self._make_schedule(retention_days=30)
+        reports = [
+            self._make_report(1, days_old=60),   # old — delete
+            self._make_report(2, days_old=45),   # old — delete
+            self._make_report(3, days_old=20),   # recent — keep
+            self._make_report(4, days_old=5),    # recent — keep
+        ]
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = reports
+        db.execute.return_value = mock_result
+
+        deleted = await apply_retention(schedule, db)
+        assert deleted == 2
+
+    @pytest.mark.asyncio
+    async def test_both_limits_and_logic(self):
+        """Both limits set: delete only when BOTH are exceeded (more permissive)."""
+        from app.services.report_schedule_service import apply_retention
+
+        # retention_count=3, retention_days=10
+        # Report that exceeds count but NOT age should be kept
+        # Report that exceeds age but NOT count should be kept
+        # Only report that exceeds both is deleted
+        schedule = self._make_schedule(retention_count=3, retention_days=10)
+        reports = [
+            self._make_report(1, days_old=60),   # count pos 0/4: count-exceeded; age-exceeded → DELETE
+            self._make_report(2, days_old=60),   # count pos 1/4: count-exceeded; age-exceeded → DELETE
+            self._make_report(3, days_old=5),    # count pos 2/4: count-exceeded; NOT age-exceeded → KEEP
+            self._make_report(4, days_old=3),    # count pos 3/4: within count; NOT age-exceeded → KEEP
+            self._make_report(5, days_old=1),    # newest: within count; NOT age-exceeded → KEEP
+        ]
+        # With count=3 and 5 reports: positions 0,1 exceed count (keep last 3 = positions 2,3,4)
+        # Reports 0,1 are >10 days old AND exceed count → BOTH exceeded → DELETE
+        # Report 2 exceeds count but is only 5 days old → NOT both → KEEP
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = reports
+        db.execute.return_value = mock_result
+
+        deleted = await apply_retention(schedule, db)
+        assert deleted == 2   # only reports[0] and reports[1]
+
+    @pytest.mark.asyncio
+    async def test_empty_reports_no_error(self):
+        """Edge case: no reports at all — no crash, 0 deleted."""
+        from app.services.report_schedule_service import apply_retention
+        schedule = self._make_schedule(retention_count=5)
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db.execute.return_value = mock_result
+        deleted = await apply_retention(schedule, db)
+        assert deleted == 0

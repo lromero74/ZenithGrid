@@ -1813,6 +1813,8 @@ def initialize_database(project_root, db_config=None):
                 chart_horizon TEXT DEFAULT 'auto',
                 chart_lookahead_multiplier REAL DEFAULT 1.0,
                 show_minimap INTEGER DEFAULT 1,
+                retention_count INTEGER,
+                retention_days INTEGER,
                 last_run_at DATETIME,
                 next_run_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

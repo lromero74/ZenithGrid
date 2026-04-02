@@ -34,6 +34,8 @@ export interface ScheduleFormData {
   chart_horizon?: string
   chart_lookahead_multiplier?: number
   show_minimap?: boolean
+  retention_count?: number | null
+  retention_days?: number | null
 }
 
 const SCHEDULE_TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
@@ -119,6 +121,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
   const [customHorizonDays, setCustomHorizonDays] = useState('90')
   const [lookaheadMultiplier, setLookaheadMultiplier] = useState('1')
   const [showMinimap, setShowMinimap] = useState(true)
+  const [retentionCount, setRetentionCount] = useState<number | null>(null)
+  const [retentionDays, setRetentionDays] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -147,6 +151,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
       }
       setLookaheadMultiplier(String(initialData.chart_lookahead_multiplier ?? 1))
       setShowMinimap(initialData.show_minimap !== false)
+      setRetentionCount(initialData.retention_count ?? null)
+      setRetentionDays(initialData.retention_days ?? null)
 
       // Parse schedule_days based on type
       const days = initialData.schedule_days || []
@@ -186,6 +192,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
       setCustomHorizonDays('90')
       setLookaheadMultiplier('1')
       setShowMinimap(true)
+      setRetentionCount(null)
+      setRetentionDays(null)
     }
   }, [initialData, isOpen])
 
@@ -347,6 +355,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
         chart_horizon: chartHorizon === 'custom' ? customHorizonDays : chartHorizon,
         chart_lookahead_multiplier: parseFloat(lookaheadMultiplier) || 1,
         show_minimap: showMinimap,
+        retention_count: retentionCount,
+        retention_days: retentionDays,
       })
       onClose()
     } finally {
@@ -844,6 +854,39 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
               <label htmlFor="showMinimap" className="text-xs text-slate-400">
                 Show overview minimap when chart doesn't reach target
               </label>
+            </div>
+          </div>
+
+          {/* Report Retention */}
+          <div className="border border-slate-600/50 rounded-lg p-3 space-y-3">
+            <h4 className="text-sm font-medium text-slate-300">Report Retention</h4>
+            <p className="text-xs text-slate-500">
+              Automatically delete old reports after each run. Leave blank to keep all reports.
+              When both limits are set, a report is only deleted if it exceeds both.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Keep last N reports</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={retentionCount ?? ''}
+                  onChange={e => setRetentionCount(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                  placeholder="e.g. 4"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Delete after N days</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={retentionDays ?? ''}
+                  onChange={e => setRetentionDays(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                  placeholder="e.g. 90"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
 

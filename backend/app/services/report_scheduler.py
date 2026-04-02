@@ -335,6 +335,18 @@ async def generate_report_for_schedule(
         await db.commit()
         await db.refresh(report)
 
+        # Apply retention policy — delete old reports that exceed the schedule's limits
+        if save and schedule.id and (
+            schedule.retention_count is not None or schedule.retention_days is not None
+        ):
+            from app.services.report_schedule_service import apply_retention
+            deleted = await apply_retention(schedule, db)
+            if deleted:
+                logger.info(
+                    f"Retention cleanup: deleted {deleted} old report(s) "
+                    f"for schedule {schedule.id} ({schedule.name})"
+                )
+
     return report
 
 

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.156.0] - 2026-04-02
+
+### Added
+- **Report Schedule Retention Policy**: Each report schedule can now set a retention policy — keep only the last N reports, delete reports older than N days, or both. When both limits are set, a report is deleted only if it exceeds both (more permissive). Old reports are cleaned up automatically after each scheduled run. All 6 existing schedules default to keeping the last 4 reports.
+
 ## [v2.155.0] - 2026-04-02
 
 ### Added

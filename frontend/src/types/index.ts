@@ -598,6 +598,8 @@ export interface ReportSchedule {
   chart_horizon?: string
   chart_lookahead_multiplier?: number
   show_minimap?: boolean
+  retention_count?: number | null
+  retention_days?: number | null
   goal_ids: number[]
   last_run_at: string | null
   next_run_at: string | null

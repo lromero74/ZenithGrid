@@ -313,6 +313,12 @@ class ReportSchedule(Base):
     chart_lookahead_multiplier = Column(Float, default=1.0)  # For auto/elapsed: multiplier × base
     show_minimap = Column(Boolean, default=True)  # Show minimap when chart doesn't reach target
 
+    # Retention policy — how long to keep generated reports
+    # Both null = keep forever. If only one is set, that limit governs.
+    # If both are set, a report is deleted only when BOTH limits are exceeded.
+    retention_count = Column(Integer, nullable=True)   # Keep last N reports
+    retention_days = Column(Integer, nullable=True)    # Delete reports older than N days
+
     # Relationships
     user = relationship("User", back_populates="report_schedules")
     account = relationship("Account")
