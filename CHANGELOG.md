@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.156.1] - 2026-04-02
+
+### Changed
+- **Performance: Database Indexes** — Added 3 missing indexes that were causing full table scans: `signals` by position ID (used by position detail view), `order_history` by bot + timestamp (used by paginated order history), and `account_value_snapshots` by user + date (used by snapshot aggregation).
+- **Performance: Filter Counts** — Position filter dropdowns (market, bot, pair, category) now compute option counts in a single pass over positions instead of re-scanning the list for each unique value. No visible change; just faster on large position sets.
+- **Performance: Indicator Extraction** — Candle OHLCV arrays are now built in one loop instead of four separate passes.
+- **Performance: Background Polling** — Position and bot data no longer refetch every 5–10 seconds while the browser tab is hidden, reducing unnecessary network traffic.
+
 ## [v2.156.0] - 2026-04-02
 
 ### Added
