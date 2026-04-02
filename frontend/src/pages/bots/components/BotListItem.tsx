@@ -246,7 +246,7 @@ export const BotListItem = memo(function BotListItem({
             if (scEnabled && scMax == null && aggregateData) {
               const quoteCurrency =
                 botPairs.length > 0 ? botPairs[0].split('-')[1] : 'BTC'
-              const { effectiveUsdValue, effectiveBtcValue } =
+              const { effectiveUsdValue, effectiveBtcValue, effectiveEthValue } =
                 computeEffectiveAggregateValues(
                   quoteCurrency,
                   aggregateData,
@@ -255,12 +255,15 @@ export const BotListItem = memo(function BotListItem({
               const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(
                 quoteCurrency
               )
-              const aggregateValue = isFiatQuote
-                ? effectiveUsdValue
-                : effectiveBtcValue
+              const aggregateValue =
+                quoteCurrency === 'ETH'
+                  ? effectiveEthValue
+                  : isFiatQuote
+                  ? effectiveUsdValue
+                  : effectiveBtcValue
               const worstCaseMin =
                 EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] ||
-                (isFiatQuote ? 1.0 : 0.0001)
+                (isFiatQuote ? 1.0 : quoteCurrency === 'ETH' ? 0.001 : 0.0001)
 
               scMax = calculateSoftCeiling(
                 bot.strategy_config,

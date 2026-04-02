@@ -81,11 +81,13 @@ export const DEFAULT_TRADING_PAIRS: TradingPair[] = [
   { value: 'BTC-USD', label: 'BTC/USD', group: 'USD', base: 'BTC' },
   { value: 'ETH-USD', label: 'ETH/USD', group: 'USD', base: 'ETH' },
   { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC', base: 'ETH' },
+  { value: 'SOL-USDT', label: 'SOL/USDT', group: 'USDT', base: 'SOL' },
 ]
 
 // Exchange minimum order sizes
 export const EXCHANGE_MINIMUMS = {
   BTC: 0.0001, // 0.0001 BTC minimum for BTC pairs
+  ETH: 0.001,  // 0.001 ETH minimum for ETH pairs
   USD: 1.0, // $1 minimum for USD pairs
   USDC: 1.0, // $1 minimum for USDC pairs
   USDT: 1.0, // $1 minimum for USDT pairs
@@ -99,7 +101,16 @@ export const convertProductsToTradingPairs = (products: any[]): TradingPair[] =>
     const base = product.base_currency
     const quote = product.quote_currency
     // Group by quote currency type
-    const group = quote === 'USD' ? 'USD' : quote === 'USDT' ? 'USDT' : quote === 'USDC' ? 'USDC' : 'BTC'
+    const group =
+      quote === 'USD'
+        ? 'USD'
+        : quote === 'USDT'
+        ? 'USDT'
+        : quote === 'USDC'
+        ? 'USDC'
+        : quote === 'ETH'
+        ? 'ETH'
+        : 'BTC'
 
     return {
       value: product.product_id,
@@ -111,8 +122,8 @@ export const convertProductsToTradingPairs = (products: any[]): TradingPair[] =>
 
   // Sort by: 1) group, 2) popularity order
   return pairs.sort((a: TradingPair, b: TradingPair) => {
-    // Group priority: BTC > USD > USDC > USDT > others
-    const groupOrder: Record<string, number> = { 'BTC': 1, 'USD': 2, 'USDC': 3, 'USDT': 4 }
+    // Group priority: BTC > USD > USDC > USDT > ETH > others
+    const groupOrder: Record<string, number> = { 'BTC': 1, 'USD': 2, 'USDC': 3, 'USDT': 4, 'ETH': 5 }
     const aGroupPriority = groupOrder[a.group] || 99
     const bGroupPriority = groupOrder[b.group] || 99
 
@@ -163,13 +174,19 @@ export function computeEffectiveAggregateValues(
   quoteCurrency: string,
   aggregateData: AggregateValue | undefined,
   rebalanceStatus: RebalanceStatus | undefined
-): { effectiveUsdValue: number; effectiveBtcValue: number } {
+): { effectiveUsdValue: number; effectiveBtcValue: number; effectiveEthValue: number } {
   const rawUsd = aggregateData?.aggregate_usd_value ?? 0
   const rawBtc = aggregateData?.aggregate_btc_value ?? 0
+  const rawEth = aggregateData?.aggregate_eth_value ?? 0
   const btcPrice = aggregateData?.btc_usd_price ?? 0
+  const ethPrice = aggregateData?.eth_usd_price ?? 0
 
   if (!rebalanceStatus) {
-    return { effectiveUsdValue: rawUsd, effectiveBtcValue: rawBtc }
+    return {
+      effectiveUsdValue: rawUsd,
+      effectiveBtcValue: rawBtc,
+      effectiveEthValue: rawEth,
+    }
   }
 
   const quote = quoteCurrency.toUpperCase()
@@ -213,9 +230,21 @@ export function computeEffectiveAggregateValues(
       return {
         effectiveUsdValue: allocatedUsd,
         effectiveBtcValue: btcPrice > 0 ? allocatedUsd / btcPrice : 0,
+        effectiveEthValue: rawEth,
       }
     }
-    return { effectiveUsdValue: allocatedUsd, effectiveBtcValue: rawBtc }
+    if (quote === 'ETH') {
+      return {
+        effectiveUsdValue: allocatedUsd,
+        effectiveBtcValue: rawBtc,
+        effectiveEthValue: ethPrice > 0 ? allocatedUsd / ethPrice : 0,
+      }
+    }
+    return {
+      effectiveUsdValue: allocatedUsd,
+      effectiveBtcValue: rawBtc,
+      effectiveEthValue: rawEth,
+    }
   }
 
   // Rebalancer disabled — subtract only the relevant reserve
@@ -224,6 +253,16 @@ export function computeEffectiveAggregateValues(
     return {
       effectiveUsdValue: rawUsd,
       effectiveBtcValue: Math.max(0, rawBtc - reserve),
+      effectiveEthValue: rawEth,
+    }
+  }
+
+  if (quote === 'ETH') {
+    const reserve = rebalanceStatus.min_balance_eth ?? 0
+    return {
+      effectiveUsdValue: rawUsd,
+      effectiveBtcValue: rawBtc,
+      effectiveEthValue: Math.max(0, rawEth - reserve),
     }
   }
 
@@ -240,6 +279,7 @@ export function computeEffectiveAggregateValues(
   return {
     effectiveUsdValue: Math.max(0, rawUsd - reserveUsd),
     effectiveBtcValue: rawBtc,
+    effectiveEthValue: rawEth,
   }
 }
 

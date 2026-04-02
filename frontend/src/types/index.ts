@@ -193,7 +193,9 @@ export interface Balances {
 export interface AggregateValue {
   aggregate_btc_value: number;
   aggregate_usd_value: number;
+  aggregate_eth_value?: number;
   btc_usd_price: number;
+  eth_usd_price?: number;
 }
 
 export interface StrategyParameter {

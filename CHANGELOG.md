@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.154.5] - 2026-03-31
+
+### Added
+- **Expanded Trading Pairs**: Added official support for USDT and ETH quote currency trading pairs in bot configuration.
+- **ETH Rebalancing Budget**: The budget calculator now includes aggregate ETH portfolio value for bots trading ETH pairs.
+
+### Fixed
+- **Bot Edit Modal Summary**: The DCA Budget Calculator summary in the bot edit modal now uses the "Soft Ceiling" (clamped max deals) for its calculations when enabled. This ensures the summary matches the actual trading limits and prevents false "Over-Allocation" warnings when the soft ceiling is active.
+- **Unified Calculation Logic (ETH/USDT)**: Updated shared calculation utilities to correctly handle exchange minimums and aggregate values for ETH and USDT quote currencies.
+
 ## [v2.154.4] - 2026-03-31
 
 ### Added

@@ -257,7 +257,7 @@ export function StrategyConfigSection({
     ? formData.product_ids[0].split('-')[1]
     : 'BTC'
 
-  const { effectiveUsdValue, effectiveBtcValue } = computeEffectiveAggregateValues(
+  const { effectiveUsdValue, effectiveBtcValue, effectiveEthValue } = computeEffectiveAggregateValues(
     quoteCurrency,
     aggregateData,
     rebalanceStatus,
@@ -299,6 +299,7 @@ export function StrategyConfigSection({
           quoteCurrency={quoteCurrency}
           aggregateBtcValue={effectiveBtcValue}
           aggregateUsdValue={effectiveUsdValue}
+          aggregateEthValue={effectiveEthValue}
           budgetPercentage={formData.budget_percentage}
           productIds={formData.product_ids}
           numPairs={formData.product_ids.length}

@@ -61,28 +61,38 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             if client:
                 aggregate_btc = await client.calculate_aggregate_btc_value()
                 aggregate_usd = await client.calculate_aggregate_usd_value()
+                aggregate_eth = await client.calculate_market_budget("ETH")
                 btc_usd_price = await client.get_btc_usd_price()
+                eth_usd_price = await client.get_eth_usd_price()
                 return {
                     "aggregate_btc_value": aggregate_btc,
                     "aggregate_usd_value": aggregate_usd,
+                    "aggregate_eth_value": aggregate_eth,
                     "btc_usd_price": btc_usd_price,
+                    "eth_usd_price": eth_usd_price,
                 }
             # Paper account but client creation failed — return defaults
             return {
                 "aggregate_btc_value": 0.0,
                 "aggregate_usd_value": 0.0,
+                "aggregate_eth_value": 0.0,
                 "btc_usd_price": 0.0,
+                "eth_usd_price": 0.0,
             }
 
         coinbase = await get_coinbase_from_db(db, current_user.id)
         aggregate_btc = await coinbase.calculate_aggregate_btc_value()
         aggregate_usd = await coinbase.calculate_aggregate_usd_value()
+        aggregate_eth = await coinbase.calculate_market_budget("ETH")
         btc_usd_price = await coinbase.get_btc_usd_price()
+        eth_usd_price = await coinbase.get_eth_usd_price()
 
         return {
             "aggregate_btc_value": aggregate_btc,
             "aggregate_usd_value": aggregate_usd,
+            "aggregate_eth_value": aggregate_eth,
             "btc_usd_price": btc_usd_price,
+            "eth_usd_price": eth_usd_price,
         }
     except (HTTPException, AppError):
         raise

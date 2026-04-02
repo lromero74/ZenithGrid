@@ -14,6 +14,7 @@ interface DCABudgetConfigFormProps {
   quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
   aggregateBtcValue?: number  // Total BTC value for min percentage calculation
   aggregateUsdValue?: number  // Total USD value for min percentage calculation
+  aggregateEthValue?: number  // Total ETH value for min percentage calculation
   // Bot-level budget fields for DCA calculator
   budgetPercentage?: number  // Bot's budget as % of total portfolio
   productIds?: string[]  // Selected trading pair IDs — used to fetch worst-case exchange minimum
@@ -207,6 +208,7 @@ function DCABudgetConfigForm({
   quoteCurrency = 'BTC',
   aggregateBtcValue,
   aggregateUsdValue,
+  aggregateEthValue,
   budgetPercentage,
   productIds,
   numPairs: _numPairs,
@@ -240,7 +242,7 @@ function DCABudgetConfigForm({
       } catch (err) {
         console.error('Failed to fetch worst case min:', err)
         // Fall back to known exchange floor values on error
-        const fallback = quoteCurrency === 'BTC' ? 0.0001 : 1.0
+        const fallback = quoteCurrency === 'BTC' ? 0.0001 : quoteCurrency === 'ETH' ? 0.001 : 1.0
         setWorstCaseMin(fallback)
       }
     }
@@ -262,7 +264,12 @@ function DCABudgetConfigForm({
   const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency)
 
   // Get the aggregate value for the quote currency
-  const aggregateValue = isFiatQuote ? aggregateUsdValue : aggregateBtcValue
+  const aggregateValue =
+    quoteCurrency === 'ETH'
+      ? aggregateEthValue
+      : isFiatQuote
+      ? aggregateUsdValue
+      : aggregateBtcValue
 
   const multiplier = getDCAMultiplier(config)
   const totalBudget = (aggregateValue || 0) * (budgetPercentage || 0) / 100
@@ -1152,10 +1159,15 @@ function DCABudgetConfigForm({
           <div className="mt-4 pt-4 border-t border-slate-700">
             <h4 className="text-sm font-semibold text-slate-300 mb-2">💰 DCA Budget Calculator</h4>
             {(() => {
+              const scEnabled = !!config.enable_soft_ceiling
+              const effectiveDeals = scEnabled
+                ? displayCeiling
+                : maxConcurrentDeals || config.max_concurrent_deals || 1
+
               const breakdown = calculateDCABudget(
                 aggregateValue,
                 budgetPercentage,
-                maxConcurrentDeals || config.max_concurrent_deals || 1,
+                effectiveDeals,
                 config.max_safety_orders ?? 5,
                 config.safety_order_volume_scale ?? 1.0,
                 exchangeMinimum
@@ -1187,7 +1199,10 @@ function DCABudgetConfigForm({
                   </p>
                   <p>
                     🎯 <strong>Per Position:</strong> {breakdown.budgetPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
-                    {' '}(divided by {maxConcurrentDeals || config.max_concurrent_deals || 1} max concurrent {maxConcurrentDeals === 1 ? 'deal' : 'deals'})
+                    {' '}(divided by {effectiveDeals} max concurrent {effectiveDeals === 1 ? 'deal' : 'deals'})
+                    {scEnabled && effectiveDeals < (maxConcurrentDeals || config.max_concurrent_deals || 1) && (
+                      <span className="text-purple-400 ml-1">(Soft Ceiling active)</span>
+                    )}
                   </p>
                   <p>
                     📥 <strong>Base Order:</strong> {breakdown.baseOrderSize.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
@@ -1208,7 +1223,7 @@ function DCABudgetConfigForm({
                   </p>
                   <p>
                     🔢 <strong>Max Simultaneous Capital:</strong> {breakdown.maxSimultaneousCapital.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
-                    {' '}({maxConcurrentDeals || config.max_concurrent_deals || 1} positions × {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency})
+                    {' '}({effectiveDeals} positions × {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency})
                   </p>
                 </div>
               )
