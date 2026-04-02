@@ -54,16 +54,23 @@ async def get_balances(
 async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
     try:
+        async def _safe_call(coro, fallback=0.0):
+            try:
+                return await coro
+            except Exception as e:
+                logger.warning(f"Aggregate value sub-call failed: {e}")
+                return fallback
+
         # Check if user is paper-only
         paper_account = await get_user_paper_account(db, current_user.id)
         if paper_account:
             client = await get_exchange_client_for_account(db, paper_account.id)
             if client:
-                aggregate_btc = await client.calculate_aggregate_btc_value()
-                aggregate_usd = await client.calculate_aggregate_usd_value()
-                aggregate_eth = await client.calculate_market_budget("ETH")
-                btc_usd_price = await client.get_btc_usd_price()
-                eth_usd_price = await client.get_eth_usd_price()
+                aggregate_btc = await _safe_call(client.calculate_aggregate_btc_value())
+                aggregate_usd = await _safe_call(client.calculate_aggregate_usd_value())
+                aggregate_eth = await _safe_call(client.calculate_market_budget("ETH"))
+                btc_usd_price = await _safe_call(client.get_btc_usd_price())
+                eth_usd_price = await _safe_call(client.get_eth_usd_price())
                 return {
                     "aggregate_btc_value": aggregate_btc,
                     "aggregate_usd_value": aggregate_usd,
@@ -81,11 +88,11 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             }
 
         coinbase = await get_coinbase_from_db(db, current_user.id)
-        aggregate_btc = await coinbase.calculate_aggregate_btc_value()
-        aggregate_usd = await coinbase.calculate_aggregate_usd_value()
-        aggregate_eth = await coinbase.calculate_market_budget("ETH")
-        btc_usd_price = await coinbase.get_btc_usd_price()
-        eth_usd_price = await coinbase.get_eth_usd_price()
+        aggregate_btc = await _safe_call(coinbase.calculate_aggregate_btc_value())
+        aggregate_usd = await _safe_call(coinbase.calculate_aggregate_usd_value())
+        aggregate_eth = await _safe_call(coinbase.calculate_market_budget("ETH"))
+        btc_usd_price = await _safe_call(coinbase.get_btc_usd_price())
+        eth_usd_price = await _safe_call(coinbase.get_eth_usd_price())
 
         return {
             "aggregate_btc_value": aggregate_btc,
