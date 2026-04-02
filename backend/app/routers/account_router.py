@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Account, User
 from app.auth.dependencies import get_current_user
+from app.position_routers.panic_sell_router import _verify_mfa
 from app.services import portfolio_conversion_service as pcs
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import (
@@ -126,11 +127,13 @@ async def get_portfolio(
 @router.get("/conversion-status/{task_id}")
 async def get_conversion_status(task_id: str, current_user: User = Depends(get_current_user)):
     """
-    Get status of a portfolio conversion task (requires auth)
+    Get status of a portfolio conversion task (requires auth + ownership)
     """
     progress = pcs.get_task_progress(task_id)
     if not progress:
         raise HTTPException(status_code=404, detail="Conversion task not found")
+    if progress.get("user_id") and progress["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this task")
     return progress
 
 
@@ -140,6 +143,7 @@ async def sell_portfolio_to_base_currency(
     target_currency: str = Query("BTC", description="Target currency: BTC or USD"),
     confirm: bool = Query(False, description="Must be true to execute"),
     account_id: Optional[int] = Query(None, description="Account ID to convert (defaults to default account)"),
+    mfa_code: Optional[str] = Query(None, description="MFA code (TOTP or email) for verification"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -150,6 +154,8 @@ async def sell_portfolio_to_base_currency(
     """
     if not confirm:
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
+
+    await _verify_mfa(db, current_user, mfa_code)
 
     from app.services.portfolio_conversion_service import SUPPORTED_TARGET_CURRENCIES
     if target_currency not in SUPPORTED_TARGET_CURRENCIES:
@@ -178,8 +184,9 @@ async def sell_portfolio_to_base_currency(
         else:
             raise HTTPException(status_code=404, detail="No default account found")
 
-    # Generate task ID and start background task
+    # Generate task ID and init with owner tracking
     task_id = str(uuid.uuid4())
+    pcs.init_task(task_id, user_id=current_user.id)
 
     # Start the conversion in the background
     background_tasks.add_task(

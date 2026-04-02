@@ -98,7 +98,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_owned_account_is_accessible(self, db_session):
         """Owner can always access their own account."""
-        from app.routers.accounts_router import _accessible_accounts_filter
+        from app.routers.accounts_query_router import _accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_filt@example.com")
         acct = await _make_paper_account(db_session, owner, "Owner's Account")
@@ -113,7 +113,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_member_account_is_accessible(self, db_session):
         """A member can access accounts they have membership on."""
-        from app.routers.accounts_router import _accessible_accounts_filter
+        from app.routers.accounts_query_router import _accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_m@example.com")
         member = await _make_user(db_session, "member_m@example.com")
@@ -130,7 +130,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_unrelated_account_is_not_accessible(self, db_session):
         """A user with no ownership or membership cannot access the account."""
-        from app.routers.accounts_router import _accessible_accounts_filter
+        from app.routers.accounts_query_router import _accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_unrel@example.com")
         stranger = await _make_user(db_session, "stranger@example.com")
@@ -146,7 +146,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_expired_membership_is_not_accessible(self, db_session):
         """Expired membership does not grant access."""
-        from app.routers.accounts_router import _accessible_accounts_filter
+        from app.routers.accounts_query_router import _accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_exp@example.com")
         member = await _make_user(db_session, "member_exp@example.com")
@@ -361,7 +361,7 @@ class TestListExpenseItemsAccess:
     @pytest.mark.asyncio
     async def test_owner_can_list_expenses(self, db_session):
         """Goal owner can list expense items."""
-        from app.routers.reports_router import _get_accessible_goal
+        from app.routers.reports_crud_router import _get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_lst@example.com")
         goal = await _make_goal(db_session, owner)
@@ -373,7 +373,7 @@ class TestListExpenseItemsAccess:
     @pytest.mark.asyncio
     async def test_observer_can_list_expenses_on_shared_account(self, db_session):
         """Observer can fetch expense goal when they have membership on owner's account."""
-        from app.routers.reports_router import _get_accessible_goal
+        from app.routers.reports_crud_router import _get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_obs@example.com")
         observer = await _make_user(db_session, "observer_exp_obs@example.com")
@@ -389,7 +389,7 @@ class TestListExpenseItemsAccess:
     async def test_stranger_cannot_access_goal(self, db_session):
         """User with no membership gets 404 on another user's goal."""
         from fastapi import HTTPException
-        from app.routers.reports_router import _get_accessible_goal
+        from app.routers.reports_crud_router import _get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_str@example.com")
         stranger = await _make_user(db_session, "stranger_exp_str@example.com")
@@ -428,7 +428,7 @@ class TestGetReportAccess:
     @pytest.mark.asyncio
     async def test_owner_can_get_report(self, db_session):
         """Report owner can fetch their own report."""
-        from app.routers.reports_router import _get_accessible_report
+        from app.routers.reports_crud_router import _get_accessible_report
 
         owner = await _make_user(db_session, "owner_rep@example.com")
         report = await _make_report(db_session, owner)
@@ -440,7 +440,7 @@ class TestGetReportAccess:
     @pytest.mark.asyncio
     async def test_observer_can_get_report_on_shared_account(self, db_session):
         """Observer can fetch a report owned by the account they observe."""
-        from app.routers.reports_router import _get_accessible_report
+        from app.routers.reports_crud_router import _get_accessible_report
 
         owner = await _make_user(db_session, "owner_rep_obs@example.com")
         observer = await _make_user(db_session, "observer_rep_obs@example.com")
@@ -456,7 +456,7 @@ class TestGetReportAccess:
     async def test_stranger_cannot_get_report(self, db_session):
         """Stranger gets 404 on another user's report."""
         from fastapi import HTTPException
-        from app.routers.reports_router import _get_accessible_report
+        from app.routers.reports_crud_router import _get_accessible_report
 
         owner = await _make_user(db_session, "owner_rep_str@example.com")
         stranger = await _make_user(db_session, "stranger_rep_str@example.com")

@@ -908,12 +908,13 @@ class TestDustClose:
         assert pct == -100.0  # Fallback for zero spent
 
     @pytest.mark.asyncio
-    async def test_dust_close_paper_balance_reduces_to_zero(self):
-        """Edge case: paper balance cap reduces raw_amount to 0, triggering dust close."""
+    async def test_dust_close_paper_balance_topped_up_and_sells(self):
+        """Edge case: paper balance is 0 but code tops it up, so normal sell proceeds."""
         db = _make_db()
         exchange = _make_exchange()
         exchange.is_paper_trading = MagicMock(return_value=True)
         exchange.get_balance = AsyncMock(return_value={"available": "0.0"})
+        exchange.adjust_balance = AsyncMock()
         tc = _make_trading_client()
         bot = _make_bot()
 
@@ -936,9 +937,8 @@ class TestDustClose:
             signal_data={"signal_type": "sell"},
         )
 
-        assert trade is None
+        # Paper balance is topped up via adjust_balance, so normal sell proceeds
+        exchange.adjust_balance.assert_awaited_once()
+        assert trade is not None
         assert position.status == "closed"
-        # With 0 available, raw_amount=0, base_amount=0 → dust close
-        # quote_value = 0.5 * 2100 = 1050, profit = 1050 - 1000 = 50
-        assert profit == pytest.approx(50.0, abs=0.1)
-        assert pct == pytest.approx(5.0, abs=0.1)
+        tc.sell.assert_awaited_once()

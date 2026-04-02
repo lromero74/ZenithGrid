@@ -40,8 +40,10 @@ from app.auth_routers.helpers import (
     verify_password,
 )
 from app.auth_routers.rate_limiters import (
+    _check,
     _check_rate_limit,
     _check_signup_rate_limit,
+    _record,
     _record_attempt,
     _record_signup_attempt,
 )
@@ -270,6 +272,11 @@ async def refresh_token(
     await check_token_revocation(payload, db)
 
     user_id = int(payload.get("sub"))
+
+    # Rate limit: 60 refreshes per hour per user
+    await _check("refresh", f"refresh:{user_id}", "Too many token refresh attempts.")
+    await _record("refresh", f"refresh:{user_id}")
+
     user = await get_user_by_id(db, user_id)
 
     if not user:
@@ -342,6 +349,10 @@ async def change_password(
     Requires authentication and the current password for verification.
     Demo accounts (no valid email) are blocked from changing passwords.
     """
+    # Rate limit: 5 per 15 min per user
+    await _check("change_pw", f"change_pw:{current_user.id}", "Too many password change attempts.")
+    await _record("change_pw", f"change_pw:{current_user.id}")
+
     # Block demo accounts from changing password
     if "@" not in (current_user.email or ""):
         raise HTTPException(

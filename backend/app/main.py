@@ -20,7 +20,8 @@ from app.multi_bot_monitor import MultiBotMonitor
 from app.position_routers import perps_router
 from app.routers import account_value_router  # Account value history tracking
 from app.routers import account_sharing_router  # Account co-management & invitations
-from app.routers import accounts_router  # Multi-account management (CEX + DEX)
+from app.routers import accounts_query_router  # Multi-account queries (GET)
+from app.routers import accounts_mutation_router  # Multi-account mutations (POST/PUT/DELETE)
 from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.routers import auth_router  # User authentication
 from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
@@ -42,7 +43,8 @@ from app.routers.order_history import router as order_history_router
 from app.routers.templates import router as templates_router
 from app.routers import admin_router  # RBAC admin management
 from app.routers import prop_guard_router
-from app.routers import reports_router  # Reporting & goals
+from app.routers import reports_crud_router  # Reporting & goals (CRUD)
+from app.routers import reports_generation_router  # Reporting & goals (generation)
 from app.routers import transfers_router  # Deposit/withdrawal tracking
 from app.routers import friends_router  # Friends & social
 from app.routers import game_history_router  # Game history & privacy
@@ -145,7 +147,8 @@ app.include_router(order_history_router)
 app.include_router(templates_router)
 app.include_router(positions_router.router)  # New routers
 app.include_router(account_router.router)
-app.include_router(accounts_router.router)  # Multi-account management (CEX + DEX)
+app.include_router(accounts_query_router.router)  # Multi-account queries (GET)
+app.include_router(accounts_mutation_router.router)  # Multi-account mutations (POST/PUT/DELETE)
 app.include_router(account_sharing_router.router)  # Account co-management & invitations
 app.include_router(market_data_router.router)
 app.include_router(settings_router.router)
@@ -164,7 +167,8 @@ app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
 app.include_router(admin_router.router)  # RBAC admin management
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
-app.include_router(reports_router.router)  # Reporting & goals
+app.include_router(reports_crud_router.router)  # Reporting & goals (CRUD)
+app.include_router(reports_generation_router.router)  # Reporting & goals (generation)
 app.include_router(transfers_router.router)  # Deposit/withdrawal tracking
 app.include_router(friends_router.router)  # Friends & social
 app.include_router(friends_router.search_router)  # User search

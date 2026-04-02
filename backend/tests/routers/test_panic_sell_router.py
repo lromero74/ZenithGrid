@@ -701,7 +701,7 @@ class TestPanicSellStatus:
         await db_session.flush()
 
         task_id = str(uuid.uuid4())
-        _init_task(task_id)
+        _init_task(task_id, user_id=user.id)
 
         result = await get_panic_sell_status(task_id=task_id, current_user=user)
 
@@ -722,6 +722,50 @@ class TestPanicSellStatus:
             await get_panic_sell_status(task_id="does-not-exist", current_user=user)
 
         assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_status_wrong_user_returns_403(self, db_session):
+        """IDOR: user B cannot poll user A's panic sell task."""
+        from app.position_routers.panic_sell_router import (
+            get_panic_sell_status, _init_task,
+        )
+        from fastapi import HTTPException
+        import uuid
+
+        owner = _make_user()
+        db_session.add(owner)
+        await db_session.flush()
+
+        task_id = str(uuid.uuid4())
+        _init_task(task_id, user_id=owner.id)
+
+        other_user = _make_user()
+        other_user.email = "other@example.com"
+        db_session.add(other_user)
+        await db_session.flush()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_panic_sell_status(task_id=task_id, current_user=other_user)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_status_correct_user_succeeds(self, db_session):
+        """Owner can access their own panic sell task."""
+        from app.position_routers.panic_sell_router import (
+            get_panic_sell_status, _init_task,
+        )
+        import uuid
+
+        owner = _make_user()
+        db_session.add(owner)
+        await db_session.flush()
+
+        task_id = str(uuid.uuid4())
+        _init_task(task_id, user_id=owner.id)
+
+        result = await get_panic_sell_status(task_id=task_id, current_user=owner)
+        assert result["task_id"] == task_id
+        assert result["status"] == "running"
 
 
 # =============================================================================

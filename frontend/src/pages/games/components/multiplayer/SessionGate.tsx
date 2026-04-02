@@ -7,8 +7,8 @@
 
 import { useEffect, useRef } from 'react'
 import { Loader2, AlertTriangle, Monitor } from 'lucide-react'
-import { useOtherSessions, useTerminateAllOtherSessions } from '../../hooks/useSessions'
-import type { SessionInfo } from '../../hooks/useSessions'
+import { useOtherSessions, useTerminateAllOtherSessions } from '../../../../hooks/useSessions'
+import type { SessionInfo } from '../../../../hooks/useSessions'
 
 interface SessionGateProps {
   onProceed: () => void

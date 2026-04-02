@@ -122,7 +122,7 @@ async def get_positions(
             pos_response.is_blacklisted = True
             pos_response.blacklist_reason = reason
             # Extract category tag from reason prefix (e.g., "[APPROVED] good coin" → "APPROVED")
-            from app.routers.blacklist_router import VALID_CATEGORIES
+            from app.constants import VALID_CATEGORIES
             for cat in VALID_CATEGORIES:
                 if reason and reason.startswith(f"[{cat}]"):
                     pos_response.coin_category = cat

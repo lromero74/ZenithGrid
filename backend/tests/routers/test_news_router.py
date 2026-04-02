@@ -85,7 +85,7 @@ class TestArticleToNewsItem:
     @pytest.mark.asyncio
     async def test_article_to_news_item_basic(self, db_session, sample_article):
         """Happy path: converts article to news item dict."""
-        from app.routers.news_router import article_to_news_item
+        from app.services.news_service import article_to_news_item
         result = article_to_news_item(sample_article)
         assert result["id"] == 1
         assert result["title"] == "Bitcoin hits 100k"
@@ -95,7 +95,7 @@ class TestArticleToNewsItem:
     @pytest.mark.asyncio
     async def test_article_to_news_item_with_seen_ids(self, db_session, sample_article):
         """Edge case: marks article as seen when in seen_ids."""
-        from app.routers.news_router import article_to_news_item
+        from app.services.news_service import article_to_news_item
         result = article_to_news_item(sample_article, seen_ids={1})
         assert result["is_seen"] is True
 
@@ -110,7 +110,7 @@ class TestArticleToNewsItem:
         db_session.add(article)
         await db_session.flush()
 
-        from app.routers.news_router import article_to_news_item
+        from app.services.news_service import article_to_news_item
         result = article_to_news_item(article)
         assert result["thumbnail"] == "/api/news/image/2"
 
@@ -356,7 +356,7 @@ class TestGetSeenContentIds:
     @pytest.mark.asyncio
     async def test_returns_empty_set(self, db_session, test_user):
         """Edge case: no seen records returns empty set."""
-        from app.routers.news_router import get_seen_content_ids
+        from app.services.news_service import get_seen_content_ids
         result = await get_seen_content_ids(
             db=db_session, user_id=test_user.id, content_type="article",
         )
@@ -372,7 +372,7 @@ class TestGetSeenContentIds:
         db_session.add(seen)
         await db_session.flush()
 
-        from app.routers.news_router import get_seen_content_ids
+        from app.services.news_service import get_seen_content_ids
         result = await get_seen_content_ids(
             db=db_session, user_id=test_user.id, content_type="article",
         )
@@ -390,7 +390,7 @@ class TestGetArticlesFromDb:
     @pytest.mark.asyncio
     async def test_returns_recent_articles(self, db_session, sample_article):
         """Happy path: returns articles from database."""
-        from app.routers.news_router import get_articles_from_db
+        from app.services.news_service import get_articles_from_db
         articles, total = await get_articles_from_db(
             db=db_session, page=1, page_size=50,
         )
@@ -400,7 +400,7 @@ class TestGetArticlesFromDb:
     @pytest.mark.asyncio
     async def test_category_filter(self, db_session, sample_article):
         """Edge case: category filter works."""
-        from app.routers.news_router import get_articles_from_db
+        from app.services.news_service import get_articles_from_db
         articles, total = await get_articles_from_db(
             db=db_session, page=1, page_size=50, category="NonExistent",
         )
@@ -463,7 +463,7 @@ class TestGetArticlesForUser:
         self, db_session, test_user, articles_with_source,
     ):
         """Happy path: SQL retention filter works without crashing."""
-        from app.routers.news_router import get_articles_for_user
+        from app.services.news_service import get_articles_for_user
         articles, total = await get_articles_for_user(
             db_session, user_id=test_user.id, page=1, page_size=50,
         )
@@ -475,7 +475,7 @@ class TestGetArticlesForUser:
         self, db_session, test_user, articles_with_source,
     ):
         """Edge case: page_size=0 returns all articles without errors."""
-        from app.routers.news_router import get_articles_for_user
+        from app.services.news_service import get_articles_for_user
         articles, total = await get_articles_for_user(
             db_session, user_id=test_user.id, page=1, page_size=0,
         )
@@ -487,7 +487,7 @@ class TestGetArticlesForUser:
         self, db_session, test_user, articles_with_source,
     ):
         """Happy path: page_size limits the number of returned articles."""
-        from app.routers.news_router import get_articles_for_user
+        from app.services.news_service import get_articles_for_user
         # Get total first with page_size=0
         _, total = await get_articles_for_user(
             db_session, user_id=test_user.id, page=1, page_size=0,
@@ -504,7 +504,7 @@ class TestGetArticlesForUser:
         self, db_session, test_user, articles_with_source,
     ):
         """Edge case: non-existent category returns zero results."""
-        from app.routers.news_router import get_articles_for_user
+        from app.services.news_service import get_articles_for_user
         articles, total = await get_articles_for_user(
             db_session, user_id=test_user.id, page=1, page_size=50,
             category="NonExistent",

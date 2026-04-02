@@ -877,7 +877,7 @@ class TestRebalanceGridOnBreakout:
     @pytest.mark.asyncio
     async def test_rebalance_cancels_old_and_places_new_orders(self):
         """Happy path: cancels old orders and initializes new grid."""
-        from app.services.grid_trading_service import rebalance_grid_on_breakout
+        from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
         bot = MagicMock()
@@ -914,17 +914,12 @@ class TestRebalanceGridOnBreakout:
                 "current_range_lower": 56000.0,
             },
         ) as mock_init:
-            result = await rebalance_grid_on_breakout(
-                bot=bot,
-                position=position,
-                exchange_client=exchange,
-                db=db,
-                breakout_direction="upward",
-                current_price=60000.0,
-                new_levels=new_levels,
-                new_upper=64000.0,
-                new_lower=56000.0,
-            )
+            result = await rebalance_grid_on_breakout(GridRebalanceParams(
+                bot=bot, position=position, exchange_client=exchange,
+                db=db, breakout_direction="upward",
+                current_price=60000.0, new_levels=new_levels,
+                new_upper=64000.0, new_lower=56000.0,
+            ))
 
         mock_cancel.assert_called_once()
         mock_init.assert_called_once()
@@ -934,7 +929,7 @@ class TestRebalanceGridOnBreakout:
     @pytest.mark.asyncio
     async def test_rebalance_increments_breakout_count(self):
         """Edge case: breakout count increments from existing value."""
-        from app.services.grid_trading_service import rebalance_grid_on_breakout
+        from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
         bot = MagicMock()
@@ -959,17 +954,12 @@ class TestRebalanceGridOnBreakout:
             new_callable=AsyncMock,
             return_value={},
         ):
-            result = await rebalance_grid_on_breakout(
-                bot=bot,
-                position=position,
-                exchange_client=exchange,
-                db=db,
-                breakout_direction="downward",
-                current_price=40000.0,
-                new_levels=[38000.0, 40000.0, 42000.0],
-                new_upper=42000.0,
-                new_lower=38000.0,
-            )
+            result = await rebalance_grid_on_breakout(GridRebalanceParams(
+                bot=bot, position=position, exchange_client=exchange,
+                db=db, breakout_direction="downward",
+                current_price=40000.0, new_levels=[38000.0, 40000.0, 42000.0],
+                new_upper=42000.0, new_lower=38000.0,
+            ))
 
         assert result["breakout_count"] == 4
         assert result["last_breakout_direction"] == "downward"
@@ -977,7 +967,7 @@ class TestRebalanceGridOnBreakout:
     @pytest.mark.asyncio
     async def test_rebalance_stores_previous_range(self):
         """Happy path: previous range values are stored in new grid state."""
-        from app.services.grid_trading_service import rebalance_grid_on_breakout
+        from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
         bot = MagicMock()
@@ -1002,17 +992,12 @@ class TestRebalanceGridOnBreakout:
             new_callable=AsyncMock,
             return_value={},
         ):
-            result = await rebalance_grid_on_breakout(
-                bot=bot,
-                position=position,
-                exchange_client=exchange,
-                db=db,
-                breakout_direction="upward",
-                current_price=60000.0,
-                new_levels=[58000.0, 60000.0, 62000.0],
-                new_upper=62000.0,
-                new_lower=58000.0,
-            )
+            result = await rebalance_grid_on_breakout(GridRebalanceParams(
+                bot=bot, position=position, exchange_client=exchange,
+                db=db, breakout_direction="upward",
+                current_price=60000.0, new_levels=[58000.0, 60000.0, 62000.0],
+                new_upper=62000.0, new_lower=58000.0,
+            ))
 
         assert result["previous_range_upper"] == 55000.0
         assert result["previous_range_lower"] == 45000.0

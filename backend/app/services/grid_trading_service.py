@@ -9,6 +9,7 @@ Handles grid bot lifecycle:
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -508,17 +509,21 @@ async def handle_grid_order_fill(
     return None
 
 
-async def rebalance_grid_on_breakout(
-    bot: Bot,
-    position: Position,
-    exchange_client: ExchangeClient,
-    db: AsyncSession,
-    breakout_direction: str,
-    current_price: float,
-    new_levels: List[float],
-    new_upper: float,
-    new_lower: float,
-) -> Dict[str, Any]:
+@dataclass
+class GridRebalanceParams:
+    """Parameters for grid rebalancing on breakout."""
+    bot: Bot
+    position: Position
+    exchange_client: ExchangeClient
+    db: AsyncSession
+    breakout_direction: str
+    current_price: float
+    new_levels: List[float]
+    new_upper: float
+    new_lower: float
+
+
+async def rebalance_grid_on_breakout(params: GridRebalanceParams) -> Dict[str, Any]:
     """
     Rebalance grid after price breakout.
 
@@ -542,65 +547,65 @@ async def rebalance_grid_on_breakout(
     Returns:
         Updated grid_state dict
     """
-    logger.warning(f"🔄 REBALANCING GRID: {breakout_direction} breakout detected")
-    old_lower = bot.bot_config['grid_state']['current_range_lower']
-    old_upper = bot.bot_config['grid_state']['current_range_upper']
+    logger.warning(f"🔄 REBALANCING GRID: {params.breakout_direction} breakout detected")
+    old_lower = params.bot.bot_config['grid_state']['current_range_lower']
+    old_upper = params.bot.bot_config['grid_state']['current_range_upper']
     logger.info(f"   Old range: {old_lower:.8f} - {old_upper:.8f}")
-    logger.info(f"   New range: {new_lower:.8f} - {new_upper:.8f}")
-    logger.info(f"   Current price: {current_price:.8f}")
+    logger.info(f"   New range: {params.new_lower:.8f} - {params.new_upper:.8f}")
+    logger.info(f"   Current price: {params.current_price:.8f}")
 
     # Step 1: Cancel all unfilled orders in old range
     cancelled_count = await cancel_grid_orders(
-        bot=bot,
-        position=position,
-        exchange_client=exchange_client,
-        db=db,
-        reason=f"{breakout_direction}_breakout"
+        bot=params.bot,
+        position=params.position,
+        exchange_client=params.exchange_client,
+        db=params.db,
+        reason=f"{params.breakout_direction}_breakout"
     )
 
     logger.info(f"   Cancelled {cancelled_count} old orders")
 
     # Step 2: Calculate new grid configuration
-    grid_mode = bot.bot_config.get("grid_mode", "neutral")
-    grid_type = bot.bot_config.get("grid_type", "arithmetic")
+    grid_mode = params.bot.bot_config.get("grid_mode", "neutral")
+    grid_type = params.bot.bot_config.get("grid_type", "arithmetic")
 
     # Keep same investment amount
-    _total_investment = bot.bot_config.get("total_investment_quote", 0)  # noqa: F841
+    _total_investment = params.bot.bot_config.get("total_investment_quote", 0)  # noqa: F841
 
     # Build new grid config
     new_grid_config = {
         "grid_mode": grid_mode,
         "grid_type": grid_type,
-        "upper_limit": new_upper,
-        "lower_limit": new_lower,
-        "levels": new_levels,
+        "upper_limit": params.new_upper,
+        "lower_limit": params.new_lower,
+        "levels": params.new_levels,
     }
 
     # Step 3: Place new grid orders in new range
-    logger.info(f"   Placing {len(new_levels)} new grid levels...")
+    logger.info(f"   Placing {len(params.new_levels)} new grid levels...")
 
     new_grid_state = await initialize_grid(
-        bot=bot,
-        position=position,
-        exchange_client=exchange_client,
-        db=db,
+        bot=params.bot,
+        position=params.position,
+        exchange_client=params.exchange_client,
+        db=params.db,
         grid_config=new_grid_config,
-        current_price=current_price,
+        current_price=params.current_price,
     )
 
     # Step 4: Update grid state with rebalance info
-    old_grid_state = bot.bot_config.get("grid_state", {})
+    old_grid_state = params.bot.bot_config.get("grid_state", {})
     new_grid_state["breakout_count"] = old_grid_state.get("breakout_count", 0) + 1
-    new_grid_state["last_breakout_direction"] = breakout_direction
+    new_grid_state["last_breakout_direction"] = params.breakout_direction
     new_grid_state["last_breakout_time"] = datetime.utcnow().isoformat()
     new_grid_state["previous_range_upper"] = old_grid_state.get("current_range_upper")
     new_grid_state["previous_range_lower"] = old_grid_state.get("current_range_lower")
 
     # Update bot config with new grid state
-    bot.bot_config["grid_state"] = new_grid_state
+    params.bot.bot_config["grid_state"] = new_grid_state
 
     # Commit bot config update
-    await db.commit()
+    await params.db.commit()
 
     logger.info(f"✅ Grid rebalanced successfully! Breakout count: {new_grid_state['breakout_count']}")
 
@@ -737,17 +742,12 @@ async def detect_and_handle_breakout(
         new_levels = calculate_geometric_levels(new_lower, new_upper, num_levels)
 
     # Rebalance the grid
-    await rebalance_grid_on_breakout(
-        bot=bot,
-        position=position,
-        exchange_client=exchange_client,
-        db=db,
-        breakout_direction=breakout_direction,
-        current_price=current_price,
-        new_levels=new_levels,
-        new_upper=new_upper,
-        new_lower=new_lower,
-    )
+    await rebalance_grid_on_breakout(GridRebalanceParams(
+        bot=bot, position=position, exchange_client=exchange_client,
+        db=db, breakout_direction=breakout_direction,
+        current_price=current_price, new_levels=new_levels,
+        new_upper=new_upper, new_lower=new_lower,
+    ))
 
     return True
 

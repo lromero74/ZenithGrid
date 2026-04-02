@@ -11,6 +11,8 @@ import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import HTTPException
+
 from app.models import Account, User
 
 
@@ -370,6 +372,44 @@ class TestGetConversionStatus:
             await get_conversion_status(task_id="nonexistent", current_user=user)
         assert exc_info.value.status_code == 404
 
+    @pytest.mark.asyncio
+    @patch("app.routers.account_router.pcs")
+    async def test_wrong_user_cannot_access_task(self, mock_pcs):
+        """IDOR: user B cannot poll user A's conversion task."""
+        from fastapi import HTTPException
+        from app.routers.account_router import get_conversion_status
+
+        mock_pcs.get_task_progress.return_value = {
+            "status": "running",
+            "user_id": 1,
+            "current": 5,
+            "total": 10,
+        }
+        other_user = MagicMock(spec=User)
+        other_user.id = 999  # Different user
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_conversion_status(task_id="task-123", current_user=other_user)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    @patch("app.routers.account_router.pcs")
+    async def test_correct_user_can_access_task(self, mock_pcs):
+        """Owner can access their own conversion task."""
+        from app.routers.account_router import get_conversion_status
+
+        mock_pcs.get_task_progress.return_value = {
+            "status": "running",
+            "user_id": 42,
+            "current": 5,
+            "total": 10,
+        }
+        owner = MagicMock(spec=User)
+        owner.id = 42
+
+        result = await get_conversion_status(task_id="task-123", current_user=owner)
+        assert result["status"] == "running"
+
 
 # =============================================================================
 # POST /api/account/sell-portfolio-to-base
@@ -397,6 +437,7 @@ class TestSellPortfolioToBase:
                 target_currency="BTC",
                 confirm=False,
                 account_id=None,
+                mfa_code=None,
                 db=db_session,
                 current_user=user,
             )
@@ -405,22 +446,23 @@ class TestSellPortfolioToBase:
     @pytest.mark.asyncio
     async def test_invalid_target_currency_returns_400(self, db_session):
         """Failure: invalid target currency returns 400."""
-        from fastapi import HTTPException
         from app.routers.account_router import sell_portfolio_to_base_currency
 
         user = MagicMock(spec=User)
         user.id = 1
         bg = MagicMock()
 
-        with pytest.raises(HTTPException) as exc_info:
-            await sell_portfolio_to_base_currency(
-                background_tasks=bg,
-                target_currency="DOGE",
-                confirm=True,
-                account_id=None,
-                db=db_session,
-                current_user=user,
-            )
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+            with pytest.raises(HTTPException) as exc_info:
+                await sell_portfolio_to_base_currency(
+                    background_tasks=bg,
+                    target_currency="DOGE",
+                    confirm=True,
+                    account_id=None,
+                    mfa_code="123456",
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
@@ -440,15 +482,17 @@ class TestSellPortfolioToBase:
 
         bg = MagicMock()
 
-        with pytest.raises(HTTPException) as exc_info:
-            await sell_portfolio_to_base_currency(
-                background_tasks=bg,
-                target_currency="BTC",
-                confirm=True,
-                account_id=None,
-                db=db_session,
-                current_user=user,
-            )
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+            with pytest.raises(HTTPException) as exc_info:
+                await sell_portfolio_to_base_currency(
+                    background_tasks=bg,
+                    target_currency="BTC",
+                    confirm=True,
+                    account_id=None,
+                    mfa_code="123456",
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -463,14 +507,111 @@ class TestSellPortfolioToBase:
 
         bg = MagicMock()
 
-        result = await sell_portfolio_to_base_currency(
-            background_tasks=bg,
-            target_currency="BTC",
-            confirm=True,
-            account_id=None,
-            db=db_session,
-            current_user=user,
-        )
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+            result = await sell_portfolio_to_base_currency(
+                background_tasks=bg,
+                target_currency="BTC",
+                confirm=True,
+                account_id=None,
+                mfa_code="123456",
+                db=db_session,
+                current_user=user,
+            )
         assert "task_id" in result
         assert "started" in result["message"].lower()
         bg.add_task.assert_called_once()
+
+
+# =============================================================================
+# sell-portfolio-to-base MFA enforcement
+# =============================================================================
+
+
+class TestSellPortfolioMfa:
+    """MFA must be verified before portfolio conversion starts."""
+
+    @pytest.mark.asyncio
+    async def test_sell_portfolio_without_mfa_code_returns_403(
+        self, db_session, user_with_live_account
+    ):
+        """Request WITHOUT mfa_code when user has MFA enabled → 403."""
+        from app.routers.account_router import sell_portfolio_to_base_currency
+
+        user, account = user_with_live_account
+        user.mfa_enabled = True
+        user.totp_secret = "encrypted_secret"
+        account.is_default = True
+        await db_session.flush()
+
+        bg = MagicMock()
+
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.side_effect = HTTPException(status_code=403, detail="MFA code required")
+            with pytest.raises(HTTPException) as exc_info:
+                await sell_portfolio_to_base_currency(
+                    background_tasks=bg,
+                    target_currency="USD",
+                    confirm=True,
+                    account_id=account.id,
+                    mfa_code=None,
+                    db=db_session,
+                    current_user=user,
+                )
+            assert exc_info.value.status_code == 403
+            assert "MFA" in exc_info.value.detail
+            mock_mfa.assert_called_once_with(db_session, user, None)
+
+    @pytest.mark.asyncio
+    async def test_sell_portfolio_with_invalid_mfa_returns_403(
+        self, db_session, user_with_live_account
+    ):
+        """Request with wrong mfa_code → 403."""
+        from app.routers.account_router import sell_portfolio_to_base_currency
+
+        user, account = user_with_live_account
+        account.is_default = True
+        await db_session.flush()
+
+        bg = MagicMock()
+
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.side_effect = HTTPException(status_code=403, detail="Invalid MFA code")
+            with pytest.raises(HTTPException) as exc_info:
+                await sell_portfolio_to_base_currency(
+                    background_tasks=bg,
+                    target_currency="USD",
+                    confirm=True,
+                    account_id=account.id,
+                    mfa_code="000000",
+                    db=db_session,
+                    current_user=user,
+                )
+            assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_sell_portfolio_with_valid_mfa_proceeds(
+        self, db_session, user_with_live_account
+    ):
+        """Request with valid mfa_code → conversion starts."""
+        from app.routers.account_router import sell_portfolio_to_base_currency
+
+        user, account = user_with_live_account
+        account.is_default = True
+        await db_session.flush()
+
+        bg = MagicMock()
+
+        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.return_value = None  # MFA passes
+            result = await sell_portfolio_to_base_currency(
+                background_tasks=bg,
+                target_currency="USD",
+                confirm=True,
+                account_id=account.id,
+                mfa_code="123456",
+                db=db_session,
+                current_user=user,
+            )
+            mock_mfa.assert_called_once_with(db_session, user, "123456")
+            assert "task_id" in result
+            assert result["message"] == "Portfolio conversion to USD started"

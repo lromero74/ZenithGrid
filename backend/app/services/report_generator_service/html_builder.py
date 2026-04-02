@@ -5,6 +5,7 @@ Part of the report_generator_service package.
 """
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -169,18 +170,22 @@ def _migrate_legacy_tiers(d: dict) -> dict:
     }
 
 
-def build_report_html(
-    report_data: Dict[str, Any],
-    ai_summary: Union[None, str, dict],
-    user_name: str,
-    period_label: str,
-    default_level: str = "simple",
-    schedule_name: Optional[str] = None,
-    email_mode: bool = False,
-    account_name: Optional[str] = None,
-    inline_images: Optional[List[Tuple[str, bytes]]] = None,
-    color_scheme: str = "dark",
-) -> str:
+@dataclass
+class BuildReportHtmlParams:
+    """Parameters for building an HTML report."""
+    report_data: Dict[str, Any]
+    ai_summary: Union[None, str, dict]
+    user_name: str
+    period_label: str
+    default_level: str = "simple"
+    schedule_name: Optional[str] = None
+    email_mode: bool = False
+    account_name: Optional[str] = None
+    inline_images: Optional[List[Tuple[str, bytes]]] = None
+    color_scheme: str = "dark"
+
+
+def build_report_html(params: BuildReportHtmlParams) -> str:
     """
     Build the full HTML report.
 
@@ -202,34 +207,34 @@ def build_report_html(
     b = get_brand()
     brand_color = b["colors"]["primary"]
 
-    metrics_html = _build_metrics_section(report_data)
-    transfers_html = _build_transfers_section(report_data)
+    metrics_html = _build_metrics_section(params.report_data)
+    transfers_html = _build_transfers_section(params.report_data)
 
     # Split goals: expenses goals go right after Capital Movements
-    all_goals = report_data.get("goals", [])
+    all_goals = params.report_data.get("goals", [])
     expense_goals = [g for g in all_goals if g.get("target_type") == "expenses"]
     other_goals = [g for g in all_goals if g.get("target_type") != "expenses"]
-    schedule_meta = report_data.get("_schedule_meta")
+    schedule_meta = params.report_data.get("_schedule_meta")
     expense_goals_html = _build_goals_section(
-        expense_goals, brand_color, email_mode=email_mode,
+        expense_goals, brand_color, email_mode=params.email_mode,
         section_title="Expense Coverage",
         schedule_meta=schedule_meta,
-        inline_images=inline_images,
+        inline_images=params.inline_images,
     )
     goals_html = _build_goals_section(
-        other_goals, brand_color, email_mode=email_mode,
-        inline_images=inline_images,
+        other_goals, brand_color, email_mode=params.email_mode,
+        inline_images=params.inline_images,
     )
-    comparison_html = _build_comparison_section(report_data)
+    comparison_html = _build_comparison_section(params.report_data)
 
-    tiered = _normalize_ai_summary(ai_summary)
+    tiered = _normalize_ai_summary(params.ai_summary)
     ai_html = ""
     if tiered:
-        if email_mode:
-            ai_html = _build_email_ai_section(tiered, default_level, brand_color)
+        if params.email_mode:
+            ai_html = _build_email_ai_section(tiered, params.default_level, brand_color)
         else:
-            ai_html = _build_tabbed_ai_section(tiered, default_level, brand_color)
-    elif isinstance(ai_summary, dict) and "_error" in ai_summary:
+            ai_html = _build_tabbed_ai_section(tiered, params.default_level, brand_color)
+    elif isinstance(params.ai_summary, dict) and "_error" in params.ai_summary:
         ai_html = """
         <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155; text-align: center;">
@@ -237,7 +242,7 @@ def build_report_html(
                 AI insights temporarily unavailable — provider rate-limited or credits exhausted.
                 Check your AI provider dashboard.</p>
         </div>"""
-    elif ai_summary is None:
+    elif params.ai_summary is None:
         ai_html = """
         <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155; text-align: center;">
@@ -255,7 +260,8 @@ def build_report_html(
 <body style="margin: 0; padding: 0; background-color: #0f172a; color: #e2e8f0;
              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
-    {_report_header(b, user_name, period_label, brand_color, schedule_name, account_name)}
+    {_report_header(b, params.user_name, params.period_label, brand_color,
+                    params.schedule_name, params.account_name)}
     {metrics_html}
     {goals_html}
     {expense_goals_html}
@@ -267,7 +273,7 @@ def build_report_html(
 </body>
 </html>"""
 
-    if color_scheme == "clean":
+    if params.color_scheme == "clean":
         html = _apply_clean_theme(html)
 
     return html

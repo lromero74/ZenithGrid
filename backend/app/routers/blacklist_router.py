@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User, Account, AccountMembership
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.constants import VALID_CATEGORIES
 from app.services.settings_service import (
     ALLOWED_CATEGORIES_KEY,
     AI_REVIEW_PROVIDER_KEY,
@@ -33,9 +34,6 @@ from app.services.settings_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/blacklist", tags=["blacklist"])
-
-# Valid coin categories
-VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "MEME", "BLACKLISTED"]
 
 
 # Pydantic schemas for blacklist operations

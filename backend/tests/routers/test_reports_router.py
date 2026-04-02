@@ -3,11 +3,13 @@ Tests for reports_router — expense item create/update endpoints, bulk delete,
 and account-scoped filtering for goals, schedules, and reports.
 """
 
+import math
 import pytest
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from app.models import (
-    Account, ExpenseItem, Report, ReportGoal, ReportSchedule, User,
+    Account, AccountValueSnapshot, ExpenseItem, Position,
+    Report, ReportGoal, ReportSchedule, User,
 )
 
 
@@ -300,14 +302,14 @@ class TestBulkDeleteReports:
     @pytest.mark.asyncio
     async def test_bulk_delete_request_validation_empty_list(self):
         """Empty list should fail Pydantic validation."""
-        from app.routers.reports_router import BulkDeleteRequest
+        from app.routers.reports_crud_router import BulkDeleteRequest
         with pytest.raises(Exception):
             BulkDeleteRequest(report_ids=[])
 
     @pytest.mark.asyncio
     async def test_bulk_delete_request_validation_exceeds_max(self):
         """>100 IDs should fail Pydantic validation."""
-        from app.routers.reports_router import BulkDeleteRequest
+        from app.routers.reports_crud_router import BulkDeleteRequest
         with pytest.raises(Exception):
             BulkDeleteRequest(report_ids=list(range(101)))
 
@@ -594,7 +596,7 @@ class TestGetUserTradingMetricsAccountScoping:
         """
         from datetime import datetime as dt
         from unittest.mock import MagicMock
-        from app.routers.reports_router import _get_user_trading_metrics
+        from app.routers.reports_generation_router import _get_user_trading_metrics
 
         # We test by mocking db.execute and verifying account_id appears in the
         # WHERE clauses. Use the real function signature to check parameter flow.
@@ -641,7 +643,7 @@ class TestGetUserTradingMetricsAccountScoping:
         """When account_id is None, all accounts for the user are included."""
         from datetime import datetime as dt
         from unittest.mock import MagicMock
-        from app.routers.reports_router import _get_user_trading_metrics
+        from app.routers.reports_generation_router import _get_user_trading_metrics
 
         calls = []
 
@@ -684,7 +686,7 @@ class TestListExpenseItemsResponseShape:
     async def test_response_is_dict_not_list(self, db_session, expense_goal):
         """Happy path: endpoint must return a dict with 'items' and 'coverage_summary'."""
         from unittest.mock import AsyncMock, MagicMock, patch
-        from app.routers.reports_router import list_expense_items
+        from app.routers.reports_generation_router import list_expense_items
 
         user, goal = expense_goal
 
@@ -694,7 +696,7 @@ class TestListExpenseItemsResponseShape:
         # Stub the waterfall and metric helpers to keep the test lightweight
         with (
             patch(
-                "app.routers.reports_router._get_user_trading_metrics",
+                "app.routers.reports_generation_router._get_user_trading_metrics",
                 new=AsyncMock(return_value=(0.0, 0.0)),
             ),
             patch(
@@ -741,7 +743,7 @@ class TestListExpenseItemsResponseShape:
         """Edge case: when goal has expense items, they appear under 'items' key."""
         from unittest.mock import AsyncMock, MagicMock, patch
         from app.models import ExpenseItem as ExpenseItemModel
-        from app.routers.reports_router import list_expense_items
+        from app.routers.reports_generation_router import list_expense_items
 
         user, goal = expense_goal
 
@@ -762,7 +764,7 @@ class TestListExpenseItemsResponseShape:
 
         with (
             patch(
-                "app.routers.reports_router._get_user_trading_metrics",
+                "app.routers.reports_generation_router._get_user_trading_metrics",
                 new=AsyncMock(return_value=(0.0, 0.0)),
             ),
             patch("app.services.expense_service.compute_expense_coverage") as mock_cov,
@@ -795,3 +797,207 @@ class TestListExpenseItemsResponseShape:
 
         assert isinstance(result, dict)
         assert len(result["items"]) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for financial helper tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+async def metrics_user_with_data(db_session):
+    """User with account, closed positions, and account value snapshots."""
+    user = User(
+        email="metrics_test@example.com",
+        hashed_password="hashed",
+        display_name="Metrics Tester",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    account = Account(
+        user_id=user.id,
+        name="Test Account",
+        type="cex",
+        is_default=True,
+    )
+    db_session.add(account)
+    await db_session.flush()
+
+    now = datetime.utcnow()
+
+    # Create closed positions with known profit in last 30 days
+    for i in range(3):
+        pos = Position(
+            user_id=user.id,
+            account_id=account.id,
+            product_id=f"ETH-USD-{i}",
+            status="closed",
+            closed_at=now - timedelta(days=i + 1),
+            profit_usd=100.0,  # 3 positions × $100 = $300 total
+            profit_quote=0.0,
+        )
+        db_session.add(pos)
+
+    # Account value snapshot (recent)
+    snap = AccountValueSnapshot(
+        account_id=account.id,
+        user_id=user.id,
+        snapshot_date=now - timedelta(hours=6),
+        total_value_usd=10000.0,
+        total_value_btc=0.15,
+    )
+    db_session.add(snap)
+    await db_session.flush()
+
+    return user, account
+
+
+class TestGetUserAnnualReturnPct:
+    """Tests for _get_user_annual_return_pct helper."""
+
+    @pytest.mark.asyncio
+    async def test_annual_return_with_profit_data(self, db_session, metrics_user_with_data):
+        """With 30-day profit and account value, returns compound-annualized %."""
+        from app.routers.reports_generation_router import _get_user_annual_return_pct
+
+        user, account = metrics_user_with_data
+        result = await _get_user_annual_return_pct(db_session, user.id)
+
+        # $300 profit over 30 days, $10000 account value
+        # daily_rate = (300/30) / 10000 = 0.001
+        # annual = ((1 + 0.001)^365 - 1) * 100 ≈ 44.025%
+        expected = round((math.pow(1 + 0.001, 365) - 1) * 100, 4)
+        assert result == expected
+
+    @pytest.mark.asyncio
+    async def test_annual_return_no_snapshots(self, db_session):
+        """With no data at all, returns 0.0."""
+        from app.routers.reports_generation_router import _get_user_annual_return_pct
+
+        # Non-existent user ID
+        result = await _get_user_annual_return_pct(db_session, 99999)
+        assert result == 0.0
+
+    @pytest.mark.asyncio
+    async def test_annual_return_no_profit(self, db_session, metrics_user_with_data):
+        """With zero profit, returns 0.0."""
+        from app.routers.reports_generation_router import _get_user_annual_return_pct
+
+        user, account = metrics_user_with_data
+        # Request BTC mode — positions only have profit_usd, so profit_quote is 0
+        result = await _get_user_annual_return_pct(db_session, user.id, is_btc=True)
+        assert result == 0.0
+
+
+class TestGetUserTradingMetrics:
+    """Tests for _get_user_trading_metrics helper."""
+
+    @pytest.mark.asyncio
+    async def test_trading_metrics_returns_tuple(self, db_session, metrics_user_with_data):
+        """Returns (annual_return_pct, account_balance) tuple."""
+        from app.routers.reports_generation_router import _get_user_trading_metrics
+
+        user, account = metrics_user_with_data
+        annual_pct, balance = await _get_user_trading_metrics(db_session, user.id)
+
+        assert isinstance(annual_pct, float)
+        assert isinstance(balance, float)
+        assert annual_pct > 0
+        assert balance == pytest.approx(10000.0)
+
+    @pytest.mark.asyncio
+    async def test_trading_metrics_account_scoped(self, db_session, metrics_user_with_data):
+        """When account_id provided, scopes to that account."""
+        from app.routers.reports_generation_router import _get_user_trading_metrics
+
+        user, account = metrics_user_with_data
+        annual_pct, balance = await _get_user_trading_metrics(
+            db_session, user.id, account_id=account.id
+        )
+        assert annual_pct > 0
+        assert balance == pytest.approx(10000.0)
+
+    @pytest.mark.asyncio
+    async def test_trading_metrics_no_data(self, db_session):
+        """With no data, returns (0.0, 0.0)."""
+        from app.routers.reports_generation_router import _get_user_trading_metrics
+
+        annual_pct, balance = await _get_user_trading_metrics(db_session, 99999)
+        assert annual_pct == 0.0
+        assert balance == 0.0
+
+    @pytest.mark.asyncio
+    async def test_trading_metrics_negative_profit_returns_zero_pct(self, db_session):
+        """When profit is negative, annual_return_pct is 0 but balance is returned."""
+        from app.routers.reports_generation_router import _get_user_trading_metrics
+
+        user = User(
+            email="neg_profit@example.com",
+            hashed_password="hashed",
+            display_name="Neg",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        account = Account(
+            user_id=user.id,
+            name="Neg Account",
+            type="cex",
+            is_default=False,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        now = datetime.utcnow()
+        # Negative profit position
+        pos = Position(
+            user_id=user.id,
+            account_id=account.id,
+            product_id="ETH-USD-neg",
+            status="closed",
+            closed_at=now - timedelta(days=1),
+            profit_usd=-50.0,
+            profit_quote=0.0,
+        )
+        db_session.add(pos)
+
+        snap = AccountValueSnapshot(
+            account_id=account.id,
+            user_id=user.id,
+            snapshot_date=now - timedelta(hours=1),
+            total_value_usd=5000.0,
+            total_value_btc=0.1,
+        )
+        db_session.add(snap)
+        await db_session.flush()
+
+        annual_pct, balance = await _get_user_trading_metrics(db_session, user.id)
+        assert annual_pct == 0.0
+        assert balance == pytest.approx(5000.0)
+
+
+class TestComputeMonthlyGrowthRate:
+    """Tests for compute_monthly_growth_rate (extracted to report_data_service)."""
+
+    def test_positive_annual_return(self):
+        """Converts annual return % to monthly growth rate."""
+        from app.services.report_data_service import compute_monthly_growth_rate
+
+        annual_pct = 44.0
+        expected = math.pow(1 + annual_pct / 100, 1 / 12) - 1
+        result = compute_monthly_growth_rate(annual_pct)
+        assert result == pytest.approx(expected)
+
+    def test_zero_annual_return(self):
+        """Zero annual return gives zero monthly rate."""
+        from app.services.report_data_service import compute_monthly_growth_rate
+
+        result = compute_monthly_growth_rate(0.0)
+        assert result == 0.0
+
+    def test_negative_annual_return(self):
+        """Negative annual return gives zero monthly rate."""
+        from app.services.report_data_service import compute_monthly_growth_rate
+
+        result = compute_monthly_growth_rate(-10.0)
+        assert result == 0.0

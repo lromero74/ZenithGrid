@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import get_quote_currency
 from app.database import get_db
-from app.models import Account, Position, User
+from app.models import Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
 from app.auth.dependencies import require_permission, Perm
+from app.services.account_access import manager_account_ids
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
 
@@ -35,10 +36,8 @@ async def add_funds_to_position(
     """Manually add funds to a position (manual safety order)"""
     quote_amount = request.btc_amount  # Multi-currency: actually quote amount (BTC or USD)
     try:
-        # Verify position belongs to current user
-        accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_r = await db.execute(accounts_q)
-        user_account_ids = [row[0] for row in accounts_r.fetchall()]
+        # Verify position belongs to an account the user can write to (owned + manager)
+        user_account_ids = await manager_account_ids(db, current_user.id)
         if not user_account_ids:
             raise HTTPException(status_code=404, detail="Position not found")
 
@@ -114,10 +113,8 @@ async def update_position_notes(
 ):
     """Update notes for a position"""
     try:
-        # Verify position belongs to current user
-        accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_r = await db.execute(accounts_q)
-        user_account_ids = [row[0] for row in accounts_r.fetchall()]
+        # Verify position belongs to an account the user can write to (owned + manager)
+        user_account_ids = await manager_account_ids(db, current_user.id)
         if not user_account_ids:
             raise HTTPException(status_code=404, detail="Position not found")
 

@@ -30,6 +30,15 @@ class PerpsMonitor:
         self.interval_seconds = interval_seconds
         self.running = False
         self.task: Optional[asyncio.Task] = None
+        self._session_maker = None  # optional injected session maker
+
+    def set_session_maker(self, sm):
+        """Inject a session maker (used when running on the secondary event loop)."""
+        self._session_maker = sm
+
+    def _get_sm(self):
+        """Return the injected session maker, falling back to the default."""
+        return self._session_maker or async_session_maker
 
     async def start(self):
         """Start the perps monitoring loop"""
@@ -65,7 +74,7 @@ class PerpsMonitor:
 
     async def _sync_positions(self):
         """Sync all open perps positions with exchange state"""
-        async with async_session_maker() as db:
+        async with self._get_sm()() as db:
             # Get all open futures positions
             result = await db.execute(
                 select(Position)

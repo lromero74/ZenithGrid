@@ -8,6 +8,7 @@ Split into focused modules:
 """
 
 from app.services.report_generator_service.html_builder import build_report_html  # noqa: F401
+from app.services.report_generator_service.html_builder import BuildReportHtmlParams  # noqa: F401
 from app.services.report_generator_service.pdf_generator import generate_pdf  # noqa: F401
 
 # Re-export internals used by tests.

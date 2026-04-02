@@ -678,3 +678,87 @@ class TestBuildPortfolioHoldingsInPositions:
         eth = holdings[0]
         assert eth["in_positions"] == 3.0
         assert eth["available"] == 0.0  # Floored at 0, not negative
+
+
+# ---------------------------------------------------------------------------
+# _compute_balance_breakdown
+# ---------------------------------------------------------------------------
+
+
+class TestComputeBalanceBreakdown:
+    """Characterization tests for _compute_balance_breakdown()."""
+
+    def test_happy_path_usd_positions(self):
+        """Happy path: USD positions are reflected in breakdown."""
+        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+
+        pos = MagicMock()
+        pos.get_quote_currency.return_value = "USD"
+        pos.get_base_currency.return_value = "ETH"
+        pos.total_base_acquired = 2.0
+        pos.total_quote_spent = 6000.0
+
+        result = _compute_balance_breakdown(BalanceBreakdownParams(
+            account_bots=[],
+            open_positions=[pos],
+            actual_btc=0.0,
+            actual_usd=10000.0,
+            actual_usdc=0.0,
+            total_reserved_btc=0.0,
+            total_reserved_usd=2000.0,
+            breakdown_prices={"ETH": 3500.0},
+            btc_usd_price=100000.0,
+        ))
+
+        # Position value = 2.0 * 3500 = 7000
+        assert result["usd"]["in_open_positions"] == 7000.0
+        assert result["usd"]["total"] == pytest.approx(10000.0 + 7000.0)
+        assert result["usd"]["reserved_by_bots"] == 2000.0
+        # free = total - reserved - in_positions
+        assert result["usd"]["free"] == pytest.approx(10000.0 + 7000.0 - 2000.0 - 7000.0)
+
+    def test_btc_positions_use_btc_price(self):
+        """Edge case: BTC-quoted positions convert via btc_usd_price."""
+        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+
+        pos = MagicMock()
+        pos.get_quote_currency.return_value = "BTC"
+        pos.get_base_currency.return_value = "ETH"
+        pos.total_base_acquired = 10.0
+        pos.total_quote_spent = 0.5
+
+        result = _compute_balance_breakdown(BalanceBreakdownParams(
+            account_bots=[],
+            open_positions=[pos],
+            actual_btc=1.0,
+            actual_usd=0.0,
+            actual_usdc=0.0,
+            total_reserved_btc=0.2,
+            total_reserved_usd=0.0,
+            breakdown_prices={"ETH": 3000.0},
+            btc_usd_price=60000.0,
+        ))
+
+        # ETH price in BTC = 3000 / 60000 = 0.05; value = 10 * 0.05 = 0.5
+        assert result["btc"]["in_open_positions"] == pytest.approx(0.5)
+
+    def test_no_positions_all_free(self):
+        """Edge case: no open positions means everything is free."""
+        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+
+        result = _compute_balance_breakdown(BalanceBreakdownParams(
+            account_bots=[],
+            open_positions=[],
+            actual_btc=1.0,
+            actual_usd=5000.0,
+            actual_usdc=500.0,
+            total_reserved_btc=0.0,
+            total_reserved_usd=0.0,
+            breakdown_prices={},
+            btc_usd_price=100000.0,
+        ))
+
+        assert result["btc"]["free"] == 1.0
+        assert result["usd"]["free"] == 5000.0
+        assert result["usdc"]["free"] == 500.0
+        assert result["btc"]["in_open_positions"] == 0.0

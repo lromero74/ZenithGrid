@@ -221,27 +221,27 @@ class TestAccountsRouterWriteDependencies:
     """Verify accounts_router write endpoints use require_permission(ACCOUNTS_WRITE)."""
 
     def test_create_account_requires_accounts_write(self):
-        from app.routers.accounts_router import create_account
+        from app.routers.accounts_mutation_router import create_account
         _assert_endpoint_requires_permission(create_account, "accounts:write")
 
     def test_update_account_requires_accounts_write(self):
-        from app.routers.accounts_router import update_account
+        from app.routers.accounts_mutation_router import update_account
         _assert_endpoint_requires_permission(update_account, "accounts:write")
 
     def test_delete_account_requires_accounts_write(self):
-        from app.routers.accounts_router import delete_account
+        from app.routers.accounts_mutation_router import delete_account
         _assert_endpoint_requires_permission(delete_account, "accounts:write")
 
     def test_set_default_requires_accounts_write(self):
-        from app.routers.accounts_router import set_default_account
+        from app.routers.accounts_mutation_router import set_default_account
         _assert_endpoint_requires_permission(set_default_account, "accounts:write")
 
     def test_link_perps_portfolio_requires_accounts_write(self):
-        from app.routers.accounts_router import link_perps_portfolio
+        from app.routers.accounts_mutation_router import link_perps_portfolio
         _assert_endpoint_requires_permission(link_perps_portfolio, "accounts:write")
 
     def test_update_auto_buy_requires_accounts_write(self):
-        from app.routers.accounts_router import update_auto_buy_settings
+        from app.routers.accounts_mutation_router import update_auto_buy_settings
         _assert_endpoint_requires_permission(update_auto_buy_settings, "accounts:write")
 
 
@@ -254,31 +254,31 @@ class TestAccountsRouterReadDependencies:
     """Verify accounts_router read endpoints use get_current_user."""
 
     def test_list_accounts_uses_get_current_user(self):
-        from app.routers.accounts_router import list_accounts
+        from app.routers.accounts_query_router import list_accounts
         _assert_endpoint_uses_get_current_user(list_accounts)
 
     def test_get_account_uses_get_current_user(self):
-        from app.routers.accounts_router import get_account
+        from app.routers.accounts_query_router import get_account
         _assert_endpoint_uses_get_current_user(get_account)
 
     def test_get_account_bots_uses_get_current_user(self):
-        from app.routers.accounts_router import get_account_bots
+        from app.routers.accounts_query_router import get_account_bots
         _assert_endpoint_uses_get_current_user(get_account_bots)
 
     def test_get_default_account_uses_get_current_user(self):
-        from app.routers.accounts_router import get_default_account
+        from app.routers.accounts_query_router import get_default_account
         _assert_endpoint_uses_get_current_user(get_default_account)
 
     def test_get_account_portfolio_uses_get_current_user(self):
-        from app.routers.accounts_router import get_account_portfolio
+        from app.routers.accounts_query_router import get_account_portfolio
         _assert_endpoint_uses_get_current_user(get_account_portfolio)
 
     def test_get_auto_buy_settings_uses_get_current_user(self):
-        from app.routers.accounts_router import get_auto_buy_settings
+        from app.routers.accounts_query_router import get_auto_buy_settings
         _assert_endpoint_uses_get_current_user(get_auto_buy_settings)
 
     def test_get_perps_portfolio_status_uses_get_current_user(self):
-        from app.routers.accounts_router import get_perps_portfolio_status
+        from app.routers.accounts_query_router import get_perps_portfolio_status
         _assert_endpoint_uses_get_current_user(get_perps_portfolio_status)
 
 

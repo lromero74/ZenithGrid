@@ -114,11 +114,11 @@ async def manager_membership(db_session, shared_account, member_user, owner):
 
 @pytest.fixture
 async def observer_membership(db_session, shared_account, observer_user, owner):
-    """An observer membership for observer_user on shared_account."""
+    """A shadow membership for observer_user on shared_account."""
     m = AccountMembership(
         account_id=shared_account.id,
         user_id=observer_user.id,
-        role="observer",
+        role="shadow",
         invited_by_user_id=owner.id,
     )
     db_session.add(m)
@@ -183,12 +183,12 @@ class TestCreateInvitation:
         assert inv.is_pending is True
 
     @pytest.mark.asyncio
-    async def test_create_invitation_observer_role(self, db_session, shared_account, owner):
-        """Happy path: can invite as observer."""
+    async def test_create_invitation_shadow_role(self, db_session, shared_account, owner):
+        """Happy path: can invite as shadow."""
         from app.services.account_sharing_service import create_invitation
 
-        inv = await create_invitation(db_session, shared_account.id, "watcher@example.com", "observer", owner)
-        assert inv.role == "observer"
+        inv = await create_invitation(db_session, shared_account.id, "watcher@example.com", "shadow", owner)
+        assert inv.role == "shadow"
 
     @pytest.mark.asyncio
     async def test_create_invitation_self_raises(self, db_session, shared_account, owner):
@@ -214,7 +214,7 @@ class TestCreateInvitation:
         from app.services.account_sharing_service import create_invitation
 
         with pytest.raises(ValueError, match="already a member"):
-            await create_invitation(db_session, shared_account.id, member_user.email, "observer", owner)
+            await create_invitation(db_session, shared_account.id, member_user.email, "shadow", owner)
 
     @pytest.mark.asyncio
     async def test_create_invitation_duplicate_pending_raises(
@@ -224,7 +224,7 @@ class TestCreateInvitation:
         from app.services.account_sharing_service import create_invitation
 
         with pytest.raises(ValueError, match="pending invitation"):
-            await create_invitation(db_session, shared_account.id, "member@example.com", "observer", owner)
+            await create_invitation(db_session, shared_account.id, "member@example.com", "shadow", owner)
 
     @pytest.mark.asyncio
     async def test_create_invitation_email_normalized_to_lowercase(
@@ -386,7 +386,7 @@ class TestAcceptInvitation:
             account_id=shared_account.id,
             invited_email=member_user.email,
             invited_by_user_id=owner.id,
-            role="observer",
+            role="shadow",
             token="revokedtoken789",
             expires_at=datetime.utcnow() + timedelta(days=7),
             revoked_at=datetime.utcnow(),
@@ -526,7 +526,7 @@ class TestListMembers:
         expired = AccountMembership(
             account_id=shared_account.id,
             user_id=member_user.id,
-            role="observer",
+            role="shadow",
             invited_by_user_id=owner.id,
             expires_at=datetime.utcnow() - timedelta(hours=1),
         )
@@ -557,15 +557,15 @@ class TestUpdateMemberRole:
     async def test_update_role_succeeds(
         self, db_session, shared_account, owner, member_user, manager_membership
     ):
-        """Happy path: owner can change manager to observer."""
+        """Happy path: owner can change manager to shadow."""
         from app.services.account_sharing_service import update_member_role
 
         updated = await update_member_role(
-            db_session, shared_account.id, member_user.id, "observer", owner
+            db_session, shared_account.id, member_user.id, "shadow", owner
         )
         await db_session.flush()
 
-        assert updated.role == "observer"
+        assert updated.role == "shadow"
 
     @pytest.mark.asyncio
     async def test_update_role_invalid_role_raises(
@@ -587,7 +587,7 @@ class TestUpdateMemberRole:
         from app.services.account_sharing_service import update_member_role
 
         with pytest.raises(ValueError, match="not found"):
-            await update_member_role(db_session, shared_account.id, 99999, "observer", owner)
+            await update_member_role(db_session, shared_account.id, 99999, "shadow", owner)
 
     @pytest.mark.asyncio
     async def test_update_role_logs_audit_event(
@@ -597,7 +597,7 @@ class TestUpdateMemberRole:
         from sqlalchemy import select
         from app.services.account_sharing_service import update_member_role
 
-        await update_member_role(db_session, shared_account.id, member_user.id, "observer", owner)
+        await update_member_role(db_session, shared_account.id, member_user.id, "shadow", owner)
         await db_session.flush()
 
         result = await db_session.execute(
@@ -609,7 +609,7 @@ class TestUpdateMemberRole:
         event = result.scalar_one_or_none()
         assert event is not None
         assert event.old_role == "manager"
-        assert event.new_role == "observer"
+        assert event.new_role == "shadow"
 
 
 # =============================================================================
@@ -744,14 +744,14 @@ class TestGetAccountRole:
         assert role == "manager"
 
     @pytest.mark.asyncio
-    async def test_observer_returns_observer_role(
+    async def test_shadow_returns_shadow_role(
         self, db_session, shared_account, observer_user, observer_membership
     ):
-        """Happy path: observer member gets role='observer'."""
+        """Happy path: shadow member gets role='shadow'."""
         from app.auth.dependencies import get_account_role
 
         role = await get_account_role(shared_account.id, observer_user, db_session)
-        assert role == "observer"
+        assert role == "shadow"
 
     @pytest.mark.asyncio
     async def test_unrelated_user_returns_none(
@@ -925,7 +925,7 @@ class TestInviteRateLimit:
     @pytest.mark.asyncio
     async def test_invite_succeeds_when_under_limit(self, db_session, shared_account, owner, member_user):
         """Happy path: invite is created when fewer than 10 have been sent this hour."""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock, MagicMock, patch
         from app.routers.account_sharing_router import invite_member, InviteRequest
 
         # Create 9 invitations in the last hour (one under the limit)
@@ -934,7 +934,7 @@ class TestInviteRateLimit:
                 account_id=shared_account.id,
                 invited_email=f"batch{i}@example.com",
                 invited_by_user_id=owner.id,
-                role="observer",
+                role="shadow",
                 token=f"batchtoken{i}abc",
                 expires_at=datetime.utcnow() + timedelta(days=7),
                 created_at=datetime.utcnow() - timedelta(minutes=30),
@@ -942,23 +942,25 @@ class TestInviteRateLimit:
             db_session.add(inv)
         await db_session.flush()
 
-        body = InviteRequest(email="newguest@example.com", role="observer")
+        body = InviteRequest(email="newguest@example.com", role="shadow")
 
         mock_inv = AccountInvitation(
             account_id=shared_account.id,
             invited_email="newguest@example.com",
             invited_by_user_id=owner.id,
-            role="observer",
+            role="shadow",
             token="freshtoken999",
             expires_at=datetime.utcnow() + timedelta(days=7),
         )
         mock_inv.id = 999
 
+        registry = MagicMock()
+        registry.broadcast = MagicMock()
+        registry.broadcast.send_to_user = AsyncMock()
+
         with patch("app.routers.account_sharing_router.svc.create_invitation", new_callable=AsyncMock,
                    return_value=mock_inv), \
-             patch("app.routers.account_sharing_router.send_invitation_email"), \
-             patch("app.services.websocket_manager.ws_manager") as mock_ws:
-            mock_ws.send_to_user = AsyncMock()
+             patch("app.routers.account_sharing_router.send_invitation_email"):
 
             # Should not raise — we are at 9, limit is 10
             result = await invite_member(
@@ -967,6 +969,7 @@ class TestInviteRateLimit:
                 account_role="owner",
                 current_user=owner,
                 db=db_session,
+                registry=registry,
             )
 
         assert result["invitation_id"] == 999
@@ -974,6 +977,7 @@ class TestInviteRateLimit:
     @pytest.mark.asyncio
     async def test_invite_returns_429_when_at_limit(self, db_session, shared_account, owner):
         """Failure: 429 is raised when 10 or more invitations sent in the last hour."""
+        from unittest.mock import MagicMock
         from fastapi import HTTPException
         from app.routers.account_sharing_router import invite_member, InviteRequest
 
@@ -983,7 +987,7 @@ class TestInviteRateLimit:
                 account_id=shared_account.id,
                 invited_email=f"spam{i}@example.com",
                 invited_by_user_id=owner.id,
-                role="observer",
+                role="shadow",
                 token=f"spamtoken{i}xyz",
                 expires_at=datetime.utcnow() + timedelta(days=7),
                 created_at=datetime.utcnow() - timedelta(minutes=10),
@@ -991,7 +995,8 @@ class TestInviteRateLimit:
             db_session.add(inv)
         await db_session.flush()
 
-        body = InviteRequest(email="blocked@example.com", role="observer")
+        body = InviteRequest(email="blocked@example.com", role="shadow")
+        registry = MagicMock()
 
         with pytest.raises(HTTPException) as exc_info:
             await invite_member(
@@ -1000,6 +1005,7 @@ class TestInviteRateLimit:
                 account_role="owner",
                 current_user=owner,
                 db=db_session,
+                registry=registry,
             )
 
         assert exc_info.value.status_code == 429
@@ -1008,7 +1014,7 @@ class TestInviteRateLimit:
     @pytest.mark.asyncio
     async def test_old_invitations_do_not_count_toward_limit(self, db_session, shared_account, owner):
         """Edge case: invitations older than 1 hour do not count toward the hourly limit."""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock, MagicMock, patch
         from app.routers.account_sharing_router import invite_member, InviteRequest
 
         # Create 10 invitations but all older than 1 hour — should NOT trigger rate limit
@@ -1017,7 +1023,7 @@ class TestInviteRateLimit:
                 account_id=shared_account.id,
                 invited_email=f"old{i}@example.com",
                 invited_by_user_id=owner.id,
-                role="observer",
+                role="shadow",
                 token=f"oldtoken{i}zzz",
                 expires_at=datetime.utcnow() + timedelta(days=7),
                 created_at=datetime.utcnow() - timedelta(hours=2),
@@ -1037,11 +1043,13 @@ class TestInviteRateLimit:
         )
         mock_inv.id = 888
 
+        registry = MagicMock()
+        registry.broadcast = MagicMock()
+        registry.broadcast.send_to_user = AsyncMock()
+
         with patch("app.routers.account_sharing_router.svc.create_invitation", new_callable=AsyncMock,
                    return_value=mock_inv), \
-             patch("app.routers.account_sharing_router.send_invitation_email"), \
-             patch("app.services.websocket_manager.ws_manager") as mock_ws:
-            mock_ws.send_to_user = AsyncMock()
+             patch("app.routers.account_sharing_router.send_invitation_email"):
 
             # Should succeed since old invites don't count
             result = await invite_member(
@@ -1050,6 +1058,7 @@ class TestInviteRateLimit:
                 account_role="owner",
                 current_user=owner,
                 db=db_session,
+                registry=registry,
             )
 
         assert result["invitation_id"] == 888

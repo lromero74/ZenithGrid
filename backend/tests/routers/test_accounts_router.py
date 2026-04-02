@@ -1,5 +1,5 @@
 """
-Tests for backend/app/routers/accounts_router.py
+Tests for accounts query + mutation routers (split from accounts_router.py)
 
 Covers account CRUD endpoints: list, create, update, delete,
 set_default, get_account_bots, get_account_portfolio, auto-buy settings,
@@ -22,8 +22,8 @@ from app.models import Account, Bot, User
 
 @pytest.fixture(autouse=True)
 def clear_accounts_router_caches():
-    """Clear TTL caches in accounts_router before each test."""
-    import app.routers.accounts_router as ar
+    """Clear TTL caches in accounts_query_router before each test."""
+    import app.routers.accounts_query_router as ar
     ar._TTL_REBALANCE_STATUS.clear()
     ar._TTL_DUST_SWEEP.clear()
     yield
@@ -127,7 +127,7 @@ class TestListAccounts:
     @pytest.mark.asyncio
     async def test_list_accounts_returns_active(self, db_session, test_user, test_account):
         """Happy path: returns active accounts for the user."""
-        from app.routers.accounts_router import list_accounts
+        from app.routers.accounts_query_router import list_accounts
         result = await list_accounts(
             include_inactive=False, db=db_session, current_user=test_user,
         )
@@ -146,7 +146,7 @@ class TestListAccounts:
         db_session.add(inactive)
         await db_session.flush()
 
-        from app.routers.accounts_router import list_accounts
+        from app.routers.accounts_query_router import list_accounts
         result = await list_accounts(
             include_inactive=True, db=db_session, current_user=test_user,
         )
@@ -156,7 +156,7 @@ class TestListAccounts:
     @pytest.mark.asyncio
     async def test_list_accounts_empty(self, db_session, test_user):
         """Edge case: user with no accounts returns empty list."""
-        from app.routers.accounts_router import list_accounts
+        from app.routers.accounts_query_router import list_accounts
         result = await list_accounts(
             include_inactive=False, db=db_session, current_user=test_user,
         )
@@ -167,7 +167,7 @@ class TestListAccounts:
         self, db_session, test_user, test_account, test_bot,
     ):
         """Happy path: bot_count is correctly computed."""
-        from app.routers.accounts_router import list_accounts
+        from app.routers.accounts_query_router import list_accounts
         result = await list_accounts(
             include_inactive=False, db=db_session, current_user=test_user,
         )
@@ -185,7 +185,7 @@ class TestGetAccount:
     @pytest.mark.asyncio
     async def test_get_account_success(self, db_session, test_user, test_account):
         """Happy path: returns account by ID."""
-        from app.routers.accounts_router import get_account
+        from app.routers.accounts_query_router import get_account
         result = await get_account(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -195,7 +195,7 @@ class TestGetAccount:
     @pytest.mark.asyncio
     async def test_get_account_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import get_account
+        from app.routers.accounts_query_router import get_account
         with pytest.raises(HTTPException) as exc_info:
             await get_account(
                 account_id=999, db=db_session, current_user=test_user,
@@ -212,7 +212,7 @@ class TestGetAccount:
         db_session.add(other_user)
         await db_session.flush()
 
-        from app.routers.accounts_router import get_account
+        from app.routers.accounts_query_router import get_account
         with pytest.raises(HTTPException) as exc_info:
             await get_account(
                 account_id=test_account.id, db=db_session, current_user=other_user,
@@ -229,7 +229,7 @@ class TestCreateAccount:
     """Tests for the create_account endpoint."""
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.create_exchange_account", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.create_exchange_account", new_callable=AsyncMock)
     async def test_create_account_success(self, mock_create, db_session, test_user):
         """Happy path: creates account via service layer."""
         # Mark as superuser to bypass the privileged-group check (which would trigger
@@ -243,7 +243,8 @@ class TestCreateAccount:
         )
         mock_create.return_value = mock_account
 
-        from app.routers.accounts_router import create_account, AccountCreate
+        from app.routers.accounts_mutation_router import create_account
+        from app.routers.accounts_query_router import AccountCreate
         account_data = AccountCreate(
             name="New Account", type="cex", exchange="coinbase",
         )
@@ -255,7 +256,7 @@ class TestCreateAccount:
         mock_create.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.create_exchange_account", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.create_exchange_account", new_callable=AsyncMock)
     async def test_create_account_service_error_raises_500(
         self, mock_create, db_session, test_user,
     ):
@@ -264,7 +265,8 @@ class TestCreateAccount:
         test_user.is_superuser = True
         mock_create.side_effect = RuntimeError("Unexpected error")
 
-        from app.routers.accounts_router import create_account, AccountCreate
+        from app.routers.accounts_mutation_router import create_account
+        from app.routers.accounts_query_router import AccountCreate
         account_data = AccountCreate(
             name="Bad Account", type="cex", exchange="coinbase",
         )
@@ -284,13 +286,14 @@ class TestUpdateAccount:
     """Tests for the update_account endpoint."""
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.clear_exchange_client_cache")
-    @patch("app.routers.accounts_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
+    @patch("app.routers.accounts_mutation_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
     async def test_update_account_name(
         self, mock_encrypt, mock_clear, db_session, test_user, test_account,
     ):
         """Happy path: updates account name."""
-        from app.routers.accounts_router import update_account, AccountUpdate
+        from app.routers.accounts_mutation_router import update_account
+        from app.routers.accounts_query_router import AccountUpdate
         update_data = AccountUpdate(name="Renamed Account")
         result = await update_account(
             account_id=test_account.id, account_data=update_data,
@@ -301,7 +304,8 @@ class TestUpdateAccount:
     @pytest.mark.asyncio
     async def test_update_account_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import update_account, AccountUpdate
+        from app.routers.accounts_mutation_router import update_account
+        from app.routers.accounts_query_router import AccountUpdate
         update_data = AccountUpdate(name="X")
         with pytest.raises(HTTPException) as exc_info:
             await update_account(
@@ -311,13 +315,14 @@ class TestUpdateAccount:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.clear_exchange_client_cache")
-    @patch("app.routers.accounts_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
+    @patch("app.routers.accounts_mutation_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
     async def test_update_account_invalid_prop_firm(
         self, mock_encrypt, mock_clear, db_session, test_user, test_account,
     ):
         """Failure case: invalid prop_firm raises 400."""
-        from app.routers.accounts_router import update_account, AccountUpdate
+        from app.routers.accounts_mutation_router import update_account
+        from app.routers.accounts_query_router import AccountUpdate
         update_data = AccountUpdate(prop_firm="invalid_firm")
         with pytest.raises(HTTPException) as exc_info:
             await update_account(
@@ -336,40 +341,122 @@ class TestDeleteAccount:
     """Tests for the delete_account endpoint."""
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.clear_exchange_client_cache")
+    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
     async def test_delete_account_success(
-        self, mock_clear, db_session, test_user, test_account,
+        self, mock_clear, mock_mfa, db_session, test_user, test_account,
     ):
         """Happy path: deletes account with no linked bots."""
-        from app.routers.accounts_router import delete_account
+        from app.routers.accounts_mutation_router import delete_account
+        mock_mfa.return_value = None
         result = await delete_account(
             account_id=test_account.id, db=db_session, current_user=test_user,
+            confirm=True, mfa_code="123456",
         )
         assert "deleted successfully" in result["message"]
         mock_clear.assert_called_once_with(test_account.id)
 
     @pytest.mark.asyncio
+    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
     async def test_delete_account_with_linked_bots(
-        self, db_session, test_user, test_account, test_bot,
+        self, mock_mfa, db_session, test_user, test_account, test_bot,
     ):
         """Failure case: cannot delete account with linked bots."""
-        from app.routers.accounts_router import delete_account
+        from app.routers.accounts_mutation_router import delete_account
+        mock_mfa.return_value = None
         with pytest.raises(HTTPException) as exc_info:
             await delete_account(
                 account_id=test_account.id, db=db_session, current_user=test_user,
+                confirm=True, mfa_code="123456",
             )
         assert exc_info.value.status_code == 400
         assert "linked bots" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_delete_account_not_found(self, db_session, test_user):
+    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
+    async def test_delete_account_not_found(self, mock_mfa, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import delete_account
+        from app.routers.accounts_mutation_router import delete_account
         with pytest.raises(HTTPException) as exc_info:
             await delete_account(
                 account_id=999, db=db_session, current_user=test_user,
+                confirm=True, mfa_code="123456",
             )
         assert exc_info.value.status_code == 404
+
+
+class TestDeleteAccountMfa:
+    """MFA must be verified before account deletion."""
+
+    @pytest.mark.asyncio
+    async def test_delete_without_mfa_code_returns_403(
+        self, db_session, test_user, test_account,
+    ):
+        """Request WITHOUT mfa_code when user has MFA enabled → 403."""
+        from app.routers.accounts_mutation_router import delete_account
+
+        test_user.mfa_enabled = True
+        test_user.totp_secret = "encrypted_secret"
+        await db_session.flush()
+
+        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.side_effect = HTTPException(status_code=403, detail="MFA code required")
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_account(
+                    account_id=test_account.id, db=db_session,
+                    current_user=test_user, confirm=True, mfa_code=None,
+                )
+            assert exc_info.value.status_code == 403
+            assert "MFA" in exc_info.value.detail
+            mock_mfa.assert_called_once_with(db_session, test_user, None)
+
+    @pytest.mark.asyncio
+    async def test_delete_with_invalid_mfa_returns_403(
+        self, db_session, test_user, test_account,
+    ):
+        """Request with wrong mfa_code → 403."""
+        from app.routers.accounts_mutation_router import delete_account
+
+        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.side_effect = HTTPException(status_code=403, detail="Invalid MFA code")
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_account(
+                    account_id=test_account.id, db=db_session,
+                    current_user=test_user, confirm=True, mfa_code="000000",
+                )
+            assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
+    async def test_delete_with_valid_mfa_succeeds(
+        self, mock_clear, db_session, test_user, test_account,
+    ):
+        """Request with valid mfa_code + confirm=true → account deleted."""
+        from app.routers.accounts_mutation_router import delete_account
+
+        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+            mock_mfa.return_value = None  # MFA passes
+            result = await delete_account(
+                account_id=test_account.id, db=db_session,
+                current_user=test_user, confirm=True, mfa_code="123456",
+            )
+            mock_mfa.assert_called_once_with(db_session, test_user, "123456")
+            assert "deleted successfully" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_delete_without_confirm_returns_400(
+        self, db_session, test_user, test_account,
+    ):
+        """Request without confirm=true → 400."""
+        from app.routers.accounts_mutation_router import delete_account
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_account(
+                account_id=test_account.id, db=db_session,
+                current_user=test_user, confirm=False, mfa_code="123456",
+            )
+        assert exc_info.value.status_code == 400
+        assert "confirm" in exc_info.value.detail.lower()
 
 
 # =============================================================================
@@ -383,7 +470,7 @@ class TestSetDefaultAccount:
     @pytest.mark.asyncio
     async def test_set_default_success(self, db_session, test_user, test_account):
         """Happy path: sets account as default."""
-        from app.routers.accounts_router import set_default_account
+        from app.routers.accounts_mutation_router import set_default_account
         result = await set_default_account(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -392,7 +479,7 @@ class TestSetDefaultAccount:
     @pytest.mark.asyncio
     async def test_set_default_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import set_default_account
+        from app.routers.accounts_mutation_router import set_default_account
         with pytest.raises(HTTPException) as exc_info:
             await set_default_account(
                 account_id=999, db=db_session, current_user=test_user,
@@ -413,7 +500,7 @@ class TestGetAccountBots:
         self, db_session, test_user, test_account, test_bot,
     ):
         """Happy path: returns bots for the account."""
-        from app.routers.accounts_router import get_account_bots
+        from app.routers.accounts_query_router import get_account_bots
         result = await get_account_bots(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -425,7 +512,7 @@ class TestGetAccountBots:
         self, db_session, test_user, test_account,
     ):
         """Edge case: account with no bots returns empty list."""
-        from app.routers.accounts_router import get_account_bots
+        from app.routers.accounts_query_router import get_account_bots
         result = await get_account_bots(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -435,7 +522,7 @@ class TestGetAccountBots:
     @pytest.mark.asyncio
     async def test_get_account_bots_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import get_account_bots
+        from app.routers.accounts_query_router import get_account_bots
         with pytest.raises(HTTPException) as exc_info:
             await get_account_bots(
                 account_id=999, db=db_session, current_user=test_user,
@@ -453,7 +540,7 @@ class TestGetAccountPortfolio:
 
     @pytest.mark.asyncio
     @patch(
-        "app.routers.accounts_router.get_portfolio_for_account",
+        "app.routers.accounts_query_router.get_portfolio_for_account",
         new_callable=AsyncMock,
     )
     async def test_get_portfolio_success(
@@ -461,7 +548,7 @@ class TestGetAccountPortfolio:
     ):
         """Happy path: returns portfolio data from service."""
         mock_portfolio.return_value = {"total_usd": 50000.0, "assets": []}
-        from app.routers.accounts_router import get_account_portfolio
+        from app.routers.accounts_query_router import get_account_portfolio
         result = await get_account_portfolio(
             account_id=1, force_fresh=False,
             db=db_session, current_user=test_user,
@@ -471,7 +558,7 @@ class TestGetAccountPortfolio:
 
     @pytest.mark.asyncio
     @patch(
-        "app.routers.accounts_router.get_portfolio_for_account",
+        "app.routers.accounts_query_router.get_portfolio_for_account",
         new_callable=AsyncMock,
     )
     async def test_get_portfolio_service_raises_404(
@@ -479,7 +566,7 @@ class TestGetAccountPortfolio:
     ):
         """Failure case: service raises HTTPException passes through."""
         mock_portfolio.side_effect = HTTPException(status_code=404, detail="Not found")
-        from app.routers.accounts_router import get_account_portfolio
+        from app.routers.accounts_query_router import get_account_portfolio
         with pytest.raises(HTTPException) as exc_info:
             await get_account_portfolio(
                 account_id=999, force_fresh=False,
@@ -501,7 +588,7 @@ class TestAutoBuySettings:
         self, db_session, test_user, test_account,
     ):
         """Happy path: returns default auto-buy settings."""
-        from app.routers.accounts_router import get_auto_buy_settings
+        from app.routers.accounts_query_router import get_auto_buy_settings
         result = await get_auto_buy_settings(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -512,7 +599,7 @@ class TestAutoBuySettings:
     @pytest.mark.asyncio
     async def test_get_auto_buy_settings_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import get_auto_buy_settings
+        from app.routers.accounts_query_router import get_auto_buy_settings
         with pytest.raises(HTTPException) as exc_info:
             await get_auto_buy_settings(
                 account_id=999, db=db_session, current_user=test_user,
@@ -524,9 +611,8 @@ class TestAutoBuySettings:
         self, db_session, test_user, test_account,
     ):
         """Happy path: updates auto-buy settings."""
-        from app.routers.accounts_router import (
-            update_auto_buy_settings, AutoBuySettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_auto_buy_settings
+        from app.routers.accounts_query_router import AutoBuySettingsUpdate
         settings = AutoBuySettingsUpdate(enabled=True, usdc_enabled=True, usdc_min=25.0)
         result = await update_auto_buy_settings(
             account_id=test_account.id, settings=settings,
@@ -545,9 +631,8 @@ class TestAutoBuySettings:
         test_account.rebalance_enabled = True
         await db_session.flush()
 
-        from app.routers.accounts_router import (
-            update_auto_buy_settings, AutoBuySettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_auto_buy_settings
+        from app.routers.accounts_query_router import AutoBuySettingsUpdate
         settings = AutoBuySettingsUpdate(enabled=True)
         result = await update_auto_buy_settings(
             account_id=test_account.id, settings=settings,
@@ -572,7 +657,7 @@ class TestLinkPerpsPortfolio:
         self, db_session, test_user, test_account_dex,
     ):
         """Failure case: DEX account raises 400."""
-        from app.routers.accounts_router import link_perps_portfolio
+        from app.routers.accounts_mutation_router import link_perps_portfolio
         with pytest.raises(HTTPException) as exc_info:
             await link_perps_portfolio(
                 account_id=test_account_dex.id, db=db_session, current_user=test_user,
@@ -582,7 +667,7 @@ class TestLinkPerpsPortfolio:
     @pytest.mark.asyncio
     async def test_link_perps_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
-        from app.routers.accounts_router import link_perps_portfolio
+        from app.routers.accounts_mutation_router import link_perps_portfolio
         with pytest.raises(HTTPException) as exc_info:
             await link_perps_portfolio(
                 account_id=999, db=db_session, current_user=test_user,
@@ -590,7 +675,7 @@ class TestLinkPerpsPortfolio:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.get_coinbase_for_account", new_callable=AsyncMock)
     async def test_link_perps_success(
         self, mock_coinbase, db_session, test_user, test_account,
     ):
@@ -602,7 +687,7 @@ class TestLinkPerpsPortfolio:
         mock_client.get_perps_portfolio_summary = AsyncMock(return_value={})
         mock_coinbase.return_value = mock_client
 
-        from app.routers.accounts_router import link_perps_portfolio
+        from app.routers.accounts_mutation_router import link_perps_portfolio
         result = await link_perps_portfolio(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -623,7 +708,7 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Happy path: returns default rebalance settings."""
-        from app.routers.accounts_router import get_rebalance_settings
+        from app.routers.accounts_query_router import get_rebalance_settings
         result = await get_rebalance_settings(
             account_id=test_account.id, db=db_session, current_user=test_user,
         )
@@ -639,9 +724,8 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Happy path: updates and persists rebalance settings."""
-        from app.routers.accounts_router import (
-            update_rebalance_settings, RebalanceSettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.routers.accounts_query_router import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
         )
@@ -663,9 +747,8 @@ class TestRebalanceSettings:
         test_account.auto_buy_enabled = True
         await db_session.flush()
 
-        from app.routers.accounts_router import (
-            update_rebalance_settings, RebalanceSettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.routers.accounts_query_router import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
         )
@@ -683,9 +766,8 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Failure: percentages not summing to 100 raises 400."""
-        from app.routers.accounts_router import (
-            update_rebalance_settings, RebalanceSettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.routers.accounts_query_router import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             target_usd_pct=50.0, target_btc_pct=40.0, target_eth_pct=20.0,
         )
@@ -700,7 +782,7 @@ class TestRebalanceSettings:
     @pytest.mark.asyncio
     async def test_get_rebalance_settings_not_found(self, db_session, test_user):
         """Failure: non-existent account raises 404."""
-        from app.routers.accounts_router import get_rebalance_settings
+        from app.routers.accounts_query_router import get_rebalance_settings
         with pytest.raises(HTTPException) as exc_info:
             await get_rebalance_settings(
                 account_id=999, db=db_session, current_user=test_user,
@@ -712,7 +794,7 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Failure: negative percentage is rejected by Pydantic validation."""
-        from app.routers.accounts_router import RebalanceSettingsUpdate
+        from app.routers.accounts_query_router import RebalanceSettingsUpdate
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
             RebalanceSettingsUpdate(target_usd_pct=-10.0)
@@ -722,9 +804,8 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Edge case: partial update with only interval changes."""
-        from app.routers.accounts_router import (
-            update_rebalance_settings, RebalanceSettingsUpdate,
-        )
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.routers.accounts_query_router import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             check_interval_minutes=30, drift_threshold_pct=3.0,
         )
@@ -769,10 +850,10 @@ class TestRebalanceStatus:
         self, db_session, test_user, paper_account,
     ):
         """Paper trading accounts should return current allocation from paper_balances."""
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
         # Mock the public price API — no exchange credentials needed
-        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices:
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices:
             mock_prices.return_value = {"BTC-USD": 90000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
             result = await get_rebalance_status(
                 account_id=paper_account.id, db=db_session, current_user=test_user,
@@ -795,7 +876,7 @@ class TestRebalanceStatus:
         self, db_session, test_user,
     ):
         """Paper trading account with no balances returns zero allocation."""
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
         account = Account(
             id=11, user_id=test_user.id, name="Empty Paper",
@@ -805,7 +886,7 @@ class TestRebalanceStatus:
         db_session.add(account)
         await db_session.flush()
 
-        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices:
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices:
             mock_prices.return_value = {"BTC-USD": 90000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=test_user,
@@ -819,7 +900,7 @@ class TestRebalanceStatus:
         self, db_session, test_user, test_account,
     ):
         """Live (non-paper) accounts use Coinbase raw balances for physical holdings display."""
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
         mock_coinbase = AsyncMock()
         # Raw balance getters (physical holdings)
@@ -829,7 +910,7 @@ class TestRebalanceStatus:
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=500.0)
         mock_coinbase.get_current_price = AsyncMock(return_value=90000.0)
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=test_account.id, db=db_session, current_user=test_user,
@@ -848,7 +929,7 @@ class TestRebalanceStatus:
         A user with 2 BTC (some acquired via BTC-USD bots) should see ~100% BTC,
         NOT 99% USD (the market-deployment view).
         """
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
         # Simulate: user physically holds 2 BTC, $0 USD, $0 ETH, $0 USDC
         # BTC price = $80,000 → total = $160,000, 100% BTC
@@ -863,7 +944,7 @@ class TestRebalanceStatus:
             return prices.get(product_id, 0.0)
         mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price)
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=test_account.id, db=db_session, current_user=test_user,
@@ -890,9 +971,9 @@ class TestRebalanceStatus:
         db_session.add(account)
         await db_session.flush()
 
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
-        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices, \
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices, \
              patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
             mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
             mock_coin_price.return_value = 200.0  # SOL-USD price
@@ -940,14 +1021,14 @@ class TestRebalanceStatus:
         db_session.add(pos)
         await db_session.flush()
 
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
 
         async def coin_price_side_effect(product_id):
             if product_id == "RUNE-BTC":
                 return 0.000030  # RUNE-BTC price
             raise Exception(f"Unexpected product: {product_id}")
 
-        with patch("app.routers.accounts_router.get_public_prices", new_callable=AsyncMock) as mock_prices, \
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices, \
              patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
             mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
             mock_coin_price.side_effect = coin_price_side_effect
@@ -994,7 +1075,7 @@ class TestAllocationIncludesOpenPositions:
     async def test_usd_position_value_added_to_usd_bucket(self, db_session):
         """Happy path: open USD-pair position value is included in USD allocation bucket."""
         from app.models import Position
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
         user, account = await self._make_account(db_session, "usd")
 
         # $0 free USD, but 1 ETH open position at $2000 each → $2000 in the USD bucket
@@ -1023,7 +1104,7 @@ class TestAllocationIncludesOpenPositions:
             side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
         )
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1037,7 +1118,7 @@ class TestAllocationIncludesOpenPositions:
     async def test_btc_position_value_added_to_btc_bucket(self, db_session):
         """Happy path: open BTC-pair position value is included in BTC allocation bucket."""
         from app.models import Position
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
         user, account = await self._make_account(db_session, "btc")
 
         # 0.01 free BTC, plus 1 ETH open at 0.05 BTC each → 0.05 BTC in position
@@ -1069,7 +1150,7 @@ class TestAllocationIncludesOpenPositions:
 
         mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_btc)
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1083,7 +1164,7 @@ class TestAllocationIncludesOpenPositions:
     async def test_closed_positions_not_counted(self, db_session):
         """Edge case: closed positions are NOT added to allocation buckets."""
         from app.models import Position
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
         user, account = await self._make_account(db_session, "closed")
 
         pos = Position(
@@ -1112,7 +1193,7 @@ class TestAllocationIncludesOpenPositions:
             side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
         )
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1125,7 +1206,7 @@ class TestAllocationIncludesOpenPositions:
     async def test_position_price_fallback_to_entry_price(self, db_session):
         """Edge case: when live price fetch fails, falls back to position entry_price."""
         from app.models import Position
-        from app.routers.accounts_router import get_rebalance_status
+        from app.routers.accounts_query_router import get_rebalance_status
         user, account = await self._make_account(db_session, "fallback")
 
         pos = Position(
@@ -1158,7 +1239,7 @@ class TestAllocationIncludesOpenPositions:
 
         mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_fallback)
 
-        with patch("app.routers.accounts_router.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1166,3 +1247,191 @@ class TestAllocationIncludesOpenPositions:
 
         # 10 tokens * $15 entry = $150 in USD bucket via fallback
         assert result["total_value_usd"] == pytest.approx(150.0, abs=1.0)
+
+
+# =============================================================================
+# _compute_allocation pure function unit tests
+# =============================================================================
+
+
+class TestComputeAllocation:
+    """Direct unit tests for the _compute_allocation pure function."""
+
+    def test_happy_path_mixed_portfolio(self):
+        """Standard case: multiple currencies produce correct percentages."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 5000.0, "BTC": 0.1, "ETH": 2.0, "USDC": 1000.0, "USDT": 0.0}
+        prices = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+        result = _compute_allocation(balances, prices)
+
+        # BTC = 0.1 * 50000 = 5000, ETH = 2 * 3000 = 6000
+        # Total = 5000 + 5000 + 6000 + 1000 + 0 = 17000
+        assert result["total_value_usd"] == pytest.approx(17000.0)
+        assert result["current_usd_pct"] == pytest.approx(round(5000 / 17000 * 100, 2))
+        assert result["current_btc_pct"] == pytest.approx(round(5000 / 17000 * 100, 2))
+        assert result["current_eth_pct"] == pytest.approx(round(6000 / 17000 * 100, 2))
+        assert result["current_usdc_pct"] == pytest.approx(round(1000 / 17000 * 100, 2))
+        assert result["current_usdt_pct"] == pytest.approx(0.0)
+
+    def test_zero_total_returns_all_zeros(self):
+        """Edge case: zero balances produce 0% across the board."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0, "USDT": 0.0}
+        prices = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+        result = _compute_allocation(balances, prices)
+
+        assert result["total_value_usd"] == 0.0
+        assert result["current_usd_pct"] == 0.0
+        assert result["current_btc_pct"] == 0.0
+        assert result["current_eth_pct"] == 0.0
+
+    def test_total_override_uses_custom_denominator(self):
+        """total_override replaces the computed total for percentage calculation."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 500.0, "BTC": 0.0, "ETH": 0.0, "USDC": 0.0, "USDT": 0.0}
+        prices = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+        result = _compute_allocation(balances, prices, total_override=10000.0)
+
+        # USD pct should be 500/10000 = 5%, not 500/500 = 100%
+        assert result["total_value_usd"] == pytest.approx(10000.0)
+        assert result["current_usd_pct"] == pytest.approx(5.0)
+
+    def test_missing_balance_keys_default_to_zero(self):
+        """Balances dict missing keys should not crash — defaults to 0."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 1000.0}  # Missing BTC, ETH, USDC, USDT
+        prices = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+        result = _compute_allocation(balances, prices)
+
+        assert result["total_value_usd"] == pytest.approx(1000.0)
+        assert result["current_usd_pct"] == pytest.approx(100.0)
+        assert result["current_btc_pct"] == pytest.approx(0.0)
+
+    def test_missing_price_keys_default_to_zero(self):
+        """Missing price keys default correctly (USDC/USDT fallback to 1.0 in caller)."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 0.0, "BTC": 1.0, "ETH": 0.0, "USDC": 0.0, "USDT": 0.0}
+        prices = {}  # No prices at all — BTC-USD defaults to 0
+        result = _compute_allocation(balances, prices)
+
+        # BTC * 0 = 0, USDC * 1.0 (default) = 0, total = 0
+        assert result["total_value_usd"] == 0.0
+        assert result["current_btc_pct"] == 0.0
+
+    def test_single_currency_is_100_percent(self):
+        """A portfolio with only one non-zero currency should be 100% that currency."""
+        from app.routers.accounts_query_router import _compute_allocation
+
+        balances = {"USD": 0.0, "BTC": 2.0, "ETH": 0.0, "USDC": 0.0, "USDT": 0.0}
+        prices = {"BTC-USD": 80000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+        result = _compute_allocation(balances, prices)
+
+        assert result["total_value_usd"] == pytest.approx(160000.0)
+        assert result["current_btc_pct"] == pytest.approx(100.0)
+
+
+# =============================================================================
+# Reserve / deployable logic tests
+# =============================================================================
+
+
+class TestRebalanceReserveDeployable:
+    """Tests for the reserve subtraction and deployable pool logic in rebalance status."""
+
+    @pytest.mark.asyncio
+    async def test_reserve_reduces_deployable(self, db_session, test_user):
+        """Reserves are subtracted from total to compute deployable value."""
+        import json
+        from app.routers.accounts_query_router import get_rebalance_status
+
+        account = Account(
+            id=20, user_id=test_user.id, name="Reserve Test",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 10000.0, "BTC": 0.0}),
+            rebalance_enabled=True,
+            min_balance_usd=2000.0,
+            min_balance_btc=0.0,
+            min_balance_eth=0.0,
+            min_balance_usdc=0.0,
+            min_balance_usdt=0.0,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices:
+            mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        assert result["total_value_usd"] == pytest.approx(10000.0)
+        assert result["reserve_value_usd"] == pytest.approx(2000.0)
+        assert result["deployable_value_usd"] == pytest.approx(8000.0)
+
+    @pytest.mark.asyncio
+    async def test_reserve_exceeding_balance_caps_at_balance(self, db_session, test_user):
+        """Reserve pct should be capped at actual balance, not exceed it."""
+        import json
+        from app.routers.accounts_query_router import get_rebalance_status
+
+        account = Account(
+            id=21, user_id=test_user.id, name="Over-Reserve",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 100.0, "BTC": 0.0}),
+            rebalance_enabled=True,
+            min_balance_usd=5000.0,  # Reserve > actual balance
+            min_balance_btc=0.0, min_balance_eth=0.0,
+            min_balance_usdc=0.0, min_balance_usdt=0.0,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices:
+            mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        # Reserve % capped at actual $100 balance, not $5000 setting
+        assert result["reserve_usd_pct"] == pytest.approx(100.0)
+        # Deployable can't go negative
+        assert result["deployable_value_usd"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_default_targets_when_none(self, db_session, test_user):
+        """When target percentages are None, defaults are applied (34/33/33/0/0)."""
+        import json
+        from app.routers.accounts_query_router import get_rebalance_status
+
+        account = Account(
+            id=22, user_id=test_user.id, name="Default Targets",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 1000.0}),
+            rebalance_target_usd_pct=None,
+            rebalance_target_btc_pct=None,
+            rebalance_target_eth_pct=None,
+            rebalance_target_usdc_pct=None,
+            rebalance_target_usdt_pct=None,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices:
+            mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0, "USDT-USD": 1.0}
+            result = await get_rebalance_status(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        assert result["target_usd_pct"] == 34.0
+        assert result["target_btc_pct"] == 33.0
+        assert result["target_eth_pct"] == 33.0
+        assert result["target_usdc_pct"] == 0.0
+        assert result["target_usdt_pct"] == 0.0

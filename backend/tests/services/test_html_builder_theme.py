@@ -9,6 +9,7 @@ Tests cover:
 """
 
 from app.services.report_generator_service.html_builder import (
+    BuildReportHtmlParams,
     _apply_clean_theme,
     build_report_html,
 )
@@ -68,49 +69,55 @@ class TestBuildReportHtmlColorScheme:
     """Tests for build_report_html with color_scheme parameter."""
 
     def test_dark_scheme_has_dark_background(self):
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
             color_scheme="dark",
-        )
+        ))
         assert "background-color: #0f172a" in html
 
     def test_clean_scheme_has_white_background(self):
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
             color_scheme="clean",
-        )
+        ))
         assert "background-color: #ffffff" in html
         assert "#0f172a" not in html
 
     def test_clean_scheme_has_dark_text(self):
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
             color_scheme="clean",
-        )
+        ))
         # Primary text should be dark
         assert "color: #111827" in html
 
     def test_default_is_dark(self):
         """No color_scheme param should default to dark."""
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
-        )
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
+        ))
         assert "background-color: #0f172a" in html
 
     def test_unknown_scheme_stays_dark(self):
         """Unknown color_scheme should just return dark (no replacement)."""
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
             color_scheme="neon",
-        )
+        ))
         assert "background-color: #0f172a" in html
 
     def test_clean_html_still_valid(self):
         """Clean theme should produce valid HTML structure."""
-        html = build_report_html(
-            _MINIMAL_DATA, None, "Test User", "Jan 1-7",
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=_MINIMAL_DATA, ai_summary=None,
+            user_name="Test User", period_label="Jan 1-7",
             color_scheme="clean",
-        )
+        ))
         assert html.startswith("<!DOCTYPE html>")
         assert "</html>" in html
         assert "<body" in html

@@ -5,6 +5,24 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.0] - 2026-04-02
+
+### Security
+- **MFA required to delete accounts** — Deleting an account now requires MFA verification (TOTP or email code) before the deletion proceeds.
+- **MFA required to sell portfolio to base currency** — The "Sell Portfolio to Base" action now requires MFA verification.
+- **TOTP required to disable email MFA** — If you have TOTP (authenticator app) active, disabling email MFA now requires your TOTP code as a second confirmation.
+- **Task ownership enforcement** — Panic sell status and portfolio conversion status can no longer be read by users other than the one who initiated the task.
+- **Shared-account access fixed** — Managers on shared accounts can now correctly place, cancel, and update limit close orders and perform manual position operations (add funds, update notes). Previously only the account owner could do these.
+- **Rate limiting on auth endpoints** — `/auth/refresh` is now limited to 60 requests/hour. `/auth/change-password` is limited to 5 requests per 15 minutes.
+- **Email MFA resend rate limiting** — Resending a login email code is now rate-limited to 5 attempts per 5 minutes.
+
+### Fixed
+- **Rebalancing toggle: 400 error** — Turning portfolio rebalancing off no longer returns a 400 "percentages must sum to 100%" error. Percentage validation is now skipped when only toggling the enabled flag.
+
+### Changed
+- **Internal: service layer extracted** — Business logic for portfolio rebalancing, P&L calculations, news querying, and seasonality management has been moved from routers into dedicated service classes. No user-visible behavior change.
+- **Internal: router files split** — The accounts and reports routers have each been split into separate query and mutation files for better maintainability. No user-visible behavior change.
+
 ## [v2.157.2] - 2026-04-02
 
 ### Added

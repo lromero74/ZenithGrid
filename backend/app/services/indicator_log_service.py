@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import async_session_maker as _default_session_maker
 from app.models import IndicatorLog
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ async def log_indicator_evaluation(
     conditions_detail: List[Dict[str, Any]],
     indicators_snapshot: Optional[Dict[str, Any]] = None,
     current_price: Optional[float] = None,
+    session_maker=None,
 ) -> Optional[IndicatorLog]:
     """
     Log an indicator condition evaluation to the database.
@@ -50,9 +52,9 @@ async def log_indicator_evaluation(
         return None
 
     try:
-        from app.database import async_session_maker
+        sm = session_maker or _default_session_maker
 
-        async with async_session_maker() as log_db:
+        async with sm() as log_db:
             log_entry = IndicatorLog(
                 bot_id=bot_id,
                 timestamp=datetime.utcnow(),

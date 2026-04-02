@@ -50,6 +50,9 @@ TRADING_PAIR_INFO: Dict[str, Dict[str, str]] = {
     "USDC-USD": {"name": "USDC/USD", "base": "USDC", "quote": "USD"},
 }
 
+# Valid coin categories for blacklist classification
+VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "MEME", "BLACKLISTED"]
+
 # Candle intervals
 # Coinbase natively supports: ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE, THIRTY_MINUTE,
 # ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY

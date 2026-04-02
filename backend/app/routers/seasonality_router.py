@@ -23,6 +23,10 @@ from app.database import get_db
 from app.models import Bot, Settings, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
+from app.services.seasonality_service import (
+    auto_manage_bots as _auto_manage_bots_logic,
+    build_seasonality_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,72 +110,29 @@ async def get_seasonality(
     enabled = enabled_str == "true" if enabled_str else False
     last_transition = settings.get("seasonality_last_transition")
 
-    return SeasonalityResponse(
-        enabled=enabled,
-        season=status.season_info.season,
-        season_name=status.season_info.name,
-        subtitle=status.season_info.subtitle,
-        description=status.season_info.description,
-        progress=status.season_info.progress,
-        confidence=status.season_info.confidence,
-        signals=status.season_info.signals,
-        mode=status.mode,
-        btc_bots_allowed=status.btc_bots_allowed if enabled else True,  # Always allowed if disabled
-        usd_bots_allowed=status.usd_bots_allowed if enabled else True,
-        threshold_crossed=status.threshold_crossed,
-        last_transition=last_transition,
-        halving_days=status.season_info.halving_days,
-        cycle_position=status.season_info.cycle_position
-    )
+    data = build_seasonality_response(status=status, enabled=enabled, last_transition=last_transition)
+    return SeasonalityResponse(**data)
 
 
 async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus, user_id: int = None) -> dict:
     """
     Auto-enable/disable bots based on seasonality mode.
 
-    Risk-Off mode: Disable BTC bots, keep USD bots
-    Risk-On mode: Disable USD bots, keep BTC bots
-
-    Args:
-        user_id: If provided, only manage this user's bots. If None, manage all bots.
-
-    Returns counts of bots affected.
+    Queries active bots from DB, delegates business logic to seasonality_service,
+    then commits if any bots were disabled.
     """
-    # Get active bots (scoped to user if provided)
     query = select(Bot).where(Bot.is_active.is_(True))
     if user_id is not None:
         query = query.where(Bot.user_id == user_id)
     result = await db.execute(query)
     active_bots = result.scalars().all()
 
-    disabled_btc = 0
-    disabled_usd = 0
+    counts = await _auto_manage_bots_logic(bots=active_bots, status=status)
 
-    for bot in active_bots:
-        # Grid bots are exempt from seasonality restrictions
-        if bot.strategy_type == "grid_trading":
-            continue
-
-        quote_currency = bot.get_quote_currency()
-
-        if status.mode == "risk_off" and quote_currency == "BTC":
-            # Risk-Off: Disable BTC bots
-            bot.is_active = False
-            bot.updated_at = datetime.utcnow()
-            disabled_btc += 1
-            logger.info(f"Seasonality: Auto-disabled BTC bot '{bot.name}' (ID: {bot.id}) - Risk-Off mode")
-
-        elif status.mode == "risk_on" and quote_currency == "USD":
-            # Risk-On: Disable USD bots
-            bot.is_active = False
-            bot.updated_at = datetime.utcnow()
-            disabled_usd += 1
-            logger.info(f"Seasonality: Auto-disabled USD bot '{bot.name}' (ID: {bot.id}) - Risk-On mode")
-
-    if disabled_btc > 0 or disabled_usd > 0:
+    if counts["disabled_btc"] > 0 or counts["disabled_usd"] > 0:
         await db.commit()
 
-    return {"disabled_btc": disabled_btc, "disabled_usd": disabled_usd}
+    return counts
 
 
 @router.post("", response_model=SeasonalityResponse)

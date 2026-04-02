@@ -26,7 +26,7 @@ class TestDustSweepRBAC:
 
     def test_get_dust_settings_uses_get_current_user(self):
         """GET dust-sweep-settings should use get_current_user (read-only)."""
-        from app.routers.accounts_router import get_dust_sweep_settings
+        from app.routers.accounts_query_router import get_dust_sweep_settings
 
         sig = inspect.signature(get_dust_sweep_settings)
         param = sig.parameters.get("current_user")
@@ -38,7 +38,7 @@ class TestDustSweepRBAC:
 
     def test_put_dust_settings_requires_write(self):
         """PUT dust-sweep-settings should require accounts:write."""
-        from app.routers.accounts_router import update_dust_sweep_settings
+        from app.routers.accounts_mutation_router import update_dust_sweep_settings
 
         sig = inspect.signature(update_dust_sweep_settings)
         param = sig.parameters.get("current_user")
@@ -54,7 +54,7 @@ class TestDustSweepRBAC:
 
     def test_post_sweep_requires_write(self):
         """POST dust-sweep should require accounts:write."""
-        from app.routers.accounts_router import sweep_dust
+        from app.routers.accounts_mutation_router import sweep_dust
 
         sig = inspect.signature(sweep_dust)
         param = sig.parameters.get("current_user")
@@ -81,7 +81,7 @@ class TestGetDustSettings:
     async def test_returns_dust_list_from_paper_balances(self, db_session):
         """Happy path: returns dust positions from paper_balances."""
         from app.models import Account, User
-        from app.routers.accounts_router import get_dust_sweep_settings
+        from app.routers.accounts_query_router import get_dust_sweep_settings
 
         user = User(
             email="test@example.com", hashed_password="x",
@@ -110,7 +110,7 @@ class TestGetDustSettings:
         }
 
         with patch(
-            "app.routers.accounts_router.get_public_prices",
+            "app.routers.accounts_query_router.get_public_prices",
             return_value=prices,
         ):
             result = await get_dust_sweep_settings(
@@ -133,7 +133,7 @@ class TestGetDustSettings:
     async def test_empty_paper_balances_returns_empty_list(self, db_session):
         """Edge case: no non-target currencies means empty dust list."""
         from app.models import Account, User
-        from app.routers.accounts_router import get_dust_sweep_settings
+        from app.routers.accounts_query_router import get_dust_sweep_settings
 
         user = User(
             email="test2@example.com", hashed_password="x",
@@ -153,7 +153,7 @@ class TestGetDustSettings:
         await db_session.flush()
 
         with patch(
-            "app.routers.accounts_router.get_public_prices",
+            "app.routers.accounts_query_router.get_public_prices",
             return_value={"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0},
         ):
             result = await get_dust_sweep_settings(
@@ -175,9 +175,8 @@ class TestUpdateDustSettings:
     async def test_crud_round_trip(self, db_session):
         """Happy path: update and read back dust sweep settings."""
         from app.models import Account, User
-        from app.routers.accounts_router import (
-            get_dust_sweep_settings, update_dust_sweep_settings,
-        )
+        from app.routers.accounts_query_router import get_dust_sweep_settings
+        from app.routers.accounts_mutation_router import update_dust_sweep_settings
         from pydantic import BaseModel
         from typing import Optional
 
@@ -199,7 +198,7 @@ class TestUpdateDustSettings:
         await db_session.flush()
 
         # Import the update model
-        from app.routers.accounts_router import DustSweepSettingsUpdate
+        from app.routers.accounts_query_router import DustSweepSettingsUpdate
 
         settings = DustSweepSettingsUpdate(enabled=True, threshold_usd=10.0)
         result = await update_dust_sweep_settings(
@@ -212,7 +211,7 @@ class TestUpdateDustSettings:
 
         # Verify via GET
         with patch(
-            "app.routers.accounts_router.get_public_prices",
+            "app.routers.accounts_query_router.get_public_prices",
             return_value={"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0},
         ):
             get_result = await get_dust_sweep_settings(

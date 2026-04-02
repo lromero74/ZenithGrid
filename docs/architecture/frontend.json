@@ -623,6 +623,10 @@
       {
         "file": "hooks/useMarketSeason.ts",
         "purpose": "Fetch market indicators and determine current season"
+      },
+      {
+        "file": "hooks/useSessions.ts",
+        "purpose": "Session management: useOtherSessions() lists active sessions, useTerminateSessions() terminates them; moved from pages/games/hooks/ to shared hooks/"
       }
     ],
     "page_specific": {

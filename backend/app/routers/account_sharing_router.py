@@ -21,6 +21,7 @@ from app.models import User
 from app.services import account_sharing_service as svc
 from app.services.email_service import send_invitation_email
 from app.config import settings
+from app.registry import get_registry, ServiceRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ async def invite_member(
     account_role: str = Depends(require_account_access("owner")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    registry: ServiceRegistry = Depends(get_registry),
 ):
     """
     Send an account sharing invitation. Owner-only.
@@ -109,7 +111,6 @@ async def invite_member(
 
     # Real-time push: if the invitee is currently connected via WebSocket, notify them
     try:
-        from app.services.websocket_manager import ws_manager
         from app.models import User as UserModel
         from sqlalchemy import select as sa_select
         invitee_result = await db.execute(
@@ -117,7 +118,7 @@ async def invite_member(
         )
         invitee = invitee_result.scalar_one_or_none()
         if invitee:
-            await ws_manager.send_to_user(invitee.id, {
+            await registry.broadcast.send_to_user(invitee.id, {
                 "type": "account:invitation",
                 "invited_by": current_user.display_name or current_user.email,
                 "account_name": account_name,

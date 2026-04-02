@@ -8,7 +8,6 @@ but with orders that are actually filled on the exchange.
 Exchange-agnostic: works with any ExchangeClient implementation.
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -169,20 +168,6 @@ class OrderReconciliationMonitor:
         except Exception as e:
             logger.error(f"Error reconciling position #{position.id}: {e}")
             await self.db.rollback()
-
-
-async def run_order_reconciliation_monitor(db: AsyncSession, exchange: ExchangeClient):
-    """Main loop for order reconciliation monitoring"""
-    monitor = OrderReconciliationMonitor(db, exchange)
-
-    while True:
-        try:
-            await monitor.check_and_fix_orphaned_positions()
-        except Exception as e:
-            logger.error(f"Error in order reconciliation monitor loop: {e}")
-
-        # Check every 60 seconds (no need to check as frequently as limit orders)
-        await asyncio.sleep(60)
 
 
 class MissingOrderDetector:
@@ -407,20 +392,3 @@ class MissingOrderDetector:
 
         except Exception as e:
             logger.error(f"Error checking for missing orders: {e}")
-
-
-async def run_missing_order_detector(db: AsyncSession, exchange: ExchangeClient):
-    """Background task to detect missing orders every 5 minutes"""
-    detector = MissingOrderDetector(db, exchange)
-
-    # Wait 2 minutes after startup before first check
-    await asyncio.sleep(120)
-
-    while True:
-        try:
-            await detector.check_for_missing_orders()
-        except Exception as e:
-            logger.error(f"Error in missing order detector loop: {e}")
-
-        # Check every 5 minutes
-        await asyncio.sleep(300)

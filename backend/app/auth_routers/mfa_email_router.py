@@ -7,6 +7,7 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_current_user, get_user_by_id
 from app.config import settings
 from app.database import get_db
+from app.encryption import decrypt_value
 from app.models import EmailVerificationToken, User
 
 from app.auth_routers.helpers import (
@@ -219,6 +221,21 @@ async def mfa_email_disable(
             detail="Invalid password.",
         )
 
+    # TOTP gate: if user has TOTP active, require TOTP code to downgrade MFA
+    if current_user.mfa_enabled and current_user.totp_secret:
+        if not request.totp_code:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="TOTP verification required. Provide your authenticator code.",
+            )
+        secret = decrypt_value(current_user.totp_secret)
+        totp = pyotp.TOTP(secret)
+        if not totp.verify(request.totp_code, valid_window=1):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid TOTP code.",
+            )
+
     # Check that at least one MFA method will remain
     if not current_user.mfa_enabled:
         raise HTTPException(
@@ -261,6 +278,10 @@ async def mfa_resend_email(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="MFA token is required.",
         )
+
+    # Rate limit resend attempts per MFA token
+    _check_mfa_rate_limit(mfa_token)
+    _record_mfa_attempt(mfa_token)
 
     user_id = await _decode_mfa_token(mfa_token)
     user = await get_user_by_id(db, user_id)

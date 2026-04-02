@@ -18,20 +18,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Account, PendingOrder, Position, User
+from app.models import PendingOrder, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.account_access import manager_account_ids
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 async def _get_user_position(db: AsyncSession, position_id: int, user_id: int) -> Position:
-    """Fetch a position that belongs to the given user, or raise 404."""
-    accounts_q = select(Account.id).where(Account.user_id == user_id)
-    accounts_r = await db.execute(accounts_q)
-    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+    """Fetch a position the user can write to (owned + manager membership), or raise 404."""
+    user_account_ids = await manager_account_ids(db, user_id)
 
     if not user_account_ids:
         raise HTTPException(status_code=404, detail="Position not found")

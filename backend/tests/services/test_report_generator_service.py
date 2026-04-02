@@ -15,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from app.services.report_generator_service import (
+    BuildReportHtmlParams,
     _build_expenses_goal_card,
     _build_tabbed_ai_section,
     _build_transfers_section,
@@ -394,12 +395,12 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "<script" not in html.lower()
         assert "</script>" not in html.lower()
 
@@ -410,23 +411,23 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "onclick" not in html.lower()
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_no_javascript_protocol(self, mock_brand):
         ai = _make_tiered_summary(simple="Analysis text.")
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "javascript:" not in html.lower()
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
@@ -436,13 +437,13 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
             email_mode=True,
-        )
+        ))
         assert "<script" not in html.lower()
         assert "onclick" not in html.lower()
 
@@ -453,12 +454,12 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "<style>" in html
         assert ":checked" in html
         assert '<input type="radio"' in html
@@ -470,13 +471,13 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
             email_mode=True,
-        )
+        ))
         assert '<input type="radio"' not in html
         assert "ai-tab-bar" not in html
         # But it should still show the default tier content
@@ -485,37 +486,37 @@ class TestBuildReportHtmlCspCompliance:
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_no_ai_summary_shows_placeholder(self, mock_brand):
         """When ai_summary is None, show the 'add credentials' prompt."""
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=None,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "AI provider credentials" in html
         assert "<script" not in html.lower()
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_string_ai_summary_uses_single_section(self, mock_brand):
         """Plain string ai_summary should render as single section (no tabs)."""
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary="Plain text analysis.",
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         assert "Plain text analysis." in html
         assert '<input type="radio"' not in html
         assert "<script" not in html.lower()
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_schedule_name_in_title(self, mock_brand):
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=None,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
             schedule_name="Weekly Summary",
-        )
+        ))
         assert "Weekly Summary" in html
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
@@ -525,12 +526,12 @@ class TestBuildReportHtmlCspCompliance:
             simple="Summary text.",
             detailed="Detailed text.",
         )
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=ai,
             user_name="Test User",
             period_label="Jan 1 - Jan 7, 2026",
-        )
+        ))
         # Check for common inline event handlers
         event_handlers = [
             "onclick", "onchange", "onmouseover", "onmouseout",
@@ -993,11 +994,11 @@ class TestBuildReportHtmlEmailModeGoals:
                 ]),
             ],
         }
-        html = build_report_html(
-            report_data, ai_summary=None,
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=report_data, ai_summary=None,
             user_name="Test", period_label="Feb 2026",
             email_mode=True,
-        )
+        ))
         assert '<input type="radio"' not in html
         assert ">Coverage</p>" in html
         assert ">Upcoming</p>" in html
@@ -1012,11 +1013,11 @@ class TestBuildReportHtmlEmailModeGoals:
                 ]),
             ],
         }
-        html = build_report_html(
-            report_data, ai_summary=None,
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=report_data, ai_summary=None,
             user_name="Test", period_label="Feb 2026",
             email_mode=False,
-        )
+        ))
         assert '<input type="radio"' in html
         assert "<style>" in html
 
@@ -1520,12 +1521,12 @@ class TestMetricsSectionDeposits:
         data = _minimal_report_data()
         data["net_deposits_usd"] = 0
         data["adjusted_account_growth_usd"] = 500.0
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=data,
             ai_summary=None,
             user_name="Test",
             period_label="Feb 2026",
-        )
+        ))
         assert "Net Deposits" in html
         assert "Adjusted Growth" in html
 
@@ -1534,12 +1535,12 @@ class TestMetricsSectionDeposits:
         """If adjusted_account_growth_usd is missing entirely, no deposit row."""
         data = _minimal_report_data()
         # No adjusted_account_growth_usd key at all
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=data,
             ai_summary=None,
             user_name="Test",
             period_label="Feb 2026",
-        )
+        ))
         assert "Net Deposits" not in html
 
 
@@ -1590,12 +1591,12 @@ class TestBuildReportHtmlTransfers:
         data["transfer_records"] = [
             {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
         ]
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=data,
             ai_summary=None,
             user_name="Test",
             period_label="Feb 2026",
-        )
+        ))
         assert "Capital Movements" in html
         assert "+$150.00" in html
 
@@ -1762,7 +1763,10 @@ class TestExpenseGoalOrdering:
         """Goal Progress appears before Expense Coverage in HTML."""
         data = _minimal_report_data()
         data["goals"] = [self._make_income_goal(), self._make_expense_goal()]
-        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=data, ai_summary=None, user_name="Test",
+            period_label="Jan 1-7, 2026",
+        ))
         goal_pos = html.find("Goal Progress")
         expense_pos = html.find("Expense Coverage")
         assert goal_pos != -1, "Goal Progress section not found"
@@ -1777,7 +1781,10 @@ class TestExpenseGoalOrdering:
         data["transfer_records"] = [
             {"date": "2026-02-20", "type": "deposit", "amount_usd": 500},
         ]
-        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=data, ai_summary=None, user_name="Test",
+            period_label="Jan 1-7, 2026",
+        ))
         cap_pos = html.find("Capital Movements")
         expense_pos = html.find("Expense Coverage")
         assert cap_pos != -1, "Capital Movements section not found"
@@ -1789,7 +1796,10 @@ class TestExpenseGoalOrdering:
         """When no expenses goals exist, no Expense Coverage section appears."""
         data = _minimal_report_data()
         data["goals"] = [self._make_income_goal()]
-        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=data, ai_summary=None, user_name="Test",
+            period_label="Jan 1-7, 2026",
+        ))
         assert "Expense Coverage" not in html
         assert "Goal Progress" in html
 
@@ -1798,7 +1808,10 @@ class TestExpenseGoalOrdering:
         """When only expenses goals exist, Goal Progress section is absent."""
         data = _minimal_report_data()
         data["goals"] = [self._make_expense_goal()]
-        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        html = build_report_html(BuildReportHtmlParams(
+            report_data=data, ai_summary=None, user_name="Test",
+            period_label="Jan 1-7, 2026",
+        ))
         assert "Expense Coverage" in html
         assert "Goal Progress" not in html
 
@@ -1814,25 +1827,25 @@ class TestAccountNameInReport:
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_html_header_includes_account_name(self, _mock):
         """HTML report header should show account name when provided."""
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=None,
             user_name="Alice",
             period_label="Feb 1 - Feb 24, 2026",
             account_name="Paper Trading",
-        )
+        ))
         assert "Paper Trading" in html
         assert "Prepared for Alice" in html
 
     @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_html_header_without_account_name(self, _mock):
         """HTML report header should work fine without account name."""
-        html = build_report_html(
+        html = build_report_html(BuildReportHtmlParams(
             report_data=_minimal_report_data(),
             ai_summary=None,
             user_name="Alice",
             period_label="Feb 1 - Feb 24, 2026",
-        )
+        ))
         assert "Prepared for Alice" in html
 
     def test_pdf_includes_account_name(self):

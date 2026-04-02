@@ -13,7 +13,7 @@ import time
 
 from fastapi import WebSocket
 
-from app.database import async_session_maker
+from app.database import async_session_maker as _default_session_maker
 from app.services import chat_service
 from app.services.broadcast_backend import broadcast_backend
 
@@ -105,6 +105,7 @@ async def handle_chat_message(
     ws_manager, websocket: WebSocket, user_id: int, msg: dict,
     user_permissions: set[str] | None = None,
     display_name: str | None = None,
+    session_maker=None,
 ):
     """Route a chat:* message to the appropriate handler.
 
@@ -140,7 +141,8 @@ async def handle_chat_message(
         return
 
     try:
-        await handler(ws_manager, websocket, user_id, msg, display_name or f"User {user_id}")
+        await handler(ws_manager, websocket, user_id, msg, display_name or f"User {user_id}",
+                      session_maker=session_maker)
     except ValueError as e:
         await websocket.send_json({"type": "chat:error", "error": str(e)})
     except Exception as e:
@@ -148,8 +150,9 @@ async def handle_chat_message(
         await websocket.send_json({"type": "chat:error", "error": "Internal error"})
 
 
-async def _handle_send(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_send(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:send — persist message and broadcast to channel members."""
+    sm = session_maker or _default_session_maker
     # W2: Type-safe extraction
     channel_id = _parse_int_field(msg, "channelId")
     if channel_id is None:
@@ -175,7 +178,7 @@ async def _handle_send(ws_manager, websocket, user_id, msg, display_name):
         })
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         message_data = await chat_service.send_message(
             db, channel_id, user_id, content, reply_to_id=reply_to_id
         )
@@ -188,8 +191,9 @@ async def _handle_send(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, member_ids, broadcast)
 
 
-async def _handle_typing(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_typing(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:typing — broadcast typing indicator to other channel members."""
+    sm = session_maker or _default_session_maker
     channel_id = _parse_int_field(msg, "channelId")
     if channel_id is None:
         return
@@ -205,7 +209,7 @@ async def _handle_typing(ws_manager, websocket, user_id, msg, display_name):
         return
     _typing_cooldowns[key] = now
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         member_ids = await chat_service.get_channel_member_ids(db, channel_id)
 
     broadcast = {
@@ -218,13 +222,14 @@ async def _handle_typing(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, others, broadcast)
 
 
-async def _handle_read(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_read(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:read — mark channel as read and broadcast receipt."""
+    sm = session_maker or _default_session_maker
     channel_id = _parse_int_field(msg, "channelId")
     if channel_id is None:
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         await chat_service.mark_read(db, channel_id, user_id)
         member_ids = await chat_service.get_channel_member_ids(db, channel_id)
 
@@ -237,8 +242,9 @@ async def _handle_read(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, others, broadcast)
 
 
-async def _handle_edit(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_edit(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:edit — edit a message and broadcast update."""
+    sm = session_maker or _default_session_maker
     message_id = _parse_int_field(msg, "messageId")
     if message_id is None:
         await websocket.send_json({"type": "chat:error", "error": "Valid messageId required"})
@@ -252,7 +258,7 @@ async def _handle_edit(ws_manager, websocket, user_id, msg, display_name):
         await websocket.send_json({"type": "chat:error", "error": "Message cannot be empty"})
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         message_data = await chat_service.edit_message(db, message_id, user_id, content)
         member_ids = await chat_service.get_channel_member_ids(db, message_data["channel_id"])
 
@@ -260,14 +266,15 @@ async def _handle_edit(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, member_ids, broadcast)
 
 
-async def _handle_delete(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_delete(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:delete — soft-delete a message and broadcast."""
+    sm = session_maker or _default_session_maker
     message_id = _parse_int_field(msg, "messageId")
     if message_id is None:
         await websocket.send_json({"type": "chat:error", "error": "Valid messageId required"})
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         result = await chat_service.delete_message(db, message_id, user_id)
         member_ids = await chat_service.get_channel_member_ids(db, result["channel_id"])
 
@@ -279,8 +286,9 @@ async def _handle_delete(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, member_ids, broadcast)
 
 
-async def _handle_react(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_react(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:react — toggle reaction and broadcast update."""
+    sm = session_maker or _default_session_maker
     message_id = _parse_int_field(msg, "messageId")
     emoji = msg.get("emoji", "")
 
@@ -288,7 +296,7 @@ async def _handle_react(ws_manager, websocket, user_id, msg, display_name):
         await websocket.send_json({"type": "chat:error", "error": "Valid messageId and emoji required"})
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         result = await chat_service.toggle_reaction(db, message_id, user_id, emoji)
         member_ids = await chat_service.get_channel_member_ids(db, result["channel_id"])
 
@@ -301,14 +309,15 @@ async def _handle_react(ws_manager, websocket, user_id, msg, display_name):
     await _broadcast_to_members(ws_manager, member_ids, broadcast)
 
 
-async def _handle_pin(ws_manager, websocket, user_id, msg, display_name):
+async def _handle_pin(ws_manager, websocket, user_id, msg, display_name, *, session_maker=None):
     """Handle chat:pin — toggle pin and broadcast update."""
+    sm = session_maker or _default_session_maker
     message_id = _parse_int_field(msg, "messageId")
     if message_id is None:
         await websocket.send_json({"type": "chat:error", "error": "Valid messageId required"})
         return
 
-    async with async_session_maker() as db:
+    async with sm() as db:
         result = await chat_service.toggle_pin(db, message_id, user_id)
         member_ids = await chat_service.get_channel_member_ids(db, result["channel_id"])
 

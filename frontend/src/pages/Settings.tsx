@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
 import { settingsApi, api } from '../services/api'
-import { useOtherSessions, useTerminateSessions, useTerminateAllOtherSessions, SessionInfo } from '../pages/games/hooks/useSessions'
+import { useOtherSessions, useTerminateSessions, useTerminateAllOtherSessions, SessionInfo } from '../hooks/useSessions'
 
 function parseDevice(ua: string | null): string {
   if (!ua) return 'Unknown device'

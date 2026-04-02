@@ -219,7 +219,7 @@ class TestListBlacklistedCoins:
         """Happy path: returns global (user_id=None) entries."""
         from app.routers.blacklist_router import list_blacklisted_coins
         result = await list_blacklisted_coins(
-            db=db_session, current_user=test_user,
+            db=db_session, current_user=test_user, account_id=None,
         )
         assert len(result) == 1
         assert result[0].symbol == "DOGE"
@@ -240,7 +240,7 @@ class TestListBlacklistedCoins:
 
         from app.routers.blacklist_router import list_blacklisted_coins
         result = await list_blacklisted_coins(
-            db=db_session, current_user=test_user,
+            db=db_session, current_user=test_user, account_id=None,
         )
         assert len(result) == 1
         assert result[0].user_override_category == "APPROVED"

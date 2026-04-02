@@ -556,39 +556,6 @@ class Position(Base):
                 self.short_total_sold_base = total_base
                 self.short_average_sell_price = total_quote / total_base if total_base > 0 else 0.0
 
-    def calculate_profit(self, current_price: float) -> dict:
-        """
-        Calculate P&L for both long and short positions.
-
-        Args:
-            current_price: Current market price
-
-        Returns:
-            Dict with profit_quote, profit_pct, unrealized_value
-        """
-        if self.direction == "long":
-            # LONG: Profit when price goes UP
-            # We bought BTC, current value is what we could sell it for now
-            unrealized_value = self.total_base_acquired * current_price
-            profit_quote = unrealized_value - self.total_quote_spent
-            profit_pct = (profit_quote / self.total_quote_spent) * 100 if self.total_quote_spent > 0 else 0.0
-
-        else:
-            # SHORT: Profit when price goes DOWN
-            # We sold BTC high, need to buy back low
-            # Cost to cover = how much USD we'd need to buy back the BTC we sold
-            cost_to_cover = (self.short_total_sold_base or 0.0) * current_price
-            # Profit = USD we received from selling - USD needed to buy back
-            profit_quote = (self.short_total_sold_quote or 0.0) - cost_to_cover
-            profit_pct = (profit_quote / (self.short_total_sold_quote or 1.0)) * 100
-            unrealized_value = cost_to_cover
-
-        return {
-            "profit_quote": profit_quote,
-            "profit_pct": profit_pct,
-            "unrealized_value": unrealized_value
-        }
-
 
 class Trade(Base):
     __tablename__ = "trades"

@@ -206,8 +206,9 @@ class MFAEmailEnableRequest(BaseModel):
 
 
 class MFAEmailDisableRequest(BaseModel):
-    """Request to disable email MFA"""
+    """Request to disable email MFA (optional TOTP code if TOTP is active)"""
     password: str = Field(..., min_length=1)
+    totp_code: Optional[str] = Field(None, min_length=6, max_length=6, pattern=r'^\d{6}$')
 
 
 class LastSeenHistoryRequest(BaseModel):

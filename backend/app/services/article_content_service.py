@@ -10,6 +10,7 @@ import asyncio
 import concurrent.futures
 import logging
 import re
+import threading
 import time
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse
@@ -33,13 +34,13 @@ _trafilatura_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 # L1: In-memory article content cache
 _article_cache: Dict[str, Tuple[Any, float]] = {}
-_article_cache_lock = asyncio.Lock()
+_article_cache_lock = threading.Lock()
 _ARTICLE_CACHE_TTL = 1800  # 30 minutes
 _ARTICLE_CACHE_MAX = 100
 
 # Per-domain crawl delay tracking
 _domain_last_fetch: Dict[str, float] = {}
-_domain_last_fetch_lock = asyncio.Lock()
+_domain_last_fetch_lock = threading.Lock()
 
 # Per-user rate limiting for external article fetches
 _article_fetch_counts: Dict[int, List[float]] = {}
@@ -184,7 +185,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
 
     # L1: Check in-memory cache (fast, short-lived)
     now = time.time()
-    async with _article_cache_lock:
+    with _article_cache_lock:
         if url in _article_cache:
             cached_response, cached_at = _article_cache[url]
             if now - cached_at < _ARTICLE_CACHE_TTL:
@@ -206,7 +207,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
                         author=db_article.author,
                         success=True,
                     )
-                    async with _article_cache_lock:
+                    with _article_cache_lock:
                         _article_cache[url] = (db_response, time.time())
                     return db_response
 
@@ -216,7 +217,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
                         success=False,
                         error="Content extraction previously failed for this article.",
                     )
-                    async with _article_cache_lock:
+                    with _article_cache_lock:
                         _article_cache[url] = (fail_response, time.time())
                     return fail_response
     except Exception as e:
@@ -230,7 +231,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
             success=False,
             error="Full article content is not available for this source.",
         )
-        async with _article_cache_lock:
+        with _article_cache_lock:
             _article_cache[url] = (no_scrape_response, time.time())
         return no_scrape_response
 
@@ -281,11 +282,11 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
         # Respect per-source crawl delay
         if crawl_delay > 0:
             fetch_domain = urlparse(url).netloc.lower()
-            async with _domain_last_fetch_lock:
+            with _domain_last_fetch_lock:
                 last_fetch = _domain_last_fetch.get(fetch_domain, 0)
                 elapsed = time.time() - last_fetch
                 if elapsed < crawl_delay:
-                    await asyncio.sleep(crawl_delay - elapsed)
+                    time.sleep(crawl_delay - elapsed)
                 _domain_last_fetch[fetch_domain] = time.time()
 
         async with aiohttp.ClientSession(
@@ -385,7 +386,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
         )
 
         # L1: Cache in memory
-        async with _article_cache_lock:
+        with _article_cache_lock:
             if len(_article_cache) >= _ARTICLE_CACHE_MAX:
                 oldest_key = min(_article_cache, key=lambda k: _article_cache[k][1])
                 del _article_cache[oldest_key]

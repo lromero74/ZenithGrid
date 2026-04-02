@@ -35,6 +35,8 @@ _LIMITS = {
     "resend":            (3,    3600),
     "mfa":               (5,    300),    # 5 per 5 min
     "disposable_email":  (2,    86400),  # 2 attempts per 24h — IP jail for throwaway emails
+    "refresh":           (60,   3600),   # 60 per hour per user
+    "change_pw":         (5,    900),    # 5 per 15 min per user
 }
 
 # ---------------------------------------------------------------------------
@@ -49,6 +51,8 @@ _forgot_pw_by_email: dict = defaultdict(list)
 _resend_attempts: dict = defaultdict(list)
 _mfa_attempts: dict = defaultdict(list)
 _disposable_email_attempts: dict = defaultdict(list)
+_refresh_attempts: dict = defaultdict(list)
+_change_pw_attempts: dict = defaultdict(list)
 
 _CATEGORY_STORE = {
     "login":              _login_attempts,
@@ -59,6 +63,8 @@ _CATEGORY_STORE = {
     "resend":             _resend_attempts,
     "mfa":                _mfa_attempts,
     "disposable_email":   _disposable_email_attempts,
+    "refresh":            _refresh_attempts,
+    "change_pw":          _change_pw_attempts,
 }
 
 # Track whether a key has been warmed from DB

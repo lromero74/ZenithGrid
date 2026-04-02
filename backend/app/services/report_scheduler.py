@@ -8,6 +8,7 @@ Also provides the generate_report_for_schedule function used by manual triggers.
 import calendar
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
@@ -123,6 +124,7 @@ async def generate_report_for_schedule(
         get_prior_period_data,
     )
     from app.services.report_generator_service import (
+        BuildReportHtmlParams,
         build_report_html,
         generate_pdf,
     )
@@ -259,12 +261,11 @@ async def generate_report_for_schedule(
             account_name = acct.name
 
     sched_name = schedule.name if schedule else None
-    html_content = build_report_html(
-        report_data, ai_summary, user_name, period_label,
-        default_level="simple",
-        schedule_name=sched_name,
-        account_name=account_name,
-    )
+    html_content = build_report_html(BuildReportHtmlParams(
+        report_data=report_data, ai_summary=ai_summary, user_name=user_name,
+        period_label=period_label, default_level="simple",
+        schedule_name=sched_name, account_name=account_name,
+    ))
 
     # Generate PDF (includes all three tiers with no emphasis)
     pdf_data = dict(report_data)
@@ -306,11 +307,12 @@ async def generate_report_for_schedule(
     # Send email to all recipients (same report for everyone)
     if send_email and save and schedule.recipients:
         recipients = [_normalize_recipient(r) for r in schedule.recipients]
-        email_sent = await _deliver_report(
-            report, recipients, ai_summary, report_data, user_name,
-            period_label, pdf_content, schedule_name=sched_name,
-            account_name=account_name,
-        )
+        email_sent = await _deliver_report(DeliverReportParams(
+            report=report, recipients=recipients, ai_summary=ai_summary,
+            report_data=report_data, user_name=user_name,
+            period_label=period_label, pdf_content=pdf_content,
+            schedule_name=sched_name, account_name=account_name,
+        ))
         if email_sent:
             report.delivery_status = "sent"
             report.delivered_at = datetime.utcnow()
@@ -350,17 +352,21 @@ async def generate_report_for_schedule(
     return report
 
 
-async def _deliver_report(
-    report: Report,
-    recipients: list,
-    ai_summary: Optional[dict],
-    report_data: dict,
-    user_name: str,
-    period_label: str,
-    pdf_content: Optional[bytes],
-    schedule_name: Optional[str] = None,
-    account_name: Optional[str] = None,
-) -> bool:
+@dataclass
+class DeliverReportParams:
+    """Parameters for delivering a report email."""
+    report: Report
+    recipients: list
+    ai_summary: Optional[dict]
+    report_data: dict
+    user_name: str
+    period_label: str
+    pdf_content: Optional[bytes]
+    schedule_name: Optional[str] = None
+    account_name: Optional[str] = None
+
+
+async def _deliver_report(params: DeliverReportParams) -> bool:
     """
     Send the report email to all recipients.
 
@@ -369,23 +375,23 @@ async def _deliver_report(
     """
     from app.services.brand_service import get_brand
     from app.services.email_service import send_report_email
-    from app.services.report_generator_service import build_report_html
+    from app.services.report_generator_service import BuildReportHtmlParams, build_report_html
 
     b = get_brand()
 
-    if not recipients:
+    if not params.recipients:
         return False
 
-    report_title = schedule_name or "Performance Report"
-    subject = f"{b['shortName']} {report_title} \u2014 {period_label}"
+    report_title = params.schedule_name or "Performance Report"
+    subject = f"{b['shortName']} {report_title} \u2014 {params.period_label}"
 
     # Plain text fallback
-    data = report.report_data or report_data or {}
+    data = params.report.report_data or params.report_data or {}
     pd = data.get("period_days")
     trades_suffix = f" (last {pd}d)" if pd else ""
     text_body = (
         f"{b['shortName']} {report_title}\n"
-        f"Period: {period_label}\n\n"
+        f"Period: {params.period_label}\n\n"
         f"Account Value: ${data.get('account_value_usd', 0):,.2f}\n"
         f"Period Profit: ${data.get('period_profit_usd', 0):,.2f}\n"
         f"Total Trades{trades_suffix}: {data.get('total_trades', 0)}\n"
@@ -393,15 +399,15 @@ async def _deliver_report(
     )
 
     pdf_filename = (
-        f"performance_report_{report.period_end.strftime('%Y-%m-%d')}.pdf"
-        if report.period_end else "performance_report.pdf"
+        f"performance_report_{params.report.period_end.strftime('%Y-%m-%d')}.pdf"
+        if params.report.period_end else "performance_report.pdf"
     )
 
     # Build HTML per color scheme (cache to avoid re-generating)
     html_cache: dict = {}  # color_scheme → (html, inline_images)
     any_sent = False
 
-    for recipient in recipients:
+    for recipient in params.recipients:
         if isinstance(recipient, dict):
             email = recipient.get("email", "")
             scheme = recipient.get("color_scheme", "dark")
@@ -411,15 +417,13 @@ async def _deliver_report(
 
         if scheme not in html_cache:
             imgs: list = []
-            html = build_report_html(
-                report_data, ai_summary, user_name, period_label,
-                default_level="simple",
-                schedule_name=schedule_name,
-                email_mode=True,
-                account_name=account_name,
-                inline_images=imgs,
-                color_scheme=scheme,
-            )
+            html = build_report_html(BuildReportHtmlParams(
+                report_data=params.report_data, ai_summary=params.ai_summary,
+                user_name=params.user_name, period_label=params.period_label,
+                default_level="simple", schedule_name=params.schedule_name,
+                email_mode=True, account_name=params.account_name,
+                inline_images=imgs, color_scheme=scheme,
+            ))
             html_cache[scheme] = (html, imgs)
 
         email_html, inline_images = html_cache[scheme]
@@ -431,7 +435,7 @@ async def _deliver_report(
                 subject=subject,
                 html_body=email_html,
                 text_body=text_body,
-                pdf_attachment=pdf_content,
+                pdf_attachment=params.pdf_content,
                 pdf_filename=pdf_filename,
                 inline_images=inline_images,
             )

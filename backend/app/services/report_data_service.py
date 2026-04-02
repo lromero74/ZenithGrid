@@ -857,3 +857,130 @@ def _enrich_snapshot_data(data: Dict[str, Any]) -> Dict[str, Any]:
             btc_value_usd / data["btc_portion_btc"], 2
         )
     return data
+
+
+# ---------------------------------------------------------------------------
+# Financial helpers (extracted from reports_router)
+# ---------------------------------------------------------------------------
+
+async def get_user_trading_metrics(
+    db: AsyncSession, user_id: int, is_btc: bool = False, account_id: int = None
+) -> tuple:
+    """
+    Return (annual_return_pct, account_balance) for a user.
+
+    If account_id is provided, scopes both the position profit and the balance
+    snapshot to that specific account. This prevents paper trading accounts or
+    other accounts from inflating or diluting the metrics used for expense planning.
+
+    Uses closed positions (30-day window) for the return rate and
+    AccountValueSnapshot for the current balance. Compound-annualizes
+    the daily rate consistent with Dashboard Portfolio Totals.
+    """
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+    lookback_days = 30
+    cutoff = now - timedelta(days=lookback_days)
+
+    profit_col = Position.profit_usd if not is_btc else Position.profit_quote
+    profit_filters = [
+        Position.user_id == user_id,
+        Position.status == "closed",
+        Position.closed_at >= cutoff,
+    ]
+    if account_id is not None:
+        profit_filters.append(Position.account_id == account_id)
+    r_profit = await db.execute(select(func.sum(profit_col)).where(*profit_filters))
+    total_profit = r_profit.scalar() or 0.0
+
+    value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
+    snap_filters = [AccountValueSnapshot.user_id == user_id]
+    if account_id is not None:
+        snap_filters.append(AccountValueSnapshot.account_id == account_id)
+
+    r_date = await db.execute(
+        select(func.max(AccountValueSnapshot.snapshot_date)).where(*snap_filters)
+    )
+    latest_date = r_date.scalar()
+    if latest_date is None:
+        return 0.0, 0.0
+    r_value = await db.execute(
+        select(func.sum(value_col)).where(
+            *snap_filters,
+            AccountValueSnapshot.snapshot_date == latest_date,
+        )
+    )
+    account_balance = r_value.scalar() or 0.0
+
+    if total_profit <= 0 or account_balance <= 0:
+        return 0.0, account_balance
+
+    daily_rate = (total_profit / lookback_days) / account_balance
+    try:
+        annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    except OverflowError:
+        annual_pct = 0.0
+    return round(annual_pct, 4), account_balance
+
+
+async def get_annual_return_pct(
+    db: AsyncSession, user_id: int, is_btc: bool = False
+) -> float:
+    """
+    Estimate the user's compound-annualized account return, aligned with the
+    Dashboard Portfolio Totals calculation.
+
+    Uses average daily PnL from the last 30 days of closed positions divided
+    by current account value = daily return rate. Annualizes via compound
+    formula: (1 + daily_rate)^365 - 1.
+
+    Returns 0.0 if insufficient data.
+    """
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+    lookback_days = 30
+    cutoff = now - timedelta(days=lookback_days)
+
+    # 30-day closed positions profit
+    profit_col = Position.profit_usd if not is_btc else Position.profit_quote
+    r_profit = await db.execute(
+        select(func.sum(profit_col)).where(
+            Position.user_id == user_id,
+            Position.status == "closed",
+            Position.closed_at >= cutoff,
+        )
+    )
+    total_profit = r_profit.scalar() or 0.0
+    if total_profit <= 0:
+        return 0.0
+
+    # Current account value from most recent snapshots
+    value_col = AccountValueSnapshot.total_value_btc if is_btc else AccountValueSnapshot.total_value_usd
+    r_value = await db.execute(
+        select(func.sum(value_col)).where(
+            AccountValueSnapshot.user_id == user_id,
+            AccountValueSnapshot.snapshot_date >= now - timedelta(days=2),
+        )
+    )
+    account_value = r_value.scalar() or 0.0
+    if account_value <= 0:
+        return 0.0
+
+    daily_rate = (total_profit / lookback_days) / account_value
+    # Compound annualization: (1 + daily_rate)^365 - 1, matching Dashboard compounded row
+    annual_pct = (math.pow(1 + daily_rate, 365) - 1) * 100
+    return round(annual_pct, 4)
+
+
+def compute_monthly_growth_rate(annual_return_pct: float) -> float:
+    """Convert an annual return percentage to a monthly growth rate.
+
+    Formula: (1 + annual_return_pct/100)^(1/12) - 1
+
+    Returns 0.0 if annual_return_pct is zero or negative.
+    """
+    if annual_return_pct <= 0:
+        return 0.0
+    return math.pow(1 + annual_return_pct / 100, 1 / 12) - 1

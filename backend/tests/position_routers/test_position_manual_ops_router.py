@@ -342,3 +342,128 @@ class TestUpdatePositionNotes:
                 current_user=user2,
             )
         assert exc_info.value.status_code == 404
+
+
+# =============================================================================
+# Shared-account manager access for manual ops
+# =============================================================================
+
+
+class TestManualOpsManagerAccess:
+    """Tests that shared-account managers can use add-funds and update-notes."""
+
+    @staticmethod
+    async def _setup_shared_access(db_session, role="manager"):
+        """Create owner, manager user, shared account, membership, and a position."""
+        from app.models.sharing import AccountMembership
+
+        owner = User(
+            email="mo_owner@example.com", hashed_password="hashed",
+            is_active=True, created_at=datetime.utcnow(),
+        )
+        db_session.add(owner)
+        await db_session.flush()
+
+        manager_user = User(
+            email="mo_manager@example.com", hashed_password="hashed",
+            is_active=True, created_at=datetime.utcnow(),
+        )
+        db_session.add(manager_user)
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="Shared Account",
+            type="cex", exchange="coinbase", is_active=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        membership = AccountMembership(
+            account_id=account.id, user_id=manager_user.id,
+            role=role, invited_by_user_id=owner.id, expires_at=None,
+        )
+        db_session.add(membership)
+        await db_session.flush()
+
+        bot = Bot(
+            user_id=owner.id, account_id=account.id, name="Shared Bot",
+            strategy_type="macd_dca", strategy_config={"base_order_fixed": 0.01},
+        )
+        db_session.add(bot)
+        await db_session.flush()
+
+        pos = Position(
+            bot_id=bot.id, account_id=account.id, product_id="ETH-BTC",
+            status="open", opened_at=datetime.utcnow(),
+            initial_quote_balance=1.0, max_quote_allowed=0.25,
+            total_quote_spent=0.01, total_base_acquired=0.5,
+            average_buy_price=0.02,
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        return owner, manager_user, account, bot, pos
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_manual_ops_router.execute_buy", new_callable=AsyncMock)
+    @patch("app.position_routers.position_manual_ops_router.TradingClient")
+    async def test_manager_can_add_funds_to_shared_account_position(self, mock_tc, mock_buy, db_session):
+        """Happy path: manager of shared account can add funds to a position."""
+        from app.position_routers.position_manual_ops_router import add_funds_to_position
+        from app.position_routers.schemas import AddFundsRequest
+
+        owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+
+        mock_trade = MagicMock()
+        mock_trade.id = 99
+        mock_trade.base_amount = 0.166
+        mock_buy.return_value = mock_trade
+
+        request = AddFundsRequest(btc_amount=0.005)
+
+        result = await add_funds_to_position(
+            position_id=pos.id, request=request,
+            db=db_session, coinbase=mock_coinbase, current_user=manager_user,
+        )
+
+        assert "Added" in result["message"]
+        assert result["trade_id"] == 99
+
+    @pytest.mark.asyncio
+    async def test_observer_cannot_add_funds_to_shared_account_position(self, db_session):
+        """Security: observer of shared account gets 404 on add-funds."""
+        from app.position_routers.position_manual_ops_router import add_funds_to_position
+        from app.position_routers.schemas import AddFundsRequest
+        from fastapi import HTTPException
+
+        owner, observer, account, bot, pos = await self._setup_shared_access(db_session, role="observer")
+
+        mock_coinbase = AsyncMock()
+        request = AddFundsRequest(btc_amount=0.005)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await add_funds_to_position(
+                position_id=pos.id, request=request,
+                db=db_session, coinbase=mock_coinbase, current_user=observer,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_manager_can_update_notes_on_shared_account_position(self, db_session):
+        """Happy path: manager of shared account can update position notes."""
+        from app.position_routers.position_manual_ops_router import update_position_notes
+        from app.position_routers.schemas import UpdateNotesRequest
+
+        owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
+
+        request = UpdateNotesRequest(notes="Manager note on shared position")
+
+        result = await update_position_notes(
+            position_id=pos.id, request=request,
+            db=db_session, current_user=manager_user,
+        )
+
+        assert result["notes"] == "Manager note on shared position"

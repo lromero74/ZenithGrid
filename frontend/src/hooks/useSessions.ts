@@ -5,7 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../../services/api'
+import { api } from '../services/api'
 
 export interface SessionInfo {
   session_id: string

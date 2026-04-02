@@ -6,6 +6,7 @@ balance retrieval, and portfolio conversion orchestration.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -256,17 +257,21 @@ def _compute_position_pnl(
     return asset_pnl
 
 
-def _compute_balance_breakdown(
-    account_bots: list,
-    open_positions: list,
-    actual_btc: float,
-    actual_usd: float,
-    actual_usdc: float,
-    total_reserved_btc: float,
-    total_reserved_usd: float,
-    breakdown_prices: dict,
-    btc_usd_price: float,
-) -> dict:
+@dataclass
+class BalanceBreakdownParams:
+    """Parameters for computing balance breakdown."""
+    account_bots: list
+    open_positions: list
+    actual_btc: float
+    actual_usd: float
+    actual_usdc: float
+    total_reserved_btc: float
+    total_reserved_usd: float
+    breakdown_prices: dict
+    btc_usd_price: float
+
+
+def _compute_balance_breakdown(params: BalanceBreakdownParams) -> dict:
     """
     Compute balance breakdown (total, reserved, in-positions, free) per quote currency.
 
@@ -277,16 +282,17 @@ def _compute_balance_breakdown(
     total_in_positions_usd = 0.0
     total_in_positions_usdc = 0.0
 
-    for position in open_positions:
+    for position in params.open_positions:
         quote = position.get_quote_currency()
         base = position.get_base_currency()
 
         # Derive position price from breakdown data
         if quote == "USD" or quote == "USDC":
-            pos_price = breakdown_prices.get(base)
+            pos_price = params.breakdown_prices.get(base)
         elif quote == "BTC":
-            base_usd = breakdown_prices.get(base)
-            pos_price = base_usd / btc_usd_price if base_usd and btc_usd_price > 0 else None
+            base_usd = params.breakdown_prices.get(base)
+            pos_price = (base_usd / params.btc_usd_price
+                         if base_usd and params.btc_usd_price > 0 else None)
         else:
             pos_price = None
 
@@ -302,24 +308,24 @@ def _compute_balance_breakdown(
         else:
             total_in_positions_btc += current_value
 
-    total_btc_portfolio = actual_btc + total_in_positions_btc
-    total_usd_portfolio = actual_usd + total_in_positions_usd
-    total_usdc_portfolio = actual_usdc + total_in_positions_usdc
+    total_btc_portfolio = params.actual_btc + total_in_positions_btc
+    total_usd_portfolio = params.actual_usd + total_in_positions_usd
+    total_usdc_portfolio = params.actual_usdc + total_in_positions_usdc
 
-    free_btc = max(0.0, total_btc_portfolio - (total_reserved_btc + total_in_positions_btc))
-    free_usd = max(0.0, total_usd_portfolio - (total_reserved_usd + total_in_positions_usd))
+    free_btc = max(0.0, total_btc_portfolio - (params.total_reserved_btc + total_in_positions_btc))
+    free_usd = max(0.0, total_usd_portfolio - (params.total_reserved_usd + total_in_positions_usd))
     free_usdc = max(0.0, total_usdc_portfolio - total_in_positions_usdc)
 
     return {
         "btc": {
             "total": total_btc_portfolio,
-            "reserved_by_bots": total_reserved_btc,
+            "reserved_by_bots": params.total_reserved_btc,
             "in_open_positions": total_in_positions_btc,
             "free": free_btc,
         },
         "usd": {
             "total": total_usd_portfolio,
-            "reserved_by_bots": total_reserved_usd,
+            "reserved_by_bots": params.total_reserved_usd,
             "in_open_positions": total_in_positions_usd,
             "free": free_usd,
         },
@@ -432,12 +438,13 @@ async def get_cex_portfolio(
     total_reserved_btc = sum(bot.reserved_btc_balance for bot in account_bots)
     total_reserved_usd = sum(bot.reserved_usd_balance for bot in account_bots)
 
-    balance_breakdown = _compute_balance_breakdown(
-        account_bots, open_positions,
-        actual_btc_balance, actual_usd_balance, actual_usdc_balance,
-        total_reserved_btc, total_reserved_usd,
-        breakdown_prices, btc_usd_price,
-    )
+    balance_breakdown = _compute_balance_breakdown(BalanceBreakdownParams(
+        account_bots=account_bots, open_positions=open_positions,
+        actual_btc=actual_btc_balance, actual_usd=actual_usd_balance,
+        actual_usdc=actual_usdc_balance, total_reserved_btc=total_reserved_btc,
+        total_reserved_usd=total_reserved_usd,
+        breakdown_prices=breakdown_prices, btc_usd_price=btc_usd_price,
+    ))
 
     # Calculate realized PnL (strictly scoped to this account)
     closed_positions_query = select(Position).where(

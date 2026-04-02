@@ -318,7 +318,7 @@ async def apply_ai_recommendations(
 
     # Trigger grid rebalance to apply new parameters
     # This will cancel old orders and place new ones with updated config
-    from app.services.grid_trading_service import rebalance_grid_on_breakout
+    from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
     current_price = await exchange_client.get_current_price(bot.product_id)
 
@@ -336,17 +336,12 @@ async def apply_ai_recommendations(
         new_levels = calculate_geometric_levels(lower, upper, num_levels)
 
     # Rebalance with new parameters
-    await rebalance_grid_on_breakout(
-        bot=bot,
-        position=position,
-        exchange_client=exchange_client,
-        db=db,
-        breakout_direction="ai_optimization",
-        current_price=current_price,
-        new_levels=new_levels,
-        new_upper=upper,
-        new_lower=lower,
-    )
+    await rebalance_grid_on_breakout(GridRebalanceParams(
+        bot=bot, position=position, exchange_client=exchange_client,
+        db=db, breakout_direction="ai_optimization",
+        current_price=current_price, new_levels=new_levels,
+        new_upper=upper, new_lower=lower,
+    ))
 
     await db.commit()
 

@@ -55,6 +55,14 @@ def mock_ws_manager():
     return mgr
 
 
+@pytest.fixture(autouse=True)
+def mock_broadcast_backend():
+    """Patch broadcast_backend.send_to_user used by _broadcast_to_members."""
+    mock_send = AsyncMock()
+    with patch.object(ws_mod.broadcast_backend, 'send_to_user', mock_send):
+        yield mock_send
+
+
 @pytest.fixture
 def mock_db_context():
     """Create a mock async_session_maker context manager."""
@@ -241,23 +249,23 @@ class TestBroadcastToMembers:
     """Tests for _broadcast_to_members()."""
 
     @pytest.mark.asyncio
-    async def test_broadcasts_to_all_members(self, mock_ws_manager):
+    async def test_broadcasts_to_all_members(self, mock_ws_manager, mock_broadcast_backend):
         """Happy path: message sent to each member."""
         await _broadcast_to_members(mock_ws_manager, [1, 2, 3], {"type": "test"})
 
-        assert mock_ws_manager.send_to_user.call_count == 3
+        assert mock_broadcast_backend.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_empty_member_list_no_broadcast(self, mock_ws_manager):
+    async def test_empty_member_list_no_broadcast(self, mock_ws_manager, mock_broadcast_backend):
         """Edge case: empty member list sends nothing."""
         await _broadcast_to_members(mock_ws_manager, [], {"type": "test"})
 
-        mock_ws_manager.send_to_user.assert_not_called()
+        mock_broadcast_backend.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exceptions_suppressed(self, mock_ws_manager):
+    async def test_exceptions_suppressed(self, mock_ws_manager, mock_broadcast_backend):
         """Failure: exceptions from individual sends don't break broadcast."""
-        mock_ws_manager.send_to_user = AsyncMock(side_effect=Exception("conn closed"))
+        mock_broadcast_backend.side_effect = Exception("conn closed")
 
         # Should not raise
         await _broadcast_to_members(mock_ws_manager, [1, 2], {"type": "test"})
@@ -318,13 +326,14 @@ class TestHandleSend:
     """Tests for the chat:send handler."""
 
     @pytest.mark.asyncio
-    async def test_send_message_success(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_send_message_success(self, mock_ws_manager, mock_ws, mock_db_context,
+                                        mock_broadcast_backend):
         """Happy path: message sent and broadcast to channel members."""
         mock_db, mock_cm = mock_db_context
 
         message_data = {"id": 1, "content": "Hello!", "channel_id": 10, "user_id": 1}
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'send_message', new_callable=AsyncMock,
                           return_value=message_data), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids_excluding_blockers',
@@ -336,7 +345,7 @@ class TestHandleSend:
             )
 
         # Broadcast should be sent to members
-        assert mock_ws_manager.send_to_user.call_count == 3
+        assert mock_broadcast_backend.call_count == 3
 
     @pytest.mark.asyncio
     async def test_send_missing_channel_id_error(self, mock_ws_manager, mock_ws):
@@ -386,7 +395,7 @@ class TestHandleSend:
         """Failure: ValueError from chat_service sent back as chat:error."""
         mock_db, mock_cm = mock_db_context
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'send_message', new_callable=AsyncMock,
                           side_effect=ValueError("You are not a member of this channel")):
             await handle_chat_message(
@@ -409,11 +418,12 @@ class TestHandleTyping:
     """Tests for the chat:typing handler."""
 
     @pytest.mark.asyncio
-    async def test_typing_broadcast_to_others(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_typing_broadcast_to_others(self, mock_ws_manager, mock_ws, mock_db_context,
+                                              mock_broadcast_backend):
         """Happy path: typing indicator sent to other members (not sender)."""
         mock_db, mock_cm = mock_db_context
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids',
                           new_callable=AsyncMock, return_value=[1, 2, 3]):
             await handle_chat_message(
@@ -424,7 +434,7 @@ class TestHandleTyping:
             )
 
         # Should only send to users 2 and 3 (not user 1)
-        assert mock_ws_manager.send_to_user.call_count == 2
+        assert mock_broadcast_backend.call_count == 2
 
     @pytest.mark.asyncio
     async def test_typing_debounced(self, mock_ws_manager, mock_ws, mock_db_context):
@@ -434,7 +444,7 @@ class TestHandleTyping:
         # Set recent cooldown for this user+channel
         ws_mod._typing_cooldowns[(1, 5)] = time.monotonic()
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm):
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm):
             await handle_chat_message(
                 mock_ws_manager, mock_ws, user_id=1,
                 msg={"type": "chat:typing", "channelId": 5},
@@ -467,13 +477,14 @@ class TestHandleEdit:
     """Tests for the chat:edit handler."""
 
     @pytest.mark.asyncio
-    async def test_edit_message_success(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_edit_message_success(self, mock_ws_manager, mock_ws, mock_db_context,
+                                        mock_broadcast_backend):
         """Happy path: message edited and broadcast to members."""
         mock_db, mock_cm = mock_db_context
 
         edit_result = {"id": 5, "channel_id": 10, "content": "Edited content"}
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'edit_message', new_callable=AsyncMock,
                           return_value=edit_result), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids',
@@ -484,7 +495,7 @@ class TestHandleEdit:
                 user_permissions={CHAT_PERMISSION},
             )
 
-        assert mock_ws_manager.send_to_user.call_count == 2
+        assert mock_broadcast_backend.call_count == 2
 
     @pytest.mark.asyncio
     async def test_edit_missing_message_id_error(self, mock_ws_manager, mock_ws):
@@ -521,13 +532,14 @@ class TestHandleDelete:
     """Tests for the chat:delete handler."""
 
     @pytest.mark.asyncio
-    async def test_delete_message_success(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_delete_message_success(self, mock_ws_manager, mock_ws, mock_db_context,
+                                          mock_broadcast_backend):
         """Happy path: message deleted and broadcast to members."""
         mock_db, mock_cm = mock_db_context
 
         delete_result = {"id": 5, "channel_id": 10}
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'delete_message', new_callable=AsyncMock,
                           return_value=delete_result), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids',
@@ -538,7 +550,7 @@ class TestHandleDelete:
                 user_permissions={CHAT_PERMISSION},
             )
 
-        assert mock_ws_manager.send_to_user.call_count == 2
+        assert mock_broadcast_backend.call_count == 2
 
     @pytest.mark.asyncio
     async def test_delete_missing_message_id_error(self, mock_ws_manager, mock_ws):
@@ -562,13 +574,14 @@ class TestHandleReact:
     """Tests for the chat:react handler."""
 
     @pytest.mark.asyncio
-    async def test_react_success(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_react_success(self, mock_ws_manager, mock_ws, mock_db_context,
+                                 mock_broadcast_backend):
         """Happy path: reaction toggled and broadcast."""
         mock_db, mock_cm = mock_db_context
 
         react_result = {"message_id": 5, "channel_id": 10, "reactions": {"thumbsup": [1]}}
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'toggle_reaction', new_callable=AsyncMock,
                           return_value=react_result), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids',
@@ -579,7 +592,7 @@ class TestHandleReact:
                 user_permissions={CHAT_PERMISSION},
             )
 
-        assert mock_ws_manager.send_to_user.call_count == 2
+        assert mock_broadcast_backend.call_count == 2
 
     @pytest.mark.asyncio
     async def test_react_missing_emoji_error(self, mock_ws_manager, mock_ws):
@@ -615,13 +628,14 @@ class TestHandlePin:
     """Tests for the chat:pin handler."""
 
     @pytest.mark.asyncio
-    async def test_pin_success(self, mock_ws_manager, mock_ws, mock_db_context):
+    async def test_pin_success(self, mock_ws_manager, mock_ws, mock_db_context,
+                               mock_broadcast_backend):
         """Happy path: pin toggled and broadcast."""
         mock_db, mock_cm = mock_db_context
 
         pin_result = {"message_id": 5, "channel_id": 10, "is_pinned": True}
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'toggle_pin', new_callable=AsyncMock,
                           return_value=pin_result), \
              patch.object(ws_mod.chat_service, 'get_channel_member_ids',
@@ -632,7 +646,7 @@ class TestHandlePin:
                 user_permissions={CHAT_PERMISSION},
             )
 
-        assert mock_ws_manager.send_to_user.call_count == 2
+        assert mock_broadcast_backend.call_count == 2
 
     @pytest.mark.asyncio
     async def test_pin_missing_message_id_error(self, mock_ws_manager, mock_ws):
@@ -662,7 +676,7 @@ class TestHandleChatMessageErrorHandling:
         """Failure: unexpected exception returns generic 'Internal error'."""
         mock_db, mock_cm = mock_db_context
 
-        with patch.object(ws_mod, 'async_session_maker', return_value=mock_cm), \
+        with patch.object(ws_mod, '_default_session_maker', return_value=mock_cm), \
              patch.object(ws_mod.chat_service, 'send_message', new_callable=AsyncMock,
                           side_effect=RuntimeError("DB connection lost")):
             await handle_chat_message(

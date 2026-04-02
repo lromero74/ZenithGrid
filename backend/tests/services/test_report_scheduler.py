@@ -15,7 +15,8 @@ Covers:
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import pytest
 
 from app.services.report_scheduler import (
     compute_next_run_flexible,
@@ -748,3 +749,61 @@ class TestBuildPeriodicityLabel:
             None, None, None, "full_prior", None, None,
         )
         assert "Custom" in result
+
+
+# ---------------------------------------------------------------------------
+# _deliver_report
+# ---------------------------------------------------------------------------
+
+
+class TestDeliverReport:
+    """Characterization tests for _deliver_report()."""
+
+    @pytest.mark.asyncio
+    async def test_happy_path_sends_email(self):
+        """Happy path: sends email to recipients and returns True."""
+        from app.services.report_scheduler import _deliver_report, DeliverReportParams
+
+        report = MagicMock()
+        report.period_end = datetime(2026, 3, 15)
+        report.report_data = None
+
+        mock_brand = {"shortName": "TestBot", "colors": {"primary": "#123456"}}
+        with patch("app.services.brand_service.get_brand", return_value=mock_brand), \
+                patch("app.services.email_service.send_report_email", return_value=True) as mock_send, \
+                patch("app.services.report_generator_service.build_report_html", return_value="<html>test</html>"):
+            result = await _deliver_report(DeliverReportParams(
+                report=report,
+                recipients=[{"email": "a@b.com", "color_scheme": "dark"}],
+                ai_summary=None,
+                report_data={"account_value_usd": 100, "period_profit_usd": 10,
+                             "total_trades": 5, "win_rate": 60.0},
+                user_name="TestUser",
+                period_label="Mar 1-15",
+                pdf_content=b"fakepdf",
+                schedule_name="Weekly Report",
+                account_name="Main",
+            ))
+
+        assert result is True
+        mock_send.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_empty_recipients_returns_false(self):
+        """Edge case: empty recipients list returns False immediately."""
+        from app.services.report_scheduler import _deliver_report, DeliverReportParams
+
+        report = MagicMock()
+        report.period_end = datetime(2026, 3, 15)
+
+        result = await _deliver_report(DeliverReportParams(
+            report=report,
+            recipients=[],
+            ai_summary=None,
+            report_data={},
+            user_name="TestUser",
+            period_label="Mar 1-15",
+            pdf_content=None,
+        ))
+
+        assert result is False

@@ -270,6 +270,216 @@ async def _create_sell_trade_record(
     return trade, profit_quote, profit_percentage
 
 
+async def _reconcile_short_sell_fill(
+    exchange: ExchangeClient,
+    order_id: str,
+    fallback_base: float,
+    fallback_price: float,
+) -> tuple:
+    """
+    Fetch actual short sell fill data from exchange with retry logic.
+
+    Args:
+        exchange: Exchange client instance
+        order_id: The exchange order ID to check
+        fallback_base: Estimated base amount if fill data unavailable
+        fallback_price: Estimated price if fill data unavailable
+
+    Returns:
+        Tuple of (actual_base_sold, quote_received, actual_price)
+    """
+    logger.info(f"Fetching fill data for short sell order {order_id}")
+    actual_base_sold = fallback_base
+    quote_received = fallback_base * fallback_price
+    actual_price = fallback_price
+
+    max_retries = 10
+    for attempt in range(max_retries):
+        if attempt > 0:
+            delay = min(0.5 * (2 ** (attempt - 1)), 5.0)
+            await asyncio.sleep(delay)
+
+        try:
+            order_details = await exchange.get_order(order_id)
+            filled_size = float(order_details.get("filled_size", "0"))
+            filled_value = float(order_details.get("filled_value", "0"))
+            avg_price = float(order_details.get("average_filled_price", "0"))
+
+            if filled_size > 0 and filled_value > 0:
+                actual_base_sold = filled_size
+                quote_received = filled_value
+                actual_price = avg_price if avg_price > 0 else fallback_price
+                logger.info(
+                    f"Short sell filled: {actual_base_sold:.8f} @ "
+                    f"{actual_price:.8f} = {quote_received:.2f}"
+                )
+                return actual_base_sold, quote_received, actual_price
+
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries}: "
+                f"Short sell not yet filled"
+            )
+        except Exception as fill_err:
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries}: "
+                f"Failed to get fill data: {fill_err}"
+            )
+
+        if attempt == max_retries - 1:
+            logger.warning(
+                f"Could not fetch fill data for {order_id} after "
+                f"{max_retries} attempts. Using estimates."
+            )
+
+    return actual_base_sold, quote_received, actual_price
+
+
+async def _create_short_sell_trade_record(
+    db: AsyncSession,
+    position: Position,
+    order_id: str,
+    actual_base_sold: float,
+    quote_received: float,
+    actual_price: float,
+    trade_type: str,
+) -> Trade:
+    """
+    Create Trade record and update position's short tracking fields.
+
+    Initializes short fields on first order, or updates running averages
+    for safety orders. Clears error status and commits immediately.
+
+    Args:
+        db: Database session
+        position: Current short position
+        order_id: Exchange order ID
+        actual_base_sold: Actual base currency sold
+        quote_received: Actual quote currency received
+        actual_price: Actual average fill price
+        trade_type: Order type identifier
+
+    Returns:
+        Committed Trade record
+    """
+    trade = Trade(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        side="sell",
+        base_amount=actual_base_sold,
+        quote_amount=quote_received,
+        price=actual_price,
+        trade_type=trade_type,
+        order_id=order_id,
+    )
+
+    db.add(trade)
+
+    # Update position's short tracking fields
+    is_first_short = position.short_entry_price is None
+
+    if is_first_short:
+        position.short_entry_price = actual_price
+        position.short_average_sell_price = actual_price
+        position.short_total_sold_base = actual_base_sold
+        position.short_total_sold_quote = quote_received
+        logger.info(
+            f"  SHORT POSITION OPENED: Entry={actual_price:.8f}, "
+            f"BTC sold={actual_base_sold:.8f}, USD received={quote_received:.2f}"
+        )
+    else:
+        prev_sold_base = position.short_total_sold_base or 0.0
+        prev_sold_quote = position.short_total_sold_quote or 0.0
+
+        new_total_sold_base = prev_sold_base + actual_base_sold
+        new_total_sold_quote = prev_sold_quote + quote_received
+
+        position.short_total_sold_base = new_total_sold_base
+        position.short_total_sold_quote = new_total_sold_quote
+        if new_total_sold_base > 0:
+            position.short_average_sell_price = (
+                new_total_sold_quote / new_total_sold_base
+            )
+        else:
+            position.short_average_sell_price = actual_price
+
+        logger.info(
+            f"  SHORT POSITION UPDATED: Avg={position.short_average_sell_price:.8f}, "
+            f"Total BTC sold={new_total_sold_base:.8f}, Total USD={new_total_sold_quote:.2f}"
+        )
+
+    # Clear any error status
+    position.last_error_message = None
+    position.last_error_timestamp = None
+
+    await db.commit()
+    await db.refresh(trade)
+
+    return trade
+
+
+async def _post_short_sell_operations(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    order_id: str,
+    actual_base_sold: float,
+    quote_received: float,
+    actual_price: float,
+    trade_type: str,
+) -> None:
+    """
+    Non-critical post-short-sell operations: logging and WebSocket notifications.
+
+    All operations are best-effort and will not raise exceptions if they fail.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance
+        bot: Bot instance
+        product_id: Trading pair
+        position: Current position
+        order_id: Exchange order ID
+        actual_base_sold: Actual base currency sold
+        quote_received: Actual quote currency received
+        actual_price: Actual average fill price
+        trade_type: Order type identifier
+    """
+    # Log to order history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type=trade_type, quote_amount=quote_received,
+                price=actual_price, status="success",
+                order_id=order_id, base_amount=actual_base_sold,
+            ),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log short sell to history: {e}")
+
+    # Broadcast short sell notification via WebSocket (best-effort)
+    try:
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
+            fill_type="short_sell",
+            product_id=product_id,
+            bot_name=bot.name,
+            base_amount=actual_base_sold,
+            quote_amount=quote_received,
+            price=actual_price,
+            position_id=position.id,
+            user_id=position.user_id,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Failed to broadcast short sell WebSocket notification: {e}")
+
+
 async def execute_sell_short(
     db: AsyncSession,
     exchange: ExchangeClient,
@@ -288,6 +498,8 @@ async def execute_sell_short(
 
     This is different from execute_sell() which CLOSES long positions.
     This function sells BTC to enter/add to a short position.
+
+    Pipeline: validate → place order → reconcile fill → record trade → notify
 
     Args:
         db: Database session
@@ -349,7 +561,7 @@ async def execute_sell_short(
             await db.commit()
         raise ValueError(error)
 
-    # Execute order via TradingClient
+    # Place order on exchange
     order_id = None
     await shutdown_manager.increment_in_flight()
     try:
@@ -382,49 +594,13 @@ async def execute_sell_short(
             logger.error(f"Full exchange response: {order_response}")
             raise ValueError("No order_id in successful exchange response")
 
-        # Fetch actual fill data from exchange with retry
-        logger.info(f"Fetching fill data for short sell order {order_id}")
-        actual_base_sold = base_amount_rounded
-        quote_received = base_amount_rounded * current_price
-        actual_price = current_price
-
-        max_retries = 10
-        for attempt in range(max_retries):
-            if attempt > 0:
-                delay = min(0.5 * (2 ** (attempt - 1)), 5.0)
-                await asyncio.sleep(delay)
-
-            try:
-                order_details = await exchange.get_order(order_id)
-                filled_size = float(order_details.get("filled_size", "0"))
-                filled_value = float(order_details.get("filled_value", "0"))
-                avg_price = float(order_details.get("average_filled_price", "0"))
-
-                if filled_size > 0 and filled_value > 0:
-                    actual_base_sold = filled_size
-                    quote_received = filled_value
-                    actual_price = avg_price if avg_price > 0 else current_price
-                    logger.info(
-                        f"Short sell filled: {actual_base_sold:.8f} @ "
-                        f"{actual_price:.8f} = {quote_received:.2f}"
-                    )
-                    break
-
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: "
-                    f"Short sell not yet filled"
-                )
-            except Exception as fill_err:
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: "
-                    f"Failed to get fill data: {fill_err}"
-                )
-
-            if attempt == max_retries - 1:
-                logger.warning(
-                    f"Could not fetch fill data for {order_id} after "
-                    f"{max_retries} attempts. Using estimates."
-                )
+        # Reconcile fill data from exchange
+        actual_base_sold, quote_received, actual_price = await _reconcile_short_sell_fill(
+            exchange=exchange,
+            order_id=order_id,
+            fallback_base=base_amount_rounded,
+            fallback_price=current_price,
+        )
 
     except Exception as e:
         logger.error(f"Error executing short sell order: {e}")
@@ -436,94 +612,30 @@ async def execute_sell_short(
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Create Trade record using actual fill data
-    trade = Trade(
-        position_id=position.id,
-        timestamp=datetime.utcnow(),
-        side="sell",  # Selling BTC to open/add to short
-        base_amount=actual_base_sold,  # Base currency sold (actual)
-        quote_amount=quote_received,  # Quote currency received (actual)
-        price=actual_price,  # Execution price (actual)
-        trade_type=trade_type,
+    # Record trade and update position
+    trade = await _create_short_sell_trade_record(
+        db=db,
+        position=position,
         order_id=order_id,
+        actual_base_sold=actual_base_sold,
+        quote_received=quote_received,
+        actual_price=actual_price,
+        trade_type=trade_type,
     )
 
-    db.add(trade)
-
-    # Update position's short tracking fields
-    is_first_short = position.short_entry_price is None
-
-    if is_first_short:
-        # First short order - initialize fields
-        position.short_entry_price = actual_price
-        position.short_average_sell_price = actual_price
-        position.short_total_sold_base = actual_base_sold
-        position.short_total_sold_quote = quote_received
-        logger.info(
-            f"  SHORT POSITION OPENED: Entry={actual_price:.8f}, "
-            f"BTC sold={actual_base_sold:.8f}, USD received={quote_received:.2f}"
-        )
-    else:
-        # Adding to existing short position (safety order)
-        prev_sold_base = position.short_total_sold_base or 0.0
-        prev_sold_quote = position.short_total_sold_quote or 0.0
-
-        new_total_sold_base = prev_sold_base + actual_base_sold
-        new_total_sold_quote = prev_sold_quote + quote_received
-
-        position.short_total_sold_base = new_total_sold_base
-        position.short_total_sold_quote = new_total_sold_quote
-        if new_total_sold_base > 0:
-            position.short_average_sell_price = (
-                new_total_sold_quote / new_total_sold_base
-            )
-        else:
-            position.short_average_sell_price = actual_price
-
-        logger.info(
-            f"  SHORT POSITION UPDATED: Avg={position.short_average_sell_price:.8f}, "
-            f"Total BTC sold={new_total_sold_base:.8f}, Total USD={new_total_sold_quote:.2f}"
-        )
-
-    # Clear any error status
-    position.last_error_message = None
-    position.last_error_timestamp = None
-
-    await db.commit()
-    await db.refresh(trade)
-
-    # Log to order history (best-effort)
-    try:
-        await log_order_to_history(
-            db=db, bot=bot, position=position,
-            entry=OrderLogEntry(
-                product_id=product_id, side="SELL", order_type="MARKET",
-                trade_type=trade_type, quote_amount=quote_received,
-                price=actual_price, status="success",
-                order_id=order_id, base_amount=actual_base_sold,
-            ),
-        )
-    except Exception as e:
-        logger.warning(f"Failed to log short sell to history: {e}")
-
-    # Broadcast short sell notification via WebSocket (best-effort)
-    try:
-        is_paper = (hasattr(exchange, 'is_paper_trading')
-                    and callable(exchange.is_paper_trading)
-                    and exchange.is_paper_trading())
-        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
-            fill_type="short_sell",
-            product_id=product_id,
-            bot_name=bot.name,
-            base_amount=actual_base_sold,
-            quote_amount=quote_received,
-            price=actual_price,
-            position_id=position.id,
-            user_id=position.user_id,
-            is_paper_trading=is_paper,
-        ))
-    except Exception as e:
-        logger.warning(f"Failed to broadcast short sell WebSocket notification: {e}")
+    # === NON-CRITICAL OPERATIONS BELOW ===
+    await _post_short_sell_operations(
+        db=db,
+        exchange=exchange,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        order_id=order_id,
+        actual_base_sold=actual_base_sold,
+        quote_received=quote_received,
+        actual_price=actual_price,
+        trade_type=trade_type,
+    )
 
     logger.info(
         f"  SHORT SELL EXECUTED: {actual_base_sold:.8f} BTC @ {actual_price:.8f} "
@@ -631,6 +743,108 @@ async def execute_limit_sell(
     )
 
     return pending_order
+
+
+async def _post_sell_operations(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    order_id: str,
+    actual_base_sold: float,
+    quote_received: float,
+    actual_price: float,
+    profit_quote: float,
+    profit_percentage: float,
+) -> None:
+    """
+    Non-critical post-sell operations: logging, WebSocket, event bus, cache, re-analysis.
+
+    All operations are best-effort and will not raise exceptions if they fail.
+    The trade record has already been committed before this is called.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance
+        trading_client: TradingClient instance
+        bot: Bot instance
+        product_id: Trading pair
+        position: Current position
+        order_id: Exchange order ID
+        actual_base_sold: Actual base currency sold
+        quote_received: Actual quote currency received
+        actual_price: Actual average fill price
+        profit_quote: Profit in quote currency
+        profit_percentage: Profit percentage
+    """
+    # Log successful sell to order history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type="sell", quote_amount=quote_received,
+                price=actual_price, status="success",
+                order_id=order_id, base_amount=actual_base_sold,
+            ),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log sell order to history (trade was recorded): {e}")
+
+    # Broadcast sell order fill notification via WebSocket (best-effort)
+    try:
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
+        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
+            fill_type="sell_order",
+            product_id=product_id,
+            bot_name=bot.name,
+            base_amount=actual_base_sold,
+            quote_amount=quote_received,
+            price=actual_price,
+            position_id=position.id,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+            user_id=position.user_id,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
+
+    # Publish domain event (best-effort — polling fallback handles misses)
+    try:
+        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            fill_type="sell_order",
+            quote_amount=quote_received,
+            base_amount=actual_base_sold,
+            price=actual_price,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
+
+    # Invalidate balance cache after trade (best-effort)
+    try:
+        await trading_client.invalidate_balance_cache()
+    except Exception as e:
+        logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
+
+    # Trigger immediate re-analysis to find replacement position (best-effort)
+    try:
+        logger.info("Position closed - triggering immediate re-analysis to find replacement")
+        bot.last_signal_check = None
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to trigger re-analysis (trade was recorded): {e}")
 
 
 async def execute_sell(
@@ -869,74 +1083,19 @@ async def execute_sell(
 
     # === NON-CRITICAL OPERATIONS BELOW ===
     # These can fail without losing the trade record
-
-    # Log successful sell to order history (best-effort)
-    try:
-        await log_order_to_history(
-            db=db, bot=bot, position=position,
-            entry=OrderLogEntry(
-                product_id=product_id, side="SELL", order_type="MARKET",
-                trade_type="sell", quote_amount=quote_received,
-                price=actual_price, status="success",
-                order_id=order_id, base_amount=actual_base_sold,
-            ),
-        )
-    except Exception as e:
-        logger.warning(f"Failed to log sell order to history (trade was recorded): {e}")
-
-    # Broadcast sell order fill notification via WebSocket (best-effort)
-    try:
-        is_paper = (hasattr(exchange, 'is_paper_trading')
-                    and callable(exchange.is_paper_trading)
-                    and exchange.is_paper_trading())
-        await broadcast_backend.broadcast_order_fill(OrderFillEvent(
-            fill_type="sell_order",
-            product_id=product_id,
-            bot_name=bot.name,
-            base_amount=actual_base_sold,
-            quote_amount=quote_received,
-            price=actual_price,
-            position_id=position.id,
-            profit=profit_quote,
-            profit_percentage=profit_percentage,
-            user_id=position.user_id,
-            is_paper_trading=is_paper,
-        ))
-    except Exception as e:
-        logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
-
-    # Publish domain event (best-effort — polling fallback handles misses)
-    try:
-        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
-        await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
-            position_id=position.id,
-            user_id=position.user_id,
-            product_id=product_id,
-            fill_type="sell_order",
-            quote_amount=quote_received,
-            base_amount=actual_base_sold,
-            price=actual_price,
-            profit=profit_quote,
-            profit_percentage=profit_percentage,
-            is_paper_trading=is_paper,
-        ))
-    except Exception as e:
-        logger.warning(f"Event bus publish failed (non-critical): {e}")
-
-    # Invalidate balance cache after trade (best-effort)
-    try:
-        await trading_client.invalidate_balance_cache()
-    except Exception as e:
-        logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
-
-    # Trigger immediate re-analysis to find replacement position (best-effort)
-    # By resetting last_signal_check, the bot will run on the next monitor cycle
-    # When a deal closes, immediately look for new opportunities
-    try:
-        logger.info("Position closed - triggering immediate re-analysis to find replacement")
-        bot.last_signal_check = None
-        await db.commit()
-    except Exception as e:
-        logger.warning(f"Failed to trigger re-analysis (trade was recorded): {e}")
+    await _post_sell_operations(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        order_id=order_id,
+        actual_base_sold=actual_base_sold,
+        quote_received=quote_received,
+        actual_price=actual_price,
+        profit_quote=profit_quote,
+        profit_percentage=profit_percentage,
+    )
 
     return trade, profit_quote, profit_percentage

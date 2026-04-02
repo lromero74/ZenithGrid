@@ -28,6 +28,23 @@ _FALLBACK_INTERMEDIATE = {
 _conversion_tasks: Dict[str, Dict] = {}
 
 
+def init_task(task_id: str, user_id: int) -> None:
+    """Initialize a conversion task with owner tracking."""
+    _conversion_tasks[task_id] = {
+        "task_id": task_id,
+        "user_id": user_id,
+        "status": "running",
+        "total": 0,
+        "current": 0,
+        "sold_count": 0,
+        "failed_count": 0,
+        "errors": [],
+        "message": "Initializing...",
+        "started_at": datetime.utcnow().isoformat(),
+        "completed_at": None,
+    }
+
+
 def get_task_progress(task_id: str) -> Optional[Dict]:
     """Get progress for a conversion task"""
     return _conversion_tasks.get(task_id)

@@ -91,9 +91,10 @@ async def _verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> 
         return
 
 
-def _init_task(task_id: str) -> None:
+def _init_task(task_id: str, user_id: int = None) -> None:
     _panic_tasks[task_id] = {
         "task_id": task_id,
+        "user_id": user_id,
         "status": "running",
         "phase": "starting",
         "message": "Initializing...",
@@ -212,7 +213,7 @@ async def panic_sell(
         raise HTTPException(status_code=403, detail="Not authorized for this account")
 
     task_id = str(uuid.uuid4())
-    _init_task(task_id)
+    _init_task(task_id, user_id=current_user.id)
 
     background_tasks.add_task(
         _run_panic_sell,
@@ -244,6 +245,8 @@ async def get_panic_sell_status(
     progress = _panic_tasks.get(task_id)
     if not progress:
         raise HTTPException(status_code=404, detail="Task not found")
+    if progress.get("user_id") and progress["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this task")
     return progress
 
 

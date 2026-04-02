@@ -717,3 +717,108 @@ class TestUpdateLimitClose:
             )
         assert exc_info.value.status_code == 404
         assert "Pending order not found" in exc_info.value.detail
+
+
+# =============================================================================
+# Shared-account manager access for limit orders
+# =============================================================================
+
+
+class TestLimitOrdersManagerAccess:
+    """Tests that shared-account managers can use limit order endpoints."""
+
+    @staticmethod
+    async def _setup_shared_access(db_session, role="manager"):
+        """Create owner, manager user, shared account, membership, and a position."""
+        from app.models.sharing import AccountMembership
+
+        owner = User(
+            email="lo_owner@example.com", hashed_password="hashed",
+            is_active=True, created_at=datetime.utcnow(),
+        )
+        db_session.add(owner)
+        await db_session.flush()
+
+        manager_user = User(
+            email="lo_manager@example.com", hashed_password="hashed",
+            is_active=True, created_at=datetime.utcnow(),
+        )
+        db_session.add(manager_user)
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="Shared Account",
+            type="cex", exchange="coinbase", is_active=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        membership = AccountMembership(
+            account_id=account.id, user_id=manager_user.id,
+            role=role, invited_by_user_id=owner.id, expires_at=None,
+        )
+        db_session.add(membership)
+        await db_session.flush()
+
+        bot = Bot(
+            user_id=owner.id, account_id=account.id, name="Shared Bot",
+            strategy_type="macd_dca", strategy_config={"base_order_fixed": 0.01},
+        )
+        db_session.add(bot)
+        await db_session.flush()
+
+        pos = Position(
+            bot_id=bot.id, account_id=account.id, product_id="ETH-BTC",
+            status="open", opened_at=datetime.utcnow(),
+            initial_quote_balance=1.0, max_quote_allowed=0.25,
+            total_quote_spent=0.01, total_base_acquired=1.5,
+            average_buy_price=0.02,
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        return owner, manager_user, account, bot, pos
+
+    @pytest.mark.asyncio
+    @patch("app.order_validation.get_product_minimums", new_callable=AsyncMock)
+    async def test_manager_can_limit_close_shared_account_position(self, mock_minimums, db_session):
+        """Happy path: manager of shared account can place a limit close order."""
+        from app.position_routers.position_limit_orders_router import limit_close_position
+        from app.position_routers.schemas import LimitCloseRequest
+
+        mock_minimums.return_value = {"base_increment": "0.00000001"}
+        owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.create_limit_order = AsyncMock(return_value={
+            "success_response": {"order_id": "order-shared-123"},
+        })
+
+        request = LimitCloseRequest(limit_price=0.025, time_in_force="gtc")
+
+        result = await limit_close_position(
+            position_id=pos.id, request=request,
+            db=db_session, coinbase=mock_coinbase, current_user=manager_user,
+        )
+
+        assert result["message"] == "Limit close order placed successfully"
+        assert result["order_id"] == "order-shared-123"
+
+    @pytest.mark.asyncio
+    async def test_observer_cannot_limit_close_shared_account_position(self, db_session):
+        """Security: observer of shared account gets 404 on limit close."""
+        from app.position_routers.position_limit_orders_router import limit_close_position
+        from app.position_routers.schemas import LimitCloseRequest
+        from fastapi import HTTPException
+
+        owner, observer, account, bot, pos = await self._setup_shared_access(db_session, role="observer")
+
+        mock_coinbase = AsyncMock()
+        request = LimitCloseRequest(limit_price=0.025, time_in_force="gtc")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await limit_close_position(
+                position_id=pos.id, request=request,
+                db=db_session, coinbase=mock_coinbase, current_user=observer,
+            )
+        assert exc_info.value.status_code == 404

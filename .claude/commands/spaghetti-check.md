@@ -84,6 +84,101 @@ Spawn a `general-purpose` agent with these instructions:
 - Report each finding with file:line, what's wrong, and where the logic should live
 - **Read-only** — report only, do not modify code
 
+#### Agent 4: Horizontal Scalability Auditor (general-purpose agent)
+
+Spawn a `general-purpose` agent with these instructions:
+
+**First, read `/home/ec2-user/ZenithGrid/docs/SCALABILITY_ROADMAP.md` in full.** It defines the architectural direction (Phase 1 done, Phase 2 in progress, Phase 3 future). Use it as the reference for what patterns are intended vs. accidental violations.
+
+Audit `backend/app/` for patterns that would prevent horizontal scaling (running 2+ backend processes) or make microservice extraction harder. Flag regressions — patterns that undo or bypass Phase 2 prep work already done.
+
+**Check 1 — Module-level mutable singletons (break multi-process)**
+Scan for module-level variables that hold mutable shared state:
+- `asyncio.Lock()` or `asyncio.Queue()` at module level (loop-bound — break when shared across threads or processes)
+- In-memory dicts/lists used as caches or rate-limit state outside of `SimpleCache` or `ServiceRegistry`
+- Module-level exchange client instances or DB session objects
+- Any `asyncio.Lock` NOT using the `(id(loop), key)` per-loop pattern (see roadmap Fix I/J for the approved pattern)
+
+**Check 2 — Cross-domain direct DB queries (prevent schema extraction)**
+The 6 database schemas are: `auth`, `trading`, `reporting`, `social`, `content`, `system`.
+Flag any service in one domain that directly queries a model from a different domain — especially:
+- `content` or `social` services querying `trading` models directly
+- `reporting` services querying `trading` tables via ORM (instead of through a service interface)
+- Any file in `services/` joining across schema boundaries in a single query
+These cross-schema joins are the main blocker for extracting a domain into its own service/database.
+
+**Check 3 — Direct DB polling instead of event bus**
+The event bus (`app/event_bus.py`) publishes: `ORDER_FILLED`, `POSITION_OPENED`, `POSITION_CLOSED`, `BOT_STARTED`, `BOT_STOPPED`, `GOAL_ACHIEVED`.
+Flag any service or monitor that:
+- Polls a DB table on a timer to detect order fills, position changes, or bot state changes — when it should subscribe to the event bus instead
+- Imports from `buy_executor`, `sell_executor`, or `limit_order_monitor` to react to fills (instead of subscribing to `ORDER_FILLED`)
+
+**Check 4 — ServiceRegistry bypass**
+`app/registry.py` provides `ServiceRegistry` with: `event_bus`, `broadcast`, `rate_limiter`, `credentials`.
+Flag any file that:
+- Imports `ws_manager` directly instead of using `registry.broadcast` (bypasses `BroadcastBackend` seam)
+- Imports `rate_limiters` helpers directly in new code instead of using `registry.rate_limiter`
+- Imports `get_exchange_client_for_account` directly instead of using `registry.credentials`
+These bypasses add new call sites that would need manual migration during Phase 3 extraction.
+
+**Check 5 — Sleep-loop background tasks (should be APScheduler)**
+The roadmap completed migration of Tier 2/3 tasks to APScheduler (v2.126.0).
+Flag any new `asyncio.sleep()` loop pattern in non-Tier-1 code (i.e., outside the 6 main trading monitors: MultiBotMonitor, LimitOrderMonitor, OrderReconciliationMonitor, PropGuardMonitor, PerpsMonitor, MissingOrderDetector).
+New background tasks should use `scheduler.add_job()` not hand-rolled sleep loops.
+
+**Check 6 — Hardcoded `async_session_maker` imports (break secondary loop)**
+The roadmap (Fix K) established that services used from the secondary event loop must accept an injected `session_maker` parameter. Hardcoded `from app.database import async_session_maker` inside exchange clients or monitors creates cross-loop DB pool conflicts.
+Flag any new occurrences of `from app.database import async_session_maker` inside:
+- Exchange client implementations (`*_client.py`)
+- Monitor classes (`*_monitor.py`)
+- Services that are registered on the secondary loop
+
+**Check 7 — WebSocket manager direct fan-out calls (prevent Redis swap)**
+`app/services/broadcast_backend.py` provides the `BroadcastBackend` seam. The swap point (`InProcessBroadcast` → `RedisBroadcast`) only works if all fan-out calls go through it.
+Grep for direct calls to `ws_manager.broadcast(`, `ws_manager.send_to_user(`, `ws_manager.send_to_room(` in routers and services. Each is a call site that bypasses the seam and would need manual migration in Phase 3.
+
+Report each finding with file:line, the specific scalability concern, and the correct pattern from the roadmap.
+**Read-only** — report only, do not modify code.
+
+#### Agent 5: Security & RBAC Auditor (multiuser-security agent)
+
+Spawn a `multiuser-security` agent with these instructions:
+
+Perform a full security and RBAC audit of `backend/app/`. This is a multi-user trading platform — every endpoint that touches user data must be protected. Flag anything that could allow one user to access or modify another user's data (IDOR), bypass authentication, or escalate privileges.
+
+**Check 1 — Missing auth dependencies**
+Every endpoint that touches user-owned data must have `Depends(get_current_user)` (or an equivalent admin/MFA dependency). Scan all routers for:
+- Endpoints with no auth dependency at all
+- Endpoints that accept a `user_id` or `account_id` from the request body/query params without verifying it matches the authenticated user
+- POST/PUT/DELETE endpoints with weaker auth than their corresponding GET endpoints
+
+**Check 2 — IDOR vulnerabilities (tenant isolation)**
+For every endpoint that accepts a resource ID (bot_id, account_id, position_id, report_id, etc.), verify that the query filters by `user_id` or validates ownership before returning/modifying the record. Flag any query that fetches by ID alone without a user ownership check.
+
+**Check 3 — RBAC enforcement**
+The app has roles/permissions in the `auth` schema. Audit:
+- Admin-only operations (ban, user management, system settings) — do they check admin role?
+- Any endpoint that performs privileged actions (e.g., force-selling another user's positions, accessing all users' data) without an explicit role check
+- The `admin_router.py` endpoints — do they ALL require admin role, or are some accessible by regular users?
+
+**Check 4 — MFA bypass paths**
+Panic sell and other high-risk operations require MFA. Flag:
+- Any high-risk endpoint (mass liquidation, account deletion, API key changes) that does NOT require MFA
+- Any path where MFA can be skipped (e.g., via a different endpoint that does the same action)
+
+**Check 5 — Sensitive data exposure**
+- Endpoints that return API keys, decrypted credentials, or secrets in responses
+- Error messages that leak internal implementation details (stack traces, SQL errors, file paths)
+- Endpoints that return other users' data in aggregate responses (e.g., leaderboards including private info)
+
+**Check 6 — Rate limiting coverage**
+The app has rate limiters in `auth_routers/rate_limiters.py`. Flag:
+- Auth endpoints (login, register, password reset, MFA verify) missing rate limiting
+- Any endpoint that could be used for enumeration (user lookup, exists checks) without rate limiting
+
+Report every finding with file:line, the vulnerability type, severity, and specific fix.
+**Read-only** — report only, do not modify code.
+
 3. **Wait for all agents** to complete
 4. **Consolidate** into a single report
 
@@ -124,10 +219,20 @@ Spawn a `general-purpose` agent with these instructions:
 | Severity | File | Function | Branches | Recommendation |
 |----------|------|----------|----------|----------------|
 
+### Scalability Violations
+| Severity | File | Line | Check | Problem | Correct Pattern |
+|----------|------|------|-------|---------|----------------|
+
+### Security & RBAC Violations
+| Severity | File | Line | Vulnerability Type | Details | Fix |
+|----------|------|------|-------------------|---------|-----|
+
 ### Summary
 - Files scanned: N
 - Total findings: N (N critical, N high, N medium, N low)
 - Worst offenders: [top 3 files by total findings]
+- Scalability blockers for Phase 3: N
+- Security/RBAC gaps: N
 
 ### Priority Actions
 1. [ ] [Most impactful fix]
@@ -143,10 +248,10 @@ Spawn a `general-purpose` agent with these instructions:
 
 | Level | Meaning | Example |
 |-------|---------|---------|
-| **CRITICAL** | Circular imports or broken dependency direction that could cause runtime failures | Service imports router, circular import chain |
-| **HIGH** | Major structural violation | 2000-line god file, 100-line function, router with business logic |
-| **MEDIUM** | Moderate concern | 70-line function, service with 12 imports, moderate coupling |
-| **LOW** | Minor improvement opportunity | 55-line function, slightly misplaced utility function |
+| **CRITICAL** | Runtime failure risk or active security vulnerability | Circular import, IDOR with no ownership check, asyncio.Lock cross-loop |
+| **HIGH** | Major structural or security violation | 2000-line god file, missing auth on sensitive endpoint, Phase 3 extraction blocker |
+| **MEDIUM** | Moderate concern | 70-line function, misplaced business logic, new sleep-loop task |
+| **LOW** | Minor improvement opportunity | 55-line function, slightly misplaced utility, low-traffic registry bypass |
 
 ### Important Rules (Phase 1)
 
@@ -172,11 +277,35 @@ Work through findings in this order:
 3. **MEDIUM** — moderate size violations (>1200 lines, >50 lines), misplaced logic, coupling
 4. **LOW** — skip unless quick wins (constant moves, minor import cleanups)
 
+### TDD & Diff-Safety Rules (MANDATORY for every fix)
+
+These rules apply to every fix agent, no exceptions:
+
+#### Before touching any code:
+1. **Check for existing test coverage** — search `tests/` for tests that exercise the function/module you're about to refactor
+2. **If no test covers the behavior** — write the test FIRST:
+   - Write the test, run it, confirm it **passes** (proving the behavior exists)
+   - Commit the test on its own before making any structural change
+   - This is your safety net — it proves you haven't broken anything after refactoring
+3. **If a test already exists** — run it now to confirm it passes before you touch the code
+
+#### While making changes:
+4. **Run `git diff` before and after** each logical change — read the diff to verify:
+   - No behavior was removed (deleted code should only be structural, never logic)
+   - No function signatures changed unless all callers were updated
+   - No import was removed unless the symbol moved somewhere else
+5. **Run affected tests after each file change** — don't batch up changes and test at the end
+
+#### After the fix:
+6. **Run the test you wrote (or found) again** — confirm it still passes
+7. **Run the full test file** for each module you touched — not just the one test
+
 ### Fix Process
 
 For each fix:
 1. **Create a task** describing the specific refactoring
 2. **Spawn a general-purpose agent** as a teammate to execute the fix with these rules:
+   - Follow the TDD & Diff-Safety Rules above — no exceptions
    - Work on one file/module at a time
    - When splitting files: update ALL import consumers across the codebase
    - When moving functions: update ALL callers, delete the old location completely
