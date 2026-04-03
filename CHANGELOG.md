@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.4] - 2026-04-03
+
+### Fixed
+- **Delisted pairs in paper accounts no longer spam 404 errors** — Coins that were once traded but are no longer listed on Coinbase (e.g. RONIN after its delisting) would cause repeated failed price lookups on every bot cycle. The daily pair-sync job now identifies these coins and the paper trading client skips pricing attempts for them. Balances are preserved exactly as on a real exchange — you can't remove worthless coins from your wallet, and neither can we.
+- **Single-pair bots with a delisted pair are now auto-deactivated** — The daily pair-sync previously only scanned the multi-pair list (`product_ids`) but ignored the legacy single-pair field (`product_id`). A bot whose sole trading pair was delisted would keep running and firing 404s indefinitely. It is now detected, deactivated, and its pair cleared automatically.
+
 ## [v2.158.3] - 2026-04-02
 
 ### Fixed

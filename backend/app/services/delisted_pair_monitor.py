@@ -7,6 +7,7 @@ Daily background job that:
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Set
@@ -344,6 +345,53 @@ class TradingPairMonitor:
 
         return detected
 
+    async def _get_unresolvable_coins(self, db: AsyncSession, available_products: set) -> set[str]:
+        """
+        Return the set of coin tickers that are held in any paper account but have no
+        tradeable pair (neither <COIN>-USD nor <COIN>-BTC) on the exchange.
+
+        These balances are kept as-is (mirroring real-exchange behaviour where delisted
+        coins still sit in your account), but callers can use this set to suppress
+        repeated pricing attempts that would always fail with a 404.
+        """
+        DUST = 1e-4
+        # Build set of tradeable base currencies
+        tradeable_bases: set[str] = set()
+        for pid in available_products:
+            parts = pid.split("-", 1)
+            if len(parts) == 2:
+                tradeable_bases.add(parts[0])
+
+        always_priceable = {"USD", "USDC", "USDT", "BTC", "ETH"}
+        unresolvable: set[str] = set()
+
+        account_result = await db.execute(
+            select(Account).where(
+                Account.is_paper_trading.is_(True),
+                Account.paper_balances.isnot(None),
+            )
+        )
+        for account in account_result.scalars().all():
+            try:
+                balances: dict = json.loads(account.paper_balances) if account.paper_balances else {}
+            except Exception:
+                continue
+            for currency, amount in balances.items():
+                if currency in always_priceable:
+                    continue
+                if amount <= DUST:
+                    continue
+                if currency not in tradeable_bases:
+                    unresolvable.add(currency)
+
+        if unresolvable:
+            logger.info(
+                "Paper accounts hold %d delisted/unresolvable coin(s): %s — "
+                "pricing will be skipped; balances are preserved (mirrors real-exchange behaviour)",
+                len(unresolvable), sorted(unresolvable),
+            )
+        return unresolvable
+
     async def check_and_sync_pairs(self) -> dict:
         """
         Check all bots for delisted pairs and newly available pairs.
@@ -359,6 +407,7 @@ class TradingPairMonitor:
             "affected_bots": [],
             "new_pairs_available": [],
             "detected_stable_pairs": [],
+            "unresolvable_paper_coins": [],
             "errors": []
         }
 
@@ -371,15 +420,35 @@ class TradingPairMonitor:
                     results["errors"].append("Could not fetch available products")
                     return results
 
-                # Get all bots with product_ids configured
-                bot_result = await db.execute(
-                    select(Bot).where(Bot.product_ids.isnot(None))
-                )
+                # Get all bots (product_ids list AND legacy single product_id)
+                bot_result = await db.execute(select(Bot))
                 bots = bot_result.scalars().all()
 
                 all_bot_pairs = set()
                 for bot in bots:
                     results["bots_checked"] += 1
+
+                    # ── Legacy single-pair field ──────────────────────────────
+                    if bot.product_id and not bot.product_ids:
+                        if bot.product_id not in available_products:
+                            logger.warning(
+                                "Bot '%s' (id=%d): product_id '%s' is delisted — "
+                                "clearing product_id and deactivating bot",
+                                bot.name, bot.id, bot.product_id,
+                            )
+                            bot_change = {
+                                "bot_id": bot.id,
+                                "bot_name": bot.name,
+                                "removed_pairs": [bot.product_id],
+                                "added_pairs": [],
+                            }
+                            results["pairs_removed"] += 1
+                            results["affected_bots"].append(bot_change)
+                            bot.product_id = None
+                            bot.is_active = False
+                        else:
+                            all_bot_pairs.add(bot.product_id)
+                        continue  # single-pair bot: nothing more to do
 
                     if not bot.product_ids:
                         continue
@@ -477,12 +546,20 @@ class TradingPairMonitor:
                         "USD": sorted(list(new_usd))[:20],
                     }
 
+                # Identify delisted coins sitting in paper accounts (balances preserved,
+                # but we cache the set so the paper trading client can skip pricing them)
+                unresolvable = await self._get_unresolvable_coins(db, available_products)
+                if unresolvable:
+                    results["unresolvable_paper_coins"] = sorted(unresolvable)
+                    # Publish to module-level cache so paper_trading_client can read it
+                    _unresolvable_paper_coins.update(unresolvable)
+
                 if results["pairs_removed"] > 0 or results["pairs_added"] > 0:
                     await db.commit()
                     logger.info(
-                        f"Pair sync complete: "
-                        f"Removed {results['pairs_removed']}, Added {results['pairs_added']} "
-                        f"pairs across {len(results['affected_bots'])} bots"
+                        "Pair sync complete: removed %d, added %d pairs across %d bots",
+                        results["pairs_removed"], results["pairs_added"],
+                        len(results["affected_bots"]),
                     )
                 else:
                     logger.info("Pair sync complete: No changes needed")
@@ -517,6 +594,14 @@ class TradingPairMonitor:
         """
         logger.info("Manual pair sync triggered")
         return await self.check_and_sync_pairs()
+
+
+# Module-level set of coin tickers known to have no tradeable pair on the exchange.
+# Populated by TradingPairMonitor.check_and_sync_pairs() after each daily run.
+# Read by paper_trading_client._price_in_usd / _price_in_btc to suppress repeated
+# 404 requests for coins that can never be priced (e.g. RONIN after delisting).
+# Balances for these coins are intentionally kept — mirrors real-exchange behaviour.
+_unresolvable_paper_coins: set[str] = set()
 
 
 # Module-level singleton — imported by scheduler.py and main.py

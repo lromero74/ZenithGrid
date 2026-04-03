@@ -1242,7 +1242,7 @@
     },
     {
       "file": "services/delisted_pair_monitor.py",
-      "purpose": "Daily sync of trading pairs; removes delisted pairs from bots",
+      "purpose": "Daily sync of trading pairs; removes delisted pairs from bots (checks both product_ids list and legacy product_id field); detects unresolvable paper-account coin balances via _get_unresolvable_coins() and publishes the result to the module-level _unresolvable_paper_coins set so paper_trading_client can suppress repeated 404 pricing requests",
       "type": "background"
     },
     {
@@ -1501,7 +1501,7 @@
       },
       {
         "file": "exchange_clients/paper_trading_client.py",
-        "purpose": "Simulated exchange client for paper trading"
+        "purpose": "Simulated exchange client for paper trading; _is_known_unresolvable() consults delisted_pair_monitor._unresolvable_paper_coins to skip get_price() calls for delisted coins, suppressing repeated 404 requests and downgrading those log lines to DEBUG"
       },
       {
         "file": "exchange_clients/bybit_adapter.py",

@@ -571,8 +571,20 @@ class PaperTradingClient(ExchangeClient):
     # Minimum balance to bother pricing (skip dust from partial fills)
     _DUST_THRESHOLD = 1e-4
 
+    @staticmethod
+    def _is_known_unresolvable(currency: str) -> bool:
+        """Return True if the daily pair-sync has flagged this coin as having no tradeable pair."""
+        try:
+            from app.services.delisted_pair_monitor import _unresolvable_paper_coins
+            return currency in _unresolvable_paper_coins
+        except ImportError:
+            return False
+
     async def _price_in_usd(self, currency: str, balance: float, btc_usd: float) -> float:
         """Convert a crypto balance to USD.  Try direct pair first, fall back via BTC."""
+        if self._is_known_unresolvable(currency):
+            logger.debug("Skipping price fetch for %s — known unresolvable (delisted)", currency)
+            return 0.0
         # Try direct USD pair
         try:
             price = await self.get_price(f"{currency}-USD")
@@ -588,11 +600,14 @@ class PaperTradingClient(ExchangeClient):
                     return balance * btc_price * btc_usd
             except Exception:
                 pass
-        logger.warning(f"Could not price {currency} in USD (no USD or BTC pair)")
+        logger.debug("Could not price %s in USD (no USD or BTC pair)", currency)
         return 0.0
 
     async def _price_in_btc(self, currency: str, balance: float, btc_usd: float) -> float:
         """Convert a crypto balance to BTC.  Try direct pair first, fall back via USD."""
+        if self._is_known_unresolvable(currency):
+            logger.debug("Skipping price fetch for %s — known unresolvable (delisted)", currency)
+            return 0.0
         # Try direct BTC pair
         try:
             price = await self.get_price(f"{currency}-BTC")
@@ -608,7 +623,7 @@ class PaperTradingClient(ExchangeClient):
                     return balance * usd_price / btc_usd
             except Exception:
                 pass
-        logger.warning(f"Could not price {currency} in BTC (no BTC or USD pair)")
+        logger.debug("Could not price %s in BTC (no BTC or USD pair)", currency)
         return 0.0
 
     async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
