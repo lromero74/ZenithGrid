@@ -10,9 +10,9 @@ A sophisticated self-hosted cryptocurrency trading platform with **AI-powered au
 The first and only DCA bot platform with built-in AI decision-making:
 - **Multi-AI Provider Support**: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI), Groq (Llama)
 - **Autonomous Trading**: AI analyzes markets and makes intelligent buy/sell decisions
-- **Never Sells at a Loss**: Hard-coded safety to protect capital
+- **Profit-Target Enforcement**: AI bot waits for your configured profit target before closing a position
 - **Token Optimized**: Smart caching, batching, and rate limiting
-- **Sentiment Ready**: Framework for Twitter, news, and Reddit integration
+- **Sentiment Ready**: News aggregation integrated; Twitter/X and Reddit signal integration planned
 - **Configurable Risk**: Conservative, Moderate, or Aggressive modes
 - **Per-User API Keys**: Encrypted credential management
 
@@ -24,7 +24,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Slippage Guard**: Order book depth protection ensures market orders don't execute at unfavorable prices
 - **Multi-Timeframe**: Different timeframes per indicator (5m, 15m, 30m, 1h, 4h, 1d)
 - **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
-- **6 Advanced Strategies**: Indicator-Based (custom), Bull Flag Scanner, AI Spot Opinion, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
+- **5 Advanced Strategies**: Indicator-Based (custom, includes Bull Flag and AI sub-modes), Grid Trading, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
 
 ### 📈 Reports & Goal Tracking
 - **Scheduled Email Reports**: Automated daily, weekly, monthly, quarterly, and yearly reports with xTD period summaries
@@ -51,7 +51,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **News Aggregation**: Configurable multi-source crypto news with advanced category and source filtering
 - **Article Reader with TTS**: Full article content with text-to-speech, voice cycling, and word-level sync — 40+ Microsoft Edge Neural voices including high-fidelity Multilingual Neural variants (Ava, Emma, Brian, Andrew)
 - **YouTube Integration**: Educational content from crypto channels
-- **Market Intelligence**: 16+ indicator cards — Fear & Greed, BTC Dominance, Altseason Index, ATH Distance, Hash Rate, Mempool, Lightning Network, Stablecoin Market Cap, BTC RSI, Halving Countdown, US Debt, and more
+- **Market Intelligence**: 14 indicator cards — Fear & Greed, BTC Dominance, Altseason Index, ATH Distance, Hash Rate, Mempool, Lightning Network, Stablecoin Market Cap, BTC RSI, Halving Countdown, US Debt, Total Market Cap, BTC Supply, and Crypto Season
 - **In-App Version History**: Click the version number in the header to see the changelog
 
 ### 🔐 Security & Multi-User
@@ -88,7 +88,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 
 ## 📋 Prerequisites
 
-- **Python 3.10+** (Python 3.13 recommended)
+- **Python 3.10+** (Python 3.11+ recommended)
 - **Node.js 18+** and npm
 - **Exchange account** — Coinbase (required for spot), ByBit/MT5 (optional for perps)
 - **AI API key** (optional, for AI bots - Claude, GPT, Gemini, Grok, or Groq)
@@ -178,22 +178,22 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 3. Click **"Create New Bot"**
 4. (Optional) Select a template: Conservative/Balanced/Aggressive
 5. Choose strategy:
-   - **Custom Bot (Indicator-Based)** - Mix-and-match conditions
-   - **AI Spot Opinion** - AI-powered market analysis
-   - **Bull Flag Scanner** - Automated pattern detection
-   - **Grid Trading** - Grid-based strategy
+   - **Indicator-Based** - Mix-and-match conditions (includes Bull Flag and AI sub-modes)
+   - **Grid Trading** - Grid-based range strategy
+   - **Triangular Arbitrage** - 3-way currency cycle detection
+   - **Spatial Arbitrage** - Cross-exchange price difference exploitation
+   - **Statistical Arbitrage** - Mean-reversion pairs trading
 6. Select trading pair(s)
 7. Configure parameters
 8. Click **"Start Bot"**
 
 ### Available Strategies
 
-1. **🎯 Indicator-Based (Universal/Custom Bot)** - Mix-and-match framework with 20+ technical indicators, multi-timeframe support, and phase-based conditions
-2. **📊 Bull Flag Scanner** - Automated bullish reversal pattern detection with volume confirmation
-3. **🤖 AI Spot Opinion** - Real-time LLM-based market analysis (Claude, GPT, Gemini, Grok, Groq)
-4. **🔺 Triangular Arbitrage** - Single-exchange 3-way currency cycle profitability detection
-5. **🌐 Spatial Arbitrage** - Cross-exchange (CEX vs DEX) price difference exploitation
-6. **📈 Statistical Arbitrage (Pairs Trading)** - Mean-reversion trading between correlated pairs
+1. **🎯 Indicator-Based (Universal/Custom Bot)** - Mix-and-match framework with 19+ technical indicators, multi-timeframe support, phase-based conditions, and built-in Bull Flag Scanner and AI Spot Opinion sub-modes
+2. **⚡ Grid Trading** - Automated buy/sell grid across a price range with configurable arithmetic or geometric levels
+3. **🔺 Triangular Arbitrage** - Single-exchange 3-way currency cycle profitability detection
+4. **🌐 Spatial Arbitrage** - Cross-exchange (CEX vs DEX) price difference exploitation
+5. **📈 Statistical Arbitrage (Pairs Trading)** - Mean-reversion trading between correlated pairs
 
 ## 💡 AI Bot Quick Start
 
@@ -228,7 +228,7 @@ All configuration is done through the web interface - no manual JSON editing req
 3. Calls your chosen AI (Claude/GPT/Gemini) for analysis
 4. AI returns: buy/hold/sell + confidence score + reasoning
 5. Bot executes if confidence exceeds threshold
-6. **Never sells at a loss** - waits for profit target
+6. **Profit-target enforcement** - holds until your configured profit target is met
 7. All decisions logged with reasoning in AI Bot Reasoning tab
 
 ### Token Optimization:
@@ -309,7 +309,7 @@ python3 update.py --yes
 | **Bull Flag Scanner** | ❌ | ✅ **Automated pattern detection** |
 | **Arbitrage Strategies** | Limited | ✅ **3 types** |
 | **News + TTS Reader** | ❌ | ✅ **Multi-source with text-to-speech** |
-| **Market Sentiment** | ❌ | ✅ **16+ indicator cards** |
+| **Market Sentiment** | ❌ | ✅ **14 indicator cards** |
 | **Multi-Exchange** | ✅ | ✅ **Coinbase + ByBit + MT5 + DEX** |
 | **Prop Firm Safety** | ❌ | ✅ **PropGuard drawdown monitoring** |
 | **MFA / 2FA** | ✅ | ✅ **TOTP + Email MFA** |
@@ -335,7 +335,7 @@ python3 update.py --yes
 
 ## 🛡️ Safety Features
 
-- **Never Sell at a Loss** (AI bot hard-coded rule)
+- **Profit-Target Enforcement** (AI bot holds until your configured target is met; stop loss available as opt-in exit)
 - **Budget Limits** per bot with percentage allocation
 - **Position Size Limits** (max concurrent deals)
 - **Category Filtering** (blacklist risky coins)
@@ -405,7 +405,7 @@ python3 update.py --yes
 - [x] **Bull Flag pattern scanner**
 - [x] **Arbitrage strategies** (Triangular, Spatial, Statistical)
 - [x] **News aggregation with TTS article reader**
-- [x] **Market sentiment dashboard** (16+ indicator cards)
+- [x] **Market sentiment dashboard** (14 indicator cards)
 - [x] **Category filtering system**
 - [x] **Trailing take profit / stop loss**
 - [x] **Portfolio tracking** (CEX + DEX)
@@ -439,7 +439,7 @@ python3 update.py --yes
 ### Backend won't start
 ```bash
 # Check logs
-tail -f .pids/backend.log
+sudo journalctl -u trading-bot-backend -f
 
 # Common issues:
 # - Missing API credentials (add to backend/.env)

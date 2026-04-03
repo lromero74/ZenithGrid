@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.9] - 2026-04-03
+
+### Fixed
+- **README accuracy corrections** — Fixed several stale or incorrect claims: strategy count corrected from 6 to 5 (Bull Flag and AI Spot Opinion are sub-modes of Indicator-Based, not separate strategies; Grid Trading added to the list); indicator card count corrected from "16+" to 14; replaced "Never Sells at a Loss" promise language with accurate "profit-target enforcement" framing; Python version recommendation updated from 3.13 to 3.11+; troubleshooting log command updated from stale `.pids/backend.log` to `journalctl`; Twitter/Reddit "Sentiment Ready" claim clarified as planned rather than implemented.
+
 ## [v2.158.8] - 2026-04-03
 
 ### Fixed
