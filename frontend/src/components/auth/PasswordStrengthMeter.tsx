@@ -94,6 +94,17 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
   )
 }
 
+/** Amber warning shown below a password field when Caps Lock is active. */
+export function CapsLockWarning({ active }: { active: boolean }) {
+  if (!active) return null
+  return (
+    <p className="mt-1.5 text-xs text-amber-400 flex items-center gap-1.5">
+      <span className="text-sm font-bold leading-none">⇪</span>
+      Caps Lock is on
+    </p>
+  )
+}
+
 /** Check if all required password criteria are met (special char is bonus) */
 export function isPasswordValid(password: string): boolean {
   return (

@@ -9,7 +9,8 @@ import { useState, FormEvent } from 'react'
 import { Truck, Lock, AlertCircle, CheckCircle, Check } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBrand } from '../../contexts/BrandContext'
-import { PasswordStrengthMeter, isPasswordValid } from './PasswordStrengthMeter'
+import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from './PasswordStrengthMeter'
+import { useCapsLock } from '../../hooks/useCapsLock'
 
 interface ResetPasswordProps {
   token: string
@@ -19,6 +20,7 @@ interface ResetPasswordProps {
 export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
   const { resetPassword } = useAuth()
   const { brand } = useBrand()
+  const capsLock = useCapsLock()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -114,6 +116,7 @@ export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
                   />
                 </div>
                 <PasswordStrengthMeter password={password} />
+                <CapsLockWarning active={capsLock} />
               </div>
 
               <div>
@@ -148,6 +151,7 @@ export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
                     </div>
                   )}
                 </div>
+                <CapsLockWarning active={capsLock} />
               </div>
 
               <button

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.13] - 2026-04-03
+
+### Added
+- **Caps Lock warning on all password fields** — All password inputs (sign-in, sign-up, reset password, and all three fields in the Settings change-password form plus the MFA confirmation fields) now show an amber "⇪ Caps Lock is on" hint whenever Caps Lock is active. The warning disappears automatically when Caps Lock is turned off. The sign-in field suppresses the warning when the "show password" eye toggle is active (since the characters are already visible).
+
 ## [v2.158.12] - 2026-04-03
 
 ### Changed

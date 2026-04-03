@@ -9,12 +9,14 @@ import { useState, useRef, useEffect, FormEvent } from 'react'
 import { Truck, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw, Eye, EyeOff, TriangleAlert } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useBrand } from '../contexts/BrandContext'
-import { PasswordStrengthMeter, isPasswordValid } from '../components/auth/PasswordStrengthMeter'
+import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
+import { useCapsLock } from '../hooks/useCapsLock'
 import { ForgotPassword } from '../components/auth/ForgotPassword'
 
 export default function Login() {
   const { login, signup, mfaPending, mfaMethods, verifyMFA, verifyMFAEmailCode, resendMFAEmail, cancelMFA } = useAuth()
   const { brand, brandImageUrl } = useBrand()
+  const capsLock = useCapsLock()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -588,6 +590,7 @@ export default function Login() {
                   </button>
                 </div>
               </div>
+              {!showPassword && <CapsLockWarning active={capsLock} />}
 
               {/* Submit Button */}
               <button
@@ -796,6 +799,7 @@ export default function Login() {
                     />
                   </div>
                   <PasswordStrengthMeter password={signupPassword} />
+                  <CapsLockWarning active={capsLock} />
                 </div>
 
                 {/* Confirm Password Field */}
@@ -831,6 +835,7 @@ export default function Login() {
                       </div>
                     )}
                   </div>
+                  <CapsLockWarning active={capsLock} />
                 </div>
 
                 {/* Terms of Service */}

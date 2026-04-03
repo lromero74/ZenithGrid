@@ -392,7 +392,7 @@
       },
       {
         "file": "components/PasswordStrengthMeter.tsx",
-        "purpose": "Visual password strength indicator"
+        "purpose": "Visual password strength indicator; also exports CapsLockWarning component (renders amber caps-lock hint when active prop is true, returns null otherwise)"
       },
       {
         "file": "components/SessionLimitsNotice.tsx",
@@ -616,6 +616,10 @@
   ],
   "hooks": {
     "global": [
+      {
+        "file": "hooks/useCapsLock.ts",
+        "purpose": "Detects CapsLock state via window keydown/keyup events using e.getModifierState('CapsLock'); returns boolean"
+      },
       {
         "file": "hooks/useAudio.ts",
         "purpose": "Web Audio API for order fill notification sounds"

@@ -11,8 +11,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
 import { settingsApi, api } from '../services/api'
-import { PasswordStrengthMeter, isPasswordValid } from '../components/auth/PasswordStrengthMeter'
+import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
 import { useOtherSessions, useTerminateSessions, useTerminateAllOtherSessions, SessionInfo } from '../hooks/useSessions'
+import { useCapsLock } from '../hooks/useCapsLock'
 
 function parseDevice(ua: string | null): string {
   if (!ua) return 'Unknown device'
@@ -270,6 +271,7 @@ export default function Settings() {
 
 
   const canWriteSettings = usePermission('settings', 'write')
+  const capsLock = useCapsLock()
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -715,6 +717,7 @@ export default function Settings() {
                 className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter current password"
               />
+              <CapsLockWarning active={capsLock} />
             </div>
 
             <div>
@@ -733,6 +736,7 @@ export default function Settings() {
                 placeholder="Minimum 8 characters"
               />
               <PasswordStrengthMeter password={newPassword} />
+              <CapsLockWarning active={capsLock} />
             </div>
 
             <div>
@@ -749,6 +753,7 @@ export default function Settings() {
                 className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Re-enter new password"
               />
+              <CapsLockWarning active={capsLock} />
             </div>
 
             <button
@@ -954,6 +959,7 @@ export default function Settings() {
                       placeholder="Current password"
                       className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     />
+                    <CapsLockWarning active={capsLock} />
                     <input
                       type="text"
                       inputMode="numeric"
@@ -1053,6 +1059,7 @@ export default function Settings() {
                         showEmailMfaConfirm === 'disable' ? 'focus:ring-red-500' : 'focus:ring-blue-500'
                       } focus:border-transparent`}
                     />
+                    <CapsLockWarning active={capsLock} />
                     <div className="flex space-x-3">
                       <button
                         type="submit"
