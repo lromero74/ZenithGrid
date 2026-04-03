@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.6] - 2026-04-03
+
+### Security
+- **npm dependency security update** — Updated frontend dependencies to address flagged vulnerabilities: `react-router-dom` 7.10.1 → 7.14.0 (CSRF/XSS patches), `rollup` 4.53.3 → 4.60.1 (path traversal fix), `undici` 7.22.0 → 7.24.7 (WebSocket/HTTP smuggling fixes), `axios` 1.13.2 → 1.14.0 (safe upgrade away from the supply-chain-compromised 1.14.1). None of these vulnerabilities were directly exploitable in our deployment, but the updates are clean and non-breaking.
+
 ## [v2.158.5] - 2026-04-03
 
 ### Fixed
