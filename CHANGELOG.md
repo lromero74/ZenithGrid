@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.12] - 2026-04-03
+
+### Changed
+- **Settings: Change Password now enforces the same complexity rules as account creation** — The "Change Password" form now shows the password strength meter (4-segment bar + requirements checklist) and requires the new password to meet the same rules: at least 8 characters with uppercase, lowercase, and a number. The submit button stays disabled until all requirements are met.
+
 ## [v2.158.11] - 2026-04-03
 
 ### Fixed

@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
 import { settingsApi, api } from '../services/api'
+import { PasswordStrengthMeter, isPasswordValid } from '../components/auth/PasswordStrengthMeter'
 import { useOtherSessions, useTerminateSessions, useTerminateAllOtherSessions, SessionInfo } from '../hooks/useSessions'
 
 function parseDevice(ua: string | null): string {
@@ -368,8 +369,8 @@ export default function Settings() {
       return
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters')
+    if (!isPasswordValid(newPassword)) {
+      setPasswordError('New password must be at least 8 characters and include uppercase, lowercase, and a number')
       return
     }
 
@@ -731,6 +732,7 @@ export default function Settings() {
                 className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Minimum 8 characters"
               />
+              <PasswordStrengthMeter password={newPassword} />
             </div>
 
             <div>
@@ -751,7 +753,7 @@ export default function Settings() {
 
             <button
               type="submit"
-              disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+              disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword || !isPasswordValid(newPassword)}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
             >
               {isChangingPassword ? (
