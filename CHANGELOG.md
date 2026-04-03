@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.7] - 2026-04-03
+
+### Fixed
+- **Dashboard sparklines no longer log width(-1)/height(-1) warnings** — Recharts was measuring carousel cards the moment sparkline data arrived from the API, before the browser had laid out off-screen cards. The render deferral now triggers from when data first becomes available (not from component mount), so the chart waits two animation frames for layout to settle before measuring.
+
 ## [v2.158.6] - 2026-04-03
 
 ### Security

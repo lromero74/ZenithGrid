@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ResponsiveContainer, AreaChart, Area, YAxis } from 'recharts'
 
 interface SparklineProps {
@@ -9,25 +9,32 @@ interface SparklineProps {
 }
 
 export function Sparkline({ data, color, height = 54, timeLabel }: SparklineProps) {
-  // Defer chart mount by two frames so the container has layout dimensions
-  // before ResponsiveContainer measures itself (avoids CartesianChart width/height warnings)
-  const [mounted, setMounted] = useState(false)
+  // Defer chart render by two frames after data first becomes available.
+  // The previous approach deferred on mount, but data often arrives later (React Query),
+  // at which point some carousel cards are off-screen and measure as 0/-1 dimensions.
+  // We defer from when data first arrives instead, and only once (subsequent updates render immediately).
+  const [ready, setReady] = useState(false)
+  const triggered = useRef(false)
+  const hasData = data != null && data.length >= 2
+
   useEffect(() => {
+    if (!hasData || triggered.current) return
+    triggered.current = true
     let cancelled = false
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => { if (!cancelled) setMounted(true) })
+      requestAnimationFrame(() => { if (!cancelled) setReady(true) })
     })
     return () => { cancelled = true }
-  }, [])
+  }, [hasData])
 
-  if (!data || data.length < 2) return null
+  if (!hasData) return null
 
   const chartData = data.map((value, i) => ({ v: value, i }))
 
   return (
     <div className="w-full">
       <div className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
-        {mounted && (
+        {ready && (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
               <defs>
