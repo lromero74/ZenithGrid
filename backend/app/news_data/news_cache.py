@@ -240,8 +240,11 @@ def save_video_cache(data: Dict[str, Any]) -> None:
         logger.error(f"Failed to save video cache: {e}")
 
 
-def load_fear_greed_cache() -> Optional[Dict[str, Any]]:
-    """Load fear/greed cache from file (15 minute cache)"""
+def load_fear_greed_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    """Load fear/greed cache from file (15 minute cache).
+
+    stale=True: return data even if expired (upstream-unavailable fallback).
+    """
     if not FEAR_GREED_CACHE_FILE.exists():
         return None
 
@@ -251,7 +254,7 @@ def load_fear_greed_cache() -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (15 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if datetime.utcnow() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
+        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
             logger.info("Fear/Greed cache expired")
             return None
 
@@ -271,8 +274,11 @@ def save_fear_greed_cache(data: Dict[str, Any]) -> None:
         logger.error(f"Failed to save fear/greed cache: {e}")
 
 
-def load_block_height_cache() -> Optional[Dict[str, Any]]:
-    """Load block height cache from file (10 minute cache)"""
+def load_block_height_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    """Load block height cache from file (10 minute cache).
+
+    stale=True: return data even if expired (upstream-unavailable fallback).
+    """
     if not BLOCK_HEIGHT_CACHE_FILE.exists():
         return None
 
@@ -282,7 +288,7 @@ def load_block_height_cache() -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (10 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if datetime.utcnow() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
+        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
             logger.info("Block height cache expired")
             return None
 
@@ -302,8 +308,11 @@ def save_block_height_cache(data: Dict[str, Any]) -> None:
         logger.error(f"Failed to save block height cache: {e}")
 
 
-def load_us_debt_cache() -> Optional[Dict[str, Any]]:
-    """Load US debt cache from file (24-hour cache)"""
+def load_us_debt_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    """Load US debt cache from file (24-hour cache).
+
+    stale=True: return data even if expired (upstream-unavailable fallback).
+    """
     if not US_DEBT_CACHE_FILE.exists():
         return None
 
@@ -313,7 +322,7 @@ def load_us_debt_cache() -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (24 hours)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if datetime.utcnow() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
+        if not stale and datetime.utcnow() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
             logger.info("US debt cache expired")
             return None
 
@@ -334,8 +343,14 @@ def save_us_debt_cache(data: Dict[str, Any]) -> None:
 
 
 # Generic market metrics cache functions
-def _load_market_metrics_cache(cache_file: Path, name: str) -> Optional[Dict[str, Any]]:
-    """Generic loader for market metrics caches (15 minute expiry)"""
+def _load_market_metrics_cache(
+    cache_file: Path, name: str, stale: bool = False
+) -> Optional[Dict[str, Any]]:
+    """Generic loader for market metrics caches (15 minute expiry).
+
+    stale=True: bypass TTL check and return cached data even if expired.
+    Used as a fallback when the upstream API is unavailable.
+    """
     if not cache_file.exists():
         return None
 
@@ -344,7 +359,7 @@ def _load_market_metrics_cache(cache_file: Path, name: str) -> Optional[Dict[str
             cache = json.load(f)
 
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if datetime.utcnow() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
+        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
             logger.info(f"{name} cache expired")
             return None
 
@@ -364,64 +379,64 @@ def _save_market_metrics_cache(cache_file: Path, name: str, data: Dict[str, Any]
         logger.error(f"Failed to save {name} cache: {e}")
 
 
-def load_btc_dominance_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(BTC_DOMINANCE_CACHE_FILE, "BTC dominance")
+def load_btc_dominance_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(BTC_DOMINANCE_CACHE_FILE, "BTC dominance", stale=stale)
 
 
 def save_btc_dominance_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(BTC_DOMINANCE_CACHE_FILE, "BTC dominance", data)
 
 
-def load_altseason_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index")
+def load_altseason_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index", stale=stale)
 
 
 def save_altseason_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index", data)
 
 
-def load_stablecoin_mcap_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap")
+def load_stablecoin_mcap_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap", stale=stale)
 
 
 def save_stablecoin_mcap_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap", data)
 
 
-def load_mempool_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(MEMPOOL_CACHE_FILE, "Mempool")
+def load_mempool_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(MEMPOOL_CACHE_FILE, "Mempool", stale=stale)
 
 
 def save_mempool_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(MEMPOOL_CACHE_FILE, "Mempool", data)
 
 
-def load_hash_rate_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(HASH_RATE_CACHE_FILE, "Hash rate")
+def load_hash_rate_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(HASH_RATE_CACHE_FILE, "Hash rate", stale=stale)
 
 
 def save_hash_rate_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(HASH_RATE_CACHE_FILE, "Hash rate", data)
 
 
-def load_lightning_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(LIGHTNING_CACHE_FILE, "Lightning")
+def load_lightning_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(LIGHTNING_CACHE_FILE, "Lightning", stale=stale)
 
 
 def save_lightning_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(LIGHTNING_CACHE_FILE, "Lightning", data)
 
 
-def load_ath_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(ATH_CACHE_FILE, "ATH")
+def load_ath_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(ATH_CACHE_FILE, "ATH", stale=stale)
 
 
 def save_ath_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(ATH_CACHE_FILE, "ATH", data)
 
 
-def load_btc_rsi_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(BTC_RSI_CACHE_FILE, "BTC RSI")
+def load_btc_rsi_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(BTC_RSI_CACHE_FILE, "BTC RSI", stale=stale)
 
 
 def save_btc_rsi_cache(data: Dict[str, Any]) -> None:

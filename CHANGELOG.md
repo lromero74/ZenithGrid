@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.10] - 2026-04-03
+
+### Fixed
+- **Dashboard market metric cards no longer show 503 when data sources are unavailable** — All metric endpoints (Fear/Greed, BTC block height, US debt, BTC dominance, altseason index, stablecoin market cap, total market cap, mempool, hash rate, Lightning, ATH, BTC RSI) now fall back to stale cached data if the upstream API is unreachable. Previously any cache miss during an outage returned a 503; now the last known value is served with a warning log, and 503 is only raised if no cache exists at all.
+- **US National Debt card: duplicate projected milestone** — When current debt is just below a round trillion that is also a round 5-trillion boundary (e.g. $39.xT → next $1T and next $5T both land at $40T), the second milestone row now advances to the next $10T boundary instead of repeating the same value.
+
 ## [v2.158.9] - 2026-04-03
 
 ### Fixed

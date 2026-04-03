@@ -77,8 +77,15 @@ async def get_fear_greed(current_user: User = Depends(get_current_user)):
         return FearGreedResponse(**cache)
 
     logger.info("Fetching fresh Fear/Greed index...")
-    data = await fetch_fear_greed_index()
-    return FearGreedResponse(**data)
+    try:
+        data = await fetch_fear_greed_index()
+        return FearGreedResponse(**data)
+    except Exception:
+        stale = load_fear_greed_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale Fear/Greed cache (upstream unavailable)")
+            return FearGreedResponse(**stale)
+        raise HTTPException(status_code=503, detail="Fear/Greed data temporarily unavailable")
 
 
 @router.get("/btc-block-height", response_model=BlockHeightResponse)
@@ -95,8 +102,15 @@ async def get_btc_block_height(current_user: User = Depends(get_current_user)):
         return BlockHeightResponse(**cache)
 
     logger.info("Fetching fresh BTC block height...")
-    data = await fetch_btc_block_height()
-    return BlockHeightResponse(**data)
+    try:
+        data = await fetch_btc_block_height()
+        return BlockHeightResponse(**data)
+    except Exception:
+        stale = load_block_height_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale BTC block height cache (upstream unavailable)")
+            return BlockHeightResponse(**stale)
+        raise HTTPException(status_code=503, detail="BTC block height data temporarily unavailable")
 
 
 @router.get("/us-debt", response_model=USDebtResponse)
@@ -113,8 +127,15 @@ async def get_us_debt(current_user: User = Depends(get_current_user)):
         return USDebtResponse(**cache)
 
     logger.info("Fetching fresh US debt data...")
-    data = await fetch_us_debt()
-    return USDebtResponse(**data)
+    try:
+        data = await fetch_us_debt()
+        return USDebtResponse(**data)
+    except Exception:
+        stale = load_us_debt_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale US debt cache (upstream unavailable)")
+            return USDebtResponse(**stale)
+        raise HTTPException(status_code=503, detail="US debt data temporarily unavailable")
 
 
 @router.get("/debt-ceiling-history", response_model=DebtCeilingHistoryResponse)
@@ -151,7 +172,14 @@ async def get_btc_dominance(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh BTC dominance data...")
-    return await fetch_btc_dominance()
+    try:
+        return await fetch_btc_dominance()
+    except Exception:
+        stale = load_btc_dominance_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale BTC dominance cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="BTC dominance data temporarily unavailable")
 
 
 @router.get("/altseason-index")
@@ -169,7 +197,14 @@ async def get_altseason_index(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh altseason index...")
-    return await fetch_altseason_index()
+    try:
+        return await fetch_altseason_index()
+    except Exception:
+        stale = load_altseason_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale altseason cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="Altseason index data temporarily unavailable")
 
 
 @router.get("/stablecoin-mcap")
@@ -186,7 +221,14 @@ async def get_stablecoin_mcap(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh stablecoin mcap...")
-    return await fetch_stablecoin_mcap()
+    try:
+        return await fetch_stablecoin_mcap()
+    except Exception:
+        stale = load_stablecoin_mcap_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale stablecoin mcap cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="Stablecoin mcap data temporarily unavailable")
 
 
 @router.get("/total-market-cap")
@@ -202,11 +244,21 @@ async def get_total_market_cap(current_user: User = Depends(get_current_user)):
             "cached_at": cache.get("cached_at"),
         }
 
-    fresh_data = await fetch_btc_dominance()
-    return {
-        "total_market_cap": fresh_data.get("total_market_cap", 0),
-        "cached_at": fresh_data.get("cached_at"),
-    }
+    try:
+        fresh_data = await fetch_btc_dominance()
+        return {
+            "total_market_cap": fresh_data.get("total_market_cap", 0),
+            "cached_at": fresh_data.get("cached_at"),
+        }
+    except Exception:
+        stale = load_btc_dominance_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale total market cap from BTC dominance cache (upstream unavailable)")
+            return {
+                "total_market_cap": stale.get("total_market_cap", 0),
+                "cached_at": stale.get("cached_at"),
+            }
+        raise HTTPException(status_code=503, detail="Total market cap data temporarily unavailable")
 
 
 @router.get("/btc-supply")
@@ -243,7 +295,14 @@ async def get_mempool_stats(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh mempool stats...")
-    return await fetch_mempool_stats()
+    try:
+        return await fetch_mempool_stats()
+    except Exception:
+        stale = load_mempool_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale mempool cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="Mempool data temporarily unavailable")
 
 
 @router.get("/hash-rate")
@@ -258,7 +317,14 @@ async def get_hash_rate(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh hash rate...")
-    return await fetch_hash_rate()
+    try:
+        return await fetch_hash_rate()
+    except Exception:
+        stale = load_hash_rate_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale hash rate cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="Hash rate data temporarily unavailable")
 
 
 @router.get("/lightning")
@@ -273,7 +339,14 @@ async def get_lightning_stats(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh lightning stats...")
-    return await fetch_lightning_stats()
+    try:
+        return await fetch_lightning_stats()
+    except Exception:
+        stale = load_lightning_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale lightning cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="Lightning data temporarily unavailable")
 
 
 @router.get("/ath")
@@ -288,7 +361,14 @@ async def get_ath(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh ATH data...")
-    return await fetch_ath_data()
+    try:
+        return await fetch_ath_data()
+    except Exception:
+        stale = load_ath_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale ATH cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="ATH data temporarily unavailable")
 
 
 @router.get("/btc-rsi")
@@ -303,7 +383,14 @@ async def get_btc_rsi(current_user: User = Depends(get_current_user)):
         return cache
 
     logger.info("Fetching fresh BTC RSI data...")
-    return await fetch_btc_rsi()
+    try:
+        return await fetch_btc_rsi()
+    except Exception:
+        stale = load_btc_rsi_cache(stale=True)
+        if stale:
+            logger.warning("Serving stale BTC RSI cache (upstream unavailable)")
+            return stale
+        raise HTTPException(status_code=503, detail="BTC RSI data temporarily unavailable")
 
 
 @router.get("/metric-history/{metric_name}")

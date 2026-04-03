@@ -68,7 +68,7 @@
     {
       "file": "routers/news_metrics_router.py",
       "prefix": "/api/news",
-      "purpose": "Market sentiment & blockchain metrics endpoints (Fear & Greed, BTC dominance, etc.)"
+      "purpose": "Market sentiment & blockchain metrics endpoints (Fear & Greed, BTC dominance, etc.); all 10+ handlers use try/except with stale cache fallback so a live-fetch failure returns the last cached value rather than a 500"
     },
     {
       "file": "routers/news_tts_router.py",
@@ -252,7 +252,7 @@
       },
       {
         "file": "news_data/news_cache.py",
-        "purpose": "Cache loading/saving for news and video data"
+        "purpose": "Cache loading/saving for news and video data; all loader functions (_load_market_metrics_cache and all 8 metric wrappers) accept a stale=True parameter to return the last persisted value without triggering a live fetch"
       },
       {
         "file": "news_data/news_models.py",

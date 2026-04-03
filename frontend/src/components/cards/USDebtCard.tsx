@@ -112,7 +112,10 @@ function USDebtCardInner({ usDebtData, isError, onShowHistory }: USDebtCardProps
           {/* Projected Milestones */}
           {(() => {
             const m1T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 1)
-            const m5T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 5)
+            const m5TRaw = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 5)
+            const m5T = m5TRaw.milestone === m1T.milestone
+              ? calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 10)
+              : m5TRaw
             return (
               <div className="w-full bg-slate-900/50 rounded-lg p-2 mt-2">
                 <div className="text-[10px] text-slate-500 mb-1.5 font-medium">Projected Milestones</div>
