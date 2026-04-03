@@ -1112,7 +1112,7 @@ export const botValidationApi = {
    * DCA budget form.
    */
   getWorstCaseMinimum: (productIds: string[]) =>
-    api.post<{ max_min_quote: number }>('/bot-validation/get-worst-case-minimum', {
+    api.post<{ max_min_quote: number }>('/bots/get-worst-case-minimum', {
       product_ids: productIds,
       strategy_config: {},
     }).then((res) => res.data),

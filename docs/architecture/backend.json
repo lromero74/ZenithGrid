@@ -58,7 +58,7 @@
     {
       "file": "routers/market_data_router.py",
       "prefix": "/api",
-      "purpose": "Current prices, OHLCV candles (cached), product listings"
+      "purpose": "Current prices, OHLCV candles (cached), product listings; GET /api/products account ownership check uses accessible_accounts_filter (owner OR active member) and runs outside the broad try/except so HTTPException(404) is not swallowed as 500"
     },
     {
       "file": "routers/news_router.py",
@@ -201,6 +201,10 @@
       {
         "file": "bot_routers/bot_validation_router.py",
         "purpose": "Bot config validation against exchange minimums"
+      },
+      {
+        "file": "bot_routers/bot_rebalancer_router.py",
+        "purpose": "Bot budget rebalancer: GET /api/bots/rebalancer returns currency groups with participating bots for an account; PUT /api/bots/rebalancer saves group settings and writes budget_percentage to all participating bots; account access check uses accessible_accounts_filter (owner OR active member)"
       },
       {
         "file": "bot_routers/schemas.py",

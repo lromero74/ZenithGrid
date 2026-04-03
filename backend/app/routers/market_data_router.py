@@ -257,19 +257,23 @@ async def get_products(
     current_user=Depends(get_current_user),
 ):
     """Get all available trading products for an exchange account"""
+    # Verify account access before entering the broad try/except (HTTPException
+    # must not be swallowed and converted to 500).
+    if account_id is not None:
+        from app.services.account_access import accessible_accounts_filter
+        acct_result = await db.execute(
+            select(Account).where(
+                Account.id == account_id,
+                accessible_accounts_filter(current_user.id),
+            )
+        )
+        if not acct_result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Account not found")
+
     try:
         # Use account-specific exchange client if provided
         exchange = None
         if account_id is not None:
-            # Verify user owns this account before creating client
-            acct_result = await db.execute(
-                select(Account).where(
-                    Account.id == account_id,
-                    Account.user_id == current_user.id,
-                )
-            )
-            if not acct_result.scalar_one_or_none():
-                raise HTTPException(status_code=404, detail="Account not found")
 
             exchange = await get_exchange_client_for_account(db, account_id)
             if exchange:

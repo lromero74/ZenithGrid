@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.158.10",
+  "version": "v2.158.11",
   "updated": "2026-04-03",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "split_files": {
@@ -51,7 +51,7 @@
     "description": "All user-facing API endpoints scope queries by current_user.id or their account IDs. Background services process all users intentionally but with per-account isolation.",
     "ownership_chain": "User -> Account(s) -> Bot(s) -> Position(s) -> Trade(s)",
     "patterns": {
-      "router_queries": "Filter by user_account_ids: select(Account.id).where(Account.user_id == current_user.id), then Position.account_id.in_(user_account_ids)",
+      "router_queries": "Filter by user_account_ids: select(Account.id).where(Account.user_id == current_user.id), then Position.account_id.in_(user_account_ids). Endpoints that support shared account members use accessible_accounts_filter(user_id) from app.services.account_access, which matches accounts where the user is the owner OR an active member; this prevents 404s for members and is preferred over strict user_id==current_user.id ownership checks.",
       "position_ownership": "Helper function _get_user_position() in position_limit_orders_router.py verifies position belongs to user's accounts before any operation",
       "bot_ownership": "All bot queries include Bot.user_id == current_user.id; bot names are unique per-user via composite constraint uq_bot_user_name(user_id, name)",
       "websocket_scoping": "WebSocketManager stores (websocket, user_id) tuples; broadcast() filters by user_id so notifications only reach the owning user",

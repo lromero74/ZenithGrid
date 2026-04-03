@@ -23,6 +23,7 @@ from app.database import get_db
 from app.models import Account, Bot, User
 from app.models.trading import BotRebalancerGroup
 from app.multi_bot_monitor import is_rebalancer_gated, is_rebalancer_bot_overweight
+from app.services.account_access import accessible_accounts_filter
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ async def get_rebalancer_state(
     Returns all bots for the account grouped by quote currency,
     with existing rebalancer group settings merged in.
     """
-    # Verify account ownership
+    # Verify account access (owner or manager member)
     acc_q = await db.execute(
         select(Account).where(
             Account.id == account_id,
-            Account.user_id == current_user.id,
+            accessible_accounts_filter(current_user.id),
         )
     )
     if not acc_q.scalar_one_or_none():

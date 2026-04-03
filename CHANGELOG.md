@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.11] - 2026-04-03
+
+### Fixed
+- **Bots page: 500 error on products for shared/paper accounts** — The `/api/products` endpoint was wrapping its entire body in a broad `try/except` that swallowed the 404 `HTTPException` from the account ownership check and re-raised it as a 500. Fixed by moving the access check outside the try block. Also updated the check to use the `accessible_accounts_filter` so member accounts (including Demo BTC Paper) work correctly.
+- **Bots page: 404 on rebalancer for shared accounts** — The rebalancer endpoint (`GET /api/bots/rebalancer`) used a strict owner-only query, rejecting accounts accessible via membership. Updated to use `accessible_accounts_filter` so managers and account members can view the rebalancer state.
+- **Bot form: "worst case minimum" always 405** — Frontend was calling `POST /api/bot-validation/get-worst-case-minimum` but the endpoint is mounted at `/api/bots/get-worst-case-minimum`. Fixed the URL in `api.ts`.
+
 ## [v2.158.10] - 2026-04-03
 
 ### Fixed
