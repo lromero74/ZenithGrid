@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ResponsiveContainer, AreaChart, Area, YAxis } from 'recharts'
+import { AreaChart, Area, YAxis } from 'recharts'
 
 interface SparklineProps {
   data: number[]
@@ -9,22 +9,27 @@ interface SparklineProps {
 }
 
 export function Sparkline({ data, color, height = 54, timeLabel }: SparklineProps) {
-  // Defer chart render by two frames after data first becomes available.
-  // The previous approach deferred on mount, but data often arrives later (React Query),
-  // at which point some carousel cards are off-screen and measure as 0/-1 dimensions.
-  // We defer from when data first arrives instead, and only once (subsequent updates render immediately).
-  const [ready, setReady] = useState(false)
-  const triggered = useRef(false)
+  // Measure the container's pixel width ourselves before rendering Recharts.
+  // ResponsiveContainer initializes its internal state to -1 and only updates after
+  // its own ResizeObserver fires, causing the "width(-1)/height(-1)" warning on every
+  // first render. By measuring the wrapper div directly and passing explicit pixel
+  // dimensions to AreaChart, we skip ResponsiveContainer entirely and eliminate the warning.
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
   const hasData = data != null && data.length >= 2
 
   useEffect(() => {
-    if (!hasData || triggered.current) return
-    triggered.current = true
-    let cancelled = false
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { if (!cancelled) setReady(true) })
-    })
-    return () => { cancelled = true }
+    if (!hasData) return
+    const el = containerRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      if (w > 0) setWidth(w)
+    }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
   }, [hasData])
 
   if (!hasData) return null
@@ -33,27 +38,25 @@ export function Sparkline({ data, color, height = 54, timeLabel }: SparklineProp
 
   return (
     <div className="w-full">
-      <div className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
-        {ready && (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
-              <defs>
-                <linearGradient id={`spark-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={color} stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
-              <YAxis domain={['dataMin', 'dataMax']} hide />
-              <Area
-                type="monotone"
-                dataKey="v"
-                stroke={color}
-                strokeWidth={1.5}
-                fill={`url(#spark-${color.replace('#', '')})`}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div ref={containerRef} className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
+        {width > 0 && (
+          <AreaChart width={width} height={height} data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+            <defs>
+              <linearGradient id={`spark-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={color} stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <YAxis domain={['dataMin', 'dataMax']} hide />
+            <Area
+              type="monotone"
+              dataKey="v"
+              stroke={color}
+              strokeWidth={1.5}
+              fill={`url(#spark-${color.replace('#', '')})`}
+              isAnimationActive={false}
+            />
+          </AreaChart>
         )}
       </div>
       {timeLabel && <div className="text-[10px] text-slate-600 text-center mt-0.5">{timeLabel}</div>}

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.8] - 2026-04-03
+
+### Fixed
+- **Dashboard sparkline width(-1)/height(-1) warning fully eliminated** — The previous fix deferred chart rendering by two animation frames, but Recharts' `ResponsiveContainer` always initializes its internal state to -1 before its own ResizeObserver fires, so the warning still appeared on first render. Replaced `ResponsiveContainer` with direct container measurement: a `ResizeObserver` on the wrapper div passes explicit pixel dimensions to `AreaChart`, so the chart only renders when a real measured width is available.
+
 ## [v2.158.7] - 2026-04-03
 
 ### Fixed
