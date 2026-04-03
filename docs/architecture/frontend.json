@@ -577,7 +577,7 @@
         "NotificationProvider",
         "useNotifications"
       ],
-      "purpose": "WebSocket order fill notifications, toast alerts, audio"
+      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async — before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session)"
     },
     {
       "file": "contexts/VideoPlayerContext.tsx",

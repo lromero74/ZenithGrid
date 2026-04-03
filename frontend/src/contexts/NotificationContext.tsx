@@ -6,6 +6,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react'
 import { ToastContainer, ToastData, ToastType } from '../components/shared/Toast'
 import { useAudio, OrderFillType } from '../hooks/useAudio'
+import { tryRefreshToken } from '../services/api'
 
 interface OrderFillEvent {
   type: 'order_fill'
@@ -221,12 +222,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   }, [addToast, audioEnabled, playOrderSound])
 
   // Connect to WebSocket
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     // Determine WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const token = localStorage.getItem('auth_access_token')
-    const wsUrl = token ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}` : `${protocol}//${host}/ws`
+
+    // Check if the access token is expired before connecting.
+    // If it is, try a silent refresh first so we don't open a socket that
+    // the backend will immediately reject (avoids console error spam).
+    let token = localStorage.getItem('auth_access_token')
+    const expiry = parseInt(localStorage.getItem('auth_token_expiry') || '0')
+    if (!token || Date.now() >= expiry) {
+      token = await tryRefreshToken()
+      if (!token) {
+        // No valid token — user is logged out or refresh failed; don't connect
+        return
+      }
+    }
+
+    const wsUrl = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
 
     console.debug('Connecting to notification WebSocket')
 

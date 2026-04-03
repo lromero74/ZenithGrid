@@ -50,8 +50,9 @@ function forceLogout() {
 /**
  * Attempt to refresh the access token using the stored refresh token.
  * Returns the new access token on success, null on failure.
+ * Exported for use by non-axios callers (e.g. WebSocket connection logic).
  */
-async function tryRefreshToken(): Promise<string | null> {
+export async function tryRefreshToken(): Promise<string | null> {
   const refreshToken = localStorage.getItem('auth_refresh_token');
   if (!refreshToken) return null;
 

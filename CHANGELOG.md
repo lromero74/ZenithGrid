@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.14] - 2026-04-03
+
+### Fixed
+- **WebSocket reconnect no longer spams console errors when the access token is expired** — After a 30-minute session without a page reload, the JWT in the WebSocket URL could expire (e.g. if the browser tab was throttled or the auto-refresh timer fired late). The reconnect now checks token expiry first and silently refreshes it before opening the socket. If the refresh fails the socket is simply not reopened until the user logs back in.
+
 ## [v2.158.13] - 2026-04-03
 
 ### Added
