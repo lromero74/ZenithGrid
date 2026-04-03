@@ -22,13 +22,16 @@ logger = logging.getLogger(__name__)
 async def get_public_prices() -> dict:
     """Fetch current prices from public Coinbase API (no auth needed)."""
     from app.coinbase_api import public_market_data
-    prices = {}
-    for product_id in ("BTC-USD", "ETH-USD", "USDC-USD", "USDT-USD"):
-        try:
-            prices[product_id] = float(await public_market_data.get_current_price(product_id))
-        except Exception:
-            prices[product_id] = 1.0 if product_id in ("USDC-USD", "USDT-USD") else 0.0
-    return prices
+    try:
+        all_products = await public_market_data.list_products()
+        bulk = {p.get("product_id", ""): float(p.get("price") or 0) for p in all_products}
+    except Exception:
+        bulk = {}
+    stables = {"USDC-USD", "USDT-USD"}
+    return {
+        pid: bulk.get(pid, 1.0 if pid in stables else 0.0)
+        for pid in ("BTC-USD", "ETH-USD", "USDC-USD", "USDT-USD")
+    }
 
 
 def compute_allocation(
@@ -112,27 +115,23 @@ async def _compute_paper_balances(
     if not altcoins:
         return balances
 
-    # Fetch all altcoin prices in parallel
-    async def _safe_price(pair: str) -> float:
-        try:
-            return float(await public_market_data.get_current_price(pair))
-        except Exception:
-            return 0.0
+    # Fetch all prices in bulk (single API call, cached 1hr) — avoids N sequential
+    # rate-limited ticker calls which cause timeouts on accounts with many altcoins.
+    try:
+        all_products = await public_market_data.list_products()
+        bulk_prices = {
+            p.get("product_id", ""): float(p.get("price") or 0)
+            for p in all_products
+        }
+    except Exception:
+        bulk_prices = {}
 
-    primary_pairs = [f"{cur}-{quote}" for cur, _, quote in altcoins]
-    primary_rates = await asyncio.gather(*[_safe_price(p) for p in primary_pairs])
+    primary_rates = [bulk_prices.get(f"{cur}-{quote}", 0.0) for cur, _, quote in altcoins]
 
-    # Fetch USD fallbacks in parallel for any that returned 0 with a non-USD quote
-    fallback_needed = [
-        (i, cur, amt) for i, ((cur, amt, quote), rate) in enumerate(zip(altcoins, primary_rates))
-        if rate == 0.0 and quote != "USD"
-    ]
-    if fallback_needed:
-        fallback_rates = await asyncio.gather(*[
-            _safe_price(f"{cur}-USD") for _, cur, _ in fallback_needed
-        ])
-        for (i, _, _), fb_rate in zip(fallback_needed, fallback_rates):
-            primary_rates[i] = fb_rate  # 0.0 if both failed — omitted from total
+    # Fallback to USD pair for any that returned 0 with a non-USD quote
+    for i, (cur, _amt, quote) in enumerate(altcoins):
+        if primary_rates[i] == 0.0 and quote != "USD":
+            primary_rates[i] = bulk_prices.get(f"{cur}-USD", 0.0)
 
     # Fold priced altcoins into quote-currency buckets
     for (currency, amount, quote), rate in zip(altcoins, primary_rates):
@@ -160,27 +159,32 @@ async def _compute_live_balances(
         except Exception:
             return fallback
 
-    async def _safe_price(product_id: str, fallback: float = 0.0) -> float:
-        try:
-            return float(await coinbase.get_current_price(product_id))
-        except Exception:
-            return fallback
-
-    # Fetch all balances and prices in parallel
+    # Fetch all balances in parallel and all prices via single bulk API call
+    # (bulk list_products is cached 1hr; avoids N sequential rate-limited ticker calls)
+    from app.coinbase_api import public_market_data as pmd
     (
-        usd_bal, btc_bal, eth_bal, usdc_bal, usdt_bal,
-        btc_price, eth_price, usdc_price, usdt_price,
+        usd_bal, btc_bal, eth_bal, usdc_bal, usdt_bal, all_products,
     ) = await asyncio.gather(
         _safe_balance(coinbase.get_usd_balance),
         _safe_balance(coinbase.get_btc_balance),
         _safe_balance(coinbase.get_eth_balance),
         _safe_balance(coinbase.get_usdc_balance),
         _safe_balance(coinbase.get_usdt_balance),
-        _safe_price("BTC-USD"),
-        _safe_price("ETH-USD"),
-        _safe_price("USDC-USD", fallback=1.0),
-        _safe_price("USDT-USD", fallback=1.0),
+        pmd.list_products(),
     )
+
+    bulk_prices = {
+        p.get("product_id", ""): float(p.get("price") or 0)
+        for p in (all_products or [])
+    }
+
+    def _bulk_price(product_id: str, fallback: float = 0.0) -> float:
+        return bulk_prices.get(product_id, fallback)
+
+    btc_price = _bulk_price("BTC-USD")
+    eth_price = _bulk_price("ETH-USD")
+    usdc_price = _bulk_price("USDC-USD", fallback=1.0)
+    usdt_price = _bulk_price("USDT-USD", fallback=1.0)
 
     balances = {"USD": usd_bal, "BTC": btc_bal, "ETH": eth_bal, "USDC": usdc_bal, "USDT": usdt_bal}
     prices = {"BTC-USD": btc_price, "ETH-USD": eth_price, "USDC-USD": usdc_price, "USDT-USD": usdt_price}
@@ -188,8 +192,6 @@ async def _compute_live_balances(
     # Add open position market values to their quote-currency bucket
     open_positions = await _get_open_positions(db, account.id)
 
-    # Collect valid positions needing price lookups
-    valid_positions = []
     for pos in open_positions:
         pid = pos.product_id or ""
         parts = pid.split("-") if pid else []
@@ -198,26 +200,10 @@ async def _compute_live_balances(
         base_qty = pos.total_base_acquired or 0.0
         if base_qty <= 0:
             continue
-        valid_positions.append((pos, pid, parts[1]))  # (pos, pid, quote_cur)
-
-    if valid_positions:
-        # Fetch all position prices in parallel
-        async def _safe_position_price(pid: str, fallback: float) -> float:
-            try:
-                return float(await coinbase.get_current_price(pid))
-            except Exception:
-                return fallback
-
-        position_prices = await asyncio.gather(*[
-            _safe_position_price(pid, pos.entry_price or 0.0)
-            for pos, pid, _ in valid_positions
-        ])
-
-        for (pos, pid, quote_cur), price_val in zip(valid_positions, position_prices):
-            base_qty = pos.total_base_acquired or 0.0
-            position_value = base_qty * price_val
-            if quote_cur in balances:
-                balances[quote_cur] = balances.get(quote_cur, 0.0) + position_value
+        quote_cur = parts[1]
+        price_val = _bulk_price(pid, fallback=pos.entry_price or 0.0)
+        if quote_cur in balances:
+            balances[quote_cur] = balances.get(quote_cur, 0.0) + base_qty * price_val
 
     return balances, prices
 

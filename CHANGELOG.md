@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.158.5] - 2026-04-03
+
+### Fixed
+- **Dust sweep and rebalance status endpoints no longer time out** — The v2.158.2 parallel-fetch fix used `asyncio.gather()` over individual ticker calls, but those calls go through a 200ms rate-limiter lock that serializes them regardless of concurrency. An account with 40 altcoins would still wait 8+ seconds minimum. Both endpoints now use a single bulk `list_products()` call (cached 1 hour, returns all ~500 products with current prices) — pricing 40 coins now takes milliseconds instead of up to 45 seconds.
+
 ## [v2.158.4] - 2026-04-03
 
 ### Fixed

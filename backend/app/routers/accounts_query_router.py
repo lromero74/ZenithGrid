@@ -7,7 +7,6 @@ Read-only operations for trading accounts:
 - Settings reads (auto-buy, rebalance, dust sweep, perps)
 """
 
-import asyncio
 import json
 import logging
 import time
@@ -841,25 +840,24 @@ async def get_dust_sweep_settings(
             reverse=True,
         )[:40]
 
-        # Fetch missing prices in parallel for altcoins not in the public prices cache
+        # Enrich price map from bulk product list (single API call, cached 1hr)
+        # This avoids N sequential rate-limited ticker calls that cause timeouts.
         missing_price_coins = [
             coin for coin, _ in altcoins if prices.get(f"{coin}-USD", 0.0) <= 0
         ]
         if missing_price_coins:
-            async def _safe_altcoin_price(coin: str) -> float:
-                try:
-                    return float(
-                        await public_market_data.get_current_price(f"{coin}-USD")
-                    )
-                except Exception:
-                    return 0.0
-
-            fetched_prices = await asyncio.gather(*[
-                _safe_altcoin_price(coin) for coin in missing_price_coins
-            ])
-            for coin, price in zip(missing_price_coins, fetched_prices):
-                if price > 0:
-                    prices[f"{coin}-USD"] = price
+            try:
+                all_products = await public_market_data.list_products()
+                bulk_prices = {
+                    p.get("product_id", ""): float(p.get("price") or 0)
+                    for p in all_products
+                }
+                for coin in missing_price_coins:
+                    price = bulk_prices.get(f"{coin}-USD", 0.0)
+                    if price > 0:
+                        prices[f"{coin}-USD"] = price
+            except Exception:
+                pass
 
         for coin, amount in altcoins:
             usd_price = prices.get(f"{coin}-USD", 0.0)

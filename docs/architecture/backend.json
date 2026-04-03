@@ -1372,7 +1372,7 @@
     },
     {
       "file": "services/rebalance_service.py",
-      "purpose": "Pure business logic for computing portfolio allocation percentages, reserve values, and deployable pools; extracted from accounts_router.py",
+      "purpose": "Pure business logic for computing portfolio allocation percentages, reserve values, and deployable pools; uses bulk list_products() pricing (cached 1hr) instead of per-asset ticker calls; extracted from accounts_router.py",
       "type": "trading"
     },
     {
