@@ -39,7 +39,18 @@ from typing import Any, Dict, List, Optional
 
 from app.indicator_calculator import IndicatorCalculator
 
+# Import the tools package so tools self-register in REGISTRY.
+from app.indicators.ai_tools import REGISTRY as TOOL_REGISTRY  # noqa: F401
+from app.indicators.ai_tools import (
+    ToolContext,
+    execute as execute_tool,
+    get_schemas_for,
+)
+
 logger = logging.getLogger(__name__)
+
+# Cap the Claude tool-use loop. Each iteration = 1 LLM call + N parallel tool calls.
+MAX_TOOL_TURNS = 4
 
 
 @dataclass
@@ -313,7 +324,7 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             return "hold", 0, f"LLM error: {str(e)}"
 
     async def _call_claude(self, prompt: str, api_key: str) -> str:
-        """Call Claude API with user's API key."""
+        """Call Claude API with user's API key (single-shot, no tools)."""
         from anthropic import AsyncAnthropic
 
         if not api_key:
@@ -328,6 +339,84 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
         )
 
         return response.content[0].text
+
+    async def _call_claude_with_tools(
+        self,
+        prompt: str,
+        api_key: str,
+        tool_ctx: ToolContext,
+        enabled_tools: List[str],
+    ) -> tuple[str, List[Dict[str, Any]]]:
+        """
+        Run Claude's tool-use loop. Returns (final_text, tool_calls_log).
+
+        Each iteration:
+          1. Call messages.create with tools=[...] and the running message history.
+          2. If stop_reason == "tool_use", execute each tool_use block,
+             append tool_result blocks, and continue.
+          3. Otherwise return the final text block.
+
+        Capped at MAX_TOOL_TURNS. After the cap, we drop tools= to force a final
+        response so we never get stuck in a loop.
+        """
+        from anthropic import AsyncAnthropic
+
+        if not api_key:
+            raise ValueError("Claude API key not configured for this user")
+
+        client = AsyncAnthropic(api_key=api_key)
+        tool_schemas = get_schemas_for(enabled_tools)
+        messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
+        tool_calls_log: List[Dict[str, Any]] = []
+
+        for turn in range(MAX_TOOL_TURNS + 1):
+            # On the final turn, drop tools= to force a text response.
+            kwargs: Dict[str, Any] = {
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 2048,
+                "temperature": 0,
+                "messages": messages,
+            }
+            if tool_schemas and turn < MAX_TOOL_TURNS:
+                kwargs["tools"] = tool_schemas
+
+            response = await client.messages.create(**kwargs)
+
+            if response.stop_reason != "tool_use":
+                # Final response: collect first text block and return.
+                text = ""
+                for block in response.content:
+                    if getattr(block, "type", None) == "text":
+                        text = block.text
+                        break
+                return text, tool_calls_log
+
+            # Collect all tool_use blocks from this turn.
+            tool_uses = [b for b in response.content if getattr(b, "type", None) == "tool_use"]
+            tool_results_content: List[Dict[str, Any]] = []
+
+            for block in tool_uses:
+                name = block.name
+                tool_input = block.input or {}
+                output = await execute_tool(name, tool_input, tool_ctx)
+                output_json = json.dumps(output, default=str)
+                tool_results_content.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": output_json,
+                })
+                summary = output_json[:200]
+                tool_calls_log.append({
+                    "name": name,
+                    "input": tool_input,
+                    "output_summary": summary + ("…" if len(output_json) > 200 else ""),
+                })
+
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": tool_results_content})
+
+        # Loop exhausted without a final response — defensive fallback.
+        return "", tool_calls_log
 
     async def _call_openai(self, prompt: str, api_key: str) -> str:
         """Call OpenAI API with user's API key."""
@@ -374,7 +463,10 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
         db: Any,
         user_id: int,
         params: Optional[AISpotOpinionParams] = None,
-        is_sell_check: bool = False
+        is_sell_check: bool = False,
+        bot: Optional[Any] = None,
+        account_id: Optional[int] = None,
+        position: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Main evaluation function.
@@ -440,22 +532,41 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
                     "metrics": metrics
                 }
 
-        # Ask LLM for opinion
-        signal, confidence, reasoning = await self._call_llm(
-            db=db,
-            user_id=user_id,
-            product_id=product_id,
-            metrics=metrics,
-            ai_model=params.ai_model,
-            is_sell_check=is_sell_check
+        # Decide whether to run the Claude tool-use loop or the single-shot path.
+        use_tools = (
+            params.ai_model.lower() == "claude"
+            and account_id is not None
         )
+
+        tool_calls: List[Dict[str, Any]] = []
+        if use_tools:
+            signal, confidence, reasoning, tool_calls = await self._call_claude_tools_path(
+                db=db,
+                user_id=user_id,
+                product_id=product_id,
+                current_price=current_price,
+                metrics=metrics,
+                is_sell_check=is_sell_check,
+                bot=bot,
+                account_id=account_id,
+                position=position,
+            )
+        else:
+            signal, confidence, reasoning = await self._call_llm(
+                db=db,
+                user_id=user_id,
+                product_id=product_id,
+                metrics=metrics,
+                ai_model=params.ai_model,
+                is_sell_check=is_sell_check,
+            )
 
         # Update last check timestamp
         self._update_last_check(product_id, params.ai_timeframe)
 
         logger.info(
             f"AI Opinion for {product_id}: {signal.upper()} "
-            f"(confidence: {confidence}%, reason: {reasoning})"
+            f"(confidence: {confidence}%, tools={len(tool_calls)}, reason: {reasoning})"
         )
 
         return {
@@ -463,5 +574,146 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             "confidence": confidence,
             "reasoning": reasoning,
             "prefilter_passed": prefilter_passed,
-            "metrics": metrics
+            "metrics": metrics,
+            "tool_calls": tool_calls,
         }
+
+    async def _call_claude_tools_path(
+        self,
+        db: Any,
+        user_id: int,
+        product_id: str,
+        current_price: float,
+        metrics: Dict[str, Any],
+        is_sell_check: bool,
+        bot: Optional[Any],
+        account_id: Optional[int],
+        position: Optional[Any],
+    ) -> tuple[str, int, str, List[Dict[str, Any]]]:
+        """Build prompt + context and run the Claude tool-use loop.
+
+        Parses the final JSON response and returns (signal, confidence, reasoning, tool_calls).
+        On any error, falls back to ("hold", 0, "<error>", []).
+        """
+        from app.services.ai_credential_service import get_user_api_key
+
+        api_key = await get_user_api_key(db, user_id, "claude")
+        if not api_key:
+            raise ValueError(
+                "No API key configured for claude. "
+                "Please add your CLAUDE API key in Settings."
+            )
+
+        # Decide which tools are enabled for this call.
+        enabled_tools: List[str] = ["get_portfolio_context"]
+        if position is not None or is_sell_check:
+            enabled_tools.insert(0, "get_position_context")
+
+        prompt = self._build_prompt(
+            product_id=product_id,
+            metrics=metrics,
+            is_sell_check=is_sell_check,
+            enabled_tools=enabled_tools,
+        )
+
+        tool_ctx = ToolContext(
+            db=db,
+            user_id=user_id,
+            product_id=product_id,
+            current_price=current_price,
+            bot=bot,
+            position=position,
+            account_id=account_id,
+            is_sell_check=is_sell_check,
+        )
+
+        try:
+            response_text, tool_calls = await self._call_claude_with_tools(
+                prompt=prompt,
+                api_key=api_key,
+                tool_ctx=tool_ctx,
+                enabled_tools=enabled_tools,
+            )
+            signal, confidence, reasoning = self._parse_llm_response(response_text)
+            return signal, confidence, reasoning, tool_calls
+        except Exception as e:
+            logger.error(f"Error in Claude tool-use path: {e}")
+            return "hold", 0, f"LLM error: {str(e)}", []
+
+    @staticmethod
+    def _build_prompt(
+        product_id: str,
+        metrics: Dict[str, Any],
+        is_sell_check: bool,
+        enabled_tools: Optional[List[str]] = None,
+    ) -> str:
+        """Shared prompt builder for single-shot and tool-use paths."""
+        action_type = "SELL" if is_sell_check else "BUY"
+        ma20_val = metrics.get("price_vs_ma20", 0)
+        ma50_val = metrics.get("price_vs_ma50", 0)
+        ma20_dir = "above" if ma20_val > 0 else "below"
+        ma50_dir = "above" if ma50_val > 0 else "below"
+        macd_str = (
+            "Bullish" if metrics.get("macd_bullish")
+            else "Bearish" if metrics.get("macd_bearish")
+            else "Neutral"
+        )
+
+        tools_section = ""
+        if enabled_tools:
+            tools_section = (
+                "\nYou have tools available to pull additional context. "
+                "Call a tool only if its information would change your decision — "
+                "do not call tools redundantly.\n"
+            )
+
+        return f"""You are a cryptocurrency trading AI analyzing {product_id}.
+
+Current Technical Metrics:
+- RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
+- MACD: {macd_str}
+- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
+- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
+- Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
+- Volume: {metrics.get('volume_ratio', 0):.2f}x average
+- 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
+{tools_section}
+Question: Should I {action_type} this position right now?
+
+Respond with ONLY valid JSON in this exact format:
+{{
+  "signal": "buy" or "sell" or "hold",
+  "confidence": 75,
+  "reasoning": "Brief 1-2 sentence explanation"
+}}
+
+Consider:
+- For BUYS: Is momentum building? Are indicators aligning? Is this a good entry?
+- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?
+
+Be decisive but realistic. Confidence should reflect conviction (0-100).
+"""
+
+    @staticmethod
+    def _parse_llm_response(response_text: str) -> tuple[str, int, str]:
+        """Parse the final JSON response from the LLM. Tolerates ```code blocks```."""
+        text = (response_text or "").strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:-1] if len(lines) > 2 else lines)
+
+        try:
+            data = json.loads(text)
+        except Exception as e:
+            logger.warning(f"Could not parse LLM JSON: {e} / raw={text!r}")
+            return "hold", 0, f"Parse error: {e}"
+
+        signal = str(data.get("signal", "hold")).lower()
+        confidence = int(data.get("confidence", 0))
+        reasoning = str(data.get("reasoning", "No reasoning provided"))
+
+        if signal not in ("buy", "sell", "hold"):
+            logger.warning(f"Invalid signal from LLM: {signal}, defaulting to hold")
+            signal = "hold"
+        confidence = max(0, min(100, confidence))
+        return signal, confidence, reasoning
