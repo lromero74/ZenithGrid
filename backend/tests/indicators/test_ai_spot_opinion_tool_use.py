@@ -1,26 +1,25 @@
-"""Tests for the Claude tool-use loop in AISpotOpinionEvaluator.
+"""Tests for evaluate() routing + Phase-A context injection in AISpotOpinionEvaluator.
 
-Covers:
-- Single tool turn — model requests one tool, then responds with JSON
-- Multi tool in single turn — model requests two tools in parallel
-- Cap reached — tool loop drops tools= on final turn to force text response
-- Tool raises — error surfaces as tool_result, model continues
-- Non-Claude model — evaluate() falls back to single-shot _call_llm
-- account_id absent — evaluate() falls back to single-shot _call_llm
+Phase B moved the provider-specific tool loops into app.indicators.ai_providers,
+so the direct Claude-loop tests now live in tests/indicators/ai_providers/. What
+remains here is the evaluator's responsibility:
+- evaluate() always goes single-shot through _call_llm in Phase A (no argument
+  tools exist yet → no reason to enter the provider tool loop)
+- _collect_auto_context pre-fetches portfolio + position for prompt injection
+- _build_prompt renders that context as a JSON block
+- Every provider receives the same context-injected prompt
 
-Uses importlib.util.spec_from_file_location to dodge the app.indicators.__init__
-circular-import chain, matching the pattern in test_ai_spot_opinion.py.
+Uses importlib.util.spec_from_file_location for the evaluator to stay consistent
+with test_ai_spot_opinion.py's loading pattern; the cycle it originally worked
+around is gone, but the direct-load approach still works.
 """
 
 import importlib.util
-import json
 import sys
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Load the evaluator module directly.
 _spec = importlib.util.spec_from_file_location(
     "app.indicators.ai_spot_opinion",
     "/home/ec2-user/ZenithGrid/backend/app/indicators/ai_spot_opinion.py",
@@ -33,8 +32,6 @@ AISpotOpinionEvaluator = _mod.AISpotOpinionEvaluator
 AISpotOpinionParams = _mod.AISpotOpinionParams
 
 from app.indicators.ai_tools import ToolContext  # noqa: E402
-
-_API_KEY_PATCH = "app.services.ai_credential_service.get_user_api_key"
 
 
 def _make_candles(count=60, base_price=100.0, volume=1500.0):
@@ -50,149 +47,8 @@ def _make_candles(count=60, base_price=100.0, volume=1500.0):
     ]
 
 
-def _text_block(text):
-    return SimpleNamespace(type="text", text=text)
-
-
-def _tool_use_block(id_, name, input_):
-    return SimpleNamespace(type="tool_use", id=id_, name=name, input=input_)
-
-
-def _response(stop_reason, content):
-    return SimpleNamespace(stop_reason=stop_reason, content=content)
-
-
-class TestToolUseLoop:
-    """Exercise _call_claude_with_tools directly with a mocked AsyncAnthropic."""
-
-    @pytest.mark.asyncio
-    async def test_single_tool_turn_parses_final_response(self):
-        evaluator = AISpotOpinionEvaluator()
-
-        final_json = json.dumps({"signal": "buy", "confidence": 80, "reasoning": "ok"})
-        scripted = [
-            _response("tool_use", [_tool_use_block("u1", "get_portfolio_context", {})]),
-            _response("end_turn", [_text_block(final_json)]),
-        ]
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(side_effect=scripted)
-
-        ctx = ToolContext(
-            db=MagicMock(), user_id=1, product_id="ETH-USD",
-            current_price=100.0, account_id=1,
-        )
-
-        with patch.object(_mod, "execute_tool",
-                          new_callable=AsyncMock, return_value={"other_open_positions": []}):
-            with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, tool_calls = await evaluator._call_claude_with_tools(
-                    prompt="prompt", api_key="sk-test", tool_ctx=ctx,
-                    enabled_tools=["get_portfolio_context"],
-                )
-
-        assert text == final_json
-        assert len(tool_calls) == 1
-        assert tool_calls[0]["name"] == "get_portfolio_context"
-        assert mock_client.messages.create.await_count == 2
-
-    @pytest.mark.asyncio
-    async def test_multi_tool_single_turn(self):
-        evaluator = AISpotOpinionEvaluator()
-        final_json = json.dumps({"signal": "hold", "confidence": 50, "reasoning": "mixed"})
-        scripted = [
-            _response("tool_use", [
-                _tool_use_block("u1", "get_position_context", {}),
-                _tool_use_block("u2", "get_portfolio_context", {}),
-            ]),
-            _response("end_turn", [_text_block(final_json)]),
-        ]
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(side_effect=scripted)
-
-        ctx = ToolContext(
-            db=MagicMock(), user_id=1, product_id="ETH-USD",
-            current_price=100.0, account_id=1,
-        )
-
-        with patch.object(_mod, "execute_tool",
-                          new_callable=AsyncMock, return_value={"ok": True}):
-            with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, tool_calls = await evaluator._call_claude_with_tools(
-                    prompt="p", api_key="sk-test", tool_ctx=ctx,
-                    enabled_tools=["get_position_context", "get_portfolio_context"],
-                )
-
-        assert text == final_json
-        assert {tc["name"] for tc in tool_calls} == {
-            "get_position_context", "get_portfolio_context",
-        }
-
-    @pytest.mark.asyncio
-    async def test_tool_loop_cap_forces_final_response(self):
-        """After MAX_TOOL_TURNS, tools are dropped so the model must respond."""
-        evaluator = AISpotOpinionEvaluator()
-        # Model keeps asking for tools on every turn; last call must NOT include tools=.
-        scripted = [
-            _response("tool_use", [_tool_use_block(f"u{i}", "get_portfolio_context", {})])
-            for i in range(_mod.MAX_TOOL_TURNS)
-        ]
-        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": "capped"})
-        scripted.append(_response("end_turn", [_text_block(final_json)]))
-
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(side_effect=scripted)
-
-        ctx = ToolContext(
-            db=MagicMock(), user_id=1, product_id="ETH-USD",
-            current_price=100.0, account_id=1,
-        )
-
-        with patch.object(_mod, "execute_tool",
-                          new_callable=AsyncMock, return_value={"ok": True}):
-            with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, _ = await evaluator._call_claude_with_tools(
-                    prompt="p", api_key="sk-test", tool_ctx=ctx,
-                    enabled_tools=["get_portfolio_context"],
-                )
-
-        assert text == final_json
-        # Last call's kwargs should NOT contain tools=
-        last_call = mock_client.messages.create.await_args_list[-1]
-        assert "tools" not in last_call.kwargs
-
-    @pytest.mark.asyncio
-    async def test_tool_error_returned_to_model_as_tool_result(self):
-        """Tool failures become {"error": ...} in the tool_result. Loop continues."""
-        evaluator = AISpotOpinionEvaluator()
-        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": "no-op"})
-        scripted = [
-            _response("tool_use", [_tool_use_block("u1", "get_portfolio_context", {})]),
-            _response("end_turn", [_text_block(final_json)]),
-        ]
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(side_effect=scripted)
-
-        ctx = ToolContext(
-            db=MagicMock(), user_id=1, product_id="ETH-USD",
-            current_price=100.0, account_id=1,
-        )
-
-        # Our execute_tool catches exceptions inside tools — patch it to simulate
-        # an error return directly.
-        with patch.object(_mod, "execute_tool",
-                          new_callable=AsyncMock, return_value={"error": "boom"}):
-            with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, tool_calls = await evaluator._call_claude_with_tools(
-                    prompt="p", api_key="sk-test", tool_ctx=ctx,
-                    enabled_tools=["get_portfolio_context"],
-                )
-
-        assert text == final_json
-        assert tool_calls[0]["output_summary"].startswith('{"error":')
-
-
 class TestEvaluateRouting:
-    """evaluate() should always go single-shot in Phase A (no argument-taking tools yet)."""
+    """evaluate() always goes single-shot in Phase A — no argument-taking tools exist yet."""
 
     @pytest.mark.asyncio
     async def test_gpt_model_goes_single_shot(self):
@@ -201,16 +57,13 @@ class TestEvaluateRouting:
 
         with patch.object(evaluator, "_call_llm",
                           new_callable=AsyncMock, return_value=("buy", 70, "r")) as single_shot:
-            with patch.object(evaluator, "_call_claude_tools_path",
-                              new_callable=AsyncMock) as tools_path:
-                result = await evaluator.evaluate(
-                    candles=_make_candles(60), current_price=100.0,
-                    product_id="BTC-USD", db=MagicMock(), user_id=1,
-                    params=params, is_sell_check=False, account_id=1,
-                )
+            result = await evaluator.evaluate(
+                candles=_make_candles(60), current_price=100.0,
+                product_id="BTC-USD", db=MagicMock(), user_id=1,
+                params=params, is_sell_check=False, account_id=1,
+            )
 
         single_shot.assert_awaited_once()
-        tools_path.assert_not_awaited()
         assert result["tool_calls"] == []
         assert result["signal"] == "buy"
 
@@ -221,36 +74,31 @@ class TestEvaluateRouting:
 
         with patch.object(evaluator, "_call_llm",
                           new_callable=AsyncMock, return_value=("hold", 50, "r")) as single_shot:
-            with patch.object(evaluator, "_call_claude_tools_path",
-                              new_callable=AsyncMock) as tools_path:
-                await evaluator.evaluate(
-                    candles=_make_candles(60), current_price=100.0,
-                    product_id="BTC-USD", db=MagicMock(), user_id=1,
-                    params=params, is_sell_check=False, account_id=None,
-                )
+            await evaluator.evaluate(
+                candles=_make_candles(60), current_price=100.0,
+                product_id="BTC-USD", db=MagicMock(), user_id=1,
+                params=params, is_sell_check=False, account_id=None,
+            )
 
         single_shot.assert_awaited_once()
-        tools_path.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_claude_with_account_id_goes_single_shot_with_context(self):
-        """Phase A: no argument-taking tools exist, so even Claude+account_id runs single-shot.
+        """Phase A: no argument-taking tools exist, so Claude+account_id still runs single-shot.
         Context is pre-injected into the prompt via _collect_auto_context."""
         evaluator = AISpotOpinionEvaluator()
         params = AISpotOpinionParams(ai_model="claude", enable_buy_prefilter=False)
 
         with patch.object(evaluator, "_call_llm",
-                          new_callable=AsyncMock, return_value=("buy", 82, "great setup")) as single_shot:
-            with patch.object(evaluator, "_call_claude_tools_path",
-                              new_callable=AsyncMock) as tools_path:
-                result = await evaluator.evaluate(
-                    candles=_make_candles(60), current_price=100.0,
-                    product_id="BTC-USD", db=MagicMock(), user_id=1,
-                    params=params, is_sell_check=False, account_id=42,
-                )
+                          new_callable=AsyncMock,
+                          return_value=("buy", 82, "great setup")) as single_shot:
+            result = await evaluator.evaluate(
+                candles=_make_candles(60), current_price=100.0,
+                product_id="BTC-USD", db=MagicMock(), user_id=1,
+                params=params, is_sell_check=False, account_id=42,
+            )
 
         single_shot.assert_awaited_once()
-        tools_path.assert_not_awaited()
         assert result["signal"] == "buy"
         assert result["confidence"] == 82
 
@@ -273,7 +121,6 @@ class TestContextInjection:
 
         assert "portfolio" in context
         assert context["portfolio"] == {"open_position_count_total": 3}
-        # Portfolio tool got called; position tool did not (no position, not a sell check).
         called_names = {c.args[0] for c in tool.await_args_list}
         assert "get_portfolio_context" in called_names
         assert "get_position_context" not in called_names
@@ -384,8 +231,7 @@ class TestContextInjection:
                     return portfolio_payload
                 return {"error": "unexpected"}
 
-            async def fake_call_llm(*, db, user_id, product_id, metrics, ai_model, is_sell_check,
-                                    tool_ctx=None, prompt=None):
+            async def fake_call_llm(*, db, user_id, ai_model, prompt, tool_ctx=None):
                 captured["prompt"] = prompt
                 return "hold", 0, "ok"
 

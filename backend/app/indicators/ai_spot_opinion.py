@@ -32,7 +32,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -63,12 +62,17 @@ async def execute_tool(name: str, input: Dict[str, Any], ctx: "ToolContext") -> 
     return await _tools_module().execute(name, input, ctx)
 
 
-def get_schemas_for(names: List[str]) -> List[Dict[str, Any]]:
-    return _tools_module().get_schemas_for(names)
+# The UI-facing `ai_model` string the user picks is distinct from the credential
+# slug used to look up their API key (e.g. "gpt" → stored under "openai").
+_CREDENTIAL_NAMES = {"claude": "claude", "gpt": "openai", "openai": "openai", "gemini": "gemini"}
 
 
-# Cap the Claude tool-use loop. Each iteration = 1 LLM call + N parallel tool calls.
-MAX_TOOL_TURNS = 4
+def _credential_name_for(ai_model: str) -> str:
+    key = (ai_model or "").lower()
+    try:
+        return _CREDENTIAL_NAMES[key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown AI model: {ai_model}") from exc
 
 
 @dataclass
@@ -235,57 +239,34 @@ class AISpotOpinionEvaluator:
         *,
         db: Any,
         user_id: int,
-        product_id: str,
-        metrics: Dict[str, Any],
         ai_model: str,
-        is_sell_check: bool,
+        prompt: str,
         tool_ctx: Optional["ToolContext"] = None,
-        prompt: Optional[str] = None,
     ) -> tuple[str, int, str]:
-        """Single-shot LLM call. Returns (signal, confidence, reasoning).
+        """Single-shot LLM call via the provider adapter.
 
-        If `prompt` is None, builds one from metrics + context auto-fetched from
-        `tool_ctx`. Callers that already built a prompt (e.g. evaluate()) should
-        pass it in to avoid duplicate context fetches.
+        Returns (signal, confidence, reasoning). Runs `provider.call_with_tools`
+        with `tools=[]`, which short-circuits after one request — we get a text
+        response back, no tool loop. Phase A context is already baked into
+        `prompt` by the caller (evaluate()).
         """
+        from app.indicators.ai_providers import get_provider
         from app.services.ai_credential_service import get_user_api_key
 
-        provider_map = {
-            "claude": "claude",
-            "gpt": "openai",
-            "openai": "openai",
-            "gemini": "gemini",
-        }
-        provider = provider_map.get(ai_model.lower())
-        if not provider:
-            raise ValueError(f"Unknown AI model: {ai_model}")
-
-        api_key = await get_user_api_key(db, user_id, provider)
+        credential_name = _credential_name_for(ai_model)
+        api_key = await get_user_api_key(db, user_id, credential_name)
         if not api_key:
             raise ValueError(
-                f"No API key configured for {provider}. "
-                f"Please add your {provider.upper()} API key in Settings."
-            )
-
-        if prompt is None:
-            context = await self._collect_auto_context(tool_ctx) if tool_ctx else {}
-            prompt = self._build_prompt(
-                product_id=product_id,
-                metrics=metrics,
-                is_sell_check=is_sell_check,
-                context=context,
+                f"No API key configured for {credential_name}. "
+                f"Please add your {credential_name.upper()} API key in Settings."
             )
 
         try:
-            if ai_model == "claude":
-                response_text = await self._call_claude(prompt, api_key)
-            elif ai_model in ("gpt", "openai"):
-                response_text = await self._call_openai(prompt, api_key)
-            elif ai_model == "gemini":
-                response_text = await self._call_gemini(prompt, api_key)
-            else:
-                raise ValueError(f"Unknown AI model: {ai_model}")
-            return self._parse_llm_response(response_text)
+            provider = get_provider(ai_model, api_key=api_key)
+            text, _ = await provider.call_with_tools(
+                system=None, user=prompt, tools=[], tool_ctx=tool_ctx, max_turns=1,
+            )
+            return self._parse_llm_response(text)
         except Exception as e:
             logger.error(f"Error calling LLM ({ai_model}): {e}")
             return "hold", 0, f"LLM error: {str(e)}"
@@ -294,10 +275,9 @@ class AISpotOpinionEvaluator:
         """Pre-fetch portfolio + position context for prompt injection.
 
         Both tools are called directly (no tool-use loop) and their outputs are
-        packed into a dict the caller can render into the prompt. This is what
-        gives non-Claude providers feature parity with Claude for static context
-        in Phase A — the Claude tool loop is reserved for argument-taking tools
-        added in Phase C.
+        packed into a dict the caller can render into the prompt. This gives
+        every provider feature parity for static context in Phase A — the real
+        provider tool loop is reserved for argument-taking tools added in Phase C.
         """
         if tool_ctx is None:
             return {}
@@ -308,138 +288,6 @@ class AISpotOpinionEvaluator:
         if tool_ctx.position is not None or tool_ctx.is_sell_check:
             context["position"] = await execute_tool("get_position_context", {}, tool_ctx)
         return context
-
-    async def _call_claude(self, prompt: str, api_key: str) -> str:
-        """Call Claude API with user's API key (single-shot, no tools)."""
-        from anthropic import AsyncAnthropic
-
-        if not api_key:
-            raise ValueError("Claude API key not configured for this user")
-
-        client = AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.content[0].text
-
-    async def _call_claude_with_tools(
-        self,
-        prompt: str,
-        api_key: str,
-        tool_ctx: ToolContext,
-        enabled_tools: List[str],
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        """
-        Run Claude's tool-use loop. Returns (final_text, tool_calls_log).
-
-        Each iteration:
-          1. Call messages.create with tools=[...] and the running message history.
-          2. If stop_reason == "tool_use", execute each tool_use block,
-             append tool_result blocks, and continue.
-          3. Otherwise return the final text block.
-
-        Capped at MAX_TOOL_TURNS. After the cap, we drop tools= to force a final
-        response so we never get stuck in a loop.
-        """
-        from anthropic import AsyncAnthropic
-
-        if not api_key:
-            raise ValueError("Claude API key not configured for this user")
-
-        client = AsyncAnthropic(api_key=api_key)
-        tool_schemas = get_schemas_for(enabled_tools)
-        messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
-        tool_calls_log: List[Dict[str, Any]] = []
-
-        for turn in range(MAX_TOOL_TURNS + 1):
-            # On the final turn, drop tools= to force a text response.
-            kwargs: Dict[str, Any] = {
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 2048,
-                "temperature": 0,
-                "messages": messages,
-            }
-            if tool_schemas and turn < MAX_TOOL_TURNS:
-                kwargs["tools"] = tool_schemas
-
-            response = await client.messages.create(**kwargs)
-
-            if response.stop_reason != "tool_use":
-                # Final response: collect first text block and return.
-                text = ""
-                for block in response.content:
-                    if getattr(block, "type", None) == "text":
-                        text = block.text
-                        break
-                return text, tool_calls_log
-
-            # Collect all tool_use blocks from this turn.
-            tool_uses = [b for b in response.content if getattr(b, "type", None) == "tool_use"]
-            tool_results_content: List[Dict[str, Any]] = []
-
-            for block in tool_uses:
-                name = block.name
-                tool_input = block.input or {}
-                output = await execute_tool(name, tool_input, tool_ctx)
-                output_json = json.dumps(output, default=str)
-                tool_results_content.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output_json,
-                })
-                summary = output_json[:200]
-                tool_calls_log.append({
-                    "name": name,
-                    "input": tool_input,
-                    "output_summary": summary + ("…" if len(output_json) > 200 else ""),
-                })
-
-            messages.append({"role": "assistant", "content": response.content})
-            messages.append({"role": "user", "content": tool_results_content})
-
-        # Loop exhausted without a final response — defensive fallback.
-        return "", tool_calls_log
-
-    async def _call_openai(self, prompt: str, api_key: str) -> str:
-        """Call OpenAI API with user's API key."""
-        from openai import AsyncOpenAI
-
-        if not api_key:
-            raise ValueError("OpenAI API key not configured for this user")
-
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=1024,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.choices[0].message.content or ""
-
-    async def _call_gemini(self, prompt: str, api_key: str) -> str:
-        """Call Google Gemini API with user's API key."""
-        import google.generativeai as genai
-
-        if not api_key:
-            raise ValueError("Gemini API key not configured for this user")
-
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0,
-                max_output_tokens=1024,
-            )
-        )
-
-        return response.text
 
     async def evaluate(
         self,
@@ -543,12 +391,9 @@ class AISpotOpinionEvaluator:
         signal, confidence, reasoning = await self._call_llm(
             db=db,
             user_id=user_id,
-            product_id=product_id,
-            metrics=metrics,
             ai_model=params.ai_model,
-            is_sell_check=is_sell_check,
-            tool_ctx=tool_ctx,
             prompt=prompt,
+            tool_ctx=tool_ctx,
         )
         tool_calls: List[Dict[str, Any]] = []
 
@@ -568,69 +413,6 @@ class AISpotOpinionEvaluator:
             "metrics": metrics,
             "tool_calls": tool_calls,
         }
-
-    async def _call_claude_tools_path(
-        self,
-        db: Any,
-        user_id: int,
-        product_id: str,
-        current_price: float,
-        metrics: Dict[str, Any],
-        is_sell_check: bool,
-        bot: Optional[Any],
-        account_id: Optional[int],
-        position: Optional[Any],
-    ) -> tuple[str, int, str, List[Dict[str, Any]]]:
-        """Build prompt + context and run the Claude tool-use loop.
-
-        Parses the final JSON response and returns (signal, confidence, reasoning, tool_calls).
-        On any error, falls back to ("hold", 0, "<error>", []).
-        """
-        from app.services.ai_credential_service import get_user_api_key
-
-        api_key = await get_user_api_key(db, user_id, "claude")
-        if not api_key:
-            raise ValueError(
-                "No API key configured for claude. "
-                "Please add your CLAUDE API key in Settings."
-            )
-
-        # Decide which tools are enabled for this call.
-        enabled_tools: List[str] = ["get_portfolio_context"]
-        if position is not None or is_sell_check:
-            enabled_tools.insert(0, "get_position_context")
-
-        prompt = self._build_prompt(
-            product_id=product_id,
-            metrics=metrics,
-            is_sell_check=is_sell_check,
-            enabled_tools=enabled_tools,
-        )
-
-        from app.indicators.ai_tools import ToolContext as _ToolContext
-        tool_ctx = _ToolContext(
-            db=db,
-            user_id=user_id,
-            product_id=product_id,
-            current_price=current_price,
-            bot=bot,
-            position=position,
-            account_id=account_id,
-            is_sell_check=is_sell_check,
-        )
-
-        try:
-            response_text, tool_calls = await self._call_claude_with_tools(
-                prompt=prompt,
-                api_key=api_key,
-                tool_ctx=tool_ctx,
-                enabled_tools=enabled_tools,
-            )
-            signal, confidence, reasoning = self._parse_llm_response(response_text)
-            return signal, confidence, reasoning, tool_calls
-        except Exception as e:
-            logger.error(f"Error in Claude tool-use path: {e}")
-            return "hold", 0, f"LLM error: {str(e)}", []
 
     @staticmethod
     def _build_prompt(

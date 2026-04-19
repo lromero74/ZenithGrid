@@ -294,8 +294,21 @@ class TestBuyPrefilter:
 # TestCallLLM
 # ---------------------------------------------------------------------------
 
+def _mock_provider_returning(text):
+    """Build a mock provider whose call_with_tools returns (text, [])."""
+    provider = MagicMock()
+    provider.call_with_tools = AsyncMock(return_value=(text, []))
+    return provider
+
+
+def _mock_provider_raising(exc):
+    provider = MagicMock()
+    provider.call_with_tools = AsyncMock(side_effect=exc)
+    return provider
+
+
 class TestCallLLM:
-    """Tests for _call_llm dispatch and response parsing."""
+    """Tests for _call_llm dispatch and response parsing via the provider adapter."""
 
     @pytest.mark.asyncio
     async def test_valid_claude_response_parsed(self):
@@ -304,11 +317,11 @@ class TestCallLLM:
             "signal": "buy", "confidence": 75, "reasoning": "Bullish MACD crossover"
         })
 
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value=response_json):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
                 signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "buy"
         assert confidence == 75
@@ -318,39 +331,41 @@ class TestCallLLM:
     async def test_openai_model_dispatched_correctly(self):
         evaluator = AISpotOpinionEvaluator()
         response_json = json.dumps({"signal": "sell", "confidence": 60, "reasoning": "Overbought"})
+        mock_provider = _mock_provider_returning(response_json)
 
-        with patch.object(evaluator, "_call_openai", new_callable=AsyncMock, return_value=response_json) as mock_call:
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=mock_provider) as factory:
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="gpt", is_sell_check=False
+                signal, _, _ = await evaluator._call_llm(
+                    db=MagicMock(), user_id=1, ai_model="gpt", prompt="p",
                 )
-        mock_call.assert_awaited_once()
+        factory.assert_called_once()
+        assert factory.call_args.args[0] == "gpt"
+        mock_provider.call_with_tools.assert_awaited_once()
         assert signal == "sell"
 
     @pytest.mark.asyncio
     async def test_gemini_model_dispatched_correctly(self):
         evaluator = AISpotOpinionEvaluator()
         response_json = json.dumps({"signal": "hold", "confidence": 40, "reasoning": "Mixed signals"})
+        mock_provider = _mock_provider_returning(response_json)
 
-        with patch.object(evaluator, "_call_gemini", new_callable=AsyncMock, return_value=response_json) as mock_call:
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=mock_provider) as factory:
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="gemini", is_sell_check=False
+                signal, _, _ = await evaluator._call_llm(
+                    db=MagicMock(), user_id=1, ai_model="gemini", prompt="p",
                 )
-        mock_call.assert_awaited_once()
+        assert factory.call_args.args[0] == "gemini"
         assert signal == "hold"
 
     @pytest.mark.asyncio
     async def test_unknown_model_raises_value_error(self):
         evaluator = AISpotOpinionEvaluator()
-        with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-            with pytest.raises(ValueError, match="Unknown AI model"):
-                await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="deepseek", is_sell_check=False
-                )
+        with pytest.raises(ValueError, match="Unknown AI model"):
+            await evaluator._call_llm(
+                db=MagicMock(), user_id=1, ai_model="deepseek", prompt="p",
+            )
 
     @pytest.mark.asyncio
     async def test_no_api_key_raises_value_error(self):
@@ -358,20 +373,18 @@ class TestCallLLM:
         with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value=None):
             with pytest.raises(ValueError, match="No API key configured"):
                 await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
 
     @pytest.mark.asyncio
     async def test_response_with_markdown_code_block_stripped(self):
         evaluator = AISpotOpinionEvaluator()
         response_text = '```json\n{"signal": "buy", "confidence": 80, "reasoning": "Strong"}\n```'
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value=response_text):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning(response_text)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                signal, confidence, _ = await evaluator._call_llm(
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "buy"
         assert confidence == 80
@@ -380,12 +393,11 @@ class TestCallLLM:
     async def test_invalid_signal_defaults_to_hold(self):
         evaluator = AISpotOpinionEvaluator()
         response_json = json.dumps({"signal": "maybe", "confidence": 50, "reasoning": "Hmm"})
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value=response_json):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
                 signal, _, _ = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
 
@@ -393,12 +405,11 @@ class TestCallLLM:
     async def test_confidence_clamped_to_0_100(self):
         evaluator = AISpotOpinionEvaluator()
         response_json = json.dumps({"signal": "buy", "confidence": 150, "reasoning": "Very confident"})
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value=response_json):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
                 _, confidence, _ = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert confidence == 100
 
@@ -406,24 +417,22 @@ class TestCallLLM:
     async def test_negative_confidence_clamped_to_zero(self):
         evaluator = AISpotOpinionEvaluator()
         response_json = json.dumps({"signal": "hold", "confidence": -20, "reasoning": "Unsure"})
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value=response_json):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
                 _, confidence, _ = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert confidence == 0
 
     @pytest.mark.asyncio
     async def test_llm_exception_returns_hold_with_zero_confidence(self):
         evaluator = AISpotOpinionEvaluator()
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, side_effect=RuntimeError("API down")):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_raising(RuntimeError("API down"))):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
                 signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
         assert confidence == 0
@@ -432,12 +441,11 @@ class TestCallLLM:
     @pytest.mark.asyncio
     async def test_invalid_json_returns_hold(self):
         evaluator = AISpotOpinionEvaluator()
-
-        with patch.object(evaluator, "_call_claude", new_callable=AsyncMock, return_value="not json at all"):
+        with patch("app.indicators.ai_providers.get_provider",
+                   return_value=_mock_provider_returning("not json at all")):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
-                    db=MagicMock(), user_id=1, product_id="BTC-USD",
-                    metrics=_metrics_for_prompt(), ai_model="claude", is_sell_check=False
+                signal, confidence, _ = await evaluator._call_llm(
+                    db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
         assert confidence == 0
