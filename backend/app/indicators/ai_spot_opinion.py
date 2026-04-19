@@ -30,24 +30,42 @@ Usage:
     }
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from app.indicator_calculator import IndicatorCalculator
 
-# Import the tools package so tools self-register in REGISTRY.
-from app.indicators.ai_tools import REGISTRY as TOOL_REGISTRY  # noqa: F401
-from app.indicators.ai_tools import (
-    ToolContext,
-    execute as execute_tool,
-    get_schemas_for,
-)
+if TYPE_CHECKING:
+    from app.indicators.ai_tools import ToolContext
 
 logger = logging.getLogger(__name__)
+
+
+def _tools_module():
+    """Lazy import of the ai_tools package.
+
+    Kept local to sidestep a circular import at module load time: app.indicators
+    __init__ pulls AISpotOpinionEvaluator, and ai_tools lives under app.indicators.
+    Importing it at the top of this file would re-enter the package __init__
+    before AISpotOpinionEvaluator is defined. Loading on first use avoids that.
+    """
+    from app.indicators import ai_tools as mod
+    return mod
+
+
+async def execute_tool(name: str, input: Dict[str, Any], ctx: "ToolContext") -> Dict[str, Any]:
+    return await _tools_module().execute(name, input, ctx)
+
+
+def get_schemas_for(names: List[str]) -> List[Dict[str, Any]]:
+    return _tools_module().get_schemas_for(names)
+
 
 # Cap the Claude tool-use loop. Each iteration = 1 LLM call + N parallel tool calls.
 MAX_TOOL_TURNS = 4
@@ -214,21 +232,24 @@ class AISpotOpinionEvaluator:
 
     async def _call_llm(
         self,
+        *,
         db: Any,
         user_id: int,
         product_id: str,
         metrics: Dict[str, Any],
         ai_model: str,
-        is_sell_check: bool
+        is_sell_check: bool,
+        tool_ctx: Optional["ToolContext"] = None,
+        prompt: Optional[str] = None,
     ) -> tuple[str, int, str]:
+        """Single-shot LLM call. Returns (signal, confidence, reasoning).
+
+        If `prompt` is None, builds one from metrics + context auto-fetched from
+        `tool_ctx`. Callers that already built a prompt (e.g. evaluate()) should
+        pass it in to avoid duplicate context fetches.
         """
-        Call LLM to analyze metrics and provide opinion using user's API key.
-        Returns (signal, confidence, reasoning)
-        """
-        # Get user's API key from database
         from app.services.ai_credential_service import get_user_api_key
 
-        # Map ai_model to provider name
         provider_map = {
             "claude": "claude",
             "gpt": "openai",
@@ -246,82 +267,47 @@ class AISpotOpinionEvaluator:
                 f"Please add your {provider.upper()} API key in Settings."
             )
 
-        # Build prompt
-        action_type = "SELL" if is_sell_check else "BUY"
-        ma20_val = metrics.get('price_vs_ma20', 0)
-        ma50_val = metrics.get('price_vs_ma50', 0)
-        ma20_dir = "above" if ma20_val > 0 else "below"
-        ma50_dir = "above" if ma50_val > 0 else "below"
-        macd_str = (
-            "Bullish" if metrics.get('macd_bullish')
-            else "Bearish" if metrics.get('macd_bearish')
-            else "Neutral"
-        )
-
-        prompt = f"""You are a cryptocurrency trading AI analyzing {product_id}.
-
-Current Technical Metrics:
-- RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
-- MACD: {macd_str}
-- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
-- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
-- Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
-- Volume: {metrics.get('volume_ratio', 0):.2f}x average
-- 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
-
-Question: Should I {action_type} this position right now?
-
-Respond with ONLY valid JSON in this exact format:
-{{
-  "signal": "buy" or "sell" or "hold",
-  "confidence": 75,
-  "reasoning": "Brief 1-2 sentence explanation"
-}}
-
-Consider:
-- For BUYS: Is momentum building? Are indicators aligning? Is this a good entry?
-- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?
-
-Be decisive but realistic. Confidence should reflect conviction (0-100).
-"""
+        if prompt is None:
+            context = await self._collect_auto_context(tool_ctx) if tool_ctx else {}
+            prompt = self._build_prompt(
+                product_id=product_id,
+                metrics=metrics,
+                is_sell_check=is_sell_check,
+                context=context,
+            )
 
         try:
-            # Call appropriate LLM with user's API key
             if ai_model == "claude":
                 response_text = await self._call_claude(prompt, api_key)
-            elif ai_model == "gpt" or ai_model == "openai":
+            elif ai_model in ("gpt", "openai"):
                 response_text = await self._call_openai(prompt, api_key)
             elif ai_model == "gemini":
                 response_text = await self._call_gemini(prompt, api_key)
             else:
                 raise ValueError(f"Unknown AI model: {ai_model}")
-
-            # Parse response
-            response_text = response_text.strip()
-            # Remove markdown code blocks if present
-            if response_text.startswith("```"):
-                lines = response_text.split('\n')
-                response_text = '\n'.join(lines[1:-1] if len(lines) > 2 else lines)
-
-            data = json.loads(response_text)
-
-            signal = data.get("signal", "hold").lower()
-            confidence = int(data.get("confidence", 0))
-            reasoning = data.get("reasoning", "No reasoning provided")
-
-            # Validate signal
-            if signal not in ["buy", "sell", "hold"]:
-                logger.warning(f"Invalid signal from LLM: {signal}, defaulting to hold")
-                signal = "hold"
-
-            # Clamp confidence
-            confidence = max(0, min(100, confidence))
-
-            return signal, confidence, reasoning
-
+            return self._parse_llm_response(response_text)
         except Exception as e:
             logger.error(f"Error calling LLM ({ai_model}): {e}")
             return "hold", 0, f"LLM error: {str(e)}"
+
+    async def _collect_auto_context(self, tool_ctx: Optional["ToolContext"]) -> Dict[str, Any]:
+        """Pre-fetch portfolio + position context for prompt injection.
+
+        Both tools are called directly (no tool-use loop) and their outputs are
+        packed into a dict the caller can render into the prompt. This is what
+        gives non-Claude providers feature parity with Claude for static context
+        in Phase A — the Claude tool loop is reserved for argument-taking tools
+        added in Phase C.
+        """
+        if tool_ctx is None:
+            return {}
+
+        context: Dict[str, Any] = {}
+        if tool_ctx.account_id is not None:
+            context["portfolio"] = await execute_tool("get_portfolio_context", {}, tool_ctx)
+        if tool_ctx.position is not None or tool_ctx.is_sell_check:
+            context["position"] = await execute_tool("get_position_context", {}, tool_ctx)
+        return context
 
     async def _call_claude(self, prompt: str, api_key: str) -> str:
         """Call Claude API with user's API key (single-shot, no tools)."""
@@ -532,34 +518,39 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
                     "metrics": metrics
                 }
 
-        # Decide whether to run the Claude tool-use loop or the single-shot path.
-        use_tools = (
-            params.ai_model.lower() == "claude"
-            and account_id is not None
+        # Phase A: every provider goes through the single-shot path with
+        # portfolio + position context pre-injected into the prompt. The Claude
+        # tool-use loop stays available on the evaluator but is dormant until
+        # argument-taking tools land (Phase C of PRPs/ai-multi-provider-tools.md).
+        from app.indicators.ai_tools import ToolContext as _ToolContext
+        tool_ctx = _ToolContext(
+            db=db,
+            user_id=user_id,
+            product_id=product_id,
+            current_price=current_price,
+            bot=bot,
+            position=position,
+            account_id=account_id,
+            is_sell_check=is_sell_check,
         )
-
+        context = await self._collect_auto_context(tool_ctx)
+        prompt = self._build_prompt(
+            product_id=product_id,
+            metrics=metrics,
+            is_sell_check=is_sell_check,
+            context=context,
+        )
+        signal, confidence, reasoning = await self._call_llm(
+            db=db,
+            user_id=user_id,
+            product_id=product_id,
+            metrics=metrics,
+            ai_model=params.ai_model,
+            is_sell_check=is_sell_check,
+            tool_ctx=tool_ctx,
+            prompt=prompt,
+        )
         tool_calls: List[Dict[str, Any]] = []
-        if use_tools:
-            signal, confidence, reasoning, tool_calls = await self._call_claude_tools_path(
-                db=db,
-                user_id=user_id,
-                product_id=product_id,
-                current_price=current_price,
-                metrics=metrics,
-                is_sell_check=is_sell_check,
-                bot=bot,
-                account_id=account_id,
-                position=position,
-            )
-        else:
-            signal, confidence, reasoning = await self._call_llm(
-                db=db,
-                user_id=user_id,
-                product_id=product_id,
-                metrics=metrics,
-                ai_model=params.ai_model,
-                is_sell_check=is_sell_check,
-            )
 
         # Update last check timestamp
         self._update_last_check(product_id, params.ai_timeframe)
@@ -616,7 +607,8 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             enabled_tools=enabled_tools,
         )
 
-        tool_ctx = ToolContext(
+        from app.indicators.ai_tools import ToolContext as _ToolContext
+        tool_ctx = _ToolContext(
             db=db,
             user_id=user_id,
             product_id=product_id,
@@ -646,6 +638,7 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
         metrics: Dict[str, Any],
         is_sell_check: bool,
         enabled_tools: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Shared prompt builder for single-shot and tool-use paths."""
         action_type = "SELL" if is_sell_check else "BUY"
@@ -667,6 +660,20 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
                 "do not call tools redundantly.\n"
             )
 
+        context_section = ""
+        context_consider_line = ""
+        if context:
+            context_section = (
+                "\n## Available Context (live data pre-fetched for you):\n"
+                "```json\n"
+                f"{json.dumps(context, default=str, indent=2)}\n"
+                "```\n"
+            )
+            context_consider_line = (
+                "\n- Use the Available Context section above to factor in position age, "
+                "PnL, portfolio concentration, and other open positions."
+            )
+
         return f"""You are a cryptocurrency trading AI analyzing {product_id}.
 
 Current Technical Metrics:
@@ -677,7 +684,7 @@ Current Technical Metrics:
 - Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
 - Volume: {metrics.get('volume_ratio', 0):.2f}x average
 - 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
-{tools_section}
+{context_section}{tools_section}
 Question: Should I {action_type} this position right now?
 
 Respond with ONLY valid JSON in this exact format:
@@ -689,7 +696,7 @@ Respond with ONLY valid JSON in this exact format:
 
 Consider:
 - For BUYS: Is momentum building? Are indicators aligning? Is this a good entry?
-- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?
+- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?{context_consider_line}
 
 Be decisive but realistic. Confidence should reflect conviction (0-100).
 """
