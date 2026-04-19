@@ -214,13 +214,14 @@ export function useMarkRead() {
   })
 }
 
-export function useUnreadCounts() {
+export function useUnreadCounts(enabled: boolean = true) {
   return useQuery<Record<string, number>>({
     queryKey: ['chat-unread'],
     queryFn: async () => {
       const { data } = await api.get('/chat/unread')
       return data.counts
     },
+    enabled,
     staleTime: 15_000,
     refetchInterval: 30_000,
   })
