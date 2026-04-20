@@ -56,7 +56,7 @@ class TestEvaluateRouting:
         params = AISpotOpinionParams(ai_model="gpt", enable_buy_prefilter=False)
 
         with patch.object(evaluator, "_call_llm",
-                          new_callable=AsyncMock, return_value=("buy", 70, "r")) as single_shot:
+                          new_callable=AsyncMock, return_value=("buy", 70, "r", [])) as single_shot:
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -73,7 +73,7 @@ class TestEvaluateRouting:
         params = AISpotOpinionParams(ai_model="claude", enable_buy_prefilter=False)
 
         with patch.object(evaluator, "_call_llm",
-                          new_callable=AsyncMock, return_value=("hold", 50, "r")) as single_shot:
+                          new_callable=AsyncMock, return_value=("hold", 50, "r", [])) as single_shot:
             await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -91,7 +91,7 @@ class TestEvaluateRouting:
 
         with patch.object(evaluator, "_call_llm",
                           new_callable=AsyncMock,
-                          return_value=("buy", 82, "great setup")) as single_shot:
+                          return_value=("buy", 82, "great setup", [])) as single_shot:
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -231,9 +231,10 @@ class TestContextInjection:
                     return portfolio_payload
                 return {"error": "unexpected"}
 
-            async def fake_call_llm(*, db, user_id, ai_model, prompt, tool_ctx=None):
+            async def fake_call_llm(*, db, user_id, ai_model, prompt, tool_ctx=None,
+                                    tool_schemas=None):
                 captured["prompt"] = prompt
-                return "hold", 0, "ok"
+                return "hold", 0, "ok", []
 
             with patch.object(_mod, "execute_tool", side_effect=fake_execute_tool):
                 with patch.object(evaluator, "_call_llm",

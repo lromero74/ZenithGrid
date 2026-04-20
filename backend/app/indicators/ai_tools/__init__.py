@@ -17,6 +17,9 @@ from app.indicators.ai_tools.base import (
 # Side-effect imports: each module calls register(...) at import time.
 from app.indicators.ai_tools import position_context  # noqa: F401
 from app.indicators.ai_tools import portfolio_context  # noqa: F401
+from app.indicators.ai_tools import candle_window  # noqa: F401
+from app.indicators.ai_tools import recent_news  # noqa: F401
+from app.indicators.ai_tools import trade_history  # noqa: F401
 
 __all__ = [
     "REGISTRY",

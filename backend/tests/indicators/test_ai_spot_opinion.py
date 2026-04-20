@@ -320,7 +320,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
+                signal, confidence, reasoning, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "buy"
@@ -336,7 +336,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=mock_provider) as factory:
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, _, _ = await evaluator._call_llm(
+                signal, _, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="gpt", prompt="p",
                 )
         factory.assert_called_once()
@@ -353,7 +353,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=mock_provider) as factory:
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, _, _ = await evaluator._call_llm(
+                signal, _, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="gemini", prompt="p",
                 )
         assert factory.call_args.args[0] == "gemini"
@@ -383,7 +383,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning(response_text)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, _ = await evaluator._call_llm(
+                signal, confidence, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "buy"
@@ -396,7 +396,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, _, _ = await evaluator._call_llm(
+                signal, _, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
@@ -408,7 +408,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                _, confidence, _ = await evaluator._call_llm(
+                _, confidence, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert confidence == 100
@@ -420,7 +420,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning(response_json)):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                _, confidence, _ = await evaluator._call_llm(
+                _, confidence, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert confidence == 0
@@ -431,7 +431,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_raising(RuntimeError("API down"))):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, reasoning = await evaluator._call_llm(
+                signal, confidence, reasoning, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
@@ -444,7 +444,7 @@ class TestCallLLM:
         with patch("app.indicators.ai_providers.get_provider",
                    return_value=_mock_provider_returning("not json at all")):
             with patch(_API_KEY_PATCH, new_callable=AsyncMock, return_value="sk-test"):
-                signal, confidence, _ = await evaluator._call_llm(
+                signal, confidence, _, _ = await evaluator._call_llm(
                     db=MagicMock(), user_id=1, ai_model="claude", prompt="p",
                 )
         assert signal == "hold"
@@ -498,7 +498,7 @@ class TestEvaluate:
     async def test_sell_check_skips_prefilter(self):
         evaluator = AISpotOpinionEvaluator()
 
-        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("sell", 85, "Take profit")):
+        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("sell", 85, "Take profit", [])):
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -512,7 +512,7 @@ class TestEvaluate:
         evaluator = AISpotOpinionEvaluator()
         params = AISpotOpinionParams(enable_buy_prefilter=False)
 
-        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("buy", 78, "Good entry")):
+        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("buy", 78, "Good entry", [])):
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -529,7 +529,7 @@ class TestEvaluate:
         evaluator = AISpotOpinionEvaluator()
         params = AISpotOpinionParams(enable_buy_prefilter=False)
 
-        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("hold", 50, "Wait")):
+        with patch.object(evaluator, "_call_llm", new_callable=AsyncMock, return_value=("hold", 50, "Wait", [])):
             await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="ETH-USD", db=MagicMock(), user_id=1,

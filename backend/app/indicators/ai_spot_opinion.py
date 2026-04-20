@@ -62,6 +62,41 @@ async def execute_tool(name: str, input: Dict[str, Any], ctx: "ToolContext") -> 
     return await _tools_module().execute(name, input, ctx)
 
 
+# Argument-taking tools (Phase C). Static tools (get_portfolio_context /
+# get_position_context) are pre-fetched and injected into the prompt via
+# _collect_auto_context — they don't belong in the provider tool loop since
+# they take no arguments. These three DO take arguments, so the model decides
+# when and how to call them.
+_ARG_TOOL_NAMES: List[str] = [
+    "get_candle_window",
+    "get_recent_news",
+    "get_trade_history",
+]
+
+
+def _arg_tool_schemas() -> List[Dict[str, Any]]:
+    """Resolve the argument-taking tools' canonical schemas from the registry."""
+    return _tools_module().get_schemas_for(_ARG_TOOL_NAMES)
+
+
+# Short, user-written hints for the prompt. Lives next to _ARG_TOOL_NAMES so
+# additions are a single-line change in one place.
+_TOOL_USE_HINTS: Dict[str, str] = {
+    "get_candle_window": (
+        "zoom into price action on a chosen timeframe when summary metrics "
+        "look ambiguous (5m/15m/1h/6h/1d, up to 100 candles)."
+    ),
+    "get_recent_news": (
+        "scan cached headlines for this pair's base asset — use before confirming "
+        "a buy when metrics look clean to rule out a catalyst."
+    ),
+    "get_trade_history": (
+        "review recent closed positions on this pair for this user — win rate, "
+        "avg PnL%, and avg hold time — to calibrate conviction."
+    ),
+}
+
+
 # The UI-facing `ai_model` string the user picks is distinct from the credential
 # slug used to look up their API key (e.g. "gpt" → stored under "openai").
 _CREDENTIAL_NAMES = {"claude": "claude", "gpt": "openai", "openai": "openai", "gemini": "gemini"}
@@ -242,13 +277,17 @@ class AISpotOpinionEvaluator:
         ai_model: str,
         prompt: str,
         tool_ctx: Optional["ToolContext"] = None,
-    ) -> tuple[str, int, str]:
-        """Single-shot LLM call via the provider adapter.
+        tool_schemas: Optional[List[Dict[str, Any]]] = None,
+    ) -> tuple[str, int, str, List[Any]]:
+        """Dispatch the LLM call, letting the provider drive its own tool loop.
 
-        Returns (signal, confidence, reasoning). Runs `provider.call_with_tools`
-        with `tools=[]`, which short-circuits after one request — we get a text
-        response back, no tool loop. Phase A context is already baked into
-        `prompt` by the caller (evaluate()).
+        If `tool_schemas` is empty, `provider.call_with_tools` short-circuits to
+        a single request. If non-empty, the provider iterates its native
+        tool-use loop (up to 4 turns) and returns every tool invocation it made.
+
+        Returns (signal, confidence, reasoning, tool_calls). `tool_calls` is a
+        list of `NormalizedToolCall` dataclass instances, always — empty on the
+        single-shot path.
         """
         from app.indicators.ai_providers import get_provider
         from app.services.ai_credential_service import get_user_api_key
@@ -261,15 +300,22 @@ class AISpotOpinionEvaluator:
                 f"Please add your {credential_name.upper()} API key in Settings."
             )
 
+        schemas = list(tool_schemas or [])
         try:
             provider = get_provider(ai_model, api_key=api_key)
-            text, _ = await provider.call_with_tools(
-                system=None, user=prompt, tools=[], tool_ctx=tool_ctx, max_turns=1,
+            max_turns = 4 if schemas else 1
+            text, tool_calls = await provider.call_with_tools(
+                system=None,
+                user=prompt,
+                tools=schemas,
+                tool_ctx=tool_ctx,
+                max_turns=max_turns,
             )
-            return self._parse_llm_response(text)
+            signal, confidence, reasoning = self._parse_llm_response(text)
+            return signal, confidence, reasoning, tool_calls
         except Exception as e:
             logger.error(f"Error calling LLM ({ai_model}): {e}")
-            return "hold", 0, f"LLM error: {str(e)}"
+            return "hold", 0, f"LLM error: {str(e)}", []
 
     async def _collect_auto_context(self, tool_ctx: Optional["ToolContext"]) -> Dict[str, Any]:
         """Pre-fetch portfolio + position context for prompt injection.
@@ -366,10 +412,11 @@ class AISpotOpinionEvaluator:
                     "metrics": metrics
                 }
 
-        # Phase A: every provider goes through the single-shot path with
-        # portfolio + position context pre-injected into the prompt. The Claude
-        # tool-use loop stays available on the evaluator but is dormant until
-        # argument-taking tools land (Phase C of PRPs/ai-multi-provider-tools.md).
+        # Phase A: portfolio + position are pre-fetched and injected into the
+        # prompt (they take no args — no reason to spend a tool turn).
+        # Phase C: argument-taking tools (candle_window, recent_news,
+        # trade_history) are handed to the provider so the model can decide
+        # when to call them.
         from app.indicators.ai_tools import ToolContext as _ToolContext
         tool_ctx = _ToolContext(
             db=db,
@@ -382,20 +429,31 @@ class AISpotOpinionEvaluator:
             is_sell_check=is_sell_check,
         )
         context = await self._collect_auto_context(tool_ctx)
+        arg_schemas = _arg_tool_schemas()
         prompt = self._build_prompt(
             product_id=product_id,
             metrics=metrics,
             is_sell_check=is_sell_check,
             context=context,
+            enabled_tools=[s["name"] for s in arg_schemas],
         )
-        signal, confidence, reasoning = await self._call_llm(
+        signal, confidence, reasoning, raw_tool_calls = await self._call_llm(
             db=db,
             user_id=user_id,
             ai_model=params.ai_model,
             prompt=prompt,
             tool_ctx=tool_ctx,
+            tool_schemas=arg_schemas,
         )
-        tool_calls: List[Dict[str, Any]] = []
+        tool_calls: List[Dict[str, Any]] = [
+            {
+                "name": tc.name,
+                "input": tc.input,
+                "output_summary": tc.output_summary,
+                "turn": tc.turn,
+            }
+            for tc in raw_tool_calls
+        ]
 
         # Update last check timestamp
         self._update_last_check(product_id, params.ai_timeframe)
@@ -436,10 +494,18 @@ class AISpotOpinionEvaluator:
 
         tools_section = ""
         if enabled_tools:
+            hints = []
+            for name in enabled_tools:
+                hint = _TOOL_USE_HINTS.get(name)
+                if hint:
+                    hints.append(f"- `{name}` — {hint}")
+            hint_block = "\n".join(hints) if hints else ""
             tools_section = (
-                "\nYou have tools available to pull additional context. "
+                "\n## Tools available\n"
+                f"{hint_block}\n\n"
                 "Call a tool only if its information would change your decision — "
-                "do not call tools redundantly.\n"
+                "do not call tools redundantly. Prefer inspecting the Available "
+                "Context section first; only reach for tools when it is not enough.\n"
             )
 
         context_section = ""
