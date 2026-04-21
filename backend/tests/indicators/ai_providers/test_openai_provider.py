@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.indicators.ai_providers import NormalizedToolCall, OpenAIProvider
+from app.indicators.ai_providers import NormalizedToolCall, OpenAIProvider, TokenUsage
 from app.indicators.ai_providers.openai_provider import translate_schema
 from app.indicators.ai_tools import ToolContext
 
@@ -40,8 +40,11 @@ def _choice(finish_reason, content=None, tool_calls=None):
     return SimpleNamespace(finish_reason=finish_reason, message=message)
 
 
-def _completion(choices):
-    return SimpleNamespace(choices=choices)
+def _completion(choices, prompt_tokens=0, completion_tokens=0):
+    usage = SimpleNamespace(
+        prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+    )
+    return SimpleNamespace(choices=choices, usage=usage)
 
 
 PORTFOLIO_SCHEMA = [{
@@ -80,7 +83,7 @@ class TestOpenAIProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"other_open_positions": []}):
             with patch("openai.AsyncOpenAI", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="prompt", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -114,7 +117,7 @@ class TestOpenAIProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("openai.AsyncOpenAI", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=tools, tool_ctx=_ctx(), max_turns=4,
                 )
 
@@ -137,7 +140,7 @@ class TestOpenAIProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("openai.AsyncOpenAI", return_value=mock_client):
-                text, _ = await provider.call_with_tools(
+                text, _, _ = await provider.call_with_tools(
                     system=None, user="p", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -161,7 +164,7 @@ class TestOpenAIProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"error": "boom"}):
             with patch("openai.AsyncOpenAI", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -178,7 +181,7 @@ class TestOpenAIProvider:
         )
         provider = OpenAIProvider(api_key="sk-test")
         with patch("openai.AsyncOpenAI", return_value=mock_client):
-            text, calls = await provider.call_with_tools(
+            text, calls, _ = await provider.call_with_tools(
                 system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
             )
         assert text == final_json
@@ -231,3 +234,72 @@ class TestOpenAIProvider:
         args = exec_mock.await_args_list[0].args
         assert args[0] == "get_candle_window"
         assert args[1] == {"timeframe": "1h", "count": 20}
+
+
+class TestOpenAIUsage:
+    """Phase F: usage tokens are summed across every turn and returned."""
+
+    @pytest.mark.asyncio
+    async def test_usage_summed_across_tool_turns(self):
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        scripted = [
+            _completion(
+                [_choice("tool_calls",
+                         tool_calls=[_tool_call("c1", "get_portfolio_context", {})])],
+                prompt_tokens=100, completion_tokens=50,
+            ),
+            _completion(
+                [_choice("stop", content=final_json)],
+                prompt_tokens=150, completion_tokens=75,
+            ),
+        ]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=scripted)
+
+        provider = OpenAIProvider(api_key="sk-test")
+        with patch.object(provider, "_execute_tool",
+                          new_callable=AsyncMock, return_value={"ok": True}):
+            with patch("openai.AsyncOpenAI", return_value=mock_client):
+                _, _, usage = await provider.call_with_tools(
+                    system=None, user="p", tools=PORTFOLIO_SCHEMA,
+                    tool_ctx=_ctx(), max_turns=4,
+                )
+        assert isinstance(usage, TokenUsage)
+        assert usage.input_tokens == 250
+        assert usage.output_tokens == 125
+
+    @pytest.mark.asyncio
+    async def test_usage_on_single_shot_call(self):
+        final_json = json.dumps({"signal": "buy", "confidence": 80, "reasoning": ""})
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_completion(
+                [_choice("stop", content=final_json)],
+                prompt_tokens=42, completion_tokens=17,
+            )
+        )
+        provider = OpenAIProvider(api_key="sk-test")
+        with patch("openai.AsyncOpenAI", return_value=mock_client):
+            _, _, usage = await provider.call_with_tools(
+                system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+            )
+        assert usage.input_tokens == 42
+        assert usage.output_tokens == 17
+
+    @pytest.mark.asyncio
+    async def test_usage_defaults_to_zero_when_missing(self):
+        """A response without a .usage attribute doesn't crash — counts 0."""
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=SimpleNamespace(
+                choices=[_choice("stop", content=final_json)],
+            )
+        )
+        provider = OpenAIProvider(api_key="sk-test")
+        with patch("openai.AsyncOpenAI", return_value=mock_client):
+            _, _, usage = await provider.call_with_tools(
+                system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+            )
+        assert usage.input_tokens == 0
+        assert usage.output_tokens == 0

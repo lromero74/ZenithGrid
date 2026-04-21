@@ -101,5 +101,6 @@ frontend/public/branding/
 # Database backups
 backend/trading.db.local.backup*
 backend/trading.db.prod
+backend/backups/
 CLAUDE.md
 .claude-musings.md

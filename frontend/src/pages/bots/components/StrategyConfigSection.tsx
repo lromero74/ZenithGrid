@@ -125,7 +125,7 @@ function ParameterInput({
       >
         {param.options.map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {opt === '' ? '(provider default)' : opt}
           </option>
         ))}
       </select>

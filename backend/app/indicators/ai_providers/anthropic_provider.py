@@ -18,7 +18,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
 
-from app.indicators.ai_providers.base import NormalizedToolCall, summarize_output
+from app.indicators.ai_providers.base import NormalizedToolCall, TokenUsage, summarize_output
 
 if TYPE_CHECKING:
     from app.indicators.ai_tools import ToolContext
@@ -57,13 +57,14 @@ class AnthropicProvider:
         tools: List[Dict[str, Any]],
         tool_ctx: "ToolContext",
         max_turns: int = 4,
-    ) -> Tuple[str, List[NormalizedToolCall]]:
+    ) -> Tuple[str, List[NormalizedToolCall], TokenUsage]:
         from anthropic import AsyncAnthropic
 
         client = AsyncAnthropic(api_key=self.api_key)
         tool_schemas = translate_schema(tools)
         messages: List[Dict[str, Any]] = [{"role": "user", "content": user}]
         tool_calls: List[NormalizedToolCall] = []
+        usage = TokenUsage()
 
         for turn in range(max_turns + 1):
             kwargs: Dict[str, Any] = {
@@ -79,6 +80,7 @@ class AnthropicProvider:
                 kwargs["tools"] = tool_schemas
 
             response = await client.messages.create(**kwargs)
+            _accumulate_anthropic_usage(usage, response)
 
             if response.stop_reason != "tool_use":
                 text = ""
@@ -86,7 +88,7 @@ class AnthropicProvider:
                     if getattr(block, "type", None) == "text":
                         text = block.text
                         break
-                return text, tool_calls
+                return text, tool_calls, usage
 
             tool_uses = [b for b in response.content if getattr(b, "type", None) == "tool_use"]
             tool_results_content: List[Dict[str, Any]] = []
@@ -112,4 +114,20 @@ class AnthropicProvider:
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": tool_results_content})
 
-        return "", tool_calls
+        return "", tool_calls, usage
+
+
+def _accumulate_anthropic_usage(usage: TokenUsage, response: Any) -> None:
+    """Sum an Anthropic response's usage into the running tally.
+
+    The Messages API always attaches `response.usage.input_tokens` and
+    `response.usage.output_tokens`, but we tolerate missing fields (None/0)
+    so stubbed test responses don't have to include them.
+    """
+    u = getattr(response, "usage", None)
+    if u is None:
+        return
+    usage.add(
+        getattr(u, "input_tokens", 0),
+        getattr(u, "output_tokens", 0),
+    )

@@ -135,7 +135,8 @@ class AISpotOpinionParams:
     """Parameters for AI Spot Opinion indicator."""
 
     # LLM Configuration
-    ai_model: str = "claude"  # "claude", "gpt", or "gemini"
+    ai_model: str = "claude"  # provider: "claude", "gpt", or "gemini"
+    ai_model_override: Optional[str] = None  # specific SDK model id (optional)
     ai_timeframe: str = "15m"  # Candle timeframe (5m, 15m, 1h, 4h, etc.)
     ai_min_confidence: int = 60  # Minimum confidence to trigger signal
 
@@ -148,8 +149,12 @@ class AISpotOpinionParams:
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "AISpotOpinionParams":
         """Create params from strategy config dict."""
+        override = config.get("ai_model_override") or None
+        if isinstance(override, str):
+            override = override.strip() or None
         return cls(
             ai_model=config.get("ai_model", "claude"),
+            ai_model_override=override,
             ai_timeframe=config.get("ai_timeframe", "15m"),
             ai_min_confidence=config.get("ai_min_confidence", 60),
             enable_buy_prefilter=config.get("enable_buy_prefilter", True),
@@ -298,18 +303,21 @@ class AISpotOpinionEvaluator:
         prompt: str,
         tool_ctx: Optional["ToolContext"] = None,
         tool_schemas: Optional[List[Dict[str, Any]]] = None,
-    ) -> tuple[str, int, str, List[Any]]:
+        model_override: Optional[str] = None,
+    ) -> tuple[str, int, str, List[Any], Dict[str, Any]]:
         """Dispatch the LLM call, letting the provider drive its own tool loop.
 
         If `tool_schemas` is empty, `provider.call_with_tools` short-circuits to
         a single request. If non-empty, the provider iterates its native
         tool-use loop (up to 4 turns) and returns every tool invocation it made.
 
-        Returns (signal, confidence, reasoning, tool_calls). `tool_calls` is a
-        list of `NormalizedToolCall` dataclass instances, always — empty on the
-        single-shot path.
+        Returns (signal, confidence, reasoning, tool_calls, usage_meta). The
+        `usage_meta` dict is `{model_used, input_tokens, output_tokens,
+        cost_usd}` — populated on both success and fallback paths so the
+        opinion log can always persist a cost row (cost is zero on error).
         """
         from app.indicators.ai_providers import get_provider
+        from app.indicators.ai_pricing import estimate_cost_usd
         from app.services.ai_credential_service import get_user_api_key
 
         credential_name = _credential_name_for(ai_model)
@@ -321,10 +329,16 @@ class AISpotOpinionEvaluator:
             )
 
         schemas = list(tool_schemas or [])
+        empty_usage: Dict[str, Any] = {
+            "model_used": model_override,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0.0,
+        }
         try:
-            provider = get_provider(ai_model, api_key=api_key)
+            provider = get_provider(ai_model, api_key=api_key, model=model_override)
             max_turns = 4 if schemas else 1
-            text, tool_calls = await provider.call_with_tools(
+            text, tool_calls, usage = await provider.call_with_tools(
                 system=None,
                 user=prompt,
                 tools=schemas,
@@ -332,10 +346,22 @@ class AISpotOpinionEvaluator:
                 max_turns=max_turns,
             )
             signal, confidence, reasoning = self._parse_llm_response(text)
-            return signal, confidence, reasoning, tool_calls
+            model_used = getattr(provider, "model", None) or model_override
+            cost_usd = estimate_cost_usd(
+                model=model_used,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+            )
+            usage_meta: Dict[str, Any] = {
+                "model_used": model_used,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "cost_usd": cost_usd,
+            }
+            return signal, confidence, reasoning, tool_calls, usage_meta
         except Exception as e:
             logger.error(f"Error calling LLM ({ai_model}): {e}")
-            return "hold", 0, f"LLM error: {str(e)}", []
+            return "hold", 0, f"LLM error: {str(e)}", [], empty_usage
 
     async def _collect_auto_context(self, tool_ctx: Optional["ToolContext"]) -> Dict[str, Any]:
         """Pre-fetch portfolio + position context for prompt injection.
@@ -433,6 +459,8 @@ class AISpotOpinionEvaluator:
                     signal="hold", confidence=0,
                     reasoning=prefilter_reasoning, tool_calls=[],
                     ai_model=params.ai_model,
+                    model_used=None,
+                    input_tokens=0, output_tokens=0, cost_usd=0.0,
                 )
                 return {
                     "signal": "hold",
@@ -467,13 +495,14 @@ class AISpotOpinionEvaluator:
             context=context,
             enabled_tools=[s["name"] for s in arg_schemas],
         )
-        signal, confidence, reasoning, raw_tool_calls = await self._call_llm(
+        signal, confidence, reasoning, raw_tool_calls, usage_meta = await self._call_llm(
             db=db,
             user_id=user_id,
             ai_model=params.ai_model,
             prompt=prompt,
             tool_ctx=tool_ctx,
             tool_schemas=arg_schemas,
+            model_override=params.ai_model_override,
         )
         tool_calls: List[Dict[str, Any]] = [
             {
@@ -500,6 +529,10 @@ class AISpotOpinionEvaluator:
             product_id=product_id, is_sell_check=is_sell_check,
             signal=signal, confidence=confidence, reasoning=reasoning,
             tool_calls=tool_calls, ai_model=params.ai_model,
+            model_used=usage_meta.get("model_used"),
+            input_tokens=usage_meta.get("input_tokens", 0),
+            output_tokens=usage_meta.get("output_tokens", 0),
+            cost_usd=usage_meta.get("cost_usd", 0.0),
         )
 
         return {
@@ -509,6 +542,10 @@ class AISpotOpinionEvaluator:
             "prefilter_passed": prefilter_passed,
             "metrics": metrics,
             "tool_calls": tool_calls,
+            "model_used": usage_meta.get("model_used"),
+            "input_tokens": usage_meta.get("input_tokens", 0),
+            "output_tokens": usage_meta.get("output_tokens", 0),
+            "cost_usd": usage_meta.get("cost_usd", 0.0),
         }
 
     @staticmethod
