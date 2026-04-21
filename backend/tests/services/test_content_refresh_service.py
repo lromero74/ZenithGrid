@@ -1,63 +1,65 @@
 """
 Tests for backend/app/services/content_refresh_service.py
 
-Covers:
-- ContentRefreshService lifecycle (start/stop)
-- Status property
-- _refresh_news and _refresh_videos error handling
+Scheduling is driven by APScheduler (see app/scheduler.py) — this module no
+longer owns its own start/stop lifecycle. Tests focus on:
+- refresh_news / refresh_videos delegate to the fetch helpers with the
+  injected session maker
+- _refresh_news / _refresh_videos error handling
+- status property (last_*_refresh + configured intervals)
 - Refresh interval constants
 """
 
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from app.services.content_refresh_service import (
     ContentRefreshService,
     NEWS_REFRESH_INTERVAL,
     VIDEO_REFRESH_INTERVAL,
-    INITIAL_DELAY,
 )
 
 
 # ---------------------------------------------------------------------------
-# Service lifecycle
+# Public entry points (delegate to fetch helpers)
 # ---------------------------------------------------------------------------
 
 
-class TestContentRefreshServiceLifecycle:
-    """Tests for start/stop of the ContentRefreshService."""
+class TestPublicRefreshEntryPoints:
+    """refresh_news / refresh_videos call the fetch helpers with the configured sm."""
 
     @pytest.mark.asyncio
-    async def test_start_and_stop(self):
-        """Happy path: service starts and stops cleanly."""
+    async def test_refresh_news_calls_fetch_all_news(self):
         svc = ContentRefreshService()
-        await svc.start()
+        sentinel_sm = object()
+        svc.set_session_maker(sentinel_sm)
 
-        assert svc._running is True
-        assert svc._task is not None
+        mock_fetch = AsyncMock()
+        with patch(
+            "app.services.news_fetch_service.fetch_all_news",
+            new=mock_fetch,
+        ):
+            await svc.refresh_news()
 
-        await svc.stop()
-        assert svc._running is False
+        mock_fetch.assert_awaited_once_with(session_maker=sentinel_sm)
+        assert svc._last_news_refresh is not None
 
     @pytest.mark.asyncio
-    async def test_start_idempotent(self):
-        """Edge case: calling start twice does not create duplicate tasks."""
+    async def test_refresh_videos_calls_fetch_all_videos(self):
         svc = ContentRefreshService()
-        await svc.start()
-        first_task = svc._task
+        sentinel_sm = object()
+        svc.set_session_maker(sentinel_sm)
 
-        await svc.start()  # Second call - should be a no-op
-        assert svc._task is first_task
+        mock_fetch = AsyncMock()
+        with patch(
+            "app.services.news_fetch_service.fetch_all_videos",
+            new=mock_fetch,
+        ):
+            await svc.refresh_videos()
 
-        await svc.stop()
-
-    @pytest.mark.asyncio
-    async def test_stop_when_not_started(self):
-        """Edge case: stop on never-started service does not crash."""
-        svc = ContentRefreshService()
-        await svc.stop()
-        assert svc._running is False
+        mock_fetch.assert_awaited_once_with(session_maker=sentinel_sm)
+        assert svc._last_video_refresh is not None
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,6 @@ class TestContentRefreshServiceStatus:
         svc = ContentRefreshService()
         status = svc.status
 
-        assert status["running"] is False
         assert status["last_news_refresh"] is None
         assert status["last_video_refresh"] is None
         assert status["news_interval_minutes"] == NEWS_REFRESH_INTERVAL // 60
@@ -89,12 +90,6 @@ class TestContentRefreshServiceStatus:
         status = svc.status
         assert status["last_news_refresh"] == now.isoformat()
         assert status["last_video_refresh"] == now.isoformat()
-
-    def test_status_running_true_after_start(self):
-        """Status shows running=True after start (without waiting for loop)."""
-        svc = ContentRefreshService()
-        svc._running = True
-        assert svc.status["running"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +145,24 @@ class TestRefreshMethods:
 
 
 # ---------------------------------------------------------------------------
+# Session maker injection
+# ---------------------------------------------------------------------------
+
+
+class TestSessionMakerInjection:
+    def test_set_session_maker_overrides_default(self):
+        svc = ContentRefreshService()
+        sentinel = object()
+        svc.set_session_maker(sentinel)
+        assert svc._get_sm() is sentinel
+
+    def test_default_session_maker_used_when_not_injected(self):
+        svc = ContentRefreshService()
+        from app.database import async_session_maker
+        assert svc._get_sm() is async_session_maker
+
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
@@ -164,7 +177,3 @@ class TestConstants:
     def test_video_interval_60_minutes(self):
         """Video refresh interval is 60 minutes (3600 seconds)."""
         assert VIDEO_REFRESH_INTERVAL == 60 * 60
-
-    def test_initial_delay_10_seconds(self):
-        """Initial delay is 10 seconds."""
-        assert INITIAL_DELAY == 10

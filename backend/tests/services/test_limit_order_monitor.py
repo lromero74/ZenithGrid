@@ -168,10 +168,14 @@ class TestProcessPartialFills:
     """Tests for LimitOrderMonitor._process_partial_fills()."""
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_new_partial_fill_creates_trade(self, mock_ws):
         """Happy path: new partial fill detected, trade created."""
         db = AsyncMock()
+        # Provide a result object for the bot-name lookup used to enrich notifications.
+        bot_name_result = MagicMock()
+        bot_name_result.scalars.return_value.first.return_value = "TestBot"
+        db.execute = AsyncMock(return_value=bot_name_result)
         exchange = AsyncMock()
         monitor = LimitOrderMonitor(db, exchange)
 
@@ -203,7 +207,7 @@ class TestProcessPartialFills:
         db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_no_new_fills_does_not_create_trade(self, mock_ws):
         """Edge case: filled_size unchanged from previous check."""
         db = AsyncMock()
@@ -227,7 +231,7 @@ class TestProcessPartialFills:
         db.add.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_zero_filled_size_does_nothing(self, mock_ws):
         """Edge case: zero filled size, no action taken."""
         db = AsyncMock()
@@ -351,7 +355,7 @@ class TestProcessOrderCompletion:
     """Tests for LimitOrderMonitor._process_order_completion()."""
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_filled_order_closes_position(self, mock_ws):
         """Happy path: FILLED order closes position and calculates profit."""
         db = AsyncMock()
@@ -391,7 +395,7 @@ class TestProcessOrderCompletion:
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_cancelled_order_resets_position_flags(self, mock_ws):
         """Happy path: CANCELLED order resets closing flags."""
         db = AsyncMock()
@@ -412,7 +416,7 @@ class TestProcessOrderCompletion:
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_expired_order_resets_position_flags(self, mock_ws):
         """Happy path: EXPIRED order also resets flags."""
         db = AsyncMock()
@@ -531,7 +535,7 @@ class TestPaperOrderAutoResolution:
     """Tests for automatic resolution of paper trading orders."""
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_paper_order_auto_resolved_as_filled(self, mock_ws):
         """Happy path: paper order detected and auto-resolved via _process_order_completion."""
         db = AsyncMock()
@@ -604,7 +608,7 @@ class TestPaperOrderAutoResolution:
             exchange.get_order.assert_awaited_once_with("real-order-123")
 
     @pytest.mark.asyncio
-    @patch('app.services.limit_order_monitor.ws_manager')
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_paper_order_uses_limit_price_for_fill(self, mock_ws):
         """Paper order auto-resolution uses limit_price * base_amount as fill value."""
         db = AsyncMock()

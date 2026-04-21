@@ -67,6 +67,16 @@ def _load_migration():
 migration = _load_migration()
 
 
+@pytest.fixture(autouse=True)
+def _force_sqlite_mode():
+    """Every test in this module operates on SQLite connections. The imported
+    is_postgres() checks the runtime DATABASE_URL and returns True in prod
+    environments, which routes _index_exists to the pg_indexes query — that
+    fails against SQLite. Force it to False for the duration of each test."""
+    with patch.object(migration, "is_postgres", return_value=False):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # In-memory SQLite DB with all three tables the migration touches
 # ---------------------------------------------------------------------------
@@ -237,7 +247,7 @@ class TestRun:
         db_path = _make_file_test_db()
         try:
             with patch.object(migration, "get_migration_connection",
-                               side_effect=lambda: sqlite3.connect(db_path)), \
+                              side_effect=lambda: sqlite3.connect(db_path)), \
                  patch.object(migration, "is_postgres", return_value=False):
                 migration.run()
 
@@ -256,7 +266,7 @@ class TestRun:
         db_path = _make_file_test_db()
         try:
             with patch.object(migration, "get_migration_connection",
-                               side_effect=lambda: sqlite3.connect(db_path)), \
+                              side_effect=lambda: sqlite3.connect(db_path)), \
                  patch.object(migration, "is_postgres", return_value=False):
                 migration.run()
                 migration.run()  # must not raise
@@ -287,7 +297,7 @@ class TestRun:
             conn.close()
 
             with patch.object(migration, "get_migration_connection",
-                               side_effect=lambda: sqlite3.connect(db_path)), \
+                              side_effect=lambda: sqlite3.connect(db_path)), \
                  patch.object(migration, "is_postgres", return_value=False), \
                  patch.object(migration, "_create_index", wraps=migration._create_index) as spy:
                 migration.run()

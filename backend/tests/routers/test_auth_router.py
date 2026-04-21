@@ -623,6 +623,24 @@ class TestLoginEndpoint:
 class TestRefreshEndpoint:
     """Tests for POST /api/auth/refresh"""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_rate_limiter(self, monkeypatch):
+        """Rate limiters read from the production DB via async_session_maker at
+        module load; in tests that DB may contain real rows and trip the 429
+        guard. Also the in-memory _CATEGORY_STORE is module-level state that
+        carries across tests. Both are reset here per test."""
+        from unittest.mock import AsyncMock
+        from app.auth_routers import rate_limit_backend as rlb, rate_limiters as rl
+        fake = AsyncMock()
+        fake.record_attempt = AsyncMock(return_value=None)
+        fake.count_recent = AsyncMock(return_value=0)
+        fake.cleanup = AsyncMock(return_value=None)
+        monkeypatch.setattr(rlb, "rate_limit_backend", fake)
+        for store in rl._CATEGORY_STORE.values():
+            store.clear()
+        rl._warmed.clear()
+        yield
+
     @pytest.mark.asyncio
     async def test_refresh_with_valid_token(self, db_session):
         """Happy path: valid refresh token returns new access token."""
@@ -701,6 +719,25 @@ class TestRefreshEndpoint:
 
 class TestChangePasswordEndpoint:
     """Tests for POST /api/auth/change-password"""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_rate_limiter(self, monkeypatch):
+        """Rate limiters read from the production DB via async_session_maker at
+        module load; in tests that DB may contain real rows and trip the 429
+        guard. Also the in-memory _CATEGORY_STORE is module-level state that
+        carries across tests. Both are reset here per test."""
+        from unittest.mock import AsyncMock
+        from app.auth_routers import rate_limit_backend as rlb, rate_limiters as rl
+        fake = AsyncMock()
+        fake.record_attempt = AsyncMock(return_value=None)
+        fake.count_recent = AsyncMock(return_value=0)
+        fake.cleanup = AsyncMock(return_value=None)
+        monkeypatch.setattr(rlb, "rate_limit_backend", fake)
+        # Reset module-level memory to avoid cross-test contamination
+        for store in rl._CATEGORY_STORE.values():
+            store.clear()
+        rl._warmed.clear()
+        yield
 
     @pytest.mark.asyncio
     async def test_change_password_success(self, db_session):
@@ -1466,7 +1503,6 @@ class TestLoginLastLoginAtResilience:
     @pytest.mark.asyncio
     async def test_login_succeeds_when_last_login_commit_fails(self, db_session):
         """Happy path resilience: OperationalError on commit does not block login."""
-        from unittest.mock import AsyncMock, patch
         from sqlalchemy.exc import OperationalError
         from app.routers.auth_router import login, LoginRequest
 

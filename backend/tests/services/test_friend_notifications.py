@@ -3,7 +3,7 @@ Tests for friend notification broadcasts (online presence, request accepted).
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.models import User
 from app.models.auth import Group, Role, Permission, user_groups, group_roles, role_permissions
@@ -29,11 +29,23 @@ async def two_friends(db_session):
 
 
 @pytest.fixture
-def mock_ws_manager():
-    """Mock WebSocket manager with controllable online users."""
+def mock_ws_manager(monkeypatch):
+    """Mock WebSocket manager with controllable online users.
+
+    The service was refactored to use the module-level broadcast_backend
+    singleton for sending; only get_connected_user_ids() still comes from
+    the passed-in ws_manager. We monkey-patch broadcast_backend.send_to_user
+    to point at the same mock so tests can assert via mgr.send_to_user.
+    """
+    from app.services import friend_notifications as fn
+
     mgr = AsyncMock()
     mgr.get_connected_user_ids = MagicMock(return_value=set())
     mgr.send_to_user = AsyncMock()
+
+    mock_backend = AsyncMock()
+    mock_backend.send_to_user = mgr.send_to_user
+    monkeypatch.setattr(fn, "broadcast_backend", mock_backend)
     return mgr
 
 

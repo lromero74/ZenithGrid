@@ -98,30 +98,38 @@ class TestGetLastReviewTimestampInjection:
         assert len(calls) == 1, "Injected session_maker was never called"
 
 
-class TestRunCoinReviewSchedulerInjection:
-    """run_coin_review_scheduler() threads session_maker to inner functions."""
+class TestRunCoinReviewOnceInjection:
+    """run_coin_review_once() threads session_maker to inner functions.
+
+    Note: the old run_coin_review_scheduler loop was replaced by an APScheduler
+    job that calls run_coin_review_once() directly (see app/scheduler.py).
+    """
 
     @pytest.mark.asyncio
     async def test_threads_session_maker_to_helpers(self):
-        """Happy path: session_maker is passed through to _get_last_review_timestamp."""
-        injected = []
+        """Happy path: session_maker is passed through to _get_last_review_timestamp
+        and run_weekly_review."""
+        get_last_calls = []
+        weekly_calls = []
 
         async def mock_get_last_review(session_maker=None):
-            injected.append(session_maker)
+            get_last_calls.append(session_maker)
             return None  # no prior review → triggers run_weekly_review
 
         async def mock_run_weekly_review(standalone=False, session_maker=None):
+            weekly_calls.append(session_maker)
             return {"status": "success", "coins_analyzed": 0, "categories": {}}
 
-        import asyncio
         mock_sm = object()
 
         with patch("app.services.coin_review_service._get_last_review_timestamp", mock_get_last_review), \
-             patch("app.services.coin_review_service.run_weekly_review", mock_run_weekly_review), \
-             patch("asyncio.sleep", side_effect=[None, asyncio.CancelledError()]):
-            from app.services.coin_review_service import run_coin_review_scheduler
-            with pytest.raises(asyncio.CancelledError):
-                await run_coin_review_scheduler(session_maker=mock_sm)
+             patch("app.services.coin_review_service.run_weekly_review", mock_run_weekly_review):
+            from app.services.coin_review_service import run_coin_review_once
+            await run_coin_review_once(session_maker=mock_sm)
 
-        assert len(injected) >= 1
-        assert injected[0] is mock_sm, "session_maker not threaded to _get_last_review_timestamp"
+        assert len(get_last_calls) == 1
+        assert get_last_calls[0] is mock_sm, \
+            "session_maker not threaded to _get_last_review_timestamp"
+        assert len(weekly_calls) == 1
+        assert weekly_calls[0] is mock_sm, \
+            "session_maker not threaded to run_weekly_review"

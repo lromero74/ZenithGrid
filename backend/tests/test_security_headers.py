@@ -11,11 +11,13 @@ from starlette.testclient import TestClient
 
 from app.main import SecurityHeadersMiddleware
 
-# Expected headers and their values
+# Expected headers and their values.
+# Note: X-XSS-Protection is intentionally NOT set — modern browsers ignore/deprecated it
+# and in some cases it introduces vulnerabilities. CSP + X-Content-Type-Options replace it.
+# Note: CSP and HSTS are owned by nginx, not FastAPI — they are not asserted here.
 EXPECTED_HEADERS = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
-    "x-xss-protection": "1; mode=block",
     "referrer-policy": "strict-origin-when-cross-origin",
 }
 
@@ -83,8 +85,8 @@ class TestSecurityHeadersMiddleware:
                 f"Header {header} unexpectedly present on 500"
             )
 
-    def test_all_four_headers_exactly(self, client):
-        """Verify exactly the 4 expected security headers are present."""
+    def test_all_expected_headers_present(self, client):
+        """Verify each of the expected security headers is present."""
         response = client.get("/ok")
         for header in EXPECTED_HEADERS:
             assert header in response.headers, (

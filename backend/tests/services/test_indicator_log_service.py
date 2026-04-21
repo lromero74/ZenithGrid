@@ -62,20 +62,17 @@ class TestLogIndicatorEvaluation:
             {"type": "RSI", "timeframe": "1h", "operator": "<", "threshold": 30, "actual_value": 25, "result": True}
         ]
 
-        with patch(
-            "app.database.async_session_maker",
-            _mock_session_maker(db_session),
-        ):
-            result = await log_indicator_evaluation(
-                db=db_session,
-                bot_id=bot.id,
-                product_id="ETH-BTC",
-                phase="base_order",
-                conditions_met=True,
-                conditions_detail=conditions,
-                indicators_snapshot={"rsi_1h": 25.0},
-                current_price=0.05,
-            )
+        result = await log_indicator_evaluation(
+            db=db_session,
+            bot_id=bot.id,
+            product_id="ETH-BTC",
+            phase="base_order",
+            conditions_met=True,
+            conditions_detail=conditions,
+            indicators_snapshot={"rsi_1h": 25.0},
+            current_price=0.05,
+            session_maker=_mock_session_maker(db_session),
+        )
         await db_session.flush()
 
         assert result is not None
@@ -108,20 +105,17 @@ class TestLogIndicatorEvaluation:
 
         conditions = [{"type": "MACD", "result": True}]
 
-        with patch(
-            "app.database.async_session_maker",
-            _mock_session_maker(db_session),
-        ):
-            result = await log_indicator_evaluation(
-                db=db_session,
-                bot_id=bot.id,
-                product_id="SOL-USD",
-                phase="take_profit",
-                conditions_met=True,
-                conditions_detail=conditions,
-                indicators_snapshot=None,
-                current_price=None,
-            )
+        result = await log_indicator_evaluation(
+            db=db_session,
+            bot_id=bot.id,
+            product_id="SOL-USD",
+            phase="take_profit",
+            conditions_met=True,
+            conditions_detail=conditions,
+            indicators_snapshot=None,
+            current_price=None,
+            session_maker=_mock_session_maker(db_session),
+        )
         await db_session.flush()
 
         assert result is not None

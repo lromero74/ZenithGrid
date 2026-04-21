@@ -52,6 +52,9 @@ def _make_bot(
     bot.last_signal_check = last_signal_check
     bot.last_ai_check = last_ai_check
     bot.split_budget_across_pairs = split_budget_across_pairs
+    # Rebalancer gate defaults — disabled so tests don't trip on MagicMock comparisons
+    bot.bot_rebalancer_enabled = False
+    bot.bot_rebalancer_target_pct = 0.0
 
     # products helper (junction table)
     products = []
@@ -716,10 +719,12 @@ class TestConcurrentPairProcessing:
         Uses real asyncio.sleep(0) by patching PAIR_PROCESSING_DELAY_SECONDS=0 so tasks
         actually yield to the event loop and we can observe true concurrency.
         """
-        import app.multi_bot_monitor as mod
-
         pairs = [f"COIN{i}-BTC" for i in range(10)]
         monitor = MultiBotMonitor(exchange=_make_exchange())
+        # Force a known concurrency level — compute_dynamic_concurrency() is
+        # RAM-sensitive and returns 1 on low-memory hosts (e.g. t2.micro CI),
+        # which makes this test flaky. Fix it to 5 for deterministic behavior.
+        monitor._pair_concurrency = 5
         bot = _make_bot(product_ids=pairs, strategy_config={"max_concurrent_deals": 20})
 
         mock_result = MagicMock()
@@ -740,7 +745,7 @@ class TestConcurrentPairProcessing:
             concurrent_count -= 1
             return {"action": "none"}
 
-        pair_concurrency = getattr(mod, "PAIR_CONCURRENCY", 5)
+        pair_concurrency = monitor._pair_concurrency
 
         # Patch constant to 0 so asyncio.sleep(0) is used in _process_pair_task,
         # which is a real yield and allows other tasks to interleave.
