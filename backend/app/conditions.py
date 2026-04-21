@@ -18,7 +18,7 @@ Conditions can be combined with AND/OR logic.
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ComparisonOperator(str, Enum):
@@ -89,8 +89,7 @@ class Condition(BaseModel):
     indicator_params: Dict[str, Any] = Field(default_factory=dict)  # e.g., {"period": 14} for RSI
     compare_indicator_params: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ConditionGroup(BaseModel):
@@ -108,8 +107,7 @@ class ConditionGroup(BaseModel):
     conditions: List[Condition] = Field(default_factory=list)
     sub_groups: List["ConditionGroup"] = Field(default_factory=list)
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ConditionEvaluator:

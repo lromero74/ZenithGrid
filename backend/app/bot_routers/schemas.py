@@ -7,7 +7,7 @@ Shared request/response models for all bot router modules.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class BotCreate(BaseModel):
@@ -84,8 +84,7 @@ class BotResponse(BaseModel):
     rebalancer_bot_overweight: bool = False  # True when deployed > target + tolerance
     soft_ceiling_effective_max: Optional[int] = None  # Last computed SC deal cap (None = SC disabled or not yet run)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BotStats(BaseModel):
@@ -122,8 +121,7 @@ class AIBotLogResponse(BaseModel):
     product_id: Optional[str]
     context: Optional[dict]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScannerLogCreate(BaseModel):
@@ -148,8 +146,7 @@ class ScannerLogResponse(BaseModel):
     volume_ratio: Optional[float]
     pattern_data: Optional[dict]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IndicatorLogResponse(BaseModel):
@@ -164,8 +161,7 @@ class IndicatorLogResponse(BaseModel):
     indicators_snapshot: Optional[dict]
     current_price: Optional[float]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ValidateBotConfigRequest(BaseModel):
@@ -198,8 +194,7 @@ class BotRebalancerGroupResponse(BaseModel):
     overweight_tolerance_pct: float
     enabled: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BotRebalancerBotSlot(BaseModel):

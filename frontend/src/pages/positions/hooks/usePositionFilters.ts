@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { PositionWithPnL } from '../helpers'
 
 export type GroupByMode = 'none' | 'category' | 'market' | 'bot' | 'pair'
@@ -65,7 +65,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   useEffect(() => { setCurrentPage(1) }, [filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, pageSize])
 
   // Get group key for a position
-  const getGroupKey = (p: PositionWithPnL): string => {
+  const getGroupKey = useCallback((p: PositionWithPnL): string => {
     switch (groupBy) {
       case 'category': return p.coin_category || 'Uncategorized'
       case 'market': return (p.product_id || 'ETH-BTC').split('-')[1] || 'Other'
@@ -76,7 +76,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
       case 'pair': return p.product_id || 'Unknown'
       default: return ''
     }
-  }
+  }, [groupBy, bots])
 
   // All filtered + sorted open positions (before pagination)
   const filteredPositions = useMemo(() => {
@@ -141,7 +141,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
       if (sortOrder === 'asc') return aVal > bVal ? 1 : -1
       return aVal < bVal ? 1 : -1
     })
-  }, [positionsWithPnL, filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, bots])
+  }, [positionsWithPnL, filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, getGroupKey])
 
   // Paginated slice
   const totalCount = filteredPositions.length

@@ -14,7 +14,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,8 +47,7 @@ class BlacklistEntry(BaseModel):
     is_global: bool = False  # True if this is an AI-generated global entry
     user_override_category: Optional[str] = None  # Non-null if current user has an override
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BlacklistAddRequest(BaseModel):

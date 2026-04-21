@@ -7,7 +7,7 @@ Exposes available trading strategies and their parameter definitions to the fron
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models import User
 from app.auth.dependencies import get_current_user
@@ -23,8 +23,7 @@ class StrategyResponse(BaseModel):
     description: str
     parameters: List[Dict[str, Any]]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[StrategyResponse])
