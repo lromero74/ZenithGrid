@@ -20,7 +20,7 @@ vi.mock('../hooks/useAudio', () => ({
 }))
 
 // Mock Toast component to simplify rendering
-vi.mock('../components/Toast', () => ({
+vi.mock('../components/shared/Toast', () => ({
   ToastContainer: ({ toasts, onDismiss }: { toasts: Array<{ id: string; type: string; title: string; message: string }>; onDismiss: (id: string) => void }) => (
     <div data-testid="toast-container">
       {toasts.map((t) => (
@@ -99,6 +99,12 @@ describe('NotificationContext', () => {
     vi.useFakeTimers()
     MockWebSocket.instances = []
     vi.stubGlobal('WebSocket', MockWebSocket)
+
+    // Default auth state — provider's connect() returns early without a
+    // valid token, so seed a non-expired token so WS creation proceeds.
+    // Individual tests can override by calling localStorage.clear() first.
+    localStorage.setItem('auth_access_token', 'test-token')
+    localStorage.setItem('auth_token_expiry', String(Date.now() + 60_000))
 
     // Default fetch mock for version check (return a version)
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({

@@ -26,7 +26,7 @@ export function useChartManagement(
       if (sourceChartId !== 'main' && chartRef.current) {
         try {
           chartRef.current.timeScale().setVisibleRange(timeRange)
-        } catch (e) {
+        } catch {
           // Chart may not have data yet
         }
       }
@@ -36,7 +36,7 @@ export function useChartManagement(
         if (id !== sourceChartId) {
           try {
             chart.timeScale().setVisibleRange(timeRange)
-          } catch (e) {
+          } catch {
             // Chart may not have data yet
           }
         }
@@ -142,7 +142,7 @@ export function useChartManagement(
       if (mainCallback && chartRef.current) {
         try {
           chartRef.current.timeScale().unsubscribeVisibleTimeRangeChange(mainCallback)
-        } catch (e) {
+        } catch {
           // Already unsubscribed
         }
       }
@@ -160,7 +160,7 @@ export function useChartManagement(
     if (mainSeriesRef.current) {
       try {
         chartRef.current.removeSeries(mainSeriesRef.current)
-      } catch (e) {
+      } catch {
         // Series may have already been removed
       }
       mainSeriesRef.current = null

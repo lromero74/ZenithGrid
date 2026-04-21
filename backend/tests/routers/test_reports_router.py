@@ -1001,3 +1001,75 @@ class TestComputeMonthlyGrowthRate:
 
         result = compute_monthly_growth_rate(-10.0)
         assert result == 0.0
+
+
+class TestReportsRouteOrdering:
+    """Guard against regression where string routes are shadowed by a
+    sibling router's ``/{report_id}`` catch-all.
+
+    Background: ``reports_crud_router`` defines ``GET /{report_id}`` with an
+    ``int`` path parameter. If another router registered under the same
+    ``/reports`` prefix declares a string path like ``/expense-categories``
+    after it, Starlette route-matching tries ``/{report_id}`` first, fails
+    int validation, and returns 422 — the categories dropdown in the
+    Expenses editor then breaks.
+    """
+
+    def test_expense_categories_resolves_before_report_id(self):
+        """``GET /api/reports/expense-categories`` must resolve to the
+        categories endpoint, not the ``/{report_id}`` catch-all."""
+        from starlette.routing import Match
+        from app.main import app
+        from app.routers.reports_generation_router import get_expense_categories
+
+        # Find the first route that matches GET /api/reports/expense-categories
+        matched = None
+        for route in app.routes:
+            if not hasattr(route, "matches"):
+                continue
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/reports/expense-categories",
+            }
+            match, _ = route.matches(scope)
+            if match == Match.FULL:
+                matched = route
+                break
+
+        assert matched is not None, (
+            "No route matched GET /api/reports/expense-categories"
+        )
+        assert matched.endpoint is get_expense_categories, (
+            f"Expected /expense-categories to resolve to "
+            f"get_expense_categories; got {matched.endpoint!r}. "
+            "This means a sibling router's /{report_id} catch-all is "
+            "shadowing the string route."
+        )
+
+    def test_report_id_catchall_still_resolves_for_int_paths(self):
+        """``GET /api/reports/123`` must still resolve to get_report
+        after any route-order fix."""
+        from starlette.routing import Match
+        from app.main import app
+        from app.routers.reports_crud_router import get_report
+
+        matched = None
+        for route in app.routes:
+            if not hasattr(route, "matches"):
+                continue
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/reports/123",
+            }
+            match, _ = route.matches(scope)
+            if match == Match.FULL:
+                matched = route
+                break
+
+        assert matched is not None, "No route matched GET /api/reports/123"
+        assert matched.endpoint is get_report, (
+            f"Expected /api/reports/123 to resolve to get_report; "
+            f"got {matched.endpoint!r}."
+        )

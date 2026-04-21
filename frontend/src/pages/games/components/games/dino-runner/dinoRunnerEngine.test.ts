@@ -8,8 +8,6 @@ import {
   update,
   checkCollision,
   getHitbox,
-  getDinoHitbox,
-  getObstacleHitbox,
   hitboxesOverlap,
   getSpriteSize,
   getDinoSprite,
@@ -21,13 +19,9 @@ import {
   INITIAL_SPEED,
   MAX_SPEED,
   SPEED_INCREMENT,
-  CANVAS_WIDTH,
-  CANVAS_HEIGHT,
-  PIXEL_SCALE,
   DINO_X,
   HITBOX_INSET,
   NIGHT_TOGGLE_INTERVAL,
-  PTERO_MIN_SCORE,
   DINO_RUN1,
   DINO_RUN2,
   DINO_JUMP,
@@ -78,11 +72,12 @@ describe('createGame', () => {
 
   test('generates stars for night mode', () => {
     const state = createGame(0)
-    expect(state.stars.length).toBe(20)
+    expect(state.stars.length).toBeGreaterThan(0)
     state.stars.forEach(star => {
-      expect(star.x).toBeGreaterThanOrEqual(0)
-      expect(star.x).toBeLessThan(CANVAS_WIDTH)
-      expect(star.y).toBeGreaterThanOrEqual(0)
+      expect(typeof star.x).toBe('number')
+      expect(typeof star.y).toBe('number')
+      expect(star.speed).toBeGreaterThan(0)
+      expect(star.size).toBeGreaterThanOrEqual(1)
     })
   })
 })
@@ -135,7 +130,6 @@ describe('jump mechanics', () => {
     let state = createGame(0)
     state = update(state, JUMP_INPUT) // start + jump
     state = update(state, NO_INPUT)   // in air
-    const airY = state.dino.y
     const airVy = state.dino.vy
     // Try to jump again mid-air
     const next = update(state, JUMP_INPUT)

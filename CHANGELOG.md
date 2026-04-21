@@ -5,7 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.160.2] - 2026-04-21
+## [v2.160.3] - 2026-04-21
+
+### Fixed
+- **Expense categories dropdown in Reports now loads correctly** — The "Expenses" target editor was showing an empty category list, making it impossible to pick a category when adding or editing an expense item. The `/api/reports/expense-categories` endpoint was being shadowed by the `/api/reports/{report_id}` int-typed catch-all route because the CRUD router was registered before the generation router, so the backend returned a 422 before the intended handler could run. Fixed by reordering router registration so the specific endpoint matches first, and added regression tests that assert the route resolution order.
+
+### Changed
+- **Frontend test-suite maintenance** — Fixed 22 pre-existing test failures that had accumulated as games, audio catalogs, and components evolved past their original assertions: PanicSellModal, NotificationContext, songRegistry, sfxRegistry, dinoRunnerEngine, and EuchreEngine test files now pass. Mock paths corrected where the system-under-test import moved, hardcoded game/song counts replaced with dynamic assertions, and Euchre's `ordering up` flow updated to reflect the `goAlonePrompt` phase that now sits between order-up and dealer discard.
+
+
 
 ### Changed
 - **Internal cleanup: frontend ESLint errors zeroed out** — Resolved all 58 remaining ESLint errors across 28 frontend files. Fixes include renaming a shadowed `Infinity` identifier in the games icon map, combining `let` + destructure-and-reassign patterns into `const` destructuring across the card/arcade game engines, replacing deprecated `Function` types with explicit signatures in a chart test, hoisting several `useCallback`s above conditional early returns in multiplayer lobbies (Crazy Eights, Gin Rummy, Go Fish, and the race overlay) to comply with React's rules of hooks, and adding explicit ignore comments to intentional empty catch blocks. No user-facing behavior change.

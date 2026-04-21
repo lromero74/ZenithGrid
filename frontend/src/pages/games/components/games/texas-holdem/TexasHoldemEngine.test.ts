@@ -15,7 +15,6 @@ import {
   getMinRaise,
   setBlinds,
   type TexasHoldemState,
-  type HandResult,
   type Phase,
 } from './TexasHoldemEngine'
 
@@ -975,23 +974,23 @@ describe('setBlinds', () => {
     expect(result.blindLevel).toBe(0)
   })
 
-  test('level 1 is 20/40', () => {
+  test('level 1 is 15/30', () => {
     const result = setBlinds(makeState(), 1)
-    expect(result.smallBlind).toBe(20)
-    expect(result.bigBlind).toBe(40)
+    expect(result.smallBlind).toBe(15)
+    expect(result.bigBlind).toBe(30)
     expect(result.blindLevel).toBe(1)
   })
 
-  test('level 2 is 40/80', () => {
+  test('level 2 is 25/50', () => {
     const result = setBlinds(makeState(), 2)
-    expect(result.smallBlind).toBe(40)
-    expect(result.bigBlind).toBe(80)
+    expect(result.smallBlind).toBe(25)
+    expect(result.bigBlind).toBe(50)
   })
 
-  test('level 3 is 80/160', () => {
+  test('level 3 is 50/100', () => {
     const result = setBlinds(makeState(), 3)
-    expect(result.smallBlind).toBe(80)
-    expect(result.bigBlind).toBe(160)
+    expect(result.smallBlind).toBe(50)
+    expect(result.bigBlind).toBe(100)
   })
 })
 
@@ -1027,7 +1026,6 @@ describe('full hand flow: preflop → flop → turn → river → showdown', () 
     expect(state.bets.every(b => b === 0)).toBe(true)
 
     // All players check through the flop
-    const flopFirstPlayer = state.currentPlayer
     state = check(state) // 1st player
     expect(state.phase).toBe('flop') // must NOT advance yet
     state = check(state) // 2nd player

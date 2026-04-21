@@ -239,7 +239,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     if (mainSeriesRef.current) {
       try {
         chartRef.current.removeSeries(mainSeriesRef.current)
-      } catch (e) {
+      } catch {
         // Series may have already been removed
       }
       mainSeriesRef.current = null
@@ -331,7 +331,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
           if (chartRef.current) {
             chartRef.current.removeSeries(s)
           }
-        } catch (e) {
+        } catch {
           // Series may have already been removed
         }
       })
@@ -342,7 +342,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     if (indicatorChart) {
       try {
         indicatorChart.remove()
-      } catch (e) {
+      } catch {
         // Chart may have already been removed
       }
       indicatorChartsRef.current.delete(indicatorId)
@@ -391,7 +391,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
                 chartRef.current.removeSeries(series)
               }
             }
-          } catch (e) {
+          } catch {
             // Series may have already been removed
           }
         })
@@ -746,7 +746,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       }
 
       chartRef.current.timeScale().fitContent()
-    } catch (e) {
+    } catch {
       return
     }
   }, [chartData, chartType, useHeikinAshi, indicators, position, bot, selectedPair, trades])
@@ -787,7 +787,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       if (!existingOscillatorIds.has(id)) {
         try {
           chart.remove()
-        } catch (e) {
+        } catch {
           // Chart may have already been removed
         }
         indicatorChartsRef.current.delete(id)

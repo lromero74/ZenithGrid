@@ -168,12 +168,9 @@ export function calculateBollingerBands(
 
   // Compute variance using running sum of squares O(N) instead of slice per element O(N*P)
   let sumSq = 0
-  let windowSum = 0
   for (let i = 0; i < data.length; i++) {
-    windowSum += data[i]
     sumSq += data[i] * data[i]
     if (i >= period) {
-      windowSum -= data[i - period]
       sumSq -= data[i - period] * data[i - period]
     }
     if (i < period - 1 || middle[i] === null) {

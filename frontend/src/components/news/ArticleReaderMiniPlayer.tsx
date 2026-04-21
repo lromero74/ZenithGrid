@@ -336,7 +336,7 @@ export function ArticleReaderMiniPlayer() {
     // Note: en-dashes (–) and em-dashes (—) are treated as separators since TTS reads them as separate words
     const textWords: Array<{ start: number; end: number; text: string; lower: string; clean: string; isNumeric: boolean }> = []
     // Regex patterns: $numbers | numbers% | acronyms (A.B.C.) | regular words (with various apostrophe chars)
-    const wordRegex = /\$[\d,\.]+|\d[\d,\.]*%|(?:[A-Z]\.)+[A-Z]?|[a-zA-Z0-9]+(?:[-'''`ʼ][a-zA-Z0-9]+)*/g
+    const wordRegex = /\$[\d,.]+|\d[\d,.]*%|(?:[A-Z]\.)+[A-Z]?|[a-zA-Z0-9]+(?:[-'''`ʼ][a-zA-Z0-9]+)*/g
     let match
     while ((match = wordRegex.exec(plainText)) !== null) {
       const text = match[0]

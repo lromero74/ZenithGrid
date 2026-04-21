@@ -106,7 +106,7 @@ describe('SCALES', () => {
   })
 
   it('all scale intervals are ascending', () => {
-    for (const [name, intervals] of Object.entries(SCALES)) {
+    for (const [, intervals] of Object.entries(SCALES)) {
       for (let i = 1; i < intervals.length; i++) {
         expect(intervals[i]).toBeGreaterThan(intervals[i - 1])
       }
@@ -291,7 +291,7 @@ describe('RHYTHM_TEMPLATES', () => {
   })
 
   it('all templates sum to 16 steps (one bar)', () => {
-    for (const [name, durations] of Object.entries(RHYTHM_TEMPLATES)) {
+    for (const [, durations] of Object.entries(RHYTHM_TEMPLATES)) {
       const sum = durations.reduce((a, b) => a + b, 0)
       expect(sum).toBe(16)
     }

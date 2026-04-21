@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SFX_CATALOG, SFXRecipe, EFFECT_CATEGORIES } from './sfxCatalog'
+import { SFX_CATALOG, EFFECT_CATEGORIES } from './sfxCatalog'
 
 // ---------------------------------------------------------------------------
 // sfxCatalog tests — validate the effect recipe catalog structure
@@ -11,7 +11,7 @@ describe('SFX_CATALOG', () => {
   })
 
   it('all recipes are functions', () => {
-    for (const [name, recipe] of Object.entries(SFX_CATALOG)) {
+    for (const [, recipe] of Object.entries(SFX_CATALOG)) {
       expect(typeof recipe).toBe('function')
       // Recipes are: (engine, time, variation) => void
       expect(recipe.length).toBeGreaterThanOrEqual(2) // at least engine + time

@@ -284,7 +284,7 @@ function Bots() {
     // Step 1: Parse JSON
     try {
       parsedData = JSON.parse(jsonString)
-    } catch (err) {
+    } catch {
       return { isValid: false, errors: ['Invalid JSON format'], warnings: [], parsedData: null }
     }
 

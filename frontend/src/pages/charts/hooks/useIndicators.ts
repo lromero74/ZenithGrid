@@ -84,7 +84,7 @@ export function useIndicators({
           if (chartRef.current) {
             chartRef.current.removeSeries(s)
           }
-        } catch (e) {
+        } catch {
           // Series may have already been removed or belongs to indicator chart
         }
       })
@@ -96,7 +96,7 @@ export function useIndicators({
     if (indicatorChart) {
       try {
         indicatorChart.remove()
-      } catch (e) {
+      } catch {
         // Chart may have already been removed
       }
       indicatorChartsRef.current.delete(indicatorId)
@@ -149,7 +149,7 @@ export function useIndicators({
                 chartRef.current.removeSeries(series)
               }
             }
-          } catch (e) {
+          } catch {
             // Series may have already been removed, ignore
           }
         })
@@ -500,7 +500,7 @@ export function useIndicators({
         if (callback) {
           try {
             chart.timeScale().unsubscribeVisibleTimeRangeChange(callback)
-          } catch (e) {
+          } catch {
             // Already unsubscribed
           }
           syncCallbacksRef.current.delete(id)
@@ -512,7 +512,7 @@ export function useIndicators({
         }
         try {
           chart.remove()
-        } catch (e) {
+        } catch {
           // Chart may have already been removed
         }
         indicatorChartsRef.current.delete(id)
@@ -529,7 +529,7 @@ export function useIndicators({
         if (callback) {
           try {
             chart.timeScale().unsubscribeVisibleTimeRangeChange(callback)
-          } catch (e) {
+          } catch {
             // Already unsubscribed
           }
           syncCallbacksRef.current.delete(id)
@@ -541,7 +541,7 @@ export function useIndicators({
         }
         try {
           chart.remove()
-        } catch (e) {
+        } catch {
           // Chart may have already been removed
         }
       })

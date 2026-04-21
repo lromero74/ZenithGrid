@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mulberry32, generateSong, GENRE_PRESETS } from './songFactory'
-import { nearestChordTone, getChord, getScale } from './musicTheory'
+import { nearestChordTone, getChord } from './musicTheory'
 
 // ---------------------------------------------------------------------------
 // Mulberry32 PRNG
@@ -296,12 +296,6 @@ describe('per-genre intensity maps', () => {
 describe('chord-aware melodies', () => {
   it('lead melody contains notes from the scale', () => {
     const song = generateSong('jazz', 42)
-    const scaleFreqs = new Set(
-      // Build the full scale range
-      Array.from({ length: 3 }, (_, o) =>
-        getScale(song.key, song.scale, 3 + o)
-      ).flat()
-    )
     const leadPattern = song.channels.lead.patterns['verse']
     // At least some non-rest notes should be scale tones (within tolerance)
     const nonRestNotes = leadPattern.notes.filter(n => n.pitch > 0)

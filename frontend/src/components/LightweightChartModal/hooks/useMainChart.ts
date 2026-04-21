@@ -86,7 +86,7 @@ export function useMainChart(
     if (mainSeriesRef.current) {
       try {
         chartRef.current.removeSeries(mainSeriesRef.current)
-      } catch (e) {
+      } catch {
         // Series might already be removed
       }
       mainSeriesRef.current = null

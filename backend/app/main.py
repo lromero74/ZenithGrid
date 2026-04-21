@@ -167,8 +167,11 @@ app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
 app.include_router(admin_router.router)  # RBAC admin management
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
-app.include_router(reports_crud_router.router)  # Reporting & goals (CRUD)
+# Order matters: generation router has specific string routes like
+# /expense-categories that must match before reports_crud_router's
+# /{report_id} int-catchall (see TestReportsRouteOrdering).
 app.include_router(reports_generation_router.router)  # Reporting & goals (generation)
+app.include_router(reports_crud_router.router)  # Reporting & goals (CRUD)
 app.include_router(transfers_router.router)  # Deposit/withdrawal tracking
 app.include_router(friends_router.router)  # Friends & social
 app.include_router(friends_router.search_router)  # User search

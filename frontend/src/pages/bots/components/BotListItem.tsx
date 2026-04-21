@@ -671,7 +671,7 @@ export const BotListItem = memo(function BotListItem({
                         title: 'Copied to Clipboard',
                         message: `"${bot.name}" config ready to share`,
                       })
-                    } catch (err) {
+                    } catch {
                       addToast({
                         type: 'error',
                         title: 'Copy Failed',

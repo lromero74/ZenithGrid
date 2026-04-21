@@ -131,14 +131,14 @@
       "purpose": "PropGuard safety monitoring: status, kill switch, reset, history"
     },
     {
-      "file": "routers/reports_crud_router.py",
-      "prefix": "/api/reports",
-      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; split from reports_router.py"
-    },
-    {
       "file": "routers/reports_generation_router.py",
       "prefix": "/api/reports",
-      "purpose": "Report generation endpoints, expense item CRUD (supports both expense and savings_target item types), expense categories, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; list_expense_items returns dict (not List[dict]); split from reports_router.py"
+      "purpose": "Report generation endpoints, expense item CRUD (supports both expense and savings_target item types), expense categories, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; list_expense_items returns dict (not List[dict]); split from reports_router.py. MUST be included before reports_crud_router in main.py so specific string-typed routes like /api/reports/expense-categories match before the int-typed /{report_id} catch-all (see TestReportsRouteOrdering in tests/routers/test_reports_router.py)."
+    },
+    {
+      "file": "routers/reports_crud_router.py",
+      "prefix": "/api/reports",
+      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; split from reports_router.py. Registered AFTER reports_generation_router in main.py because its /{report_id} int-typed route would otherwise shadow sibling string routes."
     },
     {
       "file": "routers/transfers_router.py",

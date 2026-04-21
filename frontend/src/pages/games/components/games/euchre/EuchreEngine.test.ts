@@ -419,7 +419,7 @@ describe('trump selection round 1', () => {
     expect(next.makerTeam).toBe(1) // player 1 → team 1
   })
 
-  test('ordering up transitions to dealerDiscard', () => {
+  test('ordering up transitions to goAlonePrompt (then dealerDiscard)', () => {
     const state = baseState({
       phase: 'trumpRound1',
       currentPlayer: 1,
@@ -431,7 +431,7 @@ describe('trump selection round 1', () => {
       ],
     })
     const next = orderUp(state)
-    expect(next.phase).toBe('dealerDiscard')
+    expect(next.phase).toBe('goAlonePrompt')
   })
 
   test('ordering up gives dealer the flipped card', () => {

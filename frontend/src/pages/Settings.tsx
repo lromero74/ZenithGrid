@@ -558,7 +558,7 @@ export default function Settings() {
       if (response.ok) {
         setTrustedDevices(await response.json())
       }
-    } catch (err) {
+    } catch {
       setDeviceError('Failed to load trusted devices')
     } finally {
       setIsLoadingDevices(false)

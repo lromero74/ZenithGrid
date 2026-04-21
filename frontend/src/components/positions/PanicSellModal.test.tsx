@@ -18,7 +18,7 @@
  * - Close button resets and dismisses
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
@@ -30,7 +30,7 @@ import { positionsApi } from '../../services/api'
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../services/api', () => ({
+vi.mock('../../services/api', () => ({
   positionsApi: {
     panicSellSendMfa: vi.fn(),
     panicSell: vi.fn(),

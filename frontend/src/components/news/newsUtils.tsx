@@ -76,7 +76,7 @@ export function renderMarkdown(markdown: string, titleToSkip?: string | null): R
       }
 
       // Find next special character or end
-      const nextSpecial = remaining.search(/[\[*_]/)
+      const nextSpecial = remaining.search(/[[*_]/)
       if (nextSpecial === -1) {
         parts.push(remaining)
         break
