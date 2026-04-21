@@ -335,7 +335,7 @@ function moveCentipedeChain(
   const leftover = accum - steps * stepInterval
 
   // Deep-copy so we can mutate
-  let segs = chain.map(s => ({ ...s }))
+  const segs = chain.map(s => ({ ...s }))
 
   for (let step = 0; step < steps; step++) {
     // Save every segment's position/direction before the step
@@ -573,9 +573,10 @@ function checkPlayerHit(
 export function updateGame(state: GameState, dt: number): GameState {
   if (state.gameOver) return state
 
+  const { level } = state
   let {
     player, centipedes, mushrooms, bullets, spider,
-    score, lives, level, spiderTimer, invulnerable,
+    score, lives, spiderTimer, invulnerable,
   } = state
 
   // Tick invulnerability

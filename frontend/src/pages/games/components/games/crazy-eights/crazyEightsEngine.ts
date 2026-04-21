@@ -140,7 +140,7 @@ export function drawCard(state: CrazyEightsState): CrazyEightsState {
   if (state.phase !== 'playing') return state
   if (state.currentPlayer !== 0) return state
 
-  let drawPile = reshuffleDrawPile(state)
+  const drawPile = reshuffleDrawPile(state)
   if (drawPile.length === 0) {
     // No cards to draw — pass turn
     return advanceTurn({ ...state, drawPile })
@@ -183,7 +183,7 @@ function aiTurn(state: CrazyEightsState): CrazyEightsState {
 
   if (playable.length === 0) {
     // AI draws
-    let drawPile = reshuffleDrawPile(state)
+    const drawPile = reshuffleDrawPile(state)
     if (drawPile.length === 0) return state // pass
 
     const card = drawPile.pop()!
@@ -205,7 +205,7 @@ function aiTurn(state: CrazyEightsState): CrazyEightsState {
   }
 
   // AI plays: prefer non-8 cards, save 8s for last
-  let chosenIdx = playable.find(i => hand[i].rank !== 8) ?? playable[0]
+  const chosenIdx = playable.find(i => hand[i].rank !== 8) ?? playable[0]
   const card = hand[chosenIdx]
   hand.splice(chosenIdx, 1)
 

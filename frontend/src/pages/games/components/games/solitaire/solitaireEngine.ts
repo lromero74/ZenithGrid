@@ -236,7 +236,7 @@ export function canAutoComplete(state: SolitaireState): boolean {
 }
 
 export function autoComplete(state: SolitaireState): SolitaireState {
-  let current = cloneState(state)
+  const current = cloneState(state)
 
   // Keep moving cards to foundations until no more moves possible
   let moved = true

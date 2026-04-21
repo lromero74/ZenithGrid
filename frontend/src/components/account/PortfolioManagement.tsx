@@ -101,7 +101,7 @@ function loadCache(): PortfolioCache | null {
 }
 
 function saveCache(cache: PortfolioCache) {
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache)) } catch {}
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache)) } catch { /* ignored */ }
 }
 
 let _portfolioCache: PortfolioCache | null = loadCache()

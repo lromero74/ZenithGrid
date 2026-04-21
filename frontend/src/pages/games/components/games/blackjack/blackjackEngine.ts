@@ -415,9 +415,7 @@ export function hit(state: BlackjackState): BlackjackState {
   const hand = state.playerHands[state.activeHandIndex]
   if (!hand || hand.stood) return state
 
-  let shoe = [...state.shoe]
-  let card: Card
-  ;[card, shoe] = drawCard(shoe)
+  const [card, shoe] = drawCard([...state.shoe])
 
   const newCards = [...hand.cards, card]
   const score = scoreHand(newCards)
@@ -460,9 +458,7 @@ export function doubleDown(state: BlackjackState): BlackjackState {
   if (!hand || hand.cards.length !== 2) return state
   if (hand.bet > state.chips) return state // can't afford double
 
-  let shoe = [...state.shoe]
-  let card: Card
-  ;[card, shoe] = drawCard(shoe)
+  const [card, shoe] = drawCard([...state.shoe])
 
   const newCards = [...hand.cards, card]
   const score = scoreHand(newCards)
@@ -489,10 +485,8 @@ export function split(state: BlackjackState): BlackjackState {
   if (hand.bet > state.chips) return state // can't afford split
   if (state.playerHands.length >= 4) return state // max 4 hands
 
-  let shoe = [...state.shoe]
-  let card1: Card, card2: Card
-  ;[card1, shoe] = drawCard(shoe)
-  ;[card2, shoe] = drawCard(shoe)
+  const [card1, shoe1] = drawCard([...state.shoe])
+  const [card2, shoe] = drawCard(shoe1)
 
   const hand1: Hand = { cards: [hand.cards[0], card1], bet: hand.bet, stood: false, doubled: false, result: '' }
   const hand2: Hand = { cards: [hand.cards[1], card2], bet: hand.bet, stood: false, doubled: false, result: '' }
@@ -578,9 +572,7 @@ export function aiStep(state: BlackjackState): BlackjackState {
   }
 
   // Hit
-  let shoe = [...state.shoe]
-  let card: Card
-  ;[card, shoe] = drawCard(shoe)
+  const [card, shoe] = drawCard([...state.shoe])
   const newCards = [...ai.cards, card]
   const newScore = scoreHand(newCards)
 
@@ -606,9 +598,7 @@ export function dealerStep(state: BlackjackState): BlackjackState {
 
   if (!mustHit) return resolvePayout(state)
 
-  let shoe = [...state.shoe]
-  let card: Card
-  ;[card, shoe] = drawCard(shoe)
+  const [card, shoe] = drawCard([...state.shoe])
   const dealerCards = [...state.dealerHand, card]
   const newScore = scoreHand(dealerCards)
 

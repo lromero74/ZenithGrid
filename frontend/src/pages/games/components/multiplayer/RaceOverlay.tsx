@@ -185,7 +185,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
       })
     })
     return () => { unsubForfeit(); unsubDisconnect(); unsubReconnect() }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [roomId, setRaceResultWithPlayOn])
 
   // Reconnect countdown timer
@@ -640,6 +640,17 @@ export function RaceOverlay({
       return () => clearTimeout(timer)
     }
   }, [raceResult, localFinished])
+
+  // Auto-enter spectate mode once spectator data is available after skull dismissal.
+  // Declared here (before any early return) to keep Hook call order stable.
+  useEffect(() => {
+    const hasSpectatorProps = spectatablePlayers !== undefined && spectatablePlayers.length > 0
+    const readyToSpectate = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
+    if (readyToSpectate) {
+      setSpectateMode(true)
+    }
+  }, [localFinished, raceResult, skullDismissed, spectateMode, spectatablePlayers])
+
   // Self-disconnected overlay — shown when we lose connection
   if (selfDisconnected) {
     return (
@@ -705,18 +716,8 @@ export function RaceOverlay({
 
   // Elimination spectator flow: player finished, race not over yet
   // Show skull immediately — don't gate on hasSpectatorProps
-  const hasSpectatorProps = spectatablePlayers !== undefined && spectatablePlayers.length > 0
   const showSkullOverlay = localFinished && !raceResult && !skullDismissed
-  // After skull dismissed, auto-enter spectate mode once data arrives
-  const readyToSpectate = localFinished && !raceResult && skullDismissed && !spectateMode && hasSpectatorProps
   const showSpectatorBar = spectateMode && !raceResult
-
-  // Auto-enter spectate mode once spectator data is available after skull dismissal
-  useEffect(() => {
-    if (readyToSpectate) {
-      setSpectateMode(true)
-    }
-  }, [readyToSpectate])
 
   // Step 1: Skull result — "You Lost!" with a dismiss button
   if (showSkullOverlay) {

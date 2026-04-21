@@ -82,7 +82,7 @@ function loadLS<T>(key: string, fallback: T): T {
 }
 
 function saveLS(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* ignored */ }
 }
 
 interface TradingViewChartModalProps {
@@ -201,7 +201,7 @@ export default function TradingViewChartModal({
 
     return () => {
       if (widgetRef.current) {
-        try { if (typeof widgetRef.current.remove === 'function') widgetRef.current.remove() } catch {}
+        try { if (typeof widgetRef.current.remove === 'function') widgetRef.current.remove() } catch { /* ignored */ }
         widgetRef.current = null
       }
     }

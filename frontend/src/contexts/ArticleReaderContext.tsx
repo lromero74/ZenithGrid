@@ -571,7 +571,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       console.log('[TTS] Found saved session:', session.playlist.length, 'articles, index', session.currentIndex)
       setPendingResume(session)
     } catch { /* ignore parse errors */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []) // Mount only — intentionally omit deps
 
   // ===========================================================================

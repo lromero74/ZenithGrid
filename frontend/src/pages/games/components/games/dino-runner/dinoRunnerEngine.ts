@@ -1443,11 +1443,11 @@ export function update(state: GameState, input: InputState): GameState {
   }
 
   // Playing phase
-  let dino = { ...state.dino }
+  const dino = { ...state.dino }
   let { speed, score, highScore, nightMode, nightTransition,
         nextObstacleDistance, milestoneFlash } = state
   let rhythmQueue = state.rhythmQueue
-  let frameCount = state.frameCount + 1
+  const frameCount = state.frameCount + 1
 
   // --- Dino physics ---
   const onGround = dino.y >= GROUND_Y
@@ -1569,7 +1569,7 @@ export function update(state: GameState, input: InputState): GameState {
   }
 
   // --- Obstacle clear bonuses ---
-  let scorePopups = state.scorePopups
+  const scorePopups = state.scorePopups
     .map(p => ({ ...p, age: p.age + 1 }))
     .filter(p => p.age < p.maxAge)
   for (const obs of obstacles) {

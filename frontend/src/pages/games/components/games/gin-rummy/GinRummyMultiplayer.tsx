@@ -449,6 +449,32 @@ export function GinRummyMultiplayer({ roomId, players, playerNames, onLeave }: P
     return unsub
   }, [roomId, isHost, players, processAction])
 
+  // ── Handlers (declared before early return so Hook order stays stable) ─
+
+  const handleDrawPile = useCallback(() => {
+    sfx.play('deal')
+    sendAction({ type: 'gr_draw_stock' })
+  }, [sfx, sendAction])
+
+  const handleDrawDiscard = useCallback(() => {
+    sfx.play('deal')
+    sendAction({ type: 'gr_draw_discard' })
+  }, [sfx, sendAction])
+
+  const handleDiscard = useCallback((i: number) => {
+    sfx.play('place')
+    sendAction({ type: 'gr_discard', cardIndex: i })
+  }, [sfx, sendAction])
+
+  const handleKnock = useCallback(() => {
+    sfx.play('place')
+    sendAction({ type: 'gr_knock' })
+  }, [sfx, sendAction])
+
+  const handleNewRound = useCallback(() => {
+    sendAction({ type: 'gr_new_round' })
+  }, [sendAction])
+
   // ── Derive view data ───────────────────────────────────────────
 
   const view: GuestViewState | null = isHost && gameState
@@ -475,32 +501,6 @@ export function GinRummyMultiplayer({ roomId, players, playerNames, onLeave }: P
 
   const gameOver = view.phase === 'gameOver'
   const iWon = gameOver && view.scores[myPlayerIndex] >= view.targetScore
-
-  // ── Handlers ───────────────────────────────────────────────────
-
-  const handleDrawPile = useCallback(() => {
-    sfx.play('deal')
-    sendAction({ type: 'gr_draw_stock' })
-  }, [sfx, sendAction])
-
-  const handleDrawDiscard = useCallback(() => {
-    sfx.play('deal')
-    sendAction({ type: 'gr_draw_discard' })
-  }, [sfx, sendAction])
-
-  const handleDiscard = useCallback((i: number) => {
-    sfx.play('place')
-    sendAction({ type: 'gr_discard', cardIndex: i })
-  }, [sfx, sendAction])
-
-  const handleKnock = useCallback(() => {
-    sfx.play('place')
-    sendAction({ type: 'gr_knock' })
-  }, [sfx, sendAction])
-
-  const handleNewRound = useCallback(() => {
-    sendAction({ type: 'gr_new_round' })
-  }, [sendAction])
 
   // ── Turn label ─────────────────────────────────────────────────
 

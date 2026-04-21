@@ -139,9 +139,9 @@ export function resolveWar(state: WarState): WarState {
   if (state.phase !== 'war') return state
   if (!state.playerCard || !state.aiCard) return state
 
-  let playerDeck = [...state.playerDeck]
-  let aiDeck = [...state.aiDeck]
-  let warPile = [state.playerCard, state.aiCard, ...state.warPile]
+  const playerDeck = [...state.playerDeck]
+  const aiDeck = [...state.aiDeck]
+  const warPile = [state.playerCard, state.aiCard, ...state.warPile]
 
   // Loop to handle nested wars (tie during war)
   while (true) {

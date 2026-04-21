@@ -106,7 +106,7 @@ function dealRound(state: SpadesState): SpadesState {
     hands[p] = sortHand(hands[p])
   }
 
-  let next: SpadesState = {
+  const next: SpadesState = {
     ...state,
     hands,
     currentTrick: [],
@@ -203,7 +203,7 @@ export function playCard(state: SpadesState, cardIndex: number): SpadesState {
   const newTrick = [...state.currentTrick, { player: 0, card }]
   const spadesBroken = state.spadesBroken || card.suit === 'spades'
 
-  let next: SpadesState = {
+  const next: SpadesState = {
     ...state,
     hands: newHands,
     currentTrick: newTrick,

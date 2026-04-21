@@ -337,6 +337,18 @@ export function GoFishMultiplayer({ roomId, players, playerNames, onLeave }: Pro
     return unsub
   }, [roomId, isHost, players, processAction])
 
+  // ── Handlers (declared before early return so Hook order stays stable) ─
+
+  const handleAsk = useCallback((rank: number) => {
+    sfx.play('place')
+    sendAction({ type: 'gf_ask_rank', rank })
+  }, [sfx, sendAction])
+
+  const handleGoFish = useCallback(() => {
+    sfx.play('flip')
+    sendAction({ type: 'gf_go_fish' })
+  }, [sfx, sendAction])
+
   // ── Derive view ────────────────────────────────────────────────
 
   const view: GuestViewState | null = isHost && gameState
@@ -358,18 +370,6 @@ export function GoFishMultiplayer({ roomId, players, playerNames, onLeave }: Pro
   const gameOver = view.phase === 'gameOver'
   const iWon = gameOver && view.myBooks.length > view.opponentBooks.length
   const isTie = gameOver && view.myBooks.length === view.opponentBooks.length
-
-  // ── Handlers ───────────────────────────────────────────────────
-
-  const handleAsk = useCallback((rank: number) => {
-    sfx.play('place')
-    sendAction({ type: 'gf_ask_rank', rank })
-  }, [sfx, sendAction])
-
-  const handleGoFish = useCallback(() => {
-    sfx.play('flip')
-    sendAction({ type: 'gf_go_fish' })
-  }, [sfx, sendAction])
 
   // ── Turn label ─────────────────────────────────────────────────
 

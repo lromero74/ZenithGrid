@@ -280,7 +280,7 @@ describe('bidding flow', () => {
       currentPlayer: 1,
     })
     // Pass 3 times (players 1, 2, 3)
-    let s = passBid(state) // player 1 passes, then AI 2 and 3 pass
+    const s = passBid(state) // player 1 passes, then AI 2 and 3 pass
     // After 3 passes following a bid, contract should be set
     expect(s.contract).not.toBeNull()
     expect(s.contract!.level).toBe(1)
