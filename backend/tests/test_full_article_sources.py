@@ -19,39 +19,39 @@ class TestCBSPBSReclassification:
     """Verify CBS/PBS sources are reclassified from scrape=False to scrape=True."""
 
     def test_cbs_sports_scrape_allowed(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('cbs_sports', {})
         assert policy.get('scrape', True) is True
 
     def test_cbs_news_politics_scrape_allowed(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('cbs_news_politics', {})
         assert policy.get('scrape', True) is True
 
     def test_cbs_news_us_scrape_allowed(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('cbs_news_us', {})
         assert policy.get('scrape', True) is True
 
     def test_cbs_news_entertainment_scrape_allowed(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('cbs_news_entertainment', {})
         assert policy.get('scrape', True) is True
 
     def test_pbs_newshour_scrape_allowed_with_delay(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('pbs_newshour', {})
         assert policy.get('scrape', True) is True
         assert policy.get('delay', 0) == 1
 
     def test_pbs_politics_scrape_allowed_with_delay(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('pbs_politics', {})
         assert policy.get('scrape', True) is True
         assert policy.get('delay', 0) == 1
 
     def test_pbs_arts_scrape_allowed_with_delay(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('pbs_arts', {})
         assert policy.get('scrape', True) is True
         assert policy.get('delay', 0) == 1
@@ -67,7 +67,7 @@ class TestNewSourcesAdded:
 
     @pytest.fixture(autouse=True)
     def _load_sources(self):
-        from app.database_seeds import DEFAULT_CONTENT_SOURCES
+        from app.seeds import DEFAULT_CONTENT_SOURCES
         # Build lookup: source_key -> (name, type, url, website, desc, channel_id, category)
         self.sources = {}
         for row in DEFAULT_CONTENT_SOURCES:
@@ -107,7 +107,7 @@ class TestNewSourcesAdded:
 
     def test_sports_illustrated_not_dead(self):
         """SI must be removed from DEAD_SOURCES to be active."""
-        from app.database_seeds import DEAD_SOURCES
+        from app.seeds import DEAD_SOURCES
         assert 'sports_illustrated' not in DEAD_SOURCES
 
     # --- ET Online ---
@@ -124,7 +124,7 @@ class TestNewSourcesAdded:
         assert 'democracynow.org' in s['url']
 
     def test_democracy_now_crawl_delay(self):
-        from app.database_seeds import SOURCE_SCRAPE_POLICIES
+        from app.seeds import SOURCE_SCRAPE_POLICIES
         policy = SOURCE_SCRAPE_POLICIES.get('democracy_now', {})
         assert policy.get('delay', 0) == 10
 
@@ -164,7 +164,7 @@ class TestCategoryCoverage:
 
     @pytest.fixture(autouse=True)
     def _load(self):
-        from app.database_seeds import DEFAULT_CONTENT_SOURCES, SOURCE_SCRAPE_POLICIES
+        from app.seeds import DEFAULT_CONTENT_SOURCES, SOURCE_SCRAPE_POLICIES
         self.full_article_by_category = {}
         for row in DEFAULT_CONTENT_SOURCES:
             key, category = row[0], row[7]
