@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SignalResponse(BaseModel):
@@ -17,8 +17,7 @@ class SignalResponse(BaseModel):
     action_taken: Optional[str]
     reason: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MarketDataResponse(BaseModel):
@@ -29,5 +28,4 @@ class MarketDataResponse(BaseModel):
     macd_signal: Optional[float]
     macd_histogram: Optional[float]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

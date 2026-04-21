@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.exceptions import AppError
 from sqlalchemy import func, or_, select
@@ -168,8 +168,7 @@ class AccountResponse(BaseModel):
     shared_by: Optional[str] = None         # Display name of the account owner (non-owners only)
     member_count: int = 0                   # Number of active non-owner members
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AccountWithBalance(AccountResponse):

@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,8 +42,7 @@ class OrderHistoryResponse(BaseModel):
     order_id: Optional[str]
     error_message: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
