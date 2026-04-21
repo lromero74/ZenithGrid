@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.160.1] - 2026-04-21
+
+### Changed
+- **Internal cleanup: Pydantic V2 + React hook deps** — Migrated 19 deprecated `class Config:` blocks across 10 schema/router modules to Pydantic V2's `model_config = ConfigDict(...)` form, silencing all Pydantic deprecation warnings on startup. Also fixed a React `exhaustive-deps` warning in the positions filter hook by stabilizing `getGroupKey` with `useCallback`. No user-facing behavior change.
+
 ## [v2.160.0] - 2026-04-21
 
 ### Added
