@@ -43,6 +43,19 @@ from app.indicator_calculator import IndicatorCalculator
 if TYPE_CHECKING:
     from app.indicators.ai_tools import ToolContext
 
+
+async def log_opinion(**kwargs):
+    """Lazy proxy to ai_opinion_logger.log_opinion.
+
+    Direct top-level import triggers the same circular-import problem
+    `_tools_module()` works around — resolving the logger on first call
+    avoids re-entering app.indicators.__init__ while this module is still
+    loading. Patching `_mod.log_opinion` in tests still works because this
+    symbol lives in the module namespace.
+    """
+    from app.indicators.ai_opinion_logger import log_opinion as _impl
+    await _impl(**kwargs)
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,6 +84,7 @@ _ARG_TOOL_NAMES: List[str] = [
     "get_candle_window",
     "get_recent_news",
     "get_trade_history",
+    "get_prior_ai_signals",
 ]
 
 
@@ -93,6 +107,12 @@ _TOOL_USE_HINTS: Dict[str, str] = {
     "get_trade_history": (
         "review recent closed positions on this pair for this user — win rate, "
         "avg PnL%, and avg hold time — to calibrate conviction."
+    ),
+    "get_prior_ai_signals": (
+        "audit your own recent calls on this pair (up to 90 days): signal, "
+        "confidence, and outcome (win/loss/breakeven + realized PnL %) where "
+        "the parent position has closed — use this when conviction feels "
+        "familiar to check if past similar calls paid off."
     ),
 }
 
@@ -404,10 +424,20 @@ class AISpotOpinionEvaluator:
             if not prefilter_passed:
                 logger.info(f"Buy prefilter failed for {product_id}: {prefilter_reason}")
                 self._update_last_check(product_id, params.ai_timeframe)
+                prefilter_reasoning = f"Prefilter: {prefilter_reason}"
+                await self._write_opinion_log(
+                    db=db, user_id=user_id, account_id=account_id,
+                    bot_id=getattr(bot, "id", None),
+                    position_id=getattr(position, "id", None),
+                    product_id=product_id, is_sell_check=is_sell_check,
+                    signal="hold", confidence=0,
+                    reasoning=prefilter_reasoning, tool_calls=[],
+                    ai_model=params.ai_model,
+                )
                 return {
                     "signal": "hold",
                     "confidence": 0,
-                    "reasoning": f"Prefilter: {prefilter_reason}",
+                    "reasoning": prefilter_reasoning,
                     "prefilter_passed": False,
                     "metrics": metrics
                 }
@@ -463,6 +493,15 @@ class AISpotOpinionEvaluator:
             f"(confidence: {confidence}%, tools={len(tool_calls)}, reason: {reasoning})"
         )
 
+        await self._write_opinion_log(
+            db=db, user_id=user_id, account_id=account_id,
+            bot_id=getattr(bot, "id", None),
+            position_id=getattr(position, "id", None),
+            product_id=product_id, is_sell_check=is_sell_check,
+            signal=signal, confidence=confidence, reasoning=reasoning,
+            tool_calls=tool_calls, ai_model=params.ai_model,
+        )
+
         return {
             "signal": signal,
             "confidence": confidence,
@@ -471,6 +510,15 @@ class AISpotOpinionEvaluator:
             "metrics": metrics,
             "tool_calls": tool_calls,
         }
+
+    @staticmethod
+    async def _write_opinion_log(**kwargs) -> None:
+        """Fire-and-forget audit write. Any exception is swallowed so a broken
+        audit log can never break evaluate()."""
+        try:
+            await log_opinion(**kwargs)
+        except Exception:
+            logger.exception("ai_opinion_log write failed — continuing")
 
     @staticmethod
     def _build_prompt(

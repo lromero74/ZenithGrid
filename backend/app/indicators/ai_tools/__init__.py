@@ -20,6 +20,7 @@ from app.indicators.ai_tools import portfolio_context  # noqa: F401
 from app.indicators.ai_tools import candle_window  # noqa: F401
 from app.indicators.ai_tools import recent_news  # noqa: F401
 from app.indicators.ai_tools import trade_history  # noqa: F401
+from app.indicators.ai_tools import prior_ai_signals  # noqa: F401
 
 __all__ = [
     "REGISTRY",

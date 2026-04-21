@@ -327,3 +327,104 @@ class TestCleanupOldReportsLogic:
             delete(Report).where(Report.created_at < cutoff_date)
         )
         assert result.rowcount == 0
+
+
+# ---------------------------------------------------------------------------
+# cleanup_old_ai_opinion_logs — real-DB integration
+# ---------------------------------------------------------------------------
+
+
+class TestCleanupOldAIOpinionLogs:
+    """Integration tests for cleanup_old_ai_opinion_logs against in-memory DB."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_rows_older_than_90_days(self, db_session):
+        from contextlib import asynccontextmanager
+
+        from app.cleanup_jobs import cleanup_old_ai_opinion_logs
+        from app.models import AIOpinionLog, User
+
+        user = User(email="ret@r.com", hashed_password="x")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        old = AIOpinionLog(
+            user_id=user.id, product_id="ETH-USD",
+            signal="buy", confidence=70, is_sell_check=False,
+            created_at=datetime.utcnow() - timedelta(days=120),
+        )
+        fresh = AIOpinionLog(
+            user_id=user.id, product_id="ETH-USD",
+            signal="buy", confidence=70, is_sell_check=False,
+            created_at=datetime.utcnow() - timedelta(days=1),
+        )
+        db_session.add_all([old, fresh])
+        await db_session.commit()
+
+        @asynccontextmanager
+        async def _maker():
+            yield db_session
+
+        await cleanup_old_ai_opinion_logs(session_maker=_maker)
+
+        from sqlalchemy import select
+        remaining = (
+            await db_session.execute(select(AIOpinionLog))
+        ).scalars().all()
+        assert len(remaining) == 1
+        assert remaining[0].id == fresh.id
+
+    @pytest.mark.asyncio
+    async def test_noop_when_no_old_rows(self, db_session):
+        """Edge case: nothing to delete is not an error."""
+        from contextlib import asynccontextmanager
+
+        from app.cleanup_jobs import cleanup_old_ai_opinion_logs
+        from app.models import AIOpinionLog, User
+
+        user = User(email="fresh@r.com", hashed_password="x")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        row = AIOpinionLog(
+            user_id=user.id, product_id="ETH-USD",
+            signal="hold", confidence=60, is_sell_check=False,
+            created_at=datetime.utcnow() - timedelta(days=5),
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        @asynccontextmanager
+        async def _maker():
+            yield db_session
+
+        await cleanup_old_ai_opinion_logs(session_maker=_maker)
+
+        from sqlalchemy import select
+        remaining = (
+            await db_session.execute(select(AIOpinionLog))
+        ).scalars().all()
+        assert len(remaining) == 1
+
+    @pytest.mark.asyncio
+    async def test_swallows_db_errors(self):
+        """Failure case: DB explosion must not raise — scheduler keeps running."""
+        from contextlib import asynccontextmanager
+
+        from app.cleanup_jobs import cleanup_old_ai_opinion_logs
+
+        class _BrokenSession:
+            async def execute(self, *_args, **_kwargs):
+                raise RuntimeError("boom")
+
+            async def commit(self):
+                pass
+
+        @asynccontextmanager
+        async def _maker():
+            yield _BrokenSession()
+
+        # Must not raise
+        await cleanup_old_ai_opinion_logs(session_maker=_maker)

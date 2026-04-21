@@ -397,7 +397,10 @@ def _wire_event_bus_subscribers() -> None:
     All handlers run fire-and-forget (see InProcessEventBus.publish).
     Handler exceptions are caught by the bus — polling fallback ensures correctness.
     """
-    from app.event_bus import event_bus, ORDER_FILLED, BOT_STARTED, BOT_STOPPED
+    from app.event_bus import (
+        event_bus, ORDER_FILLED, BOT_STARTED, BOT_STOPPED, POSITION_CLOSED,
+    )
+    from app.indicators.ai_opinion_logger import on_position_closed
     from app.scheduler import scheduler as _scheduler
 
     async def _on_order_filled(payload) -> None:
@@ -422,8 +425,12 @@ def _wire_event_bus_subscribers() -> None:
     event_bus.subscribe(ORDER_FILLED, _on_order_filled)
     event_bus.subscribe(BOT_STARTED, _on_bot_event)
     event_bus.subscribe(BOT_STOPPED, _on_bot_event)
+    event_bus.subscribe(POSITION_CLOSED, on_position_closed)
 
-    logger.info("Event bus: subscribers wired (order.filled → auto_buy + rebalance)")
+    logger.info(
+        "Event bus: subscribers wired "
+        "(order.filled → auto_buy + rebalance, position.closed → ai_opinion_log backfill)"
+    )
 
 
 # Startup/Shutdown events

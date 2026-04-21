@@ -806,7 +806,10 @@ async def _post_close_short_operations(
 
     # Publish domain event (best-effort)
     try:
-        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        from app.event_bus import (
+            event_bus, ORDER_FILLED, OrderFilledPayload,
+            POSITION_CLOSED, PositionClosedPayload,
+        )
         await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
             position_id=position.id,
             user_id=position.user_id,
@@ -818,6 +821,14 @@ async def _post_close_short_operations(
             profit=profit_quote,
             profit_percentage=profit_percentage,
             is_paper_trading=is_paper,
+        ))
+        await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            bot_id=bot.id,
+            profit_quote=profit_quote,
+            profit_percentage=profit_percentage,
         ))
     except Exception as e:
         logger.warning(f"Event bus publish failed (non-critical): {e}")
