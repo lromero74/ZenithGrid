@@ -214,7 +214,7 @@
     "position_routers": [
       {
         "file": "position_routers/position_query_router.py",
-        "purpose": "Position listing (with offset/limit pagination, default limit 500), details, trades, AI logs, P&L timeseries; populates coin_category on each position from BlacklistedCoin reason prefix (e.g. [APPROVED], [MEME], [BLACKLISTED])"
+        "purpose": "Position listing (with offset/limit pagination, default limit 500), details, trades, AI logs, P&L timeseries; populates coin_category on each position from BlacklistedCoin reason prefix (e.g. [APPROVED], [MEME], [BLACKLISTED]); GET /api/positions/{position_id}/ai-opinion returns the most recent AIOpinionLog row (including tool_calls[]) for the position, scoped to accessible_account_ids (404 on missing or non-owner)"
       },
       {
         "file": "position_routers/position_actions_router.py",
@@ -1756,7 +1756,7 @@
     },
     {
       "file": "schemas/position.py",
-      "purpose": "Position Pydantic response schemas"
+      "purpose": "Position Pydantic response schemas; includes AIOpinionLogResponse (single ai_opinion_log row with tool_calls[]) served by GET /api/positions/{id}/ai-opinion; uses ConfigDict(from_attributes=True)"
     },
     {
       "file": "schemas/settings.py",

@@ -591,6 +591,110 @@ class TestGetPositionAiLogs:
 
 
 # =============================================================================
+# GET /positions/{position_id}/ai-opinion
+# =============================================================================
+
+
+class TestGetPositionAiOpinion:
+    """Tests for GET /positions/{position_id}/ai-opinion — Phase E tool-use transparency."""
+
+    @pytest.mark.asyncio
+    async def test_returns_most_recent_opinion(self, db_session):
+        """Happy path: returns the latest AIOpinionLog for the position with tool_calls."""
+        from app.models import AIOpinionLog
+        from app.position_routers.position_query_router import get_position_ai_opinion
+
+        user, account = await _create_user_with_account(db_session, "opinion1@test.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(db_session, account, bot=bot)
+
+        older = AIOpinionLog(
+            user_id=user.id, account_id=account.id, bot_id=bot.id, position_id=pos.id,
+            product_id=pos.product_id, signal="buy", confidence=60,
+            reasoning="early read", ai_model="claude",
+            created_at=datetime.utcnow() - timedelta(minutes=10),
+        )
+        newer = AIOpinionLog(
+            user_id=user.id, account_id=account.id, bot_id=bot.id, position_id=pos.id,
+            product_id=pos.product_id, signal="hold", confidence=80,
+            reasoning="look at recent volume",
+            ai_model="claude",
+            tool_calls=[{"name": "get_candle_window", "input": {"granularity": "ONE_HOUR"},
+                         "output_summary": "last 24 candles", "turn": 1}],
+            created_at=datetime.utcnow(),
+        )
+        db_session.add_all([older, newer])
+        await db_session.flush()
+
+        result = await get_position_ai_opinion(
+            position_id=pos.id, db=db_session, current_user=user,
+        )
+        assert result.signal == "hold"
+        assert result.confidence == 80
+        assert result.reasoning == "look at recent volume"
+        assert result.ai_model == "claude"
+        assert result.tool_calls is not None
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0]["name"] == "get_candle_window"
+
+    @pytest.mark.asyncio
+    async def test_returns_404_when_no_opinion_logged(self, db_session):
+        """Edge: position exists but has no ai_opinion_log rows → 404."""
+        from fastapi import HTTPException
+        from app.position_routers.position_query_router import get_position_ai_opinion
+
+        user, account = await _create_user_with_account(db_session, "opinion2@test.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(db_session, account, bot=bot)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_position_ai_opinion(
+                position_id=pos.id, db=db_session, current_user=user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_position_not_found_returns_404(self, db_session):
+        """Failure: non-existent position → 404."""
+        from fastapi import HTTPException
+        from app.position_routers.position_query_router import get_position_ai_opinion
+
+        user, _ = await _create_user_with_account(db_session, "opinion3@test.com")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_position_ai_opinion(
+                position_id=99999, db=db_session, current_user=user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_user_isolation(self, db_session):
+        """Failure: a different user cannot read another user's opinion log → 404."""
+        from fastapi import HTTPException
+        from app.models import AIOpinionLog
+        from app.position_routers.position_query_router import get_position_ai_opinion
+
+        user1, account1 = await _create_user_with_account(db_session, "opinion-owner@test.com")
+        user2, _ = await _create_user_with_account(db_session, "opinion-other@test.com")
+        bot = await _create_bot(db_session, user1, account1)
+        pos = await _create_position(db_session, account1, bot=bot)
+
+        db_session.add(AIOpinionLog(
+            user_id=user1.id, account_id=account1.id, bot_id=bot.id, position_id=pos.id,
+            product_id=pos.product_id, signal="buy", confidence=90,
+            reasoning="owner-only", ai_model="claude",
+            created_at=datetime.utcnow(),
+        ))
+        await db_session.flush()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_position_ai_opinion(
+                position_id=pos.id, db=db_session, current_user=user2,
+            )
+        assert exc_info.value.status_code == 404
+
+
+# =============================================================================
 # GET /positions/pnl-timeseries
 # =============================================================================
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class PositionResponse(BaseModel):
@@ -45,8 +45,7 @@ class PositionResponse(BaseModel):
     coin_category: Optional[str] = None
     computed_max_budget: Optional[float] = None  # Pre-computed resize budget for UI
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LimitOrderFill(BaseModel):
@@ -76,8 +75,7 @@ class TradeResponse(BaseModel):
     trade_type: str  # "initial", "dca", "safety_order_1", etc.
     order_id: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @computed_field
     @property
@@ -114,8 +112,31 @@ class AIBotLogResponse(BaseModel):
     product_id: Optional[str]
     context: Optional[Dict[str, Any]]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AIOpinionLogResponse(BaseModel):
+    """Shape of a single ai_opinion_log row — the per-call audit record written
+    by AISpotOpinionEvaluator. `tool_calls` is a list of
+    {name, input, output_summary, turn} entries (empty / null when the call
+    took the single-shot path)."""
+
+    id: int
+    position_id: Optional[int]
+    bot_id: Optional[int]
+    product_id: str
+    is_sell_check: bool
+    signal: str
+    confidence: int
+    reasoning: Optional[str]
+    ai_model: Optional[str]
+    tool_calls: Optional[List[Dict[str, Any]]]
+    created_at: datetime
+    outcome: Optional[str]
+    realized_pnl_pct: Optional[float]
+    closed_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdatePositionSettingsRequest(BaseModel):

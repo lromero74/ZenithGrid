@@ -114,6 +114,31 @@ export interface AIBotLog {
   context: any;
 }
 
+export interface AIToolCall {
+  name: string;
+  input: Record<string, any>;
+  output_summary?: string | null;
+  output?: any;
+  turn?: number;
+}
+
+export interface AIOpinionLog {
+  id: number;
+  position_id: number | null;
+  bot_id: number | null;
+  product_id: string;
+  is_sell_check: boolean;
+  signal: string;
+  confidence: number;
+  reasoning: string | null;
+  ai_model: string | null;
+  tool_calls: AIToolCall[] | null;
+  created_at: string;
+  outcome: string | null;
+  realized_pnl_pct: number | null;
+  closed_at: string | null;
+}
+
 export interface MarketData {
   id: number;
   timestamp: string;
@@ -240,6 +265,7 @@ export interface Bot {
   insufficient_funds?: boolean;
   budget_utilization_percentage?: number;
   account_id?: number | null;  // For multi-account support
+  account_name?: string;  // Human-readable account label (joined by backend)
   exchange_type?: 'cex' | 'dex';  // Exchange type
   quote_currency?: string;  // Quote currency for bot's pairs (BTC or USD)
   open_positions_count?: number;  // Number of open positions for this bot

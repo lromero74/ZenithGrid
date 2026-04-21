@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
-import type { Position } from '../../../types'
+import type { PositionWithPnL } from '../helpers'
 
 export type GroupByMode = 'none' | 'category' | 'market' | 'bot' | 'pair'
 
 interface UsePositionFiltersProps {
-  positionsWithPnL: (Position & { _cachedPnL?: any })[]
+  positionsWithPnL: PositionWithPnL[]
   bots?: { id: number; name: string }[]
 }
 
@@ -65,7 +65,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   useEffect(() => { setCurrentPage(1) }, [filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, pageSize])
 
   // Get group key for a position
-  const getGroupKey = (p: Position & { _cachedPnL?: any }): string => {
+  const getGroupKey = (p: PositionWithPnL): string => {
     switch (groupBy) {
       case 'category': return p.coin_category || 'Uncategorized'
       case 'market': return (p.product_id || 'ETH-BTC').split('-')[1] || 'Other'
@@ -107,7 +107,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
         if (gA > gB) return 1
       }
 
-      let aVal: any, bVal: any
+      let aVal: number | string, bVal: number | string
       switch (sortBy) {
         case 'created':
           aVal = a.status === 'closed' && a.closed_at

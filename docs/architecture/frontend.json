@@ -150,7 +150,11 @@
       },
       {
         "file": "pages/positions/components/PositionCard.tsx",
-        "purpose": "Individual position display with P&L and actions"
+        "purpose": "Individual position display with P&L and actions; renders AIReasoningExpander for the position"
+      },
+      {
+        "file": "pages/positions/components/AIReasoningExpander.tsx",
+        "purpose": "Collapsible AI reasoning panel for a position: prefetches positionsApi.getAIOpinion(id), self-hides when tool_calls is empty/null, shows signal/confidence/reasoning plus per-tool expandable output summaries; exported from pages/positions/components/index.ts"
       },
       {
         "file": "pages/positions/components/modals/CloseConfirmModal.tsx",
@@ -723,7 +727,7 @@
       },
       {
         "name": "positionsApi",
-        "purpose": "Position CRUD, trades, AI logs, settings, budget resize; getAll default limit raised to 500; panicSellSendMfa(), panicSell(), panicSellStatus() added for emergency liquidation flow"
+        "purpose": "Position CRUD, trades, AI logs, settings, budget resize; getAll default limit raised to 500; panicSellSendMfa(), panicSell(), panicSellStatus() added for emergency liquidation flow; getAIOpinion(id) fetches the most recent AIOpinionLog row (with tool_calls[]) for a position"
       },
       {
         "name": "tradesApi",

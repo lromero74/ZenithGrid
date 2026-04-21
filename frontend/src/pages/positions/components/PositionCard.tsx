@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
-import type { Position, Bot } from '../../../types'
+import type { Position, Bot, Trade } from '../../../types'
+import type { PositionWithPnL } from '../helpers'
 import CoinIcon from '../../../components/shared/CoinIcon'
 import {
   getQuoteCurrency,
@@ -12,18 +13,19 @@ import {
   PriceBar,
 } from '../../../components/positions'
 import { GridVisualizer } from '../../../components/trading/GridVisualizer'
+import { AIReasoningExpander } from './AIReasoningExpander'
 import { api, botsApi } from '../../../services/api'
 import { useConfirm } from '../../../contexts/ConfirmContext'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import { useQueryClient } from '@tanstack/react-query'
 
 interface PositionCardProps {
-  position: Position & { _cachedPnL?: any }
+  position: PositionWithPnL
   currentPrice: number | undefined
   bots: Bot[] | undefined
   bot?: Bot
   btcUsdPrice: number
-  trades: any[] | undefined
+  trades: Trade[] | undefined
   selectedPosition: number | null
   onTogglePosition: (positionId: number) => void
   onOpenChart: (productId: string, position: Position) => void
@@ -97,8 +99,10 @@ export const PositionCard = memo(function PositionCard({
         addToast({ type: 'success', title: 'Bot Started', message: `${bot.name} started` })
       }
       queryClient.invalidateQueries({ queryKey: ['bots'] })
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      addToast({ type: 'error', title: 'Error', message: detail || msg })
     }
   }
 
@@ -108,8 +112,10 @@ export const PositionCard = memo(function PositionCard({
       try {
         await api.post(`/positions/${position.id}/cancel-limit-close`)
         onRefetch()
-      } catch (err: any) {
-        addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        addToast({ type: 'error', title: 'Error', message: detail || msg })
       }
     }
   }
@@ -295,7 +301,7 @@ export const PositionCard = memo(function PositionCard({
                 })()}
               </div>
               <div className="flex items-center gap-2">
-                <div className="text-[10px] text-slate-400">{(bot as any)?.account_name || 'Exchange Account'}</div>
+                <div className="text-[10px] text-slate-400">{bot?.account_name || 'Exchange Account'}</div>
                 {/* Limit Close Status Badge */}
                 {position.closing_via_limit && position.limit_order_details && (
                   <div className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] font-medium">
@@ -548,8 +554,10 @@ export const PositionCard = memo(function PositionCard({
                 const d = result.data
                 addToast({ type: 'success', title: 'Budget Resized', message: `${d.old_max.toFixed(8)} → ${d.new_max.toFixed(8)} ${d.quote_currency}` })
                 onRefetch()
-              } catch (err: any) {
-                addToast({ type: 'error', title: 'Resize Failed', message: err.response?.data?.detail || err.message })
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Unknown error'
+                const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                addToast({ type: 'error', title: 'Resize Failed', message: detail || msg })
               }
             }}
           >
@@ -590,6 +598,11 @@ export const PositionCard = memo(function PositionCard({
             <span className="text-slate-300">{position.notes}</span>
           </div>
           ) : null}
+        </div>
+
+        {/* AI Reasoning Expander — tool-use transparency (Phase E) */}
+        <div className="px-4 pb-3" onClick={(e) => e.stopPropagation()}>
+          <AIReasoningExpander positionId={position.id} />
         </div>
       </div>
 
