@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
+from app.models import AIBotLog, AIOpinionLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
 from app.auth.dependencies import get_current_user
 from app.services.account_access import accessible_account_ids
-from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
+from app.schemas import AIBotLogResponse, AIOpinionLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 
 logger = logging.getLogger(__name__)
@@ -722,3 +722,34 @@ async def get_position_ai_logs(
     logs = result.scalars().all()
 
     return [AIBotLogResponse.model_validate(log) for log in logs]
+
+
+@router.get("/{position_id}/ai-opinion", response_model=AIOpinionLogResponse)
+async def get_position_ai_opinion(
+    position_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the most recent AI opinion log for a position, including any
+    tool_calls the model issued (Phase E — tool-use transparency UI)."""
+    user_account_ids = await accessible_account_ids(db, current_user.id)
+
+    pos_query = select(Position).where(
+        Position.id == position_id,
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+    position = (await db.execute(pos_query)).scalars().first()
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    opinion_query = (
+        select(AIOpinionLog)
+        .where(AIOpinionLog.position_id == position_id)
+        .order_by(desc(AIOpinionLog.created_at))
+        .limit(1)
+    )
+    opinion = (await db.execute(opinion_query)).scalars().first()
+    if not opinion:
+        raise HTTPException(status_code=404, detail="No AI opinion logged for this position")
+
+    return AIOpinionLogResponse.model_validate(opinion)

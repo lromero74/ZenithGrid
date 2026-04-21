@@ -2,9 +2,27 @@ import type { Position } from '../../types'
 import { authFetch } from '../../services/api'
 
 /**
+ * Shape of the per-position P&L snapshot cached on positions as `_cachedPnL`.
+ * Produced by `calculateUnrealizedPnL`; consumed by UI, filters, and stats.
+ */
+export interface CachedPnL {
+  quote: number
+  quoteCurrency: string
+  percent: number
+  usd: number
+  currentPrice: number
+}
+
+export type PositionWithPnL = Position & { _cachedPnL?: CachedPnL | null }
+
+/**
  * Calculate unrealized P&L for an open position
  */
-export const calculateUnrealizedPnL = (position: Position, currentPrice?: number, btcUsdPrice?: number) => {
+export const calculateUnrealizedPnL = (
+  position: Position,
+  currentPrice?: number,
+  btcUsdPrice?: number,
+): CachedPnL | null => {
   if (position.status !== 'open') return null
 
   // Use real-time price if available, otherwise fall back to average buy price
@@ -38,7 +56,7 @@ export const calculateUnrealizedPnL = (position: Position, currentPrice?: number
 /**
  * Calculate overall statistics for all open positions
  */
-export const calculateOverallStats = (openPositions: (Position & { _cachedPnL?: any })[]) => {
+export const calculateOverallStats = (openPositions: PositionWithPnL[]) => {
   // Calculate reserved (locked) funds and total budget by quote currency
   const reservedByQuote: Record<string, number> = {}
   const totalBudgetByQuote: Record<string, number> = {}
@@ -77,16 +95,31 @@ export const calculateOverallStats = (openPositions: (Position & { _cachedPnL?: 
 }
 
 /**
+ * Shape returned by `/api/positions/{id}/slippage-check`.
+ * Note: `show_warning` gates the modal; other fields are displayed inside it.
+ */
+export interface SlippageCheckResult {
+  show_warning: boolean
+  product_id: string
+  best_bid: number
+  mark_price: number
+  expected_profit_at_mark: number
+  actual_profit_at_bid: number
+  slippage_amount: number
+  slippage_percentage: number
+}
+
+/**
  * Check slippage before market close and show warning if needed
  */
 export const checkSlippageBeforeMarketClose = async (
   positionId: number,
-  onShowWarning: (slippage: any, positionId: number) => void,
+  onShowWarning: (slippage: SlippageCheckResult, positionId: number) => void,
   onProceedDirectly: (positionId: number) => void
 ) => {
   try {
     const response = await authFetch(`/api/positions/${positionId}/slippage-check`)
-    const slippage = await response.json()
+    const slippage: SlippageCheckResult = await response.json()
 
     if (slippage.show_warning) {
       // Show slippage warning modal
@@ -95,7 +128,7 @@ export const checkSlippageBeforeMarketClose = async (
       // No significant slippage, proceed directly to close confirmation
       onProceedDirectly(positionId)
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error checking slippage:', err)
     // If slippage check fails, still allow closing (fallback)
     onProceedDirectly(positionId)

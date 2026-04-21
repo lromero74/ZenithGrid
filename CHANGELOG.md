@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.160.0] - 2026-04-21
+
+### Added
+- **"AI reasoning" expander on position cards** — Every open position that was evaluated with tool use now shows a small collapsible "AI reasoning" row under its notes. Expanding it reveals the AI's signal (buy/sell/hold), its confidence, the model it used, the reasoning text, and the list of tools it called (portfolio, recent prior signals, etc.) with an expandable "what the AI actually saw" summary for each tool. Single-shot evaluations (no tool use) stay hidden to keep the card uncluttered.
+
+### Changed
+- **Type cleanup around position P&L cache** — Introduced named types (`CachedPnL`, `PositionWithPnL`, `SlippageCheckResult`) to replace scattered `any` usages in the positions module. No behavior change, but future errors around cached P&L shape will be caught at compile time.
+
 ## [v2.159.0] - 2026-04-21
 
 ### Added
