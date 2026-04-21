@@ -432,15 +432,24 @@ class TestGetUniqueCoins:
 
 def _make_raw_products():
     """Realistic Coinbase product list for filter tests."""
+    # DOGE-EUR is intentionally not tradeable; LTC-USD is intentionally offline.
     return [
-        {"product_id": "BTC-USD",  "base_currency_id": "BTC", "quote_currency_id": "USD",  "display_name": "BTC/USD",  "status": "online"},
-        {"product_id": "ETH-USD",  "base_currency_id": "ETH", "quote_currency_id": "USD",  "display_name": "ETH/USD",  "status": "online"},
-        {"product_id": "SOL-USDC", "base_currency_id": "SOL", "quote_currency_id": "USDC", "display_name": "SOL/USDC", "status": "online"},
-        {"product_id": "DOT-USDT", "base_currency_id": "DOT", "quote_currency_id": "USDT", "display_name": "DOT/USDT", "status": "online"},
-        {"product_id": "SOL-ETH",  "base_currency_id": "SOL", "quote_currency_id": "ETH",  "display_name": "SOL/ETH",  "status": "online"},
-        {"product_id": "ETH-BTC",  "base_currency_id": "ETH", "quote_currency_id": "BTC",  "display_name": "ETH/BTC",  "status": "online"},
-        {"product_id": "DOGE-EUR", "base_currency_id": "DOGE", "quote_currency_id": "EUR", "display_name": "DOGE/EUR", "status": "online"},  # not tradeable
-        {"product_id": "LTC-USD",  "base_currency_id": "LTC", "quote_currency_id": "USD",  "display_name": "LTC/USD",  "status": "offline"},  # offline
+        {"product_id": "BTC-USD", "base_currency_id": "BTC", "quote_currency_id": "USD",
+         "display_name": "BTC/USD", "status": "online"},
+        {"product_id": "ETH-USD", "base_currency_id": "ETH", "quote_currency_id": "USD",
+         "display_name": "ETH/USD", "status": "online"},
+        {"product_id": "SOL-USDC", "base_currency_id": "SOL", "quote_currency_id": "USDC",
+         "display_name": "SOL/USDC", "status": "online"},
+        {"product_id": "DOT-USDT", "base_currency_id": "DOT", "quote_currency_id": "USDT",
+         "display_name": "DOT/USDT", "status": "online"},
+        {"product_id": "SOL-ETH", "base_currency_id": "SOL", "quote_currency_id": "ETH",
+         "display_name": "SOL/ETH", "status": "online"},
+        {"product_id": "ETH-BTC", "base_currency_id": "ETH", "quote_currency_id": "BTC",
+         "display_name": "ETH/BTC", "status": "online"},
+        {"product_id": "DOGE-EUR", "base_currency_id": "DOGE", "quote_currency_id": "EUR",
+         "display_name": "DOGE/EUR", "status": "online"},
+        {"product_id": "LTC-USD", "base_currency_id": "LTC", "quote_currency_id": "USD",
+         "display_name": "LTC/USD", "status": "offline"},
     ]
 
 

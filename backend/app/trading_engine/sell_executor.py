@@ -82,7 +82,7 @@ async def _try_limit_sell(
 
         # Place limit order and return - position stays open until filled
         # Limit order placed; fill tracking handled by limit_order_monitor service
-        _pending_order = await execute_limit_sell(  # noqa: F841
+        await execute_limit_sell(
             db=db,
             exchange=exchange,
             trading_client=trading_client,

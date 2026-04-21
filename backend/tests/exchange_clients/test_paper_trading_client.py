@@ -1503,7 +1503,7 @@ class TestSessionMakerInjection:
     async def test_reload_balances_uses_injected_session_maker(self):
         """_reload_balances calls the injected session_maker, not the global one."""
         account = self._make_account()
-        sm = self._make_session_maker(account)
+        self._make_session_maker(account)
 
         fresh_account = MagicMock()
         fresh_account.paper_balances = json.dumps({"USD": 9999.0})

@@ -4,14 +4,12 @@ Tests for APScheduler configuration.
 TDD: Written before implementing app/scheduler.py
 """
 
-import logging
 from datetime import datetime, timedelta
 from unittest import mock
 
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.events import EVENT_JOB_ERROR
 
 
 class TestSchedulerSetup:

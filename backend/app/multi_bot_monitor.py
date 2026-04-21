@@ -299,7 +299,7 @@ class MultiBotMonitor:
                             import asyncio
                             asyncio.get_running_loop().create_task(client.close())
                         except RuntimeError:
-                            pass
+                            logger.debug("stale exchange client close skipped (no running loop)")
 
         return {
             "candles_evicted": len(stale_candles),

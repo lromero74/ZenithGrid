@@ -15,6 +15,8 @@ from typing import Dict, List, Optional
 import aiohttp
 from web3 import Web3
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 # CoinGecko chain ID mapping
@@ -257,7 +259,12 @@ class DexWalletService:
         cache_key = f"{chain_id}:{rpc_url or 'default'}"
 
         if cache_key not in self._web3_cache:
-            url = rpc_url or DEFAULT_RPC_URLS.get(chain_id)
+            # Precedence: explicit rpc_url > settings.ethereum_rpc_url (chain 1) > DEFAULT_RPC_URLS public node
+            url = rpc_url
+            if not url and chain_id == 1 and settings.ethereum_rpc_url:
+                url = settings.ethereum_rpc_url
+            if not url:
+                url = DEFAULT_RPC_URLS.get(chain_id)
             if not url:
                 raise ValueError(f"No RPC URL for chain {chain_id}")
 

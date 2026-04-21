@@ -88,7 +88,6 @@ class TestRateLimitFunctionality:
         asyncio.sleep is awaited, so concurrent callers don't compute
         the same wait and pile up.
         """
-        import importlib
         from app.coinbase_api import public_market_data
 
         # Reset state
@@ -97,7 +96,7 @@ class TestRateLimitFunctionality:
         sleep_calls = []
         last_time_at_sleep = []
 
-        original_sleep = asyncio.sleep
+        asyncio.sleep
 
         async def mock_sleep(duration):
             sleep_calls.append(duration)

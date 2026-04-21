@@ -6,7 +6,8 @@ for DEX trading operations.
 """
 
 # Ethereum Mainnet Configuration
-ETHEREUM_RPC_URL = "https://mainnet.infura.io/v3/"  # Will be configured via env
+# The RPC URL is configured via settings.ethereum_rpc_url (env) and falls
+# back to a public node in dex_wallet_service.DEFAULT_RPC_URLS.
 CHAIN_ID_ETHEREUM = 1
 
 # Common ERC-20 Token Addresses (Ethereum Mainnet)

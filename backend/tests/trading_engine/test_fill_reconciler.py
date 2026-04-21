@@ -7,7 +7,7 @@ Covers:
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.trading_engine.fill_reconciler import (
     FillData,

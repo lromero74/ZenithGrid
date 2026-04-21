@@ -14,15 +14,13 @@ Covers two bugs fixed in the pair-sync daily job:
 """
 
 import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 # ── Imports under test ────────────────────────────────────────────────────────
 from app.services.delisted_pair_monitor import (
     TradingPairMonitor,
-    _unresolvable_paper_coins,
 )
 
 

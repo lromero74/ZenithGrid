@@ -19,8 +19,6 @@ from app.services.account_service import (
     create_exchange_account,
     get_portfolio_for_account,
     _build_paper_portfolio,
-    VALID_EXCHANGES,
-    VALID_PROP_FIRMS,
 )
 
 
@@ -145,7 +143,7 @@ class TestCreateExchangeAccount:
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
-            result = await create_exchange_account(db, user, account_data)
+            await create_exchange_account(db, user, account_data)
 
         db.add.assert_called_once()
         db.commit.assert_called()
@@ -351,7 +349,7 @@ class TestGetPortfolioForAccount:
             new_callable=AsyncMock,
             return_value={"holdings": []},
         ) as mock_cex:
-            result = await get_portfolio_for_account(db, user, account_id=1)
+            await get_portfolio_for_account(db, user, account_id=1)
 
         mock_cex.assert_called_once()
 
@@ -376,7 +374,7 @@ class TestGetPortfolioForAccount:
             new_callable=AsyncMock,
             return_value={"holdings": []},
         ) as mock_generic:
-            result = await get_portfolio_for_account(db, user, account_id=1)
+            await get_portfolio_for_account(db, user, account_id=1)
 
         mock_generic.assert_called_once()
 
@@ -400,7 +398,7 @@ class TestGetPortfolioForAccount:
             new_callable=AsyncMock,
             return_value={"holdings": []},
         ) as mock_dex:
-            result = await get_portfolio_for_account(db, user, account_id=1)
+            await get_portfolio_for_account(db, user, account_id=1)
 
         mock_dex.assert_called_once()
 

@@ -9,11 +9,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
-from app.models import Bot, Position, Trade
+from app.models import Bot, Position
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +102,8 @@ async def execute_grid_rotation(
     grid_state = bot.strategy_config.get("grid_state", {})
     profit_lock_percent = bot.strategy_config.get("profit_lock_percent", 70.0)
 
-    # Get all trades for this position to calculate per-level profit
-    trades_query = select(Trade).where(Trade.position_id == position.id)
-    trades_result = await db.execute(trades_query)
-    _trades = trades_result.scalars().all()  # noqa: F841
-
-    # Group trades by grid level to calculate profit
-    # For simplicity, we'll close all filled grid levels that are currently in profit
+    # Grid-level profit decisions are made from grid_state snapshots; the
+    # per-trade breakdown is not read here yet.
 
     # Get grid levels from state
     grid_levels = grid_state.get("grid_levels", [])

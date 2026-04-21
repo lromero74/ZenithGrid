@@ -16,7 +16,6 @@ Covers:
 
 import asyncio
 import time
-from contextlib import asynccontextmanager
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,7 +26,6 @@ from app.services.market_metrics_service import (
     fetch_btc_block_height,
     fetch_btc_dominance,
     fetch_fear_greed_index,
-    fetch_hash_rate,
     fetch_lightning_stats,
     fetch_mempool_stats,
     fetch_btc_rsi,

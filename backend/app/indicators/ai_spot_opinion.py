@@ -217,10 +217,8 @@ class AISpotOpinionEvaluator:
         if not candles or len(candles) < 50:
             return {}
 
-        # Extract OHLCV data
+        # Extract OHLCV data (metrics below only need close + volume)
         closes = [float(c['close']) for c in candles]
-        _highs = [float(c['high']) for c in candles]  # noqa: F841
-        _lows = [float(c['low']) for c in candles]  # noqa: F841
         volumes = [float(c['volume']) for c in candles]
 
         current_price = closes[-1]

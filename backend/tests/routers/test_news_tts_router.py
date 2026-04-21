@@ -6,7 +6,6 @@ serve_tts_audio, voice subscriptions, TTS voices, history, and prepare_tts.
 """
 
 import asyncio
-import json
 import pytest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 
 from app.models import (
-    ArticleTTS, User, UserArticleTTSHistory, UserVoiceSubscription,
+    User, UserVoiceSubscription,
 )
 
 

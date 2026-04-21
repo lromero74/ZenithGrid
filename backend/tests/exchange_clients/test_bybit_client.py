@@ -10,7 +10,6 @@ Tests the ByBit raw API client including:
 - Error handling for ByBitError
 """
 
-import asyncio
 import sys
 import types
 import pytest

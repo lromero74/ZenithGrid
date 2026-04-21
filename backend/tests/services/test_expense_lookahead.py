@@ -1,6 +1,5 @@
 """Tests for expense goal lookahead feature."""
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.services.report_generator_service import (
     _get_upcoming_items,

@@ -7,7 +7,7 @@ manual_kill, get_propguard_history, and _get_prop_account helper.
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 

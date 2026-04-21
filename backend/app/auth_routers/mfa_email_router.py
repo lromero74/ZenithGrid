@@ -266,11 +266,11 @@ async def mfa_resend_email(
     Invalidates old MFA email tokens and creates a new one.
     Accepts mfa_token in body as JSON or query param.
     """
-    # Parse body for mfa_token
+    # Parse body for mfa_token; fall back to query param on any parse error.
     try:
         body = await http_request.json()
         mfa_token = body.get("mfa_token", mfa_token)
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         pass
 
     if not mfa_token:

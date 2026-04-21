@@ -17,7 +17,12 @@ import pytest
 def mock_session_maker():
     """Mock session_maker that returns a context-manager-compatible async session."""
     mock_session = mock.AsyncMock()
-    mock_session.execute = mock.AsyncMock(return_value=mock.MagicMock(fetchall=lambda: [], scalars=mock.MagicMock(return_value=mock.MagicMock(all=lambda: [], first=mock.MagicMock(return_value=None)))))
+    mock_scalars = mock.MagicMock(
+        return_value=mock.MagicMock(all=lambda: [], first=mock.MagicMock(return_value=None))
+    )
+    mock_session.execute = mock.AsyncMock(
+        return_value=mock.MagicMock(fetchall=lambda: [], scalars=mock_scalars)
+    )
     mock_session.commit = mock.AsyncMock()
 
     mock_ctx = mock.AsyncMock()

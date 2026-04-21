@@ -5,9 +5,8 @@ Tests batch analysis orchestration: market data collection, budget calculation,
 AI batch analysis dispatch, result processing, error tracking, and DB commit.
 """
 
-import asyncio
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -144,7 +143,7 @@ class TestBatchAnalyzerHappyPath:
 
         with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
              patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
-            result = await process_bot_batch(
+            await process_bot_batch(
                 monitor, db_session, bot, ["ETH-BTC"], strategy, skip_ai_analysis=True
             )
 
@@ -242,7 +241,7 @@ class TestBatchAnalyzerCapacity:
 
         with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
              patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
-            result = await process_bot_batch(
+            await process_bot_batch(
                 monitor, db_session, bot, ["ETH-BTC", "SOL-BTC", "ADA-BTC"], strategy
             )
 
@@ -297,7 +296,7 @@ class TestBatchAnalyzerCapacity:
 
         with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
              patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
-            result = await process_bot_batch(
+            await process_bot_batch(
                 monitor, db_session, bot, ["ETH-BTC", "SOL-BTC"], strategy
             )
 
@@ -591,7 +590,7 @@ class TestBatchAnalyzerVolumeFilter:
 
         with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
              patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
-            result = await process_bot_batch(
+            await process_bot_batch(
                 monitor, db_session, bot, ["ETH-BTC", "LOW-BTC"], strategy
             )
 
@@ -622,7 +621,7 @@ class TestBatchAnalyzerVolumeFilter:
 
         with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
              patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
-            result = await process_bot_batch(
+            await process_bot_batch(
                 monitor, db_session, bot, ["LOW-BTC"], strategy
             )
 

@@ -64,7 +64,7 @@ async def create_template(
     """Create a new bot template"""
     # Validate strategy exists
     try:
-        _strategy_def = StrategyRegistry.get_definition(template_data.strategy_type)  # noqa: F841
+        StrategyRegistry.get_definition(template_data.strategy_type)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {template_data.strategy_type}")
 

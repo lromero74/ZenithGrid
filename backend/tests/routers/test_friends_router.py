@@ -319,7 +319,7 @@ class TestUserSearch:
     async def test_search_excludes_blocked_users(self, db_session):
         """Users blocked by searcher or who blocked searcher are excluded."""
         me = await create_user(db_session, "me@test.com", "Searcher")
-        visible = await create_user(db_session, "visible@test.com", "VisibleUser")
+        await create_user(db_session, "visible@test.com", "VisibleUser")
         i_blocked = await create_user(db_session, "blocked@test.com", "IBlockedThem")
         blocked_me = await create_user(db_session, "blocker@test.com", "TheyBlockedMe")
         await db_session.flush()
@@ -357,7 +357,7 @@ class TestUserSearch:
     async def test_search_without_blocks_shows_all(self, db_session):
         """With no blocks, all active non-self users appear."""
         me = await create_user(db_session, "me@test.com", "MePlayer")
-        other = await create_user(db_session, "other@test.com", "OtherPlayer")
+        await create_user(db_session, "other@test.com", "OtherPlayer")
         await db_session.flush()
 
         blocked_ids = select(BlockedUser.blocked_id).where(

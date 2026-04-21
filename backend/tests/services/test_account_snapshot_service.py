@@ -246,6 +246,7 @@ class TestCaptureAccountSnapshot:
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=125000.0)
         mock_client.get_current_price = AsyncMock(return_value=130000.0)
+
         # calculate_market_budget drives the portions (by-quote-currency view)
         async def quote_value_side_effect(currency, bypass_cache=False):
             return {"BTC": 0.5, "USD": 60000.0}.get(currency, 0.0)
@@ -463,6 +464,7 @@ class TestCaptureAccountSnapshot:
         # calculate_market_budget returns per-market deployment values:
         # BTC market: 0.1 free + 0.4 in open ETH-BTC positions = 0.5 BTC total
         # USD market: $40,000 free USD (no open USD positions)
+
         async def quote_value_side_effect(currency, bypass_cache=False):
             return {"BTC": 0.5, "USD": 40000.0}.get(currency, 0.0)
         mock_client.calculate_market_budget = AsyncMock(

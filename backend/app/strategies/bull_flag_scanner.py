@@ -362,7 +362,6 @@ def detect_bull_flag_pattern(
 
     # Step 3: Find POLE before pullback
     pole_end_idx = pullback_end_idx
-    _pole_start_idx = None  # noqa: F841 - kept for debugging visibility
     pole_high = 0.0
     pole_low = float("inf")
     pole_candle_count = 0
@@ -377,7 +376,6 @@ def detect_bull_flag_pattern(
             pole_high = max(pole_high, high)
             pole_low = min(pole_low, low)
             pole_candle_count += 1
-            _pole_start_idx = i  # noqa: F841 - kept for debugging visibility
             pole_total_volume += get_volume(candle)  # Accumulate buy volume
         else:
             # End of pole trend

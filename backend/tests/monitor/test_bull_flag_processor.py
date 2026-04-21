@@ -5,7 +5,6 @@ Tests bull flag strategy processing: open position exit checks (TSL/TTP),
 new opportunity scanning, position entry, budget calculation, and category filtering.
 """
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

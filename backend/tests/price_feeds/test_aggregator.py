@@ -15,11 +15,10 @@ import asyncio
 import pytest
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.price_feeds.aggregator import (
     AggregatedPrice,
-    ArbitrageOpportunity,
     PriceAggregator,
 )
 from app.price_feeds.base import PriceFeed, PriceQuote
@@ -334,6 +333,7 @@ class TestFindOpportunities:
         q_btc = _make_quote(exchange="a", ask=Decimal("50000"), bid=Decimal("50100"), taker_fee=Decimal("0"))
 
         feed = _make_mock_feed("a", get_price_result=q_eth)
+
         # Override get_price to return different quotes for different pairs
         async def dynamic_price(base, quote):
             if base == "BTC":

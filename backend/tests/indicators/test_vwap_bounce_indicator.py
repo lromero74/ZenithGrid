@@ -50,7 +50,7 @@ class TestCalculateVwap:
 
     def test_higher_volume_candle_skews_vwap(self):
         low_vol = _make_candle(high=10, low=8, close=9, volume=100)   # tp=9
-        high_vol = _make_candle(high=20, low=18, close=19, volume=900) # tp=19
+        high_vol = _make_candle(high=20, low=18, close=19, volume=900)  # tp=19
         result = _calculate_vwap([low_vol, high_vol])
         # VWAP = (9*100 + 19*900) / 1000 = 18.0
         assert result == pytest.approx(18.0)

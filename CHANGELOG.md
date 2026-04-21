@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.162.1] - 2026-04-21
+
+### Changed
+- **Code-quality sweep Phase 4 — silent failures now logged, dead code removed** — Six code paths that previously swallowed exceptions with a bare `pass` (perps monitor broadcast, background presence-update JSON parsing, offline presence broadcast, paper-trading USD/BTC price lookups, MFA email attribute parsing, multi-bot-monitor stale-client close) now log at warning/debug with `exc_info=True` so real failures are visible in the logs. Exception catches were also narrowed from bare `except Exception` to the specific errors each branch actually expects. Twelve unused-local and one unused-import site were deleted outright (not just silenced with `# noqa`) across the indicator calculator, bot/template routers, grid services, bull-flag / spatial-arbitrage strategies, the buy/sell executors, and `ai_spot_opinion`. No behavior change; flake8 `F401` + `F841` now reports zero findings under `backend/app/` and `backend/tests/`.
+- **Ethereum RPC URL is now configurable via env** — A stray `ETHEREUM_RPC_URL = "https://mainnet.infura.io/v3/"` partial-URL constant in `dex_constants.py` was never read by any caller and was replaced with a proper `ethereum_rpc_url` setting in `config.py`. When set, `DexWalletService` uses it as the chain-1 RPC endpoint in preference to the public-node fallback; when empty (the default), the public RPC continues to be used.
+
 ## [v2.162.0] - 2026-04-21
 
 ### Added

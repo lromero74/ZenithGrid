@@ -3,10 +3,9 @@ Tests for admin chat functionality (admin_dm channels, admin display names).
 """
 
 import pytest
-from datetime import datetime
 
 from app.models import User
-from app.models.social import ChatChannel, ChatChannelMember, ChatMessage, Friendship
+from app.models.social import ChatChannelMember
 from app.services.chat_service import (
     get_or_create_admin_dm,
     send_message,

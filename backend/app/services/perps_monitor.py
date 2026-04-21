@@ -250,7 +250,7 @@ class PerpsMonitor:
                     "profit_pct": profit_pct,
                 }, user_id=position.user_id)
             except Exception:
-                pass
+                logger.warning("perps broadcast failed", exc_info=True)
 
             try:
                 from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload

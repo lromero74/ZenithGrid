@@ -6,10 +6,8 @@ in the admin management panel.
 """
 
 import pytest
-from unittest.mock import MagicMock
-from sqlalchemy import select
 
-from app.models import Group, Permission, Role, User, user_groups, group_roles, role_permissions
+from app.models import Group, Permission, Role, User, user_groups, group_roles
 
 
 # =============================================================================
@@ -128,8 +126,9 @@ class TestUpdateUserGroups:
         assert result["groups"][0]["name"] == "Test Group"
 
     @pytest.mark.asyncio
-    async def test_assign_mfa_group_without_mfa_fails(self, db_session, admin_user, regular_user, system_group,
-                                                       system_role):
+    async def test_assign_mfa_group_without_mfa_fails(
+        self, db_session, admin_user, regular_user, system_group, system_role,
+    ):
         # Assign the MFA-requiring role to the system group
         await db_session.execute(group_roles.insert().values(group_id=system_group.id, role_id=system_role.id))
         await db_session.flush()

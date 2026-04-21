@@ -5,7 +5,6 @@ Tests the DebtCeilingMonitor service that checks weekly for new
 US debt ceiling legislation using AI providers.
 """
 
-import asyncio
 import json
 import pytest
 from datetime import datetime

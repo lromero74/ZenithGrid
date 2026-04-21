@@ -8,7 +8,7 @@ seen/unseen marking, and cache stats.
 
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
@@ -80,7 +80,6 @@ class TestArticleToNewsItem:
     def test_converts_article_to_dict(self, sample_article):
         """Happy path: converts NewsArticle to dict."""
         # Need to access it outside async context using a sync test
-        pass
 
     @pytest.mark.asyncio
     async def test_article_to_news_item_basic(self, db_session, sample_article):

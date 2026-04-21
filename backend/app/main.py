@@ -718,7 +718,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                 msg_type = "unknown"
                 try:
                     msg_type = _json.loads(data).get("type", "unknown")
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     pass
                 logger.warning(
                     f"WebSocket message too large from user {user_id}: "
@@ -799,7 +799,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                         ws_manager, notify_db, user_id, False
                     )
             except Exception:
-                pass
+                logger.warning("offline presence broadcast failed", exc_info=True)
 
         await ws_manager.disconnect(websocket)
 
