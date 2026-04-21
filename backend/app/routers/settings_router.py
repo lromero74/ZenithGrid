@@ -23,7 +23,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, Settings, User
-from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.auth.dependencies import get_current_user, require_permission, require_superuser, Perm
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
 logger = logging.getLogger(__name__)
@@ -139,9 +139,9 @@ async def get_settings(current_user: User = Depends(require_permission(Perm.SETT
 async def update_settings(
     settings_update: SettingsUpdate,
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
+    current_user: User = Depends(require_superuser),
 ):
-    """Update trading settings"""
+    """Update trading settings (superuser only — writes global Settings row)."""
     # Update API credentials in .env file if provided
     if settings_update.coinbase_api_key is not None:
         update_env_file("COINBASE_API_KEY", settings_update.coinbase_api_key)
@@ -244,9 +244,9 @@ async def update_setting_by_key(
     key: str,
     value: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.SETTINGS_WRITE)),
+    current_user: User = Depends(require_superuser),
 ):
-    """Update a single database setting by key"""
+    """Update a single database setting by key (superuser only — writes global Settings row)."""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)
     setting = result.scalars().first()

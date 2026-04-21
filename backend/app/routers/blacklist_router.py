@@ -20,7 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User, Account, AccountMembership
-from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.auth.dependencies import (
+    get_current_user,
+    require_permission,
+    require_superuser,
+    Perm,
+)
 from app.constants import VALID_CATEGORIES
 from app.services.settings_service import (
     ALLOWED_CATEGORIES_KEY,
@@ -117,10 +122,11 @@ async def get_category_settings(db: AsyncSession = Depends(get_db), current_user
 async def update_category_settings(
     request: CategorySettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
+    current_user: User = Depends(require_superuser),
 ):
     """
-    Update which categories are allowed to trade.
+    Update which categories are allowed to trade. Superuser only — this writes a
+    global `Settings` row that affects every user on the instance.
 
     Categories: APPROVED, BORDERLINE, QUESTIONABLE, BLACKLISTED
     """
@@ -202,13 +208,13 @@ async def get_ai_provider_setting(db: AsyncSession = Depends(get_db), current_us
 async def update_ai_provider_setting(
     request: AIProviderSettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(Perm.BLACKLIST_WRITE))
+    current_user: User = Depends(require_superuser),
 ):
     """
-    Update which AI provider to use for coin review.
+    Update which AI provider to use for coin review. Superuser only — this writes
+    a global `Settings` row shared by every user on the instance.
 
     Only providers with configured API keys are available.
-    Admin only.
     """
     configured_providers = get_configured_ai_providers()
 

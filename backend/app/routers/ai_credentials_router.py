@@ -80,11 +80,11 @@ class AIProviderStatus(BaseModel):
 
 
 def _api_key_preview(api_key: str) -> str:
-    """Get a safe preview of an API key (last 8 chars of plaintext)."""
+    """Get a safe preview of an API key (last 4 chars of plaintext)."""
     if not api_key:
         return "..."
     plaintext = decrypt_value(api_key) if is_encrypted(api_key) else api_key
-    return f"...{plaintext[-8:]}" if len(plaintext) > 8 else "..."
+    return f"...{plaintext[-4:]}" if len(plaintext) > 4 else "..."
 
 
 # =============================================================================

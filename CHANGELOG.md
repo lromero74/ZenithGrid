@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.161.0] - 2026-04-21
+
+### Security
+- **Writes to global settings are now superuser-only** — The "update blacklist categories", "update AI provider setting", "update settings" (bulk), and "update setting by key" endpoints all wrote to the single global `Settings` row. They previously only required the `settings:write` / `blacklist:write` permission, which meant any permitted user could overwrite platform-wide trading configuration, the Coinbase API key, and blacklist taxonomy for every other user on the instance. These endpoints are now gated on superuser status. Non-superusers with the permission receive 403. Reads are unchanged.
+- **Template name-uniqueness no longer leaks other users' template names** — Creating or renaming a bot template previously ran a global name-lookup and returned "Template with name 'X' already exists" if ANY user in the system already had one by that name — disclosing the existence of another account's private template. The uniqueness check now only considers the caller's own templates plus the globally-visible default presets. If a cross-user collision still trips the database's legacy unique constraint, a generic "could not be created" error is returned instead of leaking the name.
+- **AI API key preview shortened from 8 to 4 plaintext characters** — The last four characters are enough to recognize a key in the Settings UI while minimizing what is shown on screen or in logs if a screenshot is shared.
+- **Public market-data endpoints are rate-limited per IP** — Ticker, batch prices, candles, product precision, coin lists, and the BTC/ETH USD price helpers route through the existing `PublicEndpointRateLimiter` middleware (120 requests / 60 seconds / IP). Regression tests were added so the coverage list and the enforcement behavior stay pinned — previously there were none.
+
 ## [v2.160.5] - 2026-04-21
 
 ### Security
