@@ -66,8 +66,8 @@ describe('useGameScores', () => {
       result.current.saveScore('2048', 2048)
     })
     const all = result.current.getAllScores()
-    expect(all['snake']).toBe(50)
-    expect(all['2048']).toBe(2048)
+    expect(all['snake'].score).toBe(50)
+    expect(all['2048'].score).toBe(2048)
   })
 
   test('clearScore removes a specific game score', () => {

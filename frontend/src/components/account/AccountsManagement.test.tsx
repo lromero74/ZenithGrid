@@ -7,26 +7,28 @@ vi.mock('./sharing/AccountSharingPanel', () => ({
 }))
 
 // Mock other heavy sub-components
-vi.mock('./PropGuardStatus', () => ({ default: () => null }))
+vi.mock('../shared/PropGuardStatus', () => ({ PropGuardStatus: () => null }))
 
-// Mock all context hooks the component uses
-vi.mock('../contexts/AccountContext', () => ({
+// Mock all context hooks the component uses. Paths must match the SUT's
+// import paths (`../../contexts/...`), which from this test file resolve
+// identically via Vitest's module resolver.
+vi.mock('../../contexts/AccountContext', () => ({
   useAccount: vi.fn(),
   getChainName: () => '',
 }))
-vi.mock('../hooks/usePermission', () => ({
+vi.mock('../../hooks/usePermission', () => ({
   usePermission: () => true,
 }))
-vi.mock('../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 2, is_superuser: false, groups: [{ name: 'Traders' }] } }),
 }))
-vi.mock('../contexts/ConfirmContext', () => ({
+vi.mock('../../contexts/ConfirmContext', () => ({
   useConfirm: () => vi.fn().mockResolvedValue(false),
 }))
-vi.mock('../contexts/NotificationContext', () => ({
+vi.mock('../../contexts/NotificationContext', () => ({
   useNotifications: () => ({ addToast: vi.fn() }),
 }))
-vi.mock('../services/api', () => ({
+vi.mock('../../services/api', () => ({
   accountApi: {},
   api: { post: vi.fn() },
 }))

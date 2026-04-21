@@ -9,6 +9,7 @@
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { renderHook } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth, RequireAuth } from './AuthContext'
 import type { ReactNode } from 'react'
 
@@ -39,9 +40,26 @@ function setupAuthSession(user = mockUser) {
   localStorage.setItem('auth_user', JSON.stringify(user))
 }
 
+// AuthProvider reads a QueryClient to invalidate auth-scoped queries on
+// logout/login. Tests provide a fresh client per render so caches don't leak.
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+}
+
+// Combined providers for tests — AuthProvider depends on QueryClient.
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={createTestQueryClient()}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  )
+}
+
 // Wrapper for renderHook
 function wrapper({ children }: { children: ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>
+  return <Providers>{children}</Providers>
 }
 
 // Helper to render a test component that consumes useAuth
@@ -74,9 +92,9 @@ describe('AuthContext', () => {
 
   test('initial state is unauthenticated when no tokens in storage', async () => {
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -110,9 +128,9 @@ describe('AuthContext', () => {
     localStorage.setItem('auth_user', JSON.stringify(user))
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -154,9 +172,9 @@ describe('AuthContext', () => {
     globalThis.fetch = mockFetch
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -191,9 +209,9 @@ describe('AuthContext', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true })
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -219,9 +237,9 @@ describe('AuthContext', () => {
     sessionStorage.setItem('auth_mfa_methods', JSON.stringify(['totp', 'email_code']))
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -237,9 +255,9 @@ describe('AuthContext', () => {
     sessionStorage.setItem('auth_mfa_methods', 'not-valid-json')
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -279,9 +297,9 @@ describe('AuthContext', () => {
     globalThis.fetch = mockFetch
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -314,9 +332,9 @@ describe('AuthContext', () => {
     globalThis.fetch = mockFetch
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -337,9 +355,9 @@ describe('AuthContext', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true })
 
     render(
-      <AuthProvider>
+      <Providers>
         <TestConsumer />
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -1564,11 +1582,11 @@ describe('RequireAuth', () => {
     localStorage.setItem('auth_user', JSON.stringify(user))
 
     render(
-      <AuthProvider>
+      <Providers>
         <RequireAuth>
           <span data-testid="protected">Secret Content</span>
         </RequireAuth>
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -1578,11 +1596,11 @@ describe('RequireAuth', () => {
 
   test('hides children when not authenticated', async () => {
     render(
-      <AuthProvider>
+      <Providers>
         <RequireAuth>
           <span data-testid="protected">Secret Content</span>
         </RequireAuth>
-      </AuthProvider>
+      </Providers>
     )
 
     await waitFor(() => {
@@ -1593,11 +1611,11 @@ describe('RequireAuth', () => {
   test('shows loading indicator while RequireAuth checks auth', async () => {
     // When not authenticated and loaded, RequireAuth returns null (no children)
     const { container } = render(
-      <AuthProvider>
+      <Providers>
         <RequireAuth>
           <span data-testid="protected">Secret Content</span>
         </RequireAuth>
-      </AuthProvider>
+      </Providers>
     )
 
     // After initialization, should not show protected content

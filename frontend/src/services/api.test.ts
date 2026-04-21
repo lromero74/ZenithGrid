@@ -455,7 +455,7 @@ describe('positionsApi', () => {
 
     await positionsApi.getAll()
     expect(api.get).toHaveBeenCalledWith('/positions/', {
-      params: { status: undefined, limit: 50 },
+      params: { status: undefined, limit: 500 },
     })
   })
 
@@ -1098,7 +1098,7 @@ describe('blacklistApi', () => {
     vi.mocked(api.get).mockResolvedValue({ data: [] })
 
     await blacklistApi.getAll()
-    expect(api.get).toHaveBeenCalledWith('/blacklist/')
+    expect(api.get).toHaveBeenCalledWith('/blacklist/', { params: undefined })
   })
 
   test('add sends single symbol', async () => {

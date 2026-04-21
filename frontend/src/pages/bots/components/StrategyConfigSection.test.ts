@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeEffectiveAggregateValues } from './StrategyConfigSection'
+import { computeEffectiveAggregateValues } from '../../../components/bots'
 import type { AggregateValue } from '../../../types'
 import type { RebalanceStatus } from '../../../services/api'
 

@@ -8,6 +8,11 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useGameState, loadGameState, saveGameState, clearGameState } from './useGameState'
+import { getStoragePrefix } from '../constants'
+
+// Keys are user-scoped via getStoragePrefix(); with no auth_user in storage
+// this resolves to `zenith-games-u0-`.
+const key = (gameId: string) => `${getStoragePrefix()}state-${gameId}`
 
 beforeEach(() => {
   localStorage.clear()
@@ -39,13 +44,13 @@ describe('loadGameState (standalone)', () => {
   })
 
   test('returns parsed state when data exists', () => {
-    localStorage.setItem('zenith-games-state-chess', JSON.stringify(mockState))
+    localStorage.setItem(key('chess'), JSON.stringify(mockState))
     const result = loadGameState<MockState>('chess')
     expect(result).toEqual(mockState)
   })
 
   test('returns null on corrupted JSON', () => {
-    localStorage.setItem('zenith-games-state-chess', '{broken json')
+    localStorage.setItem(key('chess'), '{broken json')
     const result = loadGameState<MockState>('chess')
     expect(result).toBeNull()
   })
@@ -62,7 +67,7 @@ describe('loadGameState (standalone)', () => {
 describe('saveGameState (standalone)', () => {
   test('saves state to localStorage with correct key', () => {
     saveGameState('chess', mockState)
-    const stored = localStorage.getItem('zenith-games-state-chess')
+    const stored = localStorage.getItem(key('chess'))
     expect(JSON.parse(stored!)).toEqual(mockState)
   })
 
@@ -77,9 +82,9 @@ describe('saveGameState (standalone)', () => {
 
 describe('clearGameState (standalone)', () => {
   test('removes saved state from localStorage', () => {
-    localStorage.setItem('zenith-games-state-chess', JSON.stringify(mockState))
+    localStorage.setItem(key('chess'), JSON.stringify(mockState))
     clearGameState('chess')
-    expect(localStorage.getItem('zenith-games-state-chess')).toBeNull()
+    expect(localStorage.getItem(key('chess'))).toBeNull()
   })
 
   test('does not throw when key does not exist', () => {
@@ -101,7 +106,7 @@ describe('useGameState hook load', () => {
   })
 
   test('load returns saved state', () => {
-    localStorage.setItem('zenith-games-state-2048', JSON.stringify(mockState))
+    localStorage.setItem(key('2048'), JSON.stringify(mockState))
     const { result } = renderHook(() => useGameState<MockState>('2048'))
     expect(result.current.load()).toEqual(mockState)
   })
@@ -116,12 +121,12 @@ describe('useGameState hook save', () => {
     })
 
     // Not written yet (debounced 300ms)
-    expect(localStorage.getItem('zenith-games-state-snake')).toBeNull()
+    expect(localStorage.getItem(key('snake'))).toBeNull()
 
     // Advance past debounce
     act(() => { vi.advanceTimersByTime(300) })
 
-    const stored = localStorage.getItem('zenith-games-state-snake')
+    const stored = localStorage.getItem(key('snake'))
     expect(JSON.parse(stored!)).toEqual(mockState)
   })
 
@@ -140,7 +145,7 @@ describe('useGameState hook save', () => {
 
     act(() => { vi.advanceTimersByTime(300) })
 
-    const stored = JSON.parse(localStorage.getItem('zenith-games-state-snake')!)
+    const stored = JSON.parse(localStorage.getItem(key('snake'))!)
     expect(stored.score).toBe(200) // Only last value persisted
   })
 })
@@ -152,7 +157,7 @@ describe('useGameState hook clear', () => {
     // Save something first
     act(() => { result.current.save(mockState) })
     act(() => { vi.advanceTimersByTime(300) })
-    expect(localStorage.getItem('zenith-games-state-minesweeper')).not.toBeNull()
+    expect(localStorage.getItem(key('minesweeper'))).not.toBeNull()
 
     // Start a new save then immediately clear
     act(() => { result.current.save({ ...mockState, score: 999 }) })
@@ -160,7 +165,7 @@ describe('useGameState hook clear', () => {
 
     // The pending save should be canceled
     act(() => { vi.advanceTimersByTime(300) })
-    expect(localStorage.getItem('zenith-games-state-minesweeper')).toBeNull()
+    expect(localStorage.getItem(key('minesweeper'))).toBeNull()
   })
 })
 
@@ -177,7 +182,7 @@ describe('useGameState hook unmount cleanup', () => {
 
     // Advance time — should NOT write because timer was cleared
     act(() => { vi.advanceTimersByTime(500) })
-    expect(localStorage.getItem('zenith-games-state-hangman')).toBeNull()
+    expect(localStorage.getItem(key('hangman'))).toBeNull()
   })
 })
 

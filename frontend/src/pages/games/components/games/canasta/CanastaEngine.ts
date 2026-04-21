@@ -686,6 +686,12 @@ function aiAttemptMelds(state: CanastaState): CanastaState {
   const team = teamOf(player)
   let current = state
 
+  // meldCards returns a new-reference state even on error paths (sets meldError),
+  // so detect actual progress by whether cards left the hand. Prevents infinite loops
+  // when an initial-meld threshold or validity check rejects every attempt.
+  const consumed = (before: CanastaState, after: CanastaState) =>
+    after.hands[player].length < before.hands[player].length
+
   // Try to add to existing team melds first
   let changed = true
   while (changed) {
@@ -697,7 +703,7 @@ function aiAttemptMelds(state: CanastaState): CanastaState {
         const card = hand[i]
         if (!isWild(card) && card.rank === meld.rank) {
           const next = meldCards(current, [i], current.teamMelds.indexOf(meld))
-          if (next !== current) {
+          if (consumed(current, next)) {
             current = next
             changed = true
             break
@@ -730,14 +736,14 @@ function aiAttemptMelds(state: CanastaState): CanastaState {
         )
         if (existingMeldIdx >= 0) {
           const next = meldCards(current, indices, existingMeldIdx)
-          if (next !== current) {
+          if (consumed(current, next)) {
             current = next
             changed = true
             break
           }
         } else {
           const next = meldCards(current, indices.slice(0, 3))
-          if (next !== current) {
+          if (consumed(current, next)) {
             current = next
             changed = true
             break

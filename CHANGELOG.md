@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.160.4] - 2026-04-21
+
+### Fixed
+- **Canasta hands no longer freeze the browser when the AI cannot meet the initial meld threshold** — The AI's melding loop detected progress via a reference check, but the meld function returns a new state object (with an error message) even on rejected attempts. When the AI held three low-point cards and owed an initial 50-point meld, the loop kept retrying the same rejected meld and never advanced to discard. The loop now measures progress by whether cards actually left the hand.
+
+### Changed
+- **Frontend test-suite maintenance (round two)** — Fixed 86 further pre-existing test failures that had been masked by the Canasta engine hang. Covers AuthContext (wrapped renders in `QueryClientProvider` after the provider began reading from React Query), `computeEffectiveAggregateValues` import moved to `components/bots`, user-scoped storage keys in game-state tests, the new `cards` game category, score entries now storing `{score, score_type}` objects, updated `positionsApi` default limit, and corrected mock paths in the accounts management test. Full frontend suite now runs green (2606/2606) in under three minutes.
+
 ## [v2.160.3] - 2026-04-21
 
 ### Fixed

@@ -252,8 +252,8 @@ describe('getInitialMeldReq', () => {
     expect(getInitialMeldReq(10000)).toBe(120)
   })
 
-  test('negative score requires 50 points (lowest bracket)', () => {
-    expect(getInitialMeldReq(-500)).toBe(50)
+  test('negative score requires only 15 points (comeback bracket)', () => {
+    expect(getInitialMeldReq(-500)).toBe(15)
   })
 })
 
@@ -491,7 +491,10 @@ describe('pickupDiscardPile', () => {
     })
     // 2 is wild, not a natural match
     const next = pickupDiscardPile(state, [0, 1])
-    expect(next).toEqual(state)
+    expect(next.hands).toEqual(state.hands)
+    expect(next.discardPile).toEqual(state.discardPile)
+    expect(next.hasDrawn).toBe(false)
+    expect(next.meldError).toBeTruthy()
   })
 
   test('cannot pick up pile when top card is black 3', () => {
@@ -504,7 +507,10 @@ describe('pickupDiscardPile', () => {
       teamHasInitialMeld: [true, false],
     })
     const next = pickupDiscardPile(state, [0, 1])
-    expect(next).toEqual(state)
+    expect(next.hands).toEqual(state.hands)
+    expect(next.discardPile).toEqual(state.discardPile)
+    expect(next.hasDrawn).toBe(false)
+    expect(next.meldError).toBeTruthy()
   })
 })
 
@@ -630,7 +636,9 @@ describe('meldCards', () => {
       teamHasInitialMeld: [true, false],
     })
     const next = meldCards(state, [0], 0)
-    expect(next).toEqual(state)
+    expect(next.hands).toEqual(state.hands)
+    expect(next.teamMelds).toEqual(state.teamMelds)
+    expect(next.meldError).toBeTruthy()
   })
 
   test('initial meld must meet point threshold', () => {
@@ -645,7 +653,10 @@ describe('meldCards', () => {
     })
     // 3 fours = 15 points, which is less than the 50-point requirement
     const next = meldCards(state, [0, 1, 2])
-    expect(next).toEqual(state)
+    expect(next.hands).toEqual(state.hands)
+    expect(next.teamMelds).toEqual(state.teamMelds)
+    expect(next.teamHasInitialMeld).toEqual(state.teamHasInitialMeld)
+    expect(next.meldError).toBeTruthy()
   })
 
   test('initial meld that meets threshold is accepted', () => {
