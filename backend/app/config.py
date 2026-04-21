@@ -1,7 +1,12 @@
+import logging
 from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_JWT_SECRET = "jwt-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
@@ -58,11 +63,37 @@ class Settings(BaseSettings):
         """Get CORS origins as a list"""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    # Environment: "development" | "production" | "test"
+    environment: str = "development"
+
     # JWT Authentication
-    jwt_secret_key: str = "jwt-secret-key-change-in-production"
+    jwt_secret_key: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def require_non_default_secret_in_production(cls, v: str, info) -> str:
+        """Reject the publicly-known default JWT signing key in production.
+
+        In development/test, the default is permitted but logs a loud warning so
+        operators notice. Prevents a missing .env from silently shipping with a
+        known-public secret (sweep v2.160.4 finding).
+        """
+        if v == DEFAULT_JWT_SECRET:
+            env = (info.data.get("environment") or "development").lower()
+            if env == "production":
+                raise ValueError(
+                    "jwt_secret_key is still set to the default — override it in .env "
+                    "before running in production"
+                )
+            logger.warning(
+                "jwt_secret_key is using the default — override it in .env before "
+                "deploying to production (environment=%s)",
+                env,
+            )
+        return v
 
     # Encryption key for API credentials at rest (Fernet key)
     encryption_key: str = ""

@@ -877,3 +877,41 @@ class TestResizeAllBudgets:
                 account_id=account2.id, db=db_session, current_user=user1,
             )
         assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_actions_router.compute_resize_budget", return_value=0.99)
+    async def test_resize_all_budgets_empty_writable_ids_does_not_touch_other_users(
+        self, mock_resize, db_session,
+    ):
+        """REGRESSION (sweep v2.160.4): when caller has no writable accounts and no
+        account_id param, the query must NOT fall through to a global rewrite.
+        Previously the filter was skipped entirely, rewriting max_quote_allowed on every
+        open position across all users.
+        """
+        from app.position_routers.position_actions_router import resize_all_budgets
+
+        # User A has NO accounts at all — writable_ids will be [].
+        user_a = User(
+            email="resize_empty_a@example.com",
+            hashed_password="hashed",
+            is_active=True,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(user_a)
+        await db_session.flush()
+
+        # User B has an open position with a known budget.
+        user_b, account_b = await _create_user_with_account(db_session, email="resize_empty_b@example.com")
+        position_b = await _create_position(
+            db_session, account_b, status="open", max_quote_allowed=0.25,
+        )
+        original_max = position_b.max_quote_allowed
+
+        # Call as user A with no account_id param — must not touch user B's position.
+        result = await resize_all_budgets(db=db_session, current_user=user_a)
+
+        # Refresh user B's position to verify it was not mutated.
+        await db_session.refresh(position_b)
+        assert position_b.max_quote_allowed == original_max
+        assert result["total_count"] == 0
+        assert result["updated_count"] == 0

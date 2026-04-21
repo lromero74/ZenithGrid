@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.160.5] - 2026-04-21
+
+### Security
+- **`resize_all_budgets` no longer falls through to a global rewrite when the caller has no writable accounts** — A code-quality sweep found that the bulk position-budget endpoint skipped its account filter entirely when a user with the `positions:write` permission had zero writable accounts AND supplied no `account_id` parameter. The query collapsed to `WHERE status = 'open'` across every user on the platform, rewriting `max_quote_allowed` on every open position. The filter is now always applied — empty writable-accounts lists match nothing instead of everything.
+- **JWT signing key can no longer silently ship with its public default value in production** — The `jwt_secret_key` setting defaulted to the literal string `"jwt-secret-key-change-in-production"`. If `.env` was missing or the env var was unset, the bot booted with a publicly-known signing key. The config now refuses to instantiate when the default secret is used and `environment=production`, and logs a loud warning in development.
+
+### Fixed
+- **Creating a Reports goal no longer crashes with `AttributeError`** — `create_goal` read `body.minimap_threshold_days`, but the `GoalCreate` schema did not declare that field, so any real POST to `/api/reports/goals` raised `AttributeError` before the goal could be persisted. The field is now declared on both `GoalCreate` (default 90) and `GoalUpdate`, and end-to-end create tests pin the round-trip.
+
 ## [v2.160.4] - 2026-04-21
 
 ### Fixed
