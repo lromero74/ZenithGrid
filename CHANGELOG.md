@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.162.0] - 2026-04-21
+
+### Added
+- **AI usage & cost dashboard** (Settings → AI section) — A new panel summarizes your bots' AI activity over a selectable window (7 / 30 / 90 days) and shows total calls, input/output tokens, and estimated USD cost. Breakdowns are rendered by provider and by model so you can see which Claude / GPT / Gemini model family is driving spend. Scoped to the current user — other users' activity is never visible. Pre-Phase-F rows that predate per-call cost tracking appear under a "(legacy)" model bucket so historical activity stays visible.
+- **Per-bot AI model override** — A new "AI Model Override" dropdown on the bot editor lets you pick a specific SDK model ID (e.g. `claude-haiku-4-5` for speed/cost, `gpt-4o-mini` for cheap prefilter, `gemini-1.5-pro` for long context) independently from the provider selector. Leaving it as "(provider default)" preserves the old behavior where the adapter's default model is used.
+- **Per-call cost accounting in the audit log** — Every AI spot-opinion call now records `model_used`, `input_tokens`, `output_tokens`, and `cost_usd` on its `ai_opinion_log` row. The cost is computed from a built-in pricing table matched longest-prefix against the provider's reported model string, so dated snapshot IDs resolve to their base family's price. Unknown models fall through to zero cost rather than fabricating a number.
+
+### Changed
+- **AI adapters now report token usage** — The Anthropic, OpenAI, and Gemini providers all return a `TokenUsage` record alongside the response text and normalized tool calls. Usage is summed across every turn of a tool-use loop so multi-turn calls bill the complete token count, not just the final turn.
+
 ## [v2.161.1] - 2026-04-21
 
 ### Changed

@@ -33,6 +33,14 @@ AISpotOpinionParams = _mod.AISpotOpinionParams
 
 from app.indicators.ai_tools import ToolContext  # noqa: E402
 
+# Usage meta shape returned by `_call_llm` alongside (signal, confidence, reasoning, tool_calls).
+_USAGE_META = {
+    "model_used": "claude-opus-4-7",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+}
+
 
 def _make_candles(count=60, base_price=100.0, volume=1500.0):
     return [
@@ -56,7 +64,8 @@ class TestEvaluateRouting:
         params = AISpotOpinionParams(ai_model="gpt", enable_buy_prefilter=False)
 
         with patch.object(evaluator, "_call_llm",
-                          new_callable=AsyncMock, return_value=("buy", 70, "r", [])) as single_shot:
+                          new_callable=AsyncMock,
+                          return_value=("buy", 70, "r", [], _USAGE_META)) as single_shot:
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -73,7 +82,8 @@ class TestEvaluateRouting:
         params = AISpotOpinionParams(ai_model="claude", enable_buy_prefilter=False)
 
         with patch.object(evaluator, "_call_llm",
-                          new_callable=AsyncMock, return_value=("hold", 50, "r", [])) as single_shot:
+                          new_callable=AsyncMock,
+                          return_value=("hold", 50, "r", [], _USAGE_META)) as single_shot:
             await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -91,7 +101,7 @@ class TestEvaluateRouting:
 
         with patch.object(evaluator, "_call_llm",
                           new_callable=AsyncMock,
-                          return_value=("buy", 82, "great setup", [])) as single_shot:
+                          return_value=("buy", 82, "great setup", [], _USAGE_META)) as single_shot:
             result = await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="BTC-USD", db=MagicMock(), user_id=1,
@@ -232,9 +242,9 @@ class TestContextInjection:
                 return {"error": "unexpected"}
 
             async def fake_call_llm(*, db, user_id, ai_model, prompt, tool_ctx=None,
-                                    tool_schemas=None):
+                                    tool_schemas=None, model_override=None):
                 captured["prompt"] = prompt
-                return "hold", 0, "ok", []
+                return "hold", 0, "ok", [], _USAGE_META
 
             with patch.object(_mod, "execute_tool", side_effect=fake_execute_tool):
                 with patch.object(evaluator, "_call_llm",

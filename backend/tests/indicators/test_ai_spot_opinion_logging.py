@@ -28,6 +28,14 @@ _spec.loader.exec_module(_mod)
 AISpotOpinionEvaluator = _mod.AISpotOpinionEvaluator
 AISpotOpinionParams = _mod.AISpotOpinionParams
 
+# Usage meta dict returned by `_call_llm` alongside (signal, confidence, reasoning, tool_calls).
+_USAGE_META = {
+    "model_used": "claude-opus-4-7",
+    "input_tokens": 120,
+    "output_tokens": 40,
+    "cost_usd": 0.000123,
+}
+
 
 def _make_candles(count=60, base_price=100.0, volume=1500.0):
     return [
@@ -93,7 +101,7 @@ class TestEvaluateWritesLog:
 
         with patch.object(evaluator, "_call_llm",
                           new_callable=AsyncMock,
-                          return_value=("sell", 72, "take profit", [])):
+                          return_value=("sell", 72, "take profit", [], _USAGE_META)):
             await evaluator.evaluate(
                 candles=_make_candles(60), current_price=100.0,
                 product_id="ETH-USD", db=db_session, user_id=user.id,
@@ -118,6 +126,11 @@ class TestEvaluateWritesLog:
         assert row.tool_calls == []
         # Outcome is backfilled later via POSITION_CLOSED.
         assert row.outcome is None
+        # Phase F: per-call cost accounting columns are populated from usage_meta.
+        assert row.model_used == "claude-opus-4-7"
+        assert row.input_tokens == 120
+        assert row.output_tokens == 40
+        assert row.cost_usd == 0.000123
 
     async def test_log_failure_does_not_break_evaluate(self, db_session):
         """If log_opinion raises, evaluate() must still return its result."""
@@ -131,7 +144,7 @@ class TestEvaluateWritesLog:
         with patch.object(_mod, "log_opinion", side_effect=boom):
             with patch.object(evaluator, "_call_llm",
                               new_callable=AsyncMock,
-                              return_value=("buy", 60, "looks ok", [])):
+                              return_value=("buy", 60, "looks ok", [], _USAGE_META)):
                 result = await evaluator.evaluate(
                     candles=_make_candles(60), current_price=100.0,
                     product_id="ETH-USD", db=db_session, user_id=user.id,

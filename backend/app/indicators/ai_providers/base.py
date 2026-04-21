@@ -42,6 +42,23 @@ class NormalizedToolCall:
     turn: int
 
 
+@dataclass
+class TokenUsage:
+    """Token accounting for a provider call, summed across every tool-loop turn.
+
+    Providers report usage per HTTP round-trip. For Phase F we need a single
+    (input, output) pair across the whole call so the cost dashboard can price
+    it with one MODEL_PRICING lookup. Each adapter increments these counters
+    after every SDK response; missing/None usage fields are treated as 0.
+    """
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    def add(self, input_tokens: Optional[int], output_tokens: Optional[int]) -> None:
+        self.input_tokens += int(input_tokens or 0)
+        self.output_tokens += int(output_tokens or 0)
+
+
 def summarize_output(output: Dict[str, Any]) -> str:
     """Serialize + truncate a tool result for logging. Same rule across providers."""
     as_json = json.dumps(output, default=str)
@@ -65,21 +82,27 @@ class LLMProvider(Protocol):
         tools: List[Dict[str, Any]],
         tool_ctx: "ToolContext",
         max_turns: int = 4,
-    ) -> Tuple[str, List[NormalizedToolCall]]:
+    ) -> Tuple[str, List[NormalizedToolCall], TokenUsage]:
         """Run the provider's native tool-use loop.
 
-        Returns (final_text, tool_calls). If `tools` is empty the call is
+        Returns (final_text, tool_calls, usage). `usage` sums input/output
+        tokens across every turn of the loop so callers can price a single
+        call with one MODEL_PRICING lookup. If `tools` is empty the call is
         effectively single-shot: one request, one text response, no tool calls.
         """
         ...
 
 
-def get_provider(name: str, *, api_key: str):
+def get_provider(name: str, *, api_key: str, model: Optional[str] = None):
     """Dispatch a provider name → concrete adapter instance.
 
     Accepts `claude`, `gpt`, `openai`, `gemini` (case-insensitive). Raises
     ValueError for anything else — callers should validate user config before
     reaching this.
+
+    `model` is an optional per-call SDK model override (Phase F). When None
+    each adapter uses its hard-coded default. Adapters silently pin to their
+    default if `model` is falsy, so callers can pass None without branching.
     """
     key = (name or "").lower()
     # Imports inside the function: each adapter pulls in its own SDK at import
@@ -87,11 +110,11 @@ def get_provider(name: str, *, api_key: str):
     # asks for.
     if key == "claude":
         from app.indicators.ai_providers.anthropic_provider import AnthropicProvider
-        return AnthropicProvider(api_key=api_key)
+        return AnthropicProvider(api_key=api_key, model=model)
     if key in ("gpt", "openai"):
         from app.indicators.ai_providers.openai_provider import OpenAIProvider
-        return OpenAIProvider(api_key=api_key, provider_name=key)
+        return OpenAIProvider(api_key=api_key, model=model, provider_name=key)
     if key == "gemini":
         from app.indicators.ai_providers.gemini_provider import GeminiProvider
-        return GeminiProvider(api_key=api_key)
+        return GeminiProvider(api_key=api_key, model=model)
     raise ValueError(f"unknown AI provider: {name!r}")

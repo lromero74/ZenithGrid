@@ -638,6 +638,39 @@ export const aiCredentialsApi = {
     api.delete<{ message: string }>(`/ai-credentials/${provider}`).then((res) => res.data),
 };
 
+// AI Cost Summary (Phase F)
+export interface AIModelCostRow {
+  provider: string;
+  model_used: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface AIProviderCostRow {
+  provider: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface AICostSummary {
+  days: number;
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cost_usd: number;
+  by_model: AIModelCostRow[];
+  by_provider: AIProviderCostRow[];
+}
+
+export const aiCostApi = {
+  getSummary: (days = 7) =>
+    api.get<AICostSummary>(`/ai/cost-summary?days=${days}`).then((res) => res.data),
+};
+
 // Auto-Buy BTC Settings
 export interface AutoBuySettings {
   enabled: boolean;

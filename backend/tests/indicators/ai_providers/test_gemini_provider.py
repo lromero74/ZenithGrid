@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.indicators.ai_providers import GeminiProvider, NormalizedToolCall
+from app.indicators.ai_providers import GeminiProvider, NormalizedToolCall, TokenUsage
 from app.indicators.ai_providers.gemini_provider import translate_schema
 from app.indicators.ai_tools import ToolContext
 
@@ -37,10 +37,16 @@ def _text_part(text):
     return SimpleNamespace(function_call=None, text=text)
 
 
-def _response(parts, text=None):
+def _response(parts, text=None, prompt_token_count=0, candidates_token_count=0):
     content = SimpleNamespace(parts=parts)
     candidate = SimpleNamespace(content=content)
-    resp = SimpleNamespace(candidates=[candidate], text=text or "")
+    usage_metadata = SimpleNamespace(
+        prompt_token_count=prompt_token_count,
+        candidates_token_count=candidates_token_count,
+    )
+    resp = SimpleNamespace(
+        candidates=[candidate], text=text or "", usage_metadata=usage_metadata,
+    )
     return resp
 
 
@@ -82,7 +88,7 @@ class TestGeminiProvider:
                           new_callable=AsyncMock, return_value={"other_open_positions": []}):
             with patch("google.generativeai.GenerativeModel", return_value=mock_model):
                 with patch("google.generativeai.configure"):
-                    text, calls = await provider.call_with_tools(
+                    text, calls, _ = await provider.call_with_tools(
                         system=None, user="prompt", tools=PORTFOLIO_SCHEMA,
                         tool_ctx=_ctx(), max_turns=4,
                     )
@@ -118,7 +124,7 @@ class TestGeminiProvider:
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("google.generativeai.GenerativeModel", return_value=mock_model):
                 with patch("google.generativeai.configure"):
-                    text, calls = await provider.call_with_tools(
+                    text, calls, _ = await provider.call_with_tools(
                         system=None, user="p", tools=tools, tool_ctx=_ctx(), max_turns=4,
                     )
 
@@ -145,7 +151,7 @@ class TestGeminiProvider:
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("google.generativeai.GenerativeModel", return_value=mock_model):
                 with patch("google.generativeai.configure"):
-                    text, _ = await provider.call_with_tools(
+                    text, _, _ = await provider.call_with_tools(
                         system=None, user="p", tools=PORTFOLIO_SCHEMA,
                         tool_ctx=_ctx(), max_turns=4,
                     )
@@ -168,7 +174,7 @@ class TestGeminiProvider:
                           new_callable=AsyncMock, return_value={"error": "boom"}):
             with patch("google.generativeai.GenerativeModel", return_value=mock_model):
                 with patch("google.generativeai.configure"):
-                    text, calls = await provider.call_with_tools(
+                    text, calls, _ = await provider.call_with_tools(
                         system=None, user="p", tools=PORTFOLIO_SCHEMA,
                         tool_ctx=_ctx(), max_turns=4,
                     )
@@ -185,7 +191,7 @@ class TestGeminiProvider:
         provider = GeminiProvider(api_key="sk-test")
         with patch("google.generativeai.GenerativeModel", return_value=mock_model):
             with patch("google.generativeai.configure"):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
                 )
         assert text == final_json
@@ -212,3 +218,78 @@ class TestGeminiProvider:
                     tools=[], tool_ctx=_ctx(), max_turns=4,
                 )
         assert captured_kwargs.get("system_instruction") == "You are an expert trader."
+
+
+class TestGeminiUsage:
+    """Phase F: usage tokens are summed across every turn and returned."""
+
+    @pytest.mark.asyncio
+    async def test_usage_summed_across_tool_turns(self):
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        scripted = [
+            _response(
+                [_fc_part("get_portfolio_context", {})],
+                prompt_token_count=100, candidates_token_count=50,
+            ),
+            _response(
+                [_text_part(final_json)], text=final_json,
+                prompt_token_count=150, candidates_token_count=75,
+            ),
+        ]
+        mock_chat = MagicMock()
+        mock_chat.send_message_async = AsyncMock(side_effect=scripted)
+        mock_model = MagicMock()
+        mock_model.start_chat = MagicMock(return_value=mock_chat)
+
+        provider = GeminiProvider(api_key="sk-test")
+        with patch.object(provider, "_execute_tool",
+                          new_callable=AsyncMock, return_value={"ok": True}):
+            with patch("google.generativeai.GenerativeModel", return_value=mock_model):
+                with patch("google.generativeai.configure"):
+                    _, _, usage = await provider.call_with_tools(
+                        system=None, user="p", tools=PORTFOLIO_SCHEMA,
+                        tool_ctx=_ctx(), max_turns=4,
+                    )
+        assert isinstance(usage, TokenUsage)
+        assert usage.input_tokens == 250
+        assert usage.output_tokens == 125
+
+    @pytest.mark.asyncio
+    async def test_usage_on_single_shot_call(self):
+        final_json = json.dumps({"signal": "buy", "confidence": 80, "reasoning": ""})
+        mock_model = MagicMock()
+        mock_model.generate_content_async = AsyncMock(
+            return_value=_response(
+                [_text_part(final_json)], text=final_json,
+                prompt_token_count=42, candidates_token_count=17,
+            )
+        )
+        provider = GeminiProvider(api_key="sk-test")
+        with patch("google.generativeai.GenerativeModel", return_value=mock_model):
+            with patch("google.generativeai.configure"):
+                _, _, usage = await provider.call_with_tools(
+                    system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+                )
+        assert usage.input_tokens == 42
+        assert usage.output_tokens == 17
+
+    @pytest.mark.asyncio
+    async def test_usage_defaults_to_zero_when_missing(self):
+        """A response without usage_metadata doesn't crash — counts 0."""
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        content = SimpleNamespace(parts=[_text_part(final_json)])
+        candidate = SimpleNamespace(content=content)
+        mock_model = MagicMock()
+        mock_model.generate_content_async = AsyncMock(
+            return_value=SimpleNamespace(
+                candidates=[candidate], text=final_json,
+            )
+        )
+        provider = GeminiProvider(api_key="sk-test")
+        with patch("google.generativeai.GenerativeModel", return_value=mock_model):
+            with patch("google.generativeai.configure"):
+                _, _, usage = await provider.call_with_tools(
+                    system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+                )
+        assert usage.input_tokens == 0
+        assert usage.output_tokens == 0

@@ -31,6 +31,11 @@
       "purpose": "Manage per-user AI provider API keys"
     },
     {
+      "file": "routers/ai_cost_router.py",
+      "prefix": "/api/ai",
+      "purpose": "GET /api/ai/cost-summary?days=7 returns per-(provider, model) and per-provider aggregates of AI usage and cost for the current user over the requested window; scoped to current_user.id; rejects days < 1 or > 365"
+    },
+    {
       "file": "routers/auth_router.py",
       "prefix": "/api/auth",
       "purpose": "Thin aggregator that includes all auth sub-routers (auth_routers package)"
@@ -561,12 +566,16 @@
         "reasoning",
         "ai_model",
         "tool_calls",
+        "model_used",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
         "created_at",
         "outcome",
         "realized_pnl_pct",
         "closed_at"
       ],
-      "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. 90-day retention via cleanup_old_ai_opinion_logs."
+      "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. model_used / input_tokens / output_tokens / cost_usd (added in migration 081) record the resolved model ID and per-call token usage + estimated USD cost, powering the Settings AI cost dashboard. 90-day retention via cleanup_old_ai_opinion_logs."
     },
     {
       "name": "ScannerLog",
@@ -1766,11 +1775,15 @@
   "indicators_module": [
     {
       "file": "indicators/ai_spot_opinion.py",
-      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). Every evaluation is persisted via ai_opinion_logger.log_opinion."
+      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). AISpotOpinionParams.ai_model_override is plumbed through to get_provider(model=...) so bots can pin a specific model. _call_llm returns a 5-tuple (signal, confidence, reasoning, tool_calls, usage_meta) where usage_meta = {model_used, input_tokens, output_tokens, cost_usd} (cost computed via indicators.ai_pricing.estimate_cost_usd). Every evaluation is persisted via ai_opinion_logger.log_opinion with the usage/cost fields."
     },
     {
       "file": "indicators/ai_opinion_logger.py",
-      "purpose": "Writes one AIOpinionLog row per AISpotOpinionEvaluator.evaluate() call (fire-and-forget) and subscribes to the event bus POSITION_CLOSED topic to backfill outcome / realized_pnl_pct / closed_at when the trade resolves. classify_outcome(pct) maps PnL% to win/loss/breakeven."
+      "purpose": "Writes one AIOpinionLog row per AISpotOpinionEvaluator.evaluate() call (fire-and-forget) and subscribes to the event bus POSITION_CLOSED topic to backfill outcome / realized_pnl_pct / closed_at when the trade resolves. log_opinion accepts and persists model_used / input_tokens / output_tokens / cost_usd so the Settings AI cost dashboard can aggregate spend per provider and model. classify_outcome(pct) maps PnL% to win/loss/breakeven."
+    },
+    {
+      "file": "indicators/ai_pricing.py",
+      "purpose": "AI model pricing table (USD per 1M tokens, input/output) and cost helpers. MODEL_PRICING covers the known Claude, GPT, and Gemini family bases; estimate_cost_usd(model, input_tokens, output_tokens) uses longest-prefix matching so versioned model IDs fall back to their family's base row; provider_for_model(model) returns 'anthropic' / 'openai' / 'gemini' / 'unknown'. Unknown models cost 0.0 (logged but not blocking)."
     },
     {
       "file": "indicators/bull_flag_indicator.py",
@@ -1827,12 +1840,12 @@
     ]
   },
   "ai_providers": {
-    "description": "Adapters that implement the LLMProvider protocol (async call_with_tools(system, user, tools, tool_ctx, max_turns) -> (text, calls)). The canonical tool schema is Anthropic's shape; each adapter translates it into its own call format and emits NormalizedToolCall records so upstream code (the evaluator, logger, UI) never branches on provider.",
+    "description": "Adapters that implement the LLMProvider protocol (async call_with_tools(system, user, tools, tool_ctx, max_turns) -> (text, calls, usage)). The canonical tool schema is Anthropic's shape; each adapter translates it into its own call format, emits NormalizedToolCall records, and sums a TokenUsage(input_tokens, output_tokens) across every turn of the tool loop so upstream code (the evaluator, logger, cost dashboard) never branches on provider.",
     "files": [
-      {"file": "indicators/ai_providers/base.py", "purpose": "LLMProvider protocol, NormalizedToolCall dataclass, get_provider() lookup, summarize_output() helper."},
-      {"file": "indicators/ai_providers/anthropic_provider.py", "purpose": "Claude adapter — native Anthropic tool-use format."},
-      {"file": "indicators/ai_providers/openai_provider.py", "purpose": "OpenAI GPT adapter — translates canonical tool schemas to OpenAI function-call shape."},
-      {"file": "indicators/ai_providers/gemini_provider.py", "purpose": "Google Gemini adapter — translates canonical tool schemas to Gemini function-declaration shape."}
+      {"file": "indicators/ai_providers/base.py", "purpose": "LLMProvider protocol, NormalizedToolCall dataclass, TokenUsage dataclass (input_tokens, output_tokens), get_provider(model=...) lookup, summarize_output() helper."},
+      {"file": "indicators/ai_providers/anthropic_provider.py", "purpose": "Claude adapter — native Anthropic tool-use format; accumulates usage.input_tokens / usage.output_tokens across tool-loop turns and returns TokenUsage."},
+      {"file": "indicators/ai_providers/openai_provider.py", "purpose": "OpenAI GPT adapter — translates canonical tool schemas to OpenAI function-call shape; accumulates prompt/completion token counts across turns and returns TokenUsage."},
+      {"file": "indicators/ai_providers/gemini_provider.py", "purpose": "Google Gemini adapter — translates canonical tool schemas to Gemini function-declaration shape; accumulates usageMetadata prompt/candidates token counts across turns and returns TokenUsage."}
     ]
   },
   "price_feeds": [
@@ -2153,7 +2166,7 @@
     }
   ],
   "migrations": {
-    "count": 90,
+    "count": 91,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2248,7 +2261,8 @@
       "077_soft_ceiling_effective_max.py",
       "078_add_rebalance_usdt.py",
       "079_report_schedule_retention.py",
-      "080_ai_opinion_log.py"
+      "080_ai_opinion_log.py",
+      "081_ai_opinion_log_cost_fields.py"
     ]
   }
 }

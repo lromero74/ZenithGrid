@@ -92,7 +92,7 @@
       },
       {
         "file": "pages/bots/components/StrategyConfigSection.tsx",
-        "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params)"
+        "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params); generic dropdown renderer displays empty-string options as '(provider default)' (used by the ai_spot_opinion ai_model_override param)"
       },
       {
         "file": "pages/bots/components/BotListItem.tsx",
@@ -423,6 +423,10 @@
       {
         "file": "components/AIProvidersManager.tsx",
         "purpose": "Manage AI provider API keys"
+      },
+      {
+        "file": "components/settings/AICostDashboard.tsx",
+        "purpose": "Settings panel showing AI usage and cost over a selectable day window (7/30/90); total cards for calls/tokens/cost, plus per-provider and per-model tables; calls aiCostApi.getSummary(days); rendered in Settings.tsx adjacent to AIProvidersManager"
       },
       {
         "file": "components/AutoBuySettings.tsx",
@@ -776,6 +780,10 @@
       {
         "name": "aiCredentialsApi",
         "purpose": "AI provider credential management"
+      },
+      {
+        "name": "aiCostApi",
+        "purpose": "AI usage and cost aggregates: getSummary(days=7) -> AICostSummary { totals, by_provider: AIProviderCostRow[], by_model: AIModelCostRow[] }; backs the Settings AI cost dashboard"
       },
       {
         "name": "autoBuyApi",

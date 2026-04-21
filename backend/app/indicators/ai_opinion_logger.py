@@ -49,8 +49,17 @@ async def log_opinion(
     reasoning: str,
     tool_calls: List[Any],
     ai_model: Optional[str],
+    model_used: Optional[str] = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cost_usd: float = 0.0,
 ) -> None:
-    """Persist one AI decision row. Never raises."""
+    """Persist one AI decision row. Never raises.
+
+    `model_used` / `input_tokens` / `output_tokens` / `cost_usd` are the Phase F
+    cost-accounting fields. They default to zero so prefilter-reject rows (no
+    LLM call) still satisfy the `DEFAULT 0` migration constraints.
+    """
     try:
         row = AIOpinionLog(
             user_id=user_id,
@@ -64,6 +73,10 @@ async def log_opinion(
             reasoning=reasoning,
             ai_model=ai_model,
             tool_calls=tool_calls,
+            model_used=model_used,
+            input_tokens=int(input_tokens or 0),
+            output_tokens=int(output_tokens or 0),
+            cost_usd=float(cost_usd or 0.0),
         )
         db.add(row)
         await db.commit()

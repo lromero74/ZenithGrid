@@ -24,7 +24,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
 
-from app.indicators.ai_providers.base import NormalizedToolCall, summarize_output
+from app.indicators.ai_providers.base import NormalizedToolCall, TokenUsage, summarize_output
 
 if TYPE_CHECKING:
     from app.indicators.ai_tools import ToolContext
@@ -75,7 +75,7 @@ class OpenAIProvider:
         tools: List[Dict[str, Any]],
         tool_ctx: "ToolContext",
         max_turns: int = 4,
-    ) -> Tuple[str, List[NormalizedToolCall]]:
+    ) -> Tuple[str, List[NormalizedToolCall], TokenUsage]:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=self.api_key)
@@ -87,6 +87,7 @@ class OpenAIProvider:
         messages.append({"role": "user", "content": user})
 
         tool_calls: List[NormalizedToolCall] = []
+        usage = TokenUsage()
 
         for turn in range(max_turns + 1):
             kwargs: Dict[str, Any] = {
@@ -99,11 +100,12 @@ class OpenAIProvider:
                 kwargs["tools"] = tool_schemas
 
             response = await client.chat.completions.create(**kwargs)
+            _accumulate_openai_usage(usage, response)
             choice = response.choices[0]
             msg = choice.message
 
             if choice.finish_reason == "stop" or not msg.tool_calls:
-                return msg.content or "", tool_calls
+                return msg.content or "", tool_calls, usage
 
             # Record the assistant's tool-call request in history before feeding
             # results back (required by OpenAI's API contract).
@@ -146,4 +148,20 @@ class OpenAIProvider:
                     turn=turn,
                 ))
 
-        return "", tool_calls
+        return "", tool_calls, usage
+
+
+def _accumulate_openai_usage(usage: TokenUsage, response: Any) -> None:
+    """Sum an OpenAI response's usage into the running tally.
+
+    Chat Completions attaches `response.usage.prompt_tokens` /
+    `completion_tokens`. Missing fields are treated as 0 so stubbed test
+    responses don't need to stub usage.
+    """
+    u = getattr(response, "usage", None)
+    if u is None:
+        return
+    usage.add(
+        getattr(u, "prompt_tokens", 0),
+        getattr(u, "completion_tokens", 0),
+    )

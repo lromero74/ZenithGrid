@@ -4,6 +4,7 @@ import { AccountsManagement } from '../components/account/AccountsManagement'
 import { PaperTradingManager } from '../components/account/PaperTradingManager'
 import { AddAccountModal } from '../components/account/AddAccountModal'
 import { AIProvidersManager } from '../components/settings/AIProvidersManager'
+import { AICostDashboard } from '../components/settings/AICostDashboard'
 import { PortfolioManagement } from '../components/account/PortfolioManagement'
 import { BlacklistManager } from '../components/settings/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
@@ -1173,6 +1174,9 @@ export default function Settings() {
 
       {/* AI Providers Section */}
       <AIProvidersManager />
+
+      {/* AI Usage & Cost Dashboard (Phase F) */}
+      <AICostDashboard />
 
       {/* Database Maintenance Section — admins only */}
       {isAdmin && (

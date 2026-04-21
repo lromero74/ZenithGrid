@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.indicators.ai_providers import AnthropicProvider, NormalizedToolCall
+from app.indicators.ai_providers import AnthropicProvider, NormalizedToolCall, TokenUsage
 from app.indicators.ai_tools import ToolContext
 
 
@@ -27,8 +27,9 @@ def _tool_use_block(id_, name, input_):
     return SimpleNamespace(type="tool_use", id=id_, name=name, input=input_)
 
 
-def _response(stop_reason, content):
-    return SimpleNamespace(stop_reason=stop_reason, content=content)
+def _response(stop_reason, content, input_tokens=0, output_tokens=0):
+    usage = SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
+    return SimpleNamespace(stop_reason=stop_reason, content=content, usage=usage)
 
 
 def _ctx():
@@ -60,7 +61,7 @@ class TestAnthropicProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"other_open_positions": []}):
             with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="prompt", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -94,7 +95,7 @@ class TestAnthropicProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=tools, tool_ctx=_ctx(), max_turns=4,
                 )
 
@@ -117,7 +118,7 @@ class TestAnthropicProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, _ = await provider.call_with_tools(
+                text, _, _ = await provider.call_with_tools(
                     system=None, user="p", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -140,7 +141,7 @@ class TestAnthropicProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"error": "boom"}):
             with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                text, calls = await provider.call_with_tools(
+                text, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -159,7 +160,7 @@ class TestAnthropicProvider:
 
         provider = AnthropicProvider(api_key="sk-test")
         with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-            text, calls = await provider.call_with_tools(
+            text, calls, _ = await provider.call_with_tools(
                 system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
             )
 
@@ -184,7 +185,7 @@ class TestAnthropicProvider:
         with patch.object(provider, "_execute_tool",
                           new_callable=AsyncMock, return_value={"ok": True}):
             with patch("anthropic.AsyncAnthropic", return_value=mock_client):
-                _, calls = await provider.call_with_tools(
+                _, calls, _ = await provider.call_with_tools(
                     system=None, user="p", tools=PORTFOLIO_SCHEMA,
                     tool_ctx=_ctx(), max_turns=4,
                 )
@@ -206,3 +207,68 @@ class TestAnthropicProvider:
             )
         call = mock_client.messages.create.await_args_list[0]
         assert call.kwargs.get("system") == "You are an expert trader."
+
+
+class TestAnthropicUsage:
+    """Phase F: usage tokens are summed across every turn and returned."""
+
+    @pytest.mark.asyncio
+    async def test_usage_summed_across_tool_turns(self):
+        """A tool-loop call sums input/output tokens from every round-trip."""
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        scripted = [
+            _response("tool_use",
+                      [_tool_use_block("u1", "get_portfolio_context", {})],
+                      input_tokens=100, output_tokens=50),
+            _response("end_turn", [_text_block(final_json)],
+                      input_tokens=150, output_tokens=75),
+        ]
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(side_effect=scripted)
+
+        provider = AnthropicProvider(api_key="sk-test")
+        with patch.object(provider, "_execute_tool",
+                          new_callable=AsyncMock, return_value={"ok": True}):
+            with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+                _, _, usage = await provider.call_with_tools(
+                    system=None, user="p", tools=PORTFOLIO_SCHEMA,
+                    tool_ctx=_ctx(), max_turns=4,
+                )
+        assert isinstance(usage, TokenUsage)
+        assert usage.input_tokens == 250
+        assert usage.output_tokens == 125
+
+    @pytest.mark.asyncio
+    async def test_usage_on_single_shot_call(self):
+        final_json = json.dumps({"signal": "buy", "confidence": 80, "reasoning": ""})
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_response("end_turn", [_text_block(final_json)],
+                                   input_tokens=42, output_tokens=17)
+        )
+        provider = AnthropicProvider(api_key="sk-test")
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+            _, _, usage = await provider.call_with_tools(
+                system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+            )
+        assert usage.input_tokens == 42
+        assert usage.output_tokens == 17
+
+    @pytest.mark.asyncio
+    async def test_usage_defaults_to_zero_when_missing(self):
+        """A response without a .usage attribute doesn't crash — it just counts 0."""
+        final_json = json.dumps({"signal": "hold", "confidence": 0, "reasoning": ""})
+        mock_client = MagicMock()
+        # No usage attribute at all.
+        mock_client.messages.create = AsyncMock(
+            return_value=SimpleNamespace(
+                stop_reason="end_turn", content=[_text_block(final_json)],
+            )
+        )
+        provider = AnthropicProvider(api_key="sk-test")
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
+            _, _, usage = await provider.call_with_tools(
+                system=None, user="p", tools=[], tool_ctx=_ctx(), max_turns=4,
+            )
+        assert usage.input_tokens == 0
+        assert usage.output_tokens == 0

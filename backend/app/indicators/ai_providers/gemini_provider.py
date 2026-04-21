@@ -21,7 +21,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
 
-from app.indicators.ai_providers.base import NormalizedToolCall, summarize_output
+from app.indicators.ai_providers.base import NormalizedToolCall, TokenUsage, summarize_output
 
 if TYPE_CHECKING:
     from app.indicators.ai_tools import ToolContext
@@ -88,7 +88,7 @@ class GeminiProvider:
         tools: List[Dict[str, Any]],
         tool_ctx: "ToolContext",
         max_turns: int = 4,
-    ) -> Tuple[str, List[NormalizedToolCall]]:
+    ) -> Tuple[str, List[NormalizedToolCall], TokenUsage]:
         import google.generativeai as genai
 
         genai.configure(api_key=self.api_key)
@@ -101,11 +101,13 @@ class GeminiProvider:
             model_kwargs["tools"] = [{"function_declarations": tool_decls}]
 
         model = genai.GenerativeModel(self.model, **model_kwargs)
+        usage = TokenUsage()
 
         # No-tools path: plain generate_content_async, no chat state needed.
         if not tool_decls:
             response = await model.generate_content_async(user)
-            return _extract_text(response), []
+            _accumulate_gemini_usage(usage, response)
+            return _extract_text(response), [], usage
 
         chat = model.start_chat()
         tool_calls: List[NormalizedToolCall] = []
@@ -113,9 +115,10 @@ class GeminiProvider:
 
         for turn in range(max_turns + 1):
             response = await chat.send_message_async(next_message)
+            _accumulate_gemini_usage(usage, response)
             fn_parts = _extract_function_calls(response)
             if not fn_parts or turn == max_turns:
-                return _extract_text(response), tool_calls
+                return _extract_text(response), tool_calls, usage
 
             # Build a list of function_response parts — one per function_call.
             response_parts: List[Dict[str, Any]] = []
@@ -141,4 +144,20 @@ class GeminiProvider:
                 ))
             next_message = response_parts
 
-        return "", tool_calls
+        return "", tool_calls, usage
+
+
+def _accumulate_gemini_usage(usage: TokenUsage, response: Any) -> None:
+    """Sum a Gemini response's usage into the running tally.
+
+    Gemini exposes `response.usage_metadata.prompt_token_count` and
+    `candidates_token_count`. Missing fields are treated as 0 so stubbed
+    test responses don't need to stub usage.
+    """
+    u = getattr(response, "usage_metadata", None)
+    if u is None:
+        return
+    usage.add(
+        getattr(u, "prompt_token_count", 0),
+        getattr(u, "candidates_token_count", 0),
+    )

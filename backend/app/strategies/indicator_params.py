@@ -151,6 +151,21 @@ INDICATOR_PARAMS = [
      "type": "str", "default": "claude",
      "options": ["claude", "gpt", "gemini"],
      "group": "AI Indicators"},
+    {"name": "ai_model_override", "display_name": "AI Model Override",
+     "description": "Optional: pick a specific SDK model ID (e.g. claude-haiku-4-5 for speed/cost). "
+                    "Leave as '(provider default)' to use the adapter's default.",
+     "type": "str", "default": "",
+     "options": [
+         "",  # (provider default)
+         # Anthropic Claude
+         "claude-opus-4-7", "claude-opus-4-5", "claude-sonnet-4-5",
+         "claude-haiku-4-5", "claude-3-5-sonnet", "claude-3-5-haiku",
+         # OpenAI GPT
+         "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "o1-mini",
+         # Google Gemini
+         "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash",
+     ],
+     "group": "AI Indicators"},
     {"name": "ai_timeframe", "display_name": "AI Check Timeframe",
      "description": "How often to ask AI for opinion (once per candle close)",
      "type": "str", "default": "15m",

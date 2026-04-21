@@ -730,6 +730,10 @@ class AIOpinionLog(Base):
     confidence = Column(Integer, nullable=False, default=0)
     reasoning = Column(Text, nullable=True)
     ai_model = Column(String, nullable=True)  # "claude" | "gpt" | "gemini"
+    model_used = Column(String, nullable=True)  # specific SDK model id (e.g. "claude-sonnet-4-20250514")
+    input_tokens = Column(Integer, nullable=True, default=0)
+    output_tokens = Column(Integer, nullable=True, default=0)
+    cost_usd = Column(Float, nullable=True, default=0.0)
     tool_calls = Column(JSON, nullable=True)  # list[{name,input,output_summary,turn}]
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
