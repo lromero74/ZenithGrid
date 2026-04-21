@@ -1,7 +1,6 @@
 """
 Tests for disposable email detection service.
 """
-import pytest
 from app.services.disposable_email_service import (
     is_disposable_domain,
     looks_machine_generated,

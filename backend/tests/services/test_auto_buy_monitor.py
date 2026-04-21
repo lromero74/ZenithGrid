@@ -5,7 +5,6 @@ Tests the AutoBuyMonitor service that automatically converts stablecoins
 to BTC when balances exceed configured minimums.
 """
 
-import asyncio
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch

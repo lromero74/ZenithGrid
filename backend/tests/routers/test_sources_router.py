@@ -6,7 +6,6 @@ add/delete custom sources, update source settings, and check_robots.
 """
 
 import pytest
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException

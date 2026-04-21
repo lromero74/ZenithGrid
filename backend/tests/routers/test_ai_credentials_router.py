@@ -7,7 +7,7 @@ update by provider, delete, provider status, and _api_key_preview helper.
 
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 from fastapi import HTTPException
 

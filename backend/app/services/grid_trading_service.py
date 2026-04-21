@@ -569,10 +569,7 @@ async def rebalance_grid_on_breakout(params: GridRebalanceParams) -> Dict[str, A
     grid_mode = params.bot.bot_config.get("grid_mode", "neutral")
     grid_type = params.bot.bot_config.get("grid_type", "arithmetic")
 
-    # Keep same investment amount
-    _total_investment = params.bot.bot_config.get("total_investment_quote", 0)  # noqa: F841
-
-    # Build new grid config
+    # Build new grid config (investment amount is preserved upstream)
     new_grid_config = {
         "grid_mode": grid_mode,
         "grid_type": grid_type,

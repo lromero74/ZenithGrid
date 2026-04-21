@@ -12,7 +12,6 @@ Covers:
 Uses httpx AsyncClient with ASGITransport and dependency overrides.
 """
 
-from datetime import datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient

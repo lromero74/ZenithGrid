@@ -591,7 +591,7 @@ class PaperTradingClient(ExchangeClient):
             if price and price > 0:
                 return balance * price
         except Exception:
-            pass
+            logger.debug("paper_trading USD price fetch failed for %s", currency, exc_info=True)
         # Fallback: convert via BTC (for coins with only a BTC pair)
         if btc_usd and btc_usd > 0:
             try:
@@ -599,7 +599,7 @@ class PaperTradingClient(ExchangeClient):
                 if btc_price and btc_price > 0:
                     return balance * btc_price * btc_usd
             except Exception:
-                pass
+                logger.debug("paper_trading BTC price fallback failed for %s", currency, exc_info=True)
         logger.debug("Could not price %s in USD (no USD or BTC pair)", currency)
         return 0.0
 

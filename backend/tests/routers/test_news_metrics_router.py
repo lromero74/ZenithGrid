@@ -8,8 +8,7 @@ and metric_history.
 """
 
 import pytest
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
@@ -150,7 +149,7 @@ class TestUSDebt:
             "cache_expires_at": "2026-01-02T00:00:00Z",
         }
         from app.routers.news_metrics_router import get_us_debt
-        result = await get_us_debt(current_user=test_user)
+        await get_us_debt(current_user=test_user)
         mock_fetch.assert_called_once()
 
 
@@ -234,7 +233,7 @@ class TestAltseasonIndex:
         """Edge case: cache miss triggers fresh fetch."""
         mock_fetch.return_value = {"index": 42}
         from app.routers.news_metrics_router import get_altseason_index
-        result = await get_altseason_index(current_user=test_user)
+        await get_altseason_index(current_user=test_user)
         mock_fetch.assert_called_once()
 
 

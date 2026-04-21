@@ -2,7 +2,6 @@
 Tests for application-level intrusion detection middleware.
 """
 
-import pytest
 from app.middleware.intrusion_detect import _check_body, IntrusionDetector
 
 
@@ -50,7 +49,7 @@ class TestCheckBody:
 
     def test_allows_code_discussion(self):
         # Talking ABOUT SQL, not injecting it
-        result = _check_body("I use SELECT in my queries sometimes")
+        _check_body("I use SELECT in my queries sometimes")
         # This may or may not match — the key is repeated attempts trigger ban, not single matches
         # The middleware logs but doesn't block
 

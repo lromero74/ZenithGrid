@@ -4,9 +4,7 @@ Tests for the rebalancer gate helpers in rebalance_monitor.py:
   - quote_is_overweight
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch
 
 
 class TestAllocationCache:
@@ -68,7 +66,8 @@ class TestQuoteIsOverweight:
     def test_returns_true_when_clearly_overweight(self):
         """USDC at 75% vs target 50% with 5% threshold → overweight."""
         from app.services.rebalance_monitor import quote_is_overweight
-        self._set_cache(1,
+        self._set_cache(
+            1,
             {"usd_pct": 0.0, "btc_pct": 25.0, "eth_pct": 0.0, "usdc_pct": 75.0},
             {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0},
         )
@@ -77,7 +76,8 @@ class TestQuoteIsOverweight:
     def test_returns_false_when_exactly_at_threshold(self):
         """BTC at 55% vs target 50% with 5% threshold → NOT overweight (needs strict >)."""
         from app.services.rebalance_monitor import quote_is_overweight
-        self._set_cache(1,
+        self._set_cache(
+            1,
             {"usd_pct": 0.0, "btc_pct": 55.0, "eth_pct": 0.0, "usdc_pct": 45.0},
             {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0},
         )
@@ -86,7 +86,8 @@ class TestQuoteIsOverweight:
     def test_returns_false_when_within_threshold(self):
         """USD at 3% vs target 0% with 5% threshold → within bounds."""
         from app.services.rebalance_monitor import quote_is_overweight
-        self._set_cache(1,
+        self._set_cache(
+            1,
             {"usd_pct": 3.0, "btc_pct": 48.5, "eth_pct": 0.0, "usdc_pct": 48.5},
             {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0},
         )
@@ -112,7 +113,8 @@ class TestQuoteIsOverweight:
     def test_underweight_currency_not_gated(self):
         """BTC underweight → not overweight, bot should NOT be gated."""
         from app.services.rebalance_monitor import quote_is_overweight
-        self._set_cache(1,
+        self._set_cache(
+            1,
             {"usd_pct": 0.0, "btc_pct": 30.0, "eth_pct": 0.0, "usdc_pct": 70.0},
             {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0},
         )
@@ -121,7 +123,8 @@ class TestQuoteIsOverweight:
     def test_just_over_threshold(self):
         """USDC at 56% vs target 50% with threshold 5% → 6% drift → overweight."""
         from app.services.rebalance_monitor import quote_is_overweight
-        self._set_cache(1,
+        self._set_cache(
+            1,
             {"usd_pct": 0.0, "btc_pct": 44.0, "eth_pct": 0.0, "usdc_pct": 56.0},
             {"usd_pct": 0.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 50.0},
         )

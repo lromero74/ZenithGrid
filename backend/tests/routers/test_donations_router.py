@@ -4,7 +4,6 @@ Tests for donation tracking endpoints.
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
 
 from app.models import User
 from app.models.donations import Donation

@@ -79,7 +79,7 @@ async def create_bot(
     """Create a new trading bot"""
     # Validate strategy exists
     try:
-        _strategy_def = StrategyRegistry.get_definition(bot_data.strategy_type)  # noqa: F841
+        StrategyRegistry.get_definition(bot_data.strategy_type)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {bot_data.strategy_type}")
 
@@ -614,13 +614,6 @@ async def copy_bot_to_account(
 
     if not target_account:
         raise HTTPException(status_code=404, detail="Target account not found or not accessible")
-
-    # Get source account to determine type
-    _source_account = None  # noqa: F841
-    if original_bot.account_id:
-        source_account_query = select(Account).where(Account.id == original_bot.account_id)
-        source_account_result = await db.execute(source_account_query)
-        _source_account = source_account_result.scalars().first()  # noqa: F841
 
     # Generate new name with account type suffix
     new_name = original_bot.name

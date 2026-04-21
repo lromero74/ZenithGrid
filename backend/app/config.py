@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./trading.db"
     redis_url: str = "redis://localhost:6379/0"   # DB 0: rate limiting / general cache
 
+    # Ethereum RPC URL (optional override for DEX features).
+    # When empty, DexWalletService falls back to a public-node RPC.
+    # For production DEX use, set this to an Infura/Alchemy/etc. endpoint via env.
+    ethereum_rpc_url: str = ""
+
     # Security
     # CORS origins as comma-separated string (parsed to list via validator)
     cors_origins: str = "http://localhost:3000,http://localhost:5173"

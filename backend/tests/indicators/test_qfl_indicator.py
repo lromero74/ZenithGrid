@@ -7,7 +7,6 @@ import pytest
 from app.indicators.qfl_indicator import (
     QFLIndicatorEvaluator,
     QFLParams,
-    QFLResult,
     _find_bases,
 )
 

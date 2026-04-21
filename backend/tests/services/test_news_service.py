@@ -1,15 +1,12 @@
 """Tests for news_service — business logic extracted from news_router."""
 
-import math
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import MagicMock
 
-import pytest
 
 from app.services.news_service import (
     article_to_news_item,
     build_news_response,
-    get_all_sources_from_db,
 )
 
 
@@ -33,7 +30,9 @@ class TestArticleToNewsItem:
     def test_happy_path_basic_conversion(self):
         """article_to_news_item returns a dict with all expected fields."""
         article = self._make_article()
-        sources = {"test_source": {"name": "Test Source", "website": "https://test.com", "content_scrape_allowed": True}}
+        sources = {"test_source": {
+            "name": "Test Source", "website": "https://test.com", "content_scrape_allowed": True,
+        }}
         result = article_to_news_item(article, sources=sources, seen_ids=set())
 
         assert result["id"] == 1

@@ -323,7 +323,7 @@ async def execute_buy(
     if is_base_order and config.get("base_execution_type") == "limit":
         limit_price = current_price
         logger.info(f"  Placing limit base buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
-        _pending_order = await execute_limit_buy(  # noqa: F841
+        await execute_limit_buy(
             db=db,
             exchange=exchange,
             trading_client=trading_client,
@@ -344,7 +344,7 @@ async def execute_buy(
     if is_safety_order and dca_execution_type == "limit":
         limit_price = current_price
         logger.info(f"  Placing limit DCA buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
-        _pending_order = await execute_limit_buy(  # noqa: F841
+        await execute_limit_buy(
             db=db,
             exchange=exchange,
             trading_client=trading_client,

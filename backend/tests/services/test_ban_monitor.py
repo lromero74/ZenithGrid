@@ -204,9 +204,9 @@ class TestLookupIpGeoBatch:
     def test_all_cached_makes_zero_network_calls(self):
         """Edge case: when all IPs are cached, no network requests are made."""
         ban_mod._geo_cache["1.2.3.4"] = {"country": "US", "country_name": "United States",
-                                          "city": None, "org": None, "region": None, "hostname": None}
+                                         "city": None, "org": None, "region": None, "hostname": None}
         ban_mod._geo_cache["5.6.7.8"] = {"country": "GB", "country_name": "United Kingdom",
-                                          "city": None, "org": None, "region": None, "hostname": None}
+                                         "city": None, "org": None, "region": None, "hostname": None}
         with patch('urllib.request.urlopen') as mock_open:
             result = _lookup_ip_geo_batch(["1.2.3.4", "5.6.7.8"])
         mock_open.assert_not_called()
@@ -216,7 +216,7 @@ class TestLookupIpGeoBatch:
     def test_partial_cache_only_fetches_uncached(self):
         """Edge case: IPs already in cache are not fetched; only uncached IPs are requested."""
         ban_mod._geo_cache["1.2.3.4"] = {"country": "DE", "country_name": "Germany",
-                                          "city": None, "org": None, "region": None, "hostname": None}
+                                         "city": None, "org": None, "region": None, "hostname": None}
         body = _make_batch_response(["5.6.7.8"], country="France", country_code="FR")
 
         with patch('urllib.request.urlopen', return_value=_make_urlopen_mock(body)) as mock_open:
@@ -326,9 +326,9 @@ class TestQueryFail2ban:
 
         batch_result = {
             "1.2.3.4": {"country": "US", "country_name": "United States",
-                         "city": None, "org": None, "region": None, "hostname": None},
+                        "city": None, "org": None, "region": None, "hostname": None},
             "5.6.7.8": {"country": "US", "country_name": "United States",
-                         "city": None, "org": None, "region": None, "hostname": None},
+                        "city": None, "org": None, "region": None, "hostname": None},
         }
 
         with patch('subprocess.run', side_effect=mock_subprocess_run), \
@@ -504,11 +504,11 @@ class TestQueryFail2ban:
 
         batch_result = {
             "1.1.1.1": {"country": "US", "country_name": "United States",
-                         "city": None, "org": None, "region": None, "hostname": None},
+                        "city": None, "org": None, "region": None, "hostname": None},
             "2.2.2.2": {"country": "DE", "country_name": "Germany",
-                         "city": None, "org": None, "region": None, "hostname": None},
+                        "city": None, "org": None, "region": None, "hostname": None},
             "3.3.3.3": {"country": "JP", "country_name": "Japan",
-                         "city": None, "org": None, "region": None, "hostname": None},
+                        "city": None, "org": None, "region": None, "hostname": None},
         }
 
         with patch('subprocess.run', side_effect=mock_run), \

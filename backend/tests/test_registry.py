@@ -11,7 +11,6 @@ Covers:
 - Protocol isinstance checks pass for broadcast, rate_limiter, credentials
 - ServiceRegistry can be constructed with mock replacements (the swap point test)
 """
-import pytest
 from unittest.mock import MagicMock
 
 

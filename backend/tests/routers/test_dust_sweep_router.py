@@ -11,7 +11,7 @@ import inspect
 import json
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 from app.auth.dependencies import Perm
 
@@ -177,8 +177,6 @@ class TestUpdateDustSettings:
         from app.models import Account, User
         from app.routers.accounts_query_router import get_dust_sweep_settings
         from app.routers.accounts_mutation_router import update_dust_sweep_settings
-        from pydantic import BaseModel
-        from typing import Optional
 
         user = User(
             email="crud@example.com", hashed_password="x",

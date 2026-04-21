@@ -1,10 +1,8 @@
 """Tests for seasonality_service — business logic extracted from seasonality_router."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.seasonality_service import auto_manage_bots, build_seasonality_response
 
