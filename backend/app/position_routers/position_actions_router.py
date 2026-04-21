@@ -370,8 +370,10 @@ async def resize_all_budgets(
                 raise HTTPException(status_code=404, detail="Account not found")
             query = query.where(Position.account_id == account_id)
         else:
-            if writable_ids:
-                query = query.where(Position.account_id.in_(writable_ids))
+            # Always scope to the caller's writable accounts. If they have none,
+            # match nothing ([-1] is an impossible account_id) instead of falling
+            # through to a global rewrite.
+            query = query.where(Position.account_id.in_(writable_ids or [-1]))
 
         result = await db.execute(query)
         positions = result.scalars().all()

@@ -86,6 +86,7 @@ class GoalCreate(BaseModel):
     account_id: Optional[int] = None
     chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
     show_minimap: Optional[bool] = True  # Legacy; minimap now controlled per schedule
+    minimap_threshold_days: Optional[int] = Field(90, ge=1)
 
     @model_validator(mode="after")
     def validate_goal_fields(self):
@@ -118,6 +119,7 @@ class GoalUpdate(BaseModel):
     is_active: Optional[bool] = None
     chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
     show_minimap: Optional[bool] = None  # Legacy; minimap now controlled per schedule
+    minimap_threshold_days: Optional[int] = Field(None, ge=1)
 
 
 class RecipientItem(BaseModel):
