@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker as _default_session_maker
 from app.models import (
-    Account, ActiveSession, AIBotLog, IndicatorLog, OrderHistory, Position,
-    Report, RevokedToken, Settings,
+    Account, ActiveSession, AIBotLog, AIOpinionLog, IndicatorLog, OrderHistory,
+    Position, Report, RevokedToken, Settings,
 )
 from app.services.session_service import expire_all_stale_sessions
 
@@ -256,6 +256,34 @@ async def get_log_retention_days(db: AsyncSession) -> int:
     except Exception as e:
         logger.error(f"Error getting log retention setting: {e}")
         return 14  # Default fallback
+
+
+AI_OPINION_LOG_RETENTION_DAYS = 90
+
+
+async def cleanup_old_ai_opinion_logs(session_maker=None):
+    """
+    Delete AI opinion log rows older than 90 days.
+
+    The `get_prior_ai_signals` tool clamps its lookback to the same window —
+    rows beyond it are never read, so they're safe to drop.
+    """
+    sm = session_maker or _default_session_maker
+    try:
+        async with sm() as db:
+            cutoff = datetime.utcnow() - timedelta(days=AI_OPINION_LOG_RETENTION_DAYS)
+            result = await db.execute(
+                delete(AIOpinionLog).where(AIOpinionLog.created_at < cutoff)
+            )
+            await db.commit()
+            deleted = result.rowcount
+            if deleted:
+                logger.info(
+                    f"🧹 Cleaned up {deleted} AI opinion log rows older than "
+                    f"{AI_OPINION_LOG_RETENTION_DAYS} days"
+                )
+    except Exception as e:
+        logger.error(f"Error in AI opinion log cleanup job: {e}", exc_info=True)
 
 
 async def cleanup_old_rate_limit_attempts(session_maker=None):

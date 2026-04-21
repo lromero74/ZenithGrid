@@ -1,9 +1,6 @@
 """
 Tests for app/auth_routers/rate_limit_backend.py
 
-TDD: these tests are written BEFORE implementation and must initially FAIL
-with ModuleNotFoundError: No module named 'app.auth_routers.rate_limit_backend'.
-
 Covers:
 - PostgresRateLimitBackend.record_attempt delegates to _db_record(category, key)
 - PostgresRateLimitBackend.count_recent delegates to _db_count and returns its result
@@ -11,9 +8,9 @@ Covers:
 - Module-level singleton exists and is PostgresRateLimitBackend
 - rate_limit_backend satisfies RateLimitBackend Protocol (isinstance)
 - RedisRateLimitBackend is importable
-- RedisRateLimitBackend.record_attempt raises NotImplementedError
-- RedisRateLimitBackend.count_recent raises NotImplementedError
-- RedisRateLimitBackend.cleanup raises NotImplementedError
+- RedisRateLimitBackend.record_attempt uses Redis INCR/EXPIRE
+- RedisRateLimitBackend.count_recent reads the key via GET
+- RedisRateLimitBackend.cleanup is a no-op (TTL handles expiry)
 - RedisRateLimitBackend satisfies RateLimitBackend Protocol (isinstance)
 """
 import pytest
@@ -81,28 +78,61 @@ class TestRedisRateLimitBackendStub:
         assert RedisRateLimitBackend is not None
 
     @pytest.mark.asyncio
-    async def test_redis_record_attempt_raises(self):
-        """Failure: RedisRateLimitBackend.record_attempt raises NotImplementedError."""
+    async def test_redis_record_attempt_increments_and_sets_ttl_on_first(self):
+        """Happy path: first attempt INCRs and sets EXPIRE; subsequent ones only INCR."""
         from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
-        stub = RedisRateLimitBackend()
-        with pytest.raises(NotImplementedError):
-            await stub.record_attempt("login", "1.2.3.4")
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=1)
+        mock_redis.expire = AsyncMock()
+        with patch("app.redis_client.get_redis", new=AsyncMock(return_value=mock_redis)):
+            backend = RedisRateLimitBackend()
+            await backend.record_attempt("login", "1.2.3.4")
+        mock_redis.incr.assert_awaited_once_with("rl:login:1.2.3.4")
+        mock_redis.expire.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_redis_count_recent_raises(self):
-        """Failure: RedisRateLimitBackend.count_recent raises NotImplementedError."""
+    async def test_redis_record_attempt_no_expire_on_subsequent(self):
+        """Edge case: when INCR returns > 1, EXPIRE is NOT called again."""
         from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
-        stub = RedisRateLimitBackend()
-        with pytest.raises(NotImplementedError):
-            await stub.count_recent("signup", "1.2.3.4", 3600)
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=2)
+        mock_redis.expire = AsyncMock()
+        with patch("app.redis_client.get_redis", new=AsyncMock(return_value=mock_redis)):
+            backend = RedisRateLimitBackend()
+            await backend.record_attempt("login", "1.2.3.4")
+        mock_redis.incr.assert_awaited_once()
+        mock_redis.expire.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_redis_cleanup_raises(self):
-        """Failure: RedisRateLimitBackend.cleanup raises NotImplementedError."""
+    async def test_redis_count_recent_reads_key(self):
+        """Happy path: count_recent GETs the rl key and returns int value."""
         from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
-        stub = RedisRateLimitBackend()
-        with pytest.raises(NotImplementedError):
-            await stub.cleanup()
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value="3")
+        with patch("app.redis_client.get_redis", new=AsyncMock(return_value=mock_redis)):
+            backend = RedisRateLimitBackend()
+            result = await backend.count_recent("signup", "1.2.3.4", 3600)
+        assert result == 3
+        mock_redis.get.assert_awaited_once_with("rl:signup:1.2.3.4")
+
+    @pytest.mark.asyncio
+    async def test_redis_count_recent_returns_zero_when_missing(self):
+        """Edge case: GET returns None → count is 0."""
+        from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+        with patch("app.redis_client.get_redis", new=AsyncMock(return_value=mock_redis)):
+            backend = RedisRateLimitBackend()
+            result = await backend.count_recent("signup", "1.2.3.4", 3600)
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_redis_cleanup_is_noop(self):
+        """Happy path: cleanup returns without raising (TTL handles expiry)."""
+        from app.auth_routers.rate_limit_backend import RedisRateLimitBackend
+        backend = RedisRateLimitBackend()
+        # Should not touch Redis at all
+        await backend.cleanup()
 
     def test_redis_satisfies_protocol(self):
         """Edge case: RedisRateLimitBackend also satisfies RateLimitBackend Protocol."""

@@ -5,7 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.158.14] - 2026-04-03
+## [v2.159.0] - 2026-04-21
+
+### Added
+- **AI analyst now learns from its own track record** — Every time an AI bot decides to buy or sell, its full reasoning (signal, confidence, reasoning, and any tool calls it made) is saved. When the trade eventually closes, the outcome (win/loss/breakeven and realized P&L) is stitched back onto the original opinion. A new tool `get_prior_ai_signals` exposes this history to future evaluations, so the AI can see how its recent calls on the same product have actually played out before giving a new opinion. Logs are kept for 90 days and then pruned automatically.
+- **Multi-provider AI tool use** — The AI analyst now supports tool calls across every provider (Anthropic, OpenAI, Gemini, Grok, DeepSeek). A unified provider adapter layer normalizes the tool-call loop so all providers receive the same portfolio + position context and the same set of tools, regardless of their native API shape.
+- **Portfolio + position context tools** — AI evaluators can now ask for the user's current portfolio breakdown, open-position status, and recent outcomes as structured tool results instead of fixed prompt text. Tools can take arguments (e.g. lookback window), so the AI pulls only the context it actually needs for each decision.
+
+### Fixed
+- **Chat unread-counts query no longer runs for users without chat permission** — The frontend was querying unread counts unconditionally on page load, triggering a noisy 403 for users whose group lacks `social:chat`. The query is now gated on the permission check.
+
 
 ### Fixed
 - **WebSocket reconnect no longer spams console errors when the access token is expired** — After a 30-minute session without a page reload, the JWT in the WebSocket URL could expire (e.g. if the browser tab was throttled or the auto-refresh timer fired late). The reconnect now checks token expiry first and silently refreshes it before opening the socket. If the refresh fails the socket is simply not reopened until the user logs back in.

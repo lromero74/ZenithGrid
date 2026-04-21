@@ -1244,7 +1244,8 @@ async def process_signal(
     else:
         signal_data = await strategy.analyze_signal(
             candles, current_price, position=position, action_context=action_context,
-            db=db, user_id=bot.user_id
+            db=db, user_id=bot.user_id,
+            bot=bot, account_id=bot.account_id,
         )
 
     # 2. AI failsafe — handle case where signal analysis returned None

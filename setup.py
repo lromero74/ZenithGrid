@@ -1414,6 +1414,36 @@ def initialize_database(project_root, db_config=None):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_bot_logs_bot_id ON ai_bot_logs(bot_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_bot_logs_timestamp ON ai_bot_logs(timestamp)")
 
+        # AI opinion log table (Phase D — memory/outcome-aware AI tools)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_opinion_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                account_id INTEGER,
+                bot_id INTEGER,
+                position_id INTEGER,
+                product_id VARCHAR(40) NOT NULL,
+                is_sell_check BOOLEAN NOT NULL DEFAULT 0,
+                signal VARCHAR(10) NOT NULL,
+                confidence INTEGER NOT NULL DEFAULT 0,
+                reasoning TEXT,
+                ai_model VARCHAR(20),
+                tool_calls TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                outcome VARCHAR(10),
+                realized_pnl_pct REAL,
+                closed_at TIMESTAMP
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_opinion_log_user_product_created "
+            "ON ai_opinion_log(user_id, product_id, created_at DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_opinion_log_position "
+            "ON ai_opinion_log(position_id)"
+        )
+
         # Scanner logs table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scanner_logs (

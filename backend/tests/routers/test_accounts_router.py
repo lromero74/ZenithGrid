@@ -29,6 +29,16 @@ def clear_accounts_router_caches():
     yield
 
 
+def _bulk_products(prices: dict) -> list:
+    """Build a fake list_products() response from a {product_id: price} dict.
+
+    rebalance_service uses public_market_data.list_products() (bulk, cached 1hr)
+    instead of per-pair get_current_price() calls.  Tests that set up price
+    mocks must feed this format.
+    """
+    return [{"product_id": pid, "price": str(p)} for pid, p in prices.items()]
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -939,21 +949,20 @@ class TestRebalanceStatus:
         mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
 
-        async def mock_price(product_id):
-            prices = {"BTC-USD": 80000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
-            return prices.get(product_id, 0.0)
-        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price)
+        bulk = _bulk_products({"BTC-USD": 80000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0})
 
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=test_account.id, db=db_session, current_user=test_user,
             )
 
-        # Should show 100% BTC (physical holdings), NOT 99% USD (market deployment)
-        assert result["total_value_usd"] == pytest.approx(160000.0)
-        assert result["current_btc_pct"] == pytest.approx(100.0)
-        assert result["current_usd_pct"] == pytest.approx(0.0)
+        # Should show ~100% BTC (physical holdings), NOT 99% USD (market deployment).
+        # $1 tolerance absorbs minor rounding from bulk-price string→float conversion.
+        assert result["total_value_usd"] == pytest.approx(160000.0, abs=5.0)
+        assert result["current_btc_pct"] == pytest.approx(100.0, abs=0.01)
+        assert result["current_usd_pct"] == pytest.approx(0.0, abs=0.01)
 
     @pytest.mark.asyncio
     async def test_paper_account_altcoin_total_includes_altcoins(
@@ -973,10 +982,13 @@ class TestRebalanceStatus:
 
         from app.routers.accounts_query_router import get_rebalance_status
 
+        bulk = _bulk_products({
+            "BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0,
+            "SOL-USD": 200.0,
+        })
         with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices, \
-             patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
-            mock_coin_price.return_value = 200.0  # SOL-USD price
 
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=test_user,
@@ -1023,15 +1035,13 @@ class TestRebalanceStatus:
 
         from app.routers.accounts_query_router import get_rebalance_status
 
-        async def coin_price_side_effect(product_id):
-            if product_id == "RUNE-BTC":
-                return 0.000030  # RUNE-BTC price
-            raise Exception(f"Unexpected product: {product_id}")
-
+        bulk = _bulk_products({
+            "BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0,
+            "RUNE-BTC": 0.000030,
+        })
         with patch("app.services.rebalance_service.get_public_prices", new_callable=AsyncMock) as mock_prices, \
-             patch("app.coinbase_api.public_market_data.get_current_price", new_callable=AsyncMock) as mock_coin_price:
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_prices.return_value = {"BTC-USD": 50000.0, "ETH-USD": 3000.0, "USDC-USD": 1.0}
-            mock_coin_price.side_effect = coin_price_side_effect
 
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=test_user,
@@ -1100,11 +1110,10 @@ class TestAllocationIncludesOpenPositions:
         mock_coinbase.get_btc_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
-        mock_coinbase.get_current_price = AsyncMock(
-            side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
-        )
+        bulk = _bulk_products({"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0})
 
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1144,13 +1153,13 @@ class TestAllocationIncludesOpenPositions:
         mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
 
-        async def mock_price_btc(product_id):
-            prices = {"BTC-USD": 50000.0, "ETH-USD": 2500.0, "ETH-BTC": 0.05, "USDC-USD": 1.0}
-            return prices.get(product_id, 0.0)
+        bulk = _bulk_products({
+            "BTC-USD": 50000.0, "ETH-USD": 2500.0,
+            "ETH-BTC": 0.05, "USDC-USD": 1.0,
+        })
 
-        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_btc)
-
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,
@@ -1231,15 +1240,12 @@ class TestAllocationIncludesOpenPositions:
         mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
 
-        async def mock_price_fallback(product_id):
-            # LINK-USD fetch fails (simulates API error)
-            if product_id == "LINK-USD":
-                raise Exception("price unavailable")
-            return {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(product_id, 0.0)
+        # Bulk price list omits LINK-USD — simulates missing/unavailable price
+        # so the code falls back to position.entry_price.
+        bulk = _bulk_products({"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0})
 
-        mock_coinbase.get_current_price = AsyncMock(side_effect=mock_price_fallback)
-
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,

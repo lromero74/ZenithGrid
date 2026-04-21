@@ -278,8 +278,14 @@ class TestSendMessageEndpoint:
         assert data["sender_name"] == "Alice"
 
     @pytest.mark.asyncio
-    async def test_send_empty_message_returns_422(self, app, override_current_user, alice):
-        """Empty message content is rejected by Pydantic (min_length=1)."""
+    async def test_send_empty_message_returns_400(self, app, override_current_user, alice):
+        """Empty content AND no media_url is rejected at the service layer (400).
+
+        Empty content alone is allowed by the schema so that media-only messages
+        (content="", media_url=...) can be sent. The cross-field rule
+        "content OR media_url required" is enforced in chat_service.send_message,
+        which raises ValueError → 400.
+        """
         override_current_user(app, alice)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -294,7 +300,8 @@ class TestSendMessageEndpoint:
                 json={"content": ""},
             )
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        assert "empty" in resp.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_send_message_exceeds_2000_chars_returns_422(

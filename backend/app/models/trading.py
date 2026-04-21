@@ -700,6 +700,46 @@ class OrderHistory(Base):
     position = relationship("Position")
 
 
+class AIOpinionLog(Base):
+    """
+    Per-call audit log of AI indicator decisions.
+
+    Written after every successful `AISpotOpinionEvaluator.evaluate()` call.
+    `outcome` + `realized_pnl_pct` are nullable and backfilled by a subscriber
+    to POSITION_CLOSED — so rows tied to a position gain empirical outcome once
+    the trade resolves. Rows without a position_id (pure buy-checks that did
+    not enter) stay open-ended.
+
+    Used by the `get_prior_ai_signals` tool to give the model feedback on its
+    own past calls on a pair.
+    """
+
+    __tablename__ = "ai_opinion_log"
+    __table_args__ = {'schema': 'trading'}
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=True)
+    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True, index=True)
+
+    product_id = Column(String, nullable=False, index=True)
+    is_sell_check = Column(Boolean, nullable=False, default=False)
+
+    signal = Column(String, nullable=False)   # "buy" | "sell" | "hold"
+    confidence = Column(Integer, nullable=False, default=0)
+    reasoning = Column(Text, nullable=True)
+    ai_model = Column(String, nullable=True)  # "claude" | "gpt" | "gemini"
+    tool_calls = Column(JSON, nullable=True)  # list[{name,input,output_summary,turn}]
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Backfilled on POSITION_CLOSED — null until the position actually closes.
+    outcome = Column(String, nullable=True)   # "win" | "loss" | "breakeven"
+    realized_pnl_pct = Column(Float, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+
+
 class BlacklistedCoin(Base):
     """
     Blacklisted coins that bots should not open new positions for.

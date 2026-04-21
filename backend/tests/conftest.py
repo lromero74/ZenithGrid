@@ -190,9 +190,30 @@ def db_sync_conn():
 
     Used by test_domain_schemas.py to verify table placement in named schemas.
     On SQLite the tests using this fixture are skipped via pytestmark.
+
+    Connection-pool note: the app's async engine pool accumulates connections
+    across the test run. On a small PostgreSQL with limited max_connections,
+    that can exhaust the pool and leave no slot for our sync connection here
+    ("remaining connection slots are reserved for non-replication superuser
+    connections"). Dispose both app engines first so slots are free, then
+    reconnect via db_utils.
     """
     import os
+    import asyncio
     import importlib.util
+
+    # Free connection slots held by the app's async engine pool.
+    try:
+        from app.database import engine as _app_engine, read_engine as _app_read_engine
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_app_engine.dispose())
+            loop.run_until_complete(_app_read_engine.dispose())
+        finally:
+            loop.close()
+    except Exception:
+        pass  # Best-effort — if dispose fails we fall through to the connect attempt
+
     # Load db_utils directly by file path to avoid shadowing from tests/migrations/
     _spec = importlib.util.spec_from_file_location(
         "_db_utils",

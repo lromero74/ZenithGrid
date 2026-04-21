@@ -3,7 +3,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2, MessageSquare, Users, Shield } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
-import { useIsAdmin } from './hooks/usePermission'
+import { useIsAdmin, useHasPermission } from './hooks/usePermission'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/account/AccountSwitcher'
 import { PendingInvitationsPopover } from './components/sharing/PendingInvitationsPopover'
@@ -83,8 +83,9 @@ function AppContent() {
   // Get market season for header display
   const { seasonInfo, headerGradient } = useMarketSeason()
 
-  // Chat unread badge for Social nav
-  const { data: chatUnreadCounts } = useUnreadCounts()
+  // Chat unread badge for Social nav — only for users with chat access (demo accounts lack it)
+  const canChat = useHasPermission('social:chat')
+  const { data: chatUnreadCounts } = useUnreadCounts(canChat)
   const totalChatUnread = chatUnreadCounts
     ? Object.values(chatUnreadCounts).reduce((sum, n) => sum + n, 0)
     : 0

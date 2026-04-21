@@ -545,6 +545,30 @@
       ]
     },
     {
+      "name": "AIOpinionLog",
+      "table": "ai_opinion_log",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "user_id",
+        "account_id",
+        "bot_id",
+        "position_id",
+        "product_id",
+        "is_sell_check",
+        "signal",
+        "confidence",
+        "reasoning",
+        "ai_model",
+        "tool_calls",
+        "created_at",
+        "outcome",
+        "realized_pnl_pct",
+        "closed_at"
+      ],
+      "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. 90-day retention via cleanup_old_ai_opinion_logs."
+    },
+    {
       "name": "ScannerLog",
       "table": "scanner_logs",
       "schema": "trading",
@@ -1626,7 +1650,7 @@
     },
     {
       "file": "cleanup_jobs.py",
-      "purpose": "Scheduled database and in-memory cleanup: old decision logs, failed orders, noise logs, expired sessions, revoked tokens, rate limit attempts, and periodic 5-minute in-memory cache sweep (price cache, chat/game rate-limit dicts, game rooms, monitor caches, WebSocket stale connections)"
+      "purpose": "Scheduled database and in-memory cleanup: old decision logs, failed orders, noise logs, expired sessions, revoked tokens, rate limit attempts, AI opinion logs (90-day retention via cleanup_old_ai_opinion_logs), and periodic 5-minute in-memory cache sweep (price cache, chat/game rate-limit dicts, game rooms, monitor caches, WebSocket stale connections)"
     },
     {
       "file": "conditions.py",
@@ -1714,7 +1738,7 @@
     },
     {
       "file": "event_bus.py",
-      "purpose": "In-process pub/sub event bus for domain events (order.filled, bot.started, etc.); NATS/Redis swap seam (v2.127.0)"
+      "purpose": "In-process pub/sub event bus for domain events (order.filled, bot.started, etc.); NATS/Redis swap seam (v2.127.0). Topics include ORDER_FILLED, POSITION_OPENED, POSITION_CLOSED, BOT_STARTED, BOT_STOPPED, GOAL_ACHIEVED. POSITION_CLOSED producers (v2.159.0): services/limit_order_monitor.py, services/perps_monitor.py, monitor/bull_flag_processor.py, trading_engine/buy_executor.py, trading_engine/sell_executor.py, trading_engine/perps_executor.py. Subscriber ai_opinion_logger.on_position_closed backfills outcome/realized_pnl_pct on AIOpinionLog rows tied to the closed position."
     },
     {
       "file": "registry.py",
@@ -1742,7 +1766,11 @@
   "indicators_module": [
     {
       "file": "indicators/ai_spot_opinion.py",
-      "purpose": "AI-powered indicator combining technical metrics with LLM reasoning"
+      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). Every evaluation is persisted via ai_opinion_logger.log_opinion."
+    },
+    {
+      "file": "indicators/ai_opinion_logger.py",
+      "purpose": "Writes one AIOpinionLog row per AISpotOpinionEvaluator.evaluate() call (fire-and-forget) and subscribes to the event bus POSITION_CLOSED topic to backfill outcome / realized_pnl_pct / closed_at when the trade resolves. classify_outcome(pct) maps PnL% to win/loss/breakeven."
     },
     {
       "file": "indicators/bull_flag_indicator.py",
@@ -1753,6 +1781,60 @@
       "purpose": "Default risk preset configurations for AI indicators"
     }
   ],
+  "ai_tools": {
+    "description": "Callable functions the AI spot-opinion indicator exposes to the LLM via tool-use. Each module registers a Tool instance into a shared REGISTRY at import time. Static (no-arg) tools are pre-fetched and injected into the prompt; argument-taking tools are offered to the model inside the provider tool loop.",
+    "base": {
+      "file": "indicators/ai_tools/base.py",
+      "purpose": "Shared registry: Tool dataclass, ToolContext (db, user_id, product_id, current_price, bot, position, account_id, is_sell_check), REGISTRY, register(), get_schemas_for(), and execute() (fail-open — tool errors become {\"error\": ...} so the model loop never breaks)."
+    },
+    "tools": [
+      {
+        "name": "get_portfolio_context",
+        "file": "indicators/ai_tools/portfolio_context.py",
+        "kind": "static (no-arg, pre-fetched into prompt)",
+        "purpose": "Other open positions on the same account: count by quote currency, total quote exposure, base-asset concentration, top holdings."
+      },
+      {
+        "name": "get_position_context",
+        "file": "indicators/ai_tools/position_context.py",
+        "kind": "static (no-arg, pre-fetched into prompt)",
+        "purpose": "Currently-held position: entry price, minutes held, unrealized PnL %, DCA count, highest price since entry, configured stop-loss / take-profit targets."
+      },
+      {
+        "name": "get_candle_window",
+        "file": "indicators/ai_tools/candle_window.py",
+        "kind": "argument-taking (provider tool loop)",
+        "purpose": "Fetch a compact OHLCV window on a requested Coinbase granularity so the model can zoom in on short-term volatility or out to a daily context."
+      },
+      {
+        "name": "get_recent_news",
+        "file": "indicators/ai_tools/recent_news.py",
+        "kind": "argument-taking (provider tool loop)",
+        "purpose": "Return recent content.news_articles whose title or summary mentions the base asset of the current product (no external fetch)."
+      },
+      {
+        "name": "get_trade_history",
+        "file": "indicators/ai_tools/trade_history.py",
+        "kind": "argument-taking (provider tool loop)",
+        "purpose": "Recent closed positions for the current user on this product plus a compact summary (count, win rate, avg PnL %, avg hold minutes)."
+      },
+      {
+        "name": "get_prior_ai_signals",
+        "file": "indicators/ai_tools/prior_ai_signals.py",
+        "kind": "argument-taking (provider tool loop)",
+        "purpose": "Last N closed AI opinions for this user + product from trading.ai_opinion_log with outcome / realized_pnl_pct backfilled — lets the model see whether its own recent calls on this pair have paid off."
+      }
+    ]
+  },
+  "ai_providers": {
+    "description": "Adapters that implement the LLMProvider protocol (async call_with_tools(system, user, tools, tool_ctx, max_turns) -> (text, calls)). The canonical tool schema is Anthropic's shape; each adapter translates it into its own call format and emits NormalizedToolCall records so upstream code (the evaluator, logger, UI) never branches on provider.",
+    "files": [
+      {"file": "indicators/ai_providers/base.py", "purpose": "LLMProvider protocol, NormalizedToolCall dataclass, get_provider() lookup, summarize_output() helper."},
+      {"file": "indicators/ai_providers/anthropic_provider.py", "purpose": "Claude adapter — native Anthropic tool-use format."},
+      {"file": "indicators/ai_providers/openai_provider.py", "purpose": "OpenAI GPT adapter — translates canonical tool schemas to OpenAI function-call shape."},
+      {"file": "indicators/ai_providers/gemini_provider.py", "purpose": "Google Gemini adapter — translates canonical tool schemas to Gemini function-declaration shape."}
+    ]
+  },
   "price_feeds": [
     {
       "file": "price_feeds/base.py",
@@ -2058,6 +2140,12 @@
       "purpose": "Remove expired rate limit attempt records from database"
     },
     {
+      "name": "AIOpinionLogCleanup",
+      "interval": "Daily (APScheduler)",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
+      "purpose": "Delete trading.ai_opinion_log rows older than 90 days (matches the get_prior_ai_signals lookback clamp)"
+    },
+    {
       "name": "InMemoryCacheCleanup",
       "interval": "5 minutes (APScheduler)",
       "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
@@ -2065,7 +2153,7 @@
     }
   ],
   "migrations": {
-    "count": 78,
+    "count": 90,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2148,7 +2236,19 @@
       "add_donations_table.py",
       "extend_game_high_scores.py",
       "068_domain_schemas.py",
-      "071_expense_savings_targets.py"
+      "069_account_sharing.py",
+      "070_mfa_email_default_on.py",
+      "071_expense_savings_targets.py",
+      "072_bot_running_time.py",
+      "073_backfill_bot_last_started_at.py",
+      "074_demo_superuser_manager_memberships.py",
+      "075_rename_observer_role_to_shadow.py",
+      "076_bot_budget_rebalancer.py",
+      "077_performance_indexes.py",
+      "077_soft_ceiling_effective_max.py",
+      "078_add_rebalance_usdt.py",
+      "079_report_schedule_retention.py",
+      "080_ai_opinion_log.py"
     ]
   }
 }

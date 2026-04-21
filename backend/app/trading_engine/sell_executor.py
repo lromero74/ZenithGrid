@@ -816,7 +816,10 @@ async def _post_sell_operations(
 
     # Publish domain event (best-effort — polling fallback handles misses)
     try:
-        from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+        from app.event_bus import (
+            event_bus, ORDER_FILLED, OrderFilledPayload,
+            POSITION_CLOSED, PositionClosedPayload,
+        )
         await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
             position_id=position.id,
             user_id=position.user_id,
@@ -828,6 +831,14 @@ async def _post_sell_operations(
             profit=profit_quote,
             profit_percentage=profit_percentage,
             is_paper_trading=is_paper,
+        ))
+        await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            bot_id=bot.id,
+            profit_quote=profit_quote,
+            profit_percentage=profit_percentage,
         ))
     except Exception as e:
         logger.warning(f"Event bus publish failed (non-critical): {e}")
@@ -978,6 +989,18 @@ async def execute_sell(
         position.profit_percentage = dust_pct
         position.total_quote_received = quote_value
         await db.commit()
+        try:
+            from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload
+            await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+                position_id=position.id,
+                user_id=position.user_id,
+                product_id=product_id,
+                bot_id=bot.id,
+                profit_quote=dust_profit,
+                profit_percentage=dust_pct,
+            ))
+        except Exception as e:
+            logger.warning(f"Event bus publish failed (non-critical): {e}")
         return None, dust_profit, dust_pct
 
     # Execute order via TradingClient (currency-agnostic)

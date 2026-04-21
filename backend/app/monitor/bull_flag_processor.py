@@ -103,6 +103,29 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                                 "quantity": position.total_base_acquired,
                             })
                             logger.info(f"  ✅ Sold {position.product_id}: {reason}")
+
+                            try:
+                                spent = float(position.total_quote_spent or 0)
+                                base = float(position.total_base_acquired or 0)
+                                price = float(current_price or 0)
+                                quote_received = base * price
+                                profit_quote = quote_received - spent
+                                profit_pct = (profit_quote / spent * 100) if spent > 0 else None
+                                from app.event_bus import (
+                                    event_bus, POSITION_CLOSED, PositionClosedPayload,
+                                )
+                                await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+                                    position_id=position.id,
+                                    user_id=position.user_id,
+                                    product_id=position.product_id,
+                                    bot_id=position.bot_id,
+                                    profit_quote=profit_quote,
+                                    profit_percentage=profit_pct,
+                                ))
+                            except Exception as _eb_err:
+                                logger.warning(
+                                    f"Event bus publish failed (non-critical): {_eb_err}"
+                                )
                     except Exception as e:
                         logger.error(f"  Error executing sell for {position.product_id}: {e}")
                         results["errors"].append(f"Sell error {position.product_id}: {e}")

@@ -63,18 +63,14 @@ class TestFetchAllNews:
         mock_aio_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("sys.modules", {"app.routers.news_router": mock_nr}), \
-             patch("app.services.news_fetch_service.async_session_maker", return_value=mock_session_ctx), \
+             patch("app.services.news_fetch_service._default_session_maker", return_value=mock_session_ctx), \
              patch("app.services.news_fetch_service.aiohttp.TCPConnector"), \
              patch("app.services.news_fetch_service.aiohttp.ClientSession", return_value=mock_aio_session), \
              patch("app.services.news_fetch_service.download_and_save_image",
                    new_callable=AsyncMock, return_value=None), \
              patch("app.services.news_fetch_service.NEWS_SOURCES", {"test_rss": {"type": "rss", "name": "Test"}}):
 
-            # Re-import to pick up patched sys.modules
-            import importlib
             import app.services.news_fetch_service as nfs
-            importlib.reload(nfs)
-
             # The function structure is validated; deep integration
             # requires the actual news_router, so verify the callable
             assert callable(nfs.fetch_all_news)
@@ -144,7 +140,7 @@ class TestFetchAllVideos:
         mock_aio_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("sys.modules", {"app.routers.news_router": mock_nr}), \
-             patch("app.services.news_fetch_service.async_session_maker", return_value=mock_session_ctx), \
+             patch("app.services.news_fetch_service._default_session_maker", return_value=mock_session_ctx), \
              patch("app.services.news_fetch_service.aiohttp.ClientSession", return_value=mock_aio_session), \
              patch("app.services.news_fetch_service.load_video_cache", return_value={"videos": []}), \
              patch("app.services.news_fetch_service.merge_news_items", return_value=[]), \
@@ -154,10 +150,7 @@ class TestFetchAllVideos:
                    {"test": {"name": "Test", "website": "https://t.com"}}), \
              patch("app.services.news_fetch_service.VIDEO_CACHE_CHECK_MINUTES", 30):
 
-            import importlib
             import app.services.news_fetch_service as nfs
-            importlib.reload(nfs)
-
             # Verify callable
             assert callable(nfs.fetch_all_videos)
 
@@ -180,16 +173,18 @@ class TestModuleStructure:
         from app.services import news_fetch_service
         assert hasattr(news_fetch_service, "fetch_all_videos")
 
-    def test_fetch_all_news_accepts_no_args(self):
-        """fetch_all_news takes no arguments."""
+    def test_fetch_all_news_accepts_optional_session_maker(self):
+        """fetch_all_news takes only an optional session_maker kwarg."""
         import inspect
         from app.services.news_fetch_service import fetch_all_news
         sig = inspect.signature(fetch_all_news)
-        assert len(sig.parameters) == 0
+        assert list(sig.parameters.keys()) == ["session_maker"]
+        assert sig.parameters["session_maker"].default is None
 
-    def test_fetch_all_videos_accepts_no_args(self):
-        """fetch_all_videos takes no arguments."""
+    def test_fetch_all_videos_accepts_optional_session_maker(self):
+        """fetch_all_videos takes only an optional session_maker kwarg."""
         import inspect
         from app.services.news_fetch_service import fetch_all_videos
         sig = inspect.signature(fetch_all_videos)
-        assert len(sig.parameters) == 0
+        assert list(sig.parameters.keys()) == ["session_maker"]
+        assert sig.parameters["session_maker"].default is None

@@ -279,6 +279,19 @@ async def execute_perps_close(
             f"PnL {profit_usdc:+.2f} USDC ({profit_pct:+.2f}%)"
         )
 
+        try:
+            from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload
+            await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+                position_id=position.id,
+                user_id=position.user_id,
+                product_id=position.product_id,
+                bot_id=position.bot_id,
+                profit_quote=profit_usdc,
+                profit_percentage=profit_pct,
+            ))
+        except Exception as _eb_err:
+            logger.warning(f"Event bus publish failed (non-critical): {_eb_err}")
+
         return True, profit_usdc, profit_pct
 
     except Exception as e:

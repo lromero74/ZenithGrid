@@ -409,7 +409,7 @@ class TestMarketDataDelegation:
             result = await client.list_products()
 
         assert result == [{"product_id": "BTC-USD"}]
-        mock.assert_called_once_with(client._request)
+        mock.assert_called_once_with(client._request, bypass_cache=False)
 
     @pytest.mark.asyncio
     async def test_get_product_delegates(self):

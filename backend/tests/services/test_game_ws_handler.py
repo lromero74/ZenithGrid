@@ -27,12 +27,34 @@ def clean_rooms():
     game_room_manager._user_rooms.clear()
 
 
+@pytest.fixture(autouse=True)
+def patched_broadcast_backend(monkeypatch):
+    """Replace the broadcast_backend singleton used inside game_ws_handler
+    with an AsyncMock so tests can assert on send_to_room / send_to_user calls.
+
+    The handler module was refactored to call broadcast_backend directly
+    instead of the passed-in ws_manager, so tests must inspect the singleton.
+    """
+    from app.services import game_ws_handler as gwh
+
+    mock_backend = AsyncMock()
+    mock_backend.send_to_room = AsyncMock()
+    mock_backend.send_to_user = AsyncMock()
+    monkeypatch.setattr(gwh, "broadcast_backend", mock_backend)
+    return mock_backend
+
+
 def make_ws_manager():
-    """Create a mock WebSocket manager."""
-    mgr = AsyncMock()
-    mgr.send_to_room = AsyncMock()
-    mgr.send_to_user = AsyncMock()
-    return mgr
+    """Create a mock WebSocket manager.
+
+    Mirrors the broadcast_backend mock so tests that assert on
+    mgr.send_to_room / mgr.send_to_user still behave correctly — both
+    point at the same AsyncMock under the hood.
+    """
+    # The autouse fixture patches broadcast_backend; return a reference
+    # pointed at the same mock so tests can assert via `mgr`.
+    from app.services import game_ws_handler as gwh
+    return gwh.broadcast_backend
 
 
 def make_ws():

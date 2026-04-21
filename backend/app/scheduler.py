@@ -170,6 +170,7 @@ def register_jobs(startup_time: datetime, scheduler: AsyncIOScheduler = schedule
         cleanup_expired_sessions,
         cleanup_failed_condition_logs,
         cleanup_in_memory_caches,
+        cleanup_old_ai_opinion_logs,
         cleanup_old_decision_logs,
         cleanup_old_failed_orders,
         cleanup_old_rate_limit_attempts,
@@ -246,6 +247,15 @@ def register_jobs(startup_time: datetime, scheduler: AsyncIOScheduler = schedule
         coalesce=True,
         replace_existing=True,
         next_run_time=startup_time + timedelta(minutes=2),
+    )
+    scheduler.add_job(
+        cleanup_old_ai_opinion_logs,
+        IntervalTrigger(hours=24),
+        id="cleanup_ai_opinion_logs",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+        next_run_time=startup_time + timedelta(minutes=40),
     )
 
     logger.info(f"APScheduler: registered {len(scheduler.get_jobs())} jobs")

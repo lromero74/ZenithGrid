@@ -607,7 +607,10 @@ class LimitOrderMonitor:
 
                 # Publish domain event (best-effort)
                 try:
-                    from app.event_bus import event_bus, ORDER_FILLED, OrderFilledPayload
+                    from app.event_bus import (
+                        event_bus, ORDER_FILLED, OrderFilledPayload,
+                        POSITION_CLOSED, PositionClosedPayload,
+                    )
                     await event_bus.publish(ORDER_FILLED, OrderFilledPayload(
                         position_id=position.id,
                         user_id=position.user_id,
@@ -619,6 +622,14 @@ class LimitOrderMonitor:
                         profit=position.profit_quote,
                         profit_percentage=position.profit_percentage,
                         is_paper_trading=is_paper,
+                    ))
+                    await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+                        position_id=position.id,
+                        user_id=position.user_id,
+                        product_id=position.product_id,
+                        bot_id=position.bot_id,
+                        profit_quote=position.profit_quote,
+                        profit_percentage=position.profit_percentage,
                     ))
                 except Exception as _eb_err:
                     logger.warning(f"Event bus publish failed (non-critical): {_eb_err}")

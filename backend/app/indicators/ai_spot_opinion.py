@@ -30,16 +30,104 @@ Usage:
     }
 """
 
-import asyncio
+from __future__ import annotations
+
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from app.indicator_calculator import IndicatorCalculator
 
+if TYPE_CHECKING:
+    from app.indicators.ai_tools import ToolContext
+
+
+async def log_opinion(**kwargs):
+    """Lazy proxy to ai_opinion_logger.log_opinion.
+
+    Direct top-level import triggers the same circular-import problem
+    `_tools_module()` works around — resolving the logger on first call
+    avoids re-entering app.indicators.__init__ while this module is still
+    loading. Patching `_mod.log_opinion` in tests still works because this
+    symbol lives in the module namespace.
+    """
+    from app.indicators.ai_opinion_logger import log_opinion as _impl
+    await _impl(**kwargs)
+
 logger = logging.getLogger(__name__)
+
+
+def _tools_module():
+    """Lazy import of the ai_tools package.
+
+    Kept local to sidestep a circular import at module load time: app.indicators
+    __init__ pulls AISpotOpinionEvaluator, and ai_tools lives under app.indicators.
+    Importing it at the top of this file would re-enter the package __init__
+    before AISpotOpinionEvaluator is defined. Loading on first use avoids that.
+    """
+    from app.indicators import ai_tools as mod
+    return mod
+
+
+async def execute_tool(name: str, input: Dict[str, Any], ctx: "ToolContext") -> Dict[str, Any]:
+    return await _tools_module().execute(name, input, ctx)
+
+
+# Argument-taking tools (Phase C). Static tools (get_portfolio_context /
+# get_position_context) are pre-fetched and injected into the prompt via
+# _collect_auto_context — they don't belong in the provider tool loop since
+# they take no arguments. These three DO take arguments, so the model decides
+# when and how to call them.
+_ARG_TOOL_NAMES: List[str] = [
+    "get_candle_window",
+    "get_recent_news",
+    "get_trade_history",
+    "get_prior_ai_signals",
+]
+
+
+def _arg_tool_schemas() -> List[Dict[str, Any]]:
+    """Resolve the argument-taking tools' canonical schemas from the registry."""
+    return _tools_module().get_schemas_for(_ARG_TOOL_NAMES)
+
+
+# Short, user-written hints for the prompt. Lives next to _ARG_TOOL_NAMES so
+# additions are a single-line change in one place.
+_TOOL_USE_HINTS: Dict[str, str] = {
+    "get_candle_window": (
+        "zoom into price action on a chosen timeframe when summary metrics "
+        "look ambiguous (5m/15m/1h/6h/1d, up to 100 candles)."
+    ),
+    "get_recent_news": (
+        "scan cached headlines for this pair's base asset — use before confirming "
+        "a buy when metrics look clean to rule out a catalyst."
+    ),
+    "get_trade_history": (
+        "review recent closed positions on this pair for this user — win rate, "
+        "avg PnL%, and avg hold time — to calibrate conviction."
+    ),
+    "get_prior_ai_signals": (
+        "audit your own recent calls on this pair (up to 90 days): signal, "
+        "confidence, and outcome (win/loss/breakeven + realized PnL %) where "
+        "the parent position has closed — use this when conviction feels "
+        "familiar to check if past similar calls paid off."
+    ),
+}
+
+
+# The UI-facing `ai_model` string the user picks is distinct from the credential
+# slug used to look up their API key (e.g. "gpt" → stored under "openai").
+_CREDENTIAL_NAMES = {"claude": "claude", "gpt": "openai", "openai": "openai", "gemini": "gemini"}
+
+
+def _credential_name_for(ai_model: str) -> str:
+    key = (ai_model or "").lower()
+    try:
+        return _CREDENTIAL_NAMES[key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown AI model: {ai_model}") from exc
 
 
 @dataclass
@@ -203,168 +291,69 @@ class AISpotOpinionEvaluator:
 
     async def _call_llm(
         self,
+        *,
         db: Any,
         user_id: int,
-        product_id: str,
-        metrics: Dict[str, Any],
         ai_model: str,
-        is_sell_check: bool
-    ) -> tuple[str, int, str]:
+        prompt: str,
+        tool_ctx: Optional["ToolContext"] = None,
+        tool_schemas: Optional[List[Dict[str, Any]]] = None,
+    ) -> tuple[str, int, str, List[Any]]:
+        """Dispatch the LLM call, letting the provider drive its own tool loop.
+
+        If `tool_schemas` is empty, `provider.call_with_tools` short-circuits to
+        a single request. If non-empty, the provider iterates its native
+        tool-use loop (up to 4 turns) and returns every tool invocation it made.
+
+        Returns (signal, confidence, reasoning, tool_calls). `tool_calls` is a
+        list of `NormalizedToolCall` dataclass instances, always — empty on the
+        single-shot path.
         """
-        Call LLM to analyze metrics and provide opinion using user's API key.
-        Returns (signal, confidence, reasoning)
-        """
-        # Get user's API key from database
+        from app.indicators.ai_providers import get_provider
         from app.services.ai_credential_service import get_user_api_key
 
-        # Map ai_model to provider name
-        provider_map = {
-            "claude": "claude",
-            "gpt": "openai",
-            "openai": "openai",
-            "gemini": "gemini",
-        }
-        provider = provider_map.get(ai_model.lower())
-        if not provider:
-            raise ValueError(f"Unknown AI model: {ai_model}")
-
-        api_key = await get_user_api_key(db, user_id, provider)
+        credential_name = _credential_name_for(ai_model)
+        api_key = await get_user_api_key(db, user_id, credential_name)
         if not api_key:
             raise ValueError(
-                f"No API key configured for {provider}. "
-                f"Please add your {provider.upper()} API key in Settings."
+                f"No API key configured for {credential_name}. "
+                f"Please add your {credential_name.upper()} API key in Settings."
             )
 
-        # Build prompt
-        action_type = "SELL" if is_sell_check else "BUY"
-        ma20_val = metrics.get('price_vs_ma20', 0)
-        ma50_val = metrics.get('price_vs_ma50', 0)
-        ma20_dir = "above" if ma20_val > 0 else "below"
-        ma50_dir = "above" if ma50_val > 0 else "below"
-        macd_str = (
-            "Bullish" if metrics.get('macd_bullish')
-            else "Bearish" if metrics.get('macd_bearish')
-            else "Neutral"
-        )
-
-        prompt = f"""You are a cryptocurrency trading AI analyzing {product_id}.
-
-Current Technical Metrics:
-- RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
-- MACD: {macd_str}
-- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
-- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
-- Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
-- Volume: {metrics.get('volume_ratio', 0):.2f}x average
-- 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
-
-Question: Should I {action_type} this position right now?
-
-Respond with ONLY valid JSON in this exact format:
-{{
-  "signal": "buy" or "sell" or "hold",
-  "confidence": 75,
-  "reasoning": "Brief 1-2 sentence explanation"
-}}
-
-Consider:
-- For BUYS: Is momentum building? Are indicators aligning? Is this a good entry?
-- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?
-
-Be decisive but realistic. Confidence should reflect conviction (0-100).
-"""
-
+        schemas = list(tool_schemas or [])
         try:
-            # Call appropriate LLM with user's API key
-            if ai_model == "claude":
-                response_text = await self._call_claude(prompt, api_key)
-            elif ai_model == "gpt" or ai_model == "openai":
-                response_text = await self._call_openai(prompt, api_key)
-            elif ai_model == "gemini":
-                response_text = await self._call_gemini(prompt, api_key)
-            else:
-                raise ValueError(f"Unknown AI model: {ai_model}")
-
-            # Parse response
-            response_text = response_text.strip()
-            # Remove markdown code blocks if present
-            if response_text.startswith("```"):
-                lines = response_text.split('\n')
-                response_text = '\n'.join(lines[1:-1] if len(lines) > 2 else lines)
-
-            data = json.loads(response_text)
-
-            signal = data.get("signal", "hold").lower()
-            confidence = int(data.get("confidence", 0))
-            reasoning = data.get("reasoning", "No reasoning provided")
-
-            # Validate signal
-            if signal not in ["buy", "sell", "hold"]:
-                logger.warning(f"Invalid signal from LLM: {signal}, defaulting to hold")
-                signal = "hold"
-
-            # Clamp confidence
-            confidence = max(0, min(100, confidence))
-
-            return signal, confidence, reasoning
-
+            provider = get_provider(ai_model, api_key=api_key)
+            max_turns = 4 if schemas else 1
+            text, tool_calls = await provider.call_with_tools(
+                system=None,
+                user=prompt,
+                tools=schemas,
+                tool_ctx=tool_ctx,
+                max_turns=max_turns,
+            )
+            signal, confidence, reasoning = self._parse_llm_response(text)
+            return signal, confidence, reasoning, tool_calls
         except Exception as e:
             logger.error(f"Error calling LLM ({ai_model}): {e}")
-            return "hold", 0, f"LLM error: {str(e)}"
+            return "hold", 0, f"LLM error: {str(e)}", []
 
-    async def _call_claude(self, prompt: str, api_key: str) -> str:
-        """Call Claude API with user's API key."""
-        from anthropic import AsyncAnthropic
+    async def _collect_auto_context(self, tool_ctx: Optional["ToolContext"]) -> Dict[str, Any]:
+        """Pre-fetch portfolio + position context for prompt injection.
 
-        if not api_key:
-            raise ValueError("Claude API key not configured for this user")
+        Both tools are called directly (no tool-use loop) and their outputs are
+        packed into a dict the caller can render into the prompt. This gives
+        every provider feature parity for static context in Phase A — the real
+        provider tool loop is reserved for argument-taking tools added in Phase C.
+        """
+        if tool_ctx is None:
+            return {}
 
-        client = AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.content[0].text
-
-    async def _call_openai(self, prompt: str, api_key: str) -> str:
-        """Call OpenAI API with user's API key."""
-        from openai import AsyncOpenAI
-
-        if not api_key:
-            raise ValueError("OpenAI API key not configured for this user")
-
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=1024,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.choices[0].message.content or ""
-
-    async def _call_gemini(self, prompt: str, api_key: str) -> str:
-        """Call Google Gemini API with user's API key."""
-        import google.generativeai as genai
-
-        if not api_key:
-            raise ValueError("Gemini API key not configured for this user")
-
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0,
-                max_output_tokens=1024,
-            )
-        )
-
-        return response.text
+        context: Dict[str, Any] = {}
+        if tool_ctx.account_id is not None:
+            context["portfolio"] = await execute_tool("get_portfolio_context", {}, tool_ctx)
+        if tool_ctx.position is not None or tool_ctx.is_sell_check:
+            context["position"] = await execute_tool("get_position_context", {}, tool_ctx)
+        return context
 
     async def evaluate(
         self,
@@ -374,7 +363,10 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
         db: Any,
         user_id: int,
         params: Optional[AISpotOpinionParams] = None,
-        is_sell_check: bool = False
+        is_sell_check: bool = False,
+        bot: Optional[Any] = None,
+        account_id: Optional[int] = None,
+        position: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Main evaluation function.
@@ -432,30 +424,82 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             if not prefilter_passed:
                 logger.info(f"Buy prefilter failed for {product_id}: {prefilter_reason}")
                 self._update_last_check(product_id, params.ai_timeframe)
+                prefilter_reasoning = f"Prefilter: {prefilter_reason}"
+                await self._write_opinion_log(
+                    db=db, user_id=user_id, account_id=account_id,
+                    bot_id=getattr(bot, "id", None),
+                    position_id=getattr(position, "id", None),
+                    product_id=product_id, is_sell_check=is_sell_check,
+                    signal="hold", confidence=0,
+                    reasoning=prefilter_reasoning, tool_calls=[],
+                    ai_model=params.ai_model,
+                )
                 return {
                     "signal": "hold",
                     "confidence": 0,
-                    "reasoning": f"Prefilter: {prefilter_reason}",
+                    "reasoning": prefilter_reasoning,
                     "prefilter_passed": False,
                     "metrics": metrics
                 }
 
-        # Ask LLM for opinion
-        signal, confidence, reasoning = await self._call_llm(
+        # Phase A: portfolio + position are pre-fetched and injected into the
+        # prompt (they take no args — no reason to spend a tool turn).
+        # Phase C: argument-taking tools (candle_window, recent_news,
+        # trade_history) are handed to the provider so the model can decide
+        # when to call them.
+        from app.indicators.ai_tools import ToolContext as _ToolContext
+        tool_ctx = _ToolContext(
             db=db,
             user_id=user_id,
             product_id=product_id,
-            metrics=metrics,
-            ai_model=params.ai_model,
-            is_sell_check=is_sell_check
+            current_price=current_price,
+            bot=bot,
+            position=position,
+            account_id=account_id,
+            is_sell_check=is_sell_check,
         )
+        context = await self._collect_auto_context(tool_ctx)
+        arg_schemas = _arg_tool_schemas()
+        prompt = self._build_prompt(
+            product_id=product_id,
+            metrics=metrics,
+            is_sell_check=is_sell_check,
+            context=context,
+            enabled_tools=[s["name"] for s in arg_schemas],
+        )
+        signal, confidence, reasoning, raw_tool_calls = await self._call_llm(
+            db=db,
+            user_id=user_id,
+            ai_model=params.ai_model,
+            prompt=prompt,
+            tool_ctx=tool_ctx,
+            tool_schemas=arg_schemas,
+        )
+        tool_calls: List[Dict[str, Any]] = [
+            {
+                "name": tc.name,
+                "input": tc.input,
+                "output_summary": tc.output_summary,
+                "turn": tc.turn,
+            }
+            for tc in raw_tool_calls
+        ]
 
         # Update last check timestamp
         self._update_last_check(product_id, params.ai_timeframe)
 
         logger.info(
             f"AI Opinion for {product_id}: {signal.upper()} "
-            f"(confidence: {confidence}%, reason: {reasoning})"
+            f"(confidence: {confidence}%, tools={len(tool_calls)}, reason: {reasoning})"
+        )
+
+        await self._write_opinion_log(
+            db=db, user_id=user_id, account_id=account_id,
+            bot_id=getattr(bot, "id", None),
+            position_id=getattr(position, "id", None),
+            product_id=product_id, is_sell_check=is_sell_check,
+            signal=signal, confidence=confidence, reasoning=reasoning,
+            tool_calls=tool_calls, ai_model=params.ai_model,
         )
 
         return {
@@ -463,5 +507,116 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             "confidence": confidence,
             "reasoning": reasoning,
             "prefilter_passed": prefilter_passed,
-            "metrics": metrics
+            "metrics": metrics,
+            "tool_calls": tool_calls,
         }
+
+    @staticmethod
+    async def _write_opinion_log(**kwargs) -> None:
+        """Fire-and-forget audit write. Any exception is swallowed so a broken
+        audit log can never break evaluate()."""
+        try:
+            await log_opinion(**kwargs)
+        except Exception:
+            logger.exception("ai_opinion_log write failed — continuing")
+
+    @staticmethod
+    def _build_prompt(
+        product_id: str,
+        metrics: Dict[str, Any],
+        is_sell_check: bool,
+        enabled_tools: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Shared prompt builder for single-shot and tool-use paths."""
+        action_type = "SELL" if is_sell_check else "BUY"
+        ma20_val = metrics.get("price_vs_ma20", 0)
+        ma50_val = metrics.get("price_vs_ma50", 0)
+        ma20_dir = "above" if ma20_val > 0 else "below"
+        ma50_dir = "above" if ma50_val > 0 else "below"
+        macd_str = (
+            "Bullish" if metrics.get("macd_bullish")
+            else "Bearish" if metrics.get("macd_bearish")
+            else "Neutral"
+        )
+
+        tools_section = ""
+        if enabled_tools:
+            hints = []
+            for name in enabled_tools:
+                hint = _TOOL_USE_HINTS.get(name)
+                if hint:
+                    hints.append(f"- `{name}` — {hint}")
+            hint_block = "\n".join(hints) if hints else ""
+            tools_section = (
+                "\n## Tools available\n"
+                f"{hint_block}\n\n"
+                "Call a tool only if its information would change your decision — "
+                "do not call tools redundantly. Prefer inspecting the Available "
+                "Context section first; only reach for tools when it is not enough.\n"
+            )
+
+        context_section = ""
+        context_consider_line = ""
+        if context:
+            context_section = (
+                "\n## Available Context (live data pre-fetched for you):\n"
+                "```json\n"
+                f"{json.dumps(context, default=str, indent=2)}\n"
+                "```\n"
+            )
+            context_consider_line = (
+                "\n- Use the Available Context section above to factor in position age, "
+                "PnL, portfolio concentration, and other open positions."
+            )
+
+        return f"""You are a cryptocurrency trading AI analyzing {product_id}.
+
+Current Technical Metrics:
+- RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
+- MACD: {macd_str}
+- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
+- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
+- Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
+- Volume: {metrics.get('volume_ratio', 0):.2f}x average
+- 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
+{context_section}{tools_section}
+Question: Should I {action_type} this position right now?
+
+Respond with ONLY valid JSON in this exact format:
+{{
+  "signal": "buy" or "sell" or "hold",
+  "confidence": 75,
+  "reasoning": "Brief 1-2 sentence explanation"
+}}
+
+Consider:
+- For BUYS: Is momentum building? Are indicators aligning? Is this a good entry?
+- For SELLS: Has momentum peaked? Are there warning signs? Should we take profit or cut losses?{context_consider_line}
+
+Be decisive but realistic. Confidence should reflect conviction (0-100).
+"""
+
+    @staticmethod
+    def _parse_llm_response(response_text: str) -> tuple[str, int, str]:
+        """Parse the final JSON response from the LLM. Tolerates ```code blocks```."""
+        text = (response_text or "").strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:-1] if len(lines) > 2 else lines)
+
+        try:
+            data = json.loads(text)
+        except Exception as e:
+            logger.warning(f"Could not parse LLM JSON: {e} / raw={text!r}")
+            return "hold", 0, f"Parse error: {e}"
+
+        signal = str(data.get("signal", "hold")).lower()
+        confidence = int(data.get("confidence", 0))
+        reasoning = str(data.get("reasoning", "No reasoning provided"))
+
+        if signal not in ("buy", "sell", "hold"):
+            logger.warning(f"Invalid signal from LLM: {signal}, defaulting to hold")
+            signal = "hold"
+        confidence = max(0, min(100, confidence))
+        return signal, confidence, reasoning

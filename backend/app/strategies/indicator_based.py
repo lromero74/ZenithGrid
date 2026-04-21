@@ -356,6 +356,8 @@ class IndicatorBasedStrategy(TradingStrategy):
                 if not db or not user_id:
                     raise ValueError("AI strategies require db and user_id in kwargs")
 
+                bot = kwargs.get("bot")
+                account_id = kwargs.get("account_id")
                 ai_result = await self.ai_evaluator.evaluate(
                     candles=candles,
                     current_price=current_price,
@@ -363,7 +365,10 @@ class IndicatorBasedStrategy(TradingStrategy):
                     db=db,
                     user_id=user_id,
                     params=ai_params,
-                    is_sell_check=is_sell_check
+                    is_sell_check=is_sell_check,
+                    bot=bot,
+                    account_id=account_id,
+                    position=position,
                 )
                 # Store AI opinion results
                 current_indicators["ai_opinion"] = ai_result["signal"]  # "buy", "sell", or "hold"
