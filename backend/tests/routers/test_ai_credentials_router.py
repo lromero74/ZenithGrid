@@ -54,19 +54,19 @@ class TestApiKeyPreview:
     @patch("app.routers.ai_credentials_router.is_encrypted", return_value=False)
     @patch("app.routers.ai_credentials_router.decrypt_value", side_effect=lambda v: v)
     def test_preview_long_key(self, mock_decrypt, mock_enc):
-        """Happy path: long key shows last 8 chars."""
+        """Happy path: long key shows last 4 chars (sweep v2.160.4 Phase 2.4)."""
         from app.routers.ai_credentials_router import _api_key_preview
         result = _api_key_preview("sk-ant-api-12345678abcdefgh")
         assert result.startswith("...")
-        assert result.endswith("cdefgh")
-        assert len(result) == 11  # "..." + 8 chars
+        assert result.endswith("defgh"[-4:])
+        assert len(result) == 7  # "..." + 4 chars
 
     @patch("app.routers.ai_credentials_router.is_encrypted", return_value=False)
     @patch("app.routers.ai_credentials_router.decrypt_value", side_effect=lambda v: v)
     def test_preview_short_key(self, mock_decrypt, mock_enc):
-        """Edge case: short key returns '...'."""
+        """Edge case: key at/under 4 chars returns '...'."""
         from app.routers.ai_credentials_router import _api_key_preview
-        result = _api_key_preview("short")
+        result = _api_key_preview("abcd")
         assert result == "..."
 
     def test_preview_empty_key(self):

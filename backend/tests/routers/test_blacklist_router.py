@@ -5,6 +5,8 @@ Covers blacklist CRUD endpoints: list/add/remove blacklisted coins,
 user overrides, category settings, AI provider settings, and AI review trigger.
 """
 
+import inspect
+
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
@@ -373,6 +375,23 @@ class TestCategorySettings:
             request=request, db=db_session, current_user=admin_user,
         )
         assert result.allowed_categories == ["APPROVED", "BORDERLINE"]
+
+    def test_update_category_settings_requires_superuser(self):
+        """Sweep v2.160.4: global Settings mutation must be superuser-gated,
+        not guarded by a per-user permission that any BLACKLIST_WRITE user has."""
+        from app.auth.dependencies import require_superuser
+        from app.routers.blacklist_router import update_category_settings
+        sig = inspect.signature(update_category_settings)
+        dep = sig.parameters["current_user"].default.dependency
+        assert dep is require_superuser
+
+    def test_update_ai_provider_setting_requires_superuser(self):
+        """Sweep v2.160.4: global AI-provider setting write must be superuser-only."""
+        from app.auth.dependencies import require_superuser
+        from app.routers.blacklist_router import update_ai_provider_setting
+        sig = inspect.signature(update_ai_provider_setting)
+        dep = sig.parameters["current_user"].default.dependency
+        assert dep is require_superuser
 
 
 # =============================================================================

@@ -6,6 +6,7 @@ test connection, get/update individual settings by key,
 and the update_env_file helper.
 """
 
+import inspect
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -341,3 +342,42 @@ class TestGetCoinbaseDependency:
             await get_coinbase(db=db_session, current_user=user)
         assert exc_info.value.status_code == 503
         assert "credentials" in exc_info.value.detail.lower()
+
+
+# =============================================================================
+# RBAC annotations (code-quality sweep v2.160.4 — Phase 2.2)
+# =============================================================================
+
+
+class TestRBACAnnotations:
+    """Writes to the global Settings row must be superuser-only.
+
+    The Settings table has no user_id column — permission-based gating via
+    SETTINGS_WRITE would still let every permitted user rewrite global
+    trading configuration. Hard-gate to superuser instead.
+    """
+
+    def test_update_settings_requires_superuser(self):
+        from app.auth.dependencies import require_superuser
+        from app.routers.settings_router import update_settings
+
+        sig = inspect.signature(update_settings)
+        dep = sig.parameters["current_user"].default.dependency
+        assert dep is require_superuser
+
+    def test_update_setting_by_key_requires_superuser(self):
+        from app.auth.dependencies import require_superuser
+        from app.routers.settings_router import update_setting_by_key
+
+        sig = inspect.signature(update_setting_by_key)
+        dep = sig.parameters["current_user"].default.dependency
+        assert dep is require_superuser
+
+    def test_get_setting_by_key_still_permission_gated(self):
+        """Reads stay on require_permission(SETTINGS_READ) — only writes tighten."""
+        from app.routers.settings_router import get_setting_by_key
+
+        sig = inspect.signature(get_setting_by_key)
+        dep = sig.parameters["current_user"].default.dependency
+        # require_permission returns a closure; its qualname contains the factory name
+        assert "require_permission" in dep.__qualname__

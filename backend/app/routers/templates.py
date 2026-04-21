@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -73,8 +74,13 @@ async def create_template(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
-    # Check if name is unique
-    query = select(BotTemplate).where(BotTemplate.name == template_data.name)
+    # Check if name is unique within the caller's visible scope:
+    # their own templates plus the globally-shared default templates.
+    # Another user's template with the same name must not leak via this response.
+    query = select(BotTemplate).where(
+        BotTemplate.name == template_data.name,
+        (BotTemplate.user_id == current_user.id) | (BotTemplate.is_default.is_(True)),
+    )
     result = await db.execute(query)
     if result.scalars().first():
         raise HTTPException(status_code=400, detail=f"Template with name '{template_data.name}' already exists")
@@ -92,7 +98,14 @@ async def create_template(
     )
 
     db.add(template)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Compound with the per-user scope check above: another user has a
+        # template by this name. Return a generic 400 rather than surfacing
+        # the DB-level constraint violation (which would also leak the name).
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Template could not be created")
     await db.refresh(template)
 
     # Sync bot_template_products junction table
@@ -173,8 +186,13 @@ async def update_template(
 
     # Update fields
     if template_update.name is not None:
-        # Check name uniqueness
-        name_query = select(BotTemplate).where(BotTemplate.name == template_update.name, BotTemplate.id != template_id)
+        # Scope the name-uniqueness check to the caller's visible templates
+        # (their own + defaults) so we do not leak other users' template names.
+        name_query = select(BotTemplate).where(
+            BotTemplate.name == template_update.name,
+            BotTemplate.id != template_id,
+            (BotTemplate.user_id == current_user.id) | (BotTemplate.is_default.is_(True)),
+        )
         name_result = await db.execute(name_query)
         if name_result.scalars().first():
             raise HTTPException(status_code=400, detail=f"Template with name '{template_update.name}' already exists")
@@ -205,7 +223,13 @@ async def update_template(
 
     template.updated_at = datetime.utcnow()
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Same concern as create: DB-level unique(name) can collide with
+        # another user's template. Return a generic 400 rather than leaking.
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Template could not be updated")
     await db.refresh(template)
 
     return template
