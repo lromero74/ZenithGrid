@@ -8,8 +8,10 @@ A sophisticated self-hosted cryptocurrency trading platform with **AI-powered au
 
 ### 🤖 **AI Autonomous Trading Bot**
 The first and only DCA bot platform with built-in AI decision-making:
-- **Multi-AI Provider Support**: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI), Groq (Llama)
+- **Multi-AI Provider Support**: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI), Groq (Llama), DeepSeek
 - **Autonomous Trading**: AI analyzes markets and makes intelligent buy/sell decisions
+- **Tool Use Across All Providers**: AI can call structured tools (portfolio summary, open positions, prior signal history) instead of relying on fixed prompt text — works across every supported provider
+- **Outcome-Aware Memory**: Every AI decision is logged and stitched back to its outcome (win/loss/P&L) when the trade closes, so the AI can see how its recent calls on the same product have played out before giving a new opinion
 - **Profit-Target Enforcement**: AI bot waits for your configured profit target before closing a position
 - **Token Optimized**: Smart caching, batching, and rate limiting
 - **Sentiment Ready**: News aggregation integrated; Twitter/X and Reddit signal integration planned
