@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.161.1] - 2026-04-21
+
+### Changed
+- **Auth router test coverage expanded** — Added focused test coverage for four previously under-tested auth modules: `password_router` (forgot-password generic success / repeat-clears-old / reset-bumps-tokens-valid-after / cross-user token isolation), `email_verify_router` (valid token / forged / expired / used / cross-user isolation for both link-click and 6-digit code flows, plus the 3-per-hour resend rate limit), `device_trust_router` (list / revoke / revoke-all with expired-device filtering and cross-user isolation on every path), and `helpers.get_client_ip` + `_create_device_trust`. 33 new tests, all green. Also repaired two pre-existing broken account-member tests that the v2.160.5 goal-create fix had left with unresolved forward-reference imports.
+
 ## [v2.161.0] - 2026-04-21
 
 ### Security

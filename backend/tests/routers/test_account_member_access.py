@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 
 from app.exceptions import NotFoundError
-from app.models import Account, Bot, User
+from app.models import Account, Bot, Report, ReportGoal, User
 from app.models.sharing import AccountMembership
 
 
@@ -337,9 +337,7 @@ class TestListBotsAccess:
 # =============================================================================
 
 
-async def _make_goal(db, user: User, name: str = "Test Goal") -> "ReportGoal":
-    from app.models import ReportGoal
-    from datetime import datetime, timedelta
+async def _make_goal(db, user: User, name: str = "Test Goal") -> ReportGoal:
     goal = ReportGoal(
         user_id=user.id,
         name=name,
@@ -406,9 +404,7 @@ class TestListExpenseItemsAccess:
 # =============================================================================
 
 
-async def _make_report(db, user: User) -> "Report":
-    from app.models import Report
-    from datetime import datetime, timedelta
+async def _make_report(db, user: User) -> Report:
     now = datetime.utcnow()
     report = Report(
         user_id=user.id,

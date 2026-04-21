@@ -15,6 +15,7 @@ from jose import jwt
 
 from app.auth_routers.helpers import (
     _build_user_response,
+    _create_device_trust,
     _decode_mfa_token,
     _geolocate_ip,
     _parse_device_name,
@@ -23,6 +24,7 @@ from app.auth_routers.helpers import (
     create_mfa_token,
     create_refresh_token,
     decode_device_trust_token,
+    get_client_ip,
     get_user_by_email,
     hash_password,
     verify_password,
@@ -524,3 +526,97 @@ class TestGetUserByEmail:
         # Exact case match should work
         result = await get_user_by_email(db_session, "CaseSensitive@Example.com")
         assert result is not None
+
+
+# =============================================================================
+# get_client_ip
+# =============================================================================
+
+
+class TestGetClientIp:
+    """Tests for get_client_ip() — prefers X-Forwarded-For over request.client."""
+
+    def _mock_request(self, headers=None, client_host="10.0.0.1"):
+        req = MagicMock()
+        req.headers = headers or {}
+        req.client = MagicMock()
+        req.client.host = client_host
+        return req
+
+    def test_prefers_x_forwarded_for(self):
+        """Happy path: X-Forwarded-For header wins over request.client.host."""
+        req = self._mock_request(
+            headers={"X-Forwarded-For": "203.0.113.5"}, client_host="10.0.0.1"
+        )
+        assert get_client_ip(req) == "203.0.113.5"
+
+    def test_x_forwarded_for_takes_first_ip(self):
+        """Edge case: multi-hop header — first IP is the original client."""
+        req = self._mock_request(
+            headers={"X-Forwarded-For": "203.0.113.5, 70.41.3.18, 150.172.238.178"}
+        )
+        assert get_client_ip(req) == "203.0.113.5"
+
+    def test_falls_back_to_client_host(self):
+        """Edge case: no X-Forwarded-For header → use request.client.host."""
+        req = self._mock_request(headers={}, client_host="192.168.1.50")
+        assert get_client_ip(req) == "192.168.1.50"
+
+    def test_returns_unknown_when_no_client(self):
+        """Edge case: no header and no request.client → 'unknown'."""
+        req = MagicMock()
+        req.headers = {}
+        req.client = None
+        assert get_client_ip(req) == "unknown"
+
+
+# =============================================================================
+# _create_device_trust
+# =============================================================================
+
+
+class TestCreateDeviceTrust:
+    """Tests for _create_device_trust() — writes TrustedDevice row and returns JWT."""
+
+    @pytest.mark.asyncio
+    @patch("app.auth_routers.helpers._geolocate_ip", new_callable=AsyncMock)
+    async def test_creates_trusted_device_and_returns_jwt(self, mock_geo, db_session):
+        """Happy path: inserts a TrustedDevice row for the caller and returns a decodable JWT."""
+        from sqlalchemy import select
+        from app.models import TrustedDevice, User
+
+        mock_geo.return_value = "Austin, Texas, United States"
+        user = User(
+            email="device-owner@example.com",
+            hashed_password=hash_password("Test1234"),
+            is_active=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        request = MagicMock()
+        request.headers = {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120 Safari/537.36",
+            "X-Forwarded-For": "8.8.8.8",
+        }
+        request.client = MagicMock()
+        request.client.host = "127.0.0.1"
+
+        token = await _create_device_trust(user, request, db_session)
+
+        # Returned token is a valid device_trust JWT bound to user
+        payload = decode_device_trust_token(token)
+        assert payload is not None
+        assert int(payload["sub"]) == user.id
+        assert payload["type"] == "device_trust"
+
+        # Row was persisted and scoped to the right user
+        devices = (await db_session.execute(
+            select(TrustedDevice).where(TrustedDevice.user_id == user.id)
+        )).scalars().all()
+        assert len(devices) == 1
+        assert devices[0].ip_address == "8.8.8.8"
+        assert devices[0].location == "Austin, Texas, United States"
+        assert devices[0].device_name == "Chrome on Mac"
+        # device_id in the JWT matches the row
+        assert payload["device_id"] == devices[0].device_id

@@ -5,9 +5,8 @@ TDD: These tests are written BEFORE the rate limiting implementation.
 They verify that repeated requests trigger 429 Too Many Requests.
 """
 
-import time
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
