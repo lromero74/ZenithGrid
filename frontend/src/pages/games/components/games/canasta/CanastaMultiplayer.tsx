@@ -424,7 +424,7 @@ function vsMeldCards(state: CanastaVsState, player: number, cardIndices: number[
   if (cards.length === 0) return state
 
   let newTeamMelds: CanastaVsMeld[]
-  let newInitialMeld = [...state.teamHasInitialMeld]
+  const newInitialMeld = [...state.teamHasInitialMeld]
 
   if (targetMeldIdx !== undefined) {
     const meld = state.teamMelds[targetMeldIdx]

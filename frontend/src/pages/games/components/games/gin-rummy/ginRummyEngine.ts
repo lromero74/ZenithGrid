@@ -252,9 +252,9 @@ export function canKnock(state: GinRummyState): boolean {
 function aiTurn(state: GinRummyState): GinRummyState {
   // AI draws
   const topDiscard = state.discardPile.length > 0 ? state.discardPile[state.discardPile.length - 1] : null
-  let aiHand = [...state.aiHand]
-  let drawPile = [...state.drawPile]
-  let discardPile = [...state.discardPile]
+  const aiHand = [...state.aiHand]
+  const drawPile = [...state.drawPile]
+  const discardPile = [...state.discardPile]
 
   // Check if discard pile card helps melds
   let drawFromDiscardPile = false

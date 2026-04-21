@@ -143,7 +143,7 @@ function resolveWar(state: VsWarState): VsWarState {
 
   const d0 = [...state.decks[0]]
   const d1 = [...state.decks[1]]
-  let warPile = [c0, c1, ...state.warPile]
+  const warPile = [c0, c1, ...state.warPile]
 
   while (true) {
     if (d0.length < 4) {

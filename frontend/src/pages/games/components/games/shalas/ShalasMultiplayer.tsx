@@ -236,7 +236,7 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
         break
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [applyAction])
 
   // ── WebSocket listener ─────────────────────────────────────────────

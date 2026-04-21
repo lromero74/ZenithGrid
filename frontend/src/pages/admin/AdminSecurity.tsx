@@ -94,7 +94,7 @@ export function AdminSecurity() {
   const filteredBans = useMemo(() => {
     if (!data) return []
     const q = search.trim().toLowerCase()
-    let list = q
+    const list = q
       ? data.banned_ips.filter(b =>
           b.ip.includes(q) ||
           (b.country_name || b.country || '').toLowerCase().includes(q) ||

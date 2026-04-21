@@ -396,7 +396,7 @@ export function meldCards(
   if (cards.length === 0) return state
 
   let newTeamMelds: CanastaMeld[]
-  let newInitialMeld = [...state.teamHasInitialMeld]
+  const newInitialMeld = [...state.teamHasInitialMeld]
 
   if (targetMeldIdx !== undefined) {
     // Adding to existing meld

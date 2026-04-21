@@ -161,7 +161,7 @@ export default function LightweightChartModal({
             {TIMEFRAMES.map(tf => (
               <button
                 key={tf.value}
-                onClick={() => { setTimeframe(tf.value); try { localStorage.setItem('zenith-chart-timeframe', tf.value) } catch {} }}
+                onClick={() => { setTimeframe(tf.value); try { localStorage.setItem('zenith-chart-timeframe', tf.value) } catch { /* ignored */ } }}
                 className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                   timeframe === tf.value
                     ? 'bg-blue-600 text-white'
@@ -180,7 +180,7 @@ export default function LightweightChartModal({
             {['candlestick', 'bar', 'line', 'area', 'baseline'].map(type => (
               <button
                 key={type}
-                onClick={() => { const t = type as 'candlestick' | 'bar' | 'line' | 'area' | 'baseline'; setChartType(t); try { localStorage.setItem('zenith-chart-type', t) } catch {} }}
+                onClick={() => { const t = type as 'candlestick' | 'bar' | 'line' | 'area' | 'baseline'; setChartType(t); try { localStorage.setItem('zenith-chart-type', t) } catch { /* ignored */ } }}
                 className={`px-2 py-1 rounded text-xs font-medium transition-colors capitalize ${
                   chartType === type
                     ? 'bg-blue-600 text-white'
@@ -196,7 +196,7 @@ export default function LightweightChartModal({
 
           {/* Heikin-Ashi Toggle */}
           <button
-            onClick={() => { const next = !useHeikinAshi; setUseHeikinAshi(next); try { localStorage.setItem('zenith-chart-heikin-ashi', String(next)) } catch {} }}
+            onClick={() => { const next = !useHeikinAshi; setUseHeikinAshi(next); try { localStorage.setItem('zenith-chart-heikin-ashi', String(next)) } catch { /* ignored */ } }}
             className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
               useHeikinAshi
                 ? 'bg-blue-600 text-white'

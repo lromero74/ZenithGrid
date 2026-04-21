@@ -241,7 +241,7 @@ export function CrazyEightsMultiplayer({ roomId, players, playerNames, onLeave }
       }
       case 'ce_draw_card': {
         if (current.phase !== 'playing' || current.currentPlayer !== fromPlayer) return
-        let drawPile = reshuffleDrawPile(current)
+        const drawPile = reshuffleDrawPile(current)
 
         if (drawPile.length === 0) {
           // No cards to draw — pass turn
@@ -335,6 +335,27 @@ export function CrazyEightsMultiplayer({ roomId, players, playerNames, onLeave }
     return unsub
   }, [roomId, isHost, players, processAction])
 
+  // ── Handlers (declared before early return so Hook order stays stable) ─
+
+  const handlePlay = useCallback((cardIdx: number) => {
+    sfx.play('place')
+    sendAction({ type: 'ce_play_card', cardIndex: cardIdx })
+  }, [sfx, sendAction])
+
+  const handleDraw = useCallback(() => {
+    sfx.play('flip')
+    sendAction({ type: 'ce_draw_card' })
+  }, [sfx, sendAction])
+
+  const handleChooseSuit = useCallback((suit: Suit) => {
+    sfx.play('place')
+    sendAction({ type: 'ce_choose_suit', suit })
+  }, [sfx, sendAction])
+
+  const handleNewRound = useCallback(() => {
+    sendAction({ type: 'ce_new_round' })
+  }, [sendAction])
+
   // ── Derive view ────────────────────────────────────────────────
 
   const view: GuestViewState | null = isHost && gameState
@@ -358,27 +379,6 @@ export function CrazyEightsMultiplayer({ roomId, players, playerNames, onLeave }
 
   const gameOver = view.phase === 'gameOver'
   const iWon = gameOver && view.scores[myPlayerIndex] >= view.targetScore
-
-  // ── Handlers ───────────────────────────────────────────────────
-
-  const handlePlay = useCallback((cardIdx: number) => {
-    sfx.play('place')
-    sendAction({ type: 'ce_play_card', cardIndex: cardIdx })
-  }, [sfx, sendAction])
-
-  const handleDraw = useCallback(() => {
-    sfx.play('flip')
-    sendAction({ type: 'ce_draw_card' })
-  }, [sfx, sendAction])
-
-  const handleChooseSuit = useCallback((suit: Suit) => {
-    sfx.play('place')
-    sendAction({ type: 'ce_choose_suit', suit })
-  }, [sfx, sendAction])
-
-  const handleNewRound = useCallback(() => {
-    sendAction({ type: 'ce_new_round' })
-  }, [sendAction])
 
   // ── Turn label ─────────────────────────────────────────────────
 

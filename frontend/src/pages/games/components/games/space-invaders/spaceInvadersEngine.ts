@@ -275,9 +275,10 @@ export function updateGame(
   if (state.gameOver) return state
 
   // Deep-copy mutable arrays to keep pure function semantics
+  const { wave } = state
   let {
     player, aliens, playerBullets, alienBullets,
-    bunkers, ufo, score, lives, wave,
+    bunkers, ufo, score, lives,
     alienDirection, alienStepDown, alienSpeed,
     moveTimer, fireTimer, ufoTimer,
   } = state

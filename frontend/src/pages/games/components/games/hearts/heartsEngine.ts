@@ -246,7 +246,7 @@ export function playCard(state: HeartsState, cardIndex: number): HeartsState {
   const newTrick = [...state.currentTrick, { player: 0, card }]
   const heartsBroken = state.heartsBroken || card.suit === 'hearts'
 
-  let next: HeartsState = {
+  const next: HeartsState = {
     ...state,
     hands: newHands,
     currentTrick: newTrick,

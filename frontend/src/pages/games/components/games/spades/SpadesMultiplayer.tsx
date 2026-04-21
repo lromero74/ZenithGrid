@@ -213,7 +213,7 @@ function playCardInState(state: SpadesVsState, player: number, cardIndex: number
   const newTrick = [...state.currentTrick, { player, card }]
   const spadesBroken = state.spadesBroken || card.suit === 'spades'
 
-  let next: SpadesVsState = { ...state, hands: newHands, currentTrick: newTrick, spadesBroken }
+  const next: SpadesVsState = { ...state, hands: newHands, currentTrick: newTrick, spadesBroken }
   if (newTrick.length === 4) return completeTrick(next)
   return { ...next, currentPlayer: (player + 1) % 4 }
 }

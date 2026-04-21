@@ -17,9 +17,10 @@ function createMockSeries() {
 }
 
 function createMockTimeScale() {
-  const callbacks = new Map<string, Function>()
+  type Callback = (...args: unknown[]) => void
+  const callbacks = new Map<string, Callback>()
   return {
-    subscribeVisibleTimeRangeChange: vi.fn((cb: Function) => { callbacks.set('range', cb) }),
+    subscribeVisibleTimeRangeChange: vi.fn((cb: Callback) => { callbacks.set('range', cb) }),
     unsubscribeVisibleTimeRangeChange: vi.fn(),
     setVisibleRange: vi.fn(),
     _callbacks: callbacks,

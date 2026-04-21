@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.160.2] - 2026-04-21
+
+### Changed
+- **Internal cleanup: frontend ESLint errors zeroed out** — Resolved all 58 remaining ESLint errors across 28 frontend files. Fixes include renaming a shadowed `Infinity` identifier in the games icon map, combining `let` + destructure-and-reassign patterns into `const` destructuring across the card/arcade game engines, replacing deprecated `Function` types with explicit signatures in a chart test, hoisting several `useCallback`s above conditional early returns in multiplayer lobbies (Crazy Eights, Gin Rummy, Go Fish, and the race overlay) to comply with React's rules of hooks, and adding explicit ignore comments to intentional empty catch blocks. No user-facing behavior change.
+
 ## [v2.160.1] - 2026-04-21
 
 ### Changed
