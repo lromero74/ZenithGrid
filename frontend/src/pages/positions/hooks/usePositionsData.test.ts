@@ -26,14 +26,15 @@ vi.mock('../../../services/api', () => ({
   botsApi: {
     getAll: vi.fn().mockResolvedValue([]),
   },
-  authFetch: vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ price: 0 }),
-  }),
+  marketDataApi: {
+    getPrice: vi.fn().mockResolvedValue({ price: 0 }),
+  },
   api: {
     get: vi.fn().mockResolvedValue({ data: { prices: {} } }),
   },
 }))
+
+import { api, marketDataApi } from '../../../services/api'
 
 // ---------------------------------------------------------------------------
 // Wrapper with fresh QueryClient per test
@@ -50,6 +51,7 @@ function makeWrapper(queryClient: QueryClient) {
 
 describe('usePositionsData', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.mocked(positionsApi.getAll).mockResolvedValue([])
   })
 
@@ -118,11 +120,7 @@ describe('usePositionsData', () => {
   })
 
   test('fetches direct BTC/USD market price instead of account portfolio', async () => {
-    const { authFetch } = await import('../../../services/api')
-    vi.mocked(authFetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ price: 98765.43 }),
-    } as any)
+    vi.mocked(marketDataApi.getPrice).mockResolvedValue({ price: 98765.43 } as any)
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     const { result } = renderHook(
@@ -134,8 +132,54 @@ describe('usePositionsData', () => {
       expect(result.current.btcUsdPrice).toBe(98765.43)
     })
 
-    expect(authFetch).toHaveBeenCalledWith('/api/market/btc-usd-price')
-    expect(vi.mocked(authFetch).mock.calls.some(([url]) => String(url).includes('/portfolio'))).toBe(false)
+    expect(marketDataApi.getPrice).toHaveBeenCalledWith('BTC-USD')
+  })
+
+  test('deduplicates product ids before requesting batch prices', async () => {
+    vi.mocked(positionsApi.getAll).mockResolvedValue([
+      {
+        id: 1, status: 'open', bot_id: 1, product_id: 'ETH-USD',
+        opened_at: '2025-01-01T00:00:00Z', closed_at: null,
+        initial_quote_balance: 100, max_quote_allowed: 200,
+        total_quote_spent: 50, total_base_acquired: 0.5,
+        average_buy_price: 2000, sell_price: null,
+        total_quote_received: null, profit_quote: null,
+        profit_percentage: null, trade_count: 1,
+      },
+      {
+        id: 2, status: 'open', bot_id: 2, product_id: 'ETH-USD',
+        opened_at: '2025-01-01T00:00:00Z', closed_at: null,
+        initial_quote_balance: 200, max_quote_allowed: 300,
+        total_quote_spent: 75, total_base_acquired: 0.75,
+        average_buy_price: 2100, sell_price: null,
+        total_quote_received: null, profit_quote: null,
+        profit_percentage: null, trade_count: 1,
+      },
+      {
+        id: 3, status: 'open', bot_id: 3, product_id: 'BTC-USD',
+        opened_at: '2025-01-01T00:00:00Z', closed_at: null,
+        initial_quote_balance: 300, max_quote_allowed: 400,
+        total_quote_spent: 125, total_base_acquired: 0.001,
+        average_buy_price: 60000, sell_price: null,
+        total_quote_received: null, profit_quote: null,
+        profit_percentage: null, trade_count: 1,
+      },
+    ] as any)
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    renderHook(
+      () => usePositionsData({}),
+      { wrapper: makeWrapper(qc) }
+    )
+
+    await waitFor(() => {
+      expect(vi.mocked(api.get)).toHaveBeenCalled()
+    })
+
+    expect(vi.mocked(api.get)).toHaveBeenCalledWith('/prices/batch', {
+      params: { products: 'ETH-USD,BTC-USD' },
+      signal: expect.any(AbortSignal),
+    })
   })
 
   test('interval-driven queries have refetchIntervalInBackground: false', () => {

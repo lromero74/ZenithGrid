@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.8] - 2026-04-22
+
+### Changed
+- **Dashboard first paint is lighter after the Account Value fast-path work** — The Dashboard still kicked off a burst of non-critical requests on mount even after v2.164.6 fixed the slow account-value summary path. Reservations, transfer summary, PropGuard status, and per-bot stats are now deferred for 2 seconds after first paint, so the initial render can show the core totals, bot list, and deal counts sooner. Open and closed position summary queries are also now scoped by `account_id` at the API call instead of fetching broader result sets and filtering in the browser, and those polling queries stop while the tab is hidden.
+- **Market price fetch policy is now shared instead of duplicated** — BTC/USD and ETH/USD price fetches were being managed independently in multiple places (`App`, `ClosedPositions`, positions hooks), which made polling/staleness behavior easy to drift over time. A shared `useMarketPrice()` hook plus `marketDataApi.getPrice()` helper now centralizes that path so those views reuse the same query behavior and cache shape.
+- **Positions batch-price requests stop sending duplicate markets** — When multiple open positions shared the same product, the positions page still sent repeated symbols to `/prices/batch`. The request now deduplicates product IDs first, cutting a little unnecessary payload and backend work on every polling cycle.
+
 ## [v2.164.7] - 2026-04-22
 
 ### Changed
@@ -6844,4 +6851,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add comprehensive documentation
 - Fix lightweight-charts v5 API compatibility
 - Initial commit: ETH/BTC trading bot with TradingView-style charts
-

@@ -8,6 +8,26 @@
 
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 
+const storageState = new Map<string, string>()
+
+const localStorageMock = {
+  getItem: vi.fn((key: string) => storageState.get(key) ?? null),
+  setItem: vi.fn((key: string, value: string) => {
+    storageState.set(key, String(value))
+  }),
+  removeItem: vi.fn((key: string) => {
+    storageState.delete(key)
+  }),
+  clear: vi.fn(() => {
+    storageState.clear()
+  }),
+}
+
+Object.defineProperty(globalThis, 'localStorage', {
+  value: localStorageMock,
+  configurable: true,
+})
+
 // Mock axios before importing the module under test
 vi.mock('axios', () => {
   const requestInterceptors: Array<{ fulfilled: (config: any) => any; rejected: (error: any) => any }> = []
@@ -440,6 +460,38 @@ describe('dashboardApi', () => {
     const result = await dashboardApi.getStats()
     expect(api.get).toHaveBeenCalledWith('/dashboard')
     expect(result).toEqual({ total_profit: 100 })
+  })
+})
+
+describe('marketDataApi', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset()
+    globalThis.fetch = vi.fn()
+  })
+
+  test('getRecent calls correct endpoint', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+    await marketDataApi.getRecent(48)
+
+    expect(api.get).toHaveBeenCalledWith('/market-data', { params: { hours: 48 } })
+  })
+
+  test('getPrice calls market price endpoint through authFetch', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ price: 98765.43 }),
+    } as Response)
+
+    const result = await marketDataApi.getPrice('BTC-USD')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/market/btc-usd-price',
+      expect.objectContaining({
+        headers: expect.any(Object),
+      }),
+    )
+    expect(result).toEqual({ price: 98765.43 })
   })
 })
 

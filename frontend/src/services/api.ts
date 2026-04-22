@@ -344,6 +344,14 @@ export const marketDataApi = {
     api.get<MarketData[]>('/market-data', { params: { hours } }).then((res) => res.data),
   getCoins: () =>
     api.get<{ coins: { symbol: string; markets: string[]; product_ids: string[] }[]; count: number }>('/coins').then((res) => res.data),
+  getPrice: (productId: string) =>
+    authFetch(`/api/market/${productId.toLowerCase()}-price`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${productId} price`)
+        }
+        return response.json()
+      }),
 };
 
 export const settingsApi = {

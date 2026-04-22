@@ -4,8 +4,9 @@ import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParam
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2, MessageSquare, Users, Shield } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
 import { useAccountValueSummary } from './hooks/useAccountValueSummary'
+import { useMarketPrice } from './hooks/useMarketPrice'
 import { useIsAdmin, useHasPermission } from './hooks/usePermission'
-import { positionsApi, authFetch } from './services/api'
+import { positionsApi } from './services/api'
 import { AccountSwitcher } from './components/account/AccountSwitcher'
 import { PendingInvitationsPopover } from './components/sharing/PendingInvitationsPopover'
 import { ShadowModeBanner } from './components/sharing/ShadowModeBanner'
@@ -127,33 +128,10 @@ function AppContent() {
 
   // Fetch BTC/USD price directly from market data (not calculated from portfolio)
   // This ensures correct price display regardless of paper trading balances
-  const { data: btcPriceData } = useQuery({
-    queryKey: ['btc-usd-price'],
-    queryFn: async () => {
-      const response = await authFetch('/api/market/btc-usd-price')
-      if (!response.ok) throw new Error('Failed to fetch BTC price')
-      return response.json()
-    },
-    refetchInterval: 60000, // Update every 60 seconds
-    staleTime: 30000, // Consider data fresh for 30 seconds
-  })
-
-  const btcUsdPrice = btcPriceData?.price || 0
+  const { price: btcUsdPrice } = useMarketPrice({ productId: 'BTC-USD' })
   const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
-  // Fetch ETH/USD price directly from market data
-  const { data: ethPriceData } = useQuery({
-    queryKey: ['eth-usd-price'],
-    queryFn: async () => {
-      const response = await authFetch('/api/market/eth-usd-price')
-      if (!response.ok) throw new Error('Failed to fetch ETH price')
-      return response.json()
-    },
-    refetchInterval: 60000, // Update every 60 seconds
-    staleTime: 30000, // Consider data fresh for 30 seconds
-  })
-
-  const ethUsdPrice = ethPriceData?.price || 0
+  const { price: ethUsdPrice } = useMarketPrice({ productId: 'ETH-USD' })
   const usdEthPrice = ethUsdPrice > 0 ? 1 / ethUsdPrice : 0
 
   // Fetch closed positions to count history items (deferred)

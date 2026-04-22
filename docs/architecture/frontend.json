@@ -3,7 +3,7 @@
     {
       "file": "pages/Dashboard.tsx",
       "route": "/",
-      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics. v2.164.6: account-value totals come from useAccountValueSummary (fast /account-value-summary endpoint) instead of the full portfolio fetch, and AccountValueChart + MarketSentimentCards are code-split via React.lazy/Suspense to shrink the initial Dashboard bundle."
+      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics. v2.164.6: account-value totals come from useAccountValueSummary (fast /account-value-summary endpoint) instead of the full portfolio fetch, and AccountValueChart + MarketSentimentCards are code-split via React.lazy/Suspense to shrink the initial Dashboard bundle. v2.164.8: non-critical queries (reservations, transfer summary, PropGuard status, per-bot stats) are deferred for ~2s after first paint; open/closed position summary queries now pass account_id to the backend and stop polling in hidden tabs."
     },
     {
       "file": "pages/Bots.tsx",
@@ -18,7 +18,7 @@
     {
       "file": "pages/ClosedPositions.tsx",
       "route": "/history",
-      "purpose": "Closed and failed positions with trade history, AI logs, statistics"
+      "purpose": "Closed and failed positions with trade history, AI logs, statistics. Uses shared useMarketPrice(BTC-USD) for BTC conversion display and scopes closed-position fetches by selected account_id server-side."
     },
     {
       "file": "pages/Portfolio.tsx",
@@ -671,6 +671,10 @@
       {
         "file": "hooks/useAccountValueSummary.ts",
         "purpose": "Fast account value summary for the dashboard/header: React Query against accountValueSummaryApi.get(accountId) keyed by account id, staleTime 30s, 60s refetchInterval, keepPreviousData across account switches; when the backend returns is_stale or is_refreshing the hook schedules a single setTimeout refetch 5s later so the cached snapshot upgrades to live totals without polling tightly. Introduced in v2.164.6."
+      },
+      {
+        "file": "hooks/useMarketPrice.ts",
+        "purpose": "Shared market-price hook for product endpoints such as BTC-USD and ETH-USD: React Query against marketDataApi.getPrice(productId) keyed by productId with common polling/staleness policy so header/pages reuse one fetch path. Introduced in v2.164.8."
       }
     ],
     "page_specific": {
@@ -721,7 +725,7 @@
         },
         {
           "file": "pages/positions/hooks/usePositionsData.ts",
-          "purpose": "Fetch positions, bots, prices, calculate P&L"
+          "purpose": "Fetch positions, bots, prices, calculate P&L. Scopes open positions by selected account_id, reads BTC-USD from shared useMarketPrice(), and deduplicates product IDs before /prices/batch requests."
         }
       ],
       "news": [
@@ -828,6 +832,10 @@
       {
         "name": "accountValueSummaryApi",
         "purpose": "Fast per-account value summary (total USD/BTC, BTC/USD, is_stale, is_refreshing) used by the Dashboard header; GET /accounts/{id}/account-value-summary with optional force_fresh=true; AccountValueSummary type exported from api.ts. Added in v2.164.6."
+      },
+      {
+        "name": "marketDataApi",
+        "purpose": "Historical market data, coin list, and shared single-product price fetches via getPrice(productId) for market price hooks"
       },
       {
         "name": "reportsApi",

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { positionsApi, botsApi, authFetch, api } from '../../../services/api'
+import { positionsApi, botsApi, api } from '../../../services/api'
 import { useState, useEffect, useMemo } from 'react'
 import { calculateUnrealizedPnL } from '../helpers'
+import { useMarketPrice } from '../../../hooks/useMarketPrice'
 
 interface UsePositionsDataProps {
   selectedAccountId?: number
@@ -38,21 +39,11 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     },
   })
 
-  // Fetch direct BTC/USD market price instead of the full portfolio payload.
-  const { data: btcPriceData } = useQuery({
-    queryKey: ['btc-usd-price'],
-    queryFn: async () => {
-      const response = await authFetch('/api/market/btc-usd-price')
-      if (!response.ok) throw new Error('Failed to fetch BTC price')
-      return response.json()
-    },
+  const { price: btcUsdPrice } = useMarketPrice({
+    productId: 'BTC-USD',
     refetchInterval: 120000,
     staleTime: 60000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
   })
-
-  const btcUsdPrice = btcPriceData?.price || 0
 
   // Fetch real-time prices for all open positions
   useEffect(() => {
@@ -66,7 +57,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
 
       try {
         // Fetch all prices in a single batch request
-        const productIds = openPositions.map(p => p.product_id || 'ETH-BTC').join(',')
+        const productIds = [...new Set(openPositions.map(p => p.product_id || 'ETH-BTC'))].join(',')
         const response = await api.get('/prices/batch', {
           params: { products: productIds },
           signal: abortController.signal

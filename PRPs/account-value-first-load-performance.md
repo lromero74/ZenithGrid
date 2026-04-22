@@ -2,7 +2,54 @@
 
 **Feature**: Make Account Value appear quickly on first login without hammering Coinbase with hundreds of price lookups
 **Created**: 2026-04-21
+**Last Updated**: 2026-04-22
 **One-Pass Confidence Score**: 9/10
+
+---
+
+## Status Update
+
+### Shipped on `main` in `v2.164.6`
+
+The core Phase A work in this PRP has shipped:
+- added `GET /api/accounts/{account_id}/account-value-summary`
+- added `backend/app/services/account_value_summary_service.py`
+- added shared bounded-concurrency paper valuation via `backend/app/services/paper_valuation_service.py`
+- updated `frontend/src/App.tsx` and `frontend/src/pages/Dashboard.tsx` to use the summary path for first paint
+- added stale snapshot fallback plus background refresh for paper accounts
+- added `include_details=False` fast path for live Coinbase portfolio totals
+- replaced one positions-page portfolio fetch with direct BTC/USD market-price fetch
+- lazy-loaded Dashboard chart/sentiment widgets and added Vite manual chunking
+
+### Follow-up started on `feature/dashboard-performance-followup`
+
+The next pass is now focused on Dashboard request fan-out after the Account Value path was fixed.
+
+Implemented on the follow-up branch:
+- defer non-critical Dashboard queries by 2 seconds after first paint
+- keep reservations, transfer summary, prop-guard status, and per-bot stats off the initial critical path
+- keep core totals, bot list, and open/closed position counts immediate
+- scope Dashboard open/closed position requests by `account_id` instead of fetching cross-account data and filtering client-side
+- scope Closed Positions page closed-position requests by `account_id` as well
+- stop Dashboard open/closed position polling while the tab is hidden
+- dedupe repeated product IDs before positions-page batch price requests
+- centralize BTC/USD and ETH/USD market-price fetch policy in a shared `useMarketPrice()` hook
+- switch `App`, `ClosedPositions`, and the positions hook to the shared market-price hook
+- add `frontend/src/pages/Dashboard.test.tsx` coverage for deferred query behavior
+
+### Current read on the bottleneck
+
+The original Account Value bottleneck is no longer the main startup problem.
+The next likely issue is query fan-out on the Dashboard:
+- `bots`
+- `open positions`
+- `closed positions`
+- `reservations`
+- `transfer summary`
+- `prop guard`
+- per-bot `stats`
+
+That means follow-up work should target startup request volume and polling pressure rather than reworking the summary endpoint again.
 
 ---
 
@@ -90,15 +137,14 @@ Users should not stare at a skeleton waiting for 100+ symbols to be repriced.
 
 ### Frontend critical path
 
-`frontend/src/App.tsx` fetches:
-- `/api/accounts`
-- `/api/accounts/{selectedAccount.id}/portfolio` once selected account resolves
-- and currently falls back to `/api/account/portfolio` before that
+Original state when this PRP was written:
+- `frontend/src/App.tsx` fetched the full portfolio path for Account Value
+- `frontend/src/pages/Dashboard.tsx` also fetched the full portfolio path for Account Value
 
-`frontend/src/pages/Dashboard.tsx` also fetches:
-- `/api/accounts/{selectedAccount.id}/portfolio`
-
-This means Account Value currently depends on the full portfolio payload in two places.
+Current state after Phase A:
+- Account Value first paint uses `useAccountValueSummary()`
+- the full portfolio payload is no longer required for header/dashboard Account Value rendering
+- the remaining frontend startup cost is now dominated more by query fan-out than by summary valuation
 
 ### Backend portfolio entry points
 
@@ -193,6 +239,10 @@ Recommended TTLs:
 - account summary: `30-60s`
 - successful symbol price: `60-300s`
 - negative symbol cache: `15-60 min`
+
+Implementation note:
+- explicit summary caching shipped
+- symbol-level success/negative caching is effectively handled by the Coinbase public market data helpers via `api_cache`
 
 ### 3. Stale-while-revalidate for summary
 
@@ -326,6 +376,9 @@ Behavior:
 - dashboard Account Value card uses summary query
 - full portfolio query remains only where holdings are actually needed
 
+Status:
+- shipped on `main`
+
 ### Step 7 — Optional background refresh hook
 
 If implementation remains straightforward, add a background refresh trigger for stale summary values.
@@ -335,6 +388,24 @@ If that adds too much complexity, defer it and ship:
 - explicit refresh on normal poll interval
 
 KISS applies here.
+
+Status:
+- shipped in a simple form via stale snapshot fallback + background refresh + quick recheck polling
+
+### Step 8 — Dashboard fan-out follow-up
+
+Now that Account Value is fast, reduce remaining startup pressure from non-critical Dashboard queries.
+
+Current implementation direction:
+- defer non-critical Dashboard queries for about 2 seconds after first paint
+- keep per-bot stats off the initial render critical path
+- keep reservations and transfer summary out of the initial burst
+- continue gating prop-guard calls to prop-firm accounts only
+
+Likely next tests:
+- happy path: first paint renders core dashboard content before deferred queries fire
+- edge case: non-prop accounts never hit prop-guard status
+- failure case: deferred query failures do not block core dashboard render
 
 ---
 
@@ -368,6 +439,7 @@ Likely touched files:
 - Dashboard first load for paper accounts returns a usable Account Value quickly.
 - Unsupported symbols do not cause repeated cold-start retry storms.
 - Real Coinbase account behavior remains correct.
+- Non-critical Dashboard queries do not block first paint.
 
 ### Performance
 
@@ -384,6 +456,7 @@ The full portfolio page may still take longer than the summary path.
 - bounded concurrency enforced by tests
 - unsupported products negative-cached
 - no auth regression on account access
+- deferred Dashboard queries must not hide or delay core account totals
 
 ---
 
@@ -431,12 +504,29 @@ Ship first:
 
 This is the highest-impact, lowest-risk slice.
 
+Status:
+- complete and shipped on `main`
+
 ### Phase B — Full Portfolio Cleanup
 
 After Phase A proves stable:
 - evaluate whether the full portfolio endpoint also needs paper-account optimization
 - possibly reuse the same per-asset cache there
 - optionally add background revalidation for the Portfolio page too
+
+Status:
+- still open
+- lower priority than Dashboard startup fan-out unless fresh profiling shows Portfolio has become the main pain point
+
+### Phase C — Dashboard Startup Fan-Out
+
+After the summary path is fixed:
+- defer non-critical Dashboard queries until just after first paint
+- reduce per-bot startup query bursts
+- profile whether polling intervals need further tightening
+
+Status:
+- in progress on `feature/dashboard-performance-followup`
 
 ---
 
@@ -450,6 +540,14 @@ Recommended answers for first implementation:
 - `1.` Yes, if recent enough and clearly marked stale.
 - `2.` Yes.
 - `3.` Yes, subtle only.
+
+Additional follow-up questions:
+- Should bot stats stay deferred permanently, or only until the bot cards scroll into view?
+- Should Dashboard open/closed positions be consolidated into a single backend summary endpoint to reduce request count?
+- Should BTC/ETH market-price queries be centralized into a shared hook so `App` and `Positions` reuse the same policy?
+
+Answered since last update:
+- BTC/ETH market-price queries now use a shared hook and shared API helper. The next question is whether other one-off market-price fetches, such as modal-level fetches, should join the same path too.
 
 ---
 

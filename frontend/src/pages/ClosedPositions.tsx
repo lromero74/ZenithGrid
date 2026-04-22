@@ -8,6 +8,7 @@ import { formatDateTime } from '../utils/dateFormat'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
 import { FilterPanel } from './positions/components/FilterPanel'
+import { useMarketPrice } from '../hooks/useMarketPrice'
 
 function ClosedPositions() {
   const { selectedAccount } = useAccount()
@@ -45,18 +46,7 @@ function ClosedPositions() {
   // Track last seen counts separately for closed and failed - seeded from user profile
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(user?.last_seen_history_count || 0)
   const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(user?.last_seen_failed_count || 0)
-  // Use React Query for BTC price to share cache with App.tsx header
-  const { data: btcPriceData } = useQuery({
-    queryKey: ['btc-usd-price'],
-    queryFn: async () => {
-      const response = await authFetch('/api/market/btc-usd-price')
-      if (!response.ok) throw new Error('Failed to fetch BTC price')
-      return response.json()
-    },
-    refetchInterval: 60000,
-    staleTime: 30000,
-  })
-  const currentBtcUsdPrice = btcPriceData?.price || 0
+  const { price: currentBtcUsdPrice } = useMarketPrice({ productId: 'BTC-USD' })
 
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
@@ -70,13 +60,10 @@ function ClosedPositions() {
 
   const { data: allPositions, isLoading } = useQuery({
     queryKey: ['positions-closed', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll('closed', 500), // Get closed positions with higher limit
+    queryFn: () => positionsApi.getAll('closed', 500, selectedAccount?.id), // Get closed positions with higher limit
     refetchInterval: 60000,
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((p: Position) => p.account_id === selectedAccount.id)
-    },
+    refetchOnWindowFocus: false,
+    refetchIntervalInBackground: false,
   })
 
   const { data: failedOrdersData, isLoading: isLoadingFailed } = useQuery({

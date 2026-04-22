@@ -32,6 +32,8 @@ const MarketSentimentCards = lazy(() =>
   import('../components/trading/MarketSentimentCards').then((module) => ({ default: module.MarketSentimentCards }))
 )
 
+const DEFERRED_DASHBOARD_QUERIES_DELAY_MS = 2000
+
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
 interface DashboardProps {
@@ -41,6 +43,15 @@ interface DashboardProps {
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { selectedAccount } = useAccount()
   const { summary: accountValueSummary } = useAccountValueSummary({ selectedAccount })
+  const [deferredQueriesEnabled, setDeferredQueriesEnabled] = useState(false)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDeferredQueriesEnabled(true)
+    }, DEFERRED_DASHBOARD_QUERIES_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const [showStoppedBots, setShowStoppedBots] = useState(() => {
     try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
@@ -67,25 +78,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // Fetch open positions for active deals count
   const { data: openPositions = [] } = useQuery({
     queryKey: ['open-positions', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll('open', 100),
+    queryFn: () => positionsApi.getAll('open', 100, selectedAccount?.id),
     refetchInterval: 30000, // 30 seconds
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((p: any) => p.account_id === selectedAccount.id)
-    },
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 
   // Fetch closed positions for profit/win rate metrics (high limit to get all)
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll('closed', 1000),
+    queryFn: () => positionsApi.getAll('closed', 1000, selectedAccount?.id),
     refetchInterval: 30000, // 30 seconds
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((p: any) => p.account_id === selectedAccount.id)
-    },
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 
   // Combine for recent deals display (memoized to avoid spread on every render)
@@ -100,8 +105,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       if (!response.ok) throw new Error('Failed to fetch reservations')
       return response.json()
     },
-    enabled: !!selectedAccount,
+    enabled: deferredQueriesEnabled && !!selectedAccount,
     refetchInterval: 30000, // 30 seconds
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
     staleTime: 15000,
   })
 
@@ -109,6 +116,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { data: transferSummary } = useQuery({
     queryKey: ['transfer-recent-summary'],
     queryFn: () => transfersApi.getRecentSummary(),
+    enabled: deferredQueriesEnabled,
     staleTime: 300000, // 5 minutes
     refetchOnWindowFocus: false,
   })
@@ -123,8 +131,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       if (!response.ok) return null
       return response.json()
     },
-    enabled: isPropFirm && !!selectedAccount?.id,
+    enabled: deferredQueriesEnabled && isPropFirm && !!selectedAccount?.id,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 
   const activeBots = useMemo(() => bots.filter(bot => bot.is_active), [bots])
@@ -568,7 +578,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeBots.map((bot) => (
-              <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
+              <BotCard
+                key={bot.id}
+                bot={bot}
+                onNavigate={onNavigate}
+                deferredQueriesEnabled={deferredQueriesEnabled}
+              />
             ))}
           </div>
         </div>
@@ -583,7 +598,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {inactiveBots.map((bot) => (
-              <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
+              <BotCard
+                key={bot.id}
+                bot={bot}
+                onNavigate={onNavigate}
+                deferredQueriesEnabled={deferredQueriesEnabled}
+              />
             ))}
           </div>
         </div>
@@ -604,7 +624,15 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 }
 
 // Enhanced Bot Card Component (memoized to prevent re-renders from parent state changes)
-const BotCard = memo(function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
+const BotCard = memo(function BotCard({
+  bot,
+  onNavigate: _onNavigate,
+  deferredQueriesEnabled,
+}: {
+  bot: Bot
+  onNavigate: (page: Page) => void
+  deferredQueriesEnabled: boolean
+}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useNotifications()
@@ -613,7 +641,9 @@ const BotCard = memo(function BotCard({ bot, onNavigate: _onNavigate }: { bot: B
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
     refetchInterval: 10000,
-    enabled: bot.is_active,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    enabled: deferredQueriesEnabled && bot.is_active,
   })
 
   const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
