@@ -21,18 +21,25 @@ _PRECISION_CACHE: Optional[Dict] = None
 
 
 def get_precision_data() -> Dict:
-    """Load precision data from JSON file (cached)."""
+    """Load precision data from JSON file (cached).
+
+    Prefers the runtime cache (product_precision.json, gitignored, mutated by
+    ensure_product_precision) and falls back to the tracked baseline
+    (product_precision.seed.json) so fresh clones aren't empty before the first
+    auto-fetch writes the runtime file.
+    """
     global _PRECISION_CACHE
 
     if _PRECISION_CACHE is not None:
         return _PRECISION_CACHE
 
-    # Try to load from file
-    json_path = os.path.join(os.path.dirname(__file__), "product_precision.json")
-    if os.path.exists(json_path):
-        with open(json_path, "r") as f:
-            _PRECISION_CACHE = json.load(f)
-            return _PRECISION_CACHE
+    base_dir = os.path.dirname(__file__)
+    for filename in ("product_precision.json", "product_precision.seed.json"):
+        path = os.path.join(base_dir, filename)
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                _PRECISION_CACHE = json.load(f)
+                return _PRECISION_CACHE
 
     # Fallback: return empty dict (will use default precision)
     _PRECISION_CACHE = {}

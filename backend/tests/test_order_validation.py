@@ -1,9 +1,54 @@
 """Tests for app/order_validation.py"""
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, patch
 
+import app.order_validation as order_validation
 from app.order_validation import validate_order_size, calculate_minimum_budget_percentage
+
+
+@pytest.fixture(autouse=True)
+def _reset_precision_cache():
+    """Clear the module-level precision cache so each seed-fallback test loads fresh."""
+    order_validation._PRODUCT_PRECISION = None
+    yield
+    order_validation._PRODUCT_PRECISION = None
+
+
+class TestLoadProductPrecisionSeedFallback:
+    """Runtime product_precision.json is gitignored; product_precision.seed.json is the
+    tracked baseline. order_validation must prefer the runtime file when present and
+    fall back to the seed so fresh clones aren't empty."""
+
+    def test_runtime_exists_preferred_over_seed(self, tmp_path, monkeypatch):
+        runtime = tmp_path / "product_precision.json"
+        seed = tmp_path / "product_precision.seed.json"
+        runtime.write_text(json.dumps({"RUNTIME-USD": {"quote_increment": "0.01",
+                                                       "quote_decimals": 2,
+                                                       "base_increment": "0.001"}}))
+        seed.write_text(json.dumps({"SEED-USD": {"quote_increment": "0.01",
+                                                 "quote_decimals": 2,
+                                                 "base_increment": "0.001"}}))
+        monkeypatch.setattr(order_validation, "__file__", str(tmp_path / "order_validation.py"))
+        data = order_validation._load_product_precision()
+        assert "RUNTIME-USD" in data
+        assert "SEED-USD" not in data
+
+    def test_runtime_missing_falls_back_to_seed(self, tmp_path, monkeypatch):
+        seed = tmp_path / "product_precision.seed.json"
+        seed.write_text(json.dumps({"SEED-USD": {"quote_increment": "0.01",
+                                                 "quote_decimals": 2,
+                                                 "base_increment": "0.001"}}))
+        monkeypatch.setattr(order_validation, "__file__", str(tmp_path / "order_validation.py"))
+        data = order_validation._load_product_precision()
+        assert "SEED-USD" in data
+
+    def test_both_missing_returns_empty_dict(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(order_validation, "__file__", str(tmp_path / "order_validation.py"))
+        data = order_validation._load_product_precision()
+        assert data == {}
 
 
 # ---------------------------------------------------------------------------

@@ -27,8 +27,10 @@ build/
 backend/*_cache.json
 backend/.portfolio_cache/
 
-# Product precision cache (auto-populated from Coinbase API at runtime; snapshot committed separately)
-# See backend/app/product_precision.py — ensure_product_precision() writes this file
+# Product precision cache (auto-populated from Coinbase API at runtime).
+# The tracked baseline is backend/app/product_precision.seed.json; both loaders
+# (order_validation.py, product_precision.py) fall back to it on fresh clones.
+# See backend/app/product_precision.py — ensure_product_precision() writes this file.
 backend/app/product_precision.json
 
 # Cached news images (downloaded at runtime)
