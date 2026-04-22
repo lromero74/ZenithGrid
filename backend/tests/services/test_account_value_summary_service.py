@@ -90,6 +90,9 @@ class TestGetAccountValueSummary:
             "app.services.account_value_summary_service.api_cache.get",
             new=AsyncMock(return_value=None),
         ), patch(
+            "app.services.account_value_summary_service._schedule_paper_summary_refresh",
+            return_value=True,
+        ), patch(
             "app.services.account_value_summary_service._build_live_paper_account_value_summary",
             new=AsyncMock(),
         ) as mock_build_live:
@@ -98,7 +101,7 @@ class TestGetAccountValueSummary:
         assert result["account_id"] == 7
         assert result["total_usd_value"] == pytest.approx(1073.69)
         assert result["is_stale"] is True
-        assert result["is_refreshing"] is False
+        assert result["is_refreshing"] is True
         mock_build_live.assert_not_called()
 
     @pytest.mark.asyncio
@@ -211,3 +214,67 @@ class TestBuildLivePaperAccountValueSummary:
 
         assert result["total_usd_value"] == pytest.approx(50.0)
         assert result["total_btc_value"] == pytest.approx(0.0005)
+
+
+class TestBackgroundRefresh:
+    """Tests for stale-summary background refresh scheduling."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_refresh_creates_background_task_once(self):
+        """Happy path: repeated scheduling for the same account only enqueues one task."""
+        from app.services.account_value_summary_service import _schedule_paper_summary_refresh, _refresh_in_flight
+
+        account = MagicMock()
+        account.id = 7
+        account.name = "Demo USD Paper"
+        account.paper_balances = "{}"
+
+        fake_task = MagicMock()
+        fake_loop = MagicMock()
+        fake_loop.create_task.side_effect = lambda coro: (coro.close(), fake_task)[1]
+
+        _refresh_in_flight.clear()
+        try:
+            with patch(
+                "app.services.account_value_summary_service.asyncio.get_running_loop",
+                return_value=fake_loop,
+            ):
+                first = _schedule_paper_summary_refresh(account)
+                second = _schedule_paper_summary_refresh(account)
+
+            assert first is True
+            assert second is True
+            fake_loop.create_task.assert_called_once()
+        finally:
+            _refresh_in_flight.clear()
+
+    @pytest.mark.asyncio
+    async def test_background_refresh_updates_cache_and_clears_inflight(self):
+        """Happy path: background refresh caches fresh summary and clears in-flight marker."""
+        from app.services.account_value_summary_service import _refresh_in_flight, _refresh_paper_summary_cache
+
+        _refresh_in_flight.clear()
+        _refresh_in_flight.add(7)
+        try:
+            with patch(
+                "app.services.account_value_summary_service._build_live_paper_account_value_summary",
+                new=AsyncMock(return_value={
+                    "account_id": 7,
+                    "account_name": "Demo USD Paper",
+                    "total_usd_value": 1111.11,
+                    "total_btc_value": 0.01111111,
+                    "btc_usd_price": 100000.0,
+                    "as_of": "2026-04-21T12:00:00",
+                    "is_stale": False,
+                    "is_refreshing": False,
+                }),
+            ), patch(
+                "app.services.account_value_summary_service.api_cache.set",
+                new=AsyncMock(),
+            ) as mock_cache_set:
+                await _refresh_paper_summary_cache(7, "Demo USD Paper", "{}")
+
+            mock_cache_set.assert_called_once()
+            assert 7 not in _refresh_in_flight
+        finally:
+            _refresh_in_flight.clear()

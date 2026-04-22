@@ -293,6 +293,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <p className="text-sm text-slate-400 mt-1">
                 {formatCurrency(accountValueSummary?.total_usd_value || 0)}
               </p>
+              {accountValueSummary.is_stale && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {accountValueSummary.is_refreshing ? 'Refreshing live total...' : 'Using recent snapshot'}
+                </p>
+              )}
             </>
           )}
 

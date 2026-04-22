@@ -278,6 +278,11 @@ function AppContent() {
                       <p className="text-sm text-green-400">
                         ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </p>
+                      {accountValueSummary.is_stale && (
+                        <p className="text-[11px] text-slate-500">
+                          {accountValueSummary.is_refreshing ? 'Refreshing...' : 'Using recent snapshot'}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -335,6 +340,11 @@ function AppContent() {
                       <p className="text-xs text-green-400 leading-tight">
                         ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </p>
+                      {accountValueSummary.is_stale && (
+                        <p className="text-[9px] text-slate-500 leading-tight">
+                          {accountValueSummary.is_refreshing ? 'Refreshing...' : 'Recent snapshot'}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>

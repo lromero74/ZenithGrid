@@ -8,7 +8,10 @@ cached live summary or the most recent snapshot so first login stays fast.
 
 import asyncio
 import json
+import logging
+import threading
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, Dict
 
 from fastapi import HTTPException
@@ -24,9 +27,13 @@ from app.models import Account, AccountValueSnapshot, User
 from app.services.account_access import accessible_accounts_filter
 from app.services.account_service import get_portfolio_for_account
 
+logger = logging.getLogger(__name__)
+
 SUMMARY_CACHE_TTL_SECONDS = 60
 PAPER_PRICE_CONCURRENCY = 5
 _STABLES = {"USD", "USDC", "USDT"}
+_refresh_lock = threading.Lock()
+_refresh_in_flight: set[int] = set()
 
 
 def _summary_cache_key(account_id: int) -> str:
@@ -66,6 +73,7 @@ async def get_account_value_summary(
         )
         snapshot = snapshot_result.scalar_one_or_none()
         if snapshot:
+            is_refreshing = _schedule_paper_summary_refresh(account)
             return {
                 "account_id": account.id,
                 "account_name": account.name,
@@ -74,7 +82,7 @@ async def get_account_value_summary(
                 "btc_usd_price": float(snapshot.btc_usd_price or 0.0),
                 "as_of": snapshot.snapshot_date.isoformat(),
                 "is_stale": True,
-                "is_refreshing": False,
+                "is_refreshing": is_refreshing,
             }
 
     if account.is_paper_trading:
@@ -94,6 +102,41 @@ async def get_account_value_summary(
 
     await api_cache.set(cache_key, summary, SUMMARY_CACHE_TTL_SECONDS)
     return summary
+
+
+def _schedule_paper_summary_refresh(account: Account) -> bool:
+    """Trigger a background refresh for a paper account if one isn't already running."""
+    with _refresh_lock:
+        if account.id in _refresh_in_flight:
+            return True
+        _refresh_in_flight.add(account.id)
+
+    loop = asyncio.get_running_loop()
+    loop.create_task(
+        _refresh_paper_summary_cache(
+            account.id,
+            account.name,
+            account.paper_balances,
+        )
+    )
+    return True
+
+
+async def _refresh_paper_summary_cache(account_id: int, account_name: str, paper_balances: str | None) -> None:
+    """Rebuild and cache a paper summary in the background."""
+    try:
+        account = SimpleNamespace(
+            id=account_id,
+            name=account_name,
+            paper_balances=paper_balances,
+        )
+        summary = await _build_live_paper_account_value_summary(account)
+        await api_cache.set(_summary_cache_key(account_id), summary, SUMMARY_CACHE_TTL_SECONDS)
+    except Exception:
+        logger.warning("Background paper summary refresh failed for account %s", account_id, exc_info=True)
+    finally:
+        with _refresh_lock:
+            _refresh_in_flight.discard(account_id)
 
 
 async def _get_asset_usd_value(
