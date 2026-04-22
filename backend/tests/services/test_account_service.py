@@ -418,11 +418,11 @@ class TestBuildPaperPortfolio:
         account.paper_balances = json.dumps({"BTC": 0.5, "USD": 25000.0})
 
         with patch(
-            "app.coinbase_api.public_market_data.get_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new_callable=AsyncMock,
             return_value=100000.0,
         ), patch(
-            "app.coinbase_api.public_market_data.get_current_price",
+            "app.services.paper_valuation_service.get_public_price",
             new_callable=AsyncMock,
             return_value=0.0,
         ):
@@ -440,11 +440,11 @@ class TestBuildPaperPortfolio:
         account.paper_balances = None
 
         with patch(
-            "app.coinbase_api.public_market_data.get_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new_callable=AsyncMock,
             return_value=100000.0,
         ), patch(
-            "app.coinbase_api.public_market_data.get_current_price",
+            "app.services.paper_valuation_service.get_public_price",
             new_callable=AsyncMock,
             return_value=0.0,
         ):
@@ -461,11 +461,11 @@ class TestBuildPaperPortfolio:
         account.paper_balances = json.dumps({"USDC": 5000.0})
 
         with patch(
-            "app.coinbase_api.public_market_data.get_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new_callable=AsyncMock,
             return_value=100000.0,
         ), patch(
-            "app.coinbase_api.public_market_data.get_current_price",
+            "app.services.paper_valuation_service.get_public_price",
             new_callable=AsyncMock,
             return_value=0.0,
         ):
@@ -483,11 +483,11 @@ class TestBuildPaperPortfolio:
         account.paper_balances = json.dumps({"BTC": 0.5, "USD": 10000.0, "USDC": 5000.0})
 
         with patch(
-            "app.coinbase_api.public_market_data.get_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new_callable=AsyncMock,
             return_value=100000.0,
         ), patch(
-            "app.coinbase_api.public_market_data.get_current_price",
+            "app.services.paper_valuation_service.get_public_price",
             new_callable=AsyncMock,
             return_value=0.0,
         ):
@@ -495,3 +495,69 @@ class TestBuildPaperPortfolio:
 
         total_pct = sum(h["percentage"] for h in result["holdings"])
         assert total_pct == pytest.approx(100.0)
+
+    @pytest.mark.asyncio
+    async def test_portfolio_totals_match_summary_totals_under_mocked_pricing(self):
+        """Happy path: paper portfolio totals match the summary-service totals."""
+        from app.services.account_value_summary_service import _build_live_paper_account_value_summary
+
+        account = MagicMock()
+        account.id = 7
+        account.name = "Demo Paper"
+        account.paper_balances = json.dumps({
+            "BTC": 0.25,
+            "ETH": 2.0,
+            "SOL": 10.0,
+            "USDC": 500.0,
+        })
+
+        async def fake_price(product_id: str):
+            prices = {
+                "ETH-USD": 3000.0,
+                "SOL-USD": 150.0,
+            }
+            return prices[product_id]
+
+        with patch(
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
+            new=AsyncMock(return_value=100000.0),
+        ), patch(
+            "app.services.paper_valuation_service.get_public_price",
+            new=AsyncMock(side_effect=fake_price),
+        ):
+            portfolio = await _build_paper_portfolio(account)
+            summary = await _build_live_paper_account_value_summary(account)
+
+        assert portfolio["total_usd_value"] == pytest.approx(summary["total_usd_value"])
+        assert portfolio["total_btc_value"] == pytest.approx(summary["total_btc_value"])
+
+    @pytest.mark.asyncio
+    async def test_uses_bounded_concurrency_for_altcoin_price_fetches(self):
+        """Edge case: paper portfolio repricing fans out concurrently but stays capped."""
+        account = MagicMock()
+        account.paper_balances = json.dumps({f"COIN{i}": 1.0 for i in range(12)})
+
+        in_flight = 0
+        max_in_flight = 0
+
+        async def fake_price(product_id: str):
+            nonlocal in_flight, max_in_flight
+            if product_id == "BTC-USD":
+                return 100000.0
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await __import__("asyncio").sleep(0.01)
+            in_flight -= 1
+            return 10.0
+
+        with patch(
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
+            new=AsyncMock(return_value=100000.0),
+        ), patch(
+            "app.services.paper_valuation_service.get_public_price",
+            new=AsyncMock(side_effect=fake_price),
+        ):
+            result = await _build_paper_portfolio(account)
+
+        assert result["holdings_count"] == 12
+        assert 1 < max_in_flight <= 5

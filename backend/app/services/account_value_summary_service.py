@@ -7,7 +7,6 @@ cached live summary or the most recent snapshot so first login stays fast.
 """
 
 import asyncio
-import json
 import logging
 import threading
 from datetime import datetime
@@ -19,19 +18,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import api_cache
-from app.coinbase_api.public_market_data import (
-    get_btc_usd_price as get_public_btc_usd_price,
-    get_current_price as get_public_price,
-)
 from app.models import Account, AccountValueSnapshot, User
 from app.services.account_access import accessible_accounts_filter
 from app.services.account_service import get_portfolio_for_account
+from app.services.paper_valuation_service import build_paper_holdings_and_totals
 
 logger = logging.getLogger(__name__)
 
 SUMMARY_CACHE_TTL_SECONDS = 60
-PAPER_PRICE_CONCURRENCY = 5
-_STABLES = {"USD", "USDC", "USDT"}
 _refresh_lock = threading.Lock()
 _refresh_in_flight: set[int] = set()
 
@@ -139,76 +133,16 @@ async def _refresh_paper_summary_cache(account_id: int, account_name: str, paper
             _refresh_in_flight.discard(account_id)
 
 
-async def _get_asset_usd_value(
-    currency: str,
-    amount: float,
-    btc_usd_price: float,
-    semaphore: asyncio.Semaphore,
-) -> tuple[float, float]:
-    """Return (usd_value, btc_value) for a paper balance."""
-    if amount <= 0:
-        return 0.0, 0.0
-
-    if currency == "BTC":
-        usd_value = amount * btc_usd_price
-        return usd_value, amount
-
-    if currency == "ETH":
-        async with semaphore:
-            eth_usd = await get_public_price("ETH-USD")
-        usd_value = amount * eth_usd
-        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0.0
-        return usd_value, btc_value
-
-    if currency in _STABLES:
-        btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0.0
-        return amount, btc_value
-
-    try:
-        async with semaphore:
-            usd_price = await get_public_price(f"{currency}-USD")
-        usd_value = amount * usd_price
-        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0.0
-        return usd_value, btc_value
-    except Exception:
-        pass
-
-    try:
-        async with semaphore:
-            btc_price = await get_public_price(f"{currency}-BTC")
-        btc_value = amount * btc_price
-        usd_value = btc_value * btc_usd_price
-        return usd_value, btc_value
-    except Exception:
-        return 0.0, 0.0
-
-
 async def _build_live_paper_account_value_summary(account: Account) -> Dict[str, Any]:
     """Compute a live total for a paper account with bounded price-fetch concurrency."""
-    if account.paper_balances:
-        balances = json.loads(account.paper_balances)
-    else:
-        balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
-
-    btc_usd_price = await get_public_btc_usd_price()
-    semaphore = asyncio.Semaphore(PAPER_PRICE_CONCURRENCY)
-
-    tasks = [
-        _get_asset_usd_value(currency, float(amount or 0.0), btc_usd_price, semaphore)
-        for currency, amount in balances.items()
-        if float(amount or 0.0) > 0
-    ]
-    values = await asyncio.gather(*tasks) if tasks else []
-
-    total_usd_value = sum(usd for usd, _ in values)
-    total_btc_value = sum(btc for _, btc in values)
+    valuation = await build_paper_holdings_and_totals(account)
 
     return {
         "account_id": account.id,
         "account_name": account.name,
-        "total_usd_value": total_usd_value,
-        "total_btc_value": total_btc_value,
-        "btc_usd_price": btc_usd_price,
+        "total_usd_value": valuation["total_usd_value"],
+        "total_btc_value": valuation["total_btc_value"],
+        "btc_usd_price": valuation["btc_usd_price"],
         "as_of": datetime.utcnow().isoformat(),
         "is_stale": False,
         "is_refreshing": False,

@@ -177,10 +177,10 @@ class TestBuildLivePaperAccountValueSummary:
             return 10.0
 
         with patch(
-            "app.services.account_value_summary_service.get_public_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new=AsyncMock(return_value=100000.0),
         ), patch(
-            "app.services.account_value_summary_service.get_public_price",
+            "app.services.paper_valuation_service.get_public_price",
             new=AsyncMock(side_effect=fake_price),
         ):
             result = await _build_live_paper_account_value_summary(account)
@@ -204,10 +204,10 @@ class TestBuildLivePaperAccountValueSummary:
             raise ValueError(f"{product_id} not found (negative cached)")
 
         with patch(
-            "app.services.account_value_summary_service.get_public_btc_usd_price",
+            "app.services.paper_valuation_service.get_public_btc_usd_price",
             new=AsyncMock(return_value=100000.0),
         ), patch(
-            "app.services.account_value_summary_service.get_public_price",
+            "app.services.paper_valuation_service.get_public_price",
             new=AsyncMock(side_effect=fake_price),
         ):
             result = await _build_live_paper_account_value_summary(account)
