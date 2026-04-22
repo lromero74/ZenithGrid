@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.163.2] - 2026-04-22
+
+### Changed
+- **Test coverage sweep for five historically-thin modules** — 80 new tests (1,735 lines) added across `multi_bot_monitor.py` (0% → 67% line coverage; 17 new tests covering cache cleanup, active-bot filtering, rebalancer-group logic, status reporting, pair-category filtering, and per-bot processing), `sources_router.py` (→ 96%; 11 new tests covering subscribed-source listing, dedup on custom-source add, and helper utilities), `blacklist_router.py` (→ 98%; 17 new tests covering AI provider settings, single-add, reason updates, blacklist checks, tenant isolation, user-override edge cases, and category settings shape), `accounts_query_router.py` (→ 82%) + `accounts_mutation_router.py` (→ 80%; 13 new tests covering default-account selection, perps portfolio status, and dust-sweep settings/execution — the Phase-5.3 split is now fully exercised), and `news_router.py` (44% → 75%; 22 new tests covering article image serving with path-traversal defense, cache stats/cleanup, video sources/feeds, article content, fallbacks, and DB-backed video retrieval). All 256 tests in these files pass, flake8 is clean, and no production code was modified. Remaining gaps are PostgreSQL-dialect-only SQL paths (not reachable from SQLite tests) and time-dependent asyncio scheduler loops that need a fuller orchestration harness.
+
 ## [v2.163.1] - 2026-04-22
 
 ### Changed

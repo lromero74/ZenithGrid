@@ -436,3 +436,352 @@ class TestTriggerAIReview:
         with pytest.raises(HTTPException) as exc_info:
             await trigger_ai_review(current_user=admin_user)
         assert exc_info.value.status_code == 500
+
+
+# =============================================================================
+# AI Provider Settings
+# =============================================================================
+
+
+class TestAIProviderSettings:
+    """Tests for get/update AI provider settings (coin review)."""
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.blacklist_router.get_configured_ai_providers",
+        return_value=["claude", "openai"],
+    )
+    @patch(
+        "app.routers.blacklist_router.get_ai_review_provider",
+        new_callable=AsyncMock,
+        return_value="claude",
+    )
+    async def test_get_ai_provider_returns_configured(
+        self, mock_get_prov, mock_configured, db_session, test_user,
+    ):
+        """Happy path: returns configured provider + list of available."""
+        from app.routers.blacklist_router import get_ai_provider_setting
+        result = await get_ai_provider_setting(db=db_session, current_user=test_user)
+        assert result.provider == "claude"
+        assert "claude" in result.available_providers
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.blacklist_router.get_configured_ai_providers",
+        return_value=["openai"],
+    )
+    @patch(
+        "app.routers.blacklist_router.get_ai_review_provider",
+        new_callable=AsyncMock,
+        return_value="claude",
+    )
+    async def test_get_ai_provider_falls_back_when_not_configured(
+        self, mock_get_prov, mock_configured, db_session, test_user,
+    ):
+        """Edge case: current provider missing → fall back to first configured."""
+        from app.routers.blacklist_router import get_ai_provider_setting
+        result = await get_ai_provider_setting(db=db_session, current_user=test_user)
+        assert result.provider == "openai"
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.blacklist_router.get_configured_ai_providers",
+        return_value=["claude", "openai"],
+    )
+    async def test_update_ai_provider_success(
+        self, mock_configured, db_session, admin_user,
+    ):
+        """Happy path: admin updates AI provider to a configured one."""
+        from app.routers.blacklist_router import (
+            update_ai_provider_setting, AIProviderSettingsRequest,
+        )
+        request = AIProviderSettingsRequest(provider="openai")
+        result = await update_ai_provider_setting(
+            request=request, db=db_session, current_user=admin_user,
+        )
+        assert result.provider == "openai"
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.blacklist_router.get_configured_ai_providers",
+        return_value=["claude"],
+    )
+    async def test_update_ai_provider_unconfigured_raises_400(
+        self, mock_configured, db_session, admin_user,
+    ):
+        """Failure case: unconfigured provider raises 400."""
+        from app.routers.blacklist_router import (
+            update_ai_provider_setting, AIProviderSettingsRequest,
+        )
+        request = AIProviderSettingsRequest(provider="nonexistent")
+        with pytest.raises(HTTPException) as exc_info:
+            await update_ai_provider_setting(
+                request=request, db=db_session, current_user=admin_user,
+            )
+        assert exc_info.value.status_code == 400
+
+
+# =============================================================================
+# add_single_to_blacklist
+# =============================================================================
+
+
+class TestAddSingleToBlacklist:
+    """Tests for add_single_to_blacklist endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_add_single_success(self, db_session, admin_user):
+        """Happy path: adds one coin with its own reason."""
+        from app.routers.blacklist_router import (
+            add_single_to_blacklist, BlacklistAddSingleRequest,
+        )
+        request = BlacklistAddSingleRequest(
+            symbol="LTC", reason="[APPROVED] Solid coin",
+        )
+        result = await add_single_to_blacklist(
+            request=request, db=db_session, current_user=admin_user,
+        )
+        assert result.symbol == "LTC"
+        assert "[APPROVED]" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_add_single_empty_symbol_raises_400(
+        self, db_session, admin_user,
+    ):
+        """Failure case: empty symbol raises 400."""
+        from app.routers.blacklist_router import (
+            add_single_to_blacklist, BlacklistAddSingleRequest,
+        )
+        request = BlacklistAddSingleRequest(symbol="   ", reason="Blank")
+        with pytest.raises(HTTPException) as exc_info:
+            await add_single_to_blacklist(
+                request=request, db=db_session, current_user=admin_user,
+            )
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_add_single_duplicate_raises_409(
+        self, db_session, admin_user, global_blacklist_entry,
+    ):
+        """Failure case: adding existing global entry raises 409."""
+        from app.routers.blacklist_router import (
+            add_single_to_blacklist, BlacklistAddSingleRequest,
+        )
+        request = BlacklistAddSingleRequest(symbol="DOGE", reason="[MEME] dup")
+        with pytest.raises(HTTPException) as exc_info:
+            await add_single_to_blacklist(
+                request=request, db=db_session, current_user=admin_user,
+            )
+        assert exc_info.value.status_code == 409
+
+
+# =============================================================================
+# update_blacklist_reason
+# =============================================================================
+
+
+class TestUpdateBlacklistReason:
+    """Tests for update_blacklist_reason endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_update_reason_success(
+        self, db_session, admin_user, global_blacklist_entry,
+    ):
+        """Happy path: admin updates the category/reason text."""
+        from app.routers.blacklist_router import (
+            update_blacklist_reason, BlacklistUpdateRequest,
+        )
+        request = BlacklistUpdateRequest(reason="[APPROVED] Reversed decision")
+        result = await update_blacklist_reason(
+            symbol="DOGE", request=request,
+            db=db_session, current_user=admin_user,
+        )
+        assert result.reason == "[APPROVED] Reversed decision"
+
+    @pytest.mark.asyncio
+    async def test_update_reason_not_found_raises_404(
+        self, db_session, admin_user,
+    ):
+        """Failure case: non-existent symbol raises 404."""
+        from app.routers.blacklist_router import (
+            update_blacklist_reason, BlacklistUpdateRequest,
+        )
+        request = BlacklistUpdateRequest(reason="[APPROVED] New")
+        with pytest.raises(HTTPException) as exc_info:
+            await update_blacklist_reason(
+                symbol="UNKNOWN", request=request,
+                db=db_session, current_user=admin_user,
+            )
+        assert exc_info.value.status_code == 404
+
+
+# =============================================================================
+# check_if_blacklisted
+# =============================================================================
+
+
+class TestCheckIfBlacklisted:
+    """Tests for check_if_blacklisted endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_check_returns_category_for_entry(
+        self, db_session, test_user, global_blacklist_entry,
+    ):
+        """Happy path: categorized coin returns its category."""
+        from app.routers.blacklist_router import check_if_blacklisted
+        result = await check_if_blacklisted(
+            symbol="doge", db=db_session, current_user=test_user,
+        )
+        assert result["is_categorized"] is True
+        assert result["category"] == "QUESTIONABLE"
+        assert result["symbol"] == "DOGE"
+
+    @pytest.mark.asyncio
+    async def test_check_uncategorized_returns_false(
+        self, db_session, test_user,
+    ):
+        """Edge case: uncategorized coin returns is_categorized=False, category=None."""
+        from app.routers.blacklist_router import check_if_blacklisted
+        result = await check_if_blacklisted(
+            symbol="XYZ", db=db_session, current_user=test_user,
+        )
+        assert result["is_categorized"] is False
+        assert result["category"] is None
+
+    @pytest.mark.asyncio
+    async def test_check_reason_without_prefix_is_blacklisted(
+        self, db_session, test_user,
+    ):
+        """Edge case: entry with unprefixed reason defaults to BLACKLISTED."""
+        entry = BlacklistedCoin(
+            symbol="BAD", reason="just a plain reason",
+            user_id=None, created_at=datetime.utcnow(),
+        )
+        db_session.add(entry)
+        await db_session.flush()
+
+        from app.routers.blacklist_router import check_if_blacklisted
+        result = await check_if_blacklisted(
+            symbol="BAD", db=db_session, current_user=test_user,
+        )
+        assert result["is_categorized"] is True
+        assert result["category"] == "BLACKLISTED"
+
+
+# =============================================================================
+# Tenant Isolation — list_blacklisted_coins with account_id
+# =============================================================================
+
+
+class TestListBlacklistedCoinsTenantIsolation:
+    """Tests for account-scoped blacklist visibility and access control."""
+
+    @pytest.mark.asyncio
+    async def test_list_account_id_not_found_raises_404(
+        self, db_session, test_user,
+    ):
+        """Failure case: non-existent account_id raises 404."""
+        from app.routers.blacklist_router import list_blacklisted_coins
+        with pytest.raises(HTTPException) as exc_info:
+            await list_blacklisted_coins(
+                db=db_session, current_user=test_user, account_id=9999,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_list_non_member_raises_403(
+        self, db_session, test_user,
+    ):
+        """Failure case: user is not owner and not member of the account → 403."""
+        # Create another user's account
+        from app.models import Account
+        other_user = User(
+            id=42, email="other@test.com",
+            hashed_password="x", is_active=True,
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        acct = Account(
+            id=500, user_id=other_user.id, name="Other's Account",
+            type="cex", is_active=True,
+        )
+        db_session.add(acct)
+        await db_session.flush()
+
+        from app.routers.blacklist_router import list_blacklisted_coins
+        with pytest.raises(HTTPException) as exc_info:
+            await list_blacklisted_coins(
+                db=db_session, current_user=test_user, account_id=acct.id,
+            )
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_list_owner_sees_own_overrides_via_account_id(
+        self, db_session, test_user, global_blacklist_entry,
+    ):
+        """Happy path: passing your own account_id shows your overrides (not errored)."""
+        from app.models import Account
+        acct = Account(
+            id=600, user_id=test_user.id, name="My Account",
+            type="cex", is_active=True,
+        )
+        db_session.add(acct)
+        # Create user override on DOGE
+        override = BlacklistedCoin(
+            symbol="DOGE", reason="[APPROVED] Ownr override",
+            user_id=test_user.id, created_at=datetime.utcnow(),
+        )
+        db_session.add(override)
+        await db_session.flush()
+
+        from app.routers.blacklist_router import list_blacklisted_coins
+        result = await list_blacklisted_coins(
+            db=db_session, current_user=test_user, account_id=acct.id,
+        )
+        assert len(result) == 1
+        assert result[0].user_override_category == "APPROVED"
+
+
+# =============================================================================
+# remove_user_override edge cases
+# =============================================================================
+
+
+class TestRemoveUserOverrideEdgeCases:
+    """Additional edge cases for remove_user_override."""
+
+    @pytest.mark.asyncio
+    async def test_remove_normalizes_symbol_casing(
+        self, db_session, test_user, user_override,
+    ):
+        """Edge case: lowercase input is normalized to match stored override."""
+        from app.routers.blacklist_router import remove_user_override
+        result = await remove_user_override(
+            symbol="shib", db=db_session, current_user=test_user,
+        )
+        assert "removed" in result["message"].lower()
+
+
+# =============================================================================
+# get_category_settings shape
+# =============================================================================
+
+
+class TestGetCategorySettingsShape:
+    """Tests for the shape of get_category_settings response."""
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.blacklist_router.get_allowed_categories",
+        new_callable=AsyncMock,
+        return_value=[],
+    )
+    async def test_empty_allowed_categories_still_has_full_list(
+        self, mock_cats, db_session, test_user,
+    ):
+        """Edge case: empty allowed_categories still returns all known categories."""
+        from app.routers.blacklist_router import get_category_settings
+        result = await get_category_settings(db=db_session, current_user=test_user)
+        assert result.allowed_categories == []
+        assert len(result.all_categories) > 0
+        assert "APPROVED" in result.all_categories
