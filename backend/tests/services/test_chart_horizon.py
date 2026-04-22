@@ -348,7 +348,7 @@ class TestMinimapSVG:
 
     def test_minimap_svg_rendered_when_enabled(self):
         """_build_minimap_svg returns SVG content with minimap class."""
-        from app.services.report_generator_service.html_builder import (
+        from app.services.report_generator_service.html_charts import (
             _build_minimap_svg,
         )
 
@@ -374,7 +374,7 @@ class TestMinimapSVG:
 
     def test_minimap_not_rendered_when_insufficient_data(self):
         """With fewer than 2 data points, minimap returns empty string."""
-        from app.services.report_generator_service.html_builder import (
+        from app.services.report_generator_service.html_charts import (
             _build_minimap_svg,
         )
 
@@ -391,7 +391,7 @@ class TestMinimapSVG:
 
     def test_minimap_viewport_box_present(self):
         """Minimap SVG should contain a viewport rectangle."""
-        from app.services.report_generator_service.html_builder import (
+        from app.services.report_generator_service.html_charts import (
             _build_minimap_svg,
         )
 

@@ -2,7 +2,8 @@
 Report Generator Service
 
 Split into focused modules:
-- html_builder: HTML report generation, charts, AI summaries
+- html_builder: HTML report generation, AI summaries, metrics, goals
+- html_charts: SVG trend chart + minimap rendering
 - expense_schedule: Date math + lookahead helpers for expense goal cards
 - expense_sections: HTML section builders (coverage, changes, savings)
 - expense_card: Expense goal card header + tab assembly
@@ -20,11 +21,14 @@ from app.services.report_generator_service.html_builder import (  # noqa: F401
     _build_standard_goal_card,
     _build_tabbed_ai_section,
     _build_transfers_section,
-    _build_trend_chart_svg,
-    _format_chart_value,
     _md_to_styled_html,
     _normalize_ai_summary,
     _transfer_label,
+)
+from app.services.report_generator_service.html_charts import (  # noqa: F401
+    _build_minimap_svg,
+    _build_trend_chart_svg,
+    _format_chart_value,
 )
 from app.services.report_generator_service.chart_renderer import (  # noqa: F401
     _render_trend_chart_png,

@@ -52,7 +52,7 @@ def _build_expense_card_header(
 
     trend_data = g.get("trend_data")
     if trend_data:
-        from app.services.report_generator_service.html_builder import (
+        from app.services.report_generator_service.html_charts import (
             _build_trend_chart_svg,
         )
         from app.services.report_generator_service.chart_renderer import (
@@ -80,7 +80,7 @@ def _build_expense_card_header(
     chart_settings = g.get("chart_settings", {})
     if chart_settings.get("show_minimap") and trend_data:
         try:
-            from app.services.report_generator_service.html_builder import (
+            from app.services.report_generator_service.html_charts import (
                 _build_minimap_svg,
             )
             minimap_html = _build_minimap_svg(
