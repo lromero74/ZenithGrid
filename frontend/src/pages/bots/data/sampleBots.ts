@@ -822,4 +822,99 @@ export const SAMPLE_BOTS: SampleBot[] = [
       },
     },
   },
+  {
+    // High-risk "2x in 24h" catalyst hunter — opts into the account-level
+    // speculative bucket (is_speculative tag) and flips the AI indicator
+    // into catalyst mode. The backend's preset-merger fills any fields
+    // missing here on save, so this sample only spells out the ones the
+    // user benefits from seeing in the form at preview time.
+    // See PRPs/high-risk-doubling-preset.md.
+    id: 'speculative-catalyst-usd',
+    name: 'Speculative Catalyst Hunter (USD)',
+    description: 'HIGH RISK — hunts 2x-in-a-day catalysts on microcap and midcap USD pairs. Historical win rate under 20%; typical losers close near −12%. Requires a Speculative Allocation on the account (Settings → Speculative Bucket); all speculative bots on the account share one cost-basis cap.',
+    market: 'USD',
+    strategy_type: 'indicator_based',
+    pairCount: 'all',
+    selectAllMarket: 'USD',
+    formData: {
+      name: 'Speculative Catalyst Hunter (USD)',
+      description: 'Catalyst-mode AI entry across all USD pairs with asymmetric-upside bracket (tight SL, trailing TP, 24h max hold). Shares an account-level bucket.',
+      market_type: 'spot',
+      strategy_type: 'indicator_based',
+      product_id: 'BTC-USD',
+      product_ids: [],  // Resolved at copy time via selectAllMarket
+      split_budget_across_pairs: true,
+      reserved_btc_balance: 0,
+      reserved_usd_balance: 0,
+      // Budget stays modest — the account-level bucket is the real cap,
+      // and catalyst hunts chase asymmetric upside, not size.
+      budget_percentage: 10,
+      check_interval_seconds: 900,
+      exchange_type: 'cex',
+      strategy_config: {
+        // Tags this bot into the shared speculative bucket AND merges the
+        // full preset's discipline defaults on save.
+        ai_risk_preset: 'speculative',
+        is_speculative: 'true',
+        speculative_mode: true,
+        target_multiple: 2.0,
+        target_horizon_hours: 24,
+        // Exit bracket — matches RISK_PRESETS["speculative"] in the backend.
+        take_profit_percentage: 25,
+        take_profit_mode: 'fixed',
+        trailing_take_profit: true,
+        trailing_tp_deviation: 5,
+        stop_loss_enabled: true,
+        stop_loss_percentage: -12,
+        max_safety_orders: 0,  // No averaging down — bracket discipline
+        speculative_max_hold_hours: 24,
+        // AI entry condition — catalyst-mode is triggered because
+        // speculative_mode flows into the ai_spot_opinion indicator.
+        base_order_conditions: {
+          groups: [{
+            id: 'sample_spec_buy',
+            conditions: [{
+              id: 'sample_spec_ai',
+              type: 'ai_opinion',
+              operator: 'equal',
+              value: 'buy',
+              timeframe: 'FIFTEEN_MINUTE',
+              negate: false,
+              risk_preset: 'speculative',
+              ai_provider: 'claude',
+            }],
+            logic: 'and',
+          }],
+          groupLogic: 'and',
+        },
+        safety_order_conditions: { groups: [], groupLogic: 'and' },
+        take_profit_conditions: { groups: [], groupLogic: 'and' },
+        // Tiny fixed base order — users can scale up after real outcomes.
+        base_order_type: 'fixed',
+        base_order_fixed: 20,  // $20 per catalyst hunt
+        safety_order_type: 'fixed',
+        safety_order_fixed: 0,
+        take_profit_order_type: 'market',
+        // Prefilter overrides welcome already-up setups while blocking
+        // crashers and too-late entries.
+        prefilter_max_drop_24h: 10.0,
+        prefilter_max_gain_24h: 50.0,
+        prefilter_min_gain_24h: -10.0,
+        prefilter_volume_min_ratio: 1.5,
+        prefilter_rsi_max: 85,
+        max_concurrent_deals: 3,
+        max_simultaneous_same_pair: 1,
+        ai_model: 'claude',
+        ai_timeframe: '15m',
+        ai_min_confidence: 70,
+        enable_buy_prefilter: true,
+        auto_add_new_pairs: true,
+        allowed_categories: ['APPROVED', 'BORDERLINE'],
+        slippage_guard: true,
+        max_buy_slippage_pct: 0.5,
+        max_sell_slippage_pct: 0.5,
+        simulate_slippage: true,
+      },
+    },
+  },
 ]
