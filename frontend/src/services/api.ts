@@ -214,7 +214,7 @@ export const positionsApi = {
   getAILogs: (id: number, includeBeforeOpen = true) =>
     api.get<AIBotLog[]>(`/positions/${id}/ai-logs`, { params: { include_before_open: includeBeforeOpen } }).then((res) => res.data),
   getAIOpinion: (id: number) =>
-    api.get<AIOpinionLog>(`/positions/${id}/ai-opinion`).then((res) => res.data),
+    api.get<AIOpinionLog | null>(`/positions/${id}/ai-opinion`).then((res) => res.data),
   close: (id: number, skipSlippageGuard = false) =>
     api.post<{
       message?: string; profit_quote?: number; profit_percentage?: number;

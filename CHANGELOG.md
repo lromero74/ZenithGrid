@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.5] - 2026-04-22
+
+### Fixed
+- **Positions page no longer spams the browser console with AI-opinion 404s** — The Positions page renders an "AI reasoning" expander for every row, which pre-fetches `GET /api/positions/{id}/ai-opinion` on mount so the widget can hide itself when no tool-use detail exists. For the common case of a freshly opened position with no opinion logged yet, the endpoint was raising `HTTPException(404, "No AI opinion logged for this position")`. The React component already swallowed the error in UI, but browsers still log every 4xx response to the devtools console — opening Positions with 20+ rows produced a wall of red "404 (Not Found)" entries. A missing opinion is a legitimate "no data" case, not a "not found" case. The endpoint now returns `200` with a `null` body when no opinion exists, and only returns `404` for the actual not-found cases (nonexistent position, or a position on an account the caller cannot access). No user-visible change on the page itself; the devtools console just stays quiet.
+
 ## [v2.164.4] - 2026-04-22
 
 ### Changed

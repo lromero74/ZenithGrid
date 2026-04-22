@@ -63,11 +63,15 @@ describe('AIReasoningExpander', () => {
     await waitFor(() => expect(container.firstChild).toBeNull())
   })
 
-  it('renders nothing on 404 (no opinion logged yet)', async () => {
-    mockGetAIOpinion.mockRejectedValue({
-      isAxiosError: true,
-      response: { status: 404 },
-    })
+  it('renders nothing when the endpoint returns null (no opinion logged yet)', async () => {
+    mockGetAIOpinion.mockResolvedValue(null)
+    const { container } = render(<AIReasoningExpander positionId={42} />)
+    await waitFor(() => expect(mockGetAIOpinion).toHaveBeenCalled())
+    await waitFor(() => expect(container.firstChild).toBeNull())
+  })
+
+  it('renders nothing when the fetch rejects (network error, etc.)', async () => {
+    mockGetAIOpinion.mockRejectedValue(new Error('network down'))
     const { container } = render(<AIReasoningExpander positionId={42} />)
     await waitFor(() => expect(mockGetAIOpinion).toHaveBeenCalled())
     await waitFor(() => expect(container.firstChild).toBeNull())

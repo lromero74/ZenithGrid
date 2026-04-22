@@ -638,20 +638,24 @@ class TestGetPositionAiOpinion:
         assert result.tool_calls[0]["name"] == "get_candle_window"
 
     @pytest.mark.asyncio
-    async def test_returns_404_when_no_opinion_logged(self, db_session):
-        """Edge: position exists but has no ai_opinion_log rows → 404."""
-        from fastapi import HTTPException
+    async def test_returns_none_when_no_opinion_logged(self, db_session):
+        """Edge: position exists but has no ai_opinion_log rows → returns None.
+
+        The Positions page renders the AI-reasoning expander for every row, so
+        a missing opinion is the common case. A 404 here would spam the
+        browser console; the endpoint returns null so React Query caches the
+        absence cleanly.
+        """
         from app.position_routers.position_query_router import get_position_ai_opinion
 
         user, account = await _create_user_with_account(db_session, "opinion2@test.com")
         bot = await _create_bot(db_session, user, account)
         pos = await _create_position(db_session, account, bot=bot)
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_position_ai_opinion(
-                position_id=pos.id, db=db_session, current_user=user,
-            )
-        assert exc_info.value.status_code == 404
+        result = await get_position_ai_opinion(
+            position_id=pos.id, db=db_session, current_user=user,
+        )
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_position_not_found_returns_404(self, db_session):

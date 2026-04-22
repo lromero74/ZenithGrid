@@ -724,14 +724,19 @@ async def get_position_ai_logs(
     return [AIBotLogResponse.model_validate(log) for log in logs]
 
 
-@router.get("/{position_id}/ai-opinion", response_model=AIOpinionLogResponse)
+@router.get("/{position_id}/ai-opinion", response_model=Optional[AIOpinionLogResponse])
 async def get_position_ai_opinion(
     position_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return the most recent AI opinion log for a position, including any
-    tool_calls the model issued (Phase E — tool-use transparency UI)."""
+    tool_calls the model issued (Phase E — tool-use transparency UI).
+
+    Returns `null` when the position has no opinion logged yet — the Positions
+    page renders this widget for every row, so a missing opinion is the
+    expected common case and should not surface as a 404 in the browser.
+    """
     user_account_ids = await accessible_account_ids(db, current_user.id)
 
     pos_query = select(Position).where(
@@ -750,6 +755,6 @@ async def get_position_ai_opinion(
     )
     opinion = (await db.execute(opinion_query)).scalars().first()
     if not opinion:
-        raise HTTPException(status_code=404, detail="No AI opinion logged for this position")
+        return None
 
     return AIOpinionLogResponse.model_validate(opinion)
