@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.3] - 2026-04-22
+
+### Changed
+- **Portfolio calculations deduplicated** — `portfolio_calculations.py` previously carried four near-identical helpers that shadowed four others: `_process_cex_holdings` (shadow of `_build_portfolio_holdings` without bot-held-position tracking), `_apply_unrealized_pnl` (shadow of `_compute_position_pnl` + the inline apply loop), `_calculate_balance_breakdown` (positional-arg shadow of the `BalanceBreakdownParams`-dataclass `_compute_balance_breakdown`), and `_calculate_realized_pnl` (dict-shaped shadow of the tuple-returning `_compute_closed_pnl`). The four shadows have been deleted. The aggregated cross-account portfolio view (`get_account_portfolio_data`) now uses the same four canonical helpers as the single-account view (`get_cex_portfolio`) so the two paths stay in lock-step. A tiny behavior improvement comes along for free: the aggregated view now tracks bot-held base-currency amounts when computing each holding's `available` figure (previously it used Coinbase's `available_to_trade_crypto` as-is, which doesn't know about our open bot positions). The inline "apply asset_pnl to holdings" loop that was duplicated in both callers was also factored into `_apply_asset_pnl_to_holdings`. 189 lines of duplicate code removed; 62 portfolio-adjacent tests still pass.
+
 ## [v2.164.2] - 2026-04-22
 
 ### Changed
