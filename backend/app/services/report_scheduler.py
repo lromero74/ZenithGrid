@@ -102,6 +102,108 @@ def _normalize_recipient(item) -> str:
     return str(item)
 
 
+async def _fetch_schedule_goals(
+    db: AsyncSession, schedule: "ReportSchedule", user_id: int,
+) -> list:
+    """Resolve the ReportGoal ORM rows linked to this schedule (user-scoped)."""
+    if not schedule.goal_links:
+        return []
+    goal_ids = [link.goal_id for link in schedule.goal_links]
+    if not goal_ids:
+        return []
+    result = await db.execute(
+        select(ReportGoal).where(
+            ReportGoal.id.in_(goal_ids),
+            ReportGoal.user_id == user_id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _attach_goal_trend_data(
+    db: AsyncSession,
+    schedule: "ReportSchedule",
+    goals: list,
+    report_data: dict,
+    period_days: int,
+) -> None:
+    """For each non-income goal, attach trend_data + chart_settings in-place."""
+    from app.services.goal_snapshot_service import (
+        backfill_goal_snapshots,
+        clip_trend_data,
+        compute_horizon_date,
+        get_goal_trend_data,
+    )
+
+    goal_orm_map = {g.id: g for g in goals}
+    sched_horizon = getattr(schedule, "chart_horizon", "auto") or "auto"
+    sched_mult = getattr(schedule, "chart_lookahead_multiplier", 1.0) or 1.0
+    show_minimap_default = getattr(schedule, "show_minimap", True)
+    if show_minimap_default is None:
+        show_minimap_default = True
+
+    for goal_dict in report_data.get("goals", []):
+        if goal_dict.get("target_type") in ("income",):
+            continue
+        gid = goal_dict.get("goal_id")
+        if not gid or gid not in goal_orm_map:
+            continue
+        try:
+            goal_orm = goal_orm_map[gid]
+            snap_count = await db.execute(
+                select(func.count(GoalProgressSnapshot.id))
+                .where(GoalProgressSnapshot.goal_id == gid)
+            )
+            if snap_count.scalar() == 0:
+                await backfill_goal_snapshots(db, goal_orm)
+            trend = await get_goal_trend_data(db, goal_orm)
+            goal_dict["trend_data"] = trend
+
+            target_date_str = goal_orm.target_date.strftime("%Y-%m-%d")
+            horizon_date = compute_horizon_date(
+                trend["data_points"], target_date_str, sched_horizon,
+                schedule_period_days=period_days,
+                lookahead_multiplier=sched_mult,
+            )
+
+            goal_dict["chart_settings"] = {
+                "horizon_date": horizon_date,
+                "show_minimap": show_minimap_default and horizon_date < target_date_str,
+                "target_date": target_date_str,
+                "full_data_points": trend["data_points"],
+            }
+
+            goal_dict["trend_data"] = clip_trend_data(trend, horizon_date)
+        except Exception as e:
+            logger.warning(f"Failed to fetch trend data for goal {gid}: {e}")
+
+
+async def _fetch_account_name(db: AsyncSession, account_id: Optional[int]) -> Optional[str]:
+    """Resolve account display name, or None if unset/missing."""
+    if not account_id:
+        return None
+    acct_result = await db.execute(
+        select(Account).where(Account.id == account_id)
+    )
+    acct = acct_result.scalar_one_or_none()
+    return acct.name if acct else None
+
+
+async def _advance_schedule_timing(
+    schedule: "ReportSchedule", db: AsyncSession,
+) -> None:
+    """Update last_run_at/next_run_at for an automated run."""
+    schedule.last_run_at = datetime.utcnow()
+    if schedule.schedule_type:
+        schedule.next_run_at = compute_next_run_flexible(
+            schedule, schedule.last_run_at,
+        )
+    else:
+        schedule.next_run_at = _compute_next_run_legacy(
+            schedule.periodicity, schedule.last_run_at,
+        )
+
+
 async def generate_report_for_schedule(
     db: AsyncSession,
     schedule: ReportSchedule,
@@ -144,17 +246,7 @@ async def generate_report_for_schedule(
     period_label = _format_period_label(period_start, period_end)
 
     # Get linked goals
-    goals = []
-    if schedule.goal_links:
-        goal_ids = [link.goal_id for link in schedule.goal_links]
-        if goal_ids:
-            result = await db.execute(
-                select(ReportGoal).where(
-                    ReportGoal.id.in_(goal_ids),
-                    ReportGoal.user_id == user.id,
-                )
-            )
-            goals = list(result.scalars().all())
+    goals = await _fetch_schedule_goals(db, schedule, user.id)
 
     # Gather report data
     report_data = await gather_report_data(
@@ -179,56 +271,7 @@ async def generate_report_for_schedule(
     }
 
     # Fetch trend data for non-income goals (for chart embedding)
-    from app.services.goal_snapshot_service import (
-        backfill_goal_snapshots,
-        clip_trend_data,
-        compute_horizon_date,
-        get_goal_trend_data,
-    )
-    goal_orm_map = {g.id: g for g in goals}
-    for goal_dict in report_data.get("goals", []):
-        if goal_dict.get("target_type") in ("income",):
-            continue
-        gid = goal_dict.get("goal_id")
-        if gid and gid in goal_orm_map:
-            try:
-                goal_orm = goal_orm_map[gid]
-                snap_count = await db.execute(
-                    select(func.count(GoalProgressSnapshot.id))
-                    .where(GoalProgressSnapshot.goal_id == gid)
-                )
-                if snap_count.scalar() == 0:
-                    await backfill_goal_snapshots(db, goal_orm)
-                trend = await get_goal_trend_data(db, goal_orm)
-                goal_dict["trend_data"] = trend
-
-                # Compute chart horizon using schedule-level settings
-                sched_horizon = getattr(schedule, "chart_horizon", "auto") or "auto"
-                sched_mult = getattr(schedule, "chart_lookahead_multiplier", 1.0) or 1.0
-                show_minimap = getattr(schedule, "show_minimap", True)
-                if show_minimap is None:
-                    show_minimap = True
-                target_date_str = goal_orm.target_date.strftime("%Y-%m-%d")
-
-                horizon_date = compute_horizon_date(
-                    trend["data_points"], target_date_str, sched_horizon,
-                    schedule_period_days=period_days,
-                    lookahead_multiplier=sched_mult,
-                )
-
-                goal_dict["chart_settings"] = {
-                    "horizon_date": horizon_date,
-                    "show_minimap": show_minimap and horizon_date < target_date_str,
-                    "target_date": target_date_str,
-                    "full_data_points": trend["data_points"],
-                }
-
-                # Clip main chart data to horizon
-                goal_dict["trend_data"] = clip_trend_data(trend, horizon_date)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to fetch trend data for goal {gid}: {e}"
-                )
+    await _attach_goal_trend_data(db, schedule, goals, report_data, period_days)
 
     # Get prior period data for comparison
     if schedule.id:
@@ -251,14 +294,7 @@ async def generate_report_for_schedule(
     user_name = user.display_name or user.email
 
     # Fetch account name for display in report header
-    account_name = None
-    if schedule.account_id:
-        acct_result = await db.execute(
-            select(Account).where(Account.id == schedule.account_id)
-        )
-        acct = acct_result.scalar_one_or_none()
-        if acct:
-            account_name = acct.name
+    account_name = await _fetch_account_name(db, schedule.account_id)
 
     sched_name = schedule.name if schedule else None
     html_content = build_report_html(BuildReportHtmlParams(
@@ -325,15 +361,7 @@ async def generate_report_for_schedule(
         # Only advance schedule timing for automated runs,
         # not ad-hoc/manual triggers
         if advance_schedule:
-            schedule.last_run_at = datetime.utcnow()
-            if schedule.schedule_type:
-                schedule.next_run_at = compute_next_run_flexible(
-                    schedule, schedule.last_run_at
-                )
-            else:
-                schedule.next_run_at = _compute_next_run_legacy(
-                    schedule.periodicity, schedule.last_run_at
-                )
+            await _advance_schedule_timing(schedule, db)
         await db.commit()
         await db.refresh(report)
 

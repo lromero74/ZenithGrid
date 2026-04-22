@@ -7,7 +7,7 @@ code-quality Phase 5.1.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select
 
@@ -30,6 +30,189 @@ from app.trading_engine.trade_context import TradeContext
 logger = logging.getLogger(__name__)
 
 
+async def _log_budget_blocker_if_applicable(
+    ctx: TradeContext, signal_data: Dict[str, Any],
+    position: Optional[Position], quote_amount: Optional[float],
+    quote_balance: float, buy_reason: str,
+    phase: str, trade_type: str,
+) -> None:
+    """Record a budget-blocker to indicator_logs + order_history (deduplicated).
+
+    No-op if buy_reason isn't a budget/insufficient message.
+    """
+    reason_lower = (buy_reason or "").lower()
+    if "insufficient" not in reason_lower and "budget" not in reason_lower:
+        return
+
+    db, bot = ctx.db, ctx.bot
+    product_id, current_price = ctx.product_id, ctx.current_price
+
+    await log_indicator_evaluation(
+        db=db,
+        bot_id=bot.id,
+        product_id=product_id,
+        phase=phase,
+        conditions_met=False,
+        conditions_detail=[{
+            "type": "budget",
+            "indicator": "Available Balance",
+            "operator": "sufficient_for",
+            "threshold": quote_amount if quote_amount else 0,
+            "actual_value": quote_balance,
+            "result": False,
+            "reason": buy_reason,
+        }],
+        indicators_snapshot=signal_data.get("indicators", {}),
+        current_price=current_price,
+    )
+
+    is_dup = await _is_duplicate_failed_order(
+        db, bot.id, product_id, trade_type, buy_reason, position,
+    )
+    if not is_dup:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="BUY", order_type="MARKET",
+                trade_type=trade_type, quote_amount=0.0,
+                price=current_price, status="failed",
+                error_message=buy_reason,
+            ),
+        )
+        await db.commit()
+
+
+async def _run_new_position_preflight(
+    ctx: TradeContext, aggregate_value: Optional[float],
+    open_positions_count: Optional[int],
+) -> Tuple[bool, str, Optional[int]]:
+    """Preflight checks for opening a NEW position.
+
+    Runs stable-pair guard, soft-ceiling / max-concurrent-deals, and
+    per-pair deal-cooldown. Returns (blocked, reason, open_positions_count).
+    When blocked=True, reason is populated and the caller should skip the buy.
+    """
+    db, bot, strategy = ctx.db, ctx.bot, ctx.strategy
+    product_id = ctx.product_id
+
+    # Skip stable/pegged pairs (layer-2 safety check)
+    skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
+    if skip_stable:
+        from app.services.delisted_pair_monitor import is_stable_pair
+        if is_stable_pair(product_id):
+            return True, f"{product_id} is a stable/pegged pair (skipped)", open_positions_count
+
+    if open_positions_count is None:
+        open_positions_count = await get_open_positions_count(db, bot)
+
+    max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
+
+    # Persist the computed value so the bot list can display it
+    if bot.strategy_config.get("enable_soft_ceiling", False):
+        bot.soft_ceiling_effective_max = max_deals
+        await db.commit()
+
+    logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
+
+    if open_positions_count >= max_deals:
+        ceiling_type = (
+            "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
+            else "Max concurrent deals"
+        )
+        reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
+        logger.debug(f"Should buy: FALSE - {reason}")
+        return True, reason, open_positions_count
+
+    deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
+    if deal_cooldown > 0:
+        cooldown_cutoff = datetime.utcnow() - timedelta(seconds=deal_cooldown)
+        recent_close_query = select(Position).where(
+            Position.bot_id == bot.id,
+            Position.product_id == product_id,
+            Position.status == "closed",
+            Position.closed_at >= cooldown_cutoff,
+        )
+        recent_result = await db.execute(recent_close_query)
+        recently_closed = recent_result.scalars().first()
+        if recently_closed:
+            elapsed = (datetime.utcnow() - recently_closed.closed_at).total_seconds()
+            remaining = deal_cooldown - elapsed
+            reason = f"Deal cooldown active for {product_id} ({int(remaining)}s remaining)"
+            logger.debug(f"Should buy: FALSE - {reason}")
+            logger.info(f"  ⏳ {reason}")
+            return True, reason, open_positions_count
+
+    return False, "", open_positions_count
+
+
+async def _evaluate_blacklist_category(
+    ctx: TradeContext,
+) -> Tuple[bool, str, str]:
+    """Look up the base symbol's blacklist entry and decide allow/deny.
+
+    Returns (allowed, category, reason). If no entry exists, allowed=True
+    with empty category/reason. If blocked, allowed=False and reason
+    contains the user-facing explanation.
+    """
+    from sqlalchemy import or_
+
+    db, bot = ctx.db, ctx.bot
+    product_id = ctx.product_id
+    base_symbol = product_id.split("-")[0]
+
+    blacklist_query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == base_symbol,
+        or_(
+            BlacklistedCoin.user_id == bot.user_id,
+            BlacklistedCoin.user_id.is_(None),
+        ),
+    )
+    blacklist_result = await db.execute(blacklist_query)
+    blacklist_entries = blacklist_result.scalars().all()
+
+    # Prefer user-specific entry over global
+    blacklisted_entry = None
+    for entry in blacklist_entries:
+        if entry.user_id is not None:
+            blacklisted_entry = entry
+            break
+    if blacklisted_entry is None and blacklist_entries:
+        blacklisted_entry = blacklist_entries[0]
+
+    if blacklisted_entry is None:
+        return True, "", ""
+
+    reason = blacklisted_entry.reason or ""
+    if reason.startswith("[APPROVED]"):
+        coin_category = "APPROVED"
+    elif reason.startswith("[BORDERLINE]"):
+        coin_category = "BORDERLINE"
+    elif reason.startswith("[QUESTIONABLE]"):
+        coin_category = "QUESTIONABLE"
+    elif reason.startswith("[MEME]"):
+        coin_category = "MEME"
+    else:
+        coin_category = "BLACKLISTED"
+
+    allowed_categories = ["APPROVED"]
+    if bot.strategy_config and bot.strategy_config.get("allowed_categories"):
+        allowed_categories = bot.strategy_config["allowed_categories"]
+
+    if coin_category in allowed_categories:
+        logger.debug(f"{base_symbol} is {coin_category} (allowed): {reason}")
+        logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
+        return True, coin_category, ""
+
+    category_tag = f"[{coin_category}] "
+    block_reason = (
+        f"{base_symbol} is {coin_category}:"
+        f" {reason.replace(category_tag, '')}"
+    )
+    logger.debug(f"Should buy: FALSE - {block_reason}")
+    logger.info(f"  🚫 {coin_category} (blocked): {block_reason}")
+    return False, coin_category, block_reason
+
+
 async def _decide_buy(
     ctx: TradeContext, signal_data: Dict[str, Any],
     position: Optional[Position], quote_balance: float,
@@ -40,265 +223,90 @@ async def _decide_buy(
 
     Returns (should_buy, quote_amount, buy_reason) tuple.
     """
-    db, bot, strategy = ctx.db, ctx.bot, ctx.strategy
-    product_id, current_price = ctx.product_id, ctx.current_price
-    should_buy = False
-    quote_amount = 0
-    buy_reason = ""
+    bot, strategy = ctx.bot, ctx.strategy
 
     logger.debug(f"Bot active: {bot.is_active}, Position exists: {position is not None}")
     logger.info(f"  🤖 Bot active: {bot.is_active}, Position exists: {position is not None}")
 
-    if bot.is_active:
-        # Skip stable/pegged pairs (layer-2 safety check)
-        if position is None:
-            skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
-            if skip_stable:
-                from app.services.delisted_pair_monitor import is_stable_pair
-                if is_stable_pair(product_id):
-                    return False, 0, f"{product_id} is a stable/pegged pair (skipped)"
+    if not bot.is_active:
+        return await _decide_buy_bot_stopped(
+            ctx, signal_data, position, quote_balance, aggregate_value,
+        )
 
-        # Check max concurrent deals limit
-        if position is None:  # Only check when considering opening a NEW position
-            if open_positions_count is None:
-                open_positions_count = await get_open_positions_count(db, bot)
+    # Active bot, existing position → DCA path
+    if position is not None:
+        return await _decide_buy_dca(
+            ctx, signal_data, position, quote_balance, aggregate_value,
+        )
 
-            # Use soft ceiling if enabled, otherwise use fixed max_concurrent_deals
-            max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
+    # Active bot, no position → new-position path with preflight + blacklist gates
+    blocked, reason, _ = await _run_new_position_preflight(
+        ctx, aggregate_value, open_positions_count,
+    )
+    if blocked:
+        return False, 0, reason
 
-            # Persist the computed value so the bot list can display it
-            if bot.strategy_config.get("enable_soft_ceiling", False):
-                bot.soft_ceiling_effective_max = max_deals
-                await db.commit()
+    allowed, _category, block_reason = await _evaluate_blacklist_category(ctx)
+    if not allowed:
+        return False, 0, block_reason
 
-            logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
+    should_buy, quote_amount, buy_reason = await strategy.should_buy(
+        signal_data, position, quote_balance,
+        aggregate_value=aggregate_value,
+    )
+    logger.debug(
+        f"Should buy result: {should_buy},"
+        f" amount: {quote_amount or 0:.8f}, reason: {buy_reason}"
+    )
 
-            if open_positions_count >= max_deals:
-                should_buy = False
-                ceiling_type = (
-                    "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
-                    else "Max concurrent deals"
-                )
-                buy_reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
-                logger.debug(f"Should buy: FALSE - {buy_reason}")
-            else:
-                # Check deal cooldown for this pair
-                deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
-                if deal_cooldown > 0:
-                    cooldown_cutoff = datetime.utcnow() - timedelta(seconds=deal_cooldown)
-                    recent_close_query = select(Position).where(
-                        Position.bot_id == bot.id,
-                        Position.product_id == product_id,
-                        Position.status == "closed",
-                        Position.closed_at >= cooldown_cutoff
-                    )
-                    recent_result = await db.execute(recent_close_query)
-                    recently_closed = recent_result.scalars().first()
-                    if recently_closed:
-                        elapsed = (datetime.utcnow() - recently_closed.closed_at).total_seconds()
-                        remaining = deal_cooldown - elapsed
-                        should_buy = False
-                        buy_reason = f"Deal cooldown active for {product_id} ({int(remaining)}s remaining)"
-                        logger.debug(f"Should buy: FALSE - {buy_reason}")
-                        logger.info(f"  ⏳ {buy_reason}")
+    if not should_buy:
+        await _log_budget_blocker_if_applicable(
+            ctx, signal_data, None, quote_amount, quote_balance,
+            buy_reason, phase="budget_check", trade_type="initial",
+        )
 
-                # Check if coin is blacklisted before considering a buy (skip if cooldown blocked)
-                if not buy_reason:
-                    from sqlalchemy import or_
-                    base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
+    return should_buy, quote_amount, buy_reason
 
-                    # Single query for both user-specific and global blacklist entries
-                    blacklist_query = select(BlacklistedCoin).where(
-                        BlacklistedCoin.symbol == base_symbol,
-                        or_(
-                            BlacklistedCoin.user_id == bot.user_id,
-                            BlacklistedCoin.user_id.is_(None),
-                        ),
-                    )
-                    blacklist_result = await db.execute(blacklist_query)
-                    blacklist_entries = blacklist_result.scalars().all()
 
-                    # Prefer user-specific entry over global
-                    blacklisted_entry = None
-                    for entry in blacklist_entries:
-                        if entry.user_id is not None:
-                            blacklisted_entry = entry
-                            break
-                    if blacklisted_entry is None and blacklist_entries:
-                        blacklisted_entry = blacklist_entries[0]
+async def _decide_buy_dca(
+    ctx: TradeContext, signal_data: Dict[str, Any],
+    position: Position, quote_balance: float,
+    aggregate_value: Optional[float],
+) -> tuple:
+    """Active-bot path when a position already exists (DCA check)."""
+    strategy = ctx.strategy
+    should_buy, quote_amount, buy_reason = await strategy.should_buy(
+        signal_data, position, quote_balance,
+        aggregate_value=aggregate_value,
+    )
+    if not should_buy:
+        await _log_budget_blocker_if_applicable(
+            ctx, signal_data, position, quote_amount, quote_balance,
+            buy_reason, phase="budget_check_dca", trade_type="safety_order",
+        )
+    return should_buy, quote_amount, buy_reason
 
-                    if blacklisted_entry:
-                        # Determine coin's category from reason prefix
-                        reason = blacklisted_entry.reason or ''
-                        if reason.startswith('[APPROVED]'):
-                            coin_category = 'APPROVED'
-                        elif reason.startswith('[BORDERLINE]'):
-                            coin_category = 'BORDERLINE'
-                        elif reason.startswith('[QUESTIONABLE]'):
-                            coin_category = 'QUESTIONABLE'
-                        elif reason.startswith('[MEME]'):
-                            coin_category = 'MEME'
-                        else:
-                            coin_category = 'BLACKLISTED'
 
-                        # Get allowed categories from bot's strategy_config (not global settings)
-                        allowed_categories = ['APPROVED']  # Default
-                        if bot.strategy_config and bot.strategy_config.get('allowed_categories'):
-                            allowed_categories = bot.strategy_config['allowed_categories']
+async def _decide_buy_bot_stopped(
+    ctx: TradeContext, signal_data: Dict[str, Any],
+    position: Optional[Position], quote_balance: float,
+    aggregate_value: Optional[float],
+) -> tuple:
+    """Stopped-bot path: don't open new positions; still evaluate DCA for existing."""
+    strategy = ctx.strategy
+    if position is None:
+        return False, 0, "Bot is stopped - not opening new positions"
 
-                        if coin_category in allowed_categories:
-                            # Category is allowed to trade
-                            logger.debug(f"{base_symbol} is {coin_category} (allowed): {reason}")
-                            logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
-                            should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                                signal_data, position, quote_balance,
-                                aggregate_value=aggregate_value
-                            )
-                            logger.debug(
-                                f"Should buy result: {should_buy},"
-                                f" amount: {quote_amount or 0:.8f}, reason: {buy_reason}"
-                            )
-                        else:
-                            should_buy = False
-                            category_tag = f'[{coin_category}] '
-                            buy_reason = (
-                                f"{base_symbol} is {coin_category}:"
-                                f" {reason.replace(category_tag, '')}"
-                            )
-                            logger.debug(f"Should buy: FALSE - {buy_reason}")
-                            logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
-                    else:
-                        should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                            signal_data, position, quote_balance,
-                            aggregate_value=aggregate_value
-                        )
-                        logger.debug(
-                            f"Should buy result: {should_buy},"
-                            f" amount: {quote_amount or 0:.8f}, reason: {buy_reason}"
-                        )
-
-                        # Log budget blockers to indicator_logs so they show in GUI
-                        if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
-                            await log_indicator_evaluation(
-                                db=db,
-                                bot_id=bot.id,
-                                product_id=product_id,
-                                phase="budget_check",
-                                conditions_met=False,
-                                conditions_detail=[{
-                                    "type": "budget",
-                                    "indicator": "Available Balance",
-                                    "operator": "sufficient_for",
-                                    "threshold": quote_amount if quote_amount else 0,
-                                    "actual_value": quote_balance,
-                                    "result": False,
-                                    "reason": buy_reason
-                                }],
-                                indicators_snapshot=signal_data.get("indicators", {}),
-                                current_price=current_price
-                            )
-                            if not await _is_duplicate_failed_order(db, bot.id, product_id, "initial", buy_reason):
-                                await log_order_to_history(
-                                    db=db, bot=bot, position=None,
-                                    entry=OrderLogEntry(
-                                        product_id=product_id, side="BUY", order_type="MARKET",
-                                        trade_type="initial", quote_amount=0.0,
-                                        price=current_price, status="failed",
-                                        error_message=buy_reason,
-                                    ),
-                                )
-                                await db.commit()
-        else:
-            # Position already exists for this pair - check for DCA
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                signal_data, position, quote_balance,
-                aggregate_value=aggregate_value
-            )
-
-            # Log budget blockers to indicator_logs so they show in GUI
-            if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
-                await log_indicator_evaluation(
-                    db=db,
-                    bot_id=bot.id,
-                    product_id=product_id,
-                    phase="budget_check_dca",
-                    conditions_met=False,
-                    conditions_detail=[{
-                        "type": "budget",
-                        "indicator": "Available Balance",
-                        "operator": "sufficient_for",
-                        "threshold": quote_amount if quote_amount else 0,
-                        "actual_value": quote_balance,
-                        "result": False,
-                        "reason": buy_reason
-                    }],
-                    indicators_snapshot=signal_data.get("indicators", {}),
-                    current_price=current_price
-                )
-                is_dup = await _is_duplicate_failed_order(
-                    db, bot.id, product_id, "safety_order",
-                    buy_reason, position
-                )
-                if not is_dup:
-                    await log_order_to_history(
-                        db=db, bot=bot, position=position,
-                        entry=OrderLogEntry(
-                            product_id=product_id, side="BUY", order_type="MARKET",
-                            trade_type="safety_order", quote_amount=0.0,
-                            price=current_price, status="failed",
-                            error_message=buy_reason,
-                        ),
-                    )
-                    await db.commit()
-    else:
-        # Bot is stopped - don't open new positions, but still check DCA for existing positions
-        if position is None:
-            buy_reason = "Bot is stopped - not opening new positions"
-        else:
-            # Still check DCA conditions for existing positions even when stopped
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                signal_data, position, quote_balance,
-                aggregate_value=aggregate_value
-            )
-            if not should_buy:
-                buy_reason = f"Bot stopped, DCA check: {buy_reason}"
-
-                # Log budget blockers to indicator_logs so they show in GUI (even when bot stopped)
-                if "insufficient" in buy_reason.lower() or "budget" in buy_reason.lower():
-                    await log_indicator_evaluation(
-                        db=db,
-                        bot_id=bot.id,
-                        product_id=product_id,
-                        phase="budget_check_dca",
-                        conditions_met=False,
-                        conditions_detail=[{
-                            "type": "budget",
-                            "indicator": "Available Balance",
-                            "operator": "sufficient_for",
-                            "threshold": quote_amount if quote_amount else 0,
-                            "actual_value": quote_balance,
-                            "result": False,
-                            "reason": buy_reason
-                        }],
-                        indicators_snapshot=signal_data.get("indicators", {}),
-                        current_price=current_price
-                    )
-                    is_dup = await _is_duplicate_failed_order(
-                        db, bot.id, product_id, "safety_order",
-                        buy_reason, position
-                    )
-                    if not is_dup:
-                        await log_order_to_history(
-                            db=db, bot=bot, position=position,
-                            entry=OrderLogEntry(
-                                product_id=product_id, side="BUY", order_type="MARKET",
-                                trade_type="safety_order", quote_amount=0.0,
-                                price=current_price, status="failed",
-                                error_message=buy_reason,
-                            ),
-                        )
-                        await db.commit()
-
+    should_buy, quote_amount, buy_reason = await strategy.should_buy(
+        signal_data, position, quote_balance,
+        aggregate_value=aggregate_value,
+    )
+    if not should_buy:
+        buy_reason = f"Bot stopped, DCA check: {buy_reason}"
+        await _log_budget_blocker_if_applicable(
+            ctx, signal_data, position, quote_amount, quote_balance,
+            buy_reason, phase="budget_check_dca", trade_type="safety_order",
+        )
     return should_buy, quote_amount, buy_reason
 
 
