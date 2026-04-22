@@ -33,7 +33,7 @@ from app.services.exchange_service import (
 from app.auth.mfa_verification import verify_mfa
 from sqlalchemy import func
 
-from app.routers.accounts_query_router import (
+from app.schemas.accounts import (
     AccountCreate,
     AccountResponse,
     AccountUpdate,
@@ -41,8 +41,8 @@ from app.routers.accounts_query_router import (
     AutoBuySettingsUpdate,
     DustSweepSettingsUpdate,
     RebalanceSettingsUpdate,
-    _TTL_REBALANCE_STATUS,
 )
+from app.services.account_cache import _TTL_REBALANCE_STATUS
 from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
 
 logger = logging.getLogger(__name__)

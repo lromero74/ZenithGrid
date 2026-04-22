@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.2] - 2026-04-22
+
+### Changed
+- **Accounts routers decoupled: schemas and TTL caches moved to shared modules** — `accounts_mutation_router.py` previously reached across the router layer with `from app.routers.accounts_query_router import AccountCreate, AccountResponse, AccountUpdate, AutoBuySettings, AutoBuySettingsUpdate, DustSweepSettingsUpdate, RebalanceSettingsUpdate, _TTL_REBALANCE_STATUS`, a classic router-imports-from-router anti-pattern that made the two files impossible to reason about independently. The eight Pydantic request/response classes now live in `app/schemas/accounts.py` (joining the existing `schemas/` package alongside `dashboard.py`, `market.py`, `position.py`, and `settings.py`), and the two per-account TTL caches (`_TTL_REBALANCE_STATUS`, `_TTL_DUST_SWEEP`) plus their interval constants now live in `app/services/account_cache.py`. Both routers import from the new shared modules; the cross-router import is gone. Test imports that had been reaching for the schemas via the query router were also retargeted at `app.schemas.accounts`. No behavior change — same endpoints, same responses, same TTLs. 171 affected tests pass.
+
 ## [v2.164.1] - 2026-04-22
 
 ### Changed

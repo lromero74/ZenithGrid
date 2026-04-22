@@ -196,7 +196,7 @@ class TestUpdateDustSettings:
         await db_session.flush()
 
         # Import the update model
-        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        from app.schemas.accounts import DustSweepSettingsUpdate
 
         settings = DustSweepSettingsUpdate(enabled=True, threshold_usd=10.0)
         result = await update_dust_sweep_settings(

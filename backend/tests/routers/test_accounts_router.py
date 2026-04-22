@@ -254,7 +254,7 @@ class TestCreateAccount:
         mock_create.return_value = mock_account
 
         from app.routers.accounts_mutation_router import create_account
-        from app.routers.accounts_query_router import AccountCreate
+        from app.schemas.accounts import AccountCreate
         account_data = AccountCreate(
             name="New Account", type="cex", exchange="coinbase",
         )
@@ -276,7 +276,7 @@ class TestCreateAccount:
         mock_create.side_effect = RuntimeError("Unexpected error")
 
         from app.routers.accounts_mutation_router import create_account
-        from app.routers.accounts_query_router import AccountCreate
+        from app.schemas.accounts import AccountCreate
         account_data = AccountCreate(
             name="Bad Account", type="cex", exchange="coinbase",
         )
@@ -303,7 +303,7 @@ class TestUpdateAccount:
     ):
         """Happy path: updates account name."""
         from app.routers.accounts_mutation_router import update_account
-        from app.routers.accounts_query_router import AccountUpdate
+        from app.schemas.accounts import AccountUpdate
         update_data = AccountUpdate(name="Renamed Account")
         result = await update_account(
             account_id=test_account.id, account_data=update_data,
@@ -315,7 +315,7 @@ class TestUpdateAccount:
     async def test_update_account_not_found(self, db_session, test_user):
         """Failure case: non-existent account raises 404."""
         from app.routers.accounts_mutation_router import update_account
-        from app.routers.accounts_query_router import AccountUpdate
+        from app.schemas.accounts import AccountUpdate
         update_data = AccountUpdate(name="X")
         with pytest.raises(HTTPException) as exc_info:
             await update_account(
@@ -332,7 +332,7 @@ class TestUpdateAccount:
     ):
         """Failure case: invalid prop_firm raises 400."""
         from app.routers.accounts_mutation_router import update_account
-        from app.routers.accounts_query_router import AccountUpdate
+        from app.schemas.accounts import AccountUpdate
         update_data = AccountUpdate(prop_firm="invalid_firm")
         with pytest.raises(HTTPException) as exc_info:
             await update_account(
@@ -622,7 +622,7 @@ class TestAutoBuySettings:
     ):
         """Happy path: updates auto-buy settings."""
         from app.routers.accounts_mutation_router import update_auto_buy_settings
-        from app.routers.accounts_query_router import AutoBuySettingsUpdate
+        from app.schemas.accounts import AutoBuySettingsUpdate
         settings = AutoBuySettingsUpdate(enabled=True, usdc_enabled=True, usdc_min=25.0)
         result = await update_auto_buy_settings(
             account_id=test_account.id, settings=settings,
@@ -642,7 +642,7 @@ class TestAutoBuySettings:
         await db_session.flush()
 
         from app.routers.accounts_mutation_router import update_auto_buy_settings
-        from app.routers.accounts_query_router import AutoBuySettingsUpdate
+        from app.schemas.accounts import AutoBuySettingsUpdate
         settings = AutoBuySettingsUpdate(enabled=True)
         result = await update_auto_buy_settings(
             account_id=test_account.id, settings=settings,
@@ -735,7 +735,7 @@ class TestRebalanceSettings:
     ):
         """Happy path: updates and persists rebalance settings."""
         from app.routers.accounts_mutation_router import update_rebalance_settings
-        from app.routers.accounts_query_router import RebalanceSettingsUpdate
+        from app.schemas.accounts import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
         )
@@ -758,7 +758,7 @@ class TestRebalanceSettings:
         await db_session.flush()
 
         from app.routers.accounts_mutation_router import update_rebalance_settings
-        from app.routers.accounts_query_router import RebalanceSettingsUpdate
+        from app.schemas.accounts import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             enabled=True, target_usd_pct=50.0, target_btc_pct=30.0, target_eth_pct=20.0,
         )
@@ -777,7 +777,7 @@ class TestRebalanceSettings:
     ):
         """Failure: percentages not summing to 100 raises 400."""
         from app.routers.accounts_mutation_router import update_rebalance_settings
-        from app.routers.accounts_query_router import RebalanceSettingsUpdate
+        from app.schemas.accounts import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             target_usd_pct=50.0, target_btc_pct=40.0, target_eth_pct=20.0,
         )
@@ -804,7 +804,7 @@ class TestRebalanceSettings:
         self, db_session, test_user, test_account,
     ):
         """Failure: negative percentage is rejected by Pydantic validation."""
-        from app.routers.accounts_query_router import RebalanceSettingsUpdate
+        from app.schemas.accounts import RebalanceSettingsUpdate
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
             RebalanceSettingsUpdate(target_usd_pct=-10.0)
@@ -815,7 +815,7 @@ class TestRebalanceSettings:
     ):
         """Edge case: partial update with only interval changes."""
         from app.routers.accounts_mutation_router import update_rebalance_settings
-        from app.routers.accounts_query_router import RebalanceSettingsUpdate
+        from app.schemas.accounts import RebalanceSettingsUpdate
         settings = RebalanceSettingsUpdate(
             check_interval_minutes=30, drift_threshold_pct=3.0,
         )
@@ -1653,7 +1653,7 @@ class TestUpdateDustSweepSettings:
         from app.routers.accounts_mutation_router import (
             update_dust_sweep_settings,
         )
-        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        from app.schemas.accounts import DustSweepSettingsUpdate
         settings = DustSweepSettingsUpdate(enabled=True, threshold_usd=25.0)
         result = await update_dust_sweep_settings(
             account_id=test_account.id, settings=settings,
@@ -1668,7 +1668,7 @@ class TestUpdateDustSweepSettings:
         from app.routers.accounts_mutation_router import (
             update_dust_sweep_settings,
         )
-        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        from app.schemas.accounts import DustSweepSettingsUpdate
         settings = DustSweepSettingsUpdate(enabled=True)
         with pytest.raises(HTTPException) as exc_info:
             await update_dust_sweep_settings(
@@ -1688,7 +1688,7 @@ class TestUpdateDustSweepSettings:
         from app.routers.accounts_mutation_router import (
             update_dust_sweep_settings,
         )
-        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        from app.schemas.accounts import DustSweepSettingsUpdate
         settings = DustSweepSettingsUpdate(threshold_usd=10.0)
         result = await update_dust_sweep_settings(
             account_id=test_account.id, settings=settings,
