@@ -3,7 +3,7 @@
 import pytest
 
 from app.services.report_scheduler import _compute_expense_changes
-from app.services.report_generator_service.expense_builder import (
+from app.services.report_generator_service.expense_sections import (
     _build_expense_changes_html,
 )
 

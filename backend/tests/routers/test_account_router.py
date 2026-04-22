@@ -452,7 +452,7 @@ class TestSellPortfolioToBase:
         user.id = 1
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock):
             with pytest.raises(HTTPException) as exc_info:
                 await sell_portfolio_to_base_currency(
                     background_tasks=bg,
@@ -482,7 +482,7 @@ class TestSellPortfolioToBase:
 
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock):
             with pytest.raises(HTTPException) as exc_info:
                 await sell_portfolio_to_base_currency(
                     background_tasks=bg,
@@ -507,7 +507,7 @@ class TestSellPortfolioToBase:
 
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock):
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock):
             result = await sell_portfolio_to_base_currency(
                 background_tasks=bg,
                 target_currency="BTC",
@@ -545,7 +545,7 @@ class TestSellPortfolioMfa:
 
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.side_effect = HTTPException(status_code=403, detail="MFA code required")
             with pytest.raises(HTTPException) as exc_info:
                 await sell_portfolio_to_base_currency(
@@ -574,7 +574,7 @@ class TestSellPortfolioMfa:
 
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.side_effect = HTTPException(status_code=403, detail="Invalid MFA code")
             with pytest.raises(HTTPException) as exc_info:
                 await sell_portfolio_to_base_currency(
@@ -601,7 +601,7 @@ class TestSellPortfolioMfa:
 
         bg = MagicMock()
 
-        with patch("app.routers.account_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.account_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.return_value = None  # MFA passes
             result = await sell_portfolio_to_base_currency(
                 background_tasks=bg,

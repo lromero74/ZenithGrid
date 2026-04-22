@@ -11,7 +11,7 @@ Tests cover:
 - Failure case: uses last real data point for on_track, not projected endpoint
 """
 
-from app.services.report_generator_service.html_builder import (
+from app.services.report_generator_service.html_charts import (
     _build_trend_chart_svg,
 )
 

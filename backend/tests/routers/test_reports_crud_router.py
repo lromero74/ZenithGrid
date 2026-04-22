@@ -1,15 +1,15 @@
 """
-Tests for backend/app/routers/reports_crud_router.py
+Tests for backend/app/routers/reports_crud_router.py and services/report_access.py
 
 Covers:
-- Helpers: _resolve_report_user_id, _get_accessible_goal, _get_writable_goal,
-  _get_accessible_report, _resolve_write_user_id, _get_writable_schedule
+- Helpers: _resolve_report_user_id, get_accessible_goal, get_writable_goal,
+  _get_accessible_report, _resolve_write_user_id, get_writable_schedule
 - Goals CRUD: list_goals, update_goal, delete_goal (create_goal hit by a known
   AttributeError bug — see known-issue test)
 - Schedules CRUD: list_schedules, create_schedule, update_schedule, delete_schedule
 - Reports: list_reports, get_report, delete_report, bulk_delete_reports,
   download_report_pdf
-- Serializers: _goal_to_dict, _schedule_to_dict, _report_to_dict,
+- Serializers: _goal_to_dict, _schedule_to_dict, report_to_dict,
   _normalize_recipient_for_api, _parse_json_list
 
 Multi-user isolation is tested by creating two users and asserting that
@@ -36,14 +36,10 @@ from app.routers.reports_crud_router import (
     GoalCreate,
     GoalUpdate,
     ScheduleCreate,
-    _get_accessible_goal,
     _get_accessible_report,
-    _get_writable_goal,
-    _get_writable_schedule,
     _goal_to_dict,
     _normalize_recipient_for_api,
     _parse_json_list,
-    _report_to_dict,
     _resolve_report_user_id,
     _resolve_write_user_id,
     _schedule_to_dict,
@@ -58,6 +54,12 @@ from app.routers.reports_crud_router import (
     list_reports,
     list_schedules,
     update_goal,
+)
+from app.services.report_access import (
+    get_accessible_goal,
+    get_writable_goal,
+    get_writable_schedule,
+    report_to_dict,
 )
 
 
@@ -217,14 +219,14 @@ class TestScheduleToDict:
 
 
 class TestReportToDict:
-    """Tests for _report_to_dict."""
+    """Tests for report_to_dict."""
 
     @pytest.mark.asyncio
     async def test_serializes_report_without_html_by_default(self, db_session):
         user = await _make_user(db_session, "rpt@example.com")
         report = await _make_report(db_session, user.id, html_content="<html></html>")
 
-        d = _report_to_dict(report)
+        d = report_to_dict(report)
         assert d["id"] == report.id
         assert "html_content" not in d  # excluded unless include_html=True
         assert d["has_pdf"] is False
@@ -233,7 +235,7 @@ class TestReportToDict:
     async def test_include_html_returns_content(self, db_session):
         user = await _make_user(db_session, "rpt2@example.com")
         report = await _make_report(db_session, user.id, html_content="<b>body</b>")
-        d = _report_to_dict(report, include_html=True)
+        d = report_to_dict(report, include_html=True)
         assert d["html_content"] == "<b>body</b>"
 
     @pytest.mark.asyncio
@@ -242,7 +244,7 @@ class TestReportToDict:
         user = await _make_user(db_session, "rpt3@example.com")
         tiered = json.dumps({"simple": "easy", "comfortable": "med", "technical": "deep"})
         report = await _make_report(db_session, user.id, ai_summary=tiered)
-        d = _report_to_dict(report)
+        d = report_to_dict(report)
         assert isinstance(d["ai_summary"], dict)
         assert d["ai_summary"]["simple"] == "easy"
 
@@ -251,14 +253,14 @@ class TestReportToDict:
         """Edge: plain text summary stays as a string."""
         user = await _make_user(db_session, "rpt4@example.com")
         report = await _make_report(db_session, user.id, ai_summary="Plain text.")
-        d = _report_to_dict(report)
+        d = report_to_dict(report)
         assert d["ai_summary"] == "Plain text."
 
     @pytest.mark.asyncio
     async def test_has_pdf_true_when_pdf_bytes_present(self, db_session):
         user = await _make_user(db_session, "rpt5@example.com")
         report = await _make_report(db_session, user.id, pdf_content=b"%PDF-1.4...")
-        d = _report_to_dict(report)
+        d = report_to_dict(report)
         assert d["has_pdf"] is True
 
 
@@ -296,13 +298,13 @@ class TestResolveReportUserId:
 
 
 class TestGetAccessibleGoal:
-    """_get_accessible_goal enforces multi-user isolation."""
+    """get_accessible_goal enforces multi-user isolation."""
 
     @pytest.mark.asyncio
     async def test_owner_can_read_own_goal(self, db_session):
         user = await _make_user(db_session, "own@example.com")
         goal = await _make_goal(db_session, user.id)
-        result = await _get_accessible_goal(db_session, goal.id, user.id)
+        result = await get_accessible_goal(db_session, goal.id, user.id)
         assert result.id == goal.id
 
     @pytest.mark.asyncio
@@ -313,25 +315,25 @@ class TestGetAccessibleGoal:
         goal = await _make_goal(db_session, u1.id)
 
         with pytest.raises(HTTPException) as exc:
-            await _get_accessible_goal(db_session, goal.id, u2.id)
+            await get_accessible_goal(db_session, goal.id, u2.id)
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_nonexistent_goal_raises_404(self, db_session):
         user = await _make_user(db_session, "nope@example.com")
         with pytest.raises(HTTPException) as exc:
-            await _get_accessible_goal(db_session, 99999, user.id)
+            await get_accessible_goal(db_session, 99999, user.id)
         assert exc.value.status_code == 404
 
 
 class TestGetWritableGoal:
-    """_get_writable_goal — owner can write; non-owner with no manager role → 403."""
+    """get_writable_goal — owner can write; non-owner with no manager role → 403."""
 
     @pytest.mark.asyncio
     async def test_owner_can_write(self, db_session):
         user = await _make_user(db_session, "w@example.com")
         goal = await _make_goal(db_session, user.id)
-        result = await _get_writable_goal(db_session, goal.id, user)
+        result = await get_writable_goal(db_session, goal.id, user)
         assert result.id == goal.id
 
     @pytest.mark.asyncio
@@ -341,7 +343,7 @@ class TestGetWritableGoal:
         u2 = await _make_user(db_session, "w2@example.com")
         goal = await _make_goal(db_session, u1.id)
         with pytest.raises(HTTPException) as exc:
-            await _get_writable_goal(db_session, goal.id, u2)
+            await get_writable_goal(db_session, goal.id, u2)
         assert exc.value.status_code == 404
 
 
@@ -393,7 +395,7 @@ class TestGetWritableSchedule:
     async def test_owner_can_write_schedule(self, db_session):
         user = await _make_user(db_session, "ws@example.com")
         schedule = await _make_schedule(db_session, user.id)
-        sched, uid = await _get_writable_schedule(db_session, schedule.id, user)
+        sched, uid = await get_writable_schedule(db_session, schedule.id, user)
         assert sched.id == schedule.id
         assert uid == user.id
 
@@ -401,7 +403,7 @@ class TestGetWritableSchedule:
     async def test_nonexistent_schedule_404(self, db_session):
         user = await _make_user(db_session, "ws2@example.com")
         with pytest.raises(HTTPException) as exc:
-            await _get_writable_schedule(db_session, 99999, user)
+            await get_writable_schedule(db_session, 99999, user)
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -410,7 +412,7 @@ class TestGetWritableSchedule:
         u2 = await _make_user(db_session, "ws4@example.com")
         schedule = await _make_schedule(db_session, u1.id)
         with pytest.raises(HTTPException) as exc:
-            await _get_writable_schedule(db_session, schedule.id, u2)
+            await get_writable_schedule(db_session, schedule.id, u2)
         assert exc.value.status_code == 403
 
 
@@ -604,7 +606,7 @@ class TestDeleteSchedule:
 
     @pytest.mark.asyncio
     async def test_other_user_gets_403(self, db_session):
-        """_get_writable_schedule raises 403 for non-owner non-manager."""
+        """get_writable_schedule raises 403 for non-owner non-manager."""
         u1 = await _make_user(db_session, "ds1@example.com")
         u2 = await _make_user(db_session, "ds2@example.com")
         schedule = await _make_schedule(db_session, u1.id)

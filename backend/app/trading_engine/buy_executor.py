@@ -6,7 +6,7 @@ Handles market and limit buy orders
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -273,6 +273,140 @@ async def _post_buy_operations(
         logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
 
 
+async def _submit_buy_market_order(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    quote_amount: float,
+    current_price: float,
+    trade_type: str,
+    commit_on_error: bool,
+) -> Tuple[str, float, float, float]:
+    """Submit a market buy order and reconcile the fill.
+
+    Handles shutdown-manager tracking, PropGuard gate, exchange error
+    responses, failed-order history logging, and fill reconciliation.
+
+    Returns (order_id, actual_base_amount, actual_quote_amount, actual_price).
+    Re-raises on failure after recording the error on the position when
+    commit_on_error=True.
+    """
+    await shutdown_manager.increment_in_flight()
+    try:
+        order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount)
+
+        # PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            error_msg = f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            logger.warning(f"  PropGuard blocked buy order for {product_id}: {error_msg}")
+            await log_order_to_history(
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=error_msg,
+                ),
+            )
+            if commit_on_error:
+                position.last_error_message = error_msg
+                position.last_error_timestamp = datetime.utcnow()
+                await db.commit()
+            raise ValueError(error_msg)
+
+        success_response = order_response.get("success_response", {})
+        error_response = order_response.get("error_response", {})
+        order_id = success_response.get("order_id", "")
+
+        if not order_id:
+            logger.error(f"Exchange order failed - Full response: {order_response}")
+
+            if error_response:
+                error_msg = error_response.get("message") or error_response.get("error") or "Unknown error"
+                error_details = error_response.get("error_details", "")
+                failure_reason = error_response.get("failure_reason", "")
+                preview_failure_reason = error_response.get("preview_failure_reason", "")
+
+                error_parts = [error_msg]
+                if error_details:
+                    error_parts.append(error_details)
+                if failure_reason:
+                    error_parts.append(f"Reason: {failure_reason}")
+                if preview_failure_reason:
+                    error_parts.append(f"Preview: {preview_failure_reason}")
+
+                full_error = " - ".join(error_parts)
+
+                if full_error == "Unknown error":
+                    import json
+                    full_error = f"Exchange error: {json.dumps(error_response)}"
+
+                logger.error(f"Exchange error details: {full_error}")
+            else:
+                full_error = "No order_id returned from exchange (no error_response provided)"
+
+            await log_order_to_history(
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=full_error,
+                ),
+            )
+
+            if commit_on_error:
+                position.last_error_message = full_error
+                position.last_error_timestamp = datetime.utcnow()
+                await db.commit()
+
+            raise ValueError(f"Exchange order failed: {full_error}")
+
+        # Reconcile actual fill from exchange (with retries)
+        actual_base_amount, actual_quote_amount, actual_price = await _reconcile_buy_fill(
+            exchange=exchange,
+            order_id=order_id,
+            product_id=product_id,
+        )
+
+        if actual_base_amount == 0 or actual_quote_amount == 0:
+            logger.error(
+                f"WARNING: Order {order_id} has zero fill amounts after all retries! "
+                f"Position #{position.id} will show 0% filled. "
+                f"Manual fix required using scripts/fix_position.py"
+            )
+
+        return order_id, actual_base_amount, actual_quote_amount, actual_price
+
+    except Exception as e:
+        logger.error(f"Error executing buy order: {e}")
+
+        # ValueError paths above already logged to history — skip to avoid duplicates
+        if not isinstance(e, ValueError):
+            await log_order_to_history(
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=str(e),
+                ),
+            )
+
+        if position:
+            if not position.last_error_message:
+                position.last_error_message = str(e)
+                position.last_error_timestamp = datetime.utcnow()
+            try:
+                await db.commit()
+            except Exception:
+                pass  # Don't mask the original error
+        raise
+
+    finally:
+        await shutdown_manager.decrement_in_flight()
+
+
 async def execute_buy(
     db: AsyncSession,
     exchange: ExchangeClient,
@@ -372,131 +506,18 @@ async def execute_buy(
         exchange=exchange,
     )
 
-    # Execute order via TradingClient (currency-agnostic)
-    # Actual fill amounts will be fetched from exchange after order executes
-    # Track this as an in-flight order for graceful shutdown
-    order_id = None
-    await shutdown_manager.increment_in_flight()
-    try:
-        order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount)
-
-        # Check for PropGuard safety block before normal error handling
-        if order_response.get("blocked_by") == "propguard":
-            error_msg = f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
-            logger.warning(f"  PropGuard blocked buy order for {product_id}: {error_msg}")
-            await log_order_to_history(
-                db=db, bot=bot, position=position,
-                entry=OrderLogEntry(
-                    product_id=product_id, side="BUY", order_type="MARKET",
-                    trade_type=trade_type, quote_amount=quote_amount,
-                    price=current_price, status="failed", error_message=error_msg,
-                ),
-            )
-            if commit_on_error:
-                position.last_error_message = error_msg
-                position.last_error_timestamp = datetime.utcnow()
-                await db.commit()
-            raise ValueError(error_msg)
-
-        success_response = order_response.get("success_response", {})
-        error_response = order_response.get("error_response", {})
-        order_id = success_response.get("order_id", "")
-
-        # CRITICAL: Validate order_id is present
-        if not order_id:
-            # Log the full exchange response to understand why order failed
-            logger.error(f"Exchange order failed - Full response: {order_response}")
-
-            # Save error to position for UI display
-            if error_response:
-                # Try multiple possible error field names from exchange
-                error_msg = error_response.get("message") or error_response.get("error") or "Unknown error"
-                error_details = error_response.get("error_details", "")
-                failure_reason = error_response.get("failure_reason", "")
-                preview_failure_reason = error_response.get("preview_failure_reason", "")
-
-                # Build comprehensive error message
-                error_parts = [error_msg]
-                if error_details:
-                    error_parts.append(error_details)
-                if failure_reason:
-                    error_parts.append(f"Reason: {failure_reason}")
-                if preview_failure_reason:
-                    error_parts.append(f"Preview: {preview_failure_reason}")
-
-                full_error = " - ".join(error_parts)
-
-                # If still no useful error, show the entire error_response as JSON
-                if full_error == "Unknown error":
-                    import json
-
-                    full_error = f"Exchange error: {json.dumps(error_response)}"
-
-                logger.error(f"Exchange error details: {full_error}")
-            else:
-                full_error = "No order_id returned from exchange (no error_response provided)"
-
-            # Log failed order to history
-            await log_order_to_history(
-                db=db, bot=bot, position=position,
-                entry=OrderLogEntry(
-                    product_id=product_id, side="BUY", order_type="MARKET",
-                    trade_type=trade_type, quote_amount=quote_amount,
-                    price=current_price, status="failed", error_message=full_error,
-                ),
-            )
-
-            # Record error on position (only for DCA orders)
-            if commit_on_error:
-                position.last_error_message = full_error
-                position.last_error_timestamp = datetime.utcnow()
-                await db.commit()
-
-            raise ValueError(f"Exchange order failed: {full_error}")
-
-        # Fetch actual fill data from exchange with retry logic
-        actual_base_amount, actual_quote_amount, actual_price = await _reconcile_buy_fill(
-            exchange=exchange,
-            order_id=order_id,
-            product_id=product_id,
-        )
-
-        # Final validation check
-        if actual_base_amount == 0 or actual_quote_amount == 0:
-            logger.error(
-                f"WARNING: Order {order_id} has zero fill amounts after all retries! "
-                f"Position #{position.id} will show 0% filled. "
-                f"Manual fix required using scripts/fix_position.py"
-            )
-
-    except Exception as e:
-        logger.error(f"Error executing buy order: {e}")
-
-        # Log failed order to history (only if not already logged)
-        # ValueError exceptions were already logged above, so skip those
-        if not isinstance(e, ValueError):
-            await log_order_to_history(
-                db=db, bot=bot, position=position,
-                entry=OrderLogEntry(
-                    product_id=product_id, side="BUY", order_type="MARKET",
-                    trade_type=trade_type, quote_amount=quote_amount,
-                    price=current_price, status="failed", error_message=str(e),
-                ),
-            )
-
-        # Record error on position for UI display and commit order history
-        if position:
-            if not position.last_error_message:
-                position.last_error_message = str(e)
-                position.last_error_timestamp = datetime.utcnow()
-            try:
-                await db.commit()
-            except Exception:
-                pass  # Don't mask the original error
-        raise
-
-    finally:
-        await shutdown_manager.decrement_in_flight()
+    order_id, actual_base_amount, actual_quote_amount, actual_price = await _submit_buy_market_order(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        quote_amount=quote_amount,
+        current_price=current_price,
+        trade_type=trade_type,
+        commit_on_error=commit_on_error,
+    )
 
     # Record trade with ACTUAL filled amounts from exchange
     trade = await _create_buy_trade_record(

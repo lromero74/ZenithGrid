@@ -17,11 +17,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import pyotp
-
 from app.auth.dependencies import Perm, get_current_user, require_permission
+from app.auth.mfa_verification import verify_mfa
 from app.database import get_db
-from app.encryption import decrypt_value
 from app.models.auth import User
 from app.models.trading import Account, Bot, BotRebalancerGroup, Position
 from app.services.account_access import manager_account_ids
@@ -49,46 +47,6 @@ class PanicSellRequest(BaseModel):
     zero_min_balances: bool = True
     mfa_code: Optional[str] = None
     confirm: bool = False
-
-
-async def _verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> None:
-    """Verify MFA code if the user has MFA configured.
-
-    TOTP users: verifies against stored TOTP secret.
-    Email MFA users (no TOTP): verifies against a recent EmailVerificationToken.
-    Raises HTTPException(403) on failure.
-    """
-    if user.mfa_enabled and user.totp_secret:
-        if not mfa_code:
-            raise HTTPException(status_code=403, detail="MFA code required")
-        secret = decrypt_value(user.totp_secret)
-        totp = pyotp.TOTP(secret)
-        if not totp.verify(mfa_code, valid_window=1):
-            raise HTTPException(status_code=403, detail="Invalid MFA code")
-        return
-
-    if user.mfa_email_enabled:
-        from app.models.auth import EmailVerificationToken
-        from sqlalchemy import and_
-        if not mfa_code:
-            raise HTTPException(status_code=403, detail="MFA code required")
-        result = await db.execute(
-            select(EmailVerificationToken).where(
-                and_(
-                    EmailVerificationToken.user_id == user.id,
-                    EmailVerificationToken.token_type == "action_mfa",
-                    EmailVerificationToken.verification_code == mfa_code,
-                    EmailVerificationToken.used_at.is_(None),
-                    EmailVerificationToken.expires_at > datetime.utcnow(),
-                )
-            )
-        )
-        token_record = result.scalars().first()
-        if not token_record:
-            raise HTTPException(status_code=403, detail="Invalid or expired MFA code")
-        token_record.used_at = datetime.utcnow()
-        await db.commit()
-        return
 
 
 def _init_task(task_id: str, user_id: int = None) -> None:
@@ -206,7 +164,7 @@ async def panic_sell(
         )
 
     # Verify MFA before taking any action
-    await _verify_mfa(db, current_user, request.mfa_code)
+    await verify_mfa(db, current_user, request.mfa_code)
 
     account_ids = await manager_account_ids(db, current_user.id)
     if request.account_id not in account_ids:

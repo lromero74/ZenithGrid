@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.163.0] - 2026-04-21
+
+### Changed
+- **Code-quality sweep Phase 5 — modularization** — Six backend files that exceeded the 1200 LOC cap were split into focused modules, four frontend components followed the same treatment, and long functions inside the grid trading engine were decomposed into named helpers. No behavior change — identical public contracts, same tests, same routes. Backend splits: `database_seeds.py` → `app/seeds/` package, `signal_processor.py` → `app/strategies/signal_processor/` package with buy/sell decision submodules, `expense_builder.py` → three report modules, 470 LOC of pure math extracted from `portfolio_service.py` into `portfolio_calculations.py`, 255 LOC of SVG chart helpers moved out of `html_builder.py` into `html_charts.py`, and `indicator_based.py` helpers split out. Three cross-router private helpers were promoted to proper service modules — `_get_*_goal` / `_report_to_dict` moved from `reports_crud_router.py` to a new `report_access.py`, `_build_rebalance_response` moved from `accounts_query_router.py` to `account_responses.py` (taking its pydantic DTO with it so the service stays self-contained), and `_verify_mfa` moved from `panic_sell_router.py` to a new `auth/mfa_verification.py` and is now shared by the account conversion and account deletion flows. Frontend splits: `ExpenseItemsEditor.tsx` extracted `SortableExpenseRow` plus frequency/date helpers, `Settings.tsx` extracted `ActiveSessions` and `AdminDisplayNameField` plus device/time helpers, `DCABudgetConfigForm.tsx` extracted the DCA ladder calculator and condition normalization, and `PortfolioManagement.tsx` extracted currency/mode constants and cache helpers. All 11 touched files now sit under 1200 LOC. Architecture documentation (`docs/architecture/backend.json` and `frontend.json`) was synced; the long-missing `account_sharing_router.py` entry was also added.
+
 ## [v2.162.1] - 2026-04-21
 
 ### Changed

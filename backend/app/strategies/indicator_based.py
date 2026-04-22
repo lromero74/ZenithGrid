@@ -23,18 +23,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
 from app.indicators import (
-    AISpotOpinionEvaluator, AISpotOpinionParams,
+    AISpotOpinionEvaluator,
     BullFlagIndicatorEvaluator,
     VWAPBounceIndicatorEvaluator, VWAPBounceParams,
     QFLIndicatorEvaluator, QFLParams,
 )
-from app.indicators.bull_flag_indicator import BullFlagParams
 from app.phase_conditions import PhaseConditionEvaluator
 from app.strategies import (
     StrategyDefinition,
     StrategyParameter,
     StrategyRegistry,
     TradingStrategy,
+)
+from app.strategies.indicator_based_helpers import (
+    build_ai_params,
+    build_bull_flag_params,
+    flatten_conditions,
+    needs_aggregate_indicators,
 )
 from app.strategies.indicator_params import INDICATOR_PARAMS
 from app.strategies.safety_order_calculator import (
@@ -94,129 +99,12 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Track previous indicators for crossing detection
         self.previous_indicators = None
 
-        # E8: Cache _needs_aggregate_indicators result (config doesn't change per instance)
-        self._needs_cache = self._needs_aggregate_indicators()
-
-    def _get_ai_params(self) -> AISpotOpinionParams:
-        """Get AI Spot Opinion parameters from config."""
-        return AISpotOpinionParams(
-            ai_model=self.config.get("ai_model", "claude"),
-            ai_timeframe=self.config.get("ai_timeframe", "15m"),
-            ai_min_confidence=self.config.get("ai_min_confidence", 60),
-            enable_buy_prefilter=self.config.get("enable_buy_prefilter", True),
+        # E8: Cache needs_aggregate_indicators result (config doesn't change per instance)
+        self._needs_cache = needs_aggregate_indicators(
+            self.base_order_conditions,
+            self.safety_order_conditions,
+            self.take_profit_conditions,
         )
-
-    def _get_bull_flag_params(self) -> BullFlagParams:
-        """Get Bull Flag indicator parameters from config."""
-        # Read all bull flag params from config, including migrated values
-        # Priority: explicit config > migrated config > defaults
-        return BullFlagParams(
-            timeframe=self.config.get("bull_flag_timeframe", "FIFTEEN_MINUTE"),
-            min_pole_gain_pct=self.config.get(
-                "bull_flag_min_pole_gain",
-                self.config.get("_migrated_min_pole_gain_pct", 3.0)
-            ),
-            min_pole_candles=self.config.get(
-                "bull_flag_min_pole_candles",
-                self.config.get("_migrated_min_pole_candles", 3)
-            ),
-            min_pullback_candles=self.config.get(
-                "bull_flag_min_pullback_candles",
-                self.config.get("_migrated_min_pullback_candles", 2)
-            ),
-            max_pullback_candles=self.config.get(
-                "bull_flag_max_pullback_candles",
-                self.config.get("_migrated_max_pullback_candles", 8)
-            ),
-            pullback_retracement_max=self.config.get(
-                "bull_flag_pullback_retracement_max",
-                self.config.get("_migrated_pullback_retracement_max", 50.0)
-            ),
-            reward_risk_ratio=self.config.get(
-                "bull_flag_reward_risk_ratio",
-                self.config.get("_migrated_reward_risk_ratio", 2.0)
-            ),
-        )
-
-    def _flatten_conditions(self, expression) -> List[Dict[str, Any]]:
-        """
-        Flatten conditions from either grouped or flat format.
-
-        Handles both:
-        - New grouped format: { groups: [{ conditions: [...] }], groupLogic }
-        - Old flat format: [condition1, condition2, ...]
-        """
-        if not expression:
-            return []
-
-        # New grouped format
-        if isinstance(expression, dict) and "groups" in expression:
-            conditions = []
-            for group in expression.get("groups", []):
-                conditions.extend(group.get("conditions", []))
-            return conditions
-
-        # Old flat list format
-        if isinstance(expression, list):
-            return expression
-
-        return []
-
-    def _needs_aggregate_indicators(self) -> Dict[str, Any]:
-        """
-        Check which aggregate indicators are needed based on conditions.
-
-        Returns:
-            Dict with keys: ai_buy, ai_sell, bull_flag (bool)
-            and ai_params: first found AI condition params (or None)
-        """
-        needs = {
-            "ai_buy": False,
-            "ai_sell": False,
-            "bull_flag": False,
-            "vwap_bounce_up": False,
-            "vwap_bounce_down": False,
-            "qfl_crack": False,
-            "ai_params": None,  # First AI condition's params
-        }
-
-        # Flatten all conditions from potentially grouped format
-        tp_conditions = self._flatten_conditions(self.take_profit_conditions)
-        tp_ids = {id(c) for c in tp_conditions}
-        all_conditions = (
-            self._flatten_conditions(self.base_order_conditions)
-            + self._flatten_conditions(self.safety_order_conditions)
-            + tp_conditions
-        )
-
-        for condition in all_conditions:
-            # Check both 'indicator' (legacy) and 'type' (new) keys
-            indicator = (condition.get("type") or condition.get("indicator") or "").lower()
-
-            # New AI opinion indicators
-            if indicator in ["ai_opinion", "ai_confidence", "ai_reasoning"]:
-                # Determine if this is used in entry or exit conditions
-                # If in base_order or safety_order -> buy signal needed
-                # If in take_profit -> sell signal needed
-                if id(condition) in tp_ids:
-                    needs["ai_sell"] = True
-                else:
-                    needs["ai_buy"] = True
-            # Legacy AI indicators (backward compatibility)
-            elif indicator == "ai_buy":
-                needs["ai_buy"] = True
-            elif indicator == "ai_sell":
-                needs["ai_sell"] = True
-            elif indicator == "bull_flag":
-                needs["bull_flag"] = True
-            elif indicator == "vwap_bounce_up":
-                needs["vwap_bounce_up"] = True
-            elif indicator == "vwap_bounce_down":
-                needs["vwap_bounce_down"] = True
-            elif indicator == "qfl_crack":
-                needs["qfl_crack"] = True
-
-        return needs
 
     # =========================================================================
     # analyze_signal() and its private helpers
@@ -339,7 +227,7 @@ class IndicatorBasedStrategy(TradingStrategy):
             current_indicators["ai_sell"] = previous_indicators_cache.get("ai_sell", 0)
         else:
             # Call AI fresh (full AI check)
-            ai_params = self._get_ai_params()
+            ai_params = build_ai_params(self.config)
 
             # Evaluate AI opinion for buy or sell
             # We call it once - for buy checks (no position) or sell checks (with position)
@@ -399,7 +287,7 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         Mutates current_indicators in place to add bull_flag-related keys.
         """
-        bf_params = self._get_bull_flag_params()
+        bf_params = build_bull_flag_params(self.config)
         bf_candles = candles_by_timeframe.get(bf_params.timeframe, candles)
         bf_result = self.bull_flag_evaluator.evaluate(
             candles=bf_candles,
@@ -428,7 +316,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Determine timeframe from the first matching condition
         timeframe = "FIVE_MINUTE"
         for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
-            for cond in self._flatten_conditions(cond_list):
+            for cond in flatten_conditions(cond_list):
                 if cond.get("type") in ("vwap_bounce_up", "vwap_bounce_down"):
                     timeframe = cond.get("timeframe", "FIVE_MINUTE")
                     break
@@ -463,7 +351,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         config_overrides: Dict[str, Any] = {}
 
         for cond_list in [self.base_order_conditions, self.safety_order_conditions, self.take_profit_conditions]:
-            for cond in self._flatten_conditions(cond_list):
+            for cond in flatten_conditions(cond_list):
                 if cond.get("type") == "qfl_crack":
                     # Default timeframe in condition is the crack (signal) timeframe
                     crack_timeframe = cond.get("timeframe", "FIFTEEN_MINUTE")

@@ -179,6 +179,11 @@
       "file": "routers/sessions_router.py",
       "prefix": "/api/sessions",
       "purpose": "Active session listing and termination (S08 IDOR fix applied)"
+    },
+    {
+      "file": "routers/account_sharing_router.py",
+      "prefix": "/api/accounts, /api/invitations",
+      "purpose": "Account sharing / co-management: invite members (manager or shadow role), list members, update member role, remove member, leave account, resend invite, cancel invite; user-scoped inbound invitation endpoints (list/accept/decline). Invitations are gated by InviteRequest(email, role) where role is 'manager' or 'shadow'. Delegates to services.account_sharing_service for business logic."
     }
   ],
   "sub_routers": {
@@ -1188,6 +1193,11 @@
   "models_note": "Models are split into domain files under backend/app/models/: auth.py, trading.py, reporting.py, social.py, content.py, donations.py, system.py. All tables live in named PostgreSQL schemas matching their domain (auth, trading, reporting, social, content, system) as of migration 068_domain_schemas.py. Foreign keys across schemas use fully-qualified strings (e.g. 'auth.users.id').",
   "services": [
     {
+      "file": "services/account_responses.py",
+      "purpose": "Shared response schemas and builders for account endpoints: RebalanceSettingsResponse pydantic DTO and build_rebalance_response(account) factory. Used by both accounts_query_router and accounts_mutation_router; extracted from accounts_query_router in Phase 5.3 so neither router has to reach into the other's private helpers.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/account_service.py",
       "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval",
       "type": "infrastructure"
@@ -1383,13 +1393,18 @@
       "type": "background"
     },
     {
+      "file": "services/portfolio_calculations.py",
+      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings, _compute_position_pnl, _compute_balance_breakdown (with BalanceBreakdownParams dataclass), _compute_closed_pnl, _process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl. No DB, cache, or API calls.",
+      "type": "trading"
+    },
+    {
       "file": "services/portfolio_conversion_service.py",
       "purpose": "Portfolio conversion with progress tracking; SUPPORTED_TARGET_CURRENCIES = {BTC, USD, USDC, USDT, ETH}; _FALLBACK_INTERMEDIATE dict defines intermediate routing for each target; _sell_currency_with_fallback and _convert_intermediate_currency extended to handle all 5 target currencies; init_task() added for deferred task initialization",
       "type": "trading"
     },
     {
       "file": "services/portfolio_service.py",
-      "purpose": "Portfolio aggregation and balance calculations; BalanceBreakdownParams dataclass used for parameterizing balance breakdown computation",
+      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 777 LOC)",
       "type": "trading"
     },
     {
@@ -1413,6 +1428,11 @@
       "type": "trading"
     },
     {
+      "file": "services/report_access.py",
+      "purpose": "Shared access-control helpers for report goals, schedules, and reports: get_accessible_goal (owner or observer/manager), get_writable_goal (owner or manager), get_writable_schedule, report_to_dict. Used by both reports_crud_router and reports_generation_router; extracted from reports_crud_router in Phase 5.3.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/report_ai_service.py",
       "purpose": "Generates AI-powered summaries for performance reports using per-user AI credentials; tiered output (beginner/comfortable/experienced); includes trading activity context in prompts",
       "type": "analysis"
@@ -1424,7 +1444,7 @@
     },
     {
       "file": "services/report_generator_service/",
-      "purpose": "Report generation package: html_builder (HTML report, charts, AI summaries), expense_builder (expense goal cards, schedule logic, trend charts, savings target spend-line breakdown showing Spend \u00b7 Tax \u00b7 Hold \u2192 accumulate, Ready badge when fully funded), pdf_generator (PDF generation with fpdf2, savings targets section via _build_pdf_savings_targets())",
+      "purpose": "Report generation package. Modules (after Phase 5 split): html_builder.py (HTML report assembly + AI summaries), html_charts.py (SVG trend chart + minimap + value formatting, extracted from html_builder in Phase 5), chart_renderer.py + chart_pdf_renderer.py (chart rendering entry points), expense_schedule.py (date math + lookahead/upcoming helpers, extracted in Phase 5), expense_sections.py (HTML sections: coverage, savings, changes; savings target spend-line breakdown showing Spend \u00b7 Tax \u00b7 Hold \u2192 accumulate, Ready badge when fully funded), expense_card.py (goal-card header + tab assembly + render entry, extracted in Phase 5), pdf_generator.py (PDF generation with fpdf2, savings targets section via _build_pdf_savings_targets()). Package __init__.py re-exports the public surface. The former expense_builder.py was split into the three expense_* modules in Phase 5.",
       "type": "analysis"
     },
     {
@@ -1482,8 +1502,8 @@
     "coordinators_note": "Top-level coordinators (trading_engine_v2.py, trading_client.py, multi_bot_monitor.py, order_validation.py, precision.py, product_precision.py) are listed in core_modules",
     "modules": [
       {
-        "file": "trading_engine/signal_processor.py",
-        "purpose": "Signal processing and trading decision orchestration"
+        "file": "trading_engine/signal_processor/",
+        "purpose": "Signal processing and trading decision orchestration (Phase 5 package, split from a 1308-LOC monolith). __init__.py exports process_signal() orchestrator; _shared.py holds context/budget/indicator/signal-log helpers; buy_decision.py holds _decide_buy + _execute_buy_trade (Phase 5.2 helpers: _log_budget_blocker_if_applicable, _run_new_position_preflight, _evaluate_blacklist_category, new/DCA/stopped path handlers); sell_decision.py holds _decide_and_execute_sell (Phase 5.2 helpers: _build_market_context, _resolve_take_profit_mode, _verify_mark_profit_allows_sell, _execute_position_close)."
       },
       {
         "file": "trading_engine/buy_executor.py",
@@ -1616,7 +1636,12 @@
     {
       "file": "strategies/indicator_based.py",
       "class": "IndicatorBasedStrategy",
-      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit"
+      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit. Pure helpers (flatten_conditions, needs_aggregate_indicators, build_ai_params, build_bull_flag_params) extracted to strategies/indicator_based_helpers.py in Phase 5 to stay under the 1200-LOC cap."
+    },
+    {
+      "file": "strategies/indicator_based_helpers.py",
+      "class": "N/A (module-level helpers)",
+      "purpose": "Pure, side-effect-free helpers extracted from IndicatorBasedStrategy in Phase 5: flatten_conditions(expression), needs_aggregate_indicators(base, safety, take_profit), build_ai_params(config), build_bull_flag_params(config). Callable without an instance."
     },
     {
       "file": "strategies/spatial_arbitrage.py",
@@ -1710,8 +1735,8 @@
       "purpose": "Unified CoinbaseClient class coordinating all Coinbase API modules with rate limiting (150ms min between requests) and CircuitBreaker for API resilience (5-failure threshold, 60s recovery)"
     },
     {
-      "file": "database_seeds.py",
-      "purpose": "Default content sources, dead source lists, scrape policies, and coin categories loaded by database.init_db() on startup"
+      "file": "seeds/ (package)",
+      "purpose": "Seed data loaded by database.init_db() on startup (Phase 5 split from the 1337-LOC database_seeds.py). seeds/content_sources.py holds DEFAULT_CONTENT_SOURCES, DEAD_SOURCES, SOURCE_SCRAPE_POLICIES, and seed_default_sources(). seeds/coin_categories.py holds DEFAULT_COIN_CATEGORIES and seed_default_coins(). seeds/__init__.py re-exposes the public API. The old app/database_seeds.py file was removed."
     },
     {
       "file": "multi_bot_monitor.py",
@@ -1893,6 +1918,16 @@
     {
       "file": "utils/url_utils.py",
       "purpose": "URL normalization, feed deduplication, and SSRF protection (validates URLs do not target internal/private/loopback/link-local addresses or AWS metadata endpoint)"
+    }
+  ],
+  "auth_modules": [
+    {
+      "file": "auth/dependencies.py",
+      "purpose": "FastAPI auth dependencies: get_current_user, require_account_access, permission/role gates; Perm StrEnum enumerating every valid resource:action permission string."
+    },
+    {
+      "file": "auth/mfa_verification.py",
+      "purpose": "Shared verify_mfa(db, user, mfa_code) helper for sensitive actions (panic-sell, account deletion, etc.). Supports TOTP (authenticator app) and email MFA (EmailVerificationToken with token_type='action_mfa'); raises HTTPException(403) on failure; no-op when user has no MFA configured. Extracted from panic_sell_router in Phase 5.3 so multiple routers can reuse it without cross-router imports."
     }
   ],
   "external_integrations": {

@@ -120,7 +120,7 @@ async def get_read_db():
 
 
 async def init_db():
-    from app.database_seeds import seed_default_coins, seed_default_sources
+    from app.seeds import seed_default_coins, seed_default_sources
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

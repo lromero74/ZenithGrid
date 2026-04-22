@@ -360,7 +360,15 @@
       },
       {
         "file": "components/reports/ExpenseItemsEditor.tsx",
-        "purpose": "Expense items CRUD editor for expenses-type goals; supports item_type toggle (Expense | Savings Target); savings-target form shows target amount, target date, current balance, assumed growth rate, and recurring toggle; savings items display with green piggy-bank badge and progress percentage"
+        "purpose": "Expense items CRUD editor for expenses-type goals; supports item_type toggle (Expense | Savings Target); savings-target form shows target amount, target date, current balance, assumed growth rate, and recurring toggle; savings items display with green piggy-bank badge and progress percentage. Split in Phase 5 (1338 -> 1041 LOC) — renders SortableExpenseRow per item and imports frequency/due-date helpers from ExpenseItemsEditor.helpers.ts."
+      },
+      {
+        "file": "components/reports/SortableExpenseRow.tsx",
+        "purpose": "Sortable expense/savings row used by ExpenseItemsEditor: drag handle (@dnd-kit), move-to-top/bottom + jump-to-position controls, edit/delete actions, savings piggy-bank badge. Extracted from ExpenseItemsEditor.tsx in Phase 5."
+      },
+      {
+        "file": "components/reports/ExpenseItemsEditor.helpers.ts",
+        "purpose": "Shared helpers for ExpenseItemsEditor and SortableExpenseRow: FREQUENCY_PILLS, FREQ_LABELS, due-date formatting (formatDueBadge). Extracted in Phase 5."
       }
     ],
     "prop_firm": [
@@ -451,6 +459,26 @@
       {
         "file": "components/sharing/ObserverModeBanner.tsx",
         "purpose": "Sticky read-only banner displayed when the active account is a shared account observed by the current user; shows the owner's display name and account name, e.g. 'Observer Mode \u2014 Viewing Louis's account Main Trading (Read-Only)'; receives ownerName from App.tsx via selectedAccount.shared_by"
+      },
+      {
+        "file": "components/settings/ActiveSessions.tsx",
+        "purpose": "Settings panel listing other active sessions for the current user with multi-select terminate and 'Terminate all' action; uses useOtherSessions/useTerminateSessions/useTerminateAllOtherSessions from hooks/useSessions. Extracted from Settings.tsx in Phase 5."
+      },
+      {
+        "file": "components/settings/AdminDisplayNameField.tsx",
+        "purpose": "Settings field for superusers to set/update their display name; inline save with validation. Extracted from Settings.tsx in Phase 5."
+      },
+      {
+        "file": "components/settings/SettingsHelpers.ts",
+        "purpose": "Shared utilities for settings components: parseDevice(ua) returns browser+OS from a user-agent string; timeAgo(dateStr) returns a relative-time label. Extracted from Settings.tsx in Phase 5."
+      },
+      {
+        "file": "components/account/PortfolioManagement.helpers.ts",
+        "purpose": "Shared types and cache helpers for PortfolioManagement: CurrencySlider type, PortfolioCache types, mode constants, sessionStorage cache read/write helpers. Extracted from PortfolioManagement.tsx in Phase 5 (1228 to 1161 LOC)."
+      },
+      {
+        "file": "components/trading/DCABudgetConfigForm.helpers.ts",
+        "purpose": "Pure helpers for DCABudgetConfigForm: safeParseFloat/safeParseInt, numericProps input-constraint builder, DCA ladder calculation, condition normalization. Extracted in Phase 5 (DCABudgetConfigForm.tsx shrunk 1238 to 1062 LOC)."
       }
     ],
     "layout_and_common": [

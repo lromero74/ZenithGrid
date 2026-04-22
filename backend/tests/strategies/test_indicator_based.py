@@ -6,8 +6,10 @@ Covers:
 - IndicatorBasedStrategy.calculate_base_order_size
 - IndicatorBasedStrategy.calculate_safety_order_size
 - IndicatorBasedStrategy.calculate_safety_order_price
-- IndicatorBasedStrategy._flatten_conditions
-- IndicatorBasedStrategy._needs_aggregate_indicators
+- indicator_based_helpers.flatten_conditions
+- indicator_based_helpers.needs_aggregate_indicators
+- indicator_based_helpers.build_ai_params
+- indicator_based_helpers.build_bull_flag_params
 - IndicatorBasedStrategy._check_entry_conditions
 - IndicatorBasedStrategy.should_buy (async)
 - IndicatorBasedStrategy.should_sell (async)
@@ -17,6 +19,12 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from app.strategies.indicator_based import IndicatorBasedStrategy
+from app.strategies.indicator_based_helpers import (
+    build_ai_params,
+    build_bull_flag_params,
+    flatten_conditions,
+    needs_aggregate_indicators,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -348,14 +356,12 @@ class TestFlattenConditions:
 
     def test_flat_list_format(self):
         """Old flat format should be returned as-is."""
-        strategy = _make_strategy()
         conditions = [{"type": "rsi"}, {"type": "macd"}]
-        result = strategy._flatten_conditions(conditions)
+        result = flatten_conditions(conditions)
         assert len(result) == 2
 
     def test_grouped_format(self):
         """New grouped format should be flattened into a single list."""
-        strategy = _make_strategy()
         expression = {
             "groups": [
                 {"conditions": [{"type": "rsi"}]},
@@ -363,19 +369,17 @@ class TestFlattenConditions:
             ],
             "groupLogic": "and",
         }
-        result = strategy._flatten_conditions(expression)
+        result = flatten_conditions(expression)
         assert len(result) == 3
 
     def test_empty_expression(self):
-        strategy = _make_strategy()
-        assert strategy._flatten_conditions(None) == []
-        assert strategy._flatten_conditions([]) == []
-        assert strategy._flatten_conditions({}) == []
+        assert flatten_conditions(None) == []
+        assert flatten_conditions([]) == []
+        assert flatten_conditions({}) == []
 
     def test_invalid_format(self):
         """Non-list, non-dict with 'groups' => empty list."""
-        strategy = _make_strategy()
-        assert strategy._flatten_conditions("not_valid") == []
+        assert flatten_conditions("not_valid") == []
 
 
 # =====================================================================
@@ -388,7 +392,11 @@ class TestNeedsAggregateIndicators:
 
     def test_no_conditions_returns_all_false(self):
         strategy = _make_strategy()
-        needs = strategy._needs_aggregate_indicators()
+        needs = needs_aggregate_indicators(
+            strategy.base_order_conditions,
+            strategy.safety_order_conditions,
+            strategy.take_profit_conditions,
+        )
         assert needs["ai_buy"] is False
         assert needs["ai_sell"] is False
         assert needs["bull_flag"] is False
@@ -397,28 +405,44 @@ class TestNeedsAggregateIndicators:
         strategy = _make_strategy({
             "base_order_conditions": [{"type": "ai_opinion", "operator": "equals", "value": "buy"}],
         })
-        needs = strategy._needs_aggregate_indicators()
+        needs = needs_aggregate_indicators(
+            strategy.base_order_conditions,
+            strategy.safety_order_conditions,
+            strategy.take_profit_conditions,
+        )
         assert needs["ai_buy"] is True
 
     def test_ai_confidence_in_take_profit_needs_ai_sell(self):
         strategy = _make_strategy({
             "take_profit_conditions": [{"type": "ai_confidence", "operator": "greater_than", "value": 70}],
         })
-        needs = strategy._needs_aggregate_indicators()
+        needs = needs_aggregate_indicators(
+            strategy.base_order_conditions,
+            strategy.safety_order_conditions,
+            strategy.take_profit_conditions,
+        )
         assert needs["ai_sell"] is True
 
     def test_bull_flag_in_conditions(self):
         strategy = _make_strategy({
             "base_order_conditions": [{"type": "bull_flag", "operator": "equals", "value": 1}],
         })
-        needs = strategy._needs_aggregate_indicators()
+        needs = needs_aggregate_indicators(
+            strategy.base_order_conditions,
+            strategy.safety_order_conditions,
+            strategy.take_profit_conditions,
+        )
         assert needs["bull_flag"] is True
 
     def test_legacy_ai_buy_indicator(self):
         strategy = _make_strategy({
             "base_order_conditions": [{"indicator": "ai_buy", "operator": "equals", "value": 1}],
         })
-        needs = strategy._needs_aggregate_indicators()
+        needs = needs_aggregate_indicators(
+            strategy.base_order_conditions,
+            strategy.safety_order_conditions,
+            strategy.take_profit_conditions,
+        )
         assert needs["ai_buy"] is True
 
 
@@ -1036,24 +1060,24 @@ class TestGetParams:
 
     def test_get_ai_params_defaults(self):
         strategy = _make_strategy()
-        params = strategy._get_ai_params()
+        params = build_ai_params(strategy.config)
         assert params.ai_model == "claude"
         assert params.ai_timeframe == "15m"
 
     def test_get_ai_params_custom(self):
         strategy = _make_strategy({"ai_model": "gpt", "ai_timeframe": "1h"})
-        params = strategy._get_ai_params()
+        params = build_ai_params(strategy.config)
         assert params.ai_model == "gpt"
         assert params.ai_timeframe == "1h"
 
     def test_get_bull_flag_params_defaults(self):
         strategy = _make_strategy()
-        params = strategy._get_bull_flag_params()
+        params = build_bull_flag_params(strategy.config)
         assert params.timeframe == "FIFTEEN_MINUTE"
         assert params.min_pole_gain_pct == 3.0
 
     def test_get_bull_flag_params_from_explicit_config(self):
         """Explicit bull_flag_min_pole_gain should override default."""
         strategy = _make_strategy({"bull_flag_min_pole_gain": 7.0})
-        params = strategy._get_bull_flag_params()
+        params = build_bull_flag_params(strategy.config)
         assert params.min_pole_gain_pct == 7.0

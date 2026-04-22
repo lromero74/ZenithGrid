@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.services.report_generator_service.html_builder import _format_chart_value
+from app.services.report_generator_service.html_charts import _format_chart_value
 
 
 def _load_chart_font(size: int) -> ImageFont.FreeTypeFont:

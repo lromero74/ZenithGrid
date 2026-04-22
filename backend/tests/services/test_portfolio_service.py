@@ -584,7 +584,7 @@ class TestBuildPortfolioHoldingsInPositions:
 
     def test_no_positions_available_equals_total(self):
         """Without open positions, available equals total_balance and in_positions is 0."""
-        from app.services.portfolio_service import _build_portfolio_holdings
+        from app.services.portfolio_calculations import _build_portfolio_holdings
 
         spot = [
             {"asset": "ETH", "total_balance_crypto": "5.0",
@@ -599,7 +599,7 @@ class TestBuildPortfolioHoldingsInPositions:
 
     def test_positions_reduce_available(self):
         """Open long positions reduce available and populate in_positions."""
-        from app.services.portfolio_service import _build_portfolio_holdings
+        from app.services.portfolio_calculations import _build_portfolio_holdings
 
         spot = [
             {"asset": "ETH", "total_balance_crypto": "5.0",
@@ -637,7 +637,7 @@ class TestBuildPortfolioHoldingsInPositions:
 
     def test_short_positions_excluded_from_in_positions(self):
         """Short positions should NOT count toward in_positions."""
-        from app.services.portfolio_service import _build_portfolio_holdings
+        from app.services.portfolio_calculations import _build_portfolio_holdings
 
         spot = [
             {"asset": "BTC", "total_balance_crypto": "1.0",
@@ -659,7 +659,7 @@ class TestBuildPortfolioHoldingsInPositions:
 
     def test_in_positions_capped_at_total_balance(self):
         """If positions exceed total balance (stale data), available floors at 0."""
-        from app.services.portfolio_service import _build_portfolio_holdings
+        from app.services.portfolio_calculations import _build_portfolio_holdings
 
         spot = [
             {"asset": "ETH", "total_balance_crypto": "1.0",
@@ -690,7 +690,7 @@ class TestComputeBalanceBreakdown:
 
     def test_happy_path_usd_positions(self):
         """Happy path: USD positions are reflected in breakdown."""
-        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+        from app.services.portfolio_calculations import _compute_balance_breakdown, BalanceBreakdownParams
 
         pos = MagicMock()
         pos.get_quote_currency.return_value = "USD"
@@ -719,7 +719,7 @@ class TestComputeBalanceBreakdown:
 
     def test_btc_positions_use_btc_price(self):
         """Edge case: BTC-quoted positions convert via btc_usd_price."""
-        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+        from app.services.portfolio_calculations import _compute_balance_breakdown, BalanceBreakdownParams
 
         pos = MagicMock()
         pos.get_quote_currency.return_value = "BTC"
@@ -744,7 +744,7 @@ class TestComputeBalanceBreakdown:
 
     def test_no_positions_all_free(self):
         """Edge case: no open positions means everything is free."""
-        from app.services.portfolio_service import _compute_balance_breakdown, BalanceBreakdownParams
+        from app.services.portfolio_calculations import _compute_balance_breakdown, BalanceBreakdownParams
 
         result = _compute_balance_breakdown(BalanceBreakdownParams(
             account_bots=[],

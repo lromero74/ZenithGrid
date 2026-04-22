@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from app.services.brand_service import get_brand
-from app.services.report_generator_service.expense_builder import (
+from app.services.report_generator_service.expense_schedule import (
     _MONTH_ABBREVS,
     _fmt_coverage_pct,
     _format_due_label,

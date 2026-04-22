@@ -162,11 +162,17 @@ def _make_candles(count=30, base_price=3000.0):
 
 @pytest.fixture(autouse=True)
 def _patch_externals():
-    """Patch external dependencies for all signal processor tests."""
+    """Patch external dependencies for all signal processor tests.
+
+    log_order_to_history + log_indicator_evaluation are imported in the
+    buy_decision submodule; save_ai_log is imported in both the top-level
+    orchestrator and the sell_decision submodule, so both sites are patched.
+    """
     with (
-        patch("app.trading_engine.signal_processor.log_order_to_history", new_callable=AsyncMock),
+        patch("app.trading_engine.signal_processor.buy_decision.log_order_to_history", new_callable=AsyncMock),
+        patch("app.trading_engine.signal_processor.buy_decision.log_indicator_evaluation", new_callable=AsyncMock),
         patch("app.trading_engine.signal_processor.save_ai_log", new_callable=AsyncMock),
-        patch("app.trading_engine.signal_processor.log_indicator_evaluation", new_callable=AsyncMock),
+        patch("app.trading_engine.signal_processor.sell_decision.save_ai_log", new_callable=AsyncMock),
     ):
         yield
 
@@ -421,17 +427,17 @@ class TestProcessSignal:
                 return_value=None,
             ),
             patch(
-                "app.trading_engine.signal_processor.get_open_positions_count",
+                "app.trading_engine.signal_processor.buy_decision.get_open_positions_count",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "app.trading_engine.signal_processor.create_position",
+                "app.trading_engine.signal_processor.buy_decision.create_position",
                 new_callable=AsyncMock,
                 return_value=mock_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_buy",
+                "app.trading_engine.signal_processor.buy_decision.execute_buy",
                 new_callable=AsyncMock,
                 return_value=mock_trade,
             ),
@@ -470,7 +476,7 @@ class TestProcessSignal:
                 return_value=None,
             ),
             patch(
-                "app.trading_engine.signal_processor.get_open_positions_count",
+                "app.trading_engine.signal_processor.buy_decision.get_open_positions_count",
                 new_callable=AsyncMock,
                 return_value=2,  # already at max
             ),
@@ -511,7 +517,7 @@ class TestProcessSignal:
                 return_value=existing_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_sell",
+                "app.trading_engine.signal_processor.sell_decision.execute_sell",
                 new_callable=AsyncMock,
                 return_value=(mock_trade, 150.0, 15.0),
             ),
@@ -583,7 +589,7 @@ class TestProcessSignal:
                 return_value=existing_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_sell",
+                "app.trading_engine.signal_processor.sell_decision.execute_sell",
                 new_callable=AsyncMock,
                 return_value=(None, 0.0, 0.0),  # None trade = limit order placed
             ),
@@ -619,17 +625,17 @@ class TestProcessSignal:
                 return_value=None,
             ),
             patch(
-                "app.trading_engine.signal_processor.get_open_positions_count",
+                "app.trading_engine.signal_processor.buy_decision.get_open_positions_count",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "app.trading_engine.signal_processor.create_position",
+                "app.trading_engine.signal_processor.buy_decision.create_position",
                 new_callable=AsyncMock,
                 return_value=mock_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_buy",
+                "app.trading_engine.signal_processor.buy_decision.execute_buy",
                 new_callable=AsyncMock,
                 side_effect=ValueError("Exchange rejected order"),
             ),
@@ -739,7 +745,7 @@ class TestProcessSignal:
                 return_value=existing_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_buy",
+                "app.trading_engine.signal_processor.buy_decision.execute_buy",
                 new_callable=AsyncMock,
                 side_effect=ValueError("Insufficient funds"),
             ),
@@ -820,12 +826,12 @@ class TestProcessSignal:
                 return_value=existing_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_sell",
+                "app.trading_engine.signal_processor.sell_decision.execute_sell",
                 new_callable=AsyncMock,
                 side_effect=mock_execute_sell,
             ),
             patch(
-                "app.trading_engine.signal_processor._record_signal",
+                "app.trading_engine.signal_processor.sell_decision._record_signal",
                 new_callable=AsyncMock,
             ) as mock_record,
         ):
@@ -867,7 +873,7 @@ class TestProcessSignal:
                 return_value=existing_position,
             ),
             patch(
-                "app.trading_engine.signal_processor.execute_sell",
+                "app.trading_engine.signal_processor.sell_decision.execute_sell",
                 new_callable=AsyncMock,
                 return_value=(None, 0.0, 0.0),  # No trade, but position still open
             ),

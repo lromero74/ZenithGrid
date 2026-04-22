@@ -23,6 +23,180 @@ from app.order_validation import validate_order_size
 logger = logging.getLogger(__name__)
 
 
+async def _place_grid_limit_order(
+    exchange_client: ExchangeClient,
+    db: AsyncSession,
+    bot: Bot,
+    position: Position,
+    side: str,
+    limit_price: float,
+    base_amount: float,
+    quote_amount: float,
+    trade_type: str,
+) -> Optional[str]:
+    """Place a single grid limit order and persist its PendingOrder row.
+
+    Reservation rules: BUY reserves quote currency, SELL reserves base
+    currency. Returns the exchange order_id on success, None on failure.
+
+    Does not commit — caller is expected to commit at a batch boundary.
+    """
+    product_id = bot.product_id
+    order_response = await exchange_client.create_limit_order(
+        product_id=product_id,
+        side=side,
+        limit_price=limit_price,
+        size=str(base_amount),
+        time_in_force="gtc",
+    )
+
+    order_id = (
+        order_response.get("order_id")
+        or order_response.get("success_response", {}).get("order_id")
+    )
+    if not order_id:
+        logger.error(f"No order_id in response: {order_response}")
+        return None
+
+    reserved_quote = quote_amount if side == "BUY" else 0.0
+    reserved_base = 0.0 if side == "BUY" else base_amount
+
+    pending_order = PendingOrder(
+        position_id=position.id,
+        bot_id=bot.id,
+        order_id=order_id,
+        product_id=product_id,
+        side=side,
+        order_type="LIMIT",
+        limit_price=limit_price,
+        quote_amount=quote_amount,
+        base_amount=base_amount,
+        trade_type=trade_type,
+        status="pending",
+        reserved_amount_quote=reserved_quote,
+        reserved_amount_base=reserved_base,
+        time_in_force="gtc",
+        is_manual=False,
+    )
+    db.add(pending_order)
+    return order_id
+
+
+def _compute_grid_order_size(
+    levels: List[float], current_price: float, total_investment: float, grid_mode: str,
+) -> Tuple[float, int]:
+    """Determine per-level quote size and buy-order count for the given mode."""
+    if grid_mode == "neutral":
+        buy_levels = [lvl for lvl in levels if lvl < current_price]
+        num_buy_orders = len(buy_levels)
+        if num_buy_orders == 0:
+            raise ValueError(f"No buy levels below current price {current_price:.8f}")
+        return total_investment / num_buy_orders, num_buy_orders
+    if grid_mode == "long":
+        num_buy_orders = len(levels)
+        return total_investment / num_buy_orders, num_buy_orders
+    raise ValueError(f"Unsupported grid_mode: {grid_mode}")
+
+
+async def _place_grid_buy_orders(
+    bot: Bot, position: Position, exchange_client: ExchangeClient, db: AsyncSession,
+    levels: List[float], current_price: float, order_size_quote: float, grid_mode: str,
+) -> Tuple[int, List[Dict[str, Any]]]:
+    """Place the buy-side orders for a grid. Returns (count, placed_summaries)."""
+    product_id = bot.product_id
+    placed: List[Dict[str, Any]] = []
+    buy_count = 0
+
+    for i, level_price in enumerate(levels):
+        if grid_mode == "neutral" and level_price >= current_price:
+            continue
+        base_amount = order_size_quote / level_price
+
+        try:
+            is_valid, error_msg = await validate_order_size(
+                exchange_client, product_id,
+                quote_amount=order_size_quote, base_amount=base_amount,
+            )
+            if not is_valid:
+                logger.warning(f"   ⚠️  Skipping grid level {i} at {level_price:.8f}: {error_msg}")
+                continue
+
+            logger.debug(f"   Placing buy order: price={level_price:.8f}, size={base_amount:.8f}")
+            order_id = await _place_grid_limit_order(
+                exchange_client, db, bot, position,
+                side="BUY", limit_price=level_price,
+                base_amount=base_amount, quote_amount=order_size_quote,
+                trade_type=f"grid_buy_{i}",
+            )
+            if not order_id:
+                continue
+
+            buy_count += 1
+            placed.append({
+                "level_index": i,
+                "price": level_price,
+                "order_type": "buy",
+                "order_id": order_id,
+                "status": "pending",
+                "size": base_amount,
+                "reserved_quote": order_size_quote,
+            })
+            logger.info(f"   ✅ Buy order placed at {level_price:.8f} (order_id: {order_id[:8]}...)")
+        except Exception as e:
+            logger.error(f"Failed to place buy order at {level_price:.8f}: {e}")
+
+    return buy_count, placed
+
+
+async def _place_grid_sell_orders(
+    bot: Bot, position: Position, exchange_client: ExchangeClient, db: AsyncSession,
+    levels: List[float], current_price: float, order_size_quote: float,
+) -> Tuple[int, List[Dict[str, Any]]]:
+    """Place the sell-side orders for a neutral grid above current_price."""
+    product_id = bot.product_id
+    placed: List[Dict[str, Any]] = []
+    sell_count = 0
+
+    sell_levels = [lvl for lvl in levels if lvl > current_price]
+    for i, level_price in enumerate(sell_levels):
+        base_amount = order_size_quote / level_price
+
+        try:
+            is_valid, error_msg = await validate_order_size(
+                exchange_client, product_id,
+                quote_amount=order_size_quote, base_amount=base_amount,
+            )
+            if not is_valid:
+                logger.warning(f"   ⚠️  Skipping sell level at {level_price:.8f}: {error_msg}")
+                continue
+
+            logger.debug(f"   Placing sell order: price={level_price:.8f}, size={base_amount:.8f}")
+            order_id = await _place_grid_limit_order(
+                exchange_client, db, bot, position,
+                side="SELL", limit_price=level_price,
+                base_amount=base_amount, quote_amount=order_size_quote,
+                trade_type=f"grid_sell_{i}",
+            )
+            if not order_id:
+                continue
+
+            sell_count += 1
+            placed.append({
+                "level_index": len(levels) - len(sell_levels) + i,
+                "price": level_price,
+                "order_type": "sell",
+                "order_id": order_id,
+                "status": "pending",
+                "size": base_amount,
+                "reserved_base": base_amount,
+            })
+            logger.info(f"   ✅ Sell order placed at {level_price:.8f} (order_id: {order_id[:8]}...)")
+        except Exception as e:
+            logger.error(f"Failed to place sell order at {level_price:.8f}: {e}")
+
+    return sell_count, placed
+
+
 async def initialize_grid(
     bot: Bot,
     position: Position,
@@ -60,186 +234,24 @@ async def initialize_grid(
     logger.info(f"🌐 Initializing {grid_mode} grid for {product_id} with {len(levels)} levels")
     logger.info(f"   Current price: {current_price:.8f}, Investment: {total_investment:.8f}")
 
-    # Calculate order size per level
-    if grid_mode == "neutral":
-        # Neutral grid: split investment across buy orders (sell side uses existing base currency)
-        buy_levels = [level for level in levels if level < current_price]
-        num_buy_orders = len(buy_levels)
+    order_size_quote, num_buy_orders = _compute_grid_order_size(
+        levels, current_price, total_investment, grid_mode,
+    )
+    logger.info(f"   {grid_mode.title()} mode: {num_buy_orders} buy orders @ {order_size_quote:.8f} each")
 
-        if num_buy_orders == 0:
-            raise ValueError(f"No buy levels below current price {current_price:.8f}")
-
-        order_size_quote = total_investment / num_buy_orders
-
-        logger.info(f"   Neutral mode: {num_buy_orders} buy orders @ {order_size_quote:.8f} each")
-
-    elif grid_mode == "long":
-        # Long grid: all investment goes into buy orders
-        num_buy_orders = len(levels)
-        order_size_quote = total_investment / num_buy_orders
-
-        logger.info(f"   Long mode: {num_buy_orders} buy orders @ {order_size_quote:.8f} each")
-
-    else:
-        raise ValueError(f"Unsupported grid_mode: {grid_mode}")
-
-    # Track placed orders
-    placed_orders = []
-    buy_orders_placed = 0
+    buy_orders_placed, buy_placed = await _place_grid_buy_orders(
+        bot, position, exchange_client, db,
+        levels, current_price, order_size_quote, grid_mode,
+    )
     sell_orders_placed = 0
-
-    # Place buy orders (below current price for neutral, all levels for long)
-    for i, level_price in enumerate(levels):
-        # Skip levels above current price in neutral mode
-        if grid_mode == "neutral" and level_price >= current_price:
-            continue
-
-        # Calculate base amount for this buy order
-        base_amount = order_size_quote / level_price
-
-        try:
-            # Validate order meets minimum size requirements
-            is_valid, error_msg = await validate_order_size(
-                exchange_client, product_id, quote_amount=order_size_quote, base_amount=base_amount
-            )
-
-            if not is_valid:
-                logger.warning(f"   ⚠️  Skipping grid level {i} at {level_price:.8f}: {error_msg}")
-                continue
-
-            # Place limit buy order on exchange
-            logger.debug(f"   Placing buy order: price={level_price:.8f}, size={base_amount:.8f}")
-
-            order_response = await exchange_client.create_limit_order(
-                product_id=product_id,
-                side="BUY",
-                limit_price=level_price,
-                size=str(base_amount),
-                time_in_force="gtc",
-            )
-
-            order_id = order_response.get("order_id") or order_response.get("success_response", {}).get("order_id")
-
-            if not order_id:
-                logger.error(f"No order_id in response: {order_response}")
-                continue
-
-            # Create PendingOrder record with capital reservation
-            pending_order = PendingOrder(
-                position_id=position.id,
-                bot_id=bot.id,
-                order_id=order_id,
-                product_id=product_id,
-                side="BUY",
-                order_type="LIMIT",
-                limit_price=level_price,
-                quote_amount=order_size_quote,
-                base_amount=base_amount,
-                trade_type=f"grid_buy_{i}",
-                status="pending",
-                reserved_amount_quote=order_size_quote,  # Reserve quote currency
-                reserved_amount_base=0.0,
-                time_in_force="gtc",
-                is_manual=False,
-            )
-
-            db.add(pending_order)
-            buy_orders_placed += 1
-
-            placed_orders.append({
-                "level_index": i,
-                "price": level_price,
-                "order_type": "buy",
-                "order_id": order_id,
-                "status": "pending",
-                "size": base_amount,
-                "reserved_quote": order_size_quote,
-            })
-
-            logger.info(f"   ✅ Buy order placed at {level_price:.8f} (order_id: {order_id[:8]}...)")
-
-        except Exception as e:
-            logger.error(f"Failed to place buy order at {level_price:.8f}: {e}")
-            # Continue with other orders
-
-    # Place sell orders (only in neutral mode, above current price)
+    sell_placed: List[Dict[str, Any]] = []
     if grid_mode == "neutral":
-        sell_levels = [level for level in levels if level > current_price]
+        sell_orders_placed, sell_placed = await _place_grid_sell_orders(
+            bot, position, exchange_client, db,
+            levels, current_price, order_size_quote,
+        )
+    placed_orders = buy_placed + sell_placed
 
-        # For sell orders, we need base currency
-        # Calculate how much base currency to sell at each level
-        # This assumes user has existing base currency inventory
-        # TODO: Add validation that user has enough base currency
-
-        for i, level_price in enumerate(sell_levels):
-            # Calculate size for sell order
-            # For now, use same quote value as buy orders
-            base_amount = order_size_quote / level_price
-
-            try:
-                # Validate order meets minimum size requirements
-                is_valid, error_msg = await validate_order_size(
-                    exchange_client, product_id, quote_amount=order_size_quote, base_amount=base_amount
-                )
-
-                if not is_valid:
-                    logger.warning(f"   ⚠️  Skipping sell level at {level_price:.8f}: {error_msg}")
-                    continue
-
-                logger.debug(f"   Placing sell order: price={level_price:.8f}, size={base_amount:.8f}")
-
-                order_response = await exchange_client.create_limit_order(
-                    product_id=product_id,
-                    side="SELL",
-                    limit_price=level_price,
-                    size=str(base_amount),
-                    time_in_force="gtc",
-                )
-
-                order_id = order_response.get("order_id") or order_response.get("success_response", {}).get("order_id")
-
-                if not order_id:
-                    logger.error(f"No order_id in sell response: {order_response}")
-                    continue
-
-                # Create PendingOrder record with base currency reservation
-                pending_order = PendingOrder(
-                    position_id=position.id,
-                    bot_id=bot.id,
-                    order_id=order_id,
-                    product_id=product_id,
-                    side="SELL",
-                    order_type="LIMIT",
-                    limit_price=level_price,
-                    quote_amount=order_size_quote,
-                    base_amount=base_amount,
-                    trade_type=f"grid_sell_{i}",
-                    status="pending",
-                    reserved_amount_quote=0.0,
-                    reserved_amount_base=base_amount,  # Reserve base currency
-                    time_in_force="gtc",
-                    is_manual=False,
-                )
-
-                db.add(pending_order)
-                sell_orders_placed += 1
-
-                placed_orders.append({
-                    "level_index": len(levels) - len(sell_levels) + i,
-                    "price": level_price,
-                    "order_type": "sell",
-                    "order_id": order_id,
-                    "status": "pending",
-                    "size": base_amount,
-                    "reserved_base": base_amount,
-                })
-
-                logger.info(f"   ✅ Sell order placed at {level_price:.8f} (order_id: {order_id[:8]}...)")
-
-            except Exception as e:
-                logger.error(f"Failed to place sell order at {level_price:.8f}: {e}")
-
-    # Commit all pending orders to database
     await db.commit()
 
     # Create grid state
@@ -400,43 +412,14 @@ async def handle_grid_order_fill(
 
                 try:
                     logger.info(f"   Placing corresponding sell order at {sell_price:.8f}")
-
-                    order_response = await exchange_client.create_limit_order(
-                        product_id=bot.product_id,
-                        side="SELL",
-                        limit_price=sell_price,
-                        size=str(sell_size),
-                        time_in_force="gtc",
+                    order_id = await _place_grid_limit_order(
+                        exchange_client, db, bot, position,
+                        side="SELL", limit_price=sell_price,
+                        base_amount=sell_size, quote_amount=sell_size * sell_price,
+                        trade_type="grid_sell_response",
                     )
-
-                    order_id = (
-                        order_response.get("order_id")
-                        or order_response.get("success_response", {}).get("order_id")
-                    )
-
                     if order_id:
-                        # Create new pending order
-                        new_sell_order = PendingOrder(
-                            position_id=position.id,
-                            bot_id=bot.id,
-                            order_id=order_id,
-                            product_id=bot.product_id,
-                            side="SELL",
-                            order_type="LIMIT",
-                            limit_price=sell_price,
-                            quote_amount=sell_size * sell_price,
-                            base_amount=sell_size,
-                            trade_type="grid_sell_response",
-                            status="pending",
-                            reserved_amount_quote=0.0,
-                            reserved_amount_base=sell_size,
-                            time_in_force="gtc",
-                            is_manual=False,
-                        )
-
-                        db.add(new_sell_order)
                         await db.commit()
-
                         logger.info(f"   ✅ Sell order placed at {sell_price:.8f}")
                         return order_id
 
@@ -460,42 +443,14 @@ async def handle_grid_order_fill(
 
                 try:
                     logger.info(f"   Placing corresponding buy order at {buy_price:.8f}")
-
-                    order_response = await exchange_client.create_limit_order(
-                        product_id=bot.product_id,
-                        side="BUY",
-                        limit_price=buy_price,
-                        size=str(buy_size),
-                        time_in_force="gtc",
+                    order_id = await _place_grid_limit_order(
+                        exchange_client, db, bot, position,
+                        side="BUY", limit_price=buy_price,
+                        base_amount=buy_size, quote_amount=buy_size * buy_price,
+                        trade_type="grid_buy_response",
                     )
-
-                    order_id = (
-                        order_response.get("order_id")
-                        or order_response.get("success_response", {}).get("order_id")
-                    )
-
                     if order_id:
-                        new_buy_order = PendingOrder(
-                            position_id=position.id,
-                            bot_id=bot.id,
-                            order_id=order_id,
-                            product_id=bot.product_id,
-                            side="BUY",
-                            order_type="LIMIT",
-                            limit_price=buy_price,
-                            quote_amount=buy_size * buy_price,
-                            base_amount=buy_size,
-                            trade_type="grid_buy_response",
-                            status="pending",
-                            reserved_amount_quote=buy_size * buy_price,
-                            reserved_amount_base=0.0,
-                            time_in_force="gtc",
-                            is_manual=False,
-                        )
-
-                        db.add(new_buy_order)
                         await db.commit()
-
                         logger.info(f"   ✅ Buy order placed at {buy_price:.8f}")
                         return order_id
 

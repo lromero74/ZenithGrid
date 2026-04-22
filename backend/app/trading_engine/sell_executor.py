@@ -480,6 +480,71 @@ async def _post_short_sell_operations(
         logger.warning(f"Failed to broadcast short sell WebSocket notification: {e}")
 
 
+async def _submit_short_sell_market_order(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    position: Position,
+    product_id: str,
+    base_amount_rounded: float,
+    current_price: float,
+    commit_on_error: bool,
+) -> Tuple[str, float, float, float]:
+    """Submit a market short-sell order and reconcile the fill.
+
+    Mirrors _submit_sell_market_order but uses the short-sell reconciler
+    and the short-specific error message. Re-raises on failure after
+    optionally recording the error on the position.
+    """
+    await shutdown_manager.increment_in_flight()
+    try:
+        order_response = await trading_client.sell(
+            product_id=product_id, base_amount=base_amount_rounded,
+        )
+        logger.info(f"Exchange short sell order response: {order_response}")
+
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
+        if not order_response.get("success", False):
+            error_response = order_response.get("error_response", {})
+            if error_response:
+                error_msg = error_response.get("message", "Unknown error")
+                error_details = error_response.get("error_details", "")
+                error_code = error_response.get("error", "UNKNOWN")
+                raise ValueError(
+                    f"Short sell failed [{error_code}]: {error_msg}. Details: {error_details}"
+                )
+            raise ValueError(f"Short sell failed. Full response: {order_response}")
+
+        success_response = order_response.get("success_response", {})
+        order_id = success_response.get("order_id", "") or order_response.get("order_id", "")
+
+        if not order_id:
+            logger.error(f"Full exchange response: {order_response}")
+            raise ValueError("No order_id in successful exchange response")
+
+        actual_base_sold, quote_received, actual_price = await _reconcile_short_sell_fill(
+            exchange=exchange,
+            order_id=order_id,
+            fallback_base=base_amount_rounded,
+            fallback_price=current_price,
+        )
+        return order_id, actual_base_sold, quote_received, actual_price
+
+    except Exception as e:
+        logger.error(f"Error executing short sell order: {e}")
+        if commit_on_error:
+            position.last_error_message = f"Short sell failed: {str(e)}"
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        raise
+    finally:
+        await shutdown_manager.decrement_in_flight()
+
+
 async def execute_sell_short(
     db: AsyncSession,
     exchange: ExchangeClient,
@@ -561,56 +626,16 @@ async def execute_sell_short(
             await db.commit()
         raise ValueError(error)
 
-    # Place order on exchange
-    order_id = None
-    await shutdown_manager.increment_in_flight()
-    try:
-        order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount_rounded)
-
-        logger.info(f"Exchange short sell order response: {order_response}")
-
-        # Check for PropGuard safety block
-        if order_response.get("blocked_by") == "propguard":
-            raise ValueError(
-                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
-            )
-
-        # Check success flag
-        if not order_response.get("success", False):
-            error_response = order_response.get("error_response", {})
-            if error_response:
-                error_msg = error_response.get("message", "Unknown error")
-                error_details = error_response.get("error_details", "")
-                error_code = error_response.get("error", "UNKNOWN")
-                raise ValueError(f"Short sell failed [{error_code}]: {error_msg}. Details: {error_details}")
-            else:
-                raise ValueError(f"Short sell failed. Full response: {order_response}")
-
-        # Extract order_id
-        success_response = order_response.get("success_response", {})
-        order_id = success_response.get("order_id", "") or order_response.get("order_id", "")
-
-        if not order_id:
-            logger.error(f"Full exchange response: {order_response}")
-            raise ValueError("No order_id in successful exchange response")
-
-        # Reconcile fill data from exchange
-        actual_base_sold, quote_received, actual_price = await _reconcile_short_sell_fill(
-            exchange=exchange,
-            order_id=order_id,
-            fallback_base=base_amount_rounded,
-            fallback_price=current_price,
-        )
-
-    except Exception as e:
-        logger.error(f"Error executing short sell order: {e}")
-        if commit_on_error:
-            position.last_error_message = f"Short sell failed: {str(e)}"
-            position.last_error_timestamp = datetime.utcnow()
-            await db.commit()
-        raise
-    finally:
-        await shutdown_manager.decrement_in_flight()
+    order_id, actual_base_sold, quote_received, actual_price = await _submit_short_sell_market_order(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        position=position,
+        product_id=product_id,
+        base_amount_rounded=base_amount_rounded,
+        current_price=current_price,
+        commit_on_error=commit_on_error,
+    )
 
     # Record trade and update position
     trade = await _create_short_sell_trade_record(
@@ -858,6 +883,133 @@ async def _post_sell_operations(
         logger.warning(f"Failed to trigger re-analysis (trade was recorded): {e}")
 
 
+async def _close_sell_position_as_dust(
+    db: AsyncSession,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    current_price: float,
+) -> Tuple[None, float, float]:
+    """Close a long position as dust (rounds to zero base) with no exchange order.
+
+    Calculates profit at current price, finalizes the Position row, and
+    publishes a POSITION_CLOSED event (best-effort).
+    """
+    quote_value = position.total_base_acquired * current_price
+    spent = position.total_quote_spent or 0
+    dust_profit = quote_value - spent
+    dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
+    position.status = "closed"
+    position.closed_at = datetime.utcnow()
+    position.close_price = current_price
+    position.profit_quote = dust_profit
+    position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
+    position.profit_percentage = dust_pct
+    position.total_quote_received = quote_value
+    await db.commit()
+    try:
+        from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload
+        await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
+            position_id=position.id,
+            user_id=position.user_id,
+            product_id=product_id,
+            bot_id=bot.id,
+            profit_quote=dust_profit,
+            profit_percentage=dust_pct,
+        ))
+    except Exception as e:
+        logger.warning(f"Event bus publish failed (non-critical): {e}")
+    return None, dust_profit, dust_pct
+
+
+async def _submit_sell_market_order(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    base_amount: float,
+    current_price: float,
+) -> Tuple[str, float, float, float]:
+    """Submit a market sell order and reconcile the fill.
+
+    Wraps exchange-submission bookkeeping (shutdown-manager counters,
+    PropGuard gate, error-path position + order-history logging) and
+    returns (order_id, actual_base_sold, quote_received, actual_price).
+
+    Re-raises the original exception on failure after logging.
+    """
+    await shutdown_manager.increment_in_flight()
+    try:
+        order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount)
+        logger.info(f"Exchange sell order response: {order_response}")
+
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
+        if not order_response.get("success", False):
+            error_response = order_response.get("error_response", {})
+            if error_response:
+                error_msg = error_response.get("message", "Unknown error")
+                error_details = error_response.get("error_details", "")
+                error_code = error_response.get("error", "UNKNOWN")
+                raise ValueError(
+                    f"Sell order failed [{error_code}]: {error_msg}. Details: {error_details}"
+                )
+            raise ValueError(f"Sell order failed with no error details. Full response: {order_response}")
+
+        success_response = order_response.get("success_response", {})
+        order_id = success_response.get("order_id", "") or order_response.get("order_id", "")
+
+        if not order_id:
+            logger.error(f"Full exchange response: {order_response}")
+            raise ValueError(
+                f"No order_id found in successful exchange response. "
+                f"Response keys: {list(order_response.keys())}"
+            )
+
+        actual_base_sold, quote_received, actual_price = await _reconcile_sell_fill(
+            exchange=exchange,
+            order_id=order_id,
+            product_id=product_id,
+            fallback_base=base_amount,
+            fallback_price=current_price,
+        )
+        return order_id, actual_base_sold, quote_received, actual_price
+
+    except Exception as e:
+        logger.error(f"Error executing sell order: {e}")
+
+        try:
+            position.last_error_message = f"Sell failed: {str(e)[:200]}"
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        except Exception:
+            pass  # Don't mask the original error
+
+        try:
+            await log_order_to_history(
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="SELL", order_type="MARKET",
+                    trade_type="sell", quote_amount=base_amount * current_price,
+                    price=current_price, status="failed",
+                    error_message=str(e)[:200],
+                ),
+            )
+            await db.commit()
+        except Exception:
+            pass
+
+        raise
+
+    finally:
+        await shutdown_manager.decrement_in_flight()
+
+
 async def execute_sell(
     db: AsyncSession,
     exchange: ExchangeClient,
@@ -976,120 +1128,20 @@ async def execute_sell(
             f"  Sell amount rounds to 0 for {product_id} "
             f"(raw={raw_amount:.8f}, precision={precision}). Closing as dust."
         )
-        # Calculate actual profit at current price using position's base holdings
-        quote_value = position.total_base_acquired * current_price
-        spent = position.total_quote_spent or 0
-        dust_profit = quote_value - spent
-        dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
-        position.status = "closed"
-        position.closed_at = datetime.utcnow()
-        position.close_price = current_price
-        position.profit_quote = dust_profit
-        position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
-        position.profit_percentage = dust_pct
-        position.total_quote_received = quote_value
-        await db.commit()
-        try:
-            from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload
-            await event_bus.publish(POSITION_CLOSED, PositionClosedPayload(
-                position_id=position.id,
-                user_id=position.user_id,
-                product_id=product_id,
-                bot_id=bot.id,
-                profit_quote=dust_profit,
-                profit_percentage=dust_pct,
-            ))
-        except Exception as e:
-            logger.warning(f"Event bus publish failed (non-critical): {e}")
-        return None, dust_profit, dust_pct
-
-    # Execute order via TradingClient (currency-agnostic)
-    # Track this as an in-flight order for graceful shutdown
-    order_id = None
-    actual_base_sold = base_amount
-    actual_price = current_price
-    quote_received = base_amount * current_price
-
-    await shutdown_manager.increment_in_flight()
-    try:
-        order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount)
-
-        # Log the full response for debugging
-        logger.info(f"Exchange sell order response: {order_response}")
-
-        # Check for PropGuard safety block
-        if order_response.get("blocked_by") == "propguard":
-            raise ValueError(
-                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
-            )
-
-        # Check success flag first
-        if not order_response.get("success", False):
-            # Order failed - check error response
-            error_response = order_response.get("error_response", {})
-            if error_response:
-                error_msg = error_response.get("message", "Unknown error")
-                error_details = error_response.get("error_details", "")
-                error_code = error_response.get("error", "UNKNOWN")
-                raise ValueError(f"Sell order failed [{error_code}]: {error_msg}. Details: {error_details}")
-            else:
-                raise ValueError(f"Sell order failed with no error details. Full response: {order_response}")
-
-        # Extract order_id from success_response (documented format)
-        success_response = order_response.get("success_response", {})
-        order_id = success_response.get("order_id", "")
-
-        # Fallback: try top-level order_id
-        if not order_id:
-            order_id = order_response.get("order_id", "")
-
-        # CRITICAL: Validate order_id is present
-        if not order_id:
-            logger.error(f"Full exchange response: {order_response}")
-            raise ValueError(
-                f"No order_id found in successful exchange response. Response keys: {list(order_response.keys())}"
-            )
-
-        # Fetch actual fill data from exchange with retry
-        actual_base_sold, quote_received, actual_price = await _reconcile_sell_fill(
-            exchange=exchange,
-            order_id=order_id,
-            product_id=product_id,
-            fallback_base=base_amount,
-            fallback_price=current_price,
+        return await _close_sell_position_as_dust(
+            db, bot, product_id, position, current_price,
         )
 
-    except Exception as e:
-        logger.error(f"Error executing sell order: {e}")
-
-        # Record error on position for UI visibility
-        try:
-            position.last_error_message = f"Sell failed: {str(e)[:200]}"
-            position.last_error_timestamp = datetime.utcnow()
-            await db.commit()
-        except Exception:
-            pass  # Don't mask the original error
-
-        # Log failed sell to order history and commit so it persists
-        # (log_order_to_history only adds to session, doesn't commit)
-        try:
-            await log_order_to_history(
-                db=db, bot=bot, position=position,
-                entry=OrderLogEntry(
-                    product_id=product_id, side="SELL", order_type="MARKET",
-                    trade_type="sell", quote_amount=base_amount * current_price,
-                    price=current_price, status="failed",
-                    error_message=str(e)[:200],
-                ),
-            )
-            await db.commit()
-        except Exception:
-            pass
-
-        raise
-
-    finally:
-        await shutdown_manager.decrement_in_flight()
+    order_id, actual_base_sold, quote_received, actual_price = await _submit_sell_market_order(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        base_amount=base_amount,
+        current_price=current_price,
+    )
 
     # Create trade record, compute profit, and close position
     trade, profit_quote, profit_percentage = await _create_sell_trade_record(
