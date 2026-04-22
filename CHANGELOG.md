@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.163.1] - 2026-04-22
+
+### Changed
+- **Architecture documentation drift fixes** — Two service modules that were never recorded in `docs/architecture/backend.json` are now listed: `services/account_access.py` (shared multi-user access filter helpers) and `services/account_sharing_service.py` (invitation and membership business logic). Four stale frontend component paths in `docs/architecture/frontend.json` were corrected to reflect their actual locations after Phase 5.4: `DCABudgetConfigForm`, `AdvancedConditionBuilder`, and `AccountValueChart` now point at `components/trading/`, and `BlacklistManager` points at `components/settings/`. No code changes.
+
 ## [v2.163.0] - 2026-04-21
 
 ### Changed

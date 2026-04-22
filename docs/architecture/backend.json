@@ -1193,6 +1193,11 @@
   "models_note": "Models are split into domain files under backend/app/models/: auth.py, trading.py, reporting.py, social.py, content.py, donations.py, system.py. All tables live in named PostgreSQL schemas matching their domain (auth, trading, reporting, social, content, system) as of migration 068_domain_schemas.py. Foreign keys across schemas use fully-qualified strings (e.g. 'auth.users.id').",
   "services": [
     {
+      "file": "services/account_access.py",
+      "purpose": "Shared filter utilities for multi-user account access — SQLAlchemy filter clauses and helper functions that check both ownership (account.user_id) and active membership (AccountMembership with non-expired expires_at). Supports 'manager' (read+write) and 'shadow' (read-only) roles. Used across routers and services to enforce tenant isolation + shared-access semantics consistently.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/account_responses.py",
       "purpose": "Shared response schemas and builders for account endpoints: RebalanceSettingsResponse pydantic DTO and build_rebalance_response(account) factory. Used by both accounts_query_router and accounts_mutation_router; extracted from accounts_query_router in Phase 5.3 so neither router has to reach into the other's private helpers.",
       "type": "infrastructure"
@@ -1200,6 +1205,11 @@
     {
       "file": "services/account_service.py",
       "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/account_sharing_service.py",
+      "purpose": "Business logic for account co-management: creating/validating invitations (7-day TTL), accepting/declining/revoking invitations (single-use tokens, email match enforcement), managing memberships (add, change role, remove), and audit event logging via AccountMembershipEvent. Enforces role whitelist ('manager'/'shadow' only, never 'owner') and prevents account owner removal via membership delete.",
       "type": "infrastructure"
     },
     {
