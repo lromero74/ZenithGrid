@@ -544,6 +544,36 @@ class TestListMembers:
         members = await list_members(db_session, shared_account.id)
         assert members == []
 
+    @pytest.mark.asyncio
+    async def test_list_members_redacts_email_for_non_owner(
+        self, db_session, shared_account, manager_membership, member_user
+    ):
+        """Privacy: non-owner callers see display_name only; email is null."""
+        from app.services.account_sharing_service import list_members
+
+        members = await list_members(
+            db_session, shared_account.id, caller_role="shadow"
+        )
+        assert len(members) == 1
+        assert members[0]["email"] is None
+        assert members[0]["display_name"] == member_user.display_name
+        # invited_by must not fall back to inviter email either
+        if members[0]["invited_by"] is not None:
+            assert "@" not in members[0]["invited_by"]
+
+    @pytest.mark.asyncio
+    async def test_list_members_owner_sees_email(
+        self, db_session, shared_account, manager_membership, member_user
+    ):
+        """Happy path: owner caller sees the full email field (default role="owner")."""
+        from app.services.account_sharing_service import list_members
+
+        members = await list_members(
+            db_session, shared_account.id, caller_role="owner"
+        )
+        assert len(members) == 1
+        assert members[0]["email"] == member_user.email
+
 
 # =============================================================================
 # Service: update_member_role

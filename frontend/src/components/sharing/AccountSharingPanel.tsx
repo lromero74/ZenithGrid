@@ -13,7 +13,7 @@ import { InviteMemberModal } from './InviteMemberModal'
 
 interface Member {
   user_id: number
-  email: string
+  email: string | null
   display_name: string | null
   role: 'manager' | 'shadow'
   joined_at: string
@@ -104,8 +104,9 @@ export function AccountSharingPanel({
     }
   }
 
-  const handleRemoveMember = async (userId: number, memberEmail: string) => {
-    if (!confirm(`Remove ${memberEmail} from this account?`)) return
+  const handleRemoveMember = async (userId: number, memberEmail: string | null) => {
+    const label = memberEmail || 'this member'
+    if (!confirm(`Remove ${label} from this account?`)) return
     setUpdatingMember(userId)
     try {
       const res = await authFetch(`/api/accounts/${accountId}/sharing/members/${userId}`, {
@@ -296,13 +297,13 @@ interface MemberRowProps {
   isOwner: boolean
   isUpdating: boolean
   onChangeRole: (userId: number, role: 'manager' | 'shadow') => void
-  onRemove: (userId: number, email: string) => void
+  onRemove: (userId: number, email: string | null) => void
 }
 
 function MemberRow({ member, isOwner, isUpdating, onChangeRole, onRemove }: MemberRowProps) {
   const [roleOpen, setRoleOpen] = useState(false)
 
-  const displayName = member.display_name || member.email
+  const displayName = member.display_name || member.email || 'Member'
 
   return (
     <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-opacity ${
@@ -312,12 +313,12 @@ function MemberRow({ member, isOwner, isUpdating, onChangeRole, onRemove }: Memb
         {/* Avatar placeholder */}
         <div className="w-7 h-7 rounded-full bg-violet-700/40 flex items-center justify-center flex-shrink-0">
           <span className="text-xs font-semibold text-violet-300">
-            {(member.display_name || member.email).charAt(0).toUpperCase()}
+            {displayName.charAt(0).toUpperCase()}
           </span>
         </div>
         <div className="min-w-0">
           <p className="text-sm text-slate-200 truncate">{displayName}</p>
-          {member.display_name && (
+          {member.display_name && member.email && (
             <p className="text-xs text-slate-500 truncate">{member.email}</p>
           )}
         </div>

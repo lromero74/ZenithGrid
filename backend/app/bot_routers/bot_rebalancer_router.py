@@ -50,12 +50,9 @@ async def get_rebalancer_state(
     if not acc_q.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Load bots for this account owned by current user
+    # Load all bots on this account (any member who can view the account can see them)
     bots_q = await db.execute(
-        select(Bot).where(
-            Bot.account_id == account_id,
-            Bot.user_id == current_user.id,
-        )
+        select(Bot).where(Bot.account_id == account_id)
     )
     bots = bots_q.scalars().all()
 

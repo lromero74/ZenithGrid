@@ -241,8 +241,15 @@ async def revoke_invitation(
 async def list_members(
     db: AsyncSession,
     account_id: int,
+    caller_role: str = "owner",
 ) -> list[dict]:
-    """Return all active (non-expired) members for an account."""
+    """Return all active (non-expired) members for an account.
+
+    When the caller is not the account owner, email addresses are redacted so
+    peer members don't leak each other's contact info. The owner always sees
+    everyone's email. `invited_by` falls back from display_name to email only
+    for the owner view.
+    """
     result = await db.execute(
         select(AccountMembership).where(
             AccountMembership.account_id == account_id,
@@ -250,20 +257,27 @@ async def list_members(
     )
     memberships = result.scalars().all()
 
+    is_owner = caller_role == "owner"
     members = []
     for m in memberships:
         if m.is_expired:
             continue
         user = await db.get(User, m.user_id)
         inviter = await db.get(User, m.invited_by_user_id) if m.invited_by_user_id else None
+        if is_owner:
+            email_field = user.email if user else "unknown"
+            invited_by = (inviter.display_name or inviter.email) if inviter else None
+        else:
+            email_field = None
+            invited_by = inviter.display_name if inviter else None
         members.append({
             "user_id": m.user_id,
-            "email": user.email if user else "unknown",
+            "email": email_field,
             "display_name": user.display_name if user else None,
             "role": m.role,
             "joined_at": m.joined_at.isoformat(),
             "expires_at": m.expires_at.isoformat() if m.expires_at else None,
-            "invited_by": (inviter.display_name or inviter.email) if inviter else None,
+            "invited_by": invited_by,
         })
     return members
 

@@ -735,16 +735,8 @@ async def download_report_pdf(
     db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Download a report as PDF."""
-    result = await db.execute(
-        select(Report).where(
-            Report.id == report_id,
-            Report.user_id == current_user.id,
-        )
-    )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    """Download a report as PDF. Any member with read access to the account can download."""
+    report = await _get_accessible_report(db, report_id, current_user.id)
 
     if not report.pdf_content:
         raise HTTPException(status_code=404, detail="PDF not available for this report")

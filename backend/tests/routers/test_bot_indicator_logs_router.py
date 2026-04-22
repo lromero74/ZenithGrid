@@ -8,7 +8,8 @@ import pytest
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 
-from app.models import Bot, IndicatorLog, User
+from app.models import Account, Bot, IndicatorLog, User
+from app.models.sharing import AccountMembership
 
 
 # =============================================================================
@@ -359,6 +360,79 @@ class TestGetIndicatorLogsSummary:
         with pytest.raises(HTTPException) as exc_info:
             await get_indicator_logs_summary(
                 bot_id=99999, db=db_session, current_user=user
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_shared_member_can_read_indicator_logs(self, db_session):
+        """Shared-member access: a shadow member can read logs on the owner's bot."""
+        from app.bot_routers.bot_indicator_logs_router import get_indicator_logs
+
+        owner = User(email="owner_ind@example.com", hashed_password="x", is_active=True)
+        member = User(email="member_ind@example.com", hashed_password="x", is_active=True)
+        db_session.add_all([owner, member])
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="SharedInd", type="cex",
+            exchange="coinbase", is_active=True, is_default=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=member.id, role="shadow",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        await db_session.flush()
+
+        bot = Bot(
+            user_id=owner.id, account_id=account.id, name="OwnerBot",
+            strategy_type="indicator_dca", strategy_config={"indicators": ["rsi"]},
+            product_id="ETH-BTC", product_ids=["ETH-BTC"], is_active=True,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(bot)
+        await db_session.flush()
+        await _make_indicator_log(db_session, bot, phase="base_order")
+
+        result = await get_indicator_logs(
+            bot_id=bot.id, limit=50, offset=0, db=db_session, current_user=member
+        )
+        assert len(result) == 1
+        assert result[0].phase == "base_order"
+
+    @pytest.mark.asyncio
+    async def test_unrelated_user_cannot_read_indicator_logs(self, db_session):
+        """Security: a user with no membership still gets 404."""
+        from app.bot_routers.bot_indicator_logs_router import get_indicator_logs
+
+        owner = User(email="owner_ind2@example.com", hashed_password="x", is_active=True)
+        stranger = User(email="stranger_ind@example.com", hashed_password="x", is_active=True)
+        db_session.add_all([owner, stranger])
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="PrivInd", type="cex",
+            exchange="coinbase", is_active=True, is_default=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        bot = Bot(
+            user_id=owner.id, account_id=account.id, name="OwnerBot2",
+            strategy_type="indicator_dca", strategy_config={"indicators": ["rsi"]},
+            product_id="ETH-BTC", product_ids=["ETH-BTC"], is_active=True,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(bot)
+        await db_session.flush()
+        await _make_indicator_log(db_session, bot, phase="base_order")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_indicator_logs(
+                bot_id=bot.id, limit=50, offset=0,
+                db=db_session, current_user=stranger
             )
         assert exc_info.value.status_code == 404
 

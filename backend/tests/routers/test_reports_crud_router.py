@@ -807,6 +807,57 @@ class TestDownloadReportPdf:
             )
         assert exc.value.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_shared_member_can_download_pdf(self, db_session):
+        """Shared-member access: manager on owner's account can download the PDF."""
+        from app.models.sharing import AccountMembership
+
+        owner = await _make_user(db_session, "pdf_owner@example.com")
+        manager = await _make_user(db_session, "pdf_manager@example.com")
+        account = await _make_account(db_session, owner.id, name="SharedPdfAcct")
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=manager.id, role="manager",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        await db_session.flush()
+
+        report = await _make_report(
+            db_session, owner.id, account_id=account.id,
+            pdf_content=b"%PDF-1.4 shared",
+        )
+
+        response = await download_report_pdf(
+            report_id=report.id, db=db_session, current_user=manager,
+        )
+        assert response.media_type == "application/pdf"
+        assert response.body == b"%PDF-1.4 shared"
+
+    @pytest.mark.asyncio
+    async def test_shared_member_delete_report_forbidden(self, db_session):
+        """Security: shared member cannot delete the owner's report (owner-only write)."""
+        from app.auth.dependencies import Perm  # noqa: F401 reused by require_permission
+        from app.models.sharing import AccountMembership
+
+        owner = await _make_user(db_session, "pdf_del_owner@example.com")
+        manager = await _make_user(db_session, "pdf_del_mgr@example.com")
+        account = await _make_account(db_session, owner.id, name="DelTestAcct")
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=manager.id, role="manager",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        await db_session.flush()
+
+        report = await _make_report(
+            db_session, owner.id, account_id=account.id,
+            pdf_content=b"%PDF-1.4 undeletable",
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_report(
+                report_id=report.id, db=db_session, current_user=manager,
+            )
+        assert exc.value.status_code == 404
+
 
 # ---------------------------------------------------------------------------
 # create_goal happy path (sweep v2.160.4: schema previously missed

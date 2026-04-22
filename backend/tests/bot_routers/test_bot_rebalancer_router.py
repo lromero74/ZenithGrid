@@ -399,3 +399,85 @@ class TestSaveRebalancer:
         assert bot.bot_rebalancer_enabled is False
         # budget_percentage should NOT be overwritten for disabled slots
         assert bot.budget_percentage == 33.0
+
+
+class TestRebalancerSharedMemberAccess:
+    """Rebalancer GET is visible to any account member; PUT is owner-only."""
+
+    @pytest.mark.asyncio
+    async def test_shadow_member_sees_owner_bots_in_rebalancer(self, db_session):
+        """Shadow-member access: rebalancer GET lists the owner's bots on a shared account."""
+        from app.models.sharing import AccountMembership
+
+        owner = await _create_user(db_session, email="reb_owner@example.com")
+        member = User(
+            email="reb_shadow@example.com",
+            hashed_password="x", is_active=True, is_superuser=False,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(member)
+        await db_session.flush()
+
+        account = await _create_account(db_session, owner, name="Shared reb")
+        await _create_bot(
+            db_session, owner, account, name="Owner Bot", product_ids=["ETH-USDC"]
+        )
+
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=member.id, role="shadow",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        await db_session.flush()
+
+        app = _build_app(db_session, member)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/api/bots/rebalancer?account_id={account.id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        usdc_group = next(g for g in data if g["base_currency"] == "USDC")
+        assert len(usdc_group["bots"]) == 1
+        assert usdc_group["bots"][0]["name"] == "Owner Bot"
+
+    @pytest.mark.asyncio
+    async def test_shadow_member_cannot_save_rebalancer(self, db_session):
+        """Security: non-owner members get 403 when trying to save rebalancer settings."""
+        from app.models.sharing import AccountMembership
+
+        owner = await _create_user(db_session, email="reb_owner2@example.com")
+        manager = User(
+            email="reb_manager@example.com",
+            hashed_password="x", is_active=True, is_superuser=False,
+            created_at=datetime.utcnow(),
+        )
+        db_session.add(manager)
+        await db_session.flush()
+
+        account = await _create_account(db_session, owner, name="Shared reb 2")
+        bot = await _create_bot(
+            db_session, owner, account, name="Owner Bot 2", product_ids=["ETH-USDC"]
+        )
+
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=manager.id, role="manager",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        await db_session.flush()
+
+        payload = {
+            "account_id": account.id,
+            "base_currency": "USDC",
+            "max_total_pct": 100.0,
+            "overweight_tolerance_pct": 5.0,
+            "bots": [{"bot_id": bot.id, "enabled": True, "target_pct": 50.0}],
+        }
+
+        app = _build_app(db_session, manager)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.put("/api/bots/rebalancer", json=payload)
+
+        assert response.status_code == 403
