@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.0] - 2026-04-22
+
+### Security
+- **MFA lockout after repeated failures** — The shared `verify_mfa` helper (used by panic-sell, account deletion, account conversion, and anything else that gates on a fresh code) now counts failed attempts per user and returns HTTP 429 after 5 invalid codes within 15 minutes. A successful verification clears the counter, so legitimate users who mistype once are never locked out in practice. Previously an attacker who had session access could brute-force the 6-digit TOTP window indefinitely.
+- **Invitation endpoints now rate-limited per user** — Invitation actions are capped by an in-memory sliding-window limiter keyed by user ID (not just IP). Inviting: 10/hr per account owner per specific account and 30/hr total across all an owner's accounts (the global cap is new; the per-account cap existed but ran as a DB query on every call — the new limiter is 0-RTT). Token actions (preview / accept / decline): 30/hr per authenticated user. Legit users never notice; enumeration / spray tooling hits 429 quickly.
+- **Invitation-token errors no longer leak token state** — Previously the preview / accept / decline endpoints returned distinct error text for "token does not exist" vs. "already accepted" vs. "already declined" vs. "expired" vs. "invited email does not match your account," which let anyone with one valid-looking token probe for state transitions. All five failures now collapse to a single generic "Invalid or expired invitation." The service layer still raises descriptive errors for internal tests and logging.
+- **Perps-portfolio endpoints no longer leak account existence** — `GET /accounts/{id}/perps-portfolio` and `POST /accounts/{id}/link-perps-portfolio` previously responded with 403 "Not authorized" when an authenticated user queried an account they could not access, which disclosed that the account existed. Both endpoints now uniformly return 404 "Account not found" for any inaccessible account ID. The GET endpoint additionally honors account-sharing membership (accessible to owners, managers, and shadows) rather than strict ownership; linking remains owner-only.
+
+### Added
+- **`services/user_rate_limit.py`** — Small in-memory per-user sliding-window limiter module. `check_user_rate_limit` counts allowed requests, `record_user_failure` / `clear_user_failures` handle brute-force-sensitive counters, and `prune_stale` returns memory. Drop-in: swap the module-level dict for a Redis store if the deployment ever goes multi-process.
+
 ## [v2.163.4] - 2026-04-22
 
 ### Changed

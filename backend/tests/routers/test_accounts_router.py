@@ -1540,8 +1540,10 @@ class TestGetPerpsPortfolioStatus:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_not_owner_raises_403(self, db_session, test_user):
-        """Failure case: another user's account raises 403 (tenant isolation)."""
+    async def test_not_owner_raises_404(self, db_session, test_user):
+        """Failure: another user's account returns 404 (not 403) so account
+        IDs can't be enumerated from outside the ownership boundary.
+        """
         other_user = User(
             id=999, email="other@test.com",
             hashed_password="x", is_active=True,
@@ -1561,7 +1563,7 @@ class TestGetPerpsPortfolioStatus:
             await get_perps_portfolio_status(
                 account_id=foreign_account.id, db=db_session, current_user=test_user,
             )
-        assert exc_info.value.status_code == 403
+        assert exc_info.value.status_code == 404
 
 
 # =============================================================================

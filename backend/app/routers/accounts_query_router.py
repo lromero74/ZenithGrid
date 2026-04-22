@@ -632,13 +632,15 @@ async def get_perps_portfolio_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the perps portfolio linking status for an account"""
-    account = await db.get(Account, account_id)
+    """Get the perps portfolio linking status for an account."""
+    # Gate by accessible_accounts_filter so non-members see 404, not 403 —
+    # prevents enumerating which account IDs exist.
+    query = select(Account).where(
+        Account.id == account_id, accessible_accounts_filter(current_user.id)
+    )
+    account = (await db.execute(query)).scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-
-    if account.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
 
     return {
         "account_id": account_id,
