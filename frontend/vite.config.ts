@@ -7,6 +7,24 @@ import react from '@vitejs/plugin-react'
 // to avoid Vite cache issues when git tags change
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('react') || id.includes('@tanstack/react-query') || id.includes('react-router-dom')) {
+            return 'framework'
+          }
+          if (id.includes('recharts') || id.includes('lightweight-charts')) {
+            return 'charts'
+          }
+          if (id.includes('lucide-react')) {
+            return 'icons'
+          }
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo, lazy, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { botsApi, positionsApi, authFetch, transfersApi } from '../services/api'
 import {
@@ -21,9 +21,16 @@ import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useNotifications } from '../contexts/NotificationContext'
-import { AccountValueChart } from '../components/trading/AccountValueChart'
-import { MarketSentimentCards } from '../components/trading/MarketSentimentCards'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { usePermission } from '../hooks/usePermission'
+import { useAccountValueSummary } from '../hooks/useAccountValueSummary'
+
+const AccountValueChart = lazy(() =>
+  import('../components/trading/AccountValueChart').then((module) => ({ default: module.AccountValueChart }))
+)
+const MarketSentimentCards = lazy(() =>
+  import('../components/trading/MarketSentimentCards').then((module) => ({ default: module.MarketSentimentCards }))
+)
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -33,6 +40,7 @@ interface DashboardProps {
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { selectedAccount } = useAccount()
+  const { summary: accountValueSummary } = useAccountValueSummary({ selectedAccount })
 
   const [showStoppedBots, setShowStoppedBots] = useState(() => {
     try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
@@ -82,25 +90,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   // Combine for recent deals display (memoized to avoid spread on every render)
   const allPositions = useMemo(() => [...openPositions, ...closedPositions], [openPositions, closedPositions])
-
-  // Fetch portfolio for account value - account-specific for CEX/DEX switching
-  // Falls back to singular endpoint if selectedAccount hasn't resolved yet
-  const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: async () => {
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      const response = await authFetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json()
-    },
-    refetchInterval: 120000, // Match header timing
-    staleTime: 60000,
-    refetchOnWindowFocus: false,
-  })
 
   // Fetch bidirectional bot reservations
   const { data: reservations } = useQuery({
@@ -174,7 +163,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     if (bots.length === 0) return null
     const filteredBots = bots.filter((b: Bot) => showStoppedBots || b.is_active)
     const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
-    const portfolioUsd = portfolio?.total_usd_value || 0
+    const portfolioUsd = accountValueSummary?.total_usd_value || 0
     const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
     const projectPnl = (days: number) => totalDailyPnl * days
     const isPositive = totalDailyPnl > 0
@@ -200,7 +189,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       compMonthlyPct: portfolioUsd > 0 ? (compoundReturn(30) / portfolioUsd) * 100 : 0,
       compYearlyPct: portfolioUsd > 0 ? (compoundReturn(365) / portfolioUsd) * 100 : 0,
     }
-  }, [bots, showStoppedBots, portfolio])
+  }, [bots, showStoppedBots, accountValueSummary])
 
   const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
   const formatCurrency = (value: number) => {
@@ -239,7 +228,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Market Sentiment */}
-      <MarketSentimentCards isUserEngaged={false} />
+      <Suspense fallback={<div className="bg-slate-800 rounded-lg border border-slate-700 p-6"><LoadingSpinner /></div>}>
+        <MarketSentimentCards isUserEngaged={false} />
+      </Suspense>
 
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -297,7 +288,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <p className="text-slate-400 text-sm font-medium">Account Value</p>
             <DollarSign className="w-5 h-5 text-green-500" />
           </div>
-          {!portfolio ? (
+          {!accountValueSummary ? (
             <>
               <div className="h-8 w-36 bg-slate-700 rounded animate-pulse" />
               <div className="h-5 w-20 bg-slate-700 rounded animate-pulse mt-1" />
@@ -305,11 +296,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           ) : (
             <>
               <p className="text-2xl font-bold text-white">
-                {formatCrypto(portfolio?.total_btc_value || 0, 6)} BTC
+                {formatCrypto(accountValueSummary?.total_btc_value || 0, 6)} BTC
               </p>
               <p className="text-sm text-slate-400 mt-1">
-                {formatCurrency(portfolio?.total_usd_value || 0)}
+                {formatCurrency(accountValueSummary?.total_usd_value || 0)}
               </p>
+              {accountValueSummary.is_stale && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {accountValueSummary.is_refreshing ? 'Refreshing live total...' : 'Using recent snapshot'}
+                </p>
+              )}
             </>
           )}
 
@@ -470,10 +466,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Account Value Chart */}
-      <AccountValueChart
-        liveBtcValue={portfolio?.total_btc_value}
-        liveUsdValue={portfolio?.total_usd_value}
-      />
+      <Suspense fallback={<div className="bg-slate-800 rounded-lg border border-slate-700 p-6"><LoadingSpinner /></div>}>
+        <AccountValueChart
+          liveBtcValue={accountValueSummary?.total_btc_value}
+          liveUsdValue={accountValueSummary?.total_usd_value}
+        />
+      </Suspense>
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

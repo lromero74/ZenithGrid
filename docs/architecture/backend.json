@@ -13,7 +13,7 @@
     {
       "file": "routers/accounts_query_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
+      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). v2.164.6 adds GET /{account_id}/account-value-summary (fast totals for the dashboard/header, backed by account_value_summary_service) and an include_details query flag on GET /{account_id}/portfolio that returns totals only when false. Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
     },
     {
       "file": "routers/accounts_mutation_router.py",
@@ -1209,7 +1209,7 @@
     },
     {
       "file": "services/account_service.py",
-      "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval",
+      "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval. get_portfolio_for_account() accepts include_details=False to skip per-asset holdings expansion and CEX paper-portfolio price fanouts were moved to paper_valuation_service in v2.164.6 (module trimmed to the orchestration path only).",
       "type": "infrastructure"
     },
     {
@@ -1221,6 +1221,11 @@
       "file": "services/account_snapshot_service.py",
       "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture; aggregates daily activity (closed trades, transfers) for chart markers",
       "type": "background"
+    },
+    {
+      "file": "services/account_value_summary_service.py",
+      "purpose": "Fast dashboard/header value totals per account (get_account_value_summary) — 60s api_cache with force_fresh bypass. Paper accounts prefer the most recent AccountValueSnapshot (returned with is_stale=true) while a bounded-concurrency live rebuild runs in the background via _schedule_paper_summary_refresh / _refresh_paper_summary_cache; CEX accounts call get_cex_portfolio(include_details=False); other backends fall back to get_portfolio_for_account. Introduced in v2.164.6 so first-paint doesn't block on the full portfolio payload.",
+      "type": "infrastructure"
     },
     {
       "file": "services/ai_credential_service.py",
@@ -1403,6 +1408,11 @@
       "type": "background"
     },
     {
+      "file": "services/paper_valuation_service.py",
+      "purpose": "Shared paper-account valuation helpers used by both the dashboard summary and the Portfolio page so totals stay consistent without hammering Coinbase. build_paper_holdings_and_totals(account) loads JSON paper_balances, fetches the public BTC/USD price, then prices each non-stable asset with an asyncio.Semaphore(PAPER_PRICE_CONCURRENCY=5) — USD pair first, BTC pair fallback — and returns holdings + total_usd_value/total_btc_value. Stables (USD/USDC/USDT) short-circuit to $1. Extracted from account_service._build_paper_portfolio in v2.164.6.",
+      "type": "trading"
+    },
+    {
       "file": "services/perps_monitor.py",
       "purpose": "Syncs perpetual futures positions with Coinbase INTX state; accepts session_maker injection for testability",
       "type": "background"
@@ -1419,7 +1429,7 @@
     },
     {
       "file": "services/portfolio_service.py",
-      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC)",
+      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC). v2.164.6: get_cex_portfolio accepts include_details=False to return totals only (skips the open-position query, per-asset PnL/balance fan-out, and holdings list) so the fast summary path can reuse it without paying for full portfolio assembly.",
       "type": "trading"
     },
     {

@@ -38,17 +38,12 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     },
   })
 
-  // Fetch portfolio for BTC/USD price (account-specific)
-  const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccountId],
+  // Fetch direct BTC/USD market price instead of the full portfolio payload.
+  const { data: btcPriceData } = useQuery({
+    queryKey: ['btc-usd-price'],
     queryFn: async () => {
-      if (selectedAccountId) {
-        const response = await authFetch(`/api/accounts/${selectedAccountId}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      const response = await authFetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      const response = await authFetch('/api/market/btc-usd-price')
+      if (!response.ok) throw new Error('Failed to fetch BTC price')
       return response.json()
     },
     refetchInterval: 120000,
@@ -57,9 +52,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     refetchOnWindowFocus: false,
   })
 
-  const totalBtcValue = portfolio?.total_btc_value || 0
-  const totalUsdValue = portfolio?.total_usd_value || 0
-  const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
+  const btcUsdPrice = btcPriceData?.price || 0
 
   // Fetch real-time prices for all open positions
   useEffect(() => {
@@ -136,7 +129,6 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     allPositions,
     positionsWithPnL,
     bots,
-    portfolio,
     btcUsdPrice,
     currentPrices,
     refetchPositions,

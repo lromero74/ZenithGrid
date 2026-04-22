@@ -7,7 +7,6 @@ Business logic for account management:
 - Per-account portfolio retrieval (paper trading, CEX, DEX)
 """
 
-import json
 import logging
 import re
 from urllib.parse import urlparse
@@ -20,6 +19,7 @@ from app.encryption import encrypt_value
 from app.models import Account, User
 from app.services.account_access import accessible_accounts_filter
 from app.services.exchange_service import get_coinbase_for_account, get_exchange_client_for_account
+from app.services.paper_valuation_service import build_paper_holdings_and_totals
 from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio, get_generic_cex_portfolio
 
 logger = logging.getLogger(__name__)
@@ -175,6 +175,7 @@ async def get_portfolio_for_account(
     current_user: User,
     account_id: int,
     force_fresh: bool = False,
+    include_details: bool = True,
 ) -> dict:
     """
     Get portfolio for a specific account.
@@ -200,88 +201,19 @@ async def get_portfolio_for_account(
         if exchange_name in ("bybit", "mt5_bridge"):
             return await get_generic_cex_portfolio(account, db)
         else:
-            return await get_cex_portfolio(account, db, get_coinbase_for_account, force_fresh=force_fresh)
+            return await get_cex_portfolio(
+                account,
+                db,
+                get_coinbase_for_account,
+                force_fresh=force_fresh,
+                include_details=include_details,
+            )
     else:
         return await get_dex_portfolio(account, db, get_coinbase_for_account)
 
 
 async def _build_paper_portfolio(account: Account) -> dict:
     """Build portfolio response for a paper trading account with real-time pricing."""
-    if account.paper_balances:
-        balances = json.loads(account.paper_balances)
-    else:
-        balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
-
-    from app.coinbase_api.public_market_data import (
-        get_btc_usd_price as get_public_btc_price,
-        get_current_price as get_public_price,
-    )
-
-    btc_usd_price = await get_public_btc_price()
-
-    # Fetch USD prices for all non-stablecoin currencies (USD-first, BTC fallback)
-    altcoin_usd_prices = {}
-    fiat_and_stables = {"BTC", "USD", "USDC", "USDT"}
-    for currency in balances:
-        if currency in fiat_and_stables:
-            continue
-        # Try direct USD pair first (most coins have this)
-        try:
-            altcoin_usd_prices[currency] = await get_public_price(f"{currency}-USD")
-            continue
-        except Exception:
-            logger.debug("Paper portfolio: %s-USD price lookup failed, will try BTC pair", currency, exc_info=True)
-        # Fall back to BTC pair → convert via BTC/USD
-        try:
-            btc_price = await get_public_price(f"{currency}-BTC")
-            altcoin_usd_prices[currency] = btc_price * btc_usd_price
-        except Exception:
-            logger.warning("Paper portfolio: %s-BTC price lookup failed, defaulting to 0", currency, exc_info=True)
-            altcoin_usd_prices[currency] = 0.0
-
-    # Build holdings array (compatible with frontend Portfolio page)
-    holdings = []
-    total_btc = 0.0
-    total_usd = 0.0
-    for currency, amount in balances.items():
-        if amount > 0:
-            if currency == "BTC":
-                btc_value = amount
-                usd_value = amount * btc_usd_price
-                current_price_usd = btc_usd_price
-            elif currency in ("USD", "USDC", "USDT"):
-                usd_value = amount
-                btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0
-                current_price_usd = 1.0
-            else:
-                current_price_usd = altcoin_usd_prices.get(currency, 0.0)
-                usd_value = amount * current_price_usd
-                btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-
-            total_btc += btc_value
-            total_usd += usd_value
-
-            holdings.append({
-                "asset": currency,
-                "total_balance": amount,
-                "available": amount,
-                "hold": 0.0,
-                "current_price_usd": current_price_usd,
-                "usd_value": usd_value,
-                "btc_value": btc_value,
-                "percentage": 0.0,
-            })
-
-    # Calculate allocation percentages now that we have totals
-    for holding in holdings:
-        if total_usd > 0:
-            holding["percentage"] = (holding["usd_value"] / total_usd) * 100
-
-    return {
-        "holdings": holdings,
-        "holdings_count": len(holdings),
-        "total_btc_value": total_btc,
-        "total_usd_value": total_usd,
-        "btc_usd_price": btc_usd_price,
-        "is_paper_trading": True,
-    }
+    result = await build_paper_holdings_and_totals(account)
+    result["is_paper_trading"] = True
+    return result

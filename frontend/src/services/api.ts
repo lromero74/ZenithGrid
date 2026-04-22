@@ -837,6 +837,24 @@ export const accountValueApi = {
     }).then((res) => res.data),
 };
 
+export interface AccountValueSummary {
+  account_id: number
+  account_name?: string
+  total_usd_value: number
+  total_btc_value: number
+  btc_usd_price: number
+  as_of: string
+  is_stale: boolean
+  is_refreshing: boolean
+}
+
+export const accountValueSummaryApi = {
+  get: (accountId: number, forceFresh = false) =>
+    api.get<AccountValueSummary>(`/accounts/${accountId}/account-value-summary`, {
+      params: forceFresh ? { force_fresh: true } : {},
+    }).then((res) => res.data),
+};
+
 // Reports & Goals
 import type {
   RecipientEntry, ReportGoal, ReportSchedule, ReportSummary,
