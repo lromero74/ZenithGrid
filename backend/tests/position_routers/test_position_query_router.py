@@ -514,6 +514,65 @@ class TestGetPositions:
         assert len(result) == 1
         assert result[0].computed_max_budget == pytest.approx(0.02)
 
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_trims_strategy_snapshot_to_list_safe_keys(self, mock_resize, db_session):
+        """Edge case: list endpoint keeps only the strategy config fields the positions UI needs."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "listsnapshot@example.com")
+        bot = await _create_bot(db_session, user, account)
+        await _create_position(
+            db_session,
+            account,
+            bot=bot,
+            status="open",
+            strategy_config_snapshot={
+                "take_profit_percentage": 2.5,
+                "min_profit_percentage": 1.5,
+                "price_deviation": 2.0,
+                "safety_order_step_scale": 1.2,
+                "max_safety_orders": 5,
+                "dca_target_reference": "last_buy",
+                "take_profit_percent": 2.5,
+                "base_order_size": 0.01,
+                "trailing_take_profit": True,
+                "trailing_tp_deviation": 0.4,
+                "stop_loss_enabled": True,
+                "stop_loss_percentage": -8.0,
+                "volume_scale": 1.7,
+                "indicator_stack": ["macd", "rsi"],
+            },
+        )
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].strategy_config_snapshot == {
+            "take_profit_percentage": 2.5,
+            "min_profit_percentage": 1.5,
+            "price_deviation": 2.0,
+            "safety_order_step_scale": 1.2,
+            "max_safety_orders": 5,
+            "dca_target_reference": "last_buy",
+            "take_profit_percent": 2.5,
+            "base_order_size": 0.01,
+            "trailing_take_profit": True,
+            "trailing_tp_deviation": 0.4,
+            "stop_loss_enabled": True,
+            "stop_loss_percentage": -8.0,
+        }
+
 
 # =============================================================================
 # GET /positions/{position_id}
@@ -538,6 +597,35 @@ class TestGetPosition:
         )
         assert result.id == pos.id
         assert result.status == "open"
+
+    @pytest.mark.asyncio
+    async def test_position_details_keep_full_strategy_snapshot(self, db_session):
+        """Edge case: detail endpoint still returns the full strategy snapshot."""
+        from app.position_routers.position_query_router import get_position
+
+        user, account = await _create_user_with_account(db_session, "detailconfig@example.com")
+        pos = await _create_position(
+            db_session,
+            account,
+            status="open",
+            strategy_config_snapshot={
+                "take_profit_percentage": 2.5,
+                "indicator_stack": ["macd", "rsi"],
+                "volume_scale": 1.7,
+            },
+        )
+
+        result = await get_position(
+            position_id=pos.id,
+            db=db_session,
+            current_user=user,
+        )
+
+        assert result.strategy_config_snapshot == {
+            "take_profit_percentage": 2.5,
+            "indicator_stack": ["macd", "rsi"],
+            "volume_scale": 1.7,
+        }
 
     @pytest.mark.asyncio
     async def test_position_not_found_raises_404(self, db_session):

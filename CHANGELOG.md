@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.12] - 2026-04-22
+
+### Changed
+- **Open positions list stops carrying the full frozen strategy config on every poll** — The hot `GET /api/positions` list route now trims each row’s `strategy_config_snapshot` down to just the keys the open-positions UI actually reads for its cards and list-level affordances. That reduces per-row payload size on the 5-second open-deals refresh without changing the card behavior.
+- **Full strategy snapshots still come back when a single deal is fetched** — `GET /api/positions/{id}` still returns the complete frozen strategy config, so chart, modal, and edit flows keep full-fidelity position detail when they need it. The optimization only applies to the list route.
+
 ## [v2.164.11] - 2026-04-22
 
 ### Changed
