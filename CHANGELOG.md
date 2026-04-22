@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.7] - 2026-04-22
+
+### Changed
+- **Product precision cache is no longer committed to git** — `backend/app/product_precision.json` auto-grows at runtime whenever the bot encounters a trading pair it hasn't seen before (that's been the case since v2.148.1). The file was still tracked in git, so every new coin showed up as a dirty working tree forever and the `.gitignore` entry for it never did anything on existing clones. The tracked baseline has been moved to `product_precision.seed.json` (read-only snapshot) and the runtime file is now properly untracked. Both loaders prefer the runtime file when present and fall back to the seed, so fresh clones start with precision data instead of an empty dict. No user-visible change — just no more spurious "modified" entries in `git status` after the bot runs.
+
 ## [v2.164.6] - 2026-04-22
 
 ### Changed

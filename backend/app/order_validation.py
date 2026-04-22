@@ -20,17 +20,32 @@ _PRODUCT_PRECISION = None
 
 
 def _load_product_precision():
-    """Load product precision data from product_precision.json"""
+    """Load product precision data.
+
+    Prefers the runtime cache (product_precision.json, gitignored) and falls back
+    to the tracked baseline (product_precision.seed.json) so fresh clones have
+    precision data before the first auto-fetch writes the runtime file.
+    """
     global _PRODUCT_PRECISION
-    if _PRODUCT_PRECISION is None:
-        precision_file = os.path.join(os.path.dirname(__file__), "product_precision.json")
-        try:
-            with open(precision_file, "r") as f:
-                _PRODUCT_PRECISION = json.load(f)
-                logger.info(f"Loaded precision data for {len(_PRODUCT_PRECISION)} products")
-        except Exception as e:
-            logger.error(f"Failed to load product_precision.json: {e}")
-            _PRODUCT_PRECISION = {}
+    if _PRODUCT_PRECISION is not None:
+        return _PRODUCT_PRECISION
+
+    base_dir = os.path.dirname(__file__)
+    for filename in ("product_precision.json", "product_precision.seed.json"):
+        path = os.path.join(base_dir, filename)
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    _PRODUCT_PRECISION = json.load(f)
+                    logger.info(
+                        "Loaded precision data for %d products from %s",
+                        len(_PRODUCT_PRECISION), filename,
+                    )
+                    return _PRODUCT_PRECISION
+            except Exception as e:
+                logger.error(f"Failed to load {filename}: {e}")
+
+    _PRODUCT_PRECISION = {}
     return _PRODUCT_PRECISION
 
 

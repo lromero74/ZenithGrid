@@ -86,6 +86,40 @@ class TestGetPrecisionData:
             assert data == {}
 
 
+class TestGetPrecisionDataSeedFallback:
+    """Runtime product_precision.json is gitignored; product_precision.seed.json is the
+    tracked baseline. Loader must prefer the runtime file when present and fall back
+    to the seed so fresh clones aren't empty."""
+
+    def test_runtime_exists_preferred_over_seed(self, tmp_path, monkeypatch):
+        runtime = tmp_path / "product_precision.json"
+        seed = tmp_path / "product_precision.seed.json"
+        runtime.write_text(json.dumps({"RUNTIME-USD": {"quote_increment": "0.01",
+                                                       "quote_decimals": 2,
+                                                       "base_increment": "0.001"}}))
+        seed.write_text(json.dumps({"SEED-USD": {"quote_increment": "0.01",
+                                                 "quote_decimals": 2,
+                                                 "base_increment": "0.001"}}))
+        monkeypatch.setattr(pp, "__file__", str(tmp_path / "product_precision.py"))
+        data = pp.get_precision_data()
+        assert "RUNTIME-USD" in data
+        assert "SEED-USD" not in data
+
+    def test_runtime_missing_falls_back_to_seed(self, tmp_path, monkeypatch):
+        seed = tmp_path / "product_precision.seed.json"
+        seed.write_text(json.dumps({"SEED-USD": {"quote_increment": "0.01",
+                                                 "quote_decimals": 2,
+                                                 "base_increment": "0.001"}}))
+        monkeypatch.setattr(pp, "__file__", str(tmp_path / "product_precision.py"))
+        data = pp.get_precision_data()
+        assert "SEED-USD" in data
+
+    def test_both_missing_returns_empty_dict(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(pp, "__file__", str(tmp_path / "product_precision.py"))
+        data = pp.get_precision_data()
+        assert data == {}
+
+
 # ---------------------------------------------------------------------------
 # get_quote_precision
 # ---------------------------------------------------------------------------
