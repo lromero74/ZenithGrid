@@ -473,7 +473,8 @@ class TestSeedDefaults:
 
     @pytest.mark.asyncio
     async def test_seed_defaults_creates_templates(self, db_session):
-        """Happy path: seeds 3 default templates when none exist."""
+        """Happy path: seeds four default templates when none exist — three
+        DCA presets plus the high-risk Speculative Catalyst Hunter."""
         from app.routers.templates import seed_default_templates
 
         user = _make_user(db_session, email="admin@test.com", is_superuser=True)
@@ -481,18 +482,73 @@ class TestSeedDefaults:
 
         result = await seed_default_templates(db=db_session, current_user=user)
         assert result["message"] == "Default templates created successfully"
-        assert len(result["templates"]) == 3
+        assert len(result["templates"]) == 4
+        assert "Speculative Catalyst Hunter" in result["templates"]
+
+    @pytest.mark.asyncio
+    async def test_seed_defaults_includes_speculative_template(self, db_session):
+        """The speculative default must wire ai_risk_preset=speculative onto an
+        indicator_based bot so the preset-defaults merge in the CRUD layer picks
+        up the bucket tag + catalyst-mode config. It also needs at least one
+        ai_opinion condition so the catalyst-mode AI indicator actually runs."""
+        from app.routers.templates import seed_default_templates
+        from app.models import BotTemplate
+        from sqlalchemy import select
+
+        user = _make_user(db_session, email="specadmin@test.com", is_superuser=True)
+        await db_session.flush()
+        await seed_default_templates(db=db_session, current_user=user)
+
+        rows = (await db_session.execute(
+            select(BotTemplate).where(BotTemplate.name == "Speculative Catalyst Hunter")
+        )).scalars().all()
+        assert len(rows) == 1
+        tmpl = rows[0]
+        assert tmpl.strategy_type == "indicator_based"
+        assert tmpl.strategy_config.get("ai_risk_preset") == "speculative"
+        # Must have at least one ai_opinion buy condition so catalyst-mode AI fires.
+        boc = tmpl.strategy_config.get("base_order_conditions") or []
+        assert any(
+            (c.get("type") or c.get("indicator")) == "ai_opinion"
+            for c in boc
+        ), "Template must enable the AI indicator via an ai_opinion base-order condition"
 
     @pytest.mark.asyncio
     async def test_seed_defaults_idempotent(self, db_session):
-        """Edge case: calling seed again when defaults exist does nothing."""
+        """Edge case: re-running after ALL defaults are present is a no-op."""
         from app.routers.templates import seed_default_templates
 
         user = _make_user(db_session, email="admin2@test.com", is_superuser=True)
         await db_session.flush()
 
-        # Create a default template first
-        await _make_template(db_session, user, name="Pre-existing Default", is_default=True)
-
+        # First seed installs everything.
+        await seed_default_templates(db=db_session, current_user=user)
+        # Second seed — nothing new to add.
         result = await seed_default_templates(db=db_session, current_user=user)
         assert "already exist" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_seed_defaults_adds_only_missing(self, db_session):
+        """Users who seeded an older 3-template set should pick up newly-added
+        defaults without duplicating what's already there."""
+        from app.routers.templates import seed_default_templates
+        from app.models import BotTemplate
+        from sqlalchemy import select
+
+        user = _make_user(db_session, email="partial@test.com", is_superuser=True)
+        await db_session.flush()
+
+        # Simulate an older install: only the three DCA defaults exist.
+        for name in ("Conservative DCA", "Balanced DCA", "Aggressive DCA"):
+            await _make_template(db_session, user, name=name, is_default=True)
+
+        result = await seed_default_templates(db=db_session, current_user=user)
+        # The speculative template is new — it should be added, and only it.
+        assert result["message"] == "Default templates created successfully"
+        assert result["templates"] == ["Speculative Catalyst Hunter"]
+
+        # And the total now is 4, not 7 (no duplicates of the existing three).
+        total = (await db_session.execute(
+            select(BotTemplate).where(BotTemplate.is_default)
+        )).scalars().all()
+        assert len(total) == 4

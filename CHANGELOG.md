@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.165.2] - 2026-04-22
+
+### Added
+- **"Speculative Catalyst Hunter" starter template** — A new built-in default bot template for the speculative preset. Pick it from the template list in the "+ Add Bot" modal to copy a ready-made high-risk catalyst-hunter bot: `indicator_based` strategy with an AI-opinion buy condition, `ai_risk_preset: "speculative"` set, and a 1% base-order size. The preset-defaults merger fills in the tight stop-loss, trailing take-profit, 24h max-hold, and catalyst-mode prefilter on create. You still need a non-zero Speculative Allocation on the target account (Settings → Speculative Bucket) before the bot can open positions.
+- **`/api/templates/seed-defaults` adds only missing defaults** — Instances that already seeded the older three-template set (Conservative/Balanced/Aggressive DCA) can now re-run seed-defaults to pick up the new Speculative Catalyst Hunter without duplicating the existing three. Previously the endpoint was all-or-nothing and would no-op on any pre-existing defaults.
+
 ## [v2.165.1] - 2026-04-22
 
 ### Added
