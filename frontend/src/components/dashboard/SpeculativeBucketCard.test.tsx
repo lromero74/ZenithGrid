@@ -47,6 +47,7 @@ describe('SpeculativeBucketCard', () => {
       deployed_cost_basis_usd: 0, available_usd: 0,
       active_bot_count: 0, open_position_count: 0,
       max_concurrent_slots: 0, per_slot_budget_usd: 0,
+      warnings: [],
     })
     const { container } = renderWithQuery(<SpeculativeBucketCard accountId={1} />)
     // Give the query time to resolve — the component should render null.
@@ -62,6 +63,7 @@ describe('SpeculativeBucketCard', () => {
       deployed_cost_basis_usd: 200, available_usd: 300,
       active_bot_count: 2, open_position_count: 3,
       max_concurrent_slots: 10, per_slot_budget_usd: 30,
+      warnings: [],
     })
     renderWithQuery(<SpeculativeBucketCard accountId={1} />)
     expect(await screen.findByText(/Speculative Bucket/i)).toBeInTheDocument()
@@ -76,6 +78,7 @@ describe('SpeculativeBucketCard', () => {
       deployed_cost_basis_usd: 100, available_usd: 400,
       active_bot_count: 1, open_position_count: 1,
       max_concurrent_slots: 5, per_slot_budget_usd: 80,
+      warnings: [],
     })
     mockGetClosed.mockResolvedValue([
       { id: 1, status: 'closed', strategy_config_snapshot: { is_speculative: 'true' }, profit_usd: 45 },
@@ -87,12 +90,46 @@ describe('SpeculativeBucketCard', () => {
     expect(await screen.findByText(/\+\$33\.00/)).toBeInTheDocument()
   })
 
+  it('renders warning block when the bucket response includes warnings', async () => {
+    mockGetBucket.mockResolvedValue({
+      bucket_pct: 5, bucket_usd: 500,
+      deployed_cost_basis_usd: 0, available_usd: 500,
+      active_bot_count: 1, open_position_count: 0,
+      max_concurrent_slots: 1, per_slot_budget_usd: 500,
+      warnings: [
+        {
+          code: 'rebalance_floor_too_low',
+          message: 'Rebalance USD floor is $100 but per-slot budget is $500 — raise min_balance_usd to at least $1000.',
+        },
+      ],
+    })
+    renderWithQuery(<SpeculativeBucketCard accountId={1} />)
+    const warn = await screen.findByTestId('speculative-bucket-warning-rebalance_floor_too_low')
+    expect(warn).toBeInTheDocument()
+    expect(warn.textContent).toMatch(/min_balance_usd/)
+  })
+
+  it('does not render a warning block when warnings is empty', async () => {
+    mockGetBucket.mockResolvedValue({
+      bucket_pct: 5, bucket_usd: 500,
+      deployed_cost_basis_usd: 0, available_usd: 500,
+      active_bot_count: 1, open_position_count: 0,
+      max_concurrent_slots: 1, per_slot_budget_usd: 500,
+      warnings: [],
+    })
+    renderWithQuery(<SpeculativeBucketCard accountId={1} />)
+    // Card renders, but no warning testid.
+    await screen.findByText(/Speculative Bucket/i)
+    expect(screen.queryByTestId(/speculative-bucket-warning-/)).toBeNull()
+  })
+
   it('renders a progress bar reflecting deployed share of bucket', async () => {
     mockGetBucket.mockResolvedValue({
       bucket_pct: 5, bucket_usd: 400,
       deployed_cost_basis_usd: 100, available_usd: 300,
       active_bot_count: 1, open_position_count: 1,
       max_concurrent_slots: 5, per_slot_budget_usd: 75,
+      warnings: [],
     })
     renderWithQuery(<SpeculativeBucketCard accountId={1} />)
     const bar = await screen.findByRole('progressbar')

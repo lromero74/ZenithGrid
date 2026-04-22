@@ -451,6 +451,7 @@ export function BotFormModal({
               accountSpeculativeAllocationPct={
                 fullSelectedAccount?.speculative_allocation_pct ?? 0
               }
+              strategyType={formData.strategy_type ?? null}
             />
           </fieldset>
 

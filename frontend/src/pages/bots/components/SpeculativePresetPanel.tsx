@@ -37,7 +37,15 @@ interface Props {
   onBlockingStateChange: (state: BlockingState) => void
   accountId: number | null
   accountSpeculativeAllocationPct: number
+  strategyType: string | null
 }
+
+// The preset's three effects (account bucket gate, catalyst-mode AI prompt,
+// and time-based forced exit) only all line up on the `indicator_based`
+// strategy. Rendering the panel on a Grid / Arbitrage bot would mislead the
+// user into thinking they're getting catalyst-hunt behavior when they're
+// only getting the bucket cap — hide it entirely instead.
+const SUPPORTED_STRATEGY_TYPES = new Set(['indicator_based'])
 
 export function SpeculativePresetPanel({
   strategyConfig,
@@ -45,11 +53,14 @@ export function SpeculativePresetPanel({
   onBlockingStateChange,
   accountId,
   accountSpeculativeAllocationPct,
+  strategyType,
 }: Props) {
   const preset = (strategyConfig.ai_risk_preset as RiskPreset | undefined) ?? ''
   const isSpeculative = preset === 'speculative'
   const [confirmed, setConfirmed] = useState(false)
   const [bucketInfo, setBucketInfo] = useState<SpeculativeBucketInfo | null>(null)
+  const strategySupportsPreset =
+    strategyType != null && SUPPORTED_STRATEGY_TYPES.has(strategyType)
 
   // Reset the confirmation checkbox if the user switches away from speculative.
   useEffect(() => {
@@ -72,16 +83,22 @@ export function SpeculativePresetPanel({
     return () => { cancelled = true }
   }, [isSpeculative, accountId])
 
-  // Compute the blocking state any time inputs change.
-  const bucketNotConfigured = isSpeculative && accountSpeculativeAllocationPct <= 0
-  const needsConfirmation = isSpeculative && !confirmed
+  // Compute the blocking state any time inputs change. When the strategy
+  // doesn't support the preset the panel is hidden and cannot block — report
+  // unblocked so the parent's save button isn't wedged by a stale state.
+  const bucketNotConfigured =
+    strategySupportsPreset && isSpeculative && accountSpeculativeAllocationPct <= 0
+  const needsConfirmation =
+    strategySupportsPreset && isSpeculative && !confirmed
   let blockingReason: string | null = null
-  if (bucketNotConfigured) {
-    blockingReason =
-      'Set a non-zero Speculative Allocation on this account under ' +
-      'Settings → Speculative Bucket before saving a speculative bot.'
-  } else if (needsConfirmation) {
-    blockingReason = 'Check the "I understand the risk" box to confirm.'
+  if (strategySupportsPreset) {
+    if (bucketNotConfigured) {
+      blockingReason =
+        'Set a non-zero Speculative Allocation on this account under ' +
+        'Settings → Speculative Bucket before saving a speculative bot.'
+    } else if (needsConfirmation) {
+      blockingReason = 'Check the "I understand the risk" box to confirm.'
+    }
   }
 
   useEffect(() => {
@@ -90,6 +107,10 @@ export function SpeculativePresetPanel({
       reason: blockingReason,
     })
   }, [blockingReason, onBlockingStateChange])
+
+  if (!strategySupportsPreset) {
+    return null
+  }
 
   const handlePresetChange = (value: string) => {
     onChange({ ai_risk_preset: value })

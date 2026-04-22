@@ -28,6 +28,8 @@ const makeProps = (overrides: Partial<React.ComponentProps<typeof SpeculativePre
   onBlockingStateChange: vi.fn(),
   accountId: 1,
   accountSpeculativeAllocationPct: 5,
+  // Most tests exercise the fully-supported strategy so the panel renders.
+  strategyType: 'indicator_based',
   ...overrides,
 })
 
@@ -129,5 +131,43 @@ describe('SpeculativePresetPanel', () => {
       fireEvent.change(select, { target: { value: 'speculative' } })
     })
     expect(onChange).toHaveBeenCalledWith({ ai_risk_preset: 'speculative' })
+  })
+
+  it('renders nothing when strategy_type is not indicator_based', () => {
+    const onBlockingStateChange = vi.fn()
+    const { container } = render(
+      <SpeculativePresetPanel
+        {...makeProps({
+          strategyType: 'grid_trading',
+          onBlockingStateChange,
+        })}
+      />
+    )
+    // No controls from this panel at all.
+    expect(container.textContent).toBe('')
+    // And it must never block the parent form's save button when hidden.
+    expect(onBlockingStateChange).toHaveBeenCalledWith({ blocked: false, reason: null })
+  })
+
+  it('does not block save on unsupported strategy even if speculative was picked earlier', () => {
+    // User picked speculative on indicator_based, then switched strategy to grid_trading.
+    // The panel disappears AND must clear any prior blocking state.
+    const onBlockingStateChange = vi.fn()
+    render(
+      <SpeculativePresetPanel
+        {...makeProps({
+          strategyConfig: { ai_risk_preset: 'speculative' },
+          accountSpeculativeAllocationPct: 0,
+          strategyType: 'grid_trading',
+          onBlockingStateChange,
+        })}
+      />
+    )
+    expect(onBlockingStateChange).toHaveBeenCalledWith({ blocked: false, reason: null })
+  })
+
+  it('renders the panel when strategy_type is indicator_based', () => {
+    render(<SpeculativePresetPanel {...makeProps({ strategyType: 'indicator_based' })} />)
+    expect(screen.getByLabelText(/Risk Preset/i)).toBeInTheDocument()
   })
 })

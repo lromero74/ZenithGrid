@@ -20,7 +20,8 @@ from app.services.speculative_bucket_service import (
 
 
 async def _make_user_account(db_session, *, email="spec@test.com",
-                             allocation_pct=5.0, name="SpecAcct"):
+                             allocation_pct=5.0, name="SpecAcct",
+                             rebalance_enabled=False, min_balance_usd=0.0):
     user = User(email=email, hashed_password="hash", is_active=True)
     db_session.add(user)
     await db_session.flush()
@@ -29,6 +30,8 @@ async def _make_user_account(db_session, *, email="spec@test.com",
         user_id=user.id, name=name, type="cex",
         is_active=True, is_default=True,
         speculative_allocation_pct=allocation_pct,
+        rebalance_enabled=rebalance_enabled,
+        min_balance_usd=min_balance_usd,
     )
     db_session.add(account)
     await db_session.flush()
@@ -328,3 +331,98 @@ class TestValidateSpeculativeEntry:
         )
 
         assert allowed is True
+
+
+class TestRebalanceFloorWarning:
+    """The bucket card surfaces a warning when the rebalancer's USD floor is
+    set too low relative to the per-slot budget. If it is, the rebalancer can
+    drain free cash out from under the speculative bot between entries, even
+    though the bucket itself still shows headroom.
+
+    Threshold: min_balance_usd must be at least 2x per_slot_budget_usd. That
+    multiple is a rule of thumb — one slot's worth plus a cushion for fees
+    and the next candidate entry. See accounts settings + PRP §F.
+    """
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_rebalance_disabled(self, db_session):
+        """If rebalance is off, min_balance_usd doesn't kick in → no warning
+        regardless of its value."""
+        user, account = await _make_user_account(
+            db_session, allocation_pct=5.0,
+            rebalance_enabled=False, min_balance_usd=0.0,
+        )
+        await _make_bot(db_session, user=user, account=account)
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+
+        codes = {w["code"] for w in info["warnings"]}
+        assert "rebalance_floor_too_low" not in codes
+
+    @pytest.mark.asyncio
+    async def test_warning_when_floor_below_two_slots(self, db_session):
+        """Rebalance on, per-slot=500, floor=100 → warn."""
+        user, account = await _make_user_account(
+            db_session, allocation_pct=5.0,
+            rebalance_enabled=True, min_balance_usd=100.0,
+        )
+        # One bot with max_concurrent_deals=1 → per_slot_budget = bucket_usd.
+        await _make_bot(db_session, user=user, account=account)
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+
+        codes = {w["code"] for w in info["warnings"]}
+        assert "rebalance_floor_too_low" in codes
+        warn = next(w for w in info["warnings"]
+                    if w["code"] == "rebalance_floor_too_low")
+        # Message must tell the user what the floor IS and what it SHOULD be.
+        assert "100" in warn["message"]
+        assert "1000" in warn["message"]  # 2x per-slot of 500
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_floor_meets_threshold(self, db_session):
+        """Rebalance on, per-slot=500, floor=1000 → no warning (exactly 2x)."""
+        user, account = await _make_user_account(
+            db_session, allocation_pct=5.0,
+            rebalance_enabled=True, min_balance_usd=1000.0,
+        )
+        await _make_bot(db_session, user=user, account=account)
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+
+        codes = {w["code"] for w in info["warnings"]}
+        assert "rebalance_floor_too_low" not in codes
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_no_bucket_configured(self, db_session):
+        """If bucket_pct is 0 there are no speculative entries to protect,
+        so do not pester the user about their rebalance floor."""
+        user, account = await _make_user_account(
+            db_session, allocation_pct=0.0,
+            rebalance_enabled=True, min_balance_usd=0.0,
+        )
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+
+        codes = {w["code"] for w in info["warnings"]}
+        assert "rebalance_floor_too_low" not in codes
+
+    @pytest.mark.asyncio
+    async def test_warnings_field_is_always_a_list(self, db_session):
+        """Shape contract: warnings is always a list, never missing or null."""
+        user, account = await _make_user_account(db_session, allocation_pct=5.0)
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+
+        assert "warnings" in info
+        assert isinstance(info["warnings"], list)
