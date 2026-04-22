@@ -988,7 +988,10 @@ async def _submit_sell_market_order(
             position.last_error_timestamp = datetime.utcnow()
             await db.commit()
         except Exception:
-            pass  # Don't mask the original error
+            logger.warning(
+                "Could not persist last_error on position %s after sell failure",
+                position.id, exc_info=True,
+            )  # Don't mask the original error — log and move on
 
         try:
             await log_order_to_history(

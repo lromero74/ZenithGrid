@@ -180,7 +180,7 @@ def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
             try:
                 img.close()
             except Exception:
-                pass
+                logger.debug("Error closing PIL image in image compression cleanup", exc_info=True)
         if output:
             output.close()
 

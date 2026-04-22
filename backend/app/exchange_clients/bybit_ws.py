@@ -147,13 +147,13 @@ class ByBitWSManager:
             try:
                 self._ws_private.exit()
             except Exception:
-                pass
+                logger.debug("Error closing ByBit private WebSocket", exc_info=True)
 
         if self._ws_public:
             try:
                 self._ws_public.exit()
             except Exception:
-                pass
+                logger.debug("Error closing ByBit public WebSocket", exc_info=True)
 
         if self._thread:
             self._thread.join(timeout=5)

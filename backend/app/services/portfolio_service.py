@@ -636,14 +636,14 @@ async def _get_paper_portfolio(client, btc_usd_price: float) -> dict:
                 altcoin_btc_prices[currency] = price
                 continue
         except Exception:
-            pass
+            logger.debug("Paper portfolio: %s-BTC price lookup failed", currency, exc_info=True)
         try:
             usd_price = await client.get_current_price(f"{currency}-USD")
             if usd_price is not None and btc_usd_price > 0:
                 altcoin_btc_prices[currency] = usd_price / btc_usd_price
                 continue
         except Exception:
-            pass
+            logger.debug("Paper portfolio: %s-USD price lookup failed", currency, exc_info=True)
         altcoin_btc_prices[currency] = 0.0
 
     holdings = []
@@ -698,7 +698,7 @@ async def get_account_portfolio_data(
             try:
                 btc_usd_price = await client.get_btc_usd_price()
             except Exception:
-                pass
+                logger.warning("Paper portfolio: BTC/USD price lookup failed", exc_info=True)
             return await _get_paper_portfolio(client, btc_usd_price)
         return {
             "holdings": [], "holdings_count": 0,

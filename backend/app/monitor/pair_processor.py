@@ -631,5 +631,5 @@ async def process_bot_pair(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.warning("Session rollback failed after pair-processor error on bot %s", bot.name, exc_info=True)
         return {"error": str(e)}

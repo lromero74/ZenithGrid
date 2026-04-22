@@ -679,8 +679,8 @@ async def fetch_ath_data() -> Dict[str, Any]:
             try:
                 ath_date = datetime.fromisoformat(ath_date_str.replace("Z", "+00:00"))
                 days_since_ath = (datetime.now(ath_date.tzinfo) - ath_date).days
-            except Exception:
-                pass
+            except (ValueError, TypeError):
+                logger.warning("Unparseable ATH date %r from CoinGecko", ath_date_str, exc_info=True)
 
         now = datetime.utcnow()
         cache_data = {

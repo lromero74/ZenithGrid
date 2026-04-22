@@ -126,4 +126,4 @@ async def broadcast_user_presence(
         try:
             await broadcast_backend.send_to_user(uid, message)
         except Exception:
-            pass
+            logger.warning("Failed to broadcast admin notification to user %s", uid, exc_info=True)

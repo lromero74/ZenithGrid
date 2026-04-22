@@ -230,12 +230,13 @@ async def _build_paper_portfolio(account: Account) -> dict:
             altcoin_usd_prices[currency] = await get_public_price(f"{currency}-USD")
             continue
         except Exception:
-            pass
+            logger.debug("Paper portfolio: %s-USD price lookup failed, will try BTC pair", currency, exc_info=True)
         # Fall back to BTC pair → convert via BTC/USD
         try:
             btc_price = await get_public_price(f"{currency}-BTC")
             altcoin_usd_prices[currency] = btc_price * btc_usd_price
         except Exception:
+            logger.warning("Paper portfolio: %s-BTC price lookup failed, defaulting to 0", currency, exc_info=True)
             altcoin_usd_prices[currency] = 0.0
 
     # Build holdings array (compatible with frontend Portfolio page)

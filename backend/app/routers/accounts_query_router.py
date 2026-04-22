@@ -766,6 +766,10 @@ async def get_dust_sweep_settings(
                     if available > 0:
                         balances[currency] = available
             except Exception:
+                logger.warning(
+                    "Failed to load Coinbase balances for dust sweep on account %s",
+                    account_id, exc_info=True,
+                )
                 balances = {}
 
         # Subtract amounts locked in open positions
@@ -806,7 +810,11 @@ async def get_dust_sweep_settings(
                     if price > 0:
                         prices[f"{coin}-USD"] = price
             except Exception:
-                pass
+                # Falls through to "no price" handling below — not fatal.
+                logger.warning(
+                    "Bulk product-list fetch failed while pricing dust for account %s",
+                    account_id, exc_info=True,
+                )
 
         for coin, amount in altcoins:
             usd_price = prices.get(f"{coin}-USD", 0.0)
@@ -821,8 +829,11 @@ async def get_dust_sweep_settings(
                 })
 
         dust_positions.sort(key=lambda d: d["usd_value"], reverse=True)
-    except Exception as e:
-        logger.warning(f"Error building dust positions for account {account_id}: {e}")
+    except Exception:
+        logger.warning(
+            "Error building dust positions for account %s",
+            account_id, exc_info=True,
+        )
 
     response_data = {
         "enabled": account.dust_sweep_enabled or False,
