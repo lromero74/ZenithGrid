@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.13] - 2026-04-22
+
+### Changed
+- **Open deals rows shed a few more fields the live list never reads** — The hot `GET /api/positions?status=open` path now omits several optional values that matter for detail or closed-position views but not for the active-deals list: `account_id`, `user_attempt_number`, close/profit-at-close fields, and `limit_close_order_id`. That trims each row a bit further on the 5-second open-deals refresh without changing the open positions UI.
+- **Closed and detail views keep their full data** — The trimming only applies to the open positions list route. Closed/history views and single-position detail fetches still return those fields where they’re actually used.
+
 ## [v2.164.12] - 2026-04-22
 
 ### Changed
