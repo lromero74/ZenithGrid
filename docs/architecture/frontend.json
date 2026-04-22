@@ -3,7 +3,7 @@
     {
       "file": "pages/Dashboard.tsx",
       "route": "/",
-      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics"
+      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics. v2.164.6: account-value totals come from useAccountValueSummary (fast /account-value-summary endpoint) instead of the full portfolio fetch, and AccountValueChart + MarketSentimentCards are code-split via React.lazy/Suspense to shrink the initial Dashboard bundle."
     },
     {
       "file": "pages/Bots.tsx",
@@ -667,6 +667,10 @@
       {
         "file": "hooks/useSessions.ts",
         "purpose": "Session management: useOtherSessions() lists active sessions, useTerminateSessions() terminates them; moved from pages/games/hooks/ to shared hooks/"
+      },
+      {
+        "file": "hooks/useAccountValueSummary.ts",
+        "purpose": "Fast account value summary for the dashboard/header: React Query against accountValueSummaryApi.get(accountId) keyed by account id, staleTime 30s, 60s refetchInterval, keepPreviousData across account switches; when the backend returns is_stale or is_refreshing the hook schedules a single setTimeout refetch 5s later so the cached snapshot upgrades to live totals without polling tightly. Introduced in v2.164.6."
       }
     ],
     "page_specific": {
@@ -820,6 +824,10 @@
       {
         "name": "accountValueApi",
         "purpose": "Historical account value snapshots and daily activity markers (trades, deposits, withdrawals)"
+      },
+      {
+        "name": "accountValueSummaryApi",
+        "purpose": "Fast per-account value summary (total USD/BTC, BTC/USD, is_stale, is_refreshing) used by the Dashboard header; GET /accounts/{id}/account-value-summary with optional force_fresh=true; AccountValueSummary type exported from api.ts. Added in v2.164.6."
       },
       {
         "name": "reportsApi",

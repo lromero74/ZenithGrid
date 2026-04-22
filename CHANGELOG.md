@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.6] - 2026-04-22
+
+### Changed
+- **Account Value appears almost immediately on first login** — On paper accounts with lots of non-stable assets (the worst case on `testbot` was a paper account with 135 assets taking ~27 seconds on a cold cache), the Dashboard header used to sit on a spinner while the backend valued every holding one by one through Coinbase's public price API — USD lookup first, BTC fallback second, serial, no concurrency cap. The header now calls a new lightweight endpoint, `GET /api/accounts/{id}/account-value-summary`, that returns just `total_usd_value`, `total_btc_value`, and `btc_usd_price`. The summary is cached for 60 seconds, refreshed in the background when stale, and — for paper accounts — built through a shared valuation helper with bounded concurrency (max 5 in-flight price lookups) so we stay friendly to Coinbase rate limits. The Portfolio page still gets full holdings detail on demand via a new `include_details` flag on the portfolio endpoint. Net effect: the header shows a number in well under a second on first login instead of hanging on a cold-cache burst, without trading latency for throttling.
+- **Dashboard startup is lighter** — The Dashboard page now code-splits its `AccountValueChart` and `MarketSentimentCards` widgets with `React.lazy` / `Suspense`, so the first render doesn't block on chart libraries it doesn't need yet. Also trims a little redundant work on the live portfolio warm-up path.
+
 ## [v2.164.5] - 2026-04-22
 
 ### Fixed
