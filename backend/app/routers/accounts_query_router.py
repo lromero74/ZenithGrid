@@ -428,6 +428,56 @@ async def get_account_value_summary_route(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
+@router.get("/{account_id}/speculative-bucket")
+async def get_speculative_bucket_route(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the account-level speculative bucket snapshot.
+
+    Shape documented in
+    app.services.speculative_bucket_service.get_speculative_bucket_info.
+    Scoped to accounts the caller can access (owner + shared members).
+    Read-only — no cooldown-timestamp mutation here.
+
+    See PRPs/high-risk-doubling-preset.md §Task C1.
+    """
+    # Verify access first
+    query = select(Account).where(
+        Account.id == account_id,
+        accessible_accounts_filter(current_user.id),
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # Pull the USD aggregate from the fast summary path — same denominator
+    # used by the budget math. Tolerates failures by falling back to 0.0,
+    # which keeps the endpoint alive on cold caches (bucket shows as 0).
+    aggregate_usd = 0.0
+    btc_usd_price = 0.0
+    try:
+        summary = await get_account_value_summary(
+            db, current_user, account_id, force_fresh=False,
+        )
+        aggregate_usd = float(summary.get("total_usd_value") or 0.0)
+        btc_usd_price = float(summary.get("btc_usd_price") or 0.0)
+    except Exception as e:
+        logger.warning(
+            "speculative-bucket: failed to load account value summary for %s: %s",
+            account_id, e,
+        )
+
+    from app.services.speculative_bucket_service import get_speculative_bucket_info
+    return await get_speculative_bucket_info(
+        db, account_id,
+        aggregate_usd_value=aggregate_usd,
+        btc_usd_price=btc_usd_price,
+    )
+
+
 # =============================================================================
 # Auto-Buy BTC Settings (GET)
 # =============================================================================
