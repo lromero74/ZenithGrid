@@ -66,13 +66,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // Fetch all bots with projection data (filtered by account if selected)
   const { data: bots = [] } = useQuery({
     queryKey: ['dashboard-bots', selectedAccount?.id, projectionBasis],
-    queryFn: () => botsApi.getAll(projectionBasis),
+    queryFn: () => botsApi.getAll(projectionBasis, selectedAccount?.id),
     refetchInterval: 30000,
     staleTime: 15000,
-    select: (data) => {
-      if (!selectedAccount) return data
-      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
-    },
   })
 
   // Fetch open positions for active deals count

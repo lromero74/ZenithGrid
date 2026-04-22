@@ -180,6 +180,7 @@ async def create_bot(
 async def list_bots(
     active_only: bool = False,
     projection_timeframe: Optional[str] = "all",
+    account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -195,10 +196,24 @@ async def list_bots(
     # Include bots owned by the user AND bots on accounts they have shared access to
     acc_ids = await accessible_account_ids(db, current_user.id)
     from sqlalchemy import or_
+
+    if account_id is not None:
+        account_result = await db.execute(
+            select(Account.id).where(
+                Account.id == account_id,
+                or_(Account.user_id == current_user.id, Account.id.in_(acc_ids)),
+            )
+        )
+        if account_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
     query = select(Bot).order_by(desc(Bot.created_at))
     query = query.where(
         or_(Bot.user_id == current_user.id, Bot.account_id.in_(acc_ids))
     )
+
+    if account_id is not None:
+        query = query.where(Bot.account_id == account_id)
 
     if active_only:
         query = query.where(Bot.is_active)
