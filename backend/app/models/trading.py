@@ -753,6 +753,14 @@ class AIOpinionLog(Base):
     realized_pnl_pct = Column(Float, nullable=True)
     closed_at = Column(DateTime, nullable=True)
 
+    # Speculative preset fields — null on non-speculative evaluations. Persisted
+    # so speculative_calibration_monitor can compare per-component win rates
+    # across closed positions and propose weight adjustments.
+    doubling_probability_score = Column(Integer, nullable=True)
+    speculative_score = Column(Integer, nullable=True)
+    # List of [name, fired, contribution] triples from speculative_signals.components_for_log.
+    speculative_components = Column(JSON, nullable=True)
+
 
 class BlacklistedCoin(Base):
     """

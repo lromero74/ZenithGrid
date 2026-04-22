@@ -285,6 +285,49 @@ async def delete_account(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
+@router.post("/{account_id}/speculative-calibration/dismiss")
+async def dismiss_speculative_calibration_alert(
+    account_id: int,
+    dismiss_token: str = Query(..., description="Signed dismiss token from the alert email"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
+):
+    """Silence the speculative calibration alert by resetting the cooldown.
+
+    Sets `Account.speculative_calibration_last_alerted_at = now`, which
+    extends the 30-day cooldown window without actually sending a fresh
+    alert. See PRPs/high-risk-doubling-preset.md §Task F6.
+
+    Only the account owner can dismiss — non-owners hit 404 so shared
+    users cannot silence an alert the owner needs to see.
+    """
+    from app.services.speculative_calibration_token import decode_dismiss_token
+
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id,
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    payload = decode_dismiss_token(dismiss_token)
+    if not payload:
+        raise HTTPException(status_code=403, detail="Invalid dismiss token")
+    if str(payload.get("sub")) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Invalid dismiss token")
+    if int(payload.get("account_id") or 0) != int(account_id):
+        raise HTTPException(status_code=403, detail="Invalid dismiss token")
+
+    account.speculative_calibration_last_alerted_at = datetime.utcnow()
+    await db.commit()
+    logger.info(
+        "Speculative calibration alert dismissed for account %s (user %s)",
+        account_id, current_user.id,
+    )
+    return {"dismissed": True}
+
+
 @router.post("/{account_id}/set-default")
 async def set_default_account(
     account_id: int,

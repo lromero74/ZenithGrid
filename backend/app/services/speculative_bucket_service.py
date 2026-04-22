@@ -25,9 +25,16 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Account, Bot, Position
+from app.models import Account, AIOpinionLog, Bot, Position
 
 logger = logging.getLogger(__name__)
+
+
+# Calibration alert thresholds (Phase F Task F2). Kept at module level
+# so the monitor and tests reference the same constants.
+CALIBRATION_MIN_CLOSED = 50
+CALIBRATION_MIN_COMPONENT_FIRES = 30
+CALIBRATION_MIN_DIVERGENCE_PP = 20.0
 
 
 # ---------------------------------------------------------------------------
@@ -215,3 +222,144 @@ async def validate_speculative_entry(
         )
 
     return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Phase F — calibration analysis
+# ---------------------------------------------------------------------------
+
+
+def _parse_components(raw) -> list:
+    """Normalize the speculative_components payload to a list of tuples.
+
+    The scorer persists `[(name, fired, contribution), ...]`. PostgreSQL JSONB
+    round-trips that as list-of-lists. SQLite's TEXT column (see migration
+    083) may round-trip as a JSON string. Be lenient in both directions.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        # SQLite TEXT path — parse on read.
+        import json as _json
+        try:
+            raw = _json.loads(raw)
+        except Exception:
+            return []
+    if not isinstance(raw, list):
+        return []
+    return raw
+
+
+async def analyze_speculative_calibration(
+    db: AsyncSession, user_id: int,
+) -> Optional[dict]:
+    """Return a recalibration-analysis dict, or None if the user does not yet
+    have enough closed speculative-bot data to warrant an alert.
+
+    All three thresholds must hold simultaneously:
+    - At least CALIBRATION_MIN_CLOSED closed positions from is_speculative
+      bots owned by `user_id`, with a non-null doubling_probability_score
+      in the matching ai_opinion_log row.
+    - At least one component with CALIBRATION_MIN_COMPONENT_FIRES fires
+      across those rows.
+    - Top-scoring component's win rate minus bottom-scoring component's
+      win rate >= CALIBRATION_MIN_DIVERGENCE_PP percentage points
+      (only components with >= CALIBRATION_MIN_COMPONENT_FIRES fires
+      are eligible for the top/bottom pick).
+
+    Output shape is documented in PRPs/high-risk-doubling-preset.md §Task F2.
+    """
+    stmt = (
+        select(AIOpinionLog, Position)
+        .join(Position, AIOpinionLog.position_id == Position.id)
+        .join(Bot, AIOpinionLog.bot_id == Bot.id)
+        .where(
+            AIOpinionLog.user_id == user_id,
+            AIOpinionLog.doubling_probability_score.isnot(None),
+            Position.status == "closed",
+            _speculative_bot_filter(),
+        )
+    )
+    rows = (await db.execute(stmt)).all()
+
+    total_closed = len(rows)
+    if total_closed < CALIBRATION_MIN_CLOSED:
+        return None
+
+    wins = sum(
+        1 for _, pos in rows
+        if (pos.profit_percentage or 0.0) > 0
+    )
+    losses = total_closed - wins
+    overall_win_rate_pct = (wins / total_closed) * 100.0 if total_closed else 0.0
+
+    overall_realized_pnl_usd = sum(
+        float(getattr(pos, "profit_usd", None) or 0.0)
+        for _, pos in rows
+    )
+
+    # Tally fires and wins per component. A component "fired" on a row if its
+    # tuple in AIOpinionLog.speculative_components has fired=True. Wins are
+    # counted by joining back to Position.profit_percentage > 0.
+    component_fires: dict = {}
+    component_wins: dict = {}
+    for log_row, pos in rows:
+        components = _parse_components(log_row.speculative_components)
+        is_win = (pos.profit_percentage or 0.0) > 0
+        for entry in components:
+            if not entry or len(entry) < 2:
+                continue
+            name = entry[0]
+            fired = bool(entry[1])
+            if not fired:
+                continue
+            component_fires[name] = component_fires.get(name, 0) + 1
+            if is_win:
+                component_wins[name] = component_wins.get(name, 0) + 1
+
+    if not component_fires:
+        return None
+
+    # Check "at least one component fired at least CALIBRATION_MIN_COMPONENT_FIRES times".
+    if max(component_fires.values()) < CALIBRATION_MIN_COMPONENT_FIRES:
+        return None
+
+    components_list = []
+    for name, fires in component_fires.items():
+        win_rate = (component_wins.get(name, 0) / fires) * 100.0 if fires else 0.0
+        components_list.append({
+            "name": name,
+            "fires": fires,
+            "win_rate_pct": round(win_rate, 2),
+        })
+    components_list.sort(key=lambda c: c["win_rate_pct"], reverse=True)
+
+    # Divergence is computed only across components with enough fires to
+    # be statistically meaningful. A noisy component that fired 3 times
+    # at 100% win rate should not trip the alert.
+    eligible = [c for c in components_list
+                if c["fires"] >= CALIBRATION_MIN_COMPONENT_FIRES]
+    if len(eligible) < 2:
+        # Only one component has enough fires — can't compute divergence.
+        # Treat the analysis as not yet actionable.
+        return None
+
+    top = eligible[0]
+    bottom = eligible[-1]
+    divergence_pp = top["win_rate_pct"] - bottom["win_rate_pct"]
+    if divergence_pp < CALIBRATION_MIN_DIVERGENCE_PP:
+        return None
+
+    return {
+        "total_closed": total_closed,
+        "wins": wins,
+        "losses": losses,
+        "overall_win_rate_pct": round(overall_win_rate_pct, 2),
+        "overall_realized_pnl_usd": round(overall_realized_pnl_usd, 2),
+        "components": components_list,
+        "top_component": top["name"],
+        "top_win_rate_pct": top["win_rate_pct"],
+        "bottom_component": bottom["name"],
+        "bottom_win_rate_pct": bottom["win_rate_pct"],
+        "divergence_pp": round(divergence_pp, 2),
+    }

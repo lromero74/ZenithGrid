@@ -53,12 +53,19 @@ async def log_opinion(
     input_tokens: int = 0,
     output_tokens: int = 0,
     cost_usd: float = 0.0,
+    doubling_probability_score: Optional[int] = None,
+    speculative_score: Optional[int] = None,
+    speculative_components: Optional[List[Any]] = None,
 ) -> None:
     """Persist one AI decision row. Never raises.
 
     `model_used` / `input_tokens` / `output_tokens` / `cost_usd` are the Phase F
     cost-accounting fields. They default to zero so prefilter-reject rows (no
     LLM call) still satisfy the `DEFAULT 0` migration constraints.
+
+    `doubling_probability_score` / `speculative_score` / `speculative_components`
+    are Phase F calibration fields — null on non-speculative evaluations,
+    consumed by speculative_calibration_monitor.
     """
     try:
         row = AIOpinionLog(
@@ -77,6 +84,15 @@ async def log_opinion(
             input_tokens=int(input_tokens or 0),
             output_tokens=int(output_tokens or 0),
             cost_usd=float(cost_usd or 0.0),
+            doubling_probability_score=(
+                int(doubling_probability_score)
+                if doubling_probability_score is not None else None
+            ),
+            speculative_score=(
+                int(speculative_score)
+                if speculative_score is not None else None
+            ),
+            speculative_components=speculative_components,
         )
         db.add(row)
         await db.commit()

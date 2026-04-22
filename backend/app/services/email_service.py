@@ -391,6 +391,196 @@ def send_invitation_email(
     return _send_email(to, subject, html_body, text_body)
 
 
+def build_speculative_calibration_text_body(
+    *,
+    analysis: dict,
+    user_first_name: str,
+    user_id: int,
+    dismiss_url: str,
+) -> str:
+    """Render the plain-text body for the speculative calibration alert.
+
+    The COPY EVERYTHING BELOW/ABOVE markers and the numbered step list are
+    verbatim per PRPs/high-risk-doubling-preset.md §Phase F Task F4 — the
+    body is designed so a fresh Claude Code session can recalibrate the
+    weights in speculative_signals.py with no prior context. Do not
+    reword without reading the PRP.
+    """
+    components = sorted(
+        analysis.get("components", []),
+        key=lambda c: c.get("win_rate_pct", 0),
+        reverse=True,
+    )
+    component_lines = "\n".join(
+        f"  {c['name']:<24} {c['fires']:>4} fires    {c['win_rate_pct']:>5.1f}%"
+        for c in components
+    )
+
+    pnl = float(analysis.get("overall_realized_pnl_usd", 0.0))
+    win_rate = analysis.get("overall_win_rate_pct", 0.0)
+    total_closed = analysis.get("total_closed", 0)
+    wins = analysis.get("wins", 0)
+    losses = analysis.get("losses", 0)
+    top = analysis.get("top_component", "")
+    top_rate = analysis.get("top_win_rate_pct", 0.0)
+    bottom = analysis.get("bottom_component", "")
+    bottom_rate = analysis.get("bottom_win_rate_pct", 0.0)
+    divergence = float(analysis.get("divergence_pp", 0.0))
+
+    bar = "━" * 44
+    return (
+        f"Hi {user_first_name},\n\n"
+        "Your speculative bot preset has accumulated enough closed positions that\n"
+        "it's worth revisiting the signal weights. The signal weights in\n"
+        "speculative_signals.py were educated guesses at ship time; this alert\n"
+        "fires once we have enough data to calibrate them against real outcomes.\n\n"
+        f"{bar}\n"
+        "SUMMARY\n"
+        f"{bar}\n\n"
+        f"Total closed speculative positions:   {total_closed}\n"
+        f"Overall win rate:                     {win_rate}%  ({wins}W / {losses}L)\n"
+        f"Overall realized PnL:                 ${pnl:+.2f}\n\n"
+        f"{bar}\n"
+        "COMPONENT PERFORMANCE (fires / win rate)\n"
+        f"{bar}\n\n"
+        f"{component_lines}\n\n"
+        f"Gap between top ({top}) and bottom ({bottom}):\n"
+        f"  {divergence:.1f} percentage points\n\n"
+        f"{bar}\n"
+        "TO ACT ON THIS\n"
+        f"{bar}\n\n"
+        "Open a new Claude Code session at /home/ec2-user/ZenithGrid and\n"
+        "paste the block below. It is self-contained — Claude will have\n"
+        "no memory of the original preset design, but this prompt has\n"
+        "everything needed to recalibrate.\n\n"
+        "━━━━━ COPY EVERYTHING BELOW THIS LINE ━━━━━\n\n"
+        "I received a speculative preset calibration alert from ZenithGrid.\n"
+        "I want to review and adjust the signal weights in\n"
+        "`backend/app/indicators/speculative_signals.py` based on accumulated\n"
+        "outcome data in `ai_opinion_log`.\n\n"
+        "Reference: `PRPs/high-risk-doubling-preset.md` (Phase F — Calibration\n"
+        "Alert Monitor). The monitor fires when ≥50 closed speculative positions\n"
+        "have accumulated and component win rates diverge by ≥20 percentage\n"
+        "points.\n\n"
+        "Current snapshot from the alert:\n"
+        f"- Total closed speculative positions: {total_closed}\n"
+        f"- Overall win rate: {win_rate}%\n"
+        f"- Top component: {top} ({top_rate}% win rate)\n"
+        f"- Bottom component: {bottom} ({bottom_rate}% win rate)\n"
+        f"- Divergence: {divergence:.1f} percentage points\n\n"
+        "Please do this, in order:\n\n"
+        "1. Re-verify the numbers in the alert by querying `ai_opinion_log`\n"
+        "   joined to `trading.positions` for my user_id\n"
+        f"   (user_id={user_id}), filtered to:\n"
+        "     - speculative-tagged bots (bot.strategy_config->>'is_speculative' = 'true')\n"
+        "     - closed positions (positions.status = 'closed')\n"
+        "     - non-null doubling_probability_score\n"
+        "   For each weight component in `speculative_signals.py::WEIGHTS`, compute\n"
+        "   fire_count (how often it contributed to the score) and win_rate\n"
+        "   (wins = position.profit_percentage > 0).\n\n"
+        "2. Propose weight adjustments to the `WEIGHTS` dict in\n"
+        "   `backend/app/indicators/speculative_signals.py`:\n"
+        "     - Lower weights of components whose win rate is materially below\n"
+        "       the overall win rate (>5pp below).\n"
+        "     - Raise weights of top performers (>5pp above overall win rate).\n"
+        "     - Preserve the invariant that weights sum to 100.\n"
+        "     - Do NOT change the scorer logic, the prefilter, or the LLM prompt\n"
+        "       — only the weights dict.\n\n"
+        "3. Show me a before/after weights diff and a one-line reason per change.\n\n"
+        "4. Add or update a test in\n"
+        "   `backend/tests/indicators/test_speculative_signals.py` that asserts\n"
+        "   the new weights sum to 100 and that at least one weight changed.\n\n"
+        "5. Write a CHANGELOG entry under the next patch version.\n\n"
+        "6. Stop after the weights change and tests pass — do not ship (no\n"
+        "   tag, no push, no deploy). I want to review before `/shipit`.\n\n"
+        "If the query shows the alert was noisy (no real divergence, or\n"
+        "sample size was lower than I claimed), say so and recommend\n"
+        "dismissing the alert instead of adjusting weights.\n\n"
+        "━━━━━ COPY EVERYTHING ABOVE THIS LINE ━━━━━\n\n"
+        "If you want to silence this alert without acting on it, reply to\n"
+        f"this email with \"dismiss\" (or click: {dismiss_url}) — the cooldown\n"
+        "will reset to 30 days.\n\n"
+        "— ZenithGrid\n"
+    )
+
+
+def _build_speculative_calibration_html_body(
+    *,
+    analysis: dict,
+    user_first_name: str,
+    user_id: int,
+    dismiss_url: str,
+) -> str:
+    """Wrap the plain-text body in a minimal HTML shell.
+
+    Uses a <pre> block so the COPY EVERYTHING markers and the numbered
+    steps render as a single copy-friendly fixed-width region — the
+    user-facing point of this email is that the body can be pasted
+    whole into a Claude Code session.
+    """
+    text_body = build_speculative_calibration_text_body(
+        analysis=analysis, user_first_name=user_first_name,
+        user_id=user_id, dismiss_url=dismiss_url,
+    )
+    import html as _html
+    escaped = _html.escape(text_body)
+    # Preserve the dismiss link as an actual clickable anchor.
+    escaped = escaped.replace(
+        _html.escape(dismiss_url),
+        f'<a href="{_html.escape(dismiss_url)}" '
+        'style="color: #3b82f6;">'
+        f'{_html.escape(dismiss_url)}</a>',
+    )
+    return (
+        '<div style="font-family: -apple-system, BlinkMacSystemFont,'
+        " 'Segoe UI', Roboto, sans-serif; max-width: 720px;"
+        ' margin: 0 auto; padding: 20px;'
+        ' background-color: #0f172a; color: #e2e8f0;">'
+        f'{_email_header()}'
+        '<div style="padding: 20px 0;">'
+        '<pre style="font-family: Menlo, Consolas, monospace;'
+        ' font-size: 13px; line-height: 1.5; color: #e2e8f0;'
+        ' white-space: pre-wrap; word-break: break-word;">'
+        f'{escaped}'
+        '</pre>'
+        '</div>'
+        f'{_email_footer()}'
+        '</div>'
+    )
+
+
+def send_speculative_calibration_email(
+    *,
+    to: str,
+    analysis: dict,
+    user_first_name: str,
+    user_id: int,
+    dismiss_url: str,
+) -> bool:
+    """Send the calibration alert email.
+
+    `analysis` is the dict returned by
+    app.services.speculative_bucket_service.analyze_speculative_calibration.
+    """
+    if not settings.ses_enabled:
+        logger.warning(
+            "SES disabled, skipping speculative calibration email to %s", to,
+        )
+        return False
+
+    b = _brand()
+    subject = f"{b['shortName']} — Time to review speculative preset weights"
+    text_body = build_speculative_calibration_text_body(
+        analysis=analysis, user_first_name=user_first_name,
+        user_id=user_id, dismiss_url=dismiss_url,
+    )
+    html_body = _build_speculative_calibration_html_body(
+        analysis=analysis, user_first_name=user_first_name,
+        user_id=user_id, dismiss_url=dismiss_url,
+    )
+    return _send_email(to, subject, html_body, text_body)
+
+
 def _send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
     """Send an email via SES. Returns True on success."""
     try:

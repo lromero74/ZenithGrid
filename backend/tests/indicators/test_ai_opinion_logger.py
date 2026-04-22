@@ -128,6 +128,50 @@ class TestLogOpinion:
         assert rows[0].bot_id is None
         assert rows[0].tool_calls == []
 
+    async def test_persists_speculative_fields(self, db_session):
+        """Speculative preset fields round-trip on the ai_opinion_log row."""
+        user = await _make_user(db_session)
+        account = await _make_account(db_session, user)
+        bot = await _make_bot(db_session, account, user)
+        pos = await _make_position(db_session, bot, account, user)
+
+        components = [
+            ["volume_surge", True, 25],
+            ["compression_breakout", True, 20],
+            ["momentum_accelerating", False, 0],
+            ["micro_mid_cap", False, 0],
+            ["correlation_break", False, 0],
+            ["volume_vs_mcap", True, 15],
+        ]
+        await log_opinion(
+            db=db_session, user_id=user.id, account_id=account.id,
+            bot_id=bot.id, position_id=pos.id, product_id="HYPE-USD",
+            is_sell_check=False, signal="buy", confidence=61,
+            reasoning="catalyst", tool_calls=[], ai_model="claude",
+            doubling_probability_score=42,
+            speculative_score=60,
+            speculative_components=components,
+        )
+
+        row = (await db_session.execute(select(AIOpinionLog))).scalar_one()
+        assert row.doubling_probability_score == 42
+        assert row.speculative_score == 60
+        assert row.speculative_components == components
+
+    async def test_defaults_speculative_fields_to_null(self, db_session):
+        """Non-speculative calls must leave all speculative columns null."""
+        user = await _make_user(db_session)
+        await log_opinion(
+            db=db_session, user_id=user.id, account_id=None, bot_id=None,
+            position_id=None, product_id="BTC-USD", is_sell_check=False,
+            signal="hold", confidence=0, reasoning="r", tool_calls=[],
+            ai_model="gpt",
+        )
+        row = (await db_session.execute(select(AIOpinionLog))).scalar_one()
+        assert row.doubling_probability_score is None
+        assert row.speculative_score is None
+        assert row.speculative_components is None
+
     async def test_swallows_exceptions(self, db_session):
         """log_opinion must never raise — the evaluator treats it as fire-and-forget."""
         class BoomSession:

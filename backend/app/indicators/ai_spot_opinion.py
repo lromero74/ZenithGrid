@@ -619,6 +619,12 @@ class AISpotOpinionEvaluator:
             f"(confidence: {confidence}%, tools={len(tool_calls)}, reason: {reasoning})"
         )
 
+        # Speculative scorer persistence — None on non-speculative paths.
+        spec_components_for_log = None
+        if spec_score_result is not None:
+            from app.indicators.speculative_signals import components_for_log
+            spec_components_for_log = components_for_log(spec_score_result)
+
         await self._write_opinion_log(
             db=db, user_id=user_id, account_id=account_id,
             bot_id=getattr(bot, "id", None),
@@ -630,6 +636,9 @@ class AISpotOpinionEvaluator:
             input_tokens=usage_meta.get("input_tokens", 0),
             output_tokens=usage_meta.get("output_tokens", 0),
             cost_usd=usage_meta.get("cost_usd", 0.0),
+            doubling_probability_score=usage_meta.get("doubling_probability_score"),
+            speculative_score=(spec_score_result or {}).get("score"),
+            speculative_components=spec_components_for_log,
         )
 
         return {
