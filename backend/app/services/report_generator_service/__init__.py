@@ -3,7 +3,9 @@ Report Generator Service
 
 Split into focused modules:
 - html_builder: HTML report generation, charts, AI summaries
-- expense_builder: Expense goal cards, schedule logic, upcoming/lookahead
+- expense_schedule: Date math + lookahead helpers for expense goal cards
+- expense_sections: HTML section builders (coverage, changes, savings)
+- expense_card: Expense goal card header + tab assembly
 - pdf_generator: PDF generation with fpdf2
 """
 
@@ -27,11 +29,8 @@ from app.services.report_generator_service.html_builder import (  # noqa: F401
 from app.services.report_generator_service.chart_renderer import (  # noqa: F401
     _render_trend_chart_png,
 )
-from app.services.report_generator_service.expense_builder import (  # noqa: F401
+from app.services.report_generator_service.expense_schedule import (  # noqa: F401
     LOOKAHEAD_DAYS,
-    _build_expense_changes_html,
-    _build_expenses_goal_card,
-    _expense_name_html,
     _fmt_coverage_pct,
     _format_due_label,
     _get_lookahead_items,
@@ -39,6 +38,13 @@ from app.services.report_generator_service.expense_builder import (  # noqa: F40
     _next_biweekly_date,
     _next_every_n_days_date,
     _ordinal_day,
+)
+from app.services.report_generator_service.expense_sections import (  # noqa: F401
+    _build_expense_changes_html,
+    _expense_name_html,
+)
+from app.services.report_generator_service.expense_card import (  # noqa: F401
+    _build_expenses_goal_card,
 )
 from app.services.report_generator_service.pdf_generator import (  # noqa: F401
     _render_pdf_markdown,

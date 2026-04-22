@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import markdown as _md
 
 from app.services.brand_service import get_brand
-from app.services.report_generator_service.expense_builder import (
+from app.services.report_generator_service.expense_card import (
     _build_expenses_goal_card,
 )
 
