@@ -614,7 +614,7 @@ class PaperTradingClient(ExchangeClient):
             if price and price > 0:
                 return balance * price
         except Exception:
-            pass
+            logger.debug("%s-BTC pair unavailable, falling back to USD pair", currency, exc_info=True)
         # Fallback: convert via USD (for coins with only a USD pair)
         if btc_usd and btc_usd > 0:
             try:
@@ -622,7 +622,7 @@ class PaperTradingClient(ExchangeClient):
                 if usd_price and usd_price > 0:
                     return balance * usd_price / btc_usd
             except Exception:
-                pass
+                logger.debug("%s-USD pair unavailable", currency, exc_info=True)
         logger.debug("Could not price %s in BTC (no BTC or USD pair)", currency)
         return 0.0
 

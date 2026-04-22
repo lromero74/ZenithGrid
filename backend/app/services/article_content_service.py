@@ -101,8 +101,8 @@ async def get_allowed_article_domains() -> set[str]:
                 for alias in DOMAIN_ALIASES.get(bare, []):
                     allowed.add(alias)
                     allowed.add(f"www.{alias}")
-        except Exception:
-            pass
+        except (ValueError, AttributeError):
+            logger.warning("Malformed content source website %r — skipping", website, exc_info=True)
 
     return allowed
 

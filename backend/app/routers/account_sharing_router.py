@@ -113,14 +113,13 @@ async def invite_member(
             account_name=account_name,
         )
     except Exception:
-        logger.warning("Failed to send invitation email to %s", body.email)
+        logger.warning("Failed to send invitation email to %s", body.email, exc_info=True)
 
     # Real-time push: if the invitee is currently connected via WebSocket, notify them
     try:
         from app.models import User as UserModel
-        from sqlalchemy import select as sa_select
         invitee_result = await db.execute(
-            sa_select(UserModel).where(UserModel.email == str(body.email).lower())
+            select(UserModel).where(UserModel.email == str(body.email).lower())
         )
         invitee = invitee_result.scalar_one_or_none()
         if invitee:
@@ -132,7 +131,8 @@ async def invite_member(
                 "token": invitation.token,
             })
     except Exception:
-        pass  # Non-fatal — email is the primary channel
+        # Non-fatal — email is the primary channel
+        logger.debug("WebSocket push for invitation notification failed", exc_info=True)
 
     return {
         "message": f"Invitation sent to {body.email}",

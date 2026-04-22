@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.1] - 2026-04-22
+
+### Changed
+- **Silent exception swallows now log** — Twelve call sites that previously caught an exception and silently continued (bare `except: pass`) now emit a log line with full stack trace via `exc_info=True`. Targets: paper-portfolio coin pricing fall-through (3 sites in `portfolio_service.py` and `account_service.py`, plus the paper-trading client's own BTC/USD fallback), AI provider / broadcast failures (admin friend-notification push, invitation WebSocket push), cleanup paths that can't fail the caller (PIL image close in news-image cache, DB rollback after pair-processor error, ByBit WebSocket shutdown, last-error persistence after sell failure), and malformed-data parsing (content-source website URLs, CoinGecko ATH date). No behavior change — the same fallbacks still fire, but failures are now diagnosable from the logs. Bulk and top-level dust-sweep exceptions were also upgraded from plain `logger.warning(str(e))` to structured `logger.warning(msg, exc_info=True)` so stack traces are captured.
+
 ## [v2.164.0] - 2026-04-22
 
 ### Security
