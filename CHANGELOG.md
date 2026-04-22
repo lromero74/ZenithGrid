@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.163.4] - 2026-04-22
+
+### Changed
+- **Code-quality quick-wins batch** — Four trivial cleanups flagged by the post-v2.163.3 audit: (1) the `_accessible_accounts_filter` wrapper in `accounts_query_router.py` was a pass-through to `account_access.accessible_accounts_filter` and has been removed; all eight call sites now use the shared function directly, and a redundant inline import in `get_bots_for_account` was also deleted. (2) `_ACTIVE_MEMBERSHIP = lambda uid: (...)` in `account_access.py` (which required a `# noqa: E731`) was promoted to a proper `def _active_membership_clauses(uid)` with a real docstring. (3) Migration 081's `cost_usd` column default was `DEFAULT 0` on a `DOUBLE PRECISION` / `REAL` column — corrected to `DEFAULT 0.0` to match the column type. (4) `docs/architecture/backend.json` claimed `portfolio_service.py` was 777 LOC after Phase 5; actual was 786 — corrected. No behavior change; all 166 account-related tests pass.
+
 ## [v2.163.3] - 2026-04-22
 
 ### Changed
