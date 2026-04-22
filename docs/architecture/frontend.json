@@ -59,7 +59,7 @@
   "components": {
     "bot_management": [
       {
-        "file": "components/DCABudgetConfigForm.tsx",
+        "file": "components/trading/DCABudgetConfigForm.tsx",
         "purpose": "DCA budget configuration form"
       },
       {
@@ -67,7 +67,7 @@
         "purpose": "Conditional/rule-based strategy configuration form"
       },
       {
-        "file": "components/AdvancedConditionBuilder.tsx",
+        "file": "components/trading/AdvancedConditionBuilder.tsx",
         "purpose": "Complex trading condition builder with logic gates"
       },
       {
@@ -191,7 +191,7 @@
         "purpose": "Order book depth visualization"
       },
       {
-        "file": "components/AccountValueChart.tsx",
+        "file": "components/trading/AccountValueChart.tsx",
         "purpose": "Account value over time line chart with activity markers (trade wins/losses, deposits, withdrawals) on BTC/USD series"
       },
       {
@@ -441,7 +441,7 @@
         "purpose": "Configure auto-buy BTC settings"
       },
       {
-        "file": "components/BlacklistManager.tsx",
+        "file": "components/settings/BlacklistManager.tsx",
         "purpose": "Coin blacklist with AI review"
       },
       {
