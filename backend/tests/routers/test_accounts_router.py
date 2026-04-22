@@ -230,6 +230,58 @@ class TestGetAccount:
         assert exc_info.value.status_code == 404
 
 
+class TestGetAccountValueSummaryRoute:
+    """Tests for the get_account_value_summary_route endpoint."""
+
+    @pytest.mark.asyncio
+    @patch("app.routers.accounts_query_router.get_account_value_summary", new_callable=AsyncMock)
+    async def test_get_account_value_summary_success(
+        self, mock_get_summary, db_session, test_user, test_account,
+    ):
+        """Happy path: delegates to service and returns summary payload."""
+        mock_get_summary.return_value = {
+            "account_id": test_account.id,
+            "total_usd_value": 1234.56,
+            "total_btc_value": 0.0123,
+            "btc_usd_price": 100000.0,
+            "as_of": "2026-04-21T12:00:00",
+            "is_stale": False,
+            "is_refreshing": False,
+        }
+
+        from app.routers.accounts_query_router import get_account_value_summary_route
+
+        result = await get_account_value_summary_route(
+            account_id=test_account.id,
+            force_fresh=False,
+            db=db_session,
+            current_user=test_user,
+        )
+
+        assert result["account_id"] == test_account.id
+        mock_get_summary.assert_called_once_with(db_session, test_user, test_account.id, False)
+
+    @pytest.mark.asyncio
+    @patch("app.routers.accounts_query_router.get_account_value_summary", new_callable=AsyncMock)
+    async def test_get_account_value_summary_http_exception_bubbles(
+        self, mock_get_summary, db_session, test_user, test_account,
+    ):
+        """Failure case: HTTPException from service is re-raised unchanged."""
+        mock_get_summary.side_effect = HTTPException(status_code=404, detail="Not found")
+
+        from app.routers.accounts_query_router import get_account_value_summary_route
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_account_value_summary_route(
+                account_id=test_account.id,
+                force_fresh=False,
+                db=db_session,
+                current_user=test_user,
+            )
+
+        assert exc_info.value.status_code == 404
+
+
 # =============================================================================
 # create_account
 # =============================================================================

@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck, FileText, Gamepad2, MessageSquare, Users, Shield } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
+import { useAccountValueSummary } from './hooks/useAccountValueSummary'
 import { useIsAdmin, useHasPermission } from './hooks/usePermission'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/account/AccountSwitcher'
@@ -79,6 +80,7 @@ function AppContent() {
   const [appVersion, setAppVersion] = useState<string>('...')
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  const { summary: accountValueSummary } = useAccountValueSummary({ selectedAccount })
 
   // Get market season for header display
   const { seasonInfo, headerGradient } = useMarketSeason()
@@ -120,28 +122,8 @@ function AppContent() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
-  // Falls back to singular endpoint if selectedAccount hasn't resolved yet
-  const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: async () => {
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      const response = await authFetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json()
-    },
-    refetchInterval: 120000, // Update prices every 2 minutes
-    staleTime: 60000, // Consider data fresh for 60 seconds
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    placeholderData: keepPreviousData, // Retain old values during refetch instead of flashing to 0
-  })
-
-  const totalBtcValue = portfolio?.total_btc_value || 0
-  const totalUsdValue = portfolio?.total_usd_value || 0
+  const totalBtcValue = accountValueSummary?.total_btc_value || 0
+  const totalUsdValue = accountValueSummary?.total_usd_value || 0
 
   // Fetch BTC/USD price directly from market data (not calculated from portfolio)
   // This ensures correct price display regardless of paper trading balances
@@ -283,7 +265,7 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Account Value</p>
-                  {!portfolio ? (
+                  {!accountValueSummary ? (
                     <>
                       <div className="h-7 w-32 bg-slate-700 rounded animate-pulse ml-auto" />
                       <div className="h-5 w-16 bg-slate-700 rounded animate-pulse ml-auto mt-1" />
@@ -340,7 +322,7 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] text-slate-400 leading-tight">Account Value</p>
-                  {!portfolio ? (
+                  {!accountValueSummary ? (
                     <>
                       <div className="h-5 w-28 bg-slate-700 rounded animate-pulse ml-auto" />
                       <div className="h-4 w-14 bg-slate-700 rounded animate-pulse ml-auto mt-0.5" />

@@ -34,6 +34,7 @@ from app.services.account_cache import (
 )
 from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
 from app.services.account_service import get_portfolio_for_account
+from app.services.account_value_summary_service import get_account_value_summary
 from app.services.exchange_service import get_coinbase_for_account
 
 logger = logging.getLogger(__name__)
@@ -400,6 +401,23 @@ async def get_account_portfolio(
         raise
     except Exception as e:
         logger.error(f"Error getting portfolio for account {account_id}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.get("/{account_id}/account-value-summary")
+async def get_account_value_summary_route(
+    account_id: int,
+    force_fresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a fast account value summary for header/dashboard rendering."""
+    try:
+        return await get_account_value_summary(db, current_user, account_id, force_fresh)
+    except (HTTPException, AppError):
+        raise
+    except Exception as e:
+        logger.error(f"Error getting account value summary for account {account_id}: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
