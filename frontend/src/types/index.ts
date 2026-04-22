@@ -122,6 +122,19 @@ export interface AIToolCall {
   turn?: number;
 }
 
+// Speculative-mode component score row — each weighted quantitative signal
+// is logged so users (and a later calibration pass) can see which components
+// fired for each AI call. Shape mirrors the backend
+// speculative_signals.score_speculative_setup() "components" entries.
+export interface SpeculativeSignalComponent {
+  // whether the component fired on this call
+  fired: boolean;
+  // weight points the component contributes to the 0-100 score when fired
+  weight: number;
+  // contribution actually added to the score (weight when fired, 0 otherwise)
+  contribution: number;
+}
+
 export interface AIOpinionLog {
   id: number;
   position_id: number | null;
@@ -137,6 +150,12 @@ export interface AIOpinionLog {
   outcome: string | null;
   realized_pnl_pct: number | null;
   closed_at: string | null;
+
+  // Speculative-preset extras — optional until the backend persists them,
+  // renders nothing when absent. See PRPs/high-risk-doubling-preset.md §D4.
+  doubling_probability_score?: number | null;
+  speculative_score?: number | null;
+  speculative_components?: Record<string, SpeculativeSignalComponent> | null;
 }
 
 export interface MarketData {

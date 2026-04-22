@@ -6,6 +6,7 @@ import { AddAccountModal } from '../components/account/AddAccountModal'
 import { AIProvidersManager } from '../components/settings/AIProvidersManager'
 import { AICostDashboard } from '../components/settings/AICostDashboard'
 import { PortfolioManagement } from '../components/account/PortfolioManagement'
+import { SpeculativeAllocationSection } from '../components/settings/SpeculativeAllocationSection'
 import { BlacklistManager } from '../components/settings/BlacklistManager'
 import { ActiveSessions } from '../components/settings/ActiveSessions'
 import { AdminDisplayNameField } from '../components/settings/AdminDisplayNameField'
@@ -923,6 +924,29 @@ export default function Settings() {
 
       {/* Portfolio Management (Auto-Buy BTC + Rebalancing) */}
       <PortfolioManagement accounts={accounts} />
+
+      {/* Speculative Allocation per CEX account — hard cap on the
+          high-risk-doubling preset's bucket. See PRP high-risk-doubling-preset. */}
+      {accounts.filter(a => a.type === 'cex').length > 0 && (
+        <div className="card p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Lock className="w-6 h-6 text-amber-400" />
+            <h3 className="text-xl font-semibold">Speculative Bucket</h3>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            Per-account cap on total cost basis across all speculative-preset bots.
+            0% blocks speculative bots from opening new positions.
+          </p>
+          <div className="space-y-3">
+            {accounts.filter(a => a.type === 'cex').map(a => (
+              <div key={a.id}>
+                <div className="text-sm text-slate-300 mb-2">{a.name}</div>
+                <SpeculativeAllocationSection account={a} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Coin Categorization Section - Always visible (informational) */}
       <BlacklistManager />

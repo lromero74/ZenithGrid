@@ -201,6 +201,8 @@ class TestGetAccount:
         )
         assert result.id == test_account.id
         assert result.name == "Main Account"
+        # speculative_allocation_pct surfaces (default 0.0) so the UI can read it.
+        assert result.speculative_allocation_pct == 0.0
 
     @pytest.mark.asyncio
     async def test_get_account_not_found(self, db_session, test_user):
@@ -392,6 +394,39 @@ class TestUpdateAccount:
                 db=db_session, current_user=test_user,
             )
         assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
+    @patch("app.routers.accounts_mutation_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
+    async def test_update_account_speculative_allocation(
+        self, mock_encrypt, mock_clear, db_session, test_user, test_account,
+    ):
+        """Happy path: PATCH-style update writes speculative_allocation_pct and
+        the response surfaces it. This is the plumbing that lets the Account
+        Settings "Speculative Allocation %" field persist. See PRP §Task D1."""
+        from app.routers.accounts_mutation_router import update_account
+        from app.schemas.accounts import AccountUpdate
+        update_data = AccountUpdate(speculative_allocation_pct=5.0)
+        result = await update_account(
+            account_id=test_account.id, account_data=update_data,
+            db=db_session, current_user=test_user,
+        )
+        assert result.speculative_allocation_pct == 5.0
+        # Re-read the row — the column persisted, not just echoed.
+        await db_session.refresh(test_account)
+        assert float(test_account.speculative_allocation_pct) == 5.0
+
+    @pytest.mark.asyncio
+    async def test_update_account_speculative_allocation_out_of_range(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure case: values outside [0, 100] are rejected by the schema."""
+        from app.schemas.accounts import AccountUpdate
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            AccountUpdate(speculative_allocation_pct=150.0)
+        with pytest.raises(ValidationError):
+            AccountUpdate(speculative_allocation_pct=-1.0)
 
 
 # =============================================================================

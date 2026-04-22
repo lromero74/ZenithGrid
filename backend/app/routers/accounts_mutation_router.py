@@ -208,6 +208,7 @@ async def update_account(
             prop_daily_drawdown_pct=account.prop_daily_drawdown_pct,
             prop_total_drawdown_pct=account.prop_total_drawdown_pct,
             prop_initial_deposit=account.prop_initial_deposit,
+            speculative_allocation_pct=float(account.speculative_allocation_pct or 0.0),
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,

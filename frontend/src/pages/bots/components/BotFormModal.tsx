@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import type { Bot } from '../../../types'
 import DexConfigSection from '../../../components/trading/DexConfigSection'
 import type {
@@ -15,6 +15,11 @@ import {
   CategoryBadge,
 } from './CoinCategorySelector'
 import { BudgetSection } from './BudgetSection'
+import {
+  SpeculativePresetPanel,
+  type BlockingState,
+} from './SpeculativePresetPanel'
+import { useAccount } from '../../../contexts/AccountContext'
 
 interface BotFormModalProps {
   showModal: boolean
@@ -91,6 +96,33 @@ export function BotFormModal({
     createBot,
     updateBot,
   })
+
+  // Speculative preset — block save until the guardrails are satisfied.
+  // Pulls the account's allocation pct from the context so the panel can
+  // show an actionable copy when the bucket is not configured.
+  const { getAccountById } = useAccount()
+  const fullSelectedAccount = selectedAccount ? getAccountById(selectedAccount.id) : undefined
+  const [speculativeBlock, setSpeculativeBlock] = useState<BlockingState>({
+    blocked: false,
+    reason: null,
+  })
+  const handleSpeculativeBlockingChange = useCallback((state: BlockingState) => {
+    setSpeculativeBlock((prev) =>
+      prev.blocked === state.blocked && prev.reason === state.reason ? prev : state
+    )
+  }, [])
+  const handleSpeculativePresetChange = useCallback(
+    (updates: Record<string, unknown>) => {
+      setFormData({
+        ...formData,
+        strategy_config: {
+          ...formData.strategy_config,
+          ...updates,
+        },
+      })
+    },
+    [formData, setFormData]
+  )
 
   // Helper: get market from pair ID (e.g., "ETH-BTC" -> "BTC")
   const getMarket = (pairId: string) => pairId.split('-')[1]
@@ -409,6 +441,17 @@ export function BotFormModal({
               isPaperTrading={selectedAccount?.type === 'paper'}
               effectiveMaxDeals={effectiveMaxDeals}
             />
+
+            {/* SECTION 8: RISK PRESET (speculative bucket + warning) */}
+            <SpeculativePresetPanel
+              strategyConfig={formData.strategy_config || {}}
+              onChange={handleSpeculativePresetChange}
+              onBlockingStateChange={handleSpeculativeBlockingChange}
+              accountId={selectedAccount?.id ?? null}
+              accountSpeculativeAllocationPct={
+                fullSelectedAccount?.speculative_allocation_pct ?? 0
+              }
+            />
           </fieldset>
 
           {/* Validation Errors */}
@@ -456,6 +499,7 @@ export function BotFormModal({
             validationErrors={validationErrors}
             setShowModal={setShowModal}
             resetForm={resetForm}
+            speculativeBlock={speculativeBlock}
           />
         </form>
       </div>
@@ -1137,6 +1181,7 @@ function FormActions({
   validationErrors,
   setShowModal,
   resetForm,
+  speculativeBlock,
 }: {
   readOnly: boolean
   editingBot: Bot | null
@@ -1147,9 +1192,16 @@ function FormActions({
   validationErrors: ValidationError[]
   setShowModal: (show: boolean) => void
   resetForm: () => void
+  speculativeBlock: BlockingState
 }) {
+  const hardBlocked = validationErrors.length > 0 || speculativeBlock.blocked
   return (
     <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-700">
+      {!readOnly && speculativeBlock.blocked && speculativeBlock.reason && (
+        <span className="text-xs text-amber-300 mr-auto max-w-md">
+          {speculativeBlock.reason}
+        </span>
+      )}
       {readOnly ? (
         <button
           type="submit"
@@ -1172,23 +1224,25 @@ function FormActions({
           <button
             type="submit"
             className={`px-4 py-2 rounded transition-colors ${
-              validationErrors.length > 0
+              hardBlocked
                 ? 'bg-slate-600 cursor-not-allowed opacity-50'
                 : 'bg-blue-600 hover:bg-blue-700'
             }`}
             disabled={
               createBot.isPending ||
               updateBot.isPending ||
-              validationErrors.length > 0
+              hardBlocked
             }
           >
             {createBot.isPending || updateBot.isPending
               ? 'Saving...'
               : validationErrors.length > 0
                 ? 'Fix Errors First'
-                : editingBot
-                  ? 'Update Bot'
-                  : 'Create Bot'}
+                : speculativeBlock.blocked
+                  ? 'Resolve Warnings'
+                  : editingBot
+                    ? 'Update Bot'
+                    : 'Create Bot'}
           </button>
         </>
       )}
