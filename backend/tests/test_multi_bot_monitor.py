@@ -798,3 +798,331 @@ class TestConcurrentPairProcessing:
         assert "error" in result.get("FAIL-BTC", {})
         assert result.get("ETH-BTC", {}).get("action") == "none"
         assert result.get("SOL-BTC", {}).get("action") == "none"
+
+
+# ===========================================================================
+# Class: TestCleanupCaches
+# ===========================================================================
+
+
+class TestCleanupCaches:
+    """Tests for MultiBotMonitor.cleanup_caches() eviction."""
+
+    def test_cleanup_evicts_expired_candles(self):
+        monitor = MultiBotMonitor()
+        now = datetime.utcnow().timestamp()
+        # Fresh entry: should stay
+        monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (now, [{"close": 1}])
+        # Old entry: should evict (TTL is CANDLE_CACHE_DEFAULT_TTL; use huge age)
+        monitor._candle_cache["BTC-USD:ONE_HOUR"] = (now - 10_000_000, [{"close": 2}])
+
+        result = monitor.cleanup_caches()
+        assert result["candles_evicted"] >= 1
+        assert "ETH-BTC:FIVE_MINUTE" in monitor._candle_cache
+
+    def test_cleanup_evicts_stale_indicators(self):
+        monitor = MultiBotMonitor()
+        # Active bot id=1 in _bot_next_check
+        monitor._bot_next_check[1] = 9999999999
+        # Indicator key for active bot (stays) and stale bot (evicted)
+        monitor._previous_indicators_cache[(1, "ETH-BTC")] = {"rsi": 50}
+        monitor._previous_indicators_cache[(99, "DEAD-BTC")] = {"rsi": 70}
+
+        result = monitor.cleanup_caches()
+        assert (1, "ETH-BTC") in monitor._previous_indicators_cache
+        assert (99, "DEAD-BTC") not in monitor._previous_indicators_cache
+        assert result["indicators_evicted"] >= 1
+
+    def test_cleanup_returns_remaining_counts(self):
+        monitor = MultiBotMonitor()
+        result = monitor.cleanup_caches()
+        assert "candles_remaining" in result
+        assert "indicators_remaining" in result
+        assert "exchange_remaining" in result
+        assert "bot_next_check" in result
+
+
+# ===========================================================================
+# Class: TestGetActiveBots
+# ===========================================================================
+
+
+class TestGetActiveBots:
+    """Tests for MultiBotMonitor.get_active_bots()."""
+
+    @pytest.mark.asyncio
+    async def test_returns_active_bots_only(self, db_session):
+        """Happy path: returns active bots plus inactive ones with open positions."""
+        from app.models import Bot as BotModel
+        active = BotModel(
+            id=1, name="Active", user_id=1, strategy_type="macd_dca",
+            is_active=True, strategy_config={}, check_interval_seconds=300,
+            budget_percentage=10.0, product_ids=["ETH-BTC"],
+        )
+        inactive_no_pos = BotModel(
+            id=2, name="Inactive", user_id=1, strategy_type="macd_dca",
+            is_active=False, strategy_config={}, check_interval_seconds=300,
+            budget_percentage=10.0, product_ids=["SOL-BTC"],
+        )
+        db_session.add_all([active, inactive_no_pos])
+        await db_session.flush()
+
+        monitor = MultiBotMonitor()
+        result = await monitor.get_active_bots(db_session)
+        ids = {b.id for b in result}
+        assert 1 in ids
+        assert 2 not in ids  # inactive with no positions is excluded
+
+    @pytest.mark.asyncio
+    async def test_empty_when_no_bots(self, db_session):
+        """Edge case: no bots returns empty list."""
+        monitor = MultiBotMonitor()
+        result = await monitor.get_active_bots(db_session)
+        assert result == []
+
+
+# ===========================================================================
+# Class: TestRebalancerFlags
+# ===========================================================================
+
+
+class TestRebalancerFlags:
+    """Tests for is_rebalancer_gated() and is_rebalancer_bot_overweight()."""
+
+    def test_is_rebalancer_gated_false_by_default(self):
+        from app.multi_bot_monitor import is_rebalancer_gated
+        # Use a bot_id unlikely to be set by prior tests
+        assert is_rebalancer_gated(98765) is False
+
+    def test_is_rebalancer_gated_true_when_added(self):
+        import app.multi_bot_monitor as mod
+        from app.multi_bot_monitor import is_rebalancer_gated
+        mod._rebalancer_gated_bots.add(99)
+        try:
+            assert is_rebalancer_gated(99) is True
+        finally:
+            mod._rebalancer_gated_bots.discard(99)
+
+    def test_is_rebalancer_bot_overweight_false_by_default(self):
+        from app.multi_bot_monitor import is_rebalancer_bot_overweight
+        assert is_rebalancer_bot_overweight(98765) is False
+
+    def test_is_rebalancer_bot_overweight_true_when_added(self):
+        import app.multi_bot_monitor as mod
+        from app.multi_bot_monitor import is_rebalancer_bot_overweight
+        mod._rebalancer_bot_overweight.add(77)
+        try:
+            assert is_rebalancer_bot_overweight(77) is True
+        finally:
+            mod._rebalancer_bot_overweight.discard(77)
+
+
+# ===========================================================================
+# Class: TestGetBotRebalancerGroup
+# ===========================================================================
+
+
+class TestGetBotRebalancerGroup:
+    """Tests for _get_bot_rebalancer_group() caching + DB fetch."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_from_db_on_cache_miss(self, db_session):
+        """Happy path: DB query runs on cache miss."""
+        import app.multi_bot_monitor as mod
+        mod._rebalancer_group_cache.clear()
+
+        from app.multi_bot_monitor import _get_bot_rebalancer_group
+
+        # Mock the DB query path: return a fake group
+        fake_group = MagicMock()
+        fake_group.overweight_tolerance_pct = 7.0
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = fake_group
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=mock_result)
+
+        result = await _get_bot_rebalancer_group(db, 42, "USD")
+        assert result is fake_group
+        # Cache is populated
+        assert (42, "USD") in mod._rebalancer_group_cache
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_when_fresh(self, db_session):
+        """Edge case: cached value returned without DB hit."""
+        import time
+        import app.multi_bot_monitor as mod
+        mod._rebalancer_group_cache.clear()
+
+        cached_group = MagicMock()
+        mod._rebalancer_group_cache[(42, "USD")] = (cached_group, time.monotonic())
+
+        from app.multi_bot_monitor import _get_bot_rebalancer_group
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=RuntimeError("should not be called"))
+
+        result = await _get_bot_rebalancer_group(db, 42, "USD")
+        assert result is cached_group
+        db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refetches_when_cache_expired(self, db_session):
+        """Edge case: expired cache triggers re-fetch."""
+        import app.multi_bot_monitor as mod
+        mod._rebalancer_group_cache.clear()
+
+        # Seed with a very old cache entry
+        old_group = MagicMock()
+        mod._rebalancer_group_cache[(42, "USD")] = (old_group, 0.0)  # monotonic=0 is ancient
+
+        fresh_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = fresh_group
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=mock_result)
+
+        from app.multi_bot_monitor import _get_bot_rebalancer_group
+        result = await _get_bot_rebalancer_group(db, 42, "USD")
+        assert result is fresh_group
+
+
+# ===========================================================================
+# Class: TestGetStatus
+# ===========================================================================
+
+
+class TestGetStatus:
+    """Tests for MultiBotMonitor.get_status()."""
+
+    @pytest.mark.asyncio
+    async def test_get_status_returns_summary(self, db_session):
+        """Happy path: returns running state and bot summary."""
+        from app.models import Bot as BotModel
+        active = BotModel(
+            id=10, name="StatusBot", user_id=1, strategy_type="macd_dca",
+            is_active=True, strategy_config={}, check_interval_seconds=300,
+            budget_percentage=10.0, product_ids=["ETH-BTC"],
+        )
+        db_session.add(active)
+        await db_session.flush()
+
+        monitor = MultiBotMonitor()
+        monitor.running = True
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm:
+            mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await monitor.get_status()
+
+        assert result["running"] is True
+        assert result["active_bots"] >= 1
+        assert any(b["name"] == "StatusBot" for b in result["bots"])
+
+    @pytest.mark.asyncio
+    async def test_get_status_catches_exception(self):
+        """Failure case: DB exception does not propagate (returns falsy / error dict)."""
+        monitor = MultiBotMonitor()
+
+        broken_sm = MagicMock()
+        broken_sm.return_value.__aenter__ = AsyncMock(side_effect=RuntimeError("DB down"))
+        broken_sm.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.multi_bot_monitor.async_session_maker", broken_sm):
+            # Should not raise
+            result = await monitor.get_status()
+        # Method returns None on exception (logger.error path); assert it didn't raise
+        assert result is None or isinstance(result, dict)
+
+
+# ===========================================================================
+# Class: TestFilterPairsByCategoriesAdvanced
+# ===========================================================================
+
+
+class TestFilterPairsByCategoriesAdvanced:
+    """Additional category filter tests covering user override precedence."""
+
+    @pytest.mark.asyncio
+    async def test_user_override_takes_precedence(self, db_session):
+        """User override's category wins over the global entry's category."""
+        pairs = ["DOGE-BTC"]
+
+        # Global entry: MEME (should be filtered out under APPROVED-only allow)
+        # User override: APPROVED (should be allowed)
+        mock_global = MagicMock()
+        mock_global.symbol = "DOGE"
+        mock_global.reason = "[MEME] meme coin"
+        mock_global.user_id = None
+
+        mock_override = MagicMock()
+        mock_override.symbol = "DOGE"
+        mock_override.reason = "[APPROVED] I like it"
+        mock_override.user_id = 42
+
+        # First call returns global entries, second call returns overrides
+        call_count = {"n": 0}
+
+        def execute_side_effect(query):
+            call_count["n"] += 1
+            mock_result = MagicMock()
+            if call_count["n"] == 1:
+                mock_result.scalars.return_value.all.return_value = [mock_global]
+            else:
+                mock_result.scalars.return_value.all.return_value = [mock_override]
+            return mock_result
+
+        db_session.execute = AsyncMock(side_effect=execute_side_effect)
+
+        result = await filter_pairs_by_allowed_categories(
+            db_session, pairs, ["APPROVED"], user_id=42,
+        )
+        assert "DOGE-BTC" in result
+
+
+# ===========================================================================
+# Class: TestProcessSingleBot
+# ===========================================================================
+
+
+class TestProcessSingleBot:
+    """Tests for MultiBotMonitor._process_single_bot() error handling."""
+
+    @pytest.mark.asyncio
+    async def test_skips_when_no_exchange_available(self, db_session):
+        """No exchange client = early return, no error."""
+        monitor = MultiBotMonitor()
+        bot = _make_bot(account_id=99)
+
+        with patch.object(monitor, "get_exchange_for_bot", new_callable=AsyncMock, return_value=None), \
+             patch("app.multi_bot_monitor.async_session_maker") as mock_sm:
+            mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
+            # Should not raise despite missing exchange
+            await monitor._process_single_bot(bot, needs_ai_analysis=False)
+
+    @pytest.mark.asyncio
+    async def test_catches_exception_in_processing(self, db_session):
+        """Any inner exception is caught — method does not raise."""
+        monitor = MultiBotMonitor()
+        bot = _make_bot(account_id=99)
+        exchange = _make_exchange()
+
+        with patch.object(monitor, "get_exchange_for_bot", new_callable=AsyncMock, return_value=exchange), \
+             patch.object(monitor, "process_bot", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
+             patch("app.multi_bot_monitor.async_session_maker") as mock_sm:
+            mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            # DB has no matching bot row → local_bot is None → returns early gracefully
+            # But we still want to test the try/except path. Insert a matching bot row.
+            from app.models import Bot as BotModel
+            real_bot = BotModel(
+                id=bot.id, name=bot.name, user_id=bot.user_id,
+                strategy_type=bot.strategy_type, is_active=True,
+                strategy_config={}, check_interval_seconds=300,
+                budget_percentage=10.0, product_ids=["ETH-BTC"],
+            )
+            db_session.add(real_bot)
+            await db_session.flush()
+
+            # Should not raise
+            await monitor._process_single_bot(bot, needs_ai_analysis=True)

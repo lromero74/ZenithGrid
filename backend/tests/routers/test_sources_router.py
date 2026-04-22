@@ -403,3 +403,202 @@ class TestCheckRobots:
         with pytest.raises(HTTPException) as exc_info:
             await check_robots(request=request, current_user=test_user)
         assert exc_info.value.status_code == 400
+
+
+# =============================================================================
+# list_subscribed_sources
+# =============================================================================
+
+
+class TestListSubscribedSources:
+    """Tests for list_subscribed_sources endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_list_subscribed_default_true(
+        self, db_session, test_user, system_source,
+    ):
+        """Happy path: system source with no subscription row is treated as subscribed."""
+        from app.routers.sources_router import list_subscribed_sources
+        result = await list_subscribed_sources(
+            type=None, current_user=test_user, db=db_session,
+        )
+        assert result.total == 1
+        assert result.sources[0].name == "CoinDesk"
+
+    @pytest.mark.asyncio
+    async def test_list_subscribed_excludes_unsubscribed(
+        self, db_session, test_user, system_source,
+    ):
+        """Edge case: sources with is_subscribed=False are excluded."""
+        sub = UserSourceSubscription(
+            user_id=test_user.id, source_id=system_source.id,
+            is_subscribed=False,
+        )
+        db_session.add(sub)
+        await db_session.flush()
+
+        from app.routers.sources_router import list_subscribed_sources
+        result = await list_subscribed_sources(
+            type=None, current_user=test_user, db=db_session,
+        )
+        assert result.total == 0
+
+    @pytest.mark.asyncio
+    async def test_list_subscribed_filter_by_type(
+        self, db_session, test_user, system_source,
+    ):
+        """Edge case: type filter returns only matching sources."""
+        from app.routers.sources_router import list_subscribed_sources
+        result = await list_subscribed_sources(
+            type="video", current_user=test_user, db=db_session,
+        )
+        assert result.total == 0
+
+
+# =============================================================================
+# add_custom_source — dedup + robots edge cases
+# =============================================================================
+
+
+class TestAddCustomSourceDedup:
+    """Tests for URL deduplication and robots.txt rejection paths."""
+
+    @pytest.mark.asyncio
+    @patch("app.routers.sources_router.check_robots_txt", new_callable=AsyncMock)
+    @patch("app.routers.sources_router.domain_blacklist_service")
+    async def test_add_source_robots_rss_blocked_raises_403(
+        self, mock_blacklist, mock_robots, db_session, test_user,
+    ):
+        """Failure case: robots.txt blocking RSS raises 403."""
+        mock_blacklist.is_domain_blocked.return_value = (False, None)
+        mock_robots.return_value = MagicMock(
+            rss_allowed=False, scraping_allowed=False,
+            crawl_delay_seconds=0, domain="blocked.com",
+        )
+
+        from app.routers.sources_router import add_custom_source, AddSourceRequest
+        request = AddSourceRequest(
+            source_key="blocked", name="Blocked", type="news",
+            url="https://blocked.com/feed",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await add_custom_source(
+                request=request, current_user=test_user, db=db_session,
+            )
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    @patch("app.routers.sources_router.normalize_feed_url")
+    @patch("app.routers.sources_router.check_robots_txt", new_callable=AsyncMock)
+    @patch("app.routers.sources_router.domain_blacklist_service")
+    async def test_add_source_matches_system_url_raises_400(
+        self, mock_blacklist, mock_robots, mock_normalize,
+        db_session, test_user, system_source,
+    ):
+        """Failure case: URL matches a system source URL → 400 with hint."""
+        mock_blacklist.is_domain_blocked.return_value = (False, None)
+        mock_robots.return_value = MagicMock(
+            rss_allowed=True, scraping_allowed=True,
+            crawl_delay_seconds=0, domain="coindesk.com",
+        )
+        # Force both URLs to normalize identically
+        mock_normalize.return_value = "coindesk.com/feed"
+
+        from app.routers.sources_router import add_custom_source, AddSourceRequest
+        request = AddSourceRequest(
+            source_key="my_cd", name="My CoinDesk", type="news",
+            url="https://coindesk.com/feed",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await add_custom_source(
+                request=request, current_user=test_user, db=db_session,
+            )
+        assert exc_info.value.status_code == 400
+        assert "system source" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    @patch("app.routers.sources_router.normalize_feed_url")
+    @patch("app.routers.sources_router.check_robots_txt", new_callable=AsyncMock)
+    @patch("app.routers.sources_router.domain_blacklist_service")
+    async def test_add_source_duplicate_subscription_raises_400(
+        self, mock_blacklist, mock_robots, mock_normalize,
+        db_session, test_user, custom_source, user_subscription,
+    ):
+        """Failure case: re-adding an already-subscribed custom source URL raises 400."""
+        mock_blacklist.is_domain_blocked.return_value = (False, None)
+        mock_robots.return_value = MagicMock(
+            rss_allowed=True, scraping_allowed=True,
+            crawl_delay_seconds=0, domain="myblog.com",
+        )
+        mock_normalize.return_value = "myblog.com/feed"
+
+        from app.routers.sources_router import add_custom_source, AddSourceRequest
+        request = AddSourceRequest(
+            source_key="re_add", name="Re-add", type="news",
+            url="https://myblog.com/feed",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await add_custom_source(
+                request=request, current_user=test_user, db=db_session,
+            )
+        assert exc_info.value.status_code == 400
+        assert "already subscribed" in exc_info.value.detail.lower()
+
+
+# =============================================================================
+# Helper functions: get_user_subscription_status / count_user_custom_sources
+# =============================================================================
+
+
+class TestHelpers:
+    """Tests for internal helpers."""
+
+    @pytest.mark.asyncio
+    async def test_get_user_subscription_status_none_when_missing(
+        self, db_session, test_user, system_source,
+    ):
+        from app.routers.sources_router import get_user_subscription_status
+        result = await get_user_subscription_status(
+            db_session, test_user.id, system_source.id,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_user_subscription_status_returns_value(
+        self, db_session, test_user, custom_source, user_subscription,
+    ):
+        from app.routers.sources_router import get_user_subscription_status
+        result = await get_user_subscription_status(
+            db_session, test_user.id, custom_source.id,
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_count_user_custom_sources_zero(self, db_session, test_user):
+        from app.routers.sources_router import count_user_custom_sources
+        result = await count_user_custom_sources(db_session, test_user.id)
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_count_user_custom_sources_includes_only_custom(
+        self, db_session, test_user, custom_source, user_subscription,
+    ):
+        from app.routers.sources_router import count_user_custom_sources
+        result = await count_user_custom_sources(db_session, test_user.id)
+        assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_count_user_custom_sources_skips_unsubscribed(
+        self, db_session, test_user, custom_source,
+    ):
+        """Edge case: unsubscribed custom source is not counted."""
+        sub = UserSourceSubscription(
+            user_id=test_user.id, source_id=custom_source.id,
+            is_subscribed=False,
+        )
+        db_session.add(sub)
+        await db_session.flush()
+
+        from app.routers.sources_router import count_user_custom_sources
+        result = await count_user_custom_sources(db_session, test_user.id)
+        assert result == 0

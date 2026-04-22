@@ -1441,3 +1441,321 @@ class TestRebalanceReserveDeployable:
         assert result["target_eth_pct"] == 33.0
         assert result["target_usdc_pct"] == 0.0
         assert result["target_usdt_pct"] == 0.0
+
+
+# =============================================================================
+# get_default_account
+# =============================================================================
+
+
+class TestGetDefaultAccount:
+    """Tests for the /accounts/default endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_default_returns_default_account(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: returns the account marked is_default=True."""
+        from app.routers.accounts_query_router import get_default_account
+        result = await get_default_account(db=db_session, current_user=test_user)
+        assert result.id == test_account.id
+        assert result.is_default is True
+
+    @pytest.mark.asyncio
+    async def test_get_default_falls_back_to_first_active(
+        self, db_session, test_user,
+    ):
+        """Edge case: no is_default account → returns oldest active."""
+        acct1 = Account(
+            id=100, user_id=test_user.id, name="First", type="cex",
+            is_default=False, is_active=True,
+            created_at=datetime(2024, 1, 1), updated_at=datetime.utcnow(),
+        )
+        acct2 = Account(
+            id=101, user_id=test_user.id, name="Second", type="cex",
+            is_default=False, is_active=True,
+            created_at=datetime(2024, 6, 1), updated_at=datetime.utcnow(),
+        )
+        db_session.add_all([acct1, acct2])
+        await db_session.flush()
+
+        from app.routers.accounts_query_router import get_default_account
+        result = await get_default_account(db=db_session, current_user=test_user)
+        assert result.id == 100  # earliest created_at
+
+    @pytest.mark.asyncio
+    async def test_get_default_no_accounts_raises_404(
+        self, db_session, test_user,
+    ):
+        """Failure case: user with no accounts raises 404."""
+        from app.routers.accounts_query_router import get_default_account
+        with pytest.raises(HTTPException) as exc_info:
+            await get_default_account(db=db_session, current_user=test_user)
+        assert exc_info.value.status_code == 404
+
+
+# =============================================================================
+# get_perps_portfolio_status
+# =============================================================================
+
+
+class TestGetPerpsPortfolioStatus:
+    """Tests for the /accounts/{id}/perps-portfolio endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_returns_linking_status_unlinked(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: returns linked=False when perps_portfolio_uuid is None."""
+        from app.routers.accounts_query_router import get_perps_portfolio_status
+        result = await get_perps_portfolio_status(
+            account_id=test_account.id, db=db_session, current_user=test_user,
+        )
+        assert result["linked"] is False
+        assert result["account_id"] == test_account.id
+
+    @pytest.mark.asyncio
+    async def test_returns_linked_when_uuid_present(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: returns linked=True when perps_portfolio_uuid is set."""
+        test_account.perps_portfolio_uuid = "test-uuid-abc"
+        await db_session.flush()
+
+        from app.routers.accounts_query_router import get_perps_portfolio_status
+        result = await get_perps_portfolio_status(
+            account_id=test_account.id, db=db_session, current_user=test_user,
+        )
+        assert result["linked"] is True
+        assert result["perps_portfolio_uuid"] == "test-uuid-abc"
+
+    @pytest.mark.asyncio
+    async def test_not_found_raises_404(self, db_session, test_user):
+        """Failure case: non-existent account raises 404."""
+        from app.routers.accounts_query_router import get_perps_portfolio_status
+        with pytest.raises(HTTPException) as exc_info:
+            await get_perps_portfolio_status(
+                account_id=9999, db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_not_owner_raises_403(self, db_session, test_user):
+        """Failure case: another user's account raises 403 (tenant isolation)."""
+        other_user = User(
+            id=999, email="other@test.com",
+            hashed_password="x", is_active=True,
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        foreign_account = Account(
+            id=500, user_id=other_user.id, name="Other",
+            type="cex", is_active=True,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(foreign_account)
+        await db_session.flush()
+
+        from app.routers.accounts_query_router import get_perps_portfolio_status
+        with pytest.raises(HTTPException) as exc_info:
+            await get_perps_portfolio_status(
+                account_id=foreign_account.id, db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 403
+
+
+# =============================================================================
+# Dust Sweep — GET settings
+# =============================================================================
+
+
+class TestGetDustSweepSettings:
+    """Tests for /accounts/{id}/dust-sweep-settings (GET)."""
+
+    @pytest.mark.asyncio
+    async def test_returns_defaults_for_paper_account(
+        self, db_session, test_user,
+    ):
+        """Happy path: paper account with empty balances returns defaults."""
+        import json
+        account = Account(
+            id=700, user_id=test_user.id, name="Paper Dust",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 1000.0}),
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        from app.routers.accounts_query_router import get_dust_sweep_settings
+        result = await get_dust_sweep_settings(
+            account_id=account.id, db=db_session, current_user=test_user,
+        )
+        assert result["enabled"] is False
+        assert result["threshold_usd"] == 5.0
+        assert result["dust_positions"] == []
+
+    @pytest.mark.asyncio
+    async def test_not_found_raises_404(self, db_session, test_user):
+        """Failure case: non-existent account raises 404."""
+        from app.routers.accounts_query_router import get_dust_sweep_settings
+        with pytest.raises(HTTPException) as exc_info:
+            await get_dust_sweep_settings(
+                account_id=9999, db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_paper_account_reports_dust_positions(
+        self, db_session, test_user,
+    ):
+        """Happy path: paper account with small altcoin balance → dust position."""
+        import json
+        account = Account(
+            id=701, user_id=test_user.id, name="Paper With Dust",
+            type="cex", is_paper_trading=True,
+            paper_balances=json.dumps({"USD": 100.0, "DOGE": 50.0}),
+            dust_sweep_threshold_usd=1.0,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        # Mock prices: DOGE at $0.20 → $10 position, above $1 threshold
+        with patch(
+            "app.routers.accounts_query_router.get_public_prices",
+            new_callable=AsyncMock,
+            return_value={"DOGE-USD": 0.20},
+        ):
+            from app.routers.accounts_query_router import get_dust_sweep_settings
+            result = await get_dust_sweep_settings(
+                account_id=account.id, db=db_session, current_user=test_user,
+            )
+
+        assert any(p["coin"] == "DOGE" for p in result["dust_positions"])
+
+
+# =============================================================================
+# Dust Sweep — PUT settings
+# =============================================================================
+
+
+class TestUpdateDustSweepSettings:
+    """Tests for PUT /accounts/{id}/dust-sweep-settings."""
+
+    @pytest.mark.asyncio
+    async def test_update_enabled_and_threshold(
+        self, db_session, test_user, test_account,
+    ):
+        """Happy path: updates enabled + threshold fields."""
+        from app.routers.accounts_mutation_router import (
+            update_dust_sweep_settings,
+        )
+        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        settings = DustSweepSettingsUpdate(enabled=True, threshold_usd=25.0)
+        result = await update_dust_sweep_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result["enabled"] is True
+        assert result["threshold_usd"] == 25.0
+
+    @pytest.mark.asyncio
+    async def test_update_not_found_raises_404(self, db_session, test_user):
+        """Failure case: non-existent account raises 404."""
+        from app.routers.accounts_mutation_router import (
+            update_dust_sweep_settings,
+        )
+        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        settings = DustSweepSettingsUpdate(enabled=True)
+        with pytest.raises(HTTPException) as exc_info:
+            await update_dust_sweep_settings(
+                account_id=9999, settings=settings,
+                db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_partial_only_threshold(
+        self, db_session, test_user, test_account,
+    ):
+        """Edge case: omitting enabled leaves it unchanged."""
+        test_account.dust_sweep_enabled = True
+        await db_session.flush()
+
+        from app.routers.accounts_mutation_router import (
+            update_dust_sweep_settings,
+        )
+        from app.routers.accounts_query_router import DustSweepSettingsUpdate
+        settings = DustSweepSettingsUpdate(threshold_usd=10.0)
+        result = await update_dust_sweep_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result["enabled"] is True  # unchanged
+        assert result["threshold_usd"] == 10.0
+
+
+# =============================================================================
+# Dust Sweep — POST execute
+# =============================================================================
+
+
+class TestSweepDust:
+    """Tests for POST /accounts/{id}/dust-sweep."""
+
+    @pytest.mark.asyncio
+    async def test_sweep_not_cex_raises_400(
+        self, db_session, test_user, test_account_dex,
+    ):
+        """Failure case: DEX account raises 400."""
+        from app.routers.accounts_mutation_router import sweep_dust
+        with pytest.raises(HTTPException) as exc_info:
+            await sweep_dust(
+                account_id=test_account_dex.id,
+                db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_sweep_not_found_raises_404(self, db_session, test_user):
+        """Failure case: non-existent account raises 404."""
+        from app.routers.accounts_mutation_router import sweep_dust
+        with pytest.raises(HTTPException) as exc_info:
+            await sweep_dust(
+                account_id=9999, db=db_session, current_user=test_user,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.routers.accounts_mutation_router.get_coinbase_for_account",
+        new_callable=AsyncMock,
+    )
+    @patch("app.services.rebalance_monitor.execute_dust_sweep", new_callable=AsyncMock)
+    async def test_sweep_success_returns_summary(
+        self, mock_sweep, mock_coinbase, db_session, test_user, test_account,
+    ):
+        """Happy path: sweep returns summary with successes + failures."""
+        mock_coinbase.return_value = AsyncMock()
+        mock_sweep.return_value = [
+            {
+                "status": "success", "coin": "DOGE",
+                "amount": 10.0, "usd_value": 2.0,
+                "target_currency": "USD", "order_id": "o-1",
+            },
+            {
+                "status": "failed", "coin": "ADA",
+                "amount": 5.0, "usd_value": 1.5,
+                "error": "order rejected",
+            },
+        ]
+
+        from app.routers.accounts_mutation_router import sweep_dust
+        result = await sweep_dust(
+            account_id=test_account.id, db=db_session, current_user=test_user,
+        )
+        assert result["swept"] == 1
+        assert result["failed"] == 1
+        assert result["details"][0]["coin"] == "DOGE"
+        assert result["errors"][0]["coin"] == "ADA"
