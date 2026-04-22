@@ -53,6 +53,36 @@ async def _get_paper_account(db: AsyncSession, user_id: int):
     return result.scalar_one_or_none()
 
 
+def _apply_risk_preset_defaults(strategy_config: Optional[dict]) -> dict:
+    """Merge risk-preset defaults into strategy_config if ai_risk_preset is set.
+
+    User-supplied values win over preset defaults — we only FILL IN missing
+    keys. This keeps the preset a convenience (one-click sensible defaults)
+    without silently overwriting the user's explicit customizations.
+
+    Returns a fresh dict suitable for assignment. Idempotent: re-applying
+    the same preset to an already-merged config is a no-op.
+
+    See PRPs/high-risk-doubling-preset.md §Task C2.
+    """
+    if not isinstance(strategy_config, dict):
+        return strategy_config or {}
+
+    preset_name = strategy_config.get("ai_risk_preset")
+    if not preset_name:
+        return dict(strategy_config)
+
+    from app.indicators.risk_presets import RISK_PRESETS, get_risk_preset_defaults
+    if preset_name not in RISK_PRESETS:
+        return dict(strategy_config)
+
+    defaults = get_risk_preset_defaults(preset_name)
+    merged = dict(defaults)
+    # User values win
+    merged.update(strategy_config)
+    return merged
+
+
 # Strategy Endpoints
 @router.get("/strategies", response_model=List[StrategyDefinition])
 async def list_strategies(current_user: User = Depends(get_current_user)):
@@ -82,6 +112,11 @@ async def create_bot(
         StrategyRegistry.get_definition(bot_data.strategy_type)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {bot_data.strategy_type}")
+
+    # Merge risk-preset defaults into strategy_config when ai_risk_preset is
+    # set (e.g., "speculative"). User-supplied values win — the preset only
+    # fills missing keys. See PRPs/high-risk-doubling-preset.md §Task C2.
+    bot_data.strategy_config = _apply_risk_preset_defaults(bot_data.strategy_config)
 
     # Validate strategy config (create temporary instance to validate)
     try:
@@ -378,12 +413,14 @@ async def update_bot(
         bot.market_type = bot_update.market_type
 
     if bot_update.strategy_config is not None:
+        # Apply risk-preset defaults first (user values win). See Task C2.
+        merged_config = _apply_risk_preset_defaults(bot_update.strategy_config)
         # Validate new config
         try:
-            StrategyRegistry.get_strategy(bot.strategy_type, bot_update.strategy_config)
+            StrategyRegistry.get_strategy(bot.strategy_type, merged_config)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid strategy configuration")
-        bot.strategy_config = bot_update.strategy_config
+        bot.strategy_config = merged_config
 
     if bot_update.product_id is not None:
         bot.product_id = bot_update.product_id

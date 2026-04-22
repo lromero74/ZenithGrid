@@ -70,6 +70,10 @@ class AccountUpdate(BaseModel):
     prop_total_drawdown_pct: Optional[float] = Field(None, ge=0.1, le=100.0)
     prop_initial_deposit: Optional[float] = Field(None, gt=0, le=100_000_000)
 
+    # Speculative bucket — see PRPs/high-risk-doubling-preset.md §Task D1.
+    # 0 = no bucket (speculative bots are blocked from opening new positions).
+    speculative_allocation_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
+
 
 class AccountResponse(BaseModel):
     """Response model for account data"""
@@ -107,6 +111,9 @@ class AccountResponse(BaseModel):
     prop_daily_drawdown_pct: Optional[float] = None
     prop_total_drawdown_pct: Optional[float] = None
     prop_initial_deposit: Optional[float] = None
+
+    # Speculative bucket — surfaced so the UI can show/edit the allocation.
+    speculative_allocation_pct: float = 0.0
 
     # Computed fields
     display_name: Optional[str] = None

@@ -146,6 +146,19 @@ class AISpotOpinionParams:
     prefilter_volume_min_ratio: float = 1.2  # Require volume > avg * this
     prefilter_max_drop_24h: float = 10.0  # Don't buy if price dropped > this % in 24h
 
+    # Speculative / catalyst-hunt mode. Set by the "speculative" risk preset.
+    # When True:
+    # - The prompt asks "is this likely to 2x" instead of "is this a good entry".
+    # - The prefilter uses prefilter_max_gain_24h / prefilter_min_gain_24h
+    #   (allowing already-up setups, blocking too-late and crashing ones)
+    #   instead of the symmetric prefilter_max_drop_24h check.
+    # See PRPs/high-risk-doubling-preset.md §Recommended Design §3.
+    speculative_mode: bool = False
+    target_multiple: float = 2.0
+    target_horizon_hours: int = 24
+    prefilter_max_gain_24h: Optional[float] = None  # None = unused (inactive)
+    prefilter_min_gain_24h: Optional[float] = None  # None = fall back to max_drop_24h
+
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "AISpotOpinionParams":
         """Create params from strategy config dict."""
@@ -161,6 +174,11 @@ class AISpotOpinionParams:
             prefilter_rsi_max=config.get("prefilter_rsi_max", 70.0),
             prefilter_volume_min_ratio=config.get("prefilter_volume_min_ratio", 1.2),
             prefilter_max_drop_24h=config.get("prefilter_max_drop_24h", 10.0),
+            speculative_mode=bool(config.get("speculative_mode", False)),
+            target_multiple=float(config.get("target_multiple", 2.0)),
+            target_horizon_hours=int(config.get("target_horizon_hours", 24)),
+            prefilter_max_gain_24h=config.get("prefilter_max_gain_24h"),
+            prefilter_min_gain_24h=config.get("prefilter_min_gain_24h"),
         )
 
 
@@ -250,6 +268,39 @@ class AISpotOpinionEvaluator:
         macd_bullish = macd_line > signal_line if macd_line and signal_line else False
         macd_bearish = macd_line < signal_line if macd_line and signal_line else False
 
+        # --- Catalyst-hunt metrics (used by speculative_mode prompt + scorer) ---
+        # Longer-term volume baseline: trailing 100 candles when available.
+        # Named "30d" for the preset prompt; actual window depends on caller's
+        # candle history. Callers pulling 1d candles get ~100d, 15m gets ~24h.
+        long_window = min(100, len(volumes))
+        long_avg_volume = (sum(volumes[-long_window:]) / long_window) if long_window > 0 else 0.0
+        volume_30d_ratio = (current_volume / long_avg_volume) if long_avg_volume > 0 else 0.0
+
+        # Compression ratio: range over the last 24 candles divided by the
+        # median candle-to-candle absolute change. High = "coiled spring".
+        compression_window = min(24, len(closes))
+        compression_ratio = 0.0
+        if compression_window >= 2:
+            recent_closes = closes[-compression_window:]
+            price_range = max(recent_closes) - min(recent_closes)
+            diffs = [abs(recent_closes[i] - recent_closes[i - 1])
+                     for i in range(1, len(recent_closes))]
+            if diffs:
+                diffs_sorted = sorted(diffs)
+                median_diff = diffs_sorted[len(diffs_sorted) // 2]
+                if median_diff > 0:
+                    compression_ratio = price_range / median_diff
+
+        # Momentum 1h: price change from 4 candles ago (assumes 15m candles; for
+        # other timeframes the window is approximate). Momentum_6h uses 24 back.
+        one_hour_back_idx = max(0, len(closes) - 5)
+        ref_1h = closes[one_hour_back_idx]
+        momentum_1h = ((current_price - ref_1h) / ref_1h * 100) if ref_1h > 0 else 0.0
+        six_hours_back_idx = max(0, len(closes) - 25)
+        ref_6h = closes[six_hours_back_idx]
+        momentum_6h = ((current_price - ref_6h) / ref_6h * 100) if ref_6h > 0 else 0.0
+        momentum_acceleration = momentum_1h - (momentum_6h / 6.0)
+
         return {
             "rsi": rsi,
             "macd_bullish": macd_bullish,
@@ -264,12 +315,23 @@ class AISpotOpinionEvaluator:
             "price_vs_ma50": price_vs_ma50,
             "volume_ratio": volume_ratio,
             "price_change_24h": price_change_24h,
+            # Catalyst-hunt extras
+            "volume_30d_ratio": volume_30d_ratio,
+            "compression_ratio": compression_ratio,
+            "momentum_1h": momentum_1h,
+            "momentum_acceleration": momentum_acceleration,
         }
 
     def _check_buy_prefilter(self, metrics: Dict[str, Any], params: AISpotOpinionParams) -> tuple[bool, str]:
         """
         Pre-filter for buy opportunities using basic metrics.
         Returns (should_pass, reason)
+
+        When speculative_mode is True the 24h price-change check is inverted:
+        already-up-10-40% setups are the entry zone for catalyst hunts, so we
+        block only crashers (< prefilter_min_gain_24h) and too-late setups
+        (> prefilter_max_gain_24h). See PRPs/high-risk-doubling-preset.md
+        §Recommended Design §3.
         """
         if not params.enable_buy_prefilter:
             return True, "Prefilter disabled"
@@ -286,9 +348,27 @@ class AISpotOpinionEvaluator:
         if volume_ratio < params.prefilter_volume_min_ratio:
             return False, f"Volume too low ({volume_ratio:.2f}x < {params.prefilter_volume_min_ratio}x)"
 
-        # Check price action (don't buy if crashing)
-        if price_change_24h < -params.prefilter_max_drop_24h:
-            return False, f"Price dropped too much ({price_change_24h:.1f}% < -{params.prefilter_max_drop_24h}%)"
+        # Price action check — mode-dependent
+        if params.speculative_mode:
+            if (params.prefilter_max_gain_24h is not None
+                    and price_change_24h > params.prefilter_max_gain_24h):
+                return False, (
+                    f"Too late to enter — already up {price_change_24h:.1f}% in 24h "
+                    f"(> {params.prefilter_max_gain_24h}%)"
+                )
+            if (params.prefilter_min_gain_24h is not None
+                    and price_change_24h < params.prefilter_min_gain_24h):
+                return False, (
+                    f"Crashing — down {price_change_24h:.1f}% in 24h "
+                    f"(< {params.prefilter_min_gain_24h}%)"
+                )
+        else:
+            # Classic symmetric drop filter
+            if price_change_24h < -params.prefilter_max_drop_24h:
+                return False, (
+                    f"Price dropped too much ({price_change_24h:.1f}% < "
+                    f"-{params.prefilter_max_drop_24h}%)"
+                )
 
         return True, "Prefilter passed"
 
@@ -343,7 +423,7 @@ class AISpotOpinionEvaluator:
                 tool_ctx=tool_ctx,
                 max_turns=max_turns,
             )
-            signal, confidence, reasoning = self._parse_llm_response(text)
+            signal, confidence, reasoning, doubling_score = self._parse_llm_response(text)
             model_used = getattr(provider, "model", None) or model_override
             cost_usd = estimate_cost_usd(
                 model=model_used,
@@ -355,6 +435,7 @@ class AISpotOpinionEvaluator:
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "cost_usd": cost_usd,
+                "doubling_probability_score": doubling_score,
             }
             return signal, confidence, reasoning, tool_calls, usage_meta
         except Exception as e:
@@ -486,12 +567,30 @@ class AISpotOpinionEvaluator:
         )
         context = await self._collect_auto_context(tool_ctx)
         arg_schemas = _arg_tool_schemas()
+
+        # Speculative catalyst mode: run the deterministic scorer before the
+        # LLM call and inject the result into the prompt. The score is also
+        # persisted to ai_opinion_log so speculative_calibration_monitor can
+        # later compare per-component win rates across closed positions.
+        spec_score_result: Optional[Dict[str, Any]] = None
+        spec_score_block: Optional[str] = None
+        if params.speculative_mode and not is_sell_check:
+            from app.indicators.speculative_signals import (
+                score_speculative_setup, summarize_components_for_prompt,
+            )
+            spec_score_result = score_speculative_setup(metrics, None, product_id)
+            spec_score_block = summarize_components_for_prompt(spec_score_result)
+
         prompt = self._build_prompt(
             product_id=product_id,
             metrics=metrics,
             is_sell_check=is_sell_check,
             context=context,
             enabled_tools=[s["name"] for s in arg_schemas],
+            speculative_mode=params.speculative_mode,
+            target_multiple=params.target_multiple,
+            target_horizon_hours=params.target_horizon_hours,
+            speculative_score_block=spec_score_block,
         )
         signal, confidence, reasoning, raw_tool_calls, usage_meta = await self._call_llm(
             db=db,
@@ -520,6 +619,12 @@ class AISpotOpinionEvaluator:
             f"(confidence: {confidence}%, tools={len(tool_calls)}, reason: {reasoning})"
         )
 
+        # Speculative scorer persistence — None on non-speculative paths.
+        spec_components_for_log = None
+        if spec_score_result is not None:
+            from app.indicators.speculative_signals import components_for_log
+            spec_components_for_log = components_for_log(spec_score_result)
+
         await self._write_opinion_log(
             db=db, user_id=user_id, account_id=account_id,
             bot_id=getattr(bot, "id", None),
@@ -531,6 +636,9 @@ class AISpotOpinionEvaluator:
             input_tokens=usage_meta.get("input_tokens", 0),
             output_tokens=usage_meta.get("output_tokens", 0),
             cost_usd=usage_meta.get("cost_usd", 0.0),
+            doubling_probability_score=usage_meta.get("doubling_probability_score"),
+            speculative_score=(spec_score_result or {}).get("score"),
+            speculative_components=spec_components_for_log,
         )
 
         return {
@@ -544,6 +652,10 @@ class AISpotOpinionEvaluator:
             "input_tokens": usage_meta.get("input_tokens", 0),
             "output_tokens": usage_meta.get("output_tokens", 0),
             "cost_usd": usage_meta.get("cost_usd", 0.0),
+            # Speculative-mode extras (None for non-speculative calls)
+            "doubling_probability_score": usage_meta.get("doubling_probability_score"),
+            "speculative_score": (spec_score_result or {}).get("score"),
+            "speculative_components": (spec_score_result or {}).get("components"),
         }
 
     @staticmethod
@@ -562,8 +674,18 @@ class AISpotOpinionEvaluator:
         is_sell_check: bool,
         enabled_tools: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
+        speculative_mode: bool = False,
+        target_multiple: float = 2.0,
+        target_horizon_hours: int = 24,
+        speculative_score_block: Optional[str] = None,
     ) -> str:
-        """Shared prompt builder for single-shot and tool-use paths."""
+        """Shared prompt builder for single-shot and tool-use paths.
+
+        When speculative_mode=True the "Question" section reframes the ask
+        as an asymmetric-upside catalyst hunt and the `speculative_score_block`
+        (if provided) is appended so the LLM can reason over the audited
+        pre-score. See PRPs/high-risk-doubling-preset.md §Recommended Design §3.
+        """
         action_type = "SELL" if is_sell_check else "BUY"
         ma20_val = metrics.get("price_vs_ma20", 0)
         ma50_val = metrics.get("price_vs_ma50", 0)
@@ -605,6 +727,65 @@ class AISpotOpinionEvaluator:
                 "PnL, portfolio concentration, and other open positions."
             )
 
+        if speculative_mode and not is_sell_check:
+            # Catalyst-hunt question. Ask about doubling probability; request
+            # an extra doubling_probability_score field in the response so
+            # Phase F calibration can regress it against actual outcomes.
+            catalyst_metrics_block = (
+                f"- Volume vs long-term avg: {metrics.get('volume_30d_ratio', 0):.2f}x\n"
+                f"- Compression ratio (range/median move, last 24 candles): "
+                f"{metrics.get('compression_ratio', 0):.2f}\n"
+                f"- 1h momentum: {metrics.get('momentum_1h', 0):+.2f}%\n"
+                f"- Momentum acceleration (1h vs 6h-avg): "
+                f"{metrics.get('momentum_acceleration', 0):+.2f}\n"
+            )
+            score_block = (
+                f"\n## Audited Setup Score (weighted components)\n{speculative_score_block}\n"
+                if speculative_score_block else ""
+            )
+            return f"""You are a cryptocurrency trading AI hunting for asymmetric upside on {product_id}.
+
+You are in SPECULATIVE mode. Your job is NOT to find safe entries — it is
+to identify setups with a meaningful chance of a {target_multiple}x price
+move within the next {target_horizon_hours} hours. You should prefer
+passing ("hold") most of the time. Only commit ("buy") when a concrete
+catalyst, volume surge, or compression breakout raises the odds.
+
+Current Technical Metrics:
+- RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
+- MACD: {macd_str}
+- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
+- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
+- Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
+- Volume (short-term): {metrics.get('volume_ratio', 0):.2f}x 20-period avg
+- 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%
+
+Catalyst-hunt Metrics:
+{catalyst_metrics_block}{score_block}{context_section}{tools_section}
+Question: Is {product_id} likely to reach a {target_multiple}x move within
+the next {target_horizon_hours} hours?
+
+Call get_recent_news proactively here — catalysts (mainnet launches,
+airdrops, listings, partnership news) are what drive these moves more
+than chart patterns alone.
+
+Respond with ONLY valid JSON in this exact format:
+{{
+  "signal": "buy" or "hold",
+  "confidence": 75,
+  "doubling_probability_score": 42,
+  "reasoning": "Brief 1-2 sentence explanation citing the catalyst or pattern."
+}}
+
+Guidelines:
+- Confidence and doubling_probability_score are each 0-100 and may differ:
+  confidence = "how sure am I of my answer"; doubling_probability_score =
+  "what is the probability this actually hits {target_multiple}x in
+  {target_horizon_hours}h".
+- Be decisive but realistic. Default to hold unless the evidence is strong.
+- Do NOT choose "sell" — this is a buy-check path.{context_consider_line}
+"""
+
         return f"""You are a cryptocurrency trading AI analyzing {product_id}.
 
 Current Technical Metrics:
@@ -633,8 +814,14 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
 """
 
     @staticmethod
-    def _parse_llm_response(response_text: str) -> tuple[str, int, str]:
-        """Parse the final JSON response from the LLM. Tolerates ```code blocks```."""
+    def _parse_llm_response(response_text: str) -> tuple[str, int, str, Optional[int]]:
+        """Parse the final JSON response from the LLM. Tolerates ```code blocks```.
+
+        Returns (signal, confidence, reasoning, doubling_probability_score).
+        doubling_probability_score is present only when the LLM responded to
+        the speculative catalyst prompt (see _build_prompt speculative branch);
+        None otherwise. Invalid / out-of-range values are clamped or None.
+        """
         text = (response_text or "").strip()
         if text.startswith("```"):
             lines = text.split("\n")
@@ -644,7 +831,7 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             data = json.loads(text)
         except Exception as e:
             logger.warning(f"Could not parse LLM JSON: {e} / raw={text!r}")
-            return "hold", 0, f"Parse error: {e}"
+            return "hold", 0, f"Parse error: {e}", None
 
         signal = str(data.get("signal", "hold")).lower()
         confidence = int(data.get("confidence", 0))
@@ -654,4 +841,13 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             logger.warning(f"Invalid signal from LLM: {signal}, defaulting to hold")
             signal = "hold"
         confidence = max(0, min(100, confidence))
-        return signal, confidence, reasoning
+
+        doubling_score: Optional[int] = None
+        raw_score = data.get("doubling_probability_score")
+        if raw_score is not None:
+            try:
+                doubling_score = max(0, min(100, int(raw_score)))
+            except (TypeError, ValueError):
+                doubling_score = None
+
+        return signal, confidence, reasoning, doubling_score

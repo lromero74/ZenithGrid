@@ -102,6 +102,22 @@ describe('AIReasoningExpander', () => {
     expect(screen.getByText('get_portfolio_context')).toBeInTheDocument()
   })
 
+  it('surfaces doubling_probability_score and component breakdown when expanded on a speculative call', async () => {
+    mockGetAIOpinion.mockResolvedValue(buildOpinion({
+      doubling_probability_score: 55,
+      speculative_score: 70,
+      speculative_components: {
+        volume_surge: { fired: true, weight: 25, contribution: 25 },
+        correlation_break: { fired: false, weight: 10, contribution: 0 },
+      },
+    }))
+    render(<AIReasoningExpander positionId={42} />)
+    const btn = await screen.findByRole('button', { name: /toggle ai reasoning detail/i })
+    await act(async () => { await userEvent.click(btn) })
+    expect(screen.getByText(/Doubling probability/i)).toBeInTheDocument()
+    expect(screen.getByText(/volume_surge/)).toBeInTheDocument()
+  })
+
   it('reveals the tool output_summary when a tool row is clicked', async () => {
     mockGetAIOpinion.mockResolvedValue(buildOpinion())
     render(<AIReasoningExpander positionId={42} />)

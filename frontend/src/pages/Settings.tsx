@@ -6,14 +6,16 @@ import { AddAccountModal } from '../components/account/AddAccountModal'
 import { AIProvidersManager } from '../components/settings/AIProvidersManager'
 import { AICostDashboard } from '../components/settings/AICostDashboard'
 import { PortfolioManagement } from '../components/account/PortfolioManagement'
+import { SpeculativeAllocationSection } from '../components/settings/SpeculativeAllocationSection'
 import { BlacklistManager } from '../components/settings/BlacklistManager'
 import { ActiveSessions } from '../components/settings/ActiveSessions'
 import { AdminDisplayNameField } from '../components/settings/AdminDisplayNameField'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
-import { settingsApi } from '../services/api'
+import { settingsApi, speculativeBucketApi } from '../services/api'
 import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
 import { useCapsLock } from '../hooks/useCapsLock'
 
@@ -23,7 +25,42 @@ export default function Settings() {
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
   const { accounts } = useAccount()
   const { theme, toggleTheme } = useTheme()
+  const { addToast } = useNotifications()
   const isAdmin = useIsAdmin()
+
+  // Speculative calibration dismiss-link handler — runs once on mount.
+  // The email link lands on /settings?dismiss_token=...&account_id=...;
+  // we POST to the dismiss endpoint, then clean the query string so a
+  // reload does not retry the dismiss (which would 403 on a consumed token).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const dismissToken = params.get('dismiss_token')
+    const accountIdParam = params.get('account_id')
+    if (!dismissToken || !accountIdParam) return
+    const accountId = parseInt(accountIdParam, 10)
+    if (!Number.isFinite(accountId)) return
+    ;(async () => {
+      try {
+        await speculativeBucketApi.dismissCalibrationAlert(accountId, dismissToken)
+        addToast({
+          type: 'success',
+          title: 'Calibration alert dismissed',
+          message: 'Next recalibration check will run in 30 days.',
+        })
+      } catch (err) {
+        addToast({
+          type: 'error',
+          title: 'Could not dismiss calibration alert',
+          message: 'The link may have expired. Re-open the email and try again.',
+        })
+      } finally {
+        // Strip the query params so a refresh does not re-hit the endpoint.
+        const cleanUrl = window.location.pathname + window.location.hash
+        window.history.replaceState({}, '', cleanUrl)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
 
   const canWriteSettings = usePermission('settings', 'write')
@@ -923,6 +960,29 @@ export default function Settings() {
 
       {/* Portfolio Management (Auto-Buy BTC + Rebalancing) */}
       <PortfolioManagement accounts={accounts} />
+
+      {/* Speculative Allocation per CEX account — hard cap on the
+          high-risk-doubling preset's bucket. See PRP high-risk-doubling-preset. */}
+      {accounts.filter(a => a.type === 'cex').length > 0 && (
+        <div className="card p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Lock className="w-6 h-6 text-amber-400" />
+            <h3 className="text-xl font-semibold">Speculative Bucket</h3>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            Per-account cap on total cost basis across all speculative-preset bots.
+            0% blocks speculative bots from opening new positions.
+          </p>
+          <div className="space-y-3">
+            {accounts.filter(a => a.type === 'cex').map(a => (
+              <div key={a.id}>
+                <div className="text-sm text-slate-300 mb-2">{a.name}</div>
+                <SpeculativeAllocationSection account={a} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Coin Categorization Section - Always visible (informational) */}
       <BlacklistManager />

@@ -3,7 +3,7 @@
     {
       "file": "pages/Dashboard.tsx",
       "route": "/",
-      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics. v2.164.6: account-value totals come from useAccountValueSummary (fast /account-value-summary endpoint) instead of the full portfolio fetch, and AccountValueChart + MarketSentimentCards are code-split via React.lazy/Suspense to shrink the initial Dashboard bundle. v2.164.8: non-critical queries (reservations, transfer summary, PropGuard status, per-bot stats) are deferred for ~2s after first paint; open/closed position summary queries now pass account_id to the backend and stop polling in hidden tabs. v2.164.9: bot list fetches now also pass account_id server-side instead of fetching cross-account bots and filtering in the browser."
+      "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics. v2.164.6: account-value totals come from useAccountValueSummary (fast /account-value-summary endpoint) instead of the full portfolio fetch, and AccountValueChart + MarketSentimentCards are code-split via React.lazy/Suspense to shrink the initial Dashboard bundle. v2.164.8: non-critical queries (reservations, transfer summary, PropGuard status, per-bot stats) are deferred for ~2s after first paint; open/closed position summary queries now pass account_id to the backend and stop polling in hidden tabs. v2.164.9: bot list fetches now also pass account_id server-side instead of fetching cross-account bots and filtering in the browser. v2.165.0 renders SpeculativeBucketCard (bucket size, utilization, remaining capacity) when the selected account has speculative_allocation_pct > 0."
     },
     {
       "file": "pages/Bots.tsx",
@@ -38,7 +38,7 @@
     {
       "file": "pages/Settings.tsx",
       "route": "/settings",
-      "purpose": "User settings, password, accounts, AI credentials, blacklist config"
+      "purpose": "User settings, password, accounts, AI credentials, blacklist config. v2.165.0 renders SpeculativeAllocationSection for the per-account speculative bucket cap (0-50%) and adds a mount-time effect that detects ?dismiss_token=&account_id= on the URL (deep link from the calibration alert email) and POSTs to speculativeBucketApi.dismissCalibrationAlert to stamp the 30-day cooldown."
     },
     {
       "file": "pages/Login.tsx",
@@ -68,7 +68,7 @@
       },
       {
         "file": "components/trading/AdvancedConditionBuilder.tsx",
-        "purpose": "Complex trading condition builder with logic gates"
+        "purpose": "Complex trading condition builder with logic gates. v2.165.0: RiskPreset union and RISK_PRESETS catalog gain 'speculative' so the UI can offer the high-risk doubling preset alongside the existing conservative/balanced/aggressive options."
       },
       {
         "file": "components/ConditionBuilder.tsx",
@@ -84,7 +84,11 @@
       },
       {
         "file": "pages/bots/components/BotFormModal.tsx",
-        "purpose": "Modal form for creating/editing bots"
+        "purpose": "Modal form for creating/editing bots; v2.165.0 renders SpeculativePresetPanel when the selected risk preset is 'speculative' so users see the catalyst-trade target multiple, horizon, and max-hold-hours fields inline."
+      },
+      {
+        "file": "pages/bots/components/SpeculativePresetPanel.tsx",
+        "purpose": "Bot-form panel for the 'speculative' risk preset: exposes target_multiple, target_horizon_hours, and speculative_max_hold_hours inputs plus an explanatory summary of the catalyst-trade workflow. Added in v2.165.0."
       },
       {
         "file": "pages/bots/components/CoinCategorySelector.tsx",
@@ -154,7 +158,11 @@
       },
       {
         "file": "pages/positions/components/AIReasoningExpander.tsx",
-        "purpose": "Collapsible AI reasoning panel for a position: prefetches positionsApi.getAIOpinion(id), self-hides when tool_calls is empty/null, shows signal/confidence/reasoning plus per-tool expandable output summaries; exported from pages/positions/components/index.ts"
+        "purpose": "Collapsible AI reasoning panel for a position: prefetches positionsApi.getAIOpinion(id), self-hides when tool_calls is empty/null, shows signal/confidence/reasoning plus per-tool expandable output summaries; exported from pages/positions/components/index.ts. v2.165.0 also renders SpeculativeSignalBreakdown when the AI opinion row has doubling_probability_score or speculative_components populated."
+      },
+      {
+        "file": "pages/positions/components/SpeculativeSignalBreakdown.tsx",
+        "purpose": "Per-position catalyst-signal breakdown shown inside AIReasoningExpander: displays the AI's doubling_probability_score, the deterministic speculative_score, and a table of the 6 weighted component scores (momentum, volume, volatility expansion, catalysts, relative strength, structural breakout) pulled from AIOpinionLog.speculative_components. Added in v2.165.0."
       },
       {
         "file": "pages/positions/components/modals/CloseConfirmModal.tsx",
@@ -441,6 +449,14 @@
         "purpose": "Configure auto-buy BTC settings"
       },
       {
+        "file": "components/dashboard/SpeculativeBucketCard.tsx",
+        "purpose": "Dashboard card showing the per-account speculative bucket snapshot: bucket size (USD), used (sum of open speculative-position cost basis), remaining, utilization %, and count of open speculative positions. Fetches from speculativeBucketApi.get(accountId); self-hides when speculative_allocation_pct is 0. Added in v2.165.0."
+      },
+      {
+        "file": "components/settings/SpeculativeAllocationSection.tsx",
+        "purpose": "Settings panel for the per-account speculative bucket cap (0-50%): slider + numeric input with a recommended-allocation hint. Persists speculative_allocation_pct via the accounts update endpoint and invalidates the bucket snapshot query on save. Added in v2.165.0."
+      },
+      {
         "file": "components/settings/BlacklistManager.tsx",
         "purpose": "Coin blacklist with AI review"
       },
@@ -589,7 +605,7 @@
         "AccountProvider",
         "useAccount"
       ],
-      "purpose": "Multi-account state (CEX/DEX), account switching"
+      "purpose": "Multi-account state (CEX/DEX), account switching. v2.165.0: AccountData and AccountResponse types gain speculative_allocation_pct so the Dashboard card, Settings panel, and bot form can read the per-account speculative cap."
     },
     {
       "file": "contexts/BrandContext.tsx",
@@ -613,7 +629,7 @@
         "NotificationProvider",
         "useNotifications"
       ],
-      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async — before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session)"
+      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async — before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session). v2.165.0 adds a handler for the 'speculative_calibration_alert' event broadcast by speculative_calibration_monitor: surfaces a persistent toast with a 'Review in email' CTA until the user acknowledges."
     },
     {
       "file": "contexts/VideoPlayerContext.tsx",
@@ -840,6 +856,10 @@
       {
         "name": "reportsApi",
         "purpose": "Goals CRUD, goal trend data, report schedules, generated reports"
+      },
+      {
+        "name": "speculativeBucketApi",
+        "purpose": "Speculative bucket endpoints: get(accountId) -> SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) backing the Dashboard bucket card, and dismissCalibrationAlert({ account_id, dismiss_token }) which posts the signed token from the calibration alert email to stamp the 30-day cooldown. Added in v2.165.0."
       }
     ]
   },
@@ -872,7 +892,8 @@
         "base_order",
         "dca_order",
         "sell_order",
-        "partial_fill"
+        "partial_fill",
+        "speculative_calibration_alert"
       ],
       "limits": {
         "max_connections_per_user": 5,
@@ -895,7 +916,8 @@
         "LimitOrderFill",
         "Trade",
         "Signal",
-        "AIBotLog"
+        "AIBotLog",
+        "AIOpinionLog (extended in v2.165.0 with optional doubling_probability_score, speculative_score, speculative_components fields for the catalyst-trade reasoning UI)"
       ],
       "bot": [
         "Bot",
@@ -909,7 +931,8 @@
         "Balances",
         "AggregateValue",
         "DashboardStats",
-        "Settings"
+        "Settings",
+        "SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) — added v2.165.0"
       ],
       "market": [
         "Candle",

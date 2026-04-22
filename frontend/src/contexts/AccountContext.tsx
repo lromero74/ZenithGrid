@@ -45,6 +45,10 @@ export interface Account {
   prop_total_drawdown_pct?: number | null
   prop_initial_deposit?: number | null
 
+  // Speculative bucket (see PRP: high-risk-doubling-preset)
+  // 0 means no bucket configured — speculative bots are blocked from entries.
+  speculative_allocation_pct?: number
+
   // Metadata
   created_at: string
   updated_at: string
@@ -109,6 +113,9 @@ export interface UpdateAccountDto {
   wallet_private_key?: string
   rpc_url?: string
   wallet_type?: string
+
+  // Speculative bucket (0.0 – 100.0; 0 disables the bucket)
+  speculative_allocation_pct?: number
 }
 
 interface AccountContextType {

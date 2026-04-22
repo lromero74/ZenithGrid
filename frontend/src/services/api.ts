@@ -866,6 +866,31 @@ export const accountValueSummaryApi = {
     }).then((res) => res.data),
 };
 
+// Speculative bucket snapshot — see PRP high-risk-doubling-preset §Task D3.
+// Scoped to account; cost-basis accounting (winners do not expand headroom).
+export interface SpeculativeBucketInfo {
+  bucket_pct: number
+  bucket_usd: number
+  deployed_cost_basis_usd: number
+  available_usd: number
+  active_bot_count: number
+  open_position_count: number
+  max_concurrent_slots: number
+  per_slot_budget_usd: number
+}
+
+export const speculativeBucketApi = {
+  get: (accountId: number) =>
+    api.get<SpeculativeBucketInfo>(`/accounts/${accountId}/speculative-bucket`)
+      .then((res) => res.data),
+  dismissCalibrationAlert: (accountId: number, dismissToken: string) =>
+    api.post<{ dismissed: boolean }>(
+      `/accounts/${accountId}/speculative-calibration/dismiss`,
+      null,
+      { params: { dismiss_token: dismissToken } },
+    ).then((res) => res.data),
+};
+
 // Reports & Goals
 import type {
   RecipientEntry, ReportGoal, ReportSchedule, ReportSummary,

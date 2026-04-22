@@ -3,6 +3,7 @@ import { Brain, ChevronDown, ChevronUp, Wrench } from 'lucide-react'
 import { positionsApi } from '../../../services/api'
 import { formatDateTime } from '../../../utils/dateFormat'
 import type { AIOpinionLog, AIToolCall } from '../../../types'
+import { SpeculativeSignalBreakdown } from './SpeculativeSignalBreakdown'
 
 interface Props {
   positionId: number
@@ -93,6 +94,12 @@ export function AIReasoningExpander({ positionId }: Props) {
               {opinion.reasoning}
             </div>
           )}
+
+          <SpeculativeSignalBreakdown
+            doublingProbabilityScore={opinion.doubling_probability_score ?? null}
+            speculativeScore={opinion.speculative_score ?? null}
+            components={opinion.speculative_components ?? null}
+          />
 
           <div className="pt-2 border-t border-slate-700/40">
             <div className="flex items-center gap-1 text-slate-400 mb-1">

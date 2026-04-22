@@ -953,6 +953,22 @@ class IndicatorBasedStrategy(TradingStrategy):
         take_profit_signal = signal_data.get("take_profit_signal", False)
         avg_price = position.average_buy_price
 
+        # Speculative max-hold: time-based forced exit for catalyst-hunt setups
+        # that haven't moved. Runs BEFORE PnL / TP / SL checks so we always
+        # escape the bucket slot on schedule. Only active when the preset
+        # set speculative_max_hold_hours — absent on all non-speculative bots.
+        # See PRPs/high-risk-doubling-preset.md §Recommended Design §5.
+        max_hold_hours = self.config.get("speculative_max_hold_hours")
+        if max_hold_hours and getattr(position, "opened_at", None) is not None:
+            from datetime import datetime
+            age_seconds = (datetime.utcnow() - position.opened_at).total_seconds()
+            if age_seconds >= float(max_hold_hours) * 3600.0:
+                return (
+                    True,
+                    f"Speculative max hold ({max_hold_hours}h) reached — "
+                    f"exiting to free the bucket slot"
+                )
+
         # Calculate current profit
         current_value = position.total_base_acquired * current_price
         profit_amount = current_value - position.total_quote_spent

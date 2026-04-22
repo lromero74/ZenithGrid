@@ -62,6 +62,10 @@ from app.services.delisted_pair_monitor import trading_pair_monitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.perps_monitor import PerpsMonitor
 from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor
+from app.services.speculative_calibration_monitor import (
+    start_speculative_calibration_monitor,
+    stop_speculative_calibration_monitor,
+)
 from app.services.shutdown_manager import shutdown_manager
 from app.services.brand_service import get_brand
 from app.services.websocket_manager import ws_manager
@@ -549,6 +553,10 @@ async def startup_event():
     await start_prop_guard_monitor()
     logger.info("PropGuard monitor started - checking prop firm drawdowns every 30s")
 
+    logger.info("Starting speculative calibration alert monitor...")
+    await start_speculative_calibration_monitor()
+    logger.info("Speculative calibration monitor started - daily per-user check with 30-day cooldown")
+
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
@@ -608,6 +616,9 @@ async def shutdown_event():
 
     logger.info("🛑 Stopping PropGuard monitor...")
     await stop_prop_guard_monitor()
+
+    logger.info("🛑 Stopping speculative calibration monitor...")
+    await stop_speculative_calibration_monitor()
 
     # Cancel main loop asyncio tasks
     for task in [

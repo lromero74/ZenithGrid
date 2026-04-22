@@ -96,6 +96,16 @@ class Account(Base):
     dust_sweep_threshold_usd = Column(Float, default=5.0)
     dust_last_sweep_at = Column(DateTime, nullable=True)
 
+    # Speculative preset bucket — hard cap on total cost basis deployed across
+    # all bots whose strategy_config.is_speculative == True. Zero (default)
+    # means no bucket configured: speculative bots are soft-blocked from
+    # opening new positions until the owner sets a non-zero allocation.
+    speculative_allocation_pct = Column(Float, default=0.0, nullable=False)
+    # Last time speculative_calibration_monitor emailed the owner a
+    # weight-adjustment alert. NULL = never. Used to enforce the 30-day
+    # cooldown between alerts.
+    speculative_calibration_last_alerted_at = Column(DateTime, nullable=True)
+
     # Paper Trading
     is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
     paper_balances = Column(String, nullable=True)  # JSON: {"BTC": 1.0, "ETH": 10.0, "USD": 100000.0, ...}
@@ -742,6 +752,14 @@ class AIOpinionLog(Base):
     outcome = Column(String, nullable=True)   # "win" | "loss" | "breakeven"
     realized_pnl_pct = Column(Float, nullable=True)
     closed_at = Column(DateTime, nullable=True)
+
+    # Speculative preset fields — null on non-speculative evaluations. Persisted
+    # so speculative_calibration_monitor can compare per-component win rates
+    # across closed positions and propose weight adjustments.
+    doubling_probability_score = Column(Integer, nullable=True)
+    speculative_score = Column(Integer, nullable=True)
+    # List of [name, fired, contribution] triples from speculative_signals.components_for_log.
+    speculative_components = Column(JSON, nullable=True)
 
 
 class BlacklistedCoin(Base):

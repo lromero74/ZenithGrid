@@ -41,7 +41,7 @@ export type Timeframe =
   | 'SIX_HOUR'
   | 'ONE_DAY'
 
-export type RiskPreset = 'aggressive' | 'moderate' | 'conservative'
+export type RiskPreset = 'aggressive' | 'moderate' | 'conservative' | 'speculative'
 export type AIProvider = 'claude' | 'gemini' | 'grok'
 
 export interface Condition {
@@ -90,6 +90,12 @@ export const RISK_PRESETS: Record<RiskPreset, {
     description: 'Higher thresholds, fewer but stronger signals',
     min_confluence_score: 80,
     ai_confidence_threshold: 80,
+  },
+  speculative: {
+    label: 'Speculative (2x Hunter)',
+    description: 'Catalyst-hunt mode — respects the account Speculative Allocation cap; expect low win rate with asymmetric upside',
+    min_confluence_score: 35,
+    ai_confidence_threshold: 70,
   },
 }
 

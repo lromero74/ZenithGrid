@@ -24,6 +24,7 @@ import { useNotifications } from '../contexts/NotificationContext'
 import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { usePermission } from '../hooks/usePermission'
 import { useAccountValueSummary } from '../hooks/useAccountValueSummary'
+import { SpeculativeBucketCard } from '../components/dashboard/SpeculativeBucketCard'
 
 const AccountValueChart = lazy(() =>
   import('../components/trading/AccountValueChart').then((module) => ({ default: module.AccountValueChart }))
@@ -469,6 +470,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             {' '}in the last 30 days — % rates reflect current capital base
           </p>
         </div>
+      )}
+
+      {/* Speculative bucket — hidden when not configured; deferred to keep first paint fast */}
+      {deferredQueriesEnabled && selectedAccount?.id && (
+        <SpeculativeBucketCard accountId={selectedAccount.id} />
       )}
 
       {/* Account Value Chart */}

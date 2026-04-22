@@ -294,6 +294,31 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             window.dispatchEvent(new CustomEvent('admin:user_presence', {
               detail: { user_id: data.user_id, is_online: data.is_online },
             }))
+          } else if (data.type === 'speculative_calibration_alert') {
+            const payload = (data.payload as {
+              total_closed?: number
+              overall_win_rate_pct?: number
+              divergence_pp?: number
+              dismiss_url?: string
+            }) || {}
+            const totalClosed = payload.total_closed ?? 0
+            const divergencePp = Number(payload.divergence_pp ?? 0)
+            const dismissUrl = payload.dismiss_url
+            addToast({
+              type: 'info',
+              title: 'Speculative preset: recalibrate weights',
+              message: (
+                `After ${totalClosed} closed positions, signal components diverge by ` +
+                `${divergencePp.toFixed(1)}pp. Check your email for the full report.`
+              ),
+              persistent: true,
+              actionLabel: 'Review in email',
+              onAction: () => {
+                if (typeof dismissUrl === 'string' && dismissUrl.length > 0) {
+                  window.location.href = dismissUrl
+                }
+              },
+            })
           }
         } catch (error) {
           console.warn('Failed to parse WebSocket message:', error)

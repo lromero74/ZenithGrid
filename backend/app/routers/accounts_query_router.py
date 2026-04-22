@@ -164,6 +164,7 @@ async def list_accounts(
                 prop_daily_drawdown_pct=account.prop_daily_drawdown_pct,
                 prop_total_drawdown_pct=account.prop_total_drawdown_pct,
                 prop_initial_deposit=account.prop_initial_deposit,
+                speculative_allocation_pct=float(account.speculative_allocation_pct or 0.0),
                 created_at=account.created_at,
                 updated_at=account.updated_at,
                 last_used_at=account.last_used_at,
@@ -229,6 +230,7 @@ async def get_default_account(
             perps_portfolio_uuid=account.perps_portfolio_uuid,
             default_leverage=account.default_leverage or 1,
             margin_type=account.margin_type or "CROSS",
+            speculative_allocation_pct=float(account.speculative_allocation_pct or 0.0),
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -316,6 +318,7 @@ async def get_account(
             prop_daily_drawdown_pct=account.prop_daily_drawdown_pct,
             prop_total_drawdown_pct=account.prop_total_drawdown_pct,
             prop_initial_deposit=account.prop_initial_deposit,
+            speculative_allocation_pct=float(account.speculative_allocation_pct or 0.0),
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -426,6 +429,56 @@ async def get_account_value_summary_route(
     except Exception as e:
         logger.error(f"Error getting account value summary for account {account_id}: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.get("/{account_id}/speculative-bucket")
+async def get_speculative_bucket_route(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the account-level speculative bucket snapshot.
+
+    Shape documented in
+    app.services.speculative_bucket_service.get_speculative_bucket_info.
+    Scoped to accounts the caller can access (owner + shared members).
+    Read-only — no cooldown-timestamp mutation here.
+
+    See PRPs/high-risk-doubling-preset.md §Task C1.
+    """
+    # Verify access first
+    query = select(Account).where(
+        Account.id == account_id,
+        accessible_accounts_filter(current_user.id),
+    )
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # Pull the USD aggregate from the fast summary path — same denominator
+    # used by the budget math. Tolerates failures by falling back to 0.0,
+    # which keeps the endpoint alive on cold caches (bucket shows as 0).
+    aggregate_usd = 0.0
+    btc_usd_price = 0.0
+    try:
+        summary = await get_account_value_summary(
+            db, current_user, account_id, force_fresh=False,
+        )
+        aggregate_usd = float(summary.get("total_usd_value") or 0.0)
+        btc_usd_price = float(summary.get("btc_usd_price") or 0.0)
+    except Exception as e:
+        logger.warning(
+            "speculative-bucket: failed to load account value summary for %s: %s",
+            account_id, e,
+        )
+
+    from app.services.speculative_bucket_service import get_speculative_bucket_info
+    return await get_speculative_bucket_info(
+        db, account_id,
+        aggregate_usd_value=aggregate_usd,
+        btc_usd_price=btc_usd_price,
+    )
 
 
 # =============================================================================
