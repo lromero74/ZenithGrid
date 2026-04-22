@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.4] - 2026-04-22
+
+### Changed
+- **Shared-account members can now see bot indicator logs** — `GET /api/bots/{bot_id}/indicator-logs` and `/indicator-logs/summary` previously filtered strictly by `Bot.user_id == current_user.id`, which meant a friend you shared an account with could see the bot and its trades but hit a 404 on the logs explaining *why* each trade fired. Both endpoints now use the same `accessible_account_ids` pattern the scanner-log and AI-log endpoints already use, so any role (owner, manager, shadow) can read the reasoning for bots on accounts they have access to.
+- **Bot rebalancer view now reflects the shared account, not just your own bots** — The GET side of `/api/bots/rebalancer` verified account access via `accessible_accounts_filter` (correct) but then re-filtered the bot list by `Bot.user_id == current_user.id`, so a shared member always saw an empty rebalancer page even though the bots existed. The inner filter is removed; the bot list now comes straight from the account. The PUT side remains strictly owner-only since saving rebalancer settings can move real money.
+- **Shared-account reports: PDF download opens up; delete stays owner-only** — `GET /api/reports/{report_id}/pdf` previously required `Report.user_id == current_user.id`, blocking managers and observers of a shared account from downloading the PDF of a report they could already read on the web. It now goes through the same `_get_accessible_report` helper the `get_report` endpoint uses, so any member with read access to the owning account can download. `DELETE /api/reports/{report_id}` and the bulk-delete endpoint remain owner-only — report deletion is irreversible and there's no undo.
+
+### Security
+- **`list_members` redacts peer emails for non-owners** — `GET /api/accounts/{id}/sharing/members` previously returned every other member's full email address to anyone with at least shadow access. If an owner shared one account with three friends, each friend got the other two's emails as a side-effect of opening the sharing panel. The service now takes the caller's account role; only the account owner sees the raw `email` field. For non-owner callers, `email` is null and `invited_by` falls back to the inviter's display_name rather than their email. Display name alone is enough to identify who's on the account without leaking a contact address.
+
 ## [v2.164.3] - 2026-04-22
 
 ### Changed

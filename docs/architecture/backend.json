@@ -202,7 +202,7 @@
       },
       {
         "file": "bot_routers/bot_indicator_logs_router.py",
-        "purpose": "Indicator condition evaluation log retrieval"
+        "purpose": "Indicator condition evaluation log retrieval. v2.164.4: access uses accessible_account_ids (owner OR active member) so shared members can see bot reasoning; falls back to Bot.user_id == current_user.id when the user has no accessible accounts."
       },
       {
         "file": "bot_routers/bot_scanner_logs_router.py",
@@ -214,7 +214,7 @@
       },
       {
         "file": "bot_routers/bot_rebalancer_router.py",
-        "purpose": "Bot budget rebalancer: GET /api/bots/rebalancer returns currency groups with participating bots for an account; PUT /api/bots/rebalancer saves group settings and writes budget_percentage to all participating bots; account access check uses accessible_accounts_filter (owner OR active member)"
+        "purpose": "Bot budget rebalancer: GET /api/bots/rebalancer returns currency groups with participating bots for an account (v2.164.4: bot list is now per-account, not per-user, so shared members see the full rebalancer view); PUT /api/bots/rebalancer saves group settings and writes budget_percentage to all participating bots; PUT remains owner-only (Account.user_id == current_user.id)."
       },
       {
         "file": "bot_routers/schemas.py",
@@ -1214,7 +1214,7 @@
     },
     {
       "file": "services/account_sharing_service.py",
-      "purpose": "Business logic for account co-management: creating/validating invitations (7-day TTL), accepting/declining/revoking invitations (single-use tokens, email match enforcement), managing memberships (add, change role, remove), and audit event logging via AccountMembershipEvent. Enforces role whitelist ('manager'/'shadow' only, never 'owner') and prevents account owner removal via membership delete.",
+      "purpose": "Business logic for account co-management: creating/validating invitations (7-day TTL), accepting/declining/revoking invitations (single-use tokens, email match enforcement), managing memberships (add, change role, remove), and audit event logging via AccountMembershipEvent. Enforces role whitelist ('manager'/'shadow' only, never 'owner') and prevents account owner removal via membership delete. v2.164.4: list_members takes caller_role and redacts peer emails (and inviter email fallback) unless the caller is the owner, so sharing the account doesn't leak members' emails to each other.",
       "type": "infrastructure"
     },
     {

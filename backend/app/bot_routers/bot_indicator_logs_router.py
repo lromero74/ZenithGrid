@@ -17,6 +17,7 @@ from app.database import get_db
 from app.models import Bot, IndicatorLog, User
 from app.bot_routers.schemas import IndicatorLogResponse
 from app.auth.dependencies import get_current_user
+from app.services.account_access import accessible_account_ids
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,10 +47,12 @@ async def get_indicator_logs(
         conditions_met: Optional filter by whether conditions were met
         since: Optional filter for logs since this timestamp
     """
-    # Verify bot exists and belongs to user
-    bot_query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    bot_query = bot_query.where(Bot.user_id == current_user.id)
+    # Verify bot exists and is accessible (owned account or shared account)
+    account_ids = await accessible_account_ids(db, current_user.id)
+    bot_query = select(Bot).where(
+        Bot.id == bot_id,
+        Bot.account_id.in_(account_ids) if account_ids else Bot.user_id == current_user.id
+    )
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
@@ -95,9 +98,12 @@ async def get_indicator_logs_summary(
     """
     from datetime import timedelta
 
-    # Verify bot exists and belongs to user
-    bot_query = select(Bot).where(Bot.id == bot_id)
-    bot_query = bot_query.where(Bot.user_id == current_user.id)
+    # Verify bot exists and is accessible (owned account or shared account)
+    account_ids = await accessible_account_ids(db, current_user.id)
+    bot_query = select(Bot).where(
+        Bot.id == bot_id,
+        Bot.account_id.in_(account_ids) if account_ids else Bot.user_id == current_user.id
+    )
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 

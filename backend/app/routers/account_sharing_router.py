@@ -146,8 +146,8 @@ async def list_members(
     account_role: str = Depends(require_account_access("shadow")),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all active members of this account. Any role can view."""
-    return await svc.list_members(db, account_id)
+    """List all active members of this account. Any role can view; non-owners see emails redacted."""
+    return await svc.list_members(db, account_id, caller_role=account_role)
 
 
 @router.get("/api/accounts/{account_id}/sharing/invitations")
