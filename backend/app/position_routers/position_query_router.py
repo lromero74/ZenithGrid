@@ -25,6 +25,33 @@ from app.constants import VALID_CATEGORIES
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+LIST_SAFE_STRATEGY_CONFIG_KEYS = {
+    "take_profit_percentage",
+    "take_profit_percent",
+    "min_profit_percentage",
+    "price_deviation",
+    "safety_order_step_scale",
+    "max_safety_orders",
+    "dca_target_reference",
+    "base_order_size",
+    "trailing_take_profit",
+    "trailing_tp_deviation",
+    "stop_loss_enabled",
+    "stop_loss_percentage",
+}
+
+
+def _trim_strategy_snapshot_for_list(strategy_config_snapshot: Optional[dict]) -> Optional[dict]:
+    """Keep only the strategy config fields used by the hot open-positions UI."""
+    if not isinstance(strategy_config_snapshot, dict):
+        return strategy_config_snapshot
+
+    return {
+        key: value
+        for key, value in strategy_config_snapshot.items()
+        if key in LIST_SAFE_STRATEGY_CONFIG_KEYS
+    }
+
 
 @router.get("/", response_model=List[PositionResponse])
 async def get_positions(
@@ -190,6 +217,7 @@ async def get_positions(
     response = []
     for pos in positions:
         pos_response = PositionResponse.model_validate(pos)
+        pos_response.strategy_config_snapshot = _trim_strategy_snapshot_for_list(pos_response.strategy_config_snapshot)
         pos_response.trade_count = trade_count_map.get(pos.id, 0)
         pos_response.pending_orders_count = pending_count_map.get(pos.id, 0)
 
