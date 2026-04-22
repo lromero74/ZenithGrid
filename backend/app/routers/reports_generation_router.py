@@ -21,11 +21,11 @@ from app.models import (
     GoalProgressSnapshot,
     User,
 )
-from app.routers.reports_crud_router import (
-    _get_accessible_goal,
-    _get_writable_goal,
-    _get_writable_schedule,
-    _report_to_dict,
+from app.services.report_access import (
+    get_accessible_goal,
+    get_writable_goal,
+    get_writable_schedule,
+    report_to_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,7 +252,7 @@ async def get_goal_trend(
     )
     from sqlalchemy import func as sa_func
 
-    goal = await _get_accessible_goal(db, goal_id, current_user.id)
+    goal = await get_accessible_goal(db, goal_id, current_user.id)
 
     if goal.target_type == "income":
         raise HTTPException(
@@ -326,7 +326,7 @@ async def list_expense_items(
     """
     from app.services.expense_service import compute_expense_coverage
 
-    goal = await _get_accessible_goal(db, goal_id, current_user.id)
+    goal = await get_accessible_goal(db, goal_id, current_user.id)
     result = await db.execute(
         select(ExpenseItem)
         .where(ExpenseItem.goal_id == goal.id)
@@ -420,7 +420,7 @@ async def create_expense_item(
     """Add an expense item to a goal."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
     if goal.target_type != "expenses":
         raise HTTPException(
             status_code=400, detail="Can only add expense items to expenses goals"
@@ -474,7 +474,7 @@ async def reorder_expense_items(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Set sort_order for expense items based on provided ID order."""
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
 
     # Fetch all items for this goal
     result = await db.execute(
@@ -511,7 +511,7 @@ async def update_expense_item(
     """Update an expense item."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
     result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.id == item_id,
@@ -554,7 +554,7 @@ async def delete_expense_item(
     """Delete an expense item."""
     from app.services.expense_service import recalculate_goal_target
 
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
     result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.id == item_id,
@@ -580,7 +580,7 @@ async def generate_report(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Manually trigger report generation for a schedule."""
-    schedule, _uid = await _get_writable_schedule(db, body.schedule_id, current_user)
+    schedule, _uid = await get_writable_schedule(db, body.schedule_id, current_user)
 
     # Generate the report (ad-hoc — don't advance schedule timing)
     from app.services.report_scheduler import generate_report_for_schedule
@@ -588,7 +588,7 @@ async def generate_report(
         db, schedule, current_user, advance_schedule=False,
     )
 
-    return _report_to_dict(report, include_html=True)
+    return report_to_dict(report, include_html=True)
 
 
 @router.post("/preview")
@@ -598,11 +598,11 @@ async def preview_report(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Preview a report without saving or emailing."""
-    schedule, _uid = await _get_writable_schedule(db, body.schedule_id, current_user)
+    schedule, _uid = await get_writable_schedule(db, body.schedule_id, current_user)
 
     from app.services.report_scheduler import generate_report_for_schedule
     report = await generate_report_for_schedule(
         db, schedule, current_user, save=False, send_email=False
     )
 
-    return _report_to_dict(report, include_html=True)
+    return report_to_dict(report, include_html=True)

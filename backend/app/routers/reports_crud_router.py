@@ -27,7 +27,12 @@ from app.models import (
     ReportSchedule,
     User,
 )
-from app.services.account_access import accessible_accounts_filter, manager_account_ids, manager_accounts_filter
+from app.services.account_access import accessible_accounts_filter, manager_accounts_filter
+from app.services.report_access import (
+    get_writable_goal,
+    get_writable_schedule,
+    report_to_dict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -360,43 +365,6 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
     }
 
 
-def _report_to_dict(report: Report, include_html: bool = False) -> dict:
-    # Parse ai_summary — return as dict if it's tiered JSON, else as-is
-    ai_summary = report.ai_summary
-    if ai_summary and isinstance(ai_summary, str):
-        try:
-            parsed = json.loads(ai_summary)
-            if isinstance(parsed, dict) and ("simple" in parsed or "comfortable" in parsed):
-                ai_summary = parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    schedule_name = None
-    if report.schedule_id and hasattr(report, "schedule") and report.schedule:
-        schedule_name = report.schedule.name
-
-    result = {
-        "id": report.id,
-        "account_id": report.account_id,
-        "schedule_id": report.schedule_id,
-        "schedule_name": schedule_name,
-        "period_start": report.period_start.isoformat() if report.period_start else None,
-        "period_end": report.period_end.isoformat() if report.period_end else None,
-        "periodicity": report.periodicity,
-        "report_data": report.report_data,
-        "ai_summary": ai_summary,
-        "ai_provider_used": report.ai_provider_used,
-        "delivery_status": report.delivery_status,
-        "delivered_at": report.delivered_at.isoformat() if report.delivered_at else None,
-        "delivery_recipients": report.delivery_recipients,
-        "has_pdf": report.pdf_content is not None,
-        "created_at": report.created_at.isoformat() if report.created_at else None,
-    }
-    if include_html:
-        result["html_content"] = report.html_content
-    return result
-
-
 async def _get_user_goal(
     db: AsyncSession, goal_id: int, user_id: int,
 ) -> ReportGoal:
@@ -405,31 +373,6 @@ async def _get_user_goal(
         select(ReportGoal).where(
             ReportGoal.id == goal_id,
             ReportGoal.user_id == user_id,
-        )
-    )
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    return goal
-
-
-async def _get_accessible_goal(
-    db: AsyncSession, goal_id: int, current_user_id: int,
-) -> ReportGoal:
-    """Fetch a goal the user can read: owner OR observer/manager of owner's account."""
-    from sqlalchemy import or_
-    result = await db.execute(
-        select(ReportGoal).where(
-            ReportGoal.id == goal_id,
-            or_(
-                ReportGoal.user_id == current_user_id,
-                ReportGoal.user_id.in_(
-                    select(Account.user_id).where(
-                        accessible_accounts_filter(current_user_id),
-                        Account.user_id != current_user_id,
-                    )
-                ),
-            ),
         )
     )
     goal = result.scalar_one_or_none()
@@ -489,57 +432,6 @@ async def _resolve_write_user_id(
     if not row:
         raise HTTPException(status_code=403, detail="Insufficient access to account")
     return row[0]
-
-
-async def _get_writable_goal(
-    db: AsyncSession, goal_id: int, current_user: User,
-) -> ReportGoal:
-    """
-    Fetch a goal the user can write to.
-
-    Grants write access when the user owns the goal OR holds manager/owner
-    membership on the goal's account.  Raises 404 if not readable at all,
-    403 if readable but not writable.
-    """
-    goal = await _get_accessible_goal(db, goal_id, current_user.id)
-    if goal.user_id == current_user.id:
-        return goal
-    mgr_ids = await manager_account_ids(db, current_user.id)
-    if goal.account_id not in mgr_ids:
-        raise HTTPException(status_code=403, detail="Insufficient access to modify this goal")
-    return goal
-
-
-async def _get_writable_schedule(
-    db: AsyncSession, schedule_id: int, current_user: User,
-) -> tuple:
-    """
-    Fetch a schedule the user can write to.
-
-    Returns (schedule, effective_user_id) where effective_user_id is the
-    schedule owner's user_id — pass it to service functions that accept user_id
-    to look up records.
-
-    Grants write access when the user owns the schedule OR holds manager/owner
-    membership on the schedule's account.  Raises 404 / 403 accordingly.
-    """
-    result = await db.execute(
-        select(ReportSchedule)
-        .where(ReportSchedule.id == schedule_id)
-        .options(selectinload(ReportSchedule.goal_links))
-    )
-    schedule = result.scalar_one_or_none()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-
-    if schedule.user_id == current_user.id:
-        return schedule, current_user.id
-
-    mgr_ids = await manager_account_ids(db, current_user.id)
-    if schedule.account_id not in mgr_ids:
-        raise HTTPException(status_code=403, detail="Insufficient access to schedule")
-
-    return schedule, schedule.user_id
 
 
 # ----- Goals CRUD -----
@@ -629,7 +521,7 @@ async def update_goal(
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
     """Update an existing goal."""
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
 
     from dateutil.relativedelta import relativedelta
 
@@ -670,7 +562,7 @@ async def delete_goal(
     current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a goal."""
-    goal = await _get_writable_goal(db, goal_id, current_user)
+    goal = await get_writable_goal(db, goal_id, current_user)
 
     await db.delete(goal)
     await db.commit()
@@ -722,7 +614,7 @@ async def update_schedule(
 ) -> dict:
     """Update an existing report schedule."""
     from app.services.report_schedule_service import update_schedule_record
-    _schedule, effective_uid = await _get_writable_schedule(db, schedule_id, current_user)
+    _schedule, effective_uid = await get_writable_schedule(db, schedule_id, current_user)
     schedule = await update_schedule_record(db, effective_uid, schedule_id, body)
     return _schedule_to_dict(schedule)
 
@@ -734,7 +626,7 @@ async def delete_schedule(
     current_user: User = Depends(require_permission(Perm.REPORTS_DELETE)),
 ) -> dict:
     """Delete a report schedule."""
-    schedule, _uid = await _get_writable_schedule(db, schedule_id, current_user)
+    schedule, _uid = await get_writable_schedule(db, schedule_id, current_user)
     await db.delete(schedule)
     await db.commit()
     return {"detail": "Schedule deleted"}
@@ -779,7 +671,7 @@ async def list_reports(
 
     return {
         "total": total,
-        "reports": [_report_to_dict(r) for r in reports],
+        "reports": [report_to_dict(r) for r in reports],
     }
 
 
@@ -791,7 +683,7 @@ async def get_report(
 ) -> dict:
     """Get a single report with HTML content for in-app viewing."""
     report = await _get_accessible_report(db, report_id, current_user.id)
-    return _report_to_dict(report, include_html=True)
+    return report_to_dict(report, include_html=True)
 
 
 @router.delete("/{report_id}")

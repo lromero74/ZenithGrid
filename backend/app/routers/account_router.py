@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Account, User
 from app.auth.dependencies import get_current_user
-from app.position_routers.panic_sell_router import _verify_mfa
+from app.auth.mfa_verification import verify_mfa
 from app.services import portfolio_conversion_service as pcs
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import (
@@ -155,7 +155,7 @@ async def sell_portfolio_to_base_currency(
     if not confirm:
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
 
-    await _verify_mfa(db, current_user, mfa_code)
+    await verify_mfa(db, current_user, mfa_code)
 
     from app.services.portfolio_conversion_service import SUPPORTED_TARGET_CURRENCIES
     if target_currency not in SUPPORTED_TARGET_CURRENCIES:

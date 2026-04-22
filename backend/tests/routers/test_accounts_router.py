@@ -351,7 +351,7 @@ class TestDeleteAccount:
     """Tests for the delete_account endpoint."""
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock)
     @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
     async def test_delete_account_success(
         self, mock_clear, mock_mfa, db_session, test_user, test_account,
@@ -367,7 +367,7 @@ class TestDeleteAccount:
         mock_clear.assert_called_once_with(test_account.id)
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock)
     async def test_delete_account_with_linked_bots(
         self, mock_mfa, db_session, test_user, test_account, test_bot,
     ):
@@ -383,7 +383,7 @@ class TestDeleteAccount:
         assert "linked bots" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    @patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock)
+    @patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock)
     async def test_delete_account_not_found(self, mock_mfa, db_session, test_user):
         """Failure case: non-existent account raises 404."""
         from app.routers.accounts_mutation_router import delete_account
@@ -409,7 +409,7 @@ class TestDeleteAccountMfa:
         test_user.totp_secret = "encrypted_secret"
         await db_session.flush()
 
-        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.side_effect = HTTPException(status_code=403, detail="MFA code required")
             with pytest.raises(HTTPException) as exc_info:
                 await delete_account(
@@ -427,7 +427,7 @@ class TestDeleteAccountMfa:
         """Request with wrong mfa_code → 403."""
         from app.routers.accounts_mutation_router import delete_account
 
-        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.side_effect = HTTPException(status_code=403, detail="Invalid MFA code")
             with pytest.raises(HTTPException) as exc_info:
                 await delete_account(
@@ -444,7 +444,7 @@ class TestDeleteAccountMfa:
         """Request with valid mfa_code + confirm=true → account deleted."""
         from app.routers.accounts_mutation_router import delete_account
 
-        with patch("app.routers.accounts_mutation_router._verify_mfa", new_callable=AsyncMock) as mock_mfa:
+        with patch("app.routers.accounts_mutation_router.verify_mfa", new_callable=AsyncMock) as mock_mfa:
             mock_mfa.return_value = None  # MFA passes
             result = await delete_account(
                 account_id=test_account.id, db=db_session,

@@ -30,7 +30,7 @@ from app.services.exchange_service import (
     clear_exchange_client_cache,
     get_coinbase_for_account,
 )
-from app.position_routers.panic_sell_router import _verify_mfa
+from app.auth.mfa_verification import verify_mfa
 from sqlalchemy import func
 
 from app.routers.accounts_query_router import (
@@ -40,11 +40,10 @@ from app.routers.accounts_query_router import (
     AutoBuySettings,
     AutoBuySettingsUpdate,
     DustSweepSettingsUpdate,
-    RebalanceSettingsResponse,
     RebalanceSettingsUpdate,
-    _build_rebalance_response,
     _TTL_REBALANCE_STATUS,
 )
+from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +243,7 @@ async def delete_account(
             raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
 
         # Verify MFA before irreversible deletion
-        await _verify_mfa(db, current_user, mfa_code)
+        await verify_mfa(db, current_user, mfa_code)
 
         # Get the account (filtered by user)
         query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
@@ -548,7 +547,7 @@ async def update_rebalance_settings(
     # Clear cached status so the next fetch reflects the new reserve settings
     _TTL_REBALANCE_STATUS.pop(account_id, None)
 
-    return _build_rebalance_response(account)
+    return build_rebalance_response(account)
 
 
 # =============================================================================

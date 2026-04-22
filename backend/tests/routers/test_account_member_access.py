@@ -359,19 +359,19 @@ class TestListExpenseItemsAccess:
     @pytest.mark.asyncio
     async def test_owner_can_list_expenses(self, db_session):
         """Goal owner can list expense items."""
-        from app.routers.reports_crud_router import _get_accessible_goal
+        from app.services.report_access import get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_lst@example.com")
         goal = await _make_goal(db_session, owner)
         await db_session.commit()
 
-        result = await _get_accessible_goal(db_session, goal.id, owner.id)
+        result = await get_accessible_goal(db_session, goal.id, owner.id)
         assert result.id == goal.id
 
     @pytest.mark.asyncio
     async def test_observer_can_list_expenses_on_shared_account(self, db_session):
         """Observer can fetch expense goal when they have membership on owner's account."""
-        from app.routers.reports_crud_router import _get_accessible_goal
+        from app.services.report_access import get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_obs@example.com")
         observer = await _make_user(db_session, "observer_exp_obs@example.com")
@@ -380,14 +380,14 @@ class TestListExpenseItemsAccess:
         goal = await _make_goal(db_session, owner)
         await db_session.commit()
 
-        result = await _get_accessible_goal(db_session, goal.id, observer.id)
+        result = await get_accessible_goal(db_session, goal.id, observer.id)
         assert result.id == goal.id
 
     @pytest.mark.asyncio
     async def test_stranger_cannot_access_goal(self, db_session):
         """User with no membership gets 404 on another user's goal."""
         from fastapi import HTTPException
-        from app.routers.reports_crud_router import _get_accessible_goal
+        from app.services.report_access import get_accessible_goal
 
         owner = await _make_user(db_session, "owner_exp_str@example.com")
         stranger = await _make_user(db_session, "stranger_exp_str@example.com")
@@ -395,7 +395,7 @@ class TestListExpenseItemsAccess:
         await db_session.commit()
 
         with pytest.raises(HTTPException) as exc_info:
-            await _get_accessible_goal(db_session, goal.id, stranger.id)
+            await get_accessible_goal(db_session, goal.id, stranger.id)
         assert exc_info.value.status_code == 404
 
 

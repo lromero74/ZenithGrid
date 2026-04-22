@@ -26,6 +26,7 @@ from app.models import Account, Bot, User
 from app.models.sharing import AccountMembership
 from app.auth.dependencies import get_current_user
 from app.services.account_access import accessible_accounts_filter as _shared_accessible_accounts_filter
+from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
 from app.services.account_service import get_portfolio_for_account
 from app.services.exchange_service import get_coinbase_for_account
 
@@ -213,25 +214,6 @@ class AutoBuySettingsUpdate(BaseModel):
     usdt_min: Optional[float] = None
 
 
-# Portfolio Rebalancing Schemas
-class RebalanceSettingsResponse(BaseModel):
-    """Portfolio rebalance settings for an account"""
-    enabled: bool
-    target_usd_pct: float
-    target_btc_pct: float
-    target_eth_pct: float
-    target_usdc_pct: float
-    target_usdt_pct: float
-    drift_threshold_pct: float
-    check_interval_minutes: int
-    min_trade_pct: float
-    min_balance_usd: float
-    min_balance_btc: float
-    min_balance_eth: float
-    min_balance_usdc: float
-    min_balance_usdt: float
-
-
 class RebalanceSettingsUpdate(BaseModel):
     """Update model for rebalance settings (all fields optional)"""
     enabled: Optional[bool] = None
@@ -259,26 +241,6 @@ class DustSweepSettingsUpdate(BaseModel):
 # =============================================================================
 # Helpers
 # =============================================================================
-
-
-def _build_rebalance_response(account) -> RebalanceSettingsResponse:
-    """Build RebalanceSettingsResponse from an Account model instance."""
-    return RebalanceSettingsResponse(
-        enabled=account.rebalance_enabled or False,
-        target_usd_pct=account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,
-        target_btc_pct=account.rebalance_target_btc_pct if account.rebalance_target_btc_pct is not None else 33.0,
-        target_eth_pct=account.rebalance_target_eth_pct if account.rebalance_target_eth_pct is not None else 33.0,
-        target_usdc_pct=account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
-        target_usdt_pct=account.rebalance_target_usdt_pct if account.rebalance_target_usdt_pct is not None else 0.0,
-        drift_threshold_pct=account.rebalance_drift_threshold_pct or 5.0,
-        check_interval_minutes=account.rebalance_check_interval_minutes or 60,
-        min_trade_pct=account.rebalance_min_trade_pct if account.rebalance_min_trade_pct is not None else 5.0,
-        min_balance_usd=account.min_balance_usd or 0.0,
-        min_balance_btc=account.min_balance_btc or 0.0,
-        min_balance_eth=account.min_balance_eth or 0.0,
-        min_balance_usdc=account.min_balance_usdc or 0.0,
-        min_balance_usdt=account.min_balance_usdt or 0.0,
-    )
 
 
 async def get_public_prices() -> dict:
@@ -722,7 +684,7 @@ async def get_rebalance_settings(
     if not account:
         raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
 
-    return _build_rebalance_response(account)
+    return build_rebalance_response(account)
 
 
 @router.get("/{account_id}/rebalance-status")
