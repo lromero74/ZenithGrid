@@ -5,6 +5,8 @@
 **Last Updated**: 2026-04-22
 **One-Pass Confidence Score**: 9/10
 
+> **Status (2026-04-22, after v2.164.13)**: Phase A (fast summary path) and Phase C (Dashboard fan-out + positions-list trims) are **complete**. The positions-list field/snapshot trimming sweep is **done** — further per-field trims are diminishing returns and should stop. Remaining open work is Phase B (Portfolio-page paper valuation) and/or fresh profiling to pick the next bottleneck. See the [Sweep Complete](#sweep-complete-2026-04-22-after-v216413) section below for measured payload reductions and which fields cannot be trimmed without breaking the UI.
+
 ---
 
 ## Status Update
@@ -81,6 +83,36 @@ This latest pass trims one more avoidable source of overfetch:
 - the list response also no longer ships the entire frozen strategy config blob for every open deal; it keeps only the keys the list/cards/charts/edit affordances actually read, and the detail endpoint still preserves the full snapshot when needed
 - the open-position list now also drops several optional fields that matter for detail/closed views but not for the hot active-deals UI, shrinking each row a bit further without changing the closed/history or single-position endpoints
 - the remaining high-frequency pressure is now concentrated mostly in the necessity of the active-deals 5-second refresh itself rather than in auxiliary summary queries, bot metadata churn, duplicate timer infrastructure, avoidable ORM overfetch, or broad supporting lookups
+
+### Sweep Complete (2026-04-22, after v2.164.13)
+
+**The positions-list trimming sweep is done. Do not ship further per-field trims on this route.** The remaining fat is all load-bearing.
+
+Measured per-row reductions on `GET /api/positions?status=open` (`testbot`, 232 open positions, avg full snapshot = 2970 bytes):
+
+| Version | Change | Saved |
+|---------|--------|-------|
+| v2.164.10 | Drop eager `trades` + `pending_orders`, use aggregates | Dominant win, scales with trade count |
+| v2.164.11 | Skip `fills[]` expansion on limit-close rows | Only rows closing via limit |
+| v2.164.12 | Trim `strategy_config_snapshot` to 12 safe keys | **2970 → 250 bytes (~91% of largest field)** |
+| v2.164.13 | Null 8 optional fields (`account_id`, `user_attempt_number`, close/profit-at-close, `limit_close_order_id`) | ~80-120 bytes/row |
+
+Rows are now ~700-900 bytes each. The snapshot trim (v2.164.12) was the whale; v2.164.13 was already scraping.
+
+**Field-by-field audit of `PositionResponse` against the actual Positions UI** (cross-checked against `frontend/src/pages/Positions.tsx`, `pages/positions/**`, `components/positions/PositionCard.tsx`, `components/positions/PriceBar.tsx`, `components/positions/positionUtils.ts`, `components/positions/EditPositionSettingsModal.tsx`, and `pages/Dashboard.tsx` which also consumes `?status=open`):
+
+- **Load-bearing — cannot be trimmed**: `id`, `bot_id`, `user_deal_number`, `product_id`, `status`, `opened_at`, `max_quote_allowed`, `total_quote_spent`, `total_base_acquired`, `average_buy_price`, `profit_percentage` (Dashboard open-positions card), `btc_usd_price_at_open`, `trade_count`, `pending_orders_count`, `first_buy_price` + `last_buy_price` (PriceBar DCA reference + positionUtils), `last_error_message` + `last_error_timestamp` (error pill), `notes`, `closing_via_limit`, `limit_order_details`, `is_blacklisted`, `blacklist_reason`, `coin_category`, `computed_max_budget`, trimmed `strategy_config_snapshot`.
+- **One remaining trim candidate**: `initial_quote_balance` has **zero non-test frontend references**. Saves ~25 bytes/row. **Not worth a ship cycle on its own** — bundle it only if another list-route change is happening anyway.
+- **Looks trimmable but is not**:
+  - `profit_percentage` → consumed by `Dashboard.tsx:535`, which uses the same endpoint.
+  - `first_buy_price` / `last_buy_price` → consumed by `PriceBar.tsx` (DCA next-safety-order reference line on every open card) and `positionUtils.ts`.
+  - `user_deal_number` → card header (`PositionCard.tsx:391`).
+
+**Next real performance moves** (in priority order, based on current measurements):
+
+1. **Phase B — Portfolio page paper-account valuation** (still open in this PRP). Same bounded-concurrency/negative-cache pattern `account_value_summary_service.py` already uses, applied to `account_service._build_paper_portfolio()` on the Portfolio page. Start by measuring whether the Portfolio page is actually slow for users now — the Dashboard path is fixed, so it may no longer be the main pain point.
+2. **Fresh profiling**. With Phase A + C shipped, the next bottleneck should be chosen from new measurements, not guessed. Profile a cold-cache login → Dashboard → Positions flow and pick the slowest remaining span. Likely candidates: the 5s open-deals refresh itself (can't be much cheaper), the account value chart history query, or the Portfolio page on large paper accounts.
+3. **Do not** ship additional positions-list field trims without fresh evidence of payload or CPU pain. Payload is already dominated by the list size × ~800 bytes floor, not by any single removable field.
 
 ---
 
@@ -438,6 +470,9 @@ Likely next tests:
 - edge case: non-prop accounts never hit prop-guard status
 - failure case: deferred query failures do not block core dashboard render
 
+Status:
+- **complete** as of v2.164.13. Dashboard deferred-query behavior, account-scoped bot/position queries, hidden-tab polling pauses, adaptive open-positions cadence, shared market-price hook, and the full positions-list hot-path trim sweep all shipped. Do not ship further per-field trims on `GET /api/positions?status=open` — see [Sweep Complete](#sweep-complete-2026-04-22-after-v216413) for the audit and reasoning.
+
 ---
 
 ## File-Level Plan
@@ -546,8 +581,9 @@ After Phase A proves stable:
 - optionally add background revalidation for the Portfolio page too
 
 Status:
-- still open
-- lower priority than Dashboard startup fan-out unless fresh profiling shows Portfolio has become the main pain point
+- still open — now the **highest-priority remaining item** in this PRP
+- reuse the bounded-concurrency helper already in `backend/app/services/paper_valuation_service.py`
+- gate this on fresh profiling first — Phase A + C may have reduced Portfolio-page pain enough that this is no longer the biggest win
 
 ### Phase C — Dashboard Startup Fan-Out
 
@@ -557,7 +593,9 @@ After the summary path is fixed:
 - profile whether polling intervals need further tightening
 
 Status:
-- in progress on `feature/dashboard-performance-followup`
+- **complete** as of v2.164.13 (shipped across v2.164.8 → v2.164.13)
+- includes the full positions-list trimming sweep (trades/pending aggregates, blacklist scoping, snapshot key trim, optional field nulling)
+- see [Sweep Complete](#sweep-complete-2026-04-22-after-v216413) for measured payload reductions and why further list-route field trims are not worth shipping
 
 ---
 
