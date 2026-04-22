@@ -875,9 +875,13 @@ export const SAMPLE_BOTS: SampleBot[] = [
             id: 'sample_spec_buy',
             conditions: [{
               id: 'sample_spec_ai',
-              type: 'ai_opinion',
+              // ai_buy (binary signal on numeric input) — matches the
+              // existing AI-Autonomous sample's convention. `ai_opinion`
+              // with a string value like "buy" trips the number-input
+              // widget the condition builder renders for condition values.
+              type: 'ai_buy',
               operator: 'equal',
-              value: 'buy',
+              value: 1,
               timeframe: 'FIFTEEN_MINUTE',
               negate: false,
               risk_preset: 'speculative',

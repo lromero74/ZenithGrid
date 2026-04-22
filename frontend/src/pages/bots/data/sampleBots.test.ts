@@ -41,12 +41,17 @@ describe('SAMPLE_BOTS — speculative catalyst hunter', () => {
     expect(cfg?.is_speculative).toBe('true')
   })
 
-  it('includes at least one ai_opinion buy condition so catalyst-mode AI runs', () => {
+  it('includes at least one AI buy condition so catalyst-mode AI runs', () => {
     const cfg = spec?.formData.strategy_config as Record<string, unknown>
-    const boc = cfg?.base_order_conditions as { groups: Array<{ conditions: Array<{ type: string }> }> }
+    const boc = cfg?.base_order_conditions as { groups: Array<{ conditions: Array<{ type: string, value: unknown }> }> }
     const allConditions = boc?.groups?.flatMap(g => g.conditions) ?? []
-    const hasAiOpinion = allConditions.some(c => c.type === 'ai_opinion')
-    expect(hasAiOpinion).toBe(true)
+    // Must use ai_buy + numeric value 1 — the condition builder renders the
+    // condition value into a <input type="number"> element, so a string like
+    // "buy" triggers a "cannot be parsed" DOM warning and the sample won't
+    // copy cleanly. See ai-autonomous-btc for the canonical shape.
+    const aiBuy = allConditions.find(c => c.type === 'ai_buy')
+    expect(aiBuy).toBeDefined()
+    expect(typeof aiBuy?.value).toBe('number')
   })
 
   it('shows the speculative bracket discipline at preview time', () => {
