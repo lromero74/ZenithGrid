@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.165.1] - 2026-04-22
+
+### Added
+- **Speculative Bucket card warns when rebalance floor is too low** — If Portfolio Rebalancing is enabled on an account and its `min_balance_usd` floor is less than 2× the speculative per-slot budget, the Dashboard bucket card now shows an amber "Rebalance USD floor is $X but per-slot budget is $Y — raise min_balance_usd to at least $Z" warning. This catches the case where the rebalancer would silently drain free cash out from under the speculative bot between entries, even though the bucket still shows headroom.
+
+### Fixed
+- **Bot form hides the Speculative preset UI when the strategy can't honor it** — The "+ Add Bot" modal was rendering the Risk Preset panel for every strategy type, which misled users into thinking Grid Trading or Arbitrage bots could be made speculative. In practice only `indicator_based` bots get the full package (bucket cap + catalyst-mode AI prompt + time-based forced exit), so the panel is now hidden on other strategies. Picking Speculative on an unsupported strategy no longer wedges the save button either — blocking state is cleared when the panel is hidden.
+
 ## [v2.165.0] - 2026-04-22
 
 ### Added

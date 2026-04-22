@@ -12,7 +12,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Flame } from 'lucide-react'
+import { AlertTriangle, Flame } from 'lucide-react'
 import { speculativeBucketApi, positionsApi } from '../../services/api'
 
 interface Props {
@@ -116,6 +116,21 @@ export function SpeculativeBucketCard({ accountId }: Props) {
             {bucket.open_position_count} open
           </span>
         </div>
+
+        {bucket.warnings && bucket.warnings.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {bucket.warnings.map((w) => (
+              <div
+                key={w.code}
+                data-testid={`speculative-bucket-warning-${w.code}`}
+                className="flex gap-2 p-2 rounded border border-amber-600/40 bg-amber-900/20 text-xs text-amber-200"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <span className="leading-relaxed">{w.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

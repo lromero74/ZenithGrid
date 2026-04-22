@@ -868,6 +868,11 @@ export const accountValueSummaryApi = {
 
 // Speculative bucket snapshot — see PRP high-risk-doubling-preset §Task D3.
 // Scoped to account; cost-basis accounting (winners do not expand headroom).
+export interface SpeculativeBucketWarning {
+  code: string
+  message: string
+}
+
 export interface SpeculativeBucketInfo {
   bucket_pct: number
   bucket_usd: number
@@ -877,6 +882,7 @@ export interface SpeculativeBucketInfo {
   open_position_count: number
   max_concurrent_slots: number
   per_slot_budget_usd: number
+  warnings: SpeculativeBucketWarning[]
 }
 
 export const speculativeBucketApi = {

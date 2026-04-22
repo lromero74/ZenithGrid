@@ -36,6 +36,13 @@ CALIBRATION_MIN_CLOSED = 50
 CALIBRATION_MIN_COMPONENT_FIRES = 30
 CALIBRATION_MIN_DIVERGENCE_PP = 20.0
 
+# Rebalance floor warning: require min_balance_usd to be at least this
+# multiple of per_slot_budget_usd. One slot's worth plus a cushion for
+# the next candidate entry and fees. If the rebalancer drops below this
+# floor, speculative entries may fail with "insufficient free USD" even
+# when the bucket itself shows headroom.
+REBALANCE_FLOOR_SAFETY_MULTIPLE = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -168,6 +175,11 @@ async def get_speculative_bucket_info(
     remaining_slots = max(1, max_concurrent_slots - len(positions))
     per_slot_budget_usd = available_usd / remaining_slots if remaining_slots > 0 else 0.0
 
+    warnings = _build_bucket_warnings(
+        account=account, bucket_pct=bucket_pct,
+        per_slot_budget_usd=per_slot_budget_usd,
+    )
+
     return {
         "bucket_pct": bucket_pct,
         "bucket_usd": round(bucket_usd, 2),
@@ -177,7 +189,40 @@ async def get_speculative_bucket_info(
         "open_position_count": len(positions),
         "max_concurrent_slots": max_concurrent_slots,
         "per_slot_budget_usd": round(per_slot_budget_usd, 2),
+        "warnings": warnings,
     }
+
+
+def _build_bucket_warnings(
+    *, account: Optional[Account], bucket_pct: float,
+    per_slot_budget_usd: float,
+) -> list[dict]:
+    """Surface cross-dependency issues between the speculative bucket and
+    other account-level settings that can silently starve the bot.
+
+    Returns a list of {code, message} dicts — empty when nothing's wrong.
+    Codes are stable so the frontend can key on them without scraping
+    the message text.
+    """
+    warnings: list[dict] = []
+    if account is None or bucket_pct <= 0 or per_slot_budget_usd <= 0:
+        return warnings
+
+    if getattr(account, "rebalance_enabled", False):
+        min_floor = float(getattr(account, "min_balance_usd", 0.0) or 0.0)
+        required = per_slot_budget_usd * REBALANCE_FLOOR_SAFETY_MULTIPLE
+        if min_floor < required:
+            warnings.append({
+                "code": "rebalance_floor_too_low",
+                "message": (
+                    f"Rebalance USD floor is ${min_floor:.0f} but per-slot budget is "
+                    f"${per_slot_budget_usd:.0f} — raise min_balance_usd to at least "
+                    f"${required:.0f} so the rebalancer doesn't drain cash between "
+                    f"speculative entries."
+                ),
+            })
+
+    return warnings
 
 
 async def validate_speculative_entry(
