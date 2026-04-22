@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Eye, Copy, Pencil, Cpu, TrendingUp, BarChart3, Brain } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, Copy, Pencil, Cpu, TrendingUp, BarChart3, Brain, Flame } from 'lucide-react'
 import { SAMPLE_BOTS, type SampleBot } from '../data/sampleBots'
 
 interface SampleBotsSectionProps {
@@ -14,6 +14,7 @@ const STRATEGY_ICONS: Record<string, typeof Cpu> = {
   'rsi-runner': TrendingUp,
   'ai-autonomous': Brain,
   'macd-crossover': Cpu,
+  'speculative-catalyst': Flame,
 }
 
 function getStrategyIcon(sampleId: string) {

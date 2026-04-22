@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.165.3] - 2026-04-22
+
+### Added
+- **Speculative Catalyst Hunter (USD) sample bot** — The "Sample Bots" section on the Bots page (the bots users see front-and-center, before clicking Create Bot) now includes a ready-to-copy speculative catalyst hunter alongside BB-Recovery, RSI-Runner, AI-Autonomous, and MACD. Click Copy to pre-fill the Create Bot form with the full catalyst-hunt configuration: AI entry across all USD pairs, 2x target in 24h, tight stop-loss, trailing take-profit, 24h max-hold, and the `is_speculative` bucket tag. Still requires a non-zero Speculative Allocation on the target account (Settings → Speculative Bucket) before save.
+
 ## [v2.165.2] - 2026-04-22
 
 ### Added
