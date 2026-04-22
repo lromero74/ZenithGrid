@@ -28,7 +28,7 @@ vi.mock('../../../services/api', () => ({
   },
   authFetch: vi.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({ total_btc_value: 0, total_usd_value: 0 }),
+    json: () => Promise.resolve({ price: 0 }),
   }),
   api: {
     get: vi.fn().mockResolvedValue({ data: { prices: {} } }),
@@ -115,6 +115,27 @@ describe('usePositionsData', () => {
     )
 
     expect(result.current.btcUsdPrice).toBe(0)
+  })
+
+  test('fetches direct BTC/USD market price instead of account portfolio', async () => {
+    const { authFetch } = await import('../../../services/api')
+    vi.mocked(authFetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ price: 98765.43 }),
+    } as any)
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    const { result } = renderHook(
+      () => usePositionsData({ selectedAccountId: 42 }),
+      { wrapper: makeWrapper(qc) }
+    )
+
+    await waitFor(() => {
+      expect(result.current.btcUsdPrice).toBe(98765.43)
+    })
+
+    expect(authFetch).toHaveBeenCalledWith('/api/market/btc-usd-price')
+    expect(vi.mocked(authFetch).mock.calls.some(([url]) => String(url).includes('/portfolio'))).toBe(false)
   })
 
   test('interval-driven queries have refetchIntervalInBackground: false', () => {

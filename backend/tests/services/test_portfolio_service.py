@@ -262,6 +262,61 @@ class TestGetCexPortfolio:
         assert usdc_holding["current_price_usd"] == pytest.approx(1.0)
         assert usdc_holding["usd_value"] == pytest.approx(500.0)
 
+    @pytest.mark.asyncio
+    async def test_include_details_false_skips_balance_breakdown_and_pnl_queries(self):
+        """Edge case: lightweight portfolio skips extra DB work and returns totals only."""
+        from app.services.portfolio_service import get_cex_portfolio
+
+        account = MagicMock()
+        account.id = 7
+        account.user_id = 70
+        account.name = "Lightweight CEX"
+
+        coinbase = AsyncMock()
+        coinbase.get_portfolio_breakdown.return_value = {
+            "spot_positions": [
+                {
+                    "asset": "BTC",
+                    "total_balance_crypto": "0.5",
+                    "available_to_trade_crypto": "0.4",
+                    "total_balance_fiat": "50000",
+                },
+                {
+                    "asset": "USD",
+                    "total_balance_crypto": "1000",
+                    "available_to_trade_crypto": "1000",
+                    "total_balance_fiat": "1000",
+                },
+            ]
+        }
+        coinbase.get_btc_usd_price.return_value = 100000.0
+        get_coinbase_func = AsyncMock(return_value=coinbase)
+
+        execute_spy = AsyncMock(side_effect=AssertionError("db.execute should not run for include_details=false"))
+        db = MagicMock()
+        db.execute = execute_spy
+
+        with patch("app.services.portfolio_service.api_cache") as mock_api_cache, \
+             patch("app.services.portfolio_service.portfolio_cache") as mock_portfolio_cache:
+            mock_api_cache.get = AsyncMock(return_value=None)
+            mock_api_cache.set = AsyncMock()
+            mock_portfolio_cache.get = AsyncMock(return_value=None)
+            mock_portfolio_cache.save = AsyncMock()
+
+            result = await get_cex_portfolio(
+                account=account,
+                db=db,
+                get_coinbase_for_account_func=get_coinbase_func,
+                force_fresh=True,
+                include_details=False,
+            )
+
+        assert result["total_usd_value"] == pytest.approx(51000.0)
+        assert result["total_btc_value"] == pytest.approx(0.51)
+        assert "balance_breakdown" not in result
+        assert "pnl" not in result
+        execute_spy.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # get_dex_portfolio

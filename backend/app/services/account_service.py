@@ -175,6 +175,7 @@ async def get_portfolio_for_account(
     current_user: User,
     account_id: int,
     force_fresh: bool = False,
+    include_details: bool = True,
 ) -> dict:
     """
     Get portfolio for a specific account.
@@ -200,7 +201,13 @@ async def get_portfolio_for_account(
         if exchange_name in ("bybit", "mt5_bridge"):
             return await get_generic_cex_portfolio(account, db)
         else:
-            return await get_cex_portfolio(account, db, get_coinbase_for_account, force_fresh=force_fresh)
+            return await get_cex_portfolio(
+                account,
+                db,
+                get_coinbase_for_account,
+                force_fresh=force_fresh,
+                include_details=include_details,
+            )
     else:
         return await get_dex_portfolio(account, db, get_coinbase_for_account)
 

@@ -108,6 +108,7 @@ async def get_cex_portfolio(
     db: AsyncSession,
     get_coinbase_for_account_func,
     force_fresh: bool = False,
+    include_details: bool = True,
 ) -> dict:
     """
     Get portfolio for a CEX (Coinbase) account.
@@ -139,6 +140,25 @@ async def get_cex_portfolio(
 
     # Get BTC/USD price for BTC value column (uses cache, very fast)
     btc_usd_price = await coinbase.get_btc_usd_price()
+
+    if not include_details:
+        (_, total_usd_value, total_btc_value, _, _, _, _) = _build_portfolio_holdings(
+            spot_positions,
+            btc_usd_price,
+            [],
+        )
+        result = {
+            "total_usd_value": total_usd_value,
+            "total_btc_value": total_btc_value,
+            "btc_usd_price": btc_usd_price,
+            "account_id": account.id,
+            "account_name": account.name,
+            "account_type": "cex",
+            "is_dex": False,
+            "holdings": [],
+            "holdings_count": 0,
+        }
+        return result
 
     # Get open positions for this account (needed for "in deals" amounts)
     positions_query = select(Position).where(

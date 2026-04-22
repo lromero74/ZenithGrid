@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo, lazy, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { botsApi, positionsApi, authFetch, transfersApi } from '../services/api'
 import {
@@ -21,10 +21,16 @@ import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useNotifications } from '../contexts/NotificationContext'
-import { AccountValueChart } from '../components/trading/AccountValueChart'
-import { MarketSentimentCards } from '../components/trading/MarketSentimentCards'
+import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { usePermission } from '../hooks/usePermission'
 import { useAccountValueSummary } from '../hooks/useAccountValueSummary'
+
+const AccountValueChart = lazy(() =>
+  import('../components/trading/AccountValueChart').then((module) => ({ default: module.AccountValueChart }))
+)
+const MarketSentimentCards = lazy(() =>
+  import('../components/trading/MarketSentimentCards').then((module) => ({ default: module.MarketSentimentCards }))
+)
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -222,7 +228,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Market Sentiment */}
-      <MarketSentimentCards isUserEngaged={false} />
+      <Suspense fallback={<div className="bg-slate-800 rounded-lg border border-slate-700 p-6"><LoadingSpinner /></div>}>
+        <MarketSentimentCards isUserEngaged={false} />
+      </Suspense>
 
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -458,10 +466,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Account Value Chart */}
-      <AccountValueChart
-        liveBtcValue={accountValueSummary?.total_btc_value}
-        liveUsdValue={accountValueSummary?.total_usd_value}
-      />
+      <Suspense fallback={<div className="bg-slate-800 rounded-lg border border-slate-700 p-6"><LoadingSpinner /></div>}>
+        <AccountValueChart
+          liveBtcValue={accountValueSummary?.total_btc_value}
+          liveUsdValue={accountValueSummary?.total_usd_value}
+        />
+      </Suspense>
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

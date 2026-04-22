@@ -149,6 +149,54 @@ class TestGetAccountValueSummary:
         mock_build_live.assert_called_once_with(account)
         mock_cache_set.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_live_coinbase_account_uses_lightweight_portfolio_totals(self):
+        """Happy path: live Coinbase summaries skip heavyweight portfolio details."""
+        from app.services.account_value_summary_service import get_account_value_summary
+
+        db = AsyncMock()
+        user = MagicMock()
+        user.id = 5
+
+        account = MagicMock()
+        account.id = 11
+        account.is_paper_trading = False
+        account.type = "cex"
+        account.exchange = "coinbase"
+        account.name = "Live Coinbase"
+
+        account_result = MagicMock()
+        account_result.scalar_one_or_none.return_value = account
+        db.execute.return_value = account_result
+
+        light_portfolio = {
+            "total_usd_value": 4321.0,
+            "total_btc_value": 0.04321,
+            "btc_usd_price": 100000.0,
+        }
+
+        with patch(
+            "app.services.account_value_summary_service.api_cache.get",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.services.account_value_summary_service.api_cache.set",
+            new=AsyncMock(),
+        ), patch(
+            "app.services.account_value_summary_service.get_cex_portfolio",
+            new=AsyncMock(return_value=light_portfolio),
+        ) as mock_get_cex_portfolio, patch(
+            "app.services.account_value_summary_service.get_coinbase_for_account",
+            new=AsyncMock(return_value=AsyncMock()),
+        ), patch(
+            "app.services.account_value_summary_service.get_portfolio_for_account",
+            new=AsyncMock(side_effect=AssertionError("should not call full portfolio path")),
+        ):
+            result = await get_account_value_summary(db, user, account_id=11)
+
+        assert result["total_usd_value"] == pytest.approx(4321.0)
+        assert result["is_stale"] is False
+        mock_get_cex_portfolio.assert_awaited_once()
+
 
 class TestBuildLivePaperAccountValueSummary:
     """Tests for _build_live_paper_account_value_summary()."""

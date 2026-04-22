@@ -385,6 +385,7 @@ async def get_account_bots(
 async def get_account_portfolio(
     account_id: int,
     force_fresh: bool = False,
+    include_details: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -396,7 +397,13 @@ async def get_account_portfolio(
     For Paper Trading accounts: Returns virtual balances
     """
     try:
-        return await get_portfolio_for_account(db, current_user, account_id, force_fresh)
+        return await get_portfolio_for_account(
+            db,
+            current_user,
+            account_id,
+            force_fresh,
+            include_details,
+        )
     except (HTTPException, AppError):
         raise
     except Exception as e:

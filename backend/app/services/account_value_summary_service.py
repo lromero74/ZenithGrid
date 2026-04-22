@@ -21,7 +21,9 @@ from app.cache import api_cache
 from app.models import Account, AccountValueSnapshot, User
 from app.services.account_access import accessible_accounts_filter
 from app.services.account_service import get_portfolio_for_account
+from app.services.exchange_service import get_coinbase_for_account
 from app.services.paper_valuation_service import build_paper_holdings_and_totals
+from app.services.portfolio_service import get_cex_portfolio
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,24 @@ async def get_account_value_summary(
 
     if account.is_paper_trading:
         summary = await _build_live_paper_account_value_summary(account)
+    elif account.type == "cex" and (account.exchange or "coinbase") == "coinbase":
+        portfolio = await get_cex_portfolio(
+            account,
+            db,
+            get_coinbase_for_account,
+            force_fresh=force_fresh,
+            include_details=False,
+        )
+        summary = {
+            "account_id": account.id,
+            "account_name": account.name,
+            "total_usd_value": float(portfolio.get("total_usd_value", 0.0) or 0.0),
+            "total_btc_value": float(portfolio.get("total_btc_value", 0.0) or 0.0),
+            "btc_usd_price": float(portfolio.get("btc_usd_price", 0.0) or 0.0),
+            "as_of": datetime.utcnow().isoformat(),
+            "is_stale": False,
+            "is_refreshing": False,
+        }
     else:
         portfolio = await get_portfolio_for_account(db, current_user, account_id, force_fresh=force_fresh)
         summary = {
