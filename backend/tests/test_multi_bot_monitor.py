@@ -1126,3 +1126,243 @@ class TestProcessSingleBot:
 
             # Should not raise
             await monitor._process_single_bot(bot, needs_ai_analysis=True)
+
+
+# ===========================================================================
+# Class: TestMonitorLoop
+# ===========================================================================
+
+
+class TestMonitorLoop:
+    """Tests for MultiBotMonitor.monitor_loop() — the top-level scheduler.
+
+    Strategy: patch async_session_maker so the loop uses a mocked db,
+    patch asyncio.sleep to a no-op so the 10s interval doesn't block
+    the test, and stop the loop after one iteration by flipping
+    self.running=False inside a side_effect on get_active_bots.
+    """
+
+    @staticmethod
+    async def _noop_sleep(*_args, **_kwargs):
+        """Stand-in for asyncio.sleep so the test doesn't wait 10s."""
+        return None
+
+    def _mock_session_maker(self, mock_sm, db_session):
+        mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    @pytest.mark.asyncio
+    async def test_empty_bot_list_logs_warning_and_continues(self, db_session):
+        """Happy path: no active bots → logs warning, sleeps, exits cleanly
+        when running flips to False."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return []
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        assert monitor.running is False
+
+    @pytest.mark.asyncio
+    async def test_processes_due_bot_skips_not_due_bot(self, db_session):
+        """Due bots (current_ts >= _bot_next_check) get scheduled; bots
+        with future _bot_next_check are skipped with no _process_single_bot
+        call for them."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+
+        due_bot = _make_bot(bot_id=1, name="Due")
+        not_due_bot = _make_bot(bot_id=2, name="NotDue")
+
+        current_ts = int(datetime.utcnow().timestamp())
+        monitor._bot_next_check = {
+            due_bot.id: current_ts - 60,        # 60s overdue
+            not_due_bot.id: current_ts + 600,   # 10min in the future
+        }
+
+        process_calls = []
+
+        async def _track_process(bot, needs_ai_analysis, **_kwargs):
+            process_calls.append(bot.id)
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return [due_bot, not_due_bot]
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch.object(monitor, "_process_single_bot", side_effect=_track_process), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        assert due_bot.id in process_calls
+        assert not_due_bot.id not in process_calls
+
+    @pytest.mark.asyncio
+    async def test_staggers_first_iteration_when_many_bots(self, db_session):
+        """Edge case: first iteration with >5 bots and empty _bot_next_check
+        staggers bots in groups of 5 every 2s to avoid DB contention."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+        monitor._bot_next_check = {}  # empty = first iteration
+
+        bots = [_make_bot(bot_id=i, name=f"B{i}") for i in range(1, 12)]  # 11 bots
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return bots
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch.object(monitor, "_process_single_bot", new_callable=AsyncMock), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        # All 11 bots got scheduled entries
+        assert len(monitor._bot_next_check) == 11
+        # First 5 bots scheduled immediately (delay = 0), next 5 at +2s, 11th at +4s
+        timestamps = sorted(monitor._bot_next_check.values())
+        # Three distinct stagger groups: 0s, 2s, 4s offsets
+        unique_offsets = len(set(t - timestamps[0] for t in timestamps))
+        assert unique_offsets == 3
+
+    @pytest.mark.asyncio
+    async def test_adjusts_concurrency_when_capacity_changes(self, db_session):
+        """Dynamic concurrency branch: when compute_dynamic_concurrency
+        returns different values than cached, monitor rebuilds the
+        bot semaphore and logs the adjustment."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+        # Seed with known starting concurrency
+        monitor._bot_concurrency = 3
+        monitor._pair_concurrency = 5
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return []
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch("app.multi_bot_monitor.compute_dynamic_concurrency", return_value=(7, 9)), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        assert monitor._bot_concurrency == 7
+        assert monitor._pair_concurrency == 9
+        # Semaphore rebuilt with new bot concurrency value
+        assert isinstance(monitor._bot_semaphore, asyncio.Semaphore)
+
+    @pytest.mark.asyncio
+    async def test_scheduling_error_on_one_bot_does_not_break_loop(self, db_session):
+        """Failure case: if per-bot scheduling logic throws, the bot is
+        skipped (logged) but other bots still get processed and the loop
+        continues normally."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+
+        good_bot = _make_bot(bot_id=1, name="Good")
+        bad_bot = _make_bot(bot_id=2, name="Bad")
+        # Sabotage calculate_bot_check_interval by making strategy_config
+        # non-dict — a TypeError will raise inside the scheduling try block.
+        bad_bot.strategy_config = "not-a-dict"
+
+        process_calls = []
+
+        async def _track_process(bot, needs_ai_analysis, **_kwargs):
+            process_calls.append(bot.id)
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return [good_bot, bad_bot]
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch.object(monitor, "_process_single_bot", side_effect=_track_process), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        assert good_bot.id in process_calls
+        assert bad_bot.id not in process_calls
+
+    @pytest.mark.asyncio
+    async def test_prunes_caches_for_inactive_bots(self, db_session):
+        """Cache hygiene: stale entries for bots/pairs no longer active
+        are removed from _previous_indicators_cache, _bot_next_check,
+        and _candle_cache each iteration."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+
+        active_bot = _make_bot(bot_id=1, name="Active", product_ids=["ETH-BTC"])
+        current_ts = int(datetime.utcnow().timestamp())
+
+        # Seed caches with stale entries that no active bot references
+        monitor._previous_indicators_cache = {
+            (1, "ETH-BTC"): "keep-me",
+            (99, "OLD-PAIR"): "drop-me",  # bot 99 not active
+        }
+        monitor._bot_next_check = {
+            1: current_ts - 10,     # active bot, past due
+            77: current_ts + 500,   # deleted bot
+        }
+        monitor._candle_cache = {
+            "ETH-BTC:ONE_HOUR": "keep",
+            "DEAD-PAIR:ONE_HOUR": "drop",
+        }
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return [active_bot]
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch.object(monitor, "_process_single_bot", new_callable=AsyncMock), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            self._mock_session_maker(mock_sm, db_session)
+            await monitor.monitor_loop()
+
+        # Stale entries dropped
+        assert (99, "OLD-PAIR") not in monitor._previous_indicators_cache
+        assert 77 not in monitor._bot_next_check
+        assert "DEAD-PAIR:ONE_HOUR" not in monitor._candle_cache
+        # Active entries retained
+        assert (1, "ETH-BTC") in monitor._previous_indicators_cache
+        assert "ETH-BTC:ONE_HOUR" in monitor._candle_cache
+
+    @pytest.mark.asyncio
+    async def test_outer_exception_logged_and_loop_continues(self, db_session):
+        """Failure case: if async_session_maker itself raises, the outer
+        try/except catches it, sleeps, and the loop continues. We flip
+        running=False on the second call so the test terminates."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+        call_count = {"n": 0}
+
+        def _flaky_session_maker():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("database exploded")
+            # Second iteration: flip running off and return a normal ctx mgr
+            monitor.running = False
+            ctx = MagicMock()
+            ctx.__aenter__ = AsyncMock(return_value=db_session)
+            ctx.__aexit__ = AsyncMock(return_value=False)
+            return ctx
+
+        with patch("app.multi_bot_monitor.async_session_maker", side_effect=_flaky_session_maker), \
+             patch.object(monitor, "get_active_bots", new_callable=AsyncMock, return_value=[]), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            await monitor.monitor_loop()
+
+        # Reached iteration 2 → outer except branch worked
+        assert call_count["n"] == 2

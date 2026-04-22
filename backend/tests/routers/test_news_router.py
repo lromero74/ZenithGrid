@@ -7,7 +7,7 @@ seen/unseen marking, and cache stats.
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -1051,3 +1051,123 @@ class TestGetVideosFromDbRouter:
         assert result["total_items"] == 0
         assert result["videos"] == []
         assert len(result["sources"]) == 1
+
+
+class TestGetVideosForUserPostgresDialect:
+    """Tests for get_videos_for_user PostgreSQL dialect branch.
+
+    The SQL-based retention filter (news_router.py lines 120-125) only
+    activates when db.bind.dialect.name == 'postgresql'. SQLite tests
+    cannot exercise this path naturally, so we mock the dialect and the
+    execute() call to verify the PG branch unpacks rows correctly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_pg_branch_unpacks_video_retention_tuples(self):
+        """PG happy path: rows of (VideoArticle, retention_days) are
+        unpacked — the returned list contains only the videos, not the
+        retention column. The SQLite fallback's Python-side retention
+        filter is skipped."""
+        video_a = VideoArticle(
+            id=1, source_id=10, url="https://a.test/1",
+            title="A", published_at=datetime.utcnow(),
+        )
+        video_b = VideoArticle(
+            id=2, source_id=10, url="https://b.test/2",
+            title="B", published_at=datetime.utcnow(),
+        )
+
+        dialect = type("FakeDialect", (), {"name": "postgresql"})()
+        bind = type("FakeBind", (), {"dialect": dialect})()
+
+        mock_db = AsyncMock()
+        mock_db.bind = bind
+
+        result_obj = AsyncMock()
+        result_obj.all = lambda: [(video_a, 7), (video_b, None)]
+        mock_db.execute = AsyncMock(return_value=result_obj)
+
+        from app.routers.news_router import get_videos_for_user
+        result = await get_videos_for_user(mock_db, user_id=1)
+
+        assert result == [video_a, video_b]
+        mock_db.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_pg_branch_empty_result(self):
+        """PG edge case: empty result set returns empty list."""
+        dialect = type("FakeDialect", (), {"name": "postgresql"})()
+        bind = type("FakeBind", (), {"dialect": dialect})()
+
+        mock_db = AsyncMock()
+        mock_db.bind = bind
+
+        result_obj = AsyncMock()
+        result_obj.all = lambda: []
+        mock_db.execute = AsyncMock(return_value=result_obj)
+
+        from app.routers.news_router import get_videos_for_user
+        result = await get_videos_for_user(mock_db, user_id=1, category="crypto")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_sqlite_fallback_applies_python_retention(self):
+        """SQLite fallback: retention_days filter runs in Python and
+        excludes videos older than per-subscription retention window."""
+        now = datetime.utcnow()
+        fresh = VideoArticle(
+            id=1, source_id=10, url="https://fresh.test",
+            title="Fresh", published_at=now - timedelta(days=2),
+        )
+        stale = VideoArticle(
+            id=2, source_id=10, url="https://stale.test",
+            title="Stale", published_at=now - timedelta(days=10),
+        )
+        no_retention = VideoArticle(
+            id=3, source_id=10, url="https://forever.test",
+            title="Forever", published_at=now - timedelta(days=30),
+        )
+
+        dialect = type("FakeDialect", (), {"name": "sqlite"})()
+        bind = type("FakeBind", (), {"dialect": dialect})()
+
+        mock_db = AsyncMock()
+        mock_db.bind = bind
+
+        result_obj = AsyncMock()
+        result_obj.all = lambda: [
+            (fresh, 7),          # 2 days old < 7 day retention → kept
+            (stale, 7),          # 10 days old > 7 day retention → dropped
+            (no_retention, None),  # no retention → kept unconditionally
+        ]
+        mock_db.execute = AsyncMock(return_value=result_obj)
+
+        from app.routers.news_router import get_videos_for_user
+        result = await get_videos_for_user(mock_db, user_id=1)
+
+        assert fresh in result
+        assert stale not in result
+        assert no_retention in result
+
+    @pytest.mark.asyncio
+    async def test_no_bind_defaults_to_sqlite_fallback(self):
+        """Failure-case defense: if db.bind is somehow None, the function
+        falls back to the Python retention path (use_sql_retention=False)
+        rather than crashing on None.dialect."""
+        video = VideoArticle(
+            id=1, source_id=10, url="https://x.test",
+            title="X", published_at=datetime.utcnow(),
+        )
+
+        mock_db = AsyncMock()
+        mock_db.bind = None
+
+        result_obj = AsyncMock()
+        result_obj.all = lambda: [(video, None)]
+        mock_db.execute = AsyncMock(return_value=result_obj)
+
+        from app.routers.news_router import get_videos_for_user
+        result = await get_videos_for_user(mock_db, user_id=1)
+
+        assert result == [video]

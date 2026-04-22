@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.163.3] - 2026-04-22
+
+### Changed
+- **Coverage gap cleanup for multi_bot_monitor and news_router** — Eleven new tests (four + seven) fill the two paths the prior sweep explicitly deferred. `news_router.get_videos_for_user` now has tests for both the PostgreSQL SQL-retention branch (mocked dialect) and the SQLite Python-side retention fallback, pushing router coverage from 75% to 85%. `multi_bot_monitor.monitor_loop` now has tests for empty bot-list handling, due vs. not-due bot scheduling, first-iteration 5-per-2s staggering, dynamic concurrency adjustment when memory capacity changes, per-bot scheduling errors being contained to that bot, stale cache pruning across indicators/schedule/candles, and outer-exception recovery — lifting monitor coverage from 67% to 82%. No production code was modified.
+
 ## [v2.163.2] - 2026-04-22
 
 ### Changed
