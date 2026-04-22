@@ -267,15 +267,21 @@ async def seed_default_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(Perm.TEMPLATES_WRITE))
 ):
-    """Seed the database with default bot templates (one-time setup)"""
+    """Seed the database with default bot templates.
 
-    # Check if defaults already exist
+    Insert-only-missing: re-running this adds any new defaults that have been
+    introduced since the last seed, without duplicating or overwriting any
+    existing ones (users may have customized copies they don't want nuked).
+
+    When NO new templates need adding, returns a stable "already exist"
+    response so the test + frontend behaviors don't break.
+    """
+
+    # Load existing default-template names so we can skip ones already seeded.
     query = select(BotTemplate).where(BotTemplate.is_default)
     result = await db.execute(query)
     existing_defaults = result.scalars().all()
-
-    if existing_defaults:
-        return {"message": "Default templates already exist", "count": len(existing_defaults)}
+    existing_names = {t.name for t in existing_defaults}
 
     # Default bot templates (Conservative, Balanced, Aggressive)
     default_templates = [
@@ -357,11 +363,61 @@ async def seed_default_templates(
             "product_ids": [],
             "split_budget_across_pairs": False,
         },
+        # High-risk "2x in a day" catalyst hunter. Uses the indicator_based
+        # strategy so the preset's full package applies: account-level bucket
+        # cap (is_speculative tag), catalyst-mode AI prompt (speculative_mode
+        # on ai_spot_opinion), and time-based forced exit
+        # (speculative_max_hold_hours in indicator_based.should_sell).
+        #
+        # Only ai_risk_preset is set here — the rest of the discipline config
+        # (tight SL, trailing TP, 24h max hold, prefilter overrides) is merged
+        # in automatically by bot_crud_router._apply_risk_preset_defaults() on
+        # create. Keeping the template minimal also means future tuning of the
+        # preset (Phase F calibration) applies to new bots without needing to
+        # re-seed templates.
+        #
+        # See PRPs/high-risk-doubling-preset.md.
+        {
+            "name": "Speculative Catalyst Hunter",
+            "description": (
+                "HIGH RISK — hunts for 2x-in-a-day catalyst setups on "
+                "microcap and midcap pairs. Historical win rate under 20%; "
+                "typical losers close near −12% (tight stop loss). Requires "
+                "a Speculative Allocation to be set on the account under "
+                "Settings → Speculative Bucket before the bot can open "
+                "positions. All speculative bots on an account share that "
+                "cost-basis cap — winners do not expand headroom."
+            ),
+            "strategy_type": "indicator_based",
+            "strategy_config": {
+                # The preset merger fills in is_speculative, speculative_mode,
+                # target_multiple/horizon, tight SL/TP, max-hold, and
+                # prefilter overrides on bot create.
+                "ai_risk_preset": "speculative",
+                # Enable the AI Spot Opinion indicator via an ai_opinion
+                # base-order condition. Catalyst mode activates on this path
+                # because speculative_mode gets merged into the AI params.
+                "base_order_conditions": [
+                    {"type": "ai_opinion", "operator": "equals", "value": "buy"},
+                ],
+                "safety_order_conditions": [],
+                "take_profit_conditions": [],
+                "take_profit_order_type": "market",
+                # Tiny base order — the preset is about asymmetric upside, not
+                # size. Users can scale up later after they see real outcomes.
+                "base_order_type": "percentage",
+                "base_order_percentage": 1.0,
+            },
+            "product_ids": [],
+            "split_budget_across_pairs": False,
+        },
     ]
 
-    # Create templates
+    # Create only the templates that aren't already in the DB.
     created_templates = []
     for template_data in default_templates:
+        if template_data["name"] in existing_names:
+            continue
         template = BotTemplate(
             name=template_data["name"],
             description=template_data["description"],
@@ -374,6 +430,11 @@ async def seed_default_templates(
         db.add(template)
         created_templates.append(template_data["name"])
 
-    await db.commit()
+    if not created_templates:
+        return {
+            "message": "Default templates already exist",
+            "count": len(existing_defaults),
+        }
 
+    await db.commit()
     return {"message": "Default templates created successfully", "templates": created_templates}
