@@ -8,8 +8,11 @@ interface UsePositionsDataProps {
   selectedAccountId?: number
 }
 
+const ACTIVE_POSITIONS_REFETCH_INTERVAL_MS = 5000
+const IDLE_POSITIONS_REFETCH_INTERVAL_MS = 30000
+const BOTS_STALE_TIME_MS = 300000
+
 export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) => {
-  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
   const [isDocumentVisible, setIsDocumentVisible] = useState(() => document.visibilityState !== 'hidden')
 
   useEffect(() => {
@@ -28,7 +31,9 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   const { data: allPositions, refetch: refetchPositions } = useQuery({
     queryKey: ['positions', 'open', selectedAccountId],
     queryFn: () => positionsApi.getAll('open', 1000, selectedAccountId),
-    refetchInterval: 5000, // Update every 5 seconds for active deals
+    refetchInterval: (query) => ((query.state.data?.length || 0) > 0
+      ? ACTIVE_POSITIONS_REFETCH_INTERVAL_MS
+      : IDLE_POSITIONS_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false, // Stop polling when tab is hidden
     refetchOnMount: 'always', // Always fetch fresh data on mount (don't show stale cache)
     staleTime: 0, // Treat cached data as immediately stale
@@ -38,10 +43,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccountId],
     queryFn: () => botsApi.getAll(undefined, selectedAccountId),
-    refetchInterval: 10000,
-    refetchIntervalInBackground: false, // Stop polling when tab is hidden
-    refetchOnMount: 'always', // Always fetch fresh data on mount
-    staleTime: 0, // Treat cached data as immediately stale
+    staleTime: BOTS_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
   })
 
   const { price: btcUsdPrice } = useMarketPrice({
@@ -50,62 +53,52 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     staleTime: 60000,
   })
 
-  // Fetch real-time prices for all open positions
-  useEffect(() => {
-    if (!isDocumentVisible) return
+  const openPositions = useMemo(
+    () => (allPositions || []).filter((position) => position.status === 'open'),
+    [allPositions]
+  )
 
-    const abortController = new AbortController()
+  const batchPriceProducts = useMemo(
+    () => [...new Set(openPositions.map((position) => position.product_id || 'ETH-BTC'))],
+    [openPositions]
+  )
 
-    const fetchPrices = async () => {
-      if (!allPositions) return
-
-      const openPositions = allPositions.filter(p => p.status === 'open')
-      if (openPositions.length === 0) return
-
+  const { data: batchPrices = {} } = useQuery({
+    queryKey: ['position-batch-prices', selectedAccountId, batchPriceProducts],
+    enabled: isDocumentVisible && batchPriceProducts.length > 0,
+    queryFn: async ({ signal }) => {
       try {
-        // Fetch all prices in a single batch request
-        const productIds = [...new Set(openPositions.map(p => p.product_id || 'ETH-BTC'))].join(',')
         const response = await api.get('/prices/batch', {
-          params: { products: productIds },
-          signal: abortController.signal
+          params: { products: batchPriceProducts.join(',') },
+          signal,
         })
-
-        const priceMap = response.data.prices || {}
-
-        // Fill in fallback prices for positions that didn't get a price
-        openPositions.forEach(position => {
-          const productId = position.product_id || 'ETH-BTC'
-          if (!priceMap[productId]) {
-            priceMap[productId] = position.average_buy_price
-          }
-        })
-
-        setCurrentPrices(priceMap)
+        return response.data.prices || {}
       } catch (err) {
-        // Ignore abort errors (they're expected when component unmounts)
         if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.code === 'ECONNABORTED') {
-          return
+          return {}
         }
         console.error('Error fetching batch prices:', err)
-
-        // Fallback to using average buy prices
-        const fallbackPrices: Record<string, number> = {}
-        openPositions.forEach(position => {
-          const productId = position.product_id || 'ETH-BTC'
-          fallbackPrices[productId] = position.average_buy_price
-        })
-        setCurrentPrices(fallbackPrices)
+        return {}
       }
-    }
+    },
+    refetchInterval: ACTIVE_POSITIONS_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  })
 
-    fetchPrices()
-    const interval = setInterval(fetchPrices, 5000) // Update every 5 seconds
+  const currentPrices = useMemo(() => {
+    if (openPositions.length === 0) return {}
 
-    return () => {
-      clearInterval(interval)
-      abortController.abort() // Cancel any in-flight requests
-    }
-  }, [allPositions, isDocumentVisible])
+    const priceMap = { ...batchPrices }
+    openPositions.forEach((position) => {
+      const productId = position.product_id || 'ETH-BTC'
+      if (!priceMap[productId]) {
+        priceMap[productId] = position.average_buy_price
+      }
+    })
+    return priceMap
+  }, [batchPrices, openPositions])
 
   // Memoize P&L calculations to avoid recalculating on every render
   // This is a major performance optimization - reduces 5 calculations per position to 1

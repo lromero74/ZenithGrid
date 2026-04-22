@@ -11,9 +11,9 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import case, desc, func, or_, select
+from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.models import AIBotLog, AIOpinionLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
@@ -21,6 +21,7 @@ from app.auth.dependencies import get_current_user
 from app.services.account_access import accessible_account_ids
 from app.schemas import AIBotLogResponse, AIOpinionLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
+from app.constants import VALID_CATEGORIES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,11 +42,7 @@ async def get_positions(
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    # Use eager loading to avoid N+1 queries
-    query = select(Position).options(
-        selectinload(Position.trades),
-        selectinload(Position.pending_orders)
-    )
+    query = select(Position)
 
     # Get user's account IDs (owned + shared)
     user_account_ids = await accessible_account_ids(db, current_user.id)
@@ -71,10 +68,16 @@ async def get_positions(
 
     result = await db.execute(query)
     positions = result.scalars().all()
+    if not positions:
+        return []
+
+    position_ids = [pos.id for pos in positions]
+    base_symbols = {pos.product_id.split("-")[0] for pos in positions if pos.product_id}
 
     # Fetch blacklisted coins: global entries + current user's overrides
     from sqlalchemy import or_
     blacklist_query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol.in_(base_symbols),
         or_(
             BlacklistedCoin.user_id.is_(None),
             BlacklistedCoin.user_id == current_user.id,
@@ -84,9 +87,101 @@ async def get_positions(
     blacklisted_coins = blacklist_result.scalars().all()
     blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
 
+    trade_count_result = await db.execute(
+        select(
+            Trade.position_id,
+            func.count(Trade.id).label("trade_count"),
+        )
+        .where(Trade.position_id.in_(position_ids))
+        .group_by(Trade.position_id)
+    )
+    trade_count_map = {
+        row.position_id: row.trade_count
+        for row in trade_count_result
+    }
+
+    buy_bounds_subquery = (
+        select(
+            Trade.position_id.label("position_id"),
+            func.min(Trade.timestamp).label("first_buy_at"),
+            func.max(Trade.timestamp).label("last_buy_at"),
+        )
+        .where(
+            Trade.position_id.in_(position_ids),
+            Trade.side == "buy",
+        )
+        .group_by(Trade.position_id)
+        .subquery()
+    )
+
+    first_buy_trade = aliased(Trade)
+    last_buy_trade = aliased(Trade)
+    buy_price_result = await db.execute(
+        select(
+            buy_bounds_subquery.c.position_id,
+            first_buy_trade.price.label("first_buy_price"),
+            last_buy_trade.price.label("last_buy_price"),
+        )
+        .outerjoin(
+            first_buy_trade,
+            and_(
+                first_buy_trade.position_id == buy_bounds_subquery.c.position_id,
+                first_buy_trade.side == "buy",
+                first_buy_trade.timestamp == buy_bounds_subquery.c.first_buy_at,
+            ),
+        )
+        .outerjoin(
+            last_buy_trade,
+            and_(
+                last_buy_trade.position_id == buy_bounds_subquery.c.position_id,
+                last_buy_trade.side == "buy",
+                last_buy_trade.timestamp == buy_bounds_subquery.c.last_buy_at,
+            ),
+        )
+    )
+    buy_price_map = {
+        row.position_id: (row.first_buy_price, row.last_buy_price)
+        for row in buy_price_result
+    }
+
+    pending_count_result = await db.execute(
+        select(
+            PendingOrder.position_id,
+            func.count(PendingOrder.id).label("pending_count"),
+        )
+        .where(
+            PendingOrder.position_id.in_(position_ids),
+            PendingOrder.status == "pending",
+        )
+        .group_by(PendingOrder.position_id)
+    )
+    pending_count_map = {
+        row.position_id: row.pending_count
+        for row in pending_count_result
+    }
+
+    limit_order_ids = [
+        pos.limit_close_order_id
+        for pos in positions
+        if pos.closing_via_limit and pos.limit_close_order_id
+    ]
+    limit_order_map = {}
+    if limit_order_ids:
+        limit_order_result = await db.execute(
+            select(PendingOrder).where(PendingOrder.order_id.in_(limit_order_ids))
+        )
+        limit_order_map = {
+            order.order_id: order
+            for order in limit_order_result.scalars().all()
+        }
+
     # Pre-load bots for open positions (needed for computed_max_budget)
     from app.position_routers.helpers import compute_resize_budget
-    open_bot_ids = {pos.bot_id for pos in positions if pos.bot_id and pos.status == "open"}
+    open_bot_ids = {
+        pos.bot_id
+        for pos in positions
+        if pos.bot_id and pos.status == "open" and not pos.strategy_config_snapshot
+    }
     bots_map = {}
     if open_bot_ids:
         bots_result = await db.execute(select(Bot).where(Bot.id.in_(open_bot_ids)))
@@ -94,26 +189,14 @@ async def get_positions(
 
     response = []
     for pos in positions:
-        # Use eager-loaded data instead of separate queries
-        # Count trades (already loaded via selectinload)
-        trade_count = len(pos.trades)
-
-        # Count pending orders (already loaded via selectinload)
-        pending_count = len([o for o in pos.pending_orders if o.status == "pending"])
-
-        # Get first/last buy prices using min/max instead of sorting
-        buy_trades = [t for t in pos.trades if t.side == "buy"]
-
         pos_response = PositionResponse.model_validate(pos)
-        pos_response.trade_count = trade_count
-        pos_response.pending_orders_count = pending_count
+        pos_response.trade_count = trade_count_map.get(pos.id, 0)
+        pos_response.pending_orders_count = pending_count_map.get(pos.id, 0)
 
         # Set first/last buy prices for DCA reference
-        if buy_trades:
-            earliest = min(buy_trades, key=lambda t: t.timestamp)
-            latest = max(buy_trades, key=lambda t: t.timestamp)
-            pos_response.first_buy_price = earliest.price
-            pos_response.last_buy_price = latest.price
+        first_buy_price, last_buy_price = buy_price_map.get(pos.id, (None, None))
+        pos_response.first_buy_price = first_buy_price
+        pos_response.last_buy_price = last_buy_price
 
         # Attach coin category from blacklist (category is embedded in reason prefix)
         base_symbol = pos.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
@@ -122,7 +205,6 @@ async def get_positions(
             pos_response.is_blacklisted = True
             pos_response.blacklist_reason = reason
             # Extract category tag from reason prefix (e.g., "[APPROVED] good coin" → "APPROVED")
-            from app.constants import VALID_CATEGORIES
             for cat in VALID_CATEGORIES:
                 if reason and reason.startswith(f"[{cat}]"):
                     pos_response.coin_category = cat
@@ -139,11 +221,7 @@ async def get_positions(
 
         # If position is closing via limit, fetch order details (already loaded)
         if pos.closing_via_limit and pos.limit_close_order_id:
-            # Find the limit order from already-loaded pending_orders
-            limit_order = next(
-                (o for o in pos.pending_orders if o.order_id == pos.limit_close_order_id),
-                None
-            )
+            limit_order = limit_order_map.get(pos.limit_close_order_id)
 
             if limit_order:
                 fills_data: List = (

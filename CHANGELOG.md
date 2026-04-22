@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.10] - 2026-04-22
+
+### Changed
+- **Open positions polling now spends its hottest refresh budget only where it matters** — The Positions page now polls open deals adaptively: active deals stay on a 5-second cadence, but accounts with no open positions back off to 30 seconds. Bot metadata on that page is no longer kept on its own 10-second polling loop, and the `/prices/batch` refresh is now driven by React Query instead of a separate manual timer. The page also slowed its secondary summary widgets (completed stats, realized PnL, balances) to a 2-minute cadence and only polls the currently visible tab on the Closed Positions page.
+- **Each `GET /api/positions` refresh does less backend work** — The hot list endpoint no longer hydrates every position’s full `trades` and `pending_orders` collections just to build the list view. It now uses aggregate queries for trade counts, first/last buy prices, and pending-order counts, and only looks up the specific limit-close orders needed for rows that are actively closing via limit. The route also scopes blacklist lookups to just the symbols on the current page and only loads bot configs for positions that cannot compute resize budgets from their frozen strategy snapshot alone.
+
 ## [v2.164.9] - 2026-04-22
 
 ### Changed

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from app.models import (
-    Account, AIBotLog, BlacklistedCoin, Bot,
+    Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder,
     Position, Trade, User,
 )
 
@@ -324,6 +324,141 @@ class TestGetPositions:
         assert len(result) == 1
         assert result[0].is_blacklisted is True
         assert result[0].blacklist_reason == "Low liquidity"
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_includes_trade_counts_buy_prices_and_pending_counts(self, mock_resize, db_session):
+        """Edge case: list endpoint includes aggregated trade and pending-order fields."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "counts@example.com")
+        bot = await _create_bot(db_session, user, account, name="Counts Bot")
+        pos = await _create_position(db_session, account, bot=bot, status="open")
+
+        trades = [
+            Trade(
+                position_id=pos.id,
+                side="buy",
+                quote_amount=0.01,
+                base_amount=0.5,
+                price=0.02,
+                trade_type="initial",
+                timestamp=datetime.utcnow(),
+            ),
+            Trade(
+                position_id=pos.id,
+                side="buy",
+                quote_amount=0.01,
+                base_amount=0.55,
+                price=0.018,
+                trade_type="safety_order_1",
+                timestamp=datetime.utcnow() + timedelta(minutes=1),
+            ),
+            Trade(
+                position_id=pos.id,
+                side="sell",
+                quote_amount=0.021,
+                base_amount=1.05,
+                price=0.02,
+                trade_type="take_profit",
+                timestamp=datetime.utcnow() + timedelta(minutes=2),
+            ),
+        ]
+        db_session.add_all(trades)
+
+        pending_order = PendingOrder(
+            position_id=pos.id,
+            bot_id=bot.id,
+            order_id="pending-1",
+            product_id=pos.product_id,
+            side="BUY",
+            order_type="LIMIT",
+            limit_price=0.017,
+            quote_amount=0.01,
+            base_amount=0.58,
+            trade_type="safety_order_2",
+            status="pending",
+        )
+        db_session.add(pending_order)
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].trade_count == 3
+        assert result[0].pending_orders_count == 1
+        assert result[0].first_buy_price == pytest.approx(0.02)
+        assert result[0].last_buy_price == pytest.approx(0.018)
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_includes_limit_order_details_without_loading_all_pending_orders(self, mock_resize, db_session):
+        """Happy path: list endpoint still returns limit-close details for active limit closes."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "limitclose@example.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(
+            db_session,
+            account,
+            bot=bot,
+            status="open",
+            closing_via_limit=True,
+            limit_close_order_id="limit-close-123",
+        )
+
+        pending_order = PendingOrder(
+            position_id=pos.id,
+            bot_id=bot.id,
+            order_id="limit-close-123",
+            product_id=pos.product_id,
+            side="SELL",
+            order_type="LIMIT",
+            limit_price=0.03,
+            quote_amount=0.02,
+            base_amount=1.0,
+            trade_type="take_profit",
+            status="partially_filled",
+            remaining_base_amount=0.4,
+            fills=[
+                {
+                    "price": 0.03,
+                    "base_amount": 0.6,
+                    "quote_amount": 0.018,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            ],
+        )
+        db_session.add(pending_order)
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].limit_order_details is not None
+        assert result[0].limit_order_details.limit_price == pytest.approx(0.03)
+        assert result[0].limit_order_details.filled_amount == pytest.approx(0.6)
+        assert result[0].limit_order_details.fill_percentage == pytest.approx(60.0)
 
 
 # =============================================================================

@@ -13,12 +13,12 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true — state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag"
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true — state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag. v2.164.10: secondary summary widgets now refresh every 2 minutes instead of every minute, while the main open-deals feed remains adaptive."
     },
     {
       "file": "pages/ClosedPositions.tsx",
       "route": "/history",
-      "purpose": "Closed and failed positions with trade history, AI logs, statistics. Uses shared useMarketPrice(BTC-USD) for BTC conversion display, scopes closed-position fetches by selected account_id server-side, and now scopes supporting bot-list fetches by account as well."
+      "purpose": "Closed and failed positions with trade history, AI logs, statistics. Uses shared useMarketPrice(BTC-USD) for BTC conversion display, scopes closed-position fetches by selected account_id server-side, and now scopes supporting bot-list fetches by account as well. v2.164.10: only the visible tab's backing query polls, so the page no longer refreshes closed positions and failed orders in parallel."
     },
     {
       "file": "pages/Portfolio.tsx",
@@ -725,7 +725,7 @@
         },
         {
           "file": "pages/positions/hooks/usePositionsData.ts",
-          "purpose": "Fetch positions, bots, prices, calculate P&L. Scopes open positions and bot lists by selected account_id, reads BTC-USD from shared useMarketPrice(), deduplicates product IDs before /prices/batch requests, and skips the custom batch-price polling loop while the document is hidden."
+          "purpose": "Fetch positions, bots, prices, calculate P&L. Scopes open positions and bot lists by selected account_id, reads BTC-USD from shared useMarketPrice(), deduplicates product IDs before /prices/batch requests, and skips polling while the document is hidden. v2.164.10: batch prices are fetched through React Query instead of a manual timer, open-position polling backs off from 5s to 30s when there are no active deals, and bot metadata uses a long stale window instead of a hot polling loop."
         }
       ],
       "news": [

@@ -36,6 +36,15 @@ Implemented on the follow-up branch:
 - stop Dashboard open/closed position polling while the tab is hidden
 - dedupe repeated product IDs before positions-page batch price requests
 - stop the positions page's custom batch price polling loop while the tab is hidden
+- stop `Positions.tsx` summary/balance polling queries from refreshing in hidden tabs or on window focus
+- stop Closed Positions failed-order polling from refreshing in hidden tabs or on window focus
+- only poll the active tab on Closed Positions instead of refreshing both closed and failed datasets in parallel
+- slow the Positions page's secondary summary queries (completed stats, realized PnL, balances) to a 2-minute cadence with non-zero staleness since open positions already refresh every 5 seconds
+- replace the positions page's custom `setInterval` batch-price loop with a React Query-managed `/prices/batch` query keyed by the deduplicated open product list
+- back off the open-positions polling interval from 5s to 30s when the account currently has no open deals, while keeping 5s polling for active deals
+- remove the positions page's 10-second bot-metadata polling loop; bot labels/filters now use a long stale window instead of live polling
+- trim the backend `GET /positions` hot path by replacing eager-loaded `trades` and `pending_orders` collections with aggregate queries for trade counts / first-buy / last-buy / pending counts, plus targeted lookup only for active limit-close orders
+- scope the `GET /positions` blacklist query to just the symbols on the current page of results, and only preload bots for resize-budget calculation when a position lacks a strategy snapshot
 - centralize BTC/USD and ETH/USD market-price fetch policy in a shared `useMarketPrice()` hook
 - switch `App`, `ClosedPositions`, and the positions hook to the shared market-price hook
 - add `frontend/src/pages/Dashboard.test.tsx` coverage for deferred query behavior
@@ -57,7 +66,13 @@ That means follow-up work should target startup request volume and polling press
 This latest pass trims one more avoidable source of overfetch:
 - account-specific bot views no longer need full cross-account bot payloads just to throw most of them away client-side
 - the positions page no longer keeps its manual batch price interval running in hidden tabs
-- the remaining high-frequency pressure is now more about polling cadence and duplicated refresh loops than raw response size
+- the remaining 30s/60s page-level polling queries on Positions and Closed Positions now follow the same hidden-tab / no-focus-refresh policy as the earlier Dashboard cleanup
+- Closed Positions no longer refreshes both tabs' backing datasets at once
+- the open positions screen now uses one React Query polling model for both position rows and deduplicated batch prices instead of mixing React Query with a separate manual timer
+- the open positions screen now only stays on a 5-second cadence when there are actually active deals to watch
+- each active-deals refresh is now lighter on the backend because the positions list endpoint no longer hydrates every trade and pending order row just to compute summary fields for the list
+- the positions hot path also no longer pulls unrelated blacklist rows or unnecessary bot configs for positions that can compute their budget from the frozen snapshot alone
+- the remaining high-frequency pressure is now concentrated mostly in the necessity of the active-deals 5-second refresh itself rather than in auxiliary summary queries, bot metadata churn, duplicate timer infrastructure, avoidable ORM overfetch, or broad supporting lookups
 
 ---
 

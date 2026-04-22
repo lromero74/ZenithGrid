@@ -153,6 +153,55 @@ describe('usePositionsData', () => {
     })
   })
 
+  test('backs off open-position polling when there are no active deals', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
+
+    const positionsQuery = qc.getQueryCache().find({ queryKey: ['positions', 'open', undefined] })
+    const observerOptions = positionsQuery?.observers[0]?.options as any
+
+    expect(typeof observerOptions.refetchInterval).toBe('function')
+    expect(observerOptions.refetchInterval(positionsQuery)).toBe(30000)
+  })
+
+  test('keeps fast open-position polling when active deals exist', async () => {
+    vi.mocked(positionsApi.getAll).mockResolvedValue([
+      {
+        id: 1, status: 'open', bot_id: 1, product_id: 'ETH-USD',
+        opened_at: '2025-01-01T00:00:00Z', closed_at: null,
+        initial_quote_balance: 100, max_quote_allowed: 200,
+        total_quote_spent: 50, total_base_acquired: 0.5,
+        average_buy_price: 2000, sell_price: null,
+        total_quote_received: null, profit_quote: null,
+        profit_percentage: null, trade_count: 1,
+      },
+    ] as any)
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
+
+    await waitFor(() => {
+      expect(positionsApi.getAll).toHaveBeenCalled()
+    })
+
+    const positionsQuery = qc.getQueryCache().find({ queryKey: ['positions', 'open', undefined] })
+    const observerOptions = positionsQuery?.observers[0]?.options as any
+
+    expect(observerOptions.refetchInterval(positionsQuery)).toBe(5000)
+  })
+
+  test('does not keep bot metadata on a hot polling loop', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
+
+    const botsQuery = qc.getQueryCache().find({ queryKey: ['bots', undefined] })
+    const observerOptions = botsQuery?.observers[0]?.options as any
+
+    expect(observerOptions.refetchInterval).toBeUndefined()
+    expect(observerOptions.staleTime).toBe(300000)
+    expect(observerOptions.refetchOnWindowFocus).toBe(false)
+  })
+
   test('deduplicates product ids before requesting batch prices', async () => {
     vi.mocked(positionsApi.getAll).mockResolvedValue([
       {
@@ -248,8 +297,8 @@ describe('usePositionsData', () => {
 
     const queries = qc.getQueryCache().getAll()
 
-    // Find all high-frequency queries (≤30s interval) registered on their observers.
-    // These are the ones most impactful when running in background (5s positions, 10s bots).
+    // Find all high-frequency numeric queries (≤30s interval) registered on their observers.
+    // These are the ones most impactful when running in background.
     const highFrequencyObserverOptions = queries.flatMap(q =>
       q.observers
         .map((obs: any) => obs.options)
