@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Brain, ChevronDown, ChevronUp, Wrench } from 'lucide-react'
-import axios from 'axios'
 import { positionsApi } from '../../../services/api'
 import { formatDateTime } from '../../../utils/dateFormat'
 import type { AIOpinionLog, AIToolCall } from '../../../types'
@@ -27,19 +26,17 @@ export function AIReasoningExpander({ positionId }: Props) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set())
 
   // Prefetch once so the component can hide itself entirely when there are no
-  // tool calls to surface (single-shot fallback — PRP Phase E).
+  // tool calls to surface (single-shot fallback — PRP Phase E). The endpoint
+  // returns null when no opinion is logged yet, so we don't need special 404
+  // handling here.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         const data = await positionsApi.getAIOpinion(positionId)
         if (!cancelled) setOpinion(data)
-      } catch (err) {
-        // 404 = no opinion logged yet; other errors treated the same so the
-        // UI stays quiet rather than alarming for a non-critical audit widget.
-        if (!(axios.isAxiosError(err) && err.response?.status === 404)) {
-          void err
-        }
+      } catch {
+        // Non-critical audit widget — stay quiet on any fetch error.
       } finally {
         if (!cancelled) setFetched(true)
       }
