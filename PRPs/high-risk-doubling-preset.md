@@ -513,28 +513,273 @@ Implementation: locate the AI log component (`frontend/src/components/...` — g
 
 ---
 
+### Phase F — Calibration Alert Monitor
+
+**Motivation**: The signal weights in `speculative_signals.py` are educated guesses until we have real outcomes to calibrate against. Rather than relying on the user to remember to check, a background monitor watches for "enough data accumulated + meaningful component divergence" and alerts the account owner by email + in-app toast. **The email must contain a self-sufficient re-engagement prompt** because by the time it fires (likely weeks or months later), the Claude session that originally shipped the preset will have long-since lost context.
+
+**Task F1 — Account model: alert cooldown timestamp**
+
+Add to `trading.accounts`:
+```
+speculative_calibration_last_alerted_at  TIMESTAMP NULL
+```
+Combine into migration `082_speculative_bucket.py` (single migration for all Phase A + F account columns). Idempotent add-column.
+
+**Task F2 — Calibration analysis helper**
+
+New function in `backend/app/services/speculative_bucket_service.py` (co-located — same domain):
+```python
+async def analyze_speculative_calibration(
+    db: AsyncSession, user_id: int,
+) -> dict | None:
+    """Return an analysis dict if the user has enough data AND there is
+    component-level divergence worth alerting on. Returns None otherwise.
+
+    Shape:
+    {
+        "total_closed": 67,
+        "wins": 9,
+        "losses": 58,
+        "overall_win_rate_pct": 13.4,
+        "overall_realized_pnl_usd": -127.40,
+        "components": [
+            {"name": "volume_surge",          "fires": 52, "win_rate_pct": 19.2},
+            {"name": "compression_breakout",  "fires": 41, "win_rate_pct": 17.1},
+            ...
+        ],
+        "top_component": "volume_surge",
+        "bottom_component": "correlation_break",
+        "divergence_pp": 15.2,
+    }
+    """
+```
+
+Thresholds (all must hold to return a non-None analysis):
+- ≥50 closed positions from speculative-tagged bots with non-null `doubling_probability_score` in `ai_opinion_log`
+- At least one component with ≥30 fires
+- `top_component.win_rate - bottom_component.win_rate >= 20.0` percentage points
+
+Tests (`backend/tests/services/test_speculative_calibration.py`):
+- Happy path: enough data + divergence → returns analysis dict with correct shape.
+- Not enough data (40 positions) → returns None.
+- Enough data but flat components (all within 5pp) → returns None.
+- Ignores non-speculative bot positions.
+- Multi-user isolation: user A's data never contaminates user B's analysis.
+
+**Task F3 — Monitor background task**
+
+New file: `backend/app/services/speculative_calibration_monitor.py`
+
+Pattern: mirror `backend/app/services/prop_guard_monitor.py` (periodic async loop, one check per interval, per-user processing, started from `main.py` startup hook).
+
+```python
+CHECK_INTERVAL_SECONDS = 24 * 3600   # once per day
+COOLDOWN_DAYS = 30                    # don't re-alert more often than this
+
+async def run_speculative_calibration_monitor():
+    """Periodic background task — loops forever."""
+    while True:
+        try:
+            await _run_one_pass()
+        except Exception:
+            logger.exception("speculative_calibration_monitor pass failed")
+        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+
+async def _run_one_pass():
+    """One pass: iterate users with speculative-tagged bots, check each."""
+    # Find users who have at least one speculative-tagged bot
+    # For each user:
+    #   - Check cooldown via Account.speculative_calibration_last_alerted_at
+    #   - Call analyze_speculative_calibration(db, user_id)
+    #   - If analysis is non-None: send email + toast, update timestamp
+```
+
+Tests (`backend/tests/services/test_speculative_calibration_monitor.py`):
+- Cooldown respected: user alerted 10 days ago is skipped; user alerted 40 days ago is re-checked.
+- Users without speculative bots are skipped (no cost).
+- Email send failure does not set the cooldown timestamp (so next pass retries).
+- Toast broadcast failure does not set the cooldown timestamp.
+- On success, both email + toast are sent and timestamp is updated.
+
+Wire up in `backend/app/main.py` startup hook alongside the other monitors.
+
+**Task F4 — Email template with self-sufficient re-engagement prompt**
+
+New template: `backend/app/email_templates/speculative_calibration.html` (or wherever current templates live — locate via `grep -rln "speculative_preset\|TemplateResponse" backend/app/services/email_service.py`).
+
+The email MUST include a copy-pasteable prompt block that a fresh Claude Code session can act on without any prior context. Use a fenced verbatim block the user can copy whole.
+
+Email body (render with the analysis dict):
+
+```
+Subject: ZenithGrid — Time to review speculative preset weights
+
+Hi {user_first_name},
+
+Your speculative bot preset has accumulated enough closed positions that
+it's worth revisiting the signal weights. The signal weights in
+speculative_signals.py were educated guesses at ship time; this alert
+fires once we have enough data to calibrate them against real outcomes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total closed speculative positions:   {total_closed}
+Overall win rate:                     {overall_win_rate_pct}%  ({wins}W / {losses}L)
+Overall realized PnL:                 ${overall_realized_pnl_usd:+.2f}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPONENT PERFORMANCE (fires / win rate)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{for c in components (sorted by win_rate_pct desc):}
+  {c.name:<24} {c.fires:>4} fires    {c.win_rate_pct:>5.1f}%
+{endfor}
+
+Gap between top ({top_component}) and bottom ({bottom_component}):
+  {divergence_pp:.1f} percentage points
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TO ACT ON THIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open a new Claude Code session at /home/ec2-user/ZenithGrid and
+paste the block below. It is self-contained — Claude will have
+no memory of the original preset design, but this prompt has
+everything needed to recalibrate.
+
+━━━━━ COPY EVERYTHING BELOW THIS LINE ━━━━━
+
+I received a speculative preset calibration alert from ZenithGrid.
+I want to review and adjust the signal weights in
+`backend/app/indicators/speculative_signals.py` based on accumulated
+outcome data in `ai_opinion_log`.
+
+Reference: `PRPs/high-risk-doubling-preset.md` (Phase F — Calibration
+Alert Monitor). The monitor fires when ≥50 closed speculative positions
+have accumulated and component win rates diverge by ≥20 percentage
+points.
+
+Current snapshot from the alert:
+- Total closed speculative positions: {total_closed}
+- Overall win rate: {overall_win_rate_pct}%
+- Top component: {top_component} ({top_win_rate_pct}% win rate)
+- Bottom component: {bottom_component} ({bottom_win_rate_pct}% win rate)
+- Divergence: {divergence_pp:.1f} percentage points
+
+Please do this, in order:
+
+1. Re-verify the numbers in the alert by querying `ai_opinion_log`
+   joined to `trading.positions` for my user_id
+   (user_id={user_id}), filtered to:
+     - speculative-tagged bots (bot.strategy_config->>'is_speculative' = 'true')
+     - closed positions (positions.status = 'closed')
+     - non-null doubling_probability_score
+   For each weight component in `speculative_signals.py::WEIGHTS`, compute
+   fire_count (how often it contributed to the score) and win_rate
+   (wins = position.profit_percentage > 0).
+
+2. Propose weight adjustments to the `WEIGHTS` dict in
+   `backend/app/indicators/speculative_signals.py`:
+     - Lower weights of components whose win rate is materially below
+       the overall win rate (>5pp below).
+     - Raise weights of top performers (>5pp above overall win rate).
+     - Preserve the invariant that weights sum to 100.
+     - Do NOT change the scorer logic, the prefilter, or the LLM prompt
+       — only the weights dict.
+
+3. Show me a before/after weights diff and a one-line reason per change.
+
+4. Add or update a test in
+   `backend/tests/indicators/test_speculative_signals.py` that asserts
+   the new weights sum to 100 and that at least one weight changed.
+
+5. Write a CHANGELOG entry under the next patch version.
+
+6. Stop after the weights change and tests pass — do not ship (no
+   tag, no push, no deploy). I want to review before `/shipit`.
+
+If the query shows the alert was noisy (no real divergence, or
+sample size was lower than I claimed), say so and recommend
+dismissing the alert instead of adjusting weights.
+
+━━━━━ COPY EVERYTHING ABOVE THIS LINE ━━━━━
+
+If you want to silence this alert without acting on it, reply to
+this email with "dismiss" (or click: {dismiss_url}) — the cooldown
+will reset to 30 days.
+
+— ZenithGrid
+```
+
+Tests (`backend/tests/services/test_speculative_calibration_email.py`):
+- Render with a full analysis dict produces a message containing "COPY EVERYTHING BELOW THIS LINE" and "COPY EVERYTHING ABOVE THIS LINE" (sanity: the copy-paste markers exist).
+- Rendered email references the correct filename (`speculative_signals.py`) and the correct PRP path.
+- Rendered email contains the specific numbers from the analysis dict (no template holes).
+- Rendered email includes a valid `dismiss_url` signed with a short-lived token.
+
+**Task F5 — Toast notification**
+
+Broadcast via `WebSocketManager.broadcast(user_id, event)`. New event type:
+```typescript
+{ type: 'speculative_calibration_alert', payload: { total_closed, overall_win_rate_pct, divergence_pp, dismiss_url } }
+```
+
+Frontend (Phase D or deferred): `NotificationContext` adds a toast handler that renders a persistent (non-auto-dismiss) toast with a "Review in email" CTA. Reason for non-auto-dismiss: this is an action item, not a status update.
+
+Tests: see the existing `NotificationContext` toast handler tests as a pattern.
+
+**Task F6 — Dismiss endpoint**
+
+`POST /api/accounts/{id}/speculative-calibration/dismiss` — authenticated; verifies the `dismiss_token` query param matches; sets `speculative_calibration_last_alerted_at = now` (extending the cooldown by another 30 days without actually sending an alert).
+
+Tests: happy path dismisses; invalid/expired token 403; cross-user access 403.
+
+**Phase F deliverables checklist**:
+- [ ] Combined migration (082) includes both `speculative_allocation_pct` and `speculative_calibration_last_alerted_at`
+- [ ] `analyze_speculative_calibration()` in `speculative_bucket_service.py`
+- [ ] `speculative_calibration_monitor.py` periodic task
+- [ ] Monitor wired into `main.py` startup
+- [ ] Email template (HTML + plain-text) with copy-paste re-engagement prompt
+- [ ] Toast broadcast on alert send
+- [ ] Dismiss endpoint + token signing
+- [ ] Tests for each unit
+
+**Phase F depends on Phase B** (component breakdown must be stored in `ai_opinion_log` for the analysis to work). The monitor code can be written any time, but its `analyze_speculative_calibration()` query must match the Phase B log shape exactly.
+
+---
+
 ## File-Level Plan
 
 ### Backend (new)
-- `backend/migrations/082_speculative_bucket.py`
-- `backend/app/services/speculative_bucket_service.py`
+- `backend/migrations/082_speculative_bucket.py` (covers Phase A `speculative_allocation_pct` and Phase F `speculative_calibration_last_alerted_at`)
+- `backend/app/services/speculative_bucket_service.py` (bucket math + `analyze_speculative_calibration()`)
+- `backend/app/services/speculative_calibration_monitor.py` (Phase F periodic task)
 - `backend/app/indicators/speculative_signals.py`
+- `backend/app/email_templates/speculative_calibration.html` (+ plain-text if required by `email_service.py`)
 - `backend/tests/services/test_speculative_bucket_service.py`
+- `backend/tests/services/test_speculative_calibration.py` (analysis helper)
+- `backend/tests/services/test_speculative_calibration_monitor.py` (Phase F monitor)
+- `backend/tests/services/test_speculative_calibration_email.py` (Phase F email template)
 - `backend/tests/indicators/test_speculative_signals.py`
 - `backend/tests/indicators/test_ai_spot_opinion_catalyst.py`
 - `backend/tests/indicators/test_risk_presets.py`
 - `backend/tests/routers/test_speculative_bucket_router.py`
+- `backend/tests/routers/test_speculative_calibration_dismiss.py`
 - `backend/tests/migrations/test_082_speculative_bucket.py`
 - `backend/tests/bot_routers/test_bot_crud_speculative.py`
 
 ### Backend (modified)
-- `backend/app/models/trading.py` — add `speculative_allocation_pct` to `Account`
+- `backend/app/models/trading.py` — add `speculative_allocation_pct` AND `speculative_calibration_last_alerted_at` to `Account`
 - `backend/app/indicators/risk_presets.py` — add "speculative" entry
-- `backend/app/indicators/ai_spot_opinion.py` — extend params, metrics, prefilter, prompt
+- `backend/app/indicators/ai_spot_opinion.py` — extend params, metrics, prefilter, prompt; persist component breakdown into `ai_opinion_log` (needed by Phase F analysis)
 - `backend/app/strategies/indicator_based.py` — time-based max-hold exit in `should_sell`
 - `backend/app/trading_engine/signal_processor/buy_decision.py` — preflight bucket check
-- `backend/app/routers/accounts_query_router.py` — new bucket endpoint, optionally new pydantic field
+- `backend/app/routers/accounts_query_router.py` — new bucket endpoint, calibration dismiss endpoint
 - `backend/app/bot_routers/bot_crud_router.py` — merge preset defaults on create/update
+- `backend/app/main.py` — start Phase F monitor in the startup hook
+- `backend/app/services/email_service.py` — new send method for calibration alerts (or reuse existing with new template)
 - `backend/tests/strategies/test_indicator_based.py` — add time-based exit tests
 - `backend/tests/trading_engine/test_buy_decision.py` — add preflight tests (or new file)
 

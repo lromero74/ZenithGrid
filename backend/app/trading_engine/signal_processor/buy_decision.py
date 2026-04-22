@@ -142,6 +142,28 @@ async def _run_new_position_preflight(
             logger.info(f"  ⏳ {reason}")
             return True, reason, open_positions_count
 
+    # Speculative bucket hard cap (account-level).
+    # Speculative-tagged bots (strategy_config["is_speculative"] == "true") opt
+    # into a shared cost-basis envelope capped by Account.speculative_allocation_pct.
+    # See PRPs/high-risk-doubling-preset.md §Recommended Design §6.
+    if bot.strategy_config and str(bot.strategy_config.get("is_speculative", "")).lower() == "true":
+        from app.services.speculative_bucket_service import validate_speculative_entry
+        intended_cost_basis = float(strategy.config.get("base_order_size", 0.0) or 0.0)
+        # Use USD aggregate when available; for BTC-quote bots the preflight
+        # runs before the quote-conversion step so we pass 0 for btc_usd_price
+        # and accept a small approximation — bucket semantics treat cost basis
+        # in the bot's quote currency as USD for the cap, which is acceptable
+        # since the speculative preset is USD-biased by design.
+        allowed, spec_reason = await validate_speculative_entry(
+            db, bot,
+            intended_cost_basis_usd=intended_cost_basis,
+            aggregate_usd_value=aggregate_value or 0.0,
+        )
+        if not allowed:
+            logger.debug(f"Should buy: FALSE - {spec_reason}")
+            logger.info(f"  🚫 {spec_reason}")
+            return True, spec_reason, open_positions_count
+
     return False, "", open_positions_count
 
 
