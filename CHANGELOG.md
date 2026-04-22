@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.9] - 2026-04-22
+
+### Changed
+- **Account-scoped bot views stop overfetching cross-account data** — The Dashboard, Closed Positions page, and open positions hook were still loading the full bot list and filtering it client-side when an account was selected. `GET /api/bots/` now accepts `account_id`, verifies that the caller can access that account, and returns only the relevant bots. Those frontend views now pass the selected account through, which trims response payloads and removes a chunk of wasted work on account-specific screens.
+- **Positions page stops background batch-price polling in hidden tabs** — Even after the React Query polling cleanup in `v2.164.8`, the positions page still had a manual `setInterval(..., 5000)` loop for `/prices/batch` that kept running while the tab was hidden. That custom price-refresh loop now pauses when the document is hidden, cutting unnecessary frontend and backend churn when users switch away from the tab.
+
 ## [v2.164.8] - 2026-04-22
 
 ### Changed

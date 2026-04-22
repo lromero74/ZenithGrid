@@ -50,12 +50,7 @@ function ClosedPositions() {
 
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
-    queryFn: () => botsApi.getAll(),
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
-    },
+    queryFn: () => botsApi.getAll(undefined, selectedAccount?.id),
   })
 
   const { data: allPositions, isLoading } = useQuery({

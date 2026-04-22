@@ -421,9 +421,12 @@ export const botsApi = {
     api.get<StrategyDefinition[]>('/strategies/').then((res) => res.data),
   getStrategy: (strategyId: string) =>
     api.get<StrategyDefinition>(`/strategies/${strategyId}`).then((res) => res.data),
-  getAll: (projectionTimeframe?: string) => {
-    const params = projectionTimeframe ? `?projection_timeframe=${projectionTimeframe}` : ''
-    return api.get<Bot[]>(`/bots/${params}`).then((res) => res.data)
+  getAll: (projectionTimeframe?: string, accountId?: number) => {
+    const searchParams = new URLSearchParams()
+    if (projectionTimeframe) searchParams.set('projection_timeframe', projectionTimeframe)
+    if (accountId != null) searchParams.set('account_id', String(accountId))
+    const queryString = searchParams.toString()
+    return api.get<Bot[]>(`/bots/${queryString ? `?${queryString}` : ''}`).then((res) => res.data)
   },
   getById: (id: number) =>
     api.get<Bot>(`/bots/${id}`).then((res) => res.data),

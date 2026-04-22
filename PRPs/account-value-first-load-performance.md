@@ -29,10 +29,13 @@ Implemented on the follow-up branch:
 - defer non-critical Dashboard queries by 2 seconds after first paint
 - keep reservations, transfer summary, prop-guard status, and per-bot stats off the initial critical path
 - keep core totals, bot list, and open/closed position counts immediate
+- add backend `account_id` support to `GET /api/bots/` with a 404 for inaccessible accounts
+- scope Dashboard, Closed Positions, and positions-page bot requests by `account_id` instead of fetching cross-account bot lists and filtering in the browser
 - scope Dashboard open/closed position requests by `account_id` instead of fetching cross-account data and filtering client-side
 - scope Closed Positions page closed-position requests by `account_id` as well
 - stop Dashboard open/closed position polling while the tab is hidden
 - dedupe repeated product IDs before positions-page batch price requests
+- stop the positions page's custom batch price polling loop while the tab is hidden
 - centralize BTC/USD and ETH/USD market-price fetch policy in a shared `useMarketPrice()` hook
 - switch `App`, `ClosedPositions`, and the positions hook to the shared market-price hook
 - add `frontend/src/pages/Dashboard.test.tsx` coverage for deferred query behavior
@@ -50,6 +53,11 @@ The next likely issue is query fan-out on the Dashboard:
 - per-bot `stats`
 
 That means follow-up work should target startup request volume and polling pressure rather than reworking the summary endpoint again.
+
+This latest pass trims one more avoidable source of overfetch:
+- account-specific bot views no longer need full cross-account bot payloads just to throw most of them away client-side
+- the positions page no longer keeps its manual batch price interval running in hidden tabs
+- the remaining high-frequency pressure is now more about polling cadence and duplicated refresh loops than raw response size
 
 ---
 

@@ -320,6 +320,52 @@ class TestListBots:
 
     @pytest.mark.asyncio
     @patch("app.bot_routers.bot_crud_router.get_coinbase_from_db", new_callable=AsyncMock, return_value=None)
+    async def test_list_bots_filters_by_account_id(self, mock_coinbase, db_session):
+        """Happy path: account_id returns only bots from the selected accessible account."""
+        from app.bot_routers.bot_crud_router import list_bots
+
+        user = _make_user(db_session)
+        db_session.add(user)
+        await db_session.flush()
+
+        account1 = Account(user_id=user.id, name="One", type="cex", is_active=True)
+        account2 = Account(user_id=user.id, name="Two", type="cex", is_active=True)
+        db_session.add_all([account1, account2])
+        await db_session.flush()
+
+        bot1 = await _make_bot(db_session, user, name="AccountOneBot")
+        bot1.account_id = account1.id
+        bot2 = await _make_bot(db_session, user, name="AccountTwoBot")
+        bot2.account_id = account2.id
+        await db_session.flush()
+
+        result = await list_bots(account_id=account1.id, db=db_session, current_user=user)
+
+        assert [bot.name for bot in result] == ["AccountOneBot"]
+
+    @pytest.mark.asyncio
+    @patch("app.bot_routers.bot_crud_router.get_coinbase_from_db", new_callable=AsyncMock, return_value=None)
+    async def test_list_bots_inaccessible_account_returns_404(self, mock_coinbase, db_session):
+        """Security: inaccessible account_id is collapsed into 404."""
+        from fastapi import HTTPException
+        from app.bot_routers.bot_crud_router import list_bots
+
+        owner = _make_user(db_session, email="owner@example.com")
+        viewer = _make_user(db_session, email="viewer@example.com")
+        db_session.add_all([owner, viewer])
+        await db_session.flush()
+
+        other_account = Account(user_id=owner.id, name="Owner Account", type="cex", is_active=True)
+        db_session.add(other_account)
+        await db_session.flush()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await list_bots(account_id=other_account.id, db=db_session, current_user=viewer)
+
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.bot_routers.bot_crud_router.get_coinbase_from_db", new_callable=AsyncMock, return_value=None)
     async def test_list_bots_does_not_leak_other_user_bots(self, mock_coinbase, db_session):
         """Security: user does not see other users' bots."""
         from app.bot_routers.bot_crud_router import list_bots

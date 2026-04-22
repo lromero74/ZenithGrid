@@ -10,6 +10,16 @@ interface UsePositionsDataProps {
 
 export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) => {
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
+  const [isDocumentVisible, setIsDocumentVisible] = useState(() => document.visibilityState !== 'hidden')
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsDocumentVisible(document.visibilityState !== 'hidden')
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   // Fetch open positions for the selected account.
   // Passing account_id to the backend avoids fetching all accounts' positions
@@ -27,16 +37,11 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   // Fetch all bots to display bot names (filtered by account)
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccountId],
-    queryFn: () => botsApi.getAll(),
+    queryFn: () => botsApi.getAll(undefined, selectedAccountId),
     refetchInterval: 10000,
     refetchIntervalInBackground: false, // Stop polling when tab is hidden
     refetchOnMount: 'always', // Always fetch fresh data on mount
     staleTime: 0, // Treat cached data as immediately stale
-    select: (data) => {
-      if (!selectedAccountId) return data
-      // Filter by account_id
-      return data.filter((bot: any) => bot.account_id === selectedAccountId)
-    },
   })
 
   const { price: btcUsdPrice } = useMarketPrice({
@@ -47,6 +52,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
 
   // Fetch real-time prices for all open positions
   useEffect(() => {
+    if (!isDocumentVisible) return
+
     const abortController = new AbortController()
 
     const fetchPrices = async () => {
@@ -98,7 +105,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
       clearInterval(interval)
       abortController.abort() // Cancel any in-flight requests
     }
-  }, [allPositions])
+  }, [allPositions, isDocumentVisible])
 
   // Memoize P&L calculations to avoid recalculating on every render
   // This is a major performance optimization - reduces 5 calculations per position to 1

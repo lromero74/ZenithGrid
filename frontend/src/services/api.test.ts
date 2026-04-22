@@ -866,6 +866,13 @@ describe('botsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/bots/?projection_timeframe=1h')
   })
 
+  test('getAll includes account_id when provided', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: [] })
+
+    await botsApi.getAll('1h', 42)
+    expect(api.get).toHaveBeenCalledWith('/bots/?projection_timeframe=1h&account_id=42')
+  })
+
   test('create sends bot data', async () => {
     const botData = { name: 'Test Bot', strategy_id: 'grid' }
     vi.mocked(api.post).mockResolvedValue({ data: { id: 1, ...botData } })

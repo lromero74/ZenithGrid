@@ -147,7 +147,7 @@ describe('Dashboard startup query deferral', () => {
     render(<Dashboard onNavigate={vi.fn()} />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(botsApi.getAll).toHaveBeenCalled()
+      expect(botsApi.getAll).toHaveBeenCalledWith('7d', 7)
       expect(positionsApi.getAll).toHaveBeenCalledWith('open', 100, 7)
       expect(positionsApi.getAll).toHaveBeenCalledWith('closed', 1000, 7)
     })

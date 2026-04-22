@@ -7,12 +7,12 @@
  *   so they stop polling when the browser tab is hidden
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
-import { positionsApi } from '../../../services/api'
+import { positionsApi, botsApi } from '../../../services/api'
 import { usePositionsData } from './usePositionsData'
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,12 @@ function makeWrapper(queryClient: QueryClient) {
 describe('usePositionsData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useRealTimers()
     vi.mocked(positionsApi.getAll).mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test('returns expected shape on mount', () => {
@@ -135,6 +140,19 @@ describe('usePositionsData', () => {
     expect(marketDataApi.getPrice).toHaveBeenCalledWith('BTC-USD')
   })
 
+  test('requests bots scoped to the selected account when available', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+
+    renderHook(
+      () => usePositionsData({ selectedAccountId: 42 }),
+      { wrapper: makeWrapper(qc) }
+    )
+
+    await waitFor(() => {
+      expect(botsApi.getAll).toHaveBeenCalledWith(undefined, 42)
+    })
+  })
+
   test('deduplicates product ids before requesting batch prices', async () => {
     vi.mocked(positionsApi.getAll).mockResolvedValue([
       {
@@ -180,6 +198,45 @@ describe('usePositionsData', () => {
       params: { products: 'ETH-USD,BTC-USD' },
       signal: expect.any(AbortSignal),
     })
+  })
+
+  test('stops batch price polling while the tab is hidden', async () => {
+    vi.useFakeTimers()
+    const originalVisibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    const openPositions = [
+      {
+        id: 1, status: 'open', bot_id: 1, product_id: 'ETH-USD',
+        opened_at: '2025-01-01T00:00:00Z', closed_at: null,
+        initial_quote_balance: 100, max_quote_allowed: 200,
+        total_quote_spent: 50, total_base_acquired: 0.5,
+        average_buy_price: 2000, sell_price: null,
+        total_quote_received: null, profit_quote: null,
+        profit_percentage: null, trade_count: 1,
+      },
+    ] as any
+
+    let visibilityState: DocumentVisibilityState = 'hidden'
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => visibilityState,
+    })
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    qc.setQueryData(['positions', 'open', undefined], openPositions)
+    renderHook(
+      () => usePositionsData({}),
+      { wrapper: makeWrapper(qc) }
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+    expect(vi.mocked(api.get)).not.toHaveBeenCalled()
+    expect(document.visibilityState).toBe('hidden')
+
+    if (originalVisibilityState) {
+      Object.defineProperty(document, 'visibilityState', originalVisibilityState)
+    }
   })
 
   test('interval-driven queries have refetchIntervalInBackground: false', () => {
