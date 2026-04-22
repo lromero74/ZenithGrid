@@ -24,14 +24,11 @@ from app.services.dex_wallet_service import dex_wallet_service
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_calculations import (
     BalanceBreakdownParams,
-    _apply_unrealized_pnl,
+    _apply_asset_pnl_to_holdings,
     _build_portfolio_holdings,
-    _calculate_balance_breakdown,
-    _calculate_realized_pnl,
     _compute_balance_breakdown,
     _compute_closed_pnl,
     _compute_position_pnl,
-    _process_cex_holdings,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,16 +157,7 @@ async def get_cex_portfolio(
 
     # Compute unrealized PnL and apply to holdings
     asset_pnl = _compute_position_pnl(open_positions, breakdown_prices, btc_usd_price)
-
-    for holding in portfolio_holdings:
-        asset = holding["asset"]
-        if asset in asset_pnl:
-            pnl_data = asset_pnl[asset]
-            holding["unrealized_pnl_usd"] = pnl_data["pnl_usd"]
-            if pnl_data["cost_usd"] > 0:
-                holding["unrealized_pnl_percentage"] = (
-                    pnl_data["pnl_usd"] / pnl_data["cost_usd"]
-                ) * 100
+    _apply_asset_pnl_to_holdings(portfolio_holdings, asset_pnl)
 
     portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
@@ -726,12 +714,9 @@ async def get_account_portfolio_data(
     spot_positions = breakdown.get("spot_positions", [])
     btc_usd_price = await coinbase.get_btc_usd_price()
 
-    # Phase 1: Process CEX holdings
-    holdings, total_usd_value, total_btc_value, actual_balances, breakdown_prices = (
-        _process_cex_holdings(spot_positions, btc_usd_price)
-    )
-
-    # Phase 2: Get open/closed positions for all accessible accounts (owned + shared)
+    # Phase 1: Fetch open positions for all accessible accounts (owned + shared).
+    # Must happen before building holdings so the "in_positions" amount per asset
+    # correctly reduces the per-holding `available` figure.
     user_account_ids = await accessible_account_ids(db, current_user.id)
 
     positions_query = select(Position).where(
@@ -741,8 +726,16 @@ async def get_account_portfolio_data(
     positions_result = await db.execute(positions_query)
     open_positions = positions_result.scalars().all()
 
+    # Phase 2: Build portfolio holdings
+    (
+        holdings, total_usd_value, total_btc_value,
+        actual_usd_balance, actual_usdc_balance, actual_btc_balance,
+        breakdown_prices,
+    ) = _build_portfolio_holdings(spot_positions, btc_usd_price, open_positions)
+
     # Phase 3: Apply unrealized PnL to holdings
-    _apply_unrealized_pnl(holdings, open_positions, breakdown_prices, btc_usd_price)
+    asset_pnl = _compute_position_pnl(open_positions, breakdown_prices, btc_usd_price)
+    _apply_asset_pnl_to_holdings(holdings, asset_pnl)
     holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
     # Phase 4: Balance breakdown (reserved, in-positions, free)
@@ -752,9 +745,17 @@ async def get_account_portfolio_data(
     bots_result = await db.execute(bots_query)
     all_bots = bots_result.scalars().all()
 
-    balance_breakdown = _calculate_balance_breakdown(
-        open_positions, all_bots, actual_balances, breakdown_prices, btc_usd_price,
-    )
+    total_reserved_btc = sum(bot.reserved_btc_balance for bot in all_bots)
+    total_reserved_usd = sum(bot.reserved_usd_balance for bot in all_bots)
+
+    balance_breakdown = _compute_balance_breakdown(BalanceBreakdownParams(
+        account_bots=all_bots, open_positions=open_positions,
+        actual_btc=actual_btc_balance, actual_usd=actual_usd_balance,
+        actual_usdc=actual_usdc_balance,
+        total_reserved_btc=total_reserved_btc,
+        total_reserved_usd=total_reserved_usd,
+        breakdown_prices=breakdown_prices, btc_usd_price=btc_usd_price,
+    ))
 
     # Phase 5: Realized PnL
     closed_positions_query = select(Position).where(
@@ -764,7 +765,8 @@ async def get_account_portfolio_data(
     closed_positions_result = await db.execute(closed_positions_query)
     closed_positions = closed_positions_result.scalars().all()
 
-    pnl = _calculate_realized_pnl(closed_positions)
+    pnl_all_time, pnl_today = _compute_closed_pnl(closed_positions)
+    pnl = {"all_time": pnl_all_time, "today": pnl_today}
 
     logger.info(
         f"Portfolio summary: {len(spot_positions)} raw positions -> "

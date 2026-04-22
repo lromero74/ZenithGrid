@@ -1409,7 +1409,7 @@
     },
     {
       "file": "services/portfolio_calculations.py",
-      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings, _compute_position_pnl, _compute_balance_breakdown (with BalanceBreakdownParams dataclass), _compute_closed_pnl, _process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl. No DB, cache, or API calls.",
+      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings (handles both owner-scoped and aggregated-cross-account paths via optional open_positions), _compute_position_pnl, _apply_asset_pnl_to_holdings, _compute_balance_breakdown (with BalanceBreakdownParams dataclass), _compute_closed_pnl. Four shadow helpers (_process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl) were removed in v2.164.3; both call paths in portfolio_service now use the single canonical set. No DB, cache, or API calls.",
       "type": "trading"
     },
     {
