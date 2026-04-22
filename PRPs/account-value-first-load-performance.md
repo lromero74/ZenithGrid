@@ -48,6 +48,7 @@ Implemented on the follow-up branch:
 - feed the positions list's `computed_max_budget` calculation from the aggregated first-buy quote amount so the hot list route can still derive resize budgets without touching `position.trades`
 - stop expanding limit-close fill-history payloads on the positions list; the hot route now returns just the limit summary fields the card view actually uses
 - trim `strategy_config_snapshot` on the list route down to the handful of keys the open-positions UI actually reads, while leaving the detail endpoint full-fidelity for modal/chart/edit flows
+- clear a handful of open-list-only optional fields (`account_id`, `user_attempt_number`, close/profit-at-close fields, `limit_close_order_id`) that the active-deals UI never reads, while keeping them on detail/closed-position paths
 - centralize BTC/USD and ETH/USD market-price fetch policy in a shared `useMarketPrice()` hook
 - switch `App`, `ClosedPositions`, and the positions hook to the shared market-price hook
 - add `frontend/src/pages/Dashboard.test.tsx` coverage for deferred query behavior
@@ -78,6 +79,7 @@ This latest pass trims one more avoidable source of overfetch:
 - the remaining list-route budget calculation no longer has to lazy-load trade rows for snapshot-less positions; it reuses the first-buy size already pulled by the aggregate query
 - active limit-close rows also no longer JSON-parse and serialize fill-by-fill history on every poll; the list keeps only the summary stats the Positions cards render
 - the list response also no longer ships the entire frozen strategy config blob for every open deal; it keeps only the keys the list/cards/charts/edit affordances actually read, and the detail endpoint still preserves the full snapshot when needed
+- the open-position list now also drops several optional fields that matter for detail/closed views but not for the hot active-deals UI, shrinking each row a bit further without changing the closed/history or single-position endpoints
 - the remaining high-frequency pressure is now concentrated mostly in the necessity of the active-deals 5-second refresh itself rather than in auxiliary summary queries, bot metadata churn, duplicate timer infrastructure, avoidable ORM overfetch, or broad supporting lookups
 
 ---

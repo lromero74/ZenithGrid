@@ -40,6 +40,17 @@ LIST_SAFE_STRATEGY_CONFIG_KEYS = {
     "stop_loss_percentage",
 }
 
+OPEN_LIST_UNUSED_OPTIONAL_FIELDS = (
+    "account_id",
+    "user_attempt_number",
+    "sell_price",
+    "total_quote_received",
+    "profit_quote",
+    "btc_usd_price_at_close",
+    "profit_usd",
+    "limit_close_order_id",
+)
+
 
 def _trim_strategy_snapshot_for_list(strategy_config_snapshot: Optional[dict]) -> Optional[dict]:
     """Keep only the strategy config fields used by the hot open-positions UI."""
@@ -51,6 +62,12 @@ def _trim_strategy_snapshot_for_list(strategy_config_snapshot: Optional[dict]) -
         for key, value in strategy_config_snapshot.items()
         if key in LIST_SAFE_STRATEGY_CONFIG_KEYS
     }
+
+
+def _trim_open_list_optional_fields(pos_response: PositionResponse) -> None:
+    """Clear optional fields the open-positions list view never reads."""
+    for field_name in OPEN_LIST_UNUSED_OPTIONAL_FIELDS:
+        setattr(pos_response, field_name, None)
 
 
 @router.get("/", response_model=List[PositionResponse])
@@ -217,7 +234,11 @@ async def get_positions(
     response = []
     for pos in positions:
         pos_response = PositionResponse.model_validate(pos)
-        pos_response.strategy_config_snapshot = _trim_strategy_snapshot_for_list(pos_response.strategy_config_snapshot)
+        if status == "open":
+            pos_response.strategy_config_snapshot = _trim_strategy_snapshot_for_list(
+                pos_response.strategy_config_snapshot
+            )
+            _trim_open_list_optional_fields(pos_response)
         pos_response.trade_count = trade_count_map.get(pos.id, 0)
         pos_response.pending_orders_count = pending_count_map.get(pos.id, 0)
 

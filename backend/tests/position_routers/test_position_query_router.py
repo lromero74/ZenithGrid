@@ -573,6 +573,50 @@ class TestGetPositions:
             "stop_loss_percentage": -8.0,
         }
 
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_open_list_omits_unused_optional_fields(self, mock_resize, db_session):
+        """Edge case: open-position list omits optional fields only closed/detail flows need."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "openlisttrim@example.com")
+        bot = await _create_bot(db_session, user, account)
+        await _create_position(
+            db_session,
+            account,
+            bot=bot,
+            status="open",
+            user_attempt_number=17,
+            sell_price=0.025,
+            total_quote_received=0.03,
+            profit_quote=0.01,
+            btc_usd_price_at_close=65000,
+            profit_usd=12.0,
+            limit_close_order_id="order-123",
+        )
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].account_id is None
+        assert result[0].user_attempt_number is None
+        assert result[0].sell_price is None
+        assert result[0].total_quote_received is None
+        assert result[0].profit_quote is None
+        assert result[0].btc_usd_price_at_close is None
+        assert result[0].profit_usd is None
+        assert result[0].limit_close_order_id is None
+
 
 # =============================================================================
 # GET /positions/{position_id}
@@ -626,6 +670,40 @@ class TestGetPosition:
             "indicator_stack": ["macd", "rsi"],
             "volume_scale": 1.7,
         }
+
+    @pytest.mark.asyncio
+    async def test_position_details_keep_optional_fields(self, db_session):
+        """Edge case: detail endpoint still returns the optional fields trimmed from the open list."""
+        from app.position_routers.position_query_router import get_position
+
+        user, account = await _create_user_with_account(db_session, "detailoptional@example.com")
+        pos = await _create_position(
+            db_session,
+            account,
+            status="open",
+            user_attempt_number=17,
+            sell_price=0.025,
+            total_quote_received=0.03,
+            profit_quote=0.01,
+            btc_usd_price_at_close=65000,
+            profit_usd=12.0,
+            limit_close_order_id="order-123",
+        )
+
+        result = await get_position(
+            position_id=pos.id,
+            db=db_session,
+            current_user=user,
+        )
+
+        assert result.account_id == account.id
+        assert result.user_attempt_number == 17
+        assert result.sell_price == pytest.approx(0.025)
+        assert result.total_quote_received == pytest.approx(0.03)
+        assert result.profit_quote == pytest.approx(0.01)
+        assert result.btc_usd_price_at_close == pytest.approx(65000)
+        assert result.profit_usd == pytest.approx(12.0)
+        assert result.limit_close_order_id == "order-123"
 
     @pytest.mark.asyncio
     async def test_position_not_found_raises_404(self, db_session):
