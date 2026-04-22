@@ -28,7 +28,7 @@ def run():
             "model_used VARCHAR(80)",
             "input_tokens INTEGER DEFAULT 0",
             "output_tokens INTEGER DEFAULT 0",
-            f"cost_usd {pricing_numeric} DEFAULT 0",
+            f"cost_usd {pricing_numeric} DEFAULT 0.0",
         ]
         added = 0
         for col_def in columns:

@@ -22,13 +22,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Account
 from app.models.sharing import AccountMembership
 
-_ACTIVE_MEMBERSHIP = lambda uid: (  # noqa: E731
-    AccountMembership.user_id == uid,
-    or_(
-        AccountMembership.expires_at.is_(None),
-        AccountMembership.expires_at > datetime.utcnow(),
-    ),
-)
+
+def _active_membership_clauses(uid: int):
+    """Returns the WHERE clauses that identify a non-expired membership for uid.
+
+    Split out so accessible/manager filter builders can spread it with *clauses.
+    """
+    return (
+        AccountMembership.user_id == uid,
+        or_(
+            AccountMembership.expires_at.is_(None),
+            AccountMembership.expires_at > datetime.utcnow(),
+        ),
+    )
 
 
 def accessible_accounts_filter(current_user_id: int):
@@ -42,7 +48,7 @@ def accessible_accounts_filter(current_user_id: int):
     return or_(
         Account.user_id == current_user_id,
         Account.id.in_(
-            select(AccountMembership.account_id).where(*_ACTIVE_MEMBERSHIP(current_user_id))
+            select(AccountMembership.account_id).where(*_active_membership_clauses(current_user_id))
         ),
     )
 
@@ -59,7 +65,7 @@ def manager_accounts_filter(current_user_id: int):
         Account.user_id == current_user_id,
         Account.id.in_(
             select(AccountMembership.account_id).where(
-                *_ACTIVE_MEMBERSHIP(current_user_id),
+                *_active_membership_clauses(current_user_id),
                 AccountMembership.role == 'manager',
             )
         ),

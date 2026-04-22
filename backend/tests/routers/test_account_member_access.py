@@ -98,14 +98,14 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_owned_account_is_accessible(self, db_session):
         """Owner can always access their own account."""
-        from app.routers.accounts_query_router import _accessible_accounts_filter
+        from app.services.account_access import accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_filt@example.com")
         acct = await _make_paper_account(db_session, owner, "Owner's Account")
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Account).where(_accessible_accounts_filter(owner.id))
+            select(Account).where(accessible_accounts_filter(owner.id))
         )
         account_ids = [a.id for a in result.scalars().all()]
         assert acct.id in account_ids
@@ -113,7 +113,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_member_account_is_accessible(self, db_session):
         """A member can access accounts they have membership on."""
-        from app.routers.accounts_query_router import _accessible_accounts_filter
+        from app.services.account_access import accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_m@example.com")
         member = await _make_user(db_session, "member_m@example.com")
@@ -122,7 +122,7 @@ class TestAccessibleAccountsFilter:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Account).where(_accessible_accounts_filter(member.id))
+            select(Account).where(accessible_accounts_filter(member.id))
         )
         account_ids = [a.id for a in result.scalars().all()]
         assert acct.id in account_ids
@@ -130,7 +130,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_unrelated_account_is_not_accessible(self, db_session):
         """A user with no ownership or membership cannot access the account."""
-        from app.routers.accounts_query_router import _accessible_accounts_filter
+        from app.services.account_access import accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_unrel@example.com")
         stranger = await _make_user(db_session, "stranger@example.com")
@@ -138,7 +138,7 @@ class TestAccessibleAccountsFilter:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Account).where(_accessible_accounts_filter(stranger.id))
+            select(Account).where(accessible_accounts_filter(stranger.id))
         )
         account_ids = [a.id for a in result.scalars().all()]
         assert acct.id not in account_ids
@@ -146,7 +146,7 @@ class TestAccessibleAccountsFilter:
     @pytest.mark.asyncio
     async def test_expired_membership_is_not_accessible(self, db_session):
         """Expired membership does not grant access."""
-        from app.routers.accounts_query_router import _accessible_accounts_filter
+        from app.services.account_access import accessible_accounts_filter
 
         owner = await _make_user(db_session, "owner_exp@example.com")
         member = await _make_user(db_session, "member_exp@example.com")
@@ -163,7 +163,7 @@ class TestAccessibleAccountsFilter:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Account).where(_accessible_accounts_filter(member.id))
+            select(Account).where(accessible_accounts_filter(member.id))
         )
         account_ids = [a.id for a in result.scalars().all()]
         assert acct.id not in account_ids

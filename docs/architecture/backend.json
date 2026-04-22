@@ -1414,7 +1414,7 @@
     },
     {
       "file": "services/portfolio_service.py",
-      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 777 LOC)",
+      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC)",
       "type": "trading"
     },
     {

@@ -25,7 +25,7 @@ from app.encryption import mask_api_key
 from app.models import Account, Bot, User
 from app.models.sharing import AccountMembership
 from app.auth.dependencies import get_current_user
-from app.services.account_access import accessible_accounts_filter as _shared_accessible_accounts_filter
+from app.services.account_access import accessible_accounts_filter
 from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
 from app.services.account_service import get_portfolio_for_account
 from app.services.exchange_service import get_coinbase_for_account
@@ -41,19 +41,6 @@ _TTL_REBALANCE_STATUS: Dict[int, Tuple[float, Any]] = {}
 _TTL_DUST_SWEEP: Dict[int, Tuple[float, Any]] = {}
 _TTL_REBALANCE_SECONDS = 30
 _TTL_DUST_SWEEP_SECONDS = 60
-
-
-def _accessible_accounts_filter(current_user_id: int):
-    """
-    SQLAlchemy filter clause matching all accounts a user can access:
-      1. Accounts they own (account.user_id == current_user_id)
-      2. Accounts they have an active (non-expired) membership on
-
-    Used in list/get endpoints to include shared accounts transparently.
-    Owner-only operations (delete, credentials, set-default) do NOT use this
-    — they keep the strict account.user_id == current_user_id check.
-    """
-    return _shared_accessible_accounts_filter(current_user_id)
 
 
 # =============================================================================
@@ -284,7 +271,7 @@ async def list_accounts(
     """
     try:
         query = select(Account)
-        query = query.where(_accessible_accounts_filter(current_user.id))
+        query = query.where(accessible_accounts_filter(current_user.id))
         if not include_inactive:
             query = query.where(Account.is_active)
         query = query.order_by(Account.is_default.desc(), Account.created_at.asc())
@@ -450,7 +437,7 @@ async def get_account(
     try:
         query = select(Account).where(
             Account.id == account_id,
-            _accessible_accounts_filter(current_user.id),
+            accessible_accounts_filter(current_user.id),
         )
         result = await db.execute(query)
         account = result.scalar_one_or_none()
@@ -539,7 +526,6 @@ async def get_account_bots(
     """Get all bots linked to an account."""
     try:
         # Verify account exists and is accessible (owner or member)
-        from app.services.account_access import accessible_accounts_filter
         account_query = select(Account).where(
             Account.id == account_id,
             accessible_accounts_filter(current_user.id),
@@ -614,7 +600,7 @@ async def get_auto_buy_settings(
 ):
     """Get auto-buy BTC settings for an account"""
     query = select(Account).where(
-        Account.id == account_id, _accessible_accounts_filter(current_user.id)
+        Account.id == account_id, accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -676,7 +662,7 @@ async def get_rebalance_settings(
 ):
     """Get portfolio rebalance settings for an account."""
     query = select(Account).where(
-        Account.id == account_id, _accessible_accounts_filter(current_user.id)
+        Account.id == account_id, accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -697,7 +683,7 @@ async def get_rebalance_status(
     from app.services.rebalance_service import compute_rebalance_status
 
     query = select(Account).where(
-        Account.id == account_id, _accessible_accounts_filter(current_user.id)
+        Account.id == account_id, accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -743,7 +729,7 @@ async def get_dust_sweep_settings(
 ):
     """Get dust sweep settings and current dust positions for an account."""
     query = select(Account).where(
-        Account.id == account_id, _accessible_accounts_filter(current_user.id)
+        Account.id == account_id, accessible_accounts_filter(current_user.id)
     )
     result = await db.execute(query)
     account = result.scalar_one_or_none()
