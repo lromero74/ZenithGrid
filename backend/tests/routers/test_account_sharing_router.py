@@ -920,27 +920,34 @@ class TestAccountMembershipIsExpired:
 
 
 class TestInviteRateLimit:
-    """Tests for the 10-invites-per-account-per-hour rate limit on POST /invite."""
+    """Tests for the in-memory invite rate limits on POST /invite.
+
+    Rate limits live in app.services.user_rate_limit — the per-account cap
+    is 10/hr and the per-inviter global cap is 30/hr.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clear_rate_state(self):
+        from app.services import user_rate_limit
+        user_rate_limit._buckets.clear()
+        yield
+        user_rate_limit._buckets.clear()
 
     @pytest.mark.asyncio
     async def test_invite_succeeds_when_under_limit(self, db_session, shared_account, owner, member_user):
-        """Happy path: invite is created when fewer than 10 have been sent this hour."""
+        """Happy path: invite is created when under both rate limits."""
         from unittest.mock import AsyncMock, MagicMock, patch
         from app.routers.account_sharing_router import invite_member, InviteRequest
+        from app.services.user_rate_limit import check_user_rate_limit
 
-        # Create 9 invitations in the last hour (one under the limit)
-        for i in range(9):
-            inv = AccountInvitation(
-                account_id=shared_account.id,
-                invited_email=f"batch{i}@example.com",
-                invited_by_user_id=owner.id,
-                role="shadow",
-                token=f"batchtoken{i}abc",
-                expires_at=datetime.utcnow() + timedelta(days=7),
-                created_at=datetime.utcnow() - timedelta(minutes=30),
+        # Seed 9 prior per-account entries (one under the 10/hr cap)
+        for _ in range(9):
+            check_user_rate_limit(
+                user_id=owner.id,
+                bucket=f"invite_account:{shared_account.id}",
+                max_requests=10,
+                window_seconds=3600,
             )
-            db_session.add(inv)
-        await db_session.flush()
 
         body = InviteRequest(email="newguest@example.com", role="shadow")
 
@@ -961,8 +968,6 @@ class TestInviteRateLimit:
         with patch("app.routers.account_sharing_router.svc.create_invitation", new_callable=AsyncMock,
                    return_value=mock_inv), \
              patch("app.routers.account_sharing_router.send_invitation_email"):
-
-            # Should not raise — we are at 9, limit is 10
             result = await invite_member(
                 account_id=shared_account.id,
                 body=body,
@@ -975,25 +980,20 @@ class TestInviteRateLimit:
         assert result["invitation_id"] == 999
 
     @pytest.mark.asyncio
-    async def test_invite_returns_429_when_at_limit(self, db_session, shared_account, owner):
-        """Failure: 429 is raised when 10 or more invitations sent in the last hour."""
+    async def test_invite_returns_429_at_per_account_limit(self, db_session, shared_account, owner):
+        """Failure: 429 raised after 10 invites for a single account in an hour."""
         from unittest.mock import MagicMock
         from fastapi import HTTPException
         from app.routers.account_sharing_router import invite_member, InviteRequest
+        from app.services.user_rate_limit import check_user_rate_limit
 
-        # Create exactly 10 invitations in the last hour
-        for i in range(10):
-            inv = AccountInvitation(
-                account_id=shared_account.id,
-                invited_email=f"spam{i}@example.com",
-                invited_by_user_id=owner.id,
-                role="shadow",
-                token=f"spamtoken{i}xyz",
-                expires_at=datetime.utcnow() + timedelta(days=7),
-                created_at=datetime.utcnow() - timedelta(minutes=10),
+        for _ in range(10):
+            check_user_rate_limit(
+                user_id=owner.id,
+                bucket=f"invite_account:{shared_account.id}",
+                max_requests=10,
+                window_seconds=3600,
             )
-            db_session.add(inv)
-        await db_session.flush()
 
         body = InviteRequest(email="blocked@example.com", role="shadow")
         registry = MagicMock()
@@ -1009,50 +1009,31 @@ class TestInviteRateLimit:
             )
 
         assert exc_info.value.status_code == 429
-        assert "Too many invitations" in exc_info.value.detail
+        assert "account" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_old_invitations_do_not_count_toward_limit(self, db_session, shared_account, owner):
-        """Edge case: invitations older than 1 hour do not count toward the hourly limit."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+    async def test_invite_returns_429_at_global_inviter_limit(self, db_session, shared_account, owner):
+        """Failure: 429 raised after 30 invites across any accounts in an hour."""
+        from unittest.mock import MagicMock
+        from fastapi import HTTPException
         from app.routers.account_sharing_router import invite_member, InviteRequest
+        from app.services.user_rate_limit import check_user_rate_limit
 
-        # Create 10 invitations but all older than 1 hour — should NOT trigger rate limit
-        for i in range(10):
-            inv = AccountInvitation(
-                account_id=shared_account.id,
-                invited_email=f"old{i}@example.com",
-                invited_by_user_id=owner.id,
-                role="shadow",
-                token=f"oldtoken{i}zzz",
-                expires_at=datetime.utcnow() + timedelta(days=7),
-                created_at=datetime.utcnow() - timedelta(hours=2),
+        # Fill the global bucket but leave the per-account bucket empty so we
+        # specifically exercise the inviter-wide cap.
+        for _ in range(30):
+            check_user_rate_limit(
+                user_id=owner.id,
+                bucket="invite_global",
+                max_requests=30,
+                window_seconds=3600,
             )
-            db_session.add(inv)
-        await db_session.flush()
 
-        body = InviteRequest(email="fresh@example.com", role="manager")
-
-        mock_inv = AccountInvitation(
-            account_id=shared_account.id,
-            invited_email="fresh@example.com",
-            invited_by_user_id=owner.id,
-            role="manager",
-            token="freshtoken888",
-            expires_at=datetime.utcnow() + timedelta(days=7),
-        )
-        mock_inv.id = 888
-
+        body = InviteRequest(email="blocked@example.com", role="shadow")
         registry = MagicMock()
-        registry.broadcast = MagicMock()
-        registry.broadcast.send_to_user = AsyncMock()
 
-        with patch("app.routers.account_sharing_router.svc.create_invitation", new_callable=AsyncMock,
-                   return_value=mock_inv), \
-             patch("app.routers.account_sharing_router.send_invitation_email"):
-
-            # Should succeed since old invites don't count
-            result = await invite_member(
+        with pytest.raises(HTTPException) as exc_info:
+            await invite_member(
                 account_id=shared_account.id,
                 body=body,
                 account_role="owner",
@@ -1061,4 +1042,5 @@ class TestInviteRateLimit:
                 registry=registry,
             )
 
-        assert result["invitation_id"] == 888
+        assert exc_info.value.status_code == 429
+        assert "invitation" in exc_info.value.detail.lower()

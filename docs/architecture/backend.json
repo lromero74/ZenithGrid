@@ -183,7 +183,7 @@
     {
       "file": "routers/account_sharing_router.py",
       "prefix": "/api/accounts, /api/invitations",
-      "purpose": "Account sharing / co-management: invite members (manager or shadow role), list members, update member role, remove member, leave account, resend invite, cancel invite; user-scoped inbound invitation endpoints (list/accept/decline). Invitations are gated by InviteRequest(email, role) where role is 'manager' or 'shadow'. Delegates to services.account_sharing_service for business logic."
+      "purpose": "Account sharing / co-management: invite members (manager or shadow role), list members, update member role, remove member, leave account, resend invite, cancel invite; user-scoped inbound invitation endpoints (list/accept/decline). Invitations are gated by InviteRequest(email, role) where role is 'manager' or 'shadow'. Hardened in v2.164.0: rate-limited via user_rate_limit (invite: 10/hr per account + 30/hr per inviter; token actions: 30/hr per user) and invitation-token error responses collapsed to a single generic 'Invalid or expired invitation.' to prevent token-state enumeration. Delegates to services.account_sharing_service for business logic."
     }
   ],
   "sub_routers": {
@@ -1503,6 +1503,11 @@
       "type": "background"
     },
     {
+      "file": "services/user_rate_limit.py",
+      "purpose": "In-memory per-user sliding-window rate limiter (keyed by user_id + bucket). check_user_rate_limit enforces allow-counted caps for authenticated endpoints (e.g., invitations: 10/hr per account + 30/hr per inviter, invitation-token actions: 30/hr per user). record_user_failure / clear_user_failures gates brute-force-sensitive operations (MFA verify: 5 failures / 15 min). Complements the IP-based PublicEndpointRateLimiter. Single-process; swap in Redis for multi-process deployments.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/websocket_manager.py",
       "purpose": "WebSocket connection manager for real-time order fill notifications",
       "type": "infrastructure"
@@ -1937,7 +1942,7 @@
     },
     {
       "file": "auth/mfa_verification.py",
-      "purpose": "Shared verify_mfa(db, user, mfa_code) helper for sensitive actions (panic-sell, account deletion, etc.). Supports TOTP (authenticator app) and email MFA (EmailVerificationToken with token_type='action_mfa'); raises HTTPException(403) on failure; no-op when user has no MFA configured. Extracted from panic_sell_router in Phase 5.3 so multiple routers can reuse it without cross-router imports."
+      "purpose": "Shared verify_mfa(db, user, mfa_code) helper for sensitive actions (panic-sell, account deletion, etc.). Supports TOTP (authenticator app) and email MFA (EmailVerificationToken with token_type='action_mfa'); raises HTTPException(403) on failure; no-op when user has no MFA configured. Brute-force hardened (v2.164.0): 5 failed attempts within 15 minutes triggers an HTTPException(429) lockout via user_rate_limit.record_user_failure; success clears the failure counter. Extracted from panic_sell_router in Phase 5.3 so multiple routers can reuse it without cross-router imports."
     }
   ],
   "external_integrations": {

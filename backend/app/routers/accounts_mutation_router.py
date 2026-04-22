@@ -407,12 +407,14 @@ async def link_perps_portfolio(
     Queries Coinbase for the user's perpetuals portfolio UUID and saves it
     to the account record.
     """
-    account = await db.get(Account, account_id)
+    # Owner-only action. Collapse non-owner and missing into a uniform 404
+    # so account IDs can't be enumerated.
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id
+    )
+    account = (await db.execute(query)).scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-
-    if account.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
 
     if account.type != "cex":
         raise HTTPException(status_code=400, detail="Perps portfolio only available for CEX accounts")

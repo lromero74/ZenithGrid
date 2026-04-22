@@ -9,10 +9,9 @@ Route groups:
 """
 
 import logging
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -20,10 +19,16 @@ from app.auth.dependencies import get_current_user, require_account_access
 from app.models import User
 from app.services import account_sharing_service as svc
 from app.services.email_service import send_invitation_email
+from app.services.user_rate_limit import check_user_rate_limit
 from app.config import settings
 from app.registry import get_registry, ServiceRegistry
 
 logger = logging.getLogger(__name__)
+
+# Generic error for invitation-token endpoints. Concrete reasons
+# (expired, declined, email mismatch, etc.) are intentionally collapsed to
+# avoid leaking token state to unauthenticated enumeration attempts.
+_INVITATION_ERROR = "Invalid or expired invitation."
 
 router = APIRouter(tags=["account-sharing"])
 
@@ -61,24 +66,25 @@ async def invite_member(
     to the specified address. The recipient must authenticate as that
     email address before they can accept.
 
-    Rate-limited to 10 invitations per account per hour.
+    Rate-limited to 10 invitations per account per hour and 30 per inviter
+    per hour across all accounts they own.
     """
-    # M3: Prevent invite spam — cap at 10 invitations per account per hour
-    from datetime import timedelta
-    from app.models.sharing import AccountInvitation
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-    recent_count_result = await db.execute(
-        select(func.count(AccountInvitation.id)).where(
-            AccountInvitation.account_id == account_id,
-            AccountInvitation.created_at >= one_hour_ago,
-        )
+    # Per-account cap
+    check_user_rate_limit(
+        user_id=current_user.id,
+        bucket=f"invite_account:{account_id}",
+        max_requests=10,
+        window_seconds=3600,
+        message="Too many invitations sent for this account in the last hour.",
     )
-    recent_count = recent_count_result.scalar_one()
-    if recent_count >= 10:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many invitations sent in the last hour. Please wait before sending more.",
-        )
+    # Per-inviter global cap (prevents one user spamming across many accounts)
+    check_user_rate_limit(
+        user_id=current_user.id,
+        bucket="invite_global",
+        max_requests=30,
+        window_seconds=3600,
+        message="You have sent too many invitations in the last hour. Please wait before sending more.",
+    )
 
     try:
         invitation = await svc.create_invitation(
@@ -243,14 +249,21 @@ async def preview_invitation(
     Preview an invitation before acting on it.
 
     Returns account name, inviter, and role. Validates that the authenticated
-    user's email matches the invited_email — raises 400 if not.
+    user's email matches the invited_email.
+
+    All token-state failures (unknown, expired, already-used, email mismatch)
+    collapse to a single generic error to prevent enumeration.
     """
+    check_user_rate_limit(
+        user_id=current_user.id,
+        bucket="invitation_action",
+        max_requests=30,
+        window_seconds=3600,
+    )
     try:
         return await svc.preview_invitation(db, token, current_user)
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except (PermissionError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_INVITATION_ERROR)
 
 
 @router.post("/api/invitations/{token}/accept")
@@ -264,14 +277,20 @@ async def accept_invitation(
 
     Creates an AccountMembership record. The token is marked used and
     cannot be reused.
+
+    All token-state failures collapse to a single generic error.
     """
+    check_user_rate_limit(
+        user_id=current_user.id,
+        bucket="invitation_action",
+        max_requests=30,
+        window_seconds=3600,
+    )
     try:
         membership = await svc.accept_invitation(db, token, current_user)
         await db.commit()
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except (PermissionError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_INVITATION_ERROR)
 
     return {
         "message": "Invitation accepted. Welcome to the account!",
@@ -285,13 +304,20 @@ async def decline_invitation(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Decline an invitation. The token is marked declined and cannot be reused."""
+    """Decline an invitation. The token is marked declined and cannot be reused.
+
+    All token-state failures collapse to a single generic error.
+    """
+    check_user_rate_limit(
+        user_id=current_user.id,
+        bucket="invitation_action",
+        max_requests=30,
+        window_seconds=3600,
+    )
     try:
         await svc.decline_invitation(db, token, current_user)
         await db.commit()
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except (PermissionError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_INVITATION_ERROR)
 
     return {"message": "Invitation declined"}

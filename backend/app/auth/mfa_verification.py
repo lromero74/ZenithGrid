@@ -14,6 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.encryption import decrypt_value
 from app.models.auth import User
+from app.services.user_rate_limit import (
+    clear_user_failures,
+    record_user_failure,
+)
+
+# After this many failed MFA attempts within the window, the user is locked
+# out of MFA-gated actions. Keeps TOTP/email codes brute-force resistant.
+_MFA_MAX_FAILURES = 5
+_MFA_LOCKOUT_WINDOW = 900.0  # 15 minutes
 
 
 async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> None:
@@ -21,7 +30,8 @@ async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> N
 
     TOTP users: verifies against stored TOTP secret.
     Email MFA users (no TOTP): verifies against a recent EmailVerificationToken.
-    Raises HTTPException(403) on failure. No-op when MFA is not configured.
+    Raises HTTPException(403) on failure, HTTPException(429) after too many
+    failures. No-op when MFA is not configured.
     """
     if user.mfa_enabled and user.totp_secret:
         if not mfa_code:
@@ -29,7 +39,15 @@ async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> N
         secret = decrypt_value(user.totp_secret)
         totp = pyotp.TOTP(secret)
         if not totp.verify(mfa_code, valid_window=1):
+            record_user_failure(
+                user_id=user.id,
+                bucket="mfa_verify",
+                max_failures=_MFA_MAX_FAILURES,
+                window_seconds=_MFA_LOCKOUT_WINDOW,
+                message="Too many invalid MFA attempts. Please try again later.",
+            )
             raise HTTPException(status_code=403, detail="Invalid MFA code")
+        clear_user_failures(user_id=user.id, bucket="mfa_verify")
         return
 
     if user.mfa_email_enabled:
@@ -49,7 +67,15 @@ async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> N
         )
         token_record = result.scalars().first()
         if not token_record:
+            record_user_failure(
+                user_id=user.id,
+                bucket="mfa_verify",
+                max_failures=_MFA_MAX_FAILURES,
+                window_seconds=_MFA_LOCKOUT_WINDOW,
+                message="Too many invalid MFA attempts. Please try again later.",
+            )
             raise HTTPException(status_code=403, detail="Invalid or expired MFA code")
         token_record.used_at = datetime.utcnow()
         await db.commit()
+        clear_user_failures(user_id=user.id, bucket="mfa_verify")
         return
