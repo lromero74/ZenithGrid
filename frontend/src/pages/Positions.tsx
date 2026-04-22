@@ -31,6 +31,8 @@ import {
   TradeHistoryModal,
 } from './positions/components'
 
+const POSITIONS_SUMMARY_REFETCH_INTERVAL_MS = 120000
+
 export default function Positions() {
   const { selectedAccount } = useAccount()
   const isObserver = selectedAccount?.membership_role === 'shadow'
@@ -129,8 +131,10 @@ export default function Positions() {
   const { data: completedStats } = useQuery({
     queryKey: ['completed-trades-stats', selectedAccount?.id],
     queryFn: () => positionsApi.getCompletedStats(selectedAccount?.id),
-    refetchInterval: 60000,
-    staleTime: 0,
+    refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60000,
     refetchOnMount: 'always' as const,
   })
 
@@ -138,8 +142,10 @@ export default function Positions() {
   const { data: realizedPnL } = useQuery({
     queryKey: ['realized-pnl', selectedAccount?.id],
     queryFn: () => positionsApi.getRealizedPnL(selectedAccount?.id),
-    refetchInterval: 60000,
-    staleTime: 0,
+    refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60000,
     refetchOnMount: 'always' as const,
   })
 
@@ -150,8 +156,10 @@ export default function Positions() {
       const { accountApi } = await import('../services/api')
       return accountApi.getBalances(selectedAccount?.id)
     },
-    refetchInterval: 60000,
-    staleTime: 0,
+    refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60000,
     refetchOnMount: 'always' as const,
   })
 

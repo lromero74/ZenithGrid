@@ -56,6 +56,7 @@ function ClosedPositions() {
   const { data: allPositions, isLoading } = useQuery({
     queryKey: ['positions-closed', selectedAccount?.id],
     queryFn: () => positionsApi.getAll('closed', 500, selectedAccount?.id), // Get closed positions with higher limit
+    enabled: activeTab === 'closed',
     refetchInterval: 60000,
     refetchOnWindowFocus: false,
     refetchIntervalInBackground: false,
@@ -64,7 +65,10 @@ function ClosedPositions() {
   const { data: failedOrdersData, isLoading: isLoadingFailed } = useQuery({
     queryKey: ['order-history-failed-paginated', selectedAccount?.id, failedPage],
     queryFn: () => orderHistoryApi.getFailedPaginated(failedPage, pageSize, undefined, selectedAccount?.id),
-    refetchInterval: 30000,
+    enabled: activeTab === 'failed',
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 
   // API now filters by account_id on server side
