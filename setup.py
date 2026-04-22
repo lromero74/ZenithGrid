@@ -1173,7 +1173,9 @@ def initialize_database(project_root, db_config=None):
                 prop_firm_config TEXT,
                 prop_daily_drawdown_pct REAL,
                 prop_total_drawdown_pct REAL,
-                prop_initial_deposit REAL
+                prop_initial_deposit REAL,
+                speculative_allocation_pct REAL NOT NULL DEFAULT 0.0,
+                speculative_calibration_last_alerted_at TIMESTAMP
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounts_user_id ON accounts(user_id)")
@@ -1428,11 +1430,18 @@ def initialize_database(project_root, db_config=None):
                 confidence INTEGER NOT NULL DEFAULT 0,
                 reasoning TEXT,
                 ai_model VARCHAR(20),
+                model_used VARCHAR(80),
+                input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                cost_usd REAL DEFAULT 0.0,
                 tool_calls TEXT,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 outcome VARCHAR(10),
                 realized_pnl_pct REAL,
-                closed_at TIMESTAMP
+                closed_at TIMESTAMP,
+                doubling_probability_score INTEGER,
+                speculative_score INTEGER,
+                speculative_components TEXT
             )
         """)
         cursor.execute(

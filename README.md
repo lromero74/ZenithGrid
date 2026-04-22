@@ -25,7 +25,8 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Conditional DCA**: Custom conditions per phase (base order, safety orders, take profit)
 - **Slippage Guard**: Order book depth protection ensures market orders don't execute at unfavorable prices
 - **Multi-Timeframe**: Different timeframes per indicator (5m, 15m, 30m, 1h, 4h, 1d)
-- **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
+- **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive/Speculative presets
+- **Speculative Catalyst-Hunt Preset**: High-risk "try to 2x in 24h" mode with an account-level allocation cap (cost-basis accounting — winners don't expand headroom), per-bot bracket discipline (tight SL, trailing TP, 24h max-hold timer), a deterministic 0-100 setup scorer, and a self-calibrating email alert that fires once enough outcomes are in to re-tune the signal weights
 - **5 Advanced Strategies**: Indicator-Based (custom, includes Bull Flag and AI sub-modes), Grid Trading, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
 
 ### 📈 Reports & Goal Tracking

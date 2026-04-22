@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.165.0] - 2026-04-22
+
+### Added
+- **Speculative preset for catalyst-hunt trading** — A new "speculative" risk preset turns an AI bot into a 2x-in-24h catalyst hunter on microcap and midcap pairs. Picking it from the bot form's Risk Preset dropdown automatically fills in a tight stop-loss, trailing take-profit, a 24-hour max-hold timer, and a prefilter that welcomes already-up setups while still blocking crashers and too-late entries. The LLM is also switched into catalyst mode: its question becomes "is this likely to double?" and it's asked to return a 0-100 doubling-probability score alongside the usual signal.
+- **Account-level speculative bucket with a hard cap** — Each account now has a Speculative Allocation setting (0-100% of portfolio USD) in Settings. All bots tagged with the speculative preset on that account share that pool; once committed cost-basis fills the bucket, new speculative entries are blocked until something closes. Winners do NOT expand headroom — cost-basis accounting keeps the "5% of portfolio" promise honest. A new Dashboard card shows bucket usage, available headroom, and the separate realized PnL from speculative closed positions.
+- **Speculative signal breakdown on the AI reasoning view** — When the bot ran in catalyst mode, the Position AI Reasoning expander now surfaces the LLM's doubling-probability score plus a per-component fire breakdown (volume surge, compression breakout, momentum acceleration, micro/mid cap, correlation break, volume-vs-marketcap) so you can see exactly which signals scored the entry.
+- **Calibration alert when real outcomes diverge from the initial weights** — A background monitor watches closed speculative positions and, once 50+ have accumulated and component win rates meaningfully diverge, emails the account owner a report plus a copy-paste prompt that a fresh Claude Code session can act on to re-tune the signal weights. You'll also see an in-app toast. The email has a one-click "dismiss" link that silences the alert for another 30 days.
+- **Bracket exit discipline** — Indicator-based bots now honor a `speculative_max_hold_hours` setting: if a speculative deal doesn't pay off in time, it force-exits so the bucket slot releases on schedule instead of turning into a long-term bag.
+
+### Changed
+- **AI opinion log persists the full speculative scorer breakdown** — Every speculative-mode AI evaluation now records its doubling-probability score and per-component fire list alongside the usual signal/confidence/tool-call audit. This is what makes the calibration alert's per-component win-rate analysis possible.
+
 ## [v2.164.13] - 2026-04-22
 
 ### Changed

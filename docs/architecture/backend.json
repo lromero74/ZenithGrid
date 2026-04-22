@@ -13,12 +13,12 @@
     {
       "file": "routers/accounts_query_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). v2.164.6 adds GET /{account_id}/account-value-summary (fast totals for the dashboard/header, backed by account_value_summary_service) and an include_details query flag on GET /{account_id}/portfolio that returns totals only when false. Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
+      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). v2.164.6 adds GET /{account_id}/account-value-summary (fast totals for the dashboard/header, backed by account_value_summary_service) and an include_details query flag on GET /{account_id}/portfolio that returns totals only when false. v2.165.0 adds GET /{account_id}/speculative-bucket returning the speculative bucket snapshot (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) via speculative_bucket_service.get_speculative_bucket_info for the dashboard bucket card. Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
     },
     {
       "file": "routers/accounts_mutation_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router."
+      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router. v2.165.0 adds POST /{account_id}/speculative-calibration/dismiss which validates a JWT dismiss-token (speculative_calibration_token.decode_dismiss_token) from the calibration alert email and writes speculative_calibration_last_alerted_at to stamp the 30-day cooldown; AccountUpdate also accepts speculative_allocation_pct (0-50% cap enforced in the schema)."
     },
     {
       "file": "routers/admin_router.py",
@@ -190,7 +190,7 @@
     "bot_routers": [
       {
         "file": "bot_routers/bot_crud_router.py",
-        "purpose": "Bot creation, reading, updating, deletion, strategy listing"
+        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected — notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset."
       },
       {
         "file": "bot_routers/bot_control_router.py",
@@ -447,8 +447,11 @@
         "account_type",
         "api_key",
         "api_secret",
-        "is_default"
-      ]
+        "is_default",
+        "speculative_allocation_pct",
+        "speculative_calibration_last_alerted_at"
+      ],
+      "purpose": "Trading account (CEX/DEX/paper/prop). v2.165.0 adds speculative_allocation_pct (0-50% cap, default 0; caps the 'speculative' bucket used by the high-risk doubling preset) and speculative_calibration_last_alerted_at (timestamp stamped when a calibration alert is acknowledged — drives the 30-day per-user cooldown in speculative_calibration_monitor)."
     },
     {
       "name": "Bot",
@@ -578,9 +581,12 @@
         "created_at",
         "outcome",
         "realized_pnl_pct",
-        "closed_at"
+        "closed_at",
+        "doubling_probability_score",
+        "speculative_score",
+        "speculative_components"
       ],
-      "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. model_used / input_tokens / output_tokens / cost_usd (added in migration 081) record the resolved model ID and per-call token usage + estimated USD cost, powering the Settings AI cost dashboard. 90-day retention via cleanup_old_ai_opinion_logs."
+      "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. model_used / input_tokens / output_tokens / cost_usd (added in migration 081) record the resolved model ID and per-call token usage + estimated USD cost, powering the Settings AI cost dashboard. doubling_probability_score / speculative_score / speculative_components (added in migration 083) store the AI-reported 0-100 likelihood of target_multiple hitting within target_horizon_hours plus the deterministic catalyst scorer output (total score + per-component breakdown from indicators.speculative_signals) for calibration analysis and the AI reasoning UI. 90-day retention via cleanup_old_ai_opinion_logs."
     },
     {
       "name": "ScannerLog",
@@ -1329,7 +1335,22 @@
     },
     {
       "file": "services/email_service.py",
-      "purpose": "AWS SES email sending for verification, password reset, MFA codes",
+      "purpose": "AWS SES email sending for verification, password reset, MFA codes. v2.165.0 adds send_speculative_calibration_email() with HTML/plain body builders that include verbatim copy-paste markers for the calibration alert so users can review the recommendation in email and click the signed dismiss link back into Settings.",
+      "type": "infrastructure"
+    },
+    {
+      "file": "services/speculative_bucket_service.py",
+      "purpose": "Speculative bucket math and calibration analysis for the high-risk doubling preset. get_speculative_bucket_info(account) returns bucket_usd (account_value * speculative_allocation_pct), used_usd (sum of open speculative-bucket position cost basis), remaining_usd, utilization_pct, and open_speculative_positions. validate_speculative_entry(account, proposed_notional_usd) is the preflight bucket check wired into trading_engine.signal_processor.buy_decision so a new speculative position cannot exceed the configured cap. analyze_speculative_calibration(account) aggregates closed speculative trades to produce the win-rate vs target-multiple-hit stats and recommended allocation used by the daily calibration monitor.",
+      "type": "trading"
+    },
+    {
+      "file": "services/speculative_calibration_monitor.py",
+      "purpose": "Daily periodic task (24h interval) that runs analyze_speculative_calibration for every account with speculative_allocation_pct > 0, compares actual vs target hit-rate, and emails a calibration alert (via email_service.send_speculative_calibration_email) when the allocation should be adjusted. Enforces a 30-day per-user cooldown via Account.speculative_calibration_last_alerted_at so users aren't spammed. Also broadcasts a 'speculative_calibration_alert' WebSocket event to the account owner so the frontend can show a persistent toast with a 'Review in email' CTA. Wired into main.py startup/shutdown via start_speculative_calibration_monitor / stop_speculative_calibration_monitor.",
+      "type": "background"
+    },
+    {
+      "file": "services/speculative_calibration_token.py",
+      "purpose": "JWT dismiss-token helpers for the speculative calibration alert email. create_dismiss_token(account_id, user_id) issues a short-lived signed token, decode_dismiss_token(token) validates it for the POST /api/accounts/{id}/speculative-calibration/dismiss endpoint, and build_dismiss_url(account_id, user_id) produces the Settings deep link embedded in the email body (frontend reads ?dismiss_token=&account_id= on mount and posts back to dismiss).",
       "type": "infrastructure"
     },
     {
@@ -1533,7 +1554,7 @@
     "modules": [
       {
         "file": "trading_engine/signal_processor/",
-        "purpose": "Signal processing and trading decision orchestration (Phase 5 package, split from a 1308-LOC monolith). __init__.py exports process_signal() orchestrator; _shared.py holds context/budget/indicator/signal-log helpers; buy_decision.py holds _decide_buy + _execute_buy_trade (Phase 5.2 helpers: _log_budget_blocker_if_applicable, _run_new_position_preflight, _evaluate_blacklist_category, new/DCA/stopped path handlers); sell_decision.py holds _decide_and_execute_sell (Phase 5.2 helpers: _build_market_context, _resolve_take_profit_mode, _verify_mark_profit_allows_sell, _execute_position_close)."
+        "purpose": "Signal processing and trading decision orchestration (Phase 5 package, split from a 1308-LOC monolith). __init__.py exports process_signal() orchestrator; _shared.py holds context/budget/indicator/signal-log helpers; buy_decision.py holds _decide_buy + _execute_buy_trade (Phase 5.2 helpers: _log_budget_blocker_if_applicable, _run_new_position_preflight, _evaluate_blacklist_category, new/DCA/stopped path handlers) and v2.165.0 adds a speculative-bucket preflight check via speculative_bucket_service.validate_speculative_entry so new speculative-preset entries cannot exceed the per-account speculative cap; sell_decision.py holds _decide_and_execute_sell (Phase 5.2 helpers: _build_market_context, _resolve_take_profit_mode, _verify_mark_profit_allows_sell, _execute_position_close)."
       },
       {
         "file": "trading_engine/buy_executor.py",
@@ -1666,7 +1687,7 @@
     {
       "file": "strategies/indicator_based.py",
       "class": "IndicatorBasedStrategy",
-      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit. Pure helpers (flatten_conditions, needs_aggregate_indicators, build_ai_params, build_bull_flag_params) extracted to strategies/indicator_based_helpers.py in Phase 5 to stay under the 1200-LOC cap."
+      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit. Pure helpers (flatten_conditions, needs_aggregate_indicators, build_ai_params, build_bull_flag_params) extracted to strategies/indicator_based_helpers.py in Phase 5 to stay under the 1200-LOC cap. v2.165.0 adds a time-based max-hold exit: when speculative_max_hold_hours is set in the strategy config, positions older than the threshold are force-exited regardless of take-profit/stop-loss (used by the 'speculative' risk preset for catalyst trades)."
     },
     {
       "file": "strategies/indicator_based_helpers.py",
@@ -1702,7 +1723,7 @@
   "core_modules": [
     {
       "file": "main.py",
-      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration"
+      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration. v2.165.0 wires start_speculative_calibration_monitor / stop_speculative_calibration_monitor into the startup/shutdown hooks for the daily speculative-bucket calibration loop."
     },
     {
       "file": "ai_service.py",
@@ -1812,7 +1833,7 @@
   "schemas": [
     {
       "file": "schemas/accounts.py",
-      "purpose": "Shared Pydantic request/response schemas for the accounts routers: AccountBase, AccountCreate, AccountUpdate, AccountResponse, AccountWithBalance, AutoBuySettings, AutoBuySettingsUpdate, RebalanceSettingsUpdate, DustSweepSettingsUpdate. Extracted from accounts_query_router in v2.164.2 so accounts_mutation_router no longer cross-imports from another router."
+      "purpose": "Shared Pydantic request/response schemas for the accounts routers: AccountBase, AccountCreate, AccountUpdate, AccountResponse, AccountWithBalance, AutoBuySettings, AutoBuySettingsUpdate, RebalanceSettingsUpdate, DustSweepSettingsUpdate. Extracted from accounts_query_router in v2.164.2 so accounts_mutation_router no longer cross-imports from another router. v2.165.0 adds speculative_allocation_pct to AccountUpdate (validated 0-50) and AccountResponse so the Settings page can read and persist the speculative bucket size."
     },
     {
       "file": "schemas/dashboard.py",
@@ -1834,11 +1855,11 @@
   "indicators_module": [
     {
       "file": "indicators/ai_spot_opinion.py",
-      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). AISpotOpinionParams.ai_model_override is plumbed through to get_provider(model=...) so bots can pin a specific model. _call_llm returns a 5-tuple (signal, confidence, reasoning, tool_calls, usage_meta) where usage_meta = {model_used, input_tokens, output_tokens, cost_usd} (cost computed via indicators.ai_pricing.estimate_cost_usd). Every evaluation is persisted via ai_opinion_logger.log_opinion with the usage/cost fields."
+      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). AISpotOpinionParams.ai_model_override is plumbed through to get_provider(model=...) so bots can pin a specific model. _call_llm returns a 5-tuple (signal, confidence, reasoning, tool_calls, usage_meta) where usage_meta = {model_used, input_tokens, output_tokens, cost_usd} (cost computed via indicators.ai_pricing.estimate_cost_usd). Every evaluation is persisted via ai_opinion_logger.log_opinion with the usage/cost fields. v2.165.0 adds catalyst mode: params gain speculative_mode, target_multiple, and target_horizon_hours; when speculative_mode is on the evaluator runs the deterministic indicators.speculative_signals scorer as a prefilter and asks the model for a doubling_probability_score (0-100) alongside the signal, so only pairs that clear the catalyst threshold reach the LLM."
     },
     {
       "file": "indicators/ai_opinion_logger.py",
-      "purpose": "Writes one AIOpinionLog row per AISpotOpinionEvaluator.evaluate() call (fire-and-forget) and subscribes to the event bus POSITION_CLOSED topic to backfill outcome / realized_pnl_pct / closed_at when the trade resolves. log_opinion accepts and persists model_used / input_tokens / output_tokens / cost_usd so the Settings AI cost dashboard can aggregate spend per provider and model. classify_outcome(pct) maps PnL% to win/loss/breakeven."
+      "purpose": "Writes one AIOpinionLog row per AISpotOpinionEvaluator.evaluate() call (fire-and-forget) and subscribes to the event bus POSITION_CLOSED topic to backfill outcome / realized_pnl_pct / closed_at when the trade resolves. log_opinion accepts and persists model_used / input_tokens / output_tokens / cost_usd so the Settings AI cost dashboard can aggregate spend per provider and model. v2.165.0 also persists doubling_probability_score, speculative_score, and speculative_components (from the catalyst prefilter) so the calibration monitor and the frontend AI reasoning expander can show the full signal breakdown. classify_outcome(pct) maps PnL% to win/loss/breakeven."
     },
     {
       "file": "indicators/ai_pricing.py",
@@ -1850,7 +1871,11 @@
     },
     {
       "file": "indicators/risk_presets.py",
-      "purpose": "Default risk preset configurations for AI indicators"
+      "purpose": "Default risk preset configurations for AI indicators. v2.165.0 adds the 'speculative' preset (high-risk doubling setup: enables speculative_mode + target_multiple, sets a short speculative_max_hold_hours catalyst window, wider stop-loss, and the bucket-aware budget sizing used by buy_decision's preflight)."
+    },
+    {
+      "file": "indicators/speculative_signals.py",
+      "purpose": "Deterministic 0-100 catalyst scorer used as the prefilter for the 'speculative' risk preset. Aggregates 6 weighted components (momentum, volume, volatility expansion, news/social catalysts, relative strength, structural breakout) into a single speculative_score plus a speculative_components breakdown; the output is consumed by ai_spot_opinion (catalyst mode) and persisted on AIOpinionLog for calibration analysis."
     }
   ],
   "ai_tools": {
@@ -2232,10 +2257,16 @@
       "interval": "5 minutes (APScheduler)",
       "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
       "purpose": "Sweep all in-memory caches to prevent unbounded growth: price cache, chat/game rate-limit dicts, game rooms, monitor caches, auth rate limiters, public endpoint rate limiter, WebSocket stale connections"
+    },
+    {
+      "name": "SpeculativeCalibrationMonitor",
+      "interval": "Daily (24 hours, APScheduler)",
+      "scheduler_tier": "Tier 3 \u2014 APScheduler batch",
+      "purpose": "Analyze actual vs target hit-rate on closed speculative-bucket trades per account; email a calibration alert (via email_service.send_speculative_calibration_email) and broadcast a 'speculative_calibration_alert' WebSocket event when the recommended allocation diverges. Enforces a 30-day per-user cooldown via Account.speculative_calibration_last_alerted_at."
     }
   ],
   "migrations": {
-    "count": 91,
+    "count": 93,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2331,7 +2362,9 @@
       "078_add_rebalance_usdt.py",
       "079_report_schedule_retention.py",
       "080_ai_opinion_log.py",
-      "081_ai_opinion_log_cost_fields.py"
+      "081_ai_opinion_log_cost_fields.py",
+      "082_speculative_bucket.py",
+      "083_ai_opinion_log_speculative.py"
     ]
   }
 }

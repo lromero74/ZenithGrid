@@ -106,3 +106,4 @@ backend/trading.db.prod
 backend/backups/
 CLAUDE.md
 .claude-musings.md
+backend/db_backups/
