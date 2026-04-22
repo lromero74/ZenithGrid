@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.164.11] - 2026-04-22
+
+### Changed
+- **Open positions refreshes keep more of their backend work on the list-safe path** — The hot `GET /api/positions` list now reuses the aggregated first-buy quote amount when it needs to compute resize-budget hints for snapshot-less positions, instead of needing a trade-backed fallback path. That keeps the 5-second open-deals polling route leaner while preserving the “Resize budget” affordance on affected deals.
+- **Active limit-close rows stop expanding fill-by-fill history on every poll** — The Positions list only shows summary limit-close status such as price and fill percentage, so the hot list endpoint no longer JSON-parses and serializes the full `fills[]` history for those rows. The response keeps the summary fields the card view actually uses and drops avoidable per-poll payload and CPU work.
+
 ## [v2.164.10] - 2026-04-22
 
 ### Changed

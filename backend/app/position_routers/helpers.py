@@ -14,7 +14,7 @@ from app.trading_engine.position_manager import (
 )
 
 
-def compute_resize_budget(position: Position, bot: Optional[Bot]) -> float:
+def compute_resize_budget(position: Position, bot: Optional[Bot], base_order_size: Optional[float] = None) -> float:
     """Compute the true max deal cost for a position from its config and trades."""
     config = position.strategy_config_snapshot or (bot.strategy_config if bot else {}) or {}
 
@@ -23,9 +23,12 @@ def compute_resize_budget(position: Position, bot: Optional[Bot]) -> float:
     if expected > 0:
         return expected
 
+    # List views can pass the first-buy quote amount directly and avoid loading trades.
+    if base_order_size is None:
+        base_order_size = 0.0
+
     # Fallback: derive from position's first buy trade
-    base_order_size = 0.0
-    if position.trades:
+    if base_order_size <= 0 and position.trades:
         buy_trades = sorted(
             [t for t in position.trades if t.side == "buy"],
             key=lambda t: t.timestamp,
