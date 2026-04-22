@@ -12,9 +12,10 @@ import { ActiveSessions } from '../components/settings/ActiveSessions'
 import { AdminDisplayNameField } from '../components/settings/AdminDisplayNameField'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
-import { settingsApi } from '../services/api'
+import { settingsApi, speculativeBucketApi } from '../services/api'
 import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
 import { useCapsLock } from '../hooks/useCapsLock'
 
@@ -24,7 +25,42 @@ export default function Settings() {
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
   const { accounts } = useAccount()
   const { theme, toggleTheme } = useTheme()
+  const { addToast } = useNotifications()
   const isAdmin = useIsAdmin()
+
+  // Speculative calibration dismiss-link handler — runs once on mount.
+  // The email link lands on /settings?dismiss_token=...&account_id=...;
+  // we POST to the dismiss endpoint, then clean the query string so a
+  // reload does not retry the dismiss (which would 403 on a consumed token).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const dismissToken = params.get('dismiss_token')
+    const accountIdParam = params.get('account_id')
+    if (!dismissToken || !accountIdParam) return
+    const accountId = parseInt(accountIdParam, 10)
+    if (!Number.isFinite(accountId)) return
+    ;(async () => {
+      try {
+        await speculativeBucketApi.dismissCalibrationAlert(accountId, dismissToken)
+        addToast({
+          type: 'success',
+          title: 'Calibration alert dismissed',
+          message: 'Next recalibration check will run in 30 days.',
+        })
+      } catch (err) {
+        addToast({
+          type: 'error',
+          title: 'Could not dismiss calibration alert',
+          message: 'The link may have expired. Re-open the email and try again.',
+        })
+      } finally {
+        // Strip the query params so a refresh does not re-hit the endpoint.
+        const cleanUrl = window.location.pathname + window.location.hash
+        window.history.replaceState({}, '', cleanUrl)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
 
   const canWriteSettings = usePermission('settings', 'write')

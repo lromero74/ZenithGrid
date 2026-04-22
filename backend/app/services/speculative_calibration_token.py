@@ -81,19 +81,16 @@ def build_dismiss_url(*, user_id: int, account_id: int, base_url: str) -> str:
     """Compose the full dismiss URL included in the alert email.
 
     The endpoint is POST, but the email includes a clickable link that
-    hits a GET-forwarding route on the frontend or a lightweight dismiss
-    page. The URL shape is:
-        {base_url}/settings/speculative-bucket?dismiss_token=...&account_id=...
+    lands on the Settings page. The frontend's SpeculativeAllocationSection
+    catches the `dismiss_token` + `account_id` query params, POSTs them
+    to the API, and shows a confirmation toast.
 
-    The frontend catches the `dismiss_token` query param, POSTs it to
-    the API, and shows a confirmation. Using a frontend-hosted link
-    keeps the click behavior sane (no mail client hitting a POST
-    endpoint directly) while still carrying the signed token through.
+    URL shape: {base_url}/settings?dismiss_token=...&account_id=...
     """
     token = create_dismiss_token(user_id=user_id, account_id=account_id)
     base = base_url.rstrip("/")
     return (
-        f"{base}/settings/speculative-bucket"
+        f"{base}/settings"
         f"?dismiss_token={quote(token, safe='')}"
         f"&account_id={int(account_id)}"
     )

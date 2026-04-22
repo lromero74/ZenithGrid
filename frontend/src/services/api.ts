@@ -883,6 +883,12 @@ export const speculativeBucketApi = {
   get: (accountId: number) =>
     api.get<SpeculativeBucketInfo>(`/accounts/${accountId}/speculative-bucket`)
       .then((res) => res.data),
+  dismissCalibrationAlert: (accountId: number, dismissToken: string) =>
+    api.post<{ dismissed: boolean }>(
+      `/accounts/${accountId}/speculative-calibration/dismiss`,
+      null,
+      { params: { dismiss_token: dismissToken } },
+    ).then((res) => res.data),
 };
 
 // Reports & Goals

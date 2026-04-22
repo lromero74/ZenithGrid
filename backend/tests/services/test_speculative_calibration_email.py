@@ -82,7 +82,7 @@ class TestBuildTextBody:
 
     def test_dismiss_url_is_rendered(self, analysis):
         url = (
-            "https://tradebot.romerotechsolutions.com/settings/speculative-bucket"
+            "https://tradebot.romerotechsolutions.com/settings"
             "?dismiss_token=XYZ&account_id=7"
         )
         body = build_speculative_calibration_text_body(
@@ -91,6 +91,7 @@ class TestBuildTextBody:
         )
         assert "dismiss_token=XYZ" in body
         assert "account_id=7" in body
+        assert "/settings?" in body
 
     def test_lists_all_components_sorted_desc(self, analysis):
         body = build_speculative_calibration_text_body(

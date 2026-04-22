@@ -534,6 +534,39 @@ describe('NotificationContext', () => {
     expect(screen.getByTestId('toast-container').children.length).toBe(0)
   })
 
+  test('renders a persistent toast on speculative_calibration_alert', async () => {
+    render(
+      <NotificationProvider>
+        <TestConsumer />
+      </NotificationProvider>
+    )
+
+    act(() => { vi.advanceTimersByTime(0) })
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.simulateOpen() })
+
+    await act(async () => {
+      ws.simulateMessage({
+        type: 'speculative_calibration_alert',
+        payload: {
+          total_closed: 67,
+          overall_win_rate_pct: 13.4,
+          divergence_pp: 15.2,
+          dismiss_url: 'https://x/settings?dismiss_token=T&account_id=1',
+        },
+      })
+    })
+
+    // Toast is rendered.
+    expect(screen.getByTestId('toast-info')).toBeTruthy()
+    // Title mentions recalibrate so the user knows what to do.
+    const title = screen.getByText(/recalibrate/i)
+    expect(title).toBeTruthy()
+    // Body includes the divergence number.
+    const body = screen.getByText(/15\.2pp/)
+    expect(body).toBeTruthy()
+  })
+
   test('cleans up WebSocket and timers on unmount', async () => {
     const { unmount } = render(
       <NotificationProvider>
