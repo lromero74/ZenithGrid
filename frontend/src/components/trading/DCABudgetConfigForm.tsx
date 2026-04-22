@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { botValidationApi } from '../../services/api'
-import AdvancedConditionBuilder, {
-  ConditionExpression,
-  createEmptyExpression,
-  Condition,
-} from './AdvancedConditionBuilder'
-import { ConditionType } from './PhaseConditionSelector'
+import AdvancedConditionBuilder from './AdvancedConditionBuilder'
 import { getDCAMultiplier, EXCHANGE_MINIMUMS } from '../bots'
+import {
+  numericProps,
+  safeParseFloat,
+  calculateDCABudget,
+  toConditionExpression,
+  hasBullFlagEntry,
+} from './DCABudgetConfigForm.helpers'
 
 interface DCABudgetConfigFormProps {
   config: Record<string, any>
@@ -22,184 +24,6 @@ interface DCABudgetConfigFormProps {
   splitBudget?: boolean  // Whether to split budget across pairs
   maxConcurrentDeals?: number  // Max number of simultaneous positions
   effectiveMaxDeals?: number // Sensible maximum for deals
-}
-
-// Safe number parsing that returns undefined for invalid input (instead of NaN)
-const safeParseFloat = (value: string): number | undefined => {
-  const parsed = parseFloat(value)
-  return isNaN(parsed) ? undefined : parsed
-}
-
-const safeParseInt = (value: string): number | undefined => {
-  const parsed = parseInt(value, 10)
-  return isNaN(parsed) ? undefined : parsed
-}
-
-// Numeric input helper — allows the field to be empty while typing,
-// applies the default only when the user leaves the field blank.
-const numericProps = (
-  current: any,
-  fallback: number,
-  commit: (v: number) => void,
-  isInt = false,
-) => ({
-  value: current === '' || current === null || current === undefined ? '' : current,
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.value === '') { commit('' as any); return }
-    const v = isInt ? safeParseInt(e.target.value) : safeParseFloat(e.target.value)
-    if (v !== undefined) commit(v)
-  },
-  onBlur: (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = isInt ? safeParseInt(e.target.value) : safeParseFloat(e.target.value)
-    commit(v !== undefined ? v : fallback)
-  },
-})
-
-// Calculate DCA budget breakdown
-interface DCABudgetBreakdown {
-  totalBudget: number
-  budgetPerDeal: number
-  baseOrderSize: number
-  safetyOrders: { order: number; size: number; total: number }[]
-  totalCapitalPerDeal: number
-  maxSimultaneousCapital: number
-  budgetUtilization: number  // %
-  isOverAllocated: boolean  // True if minimum enforcement causes over-budget
-  minimumEnforced: boolean  // True if any order was bumped to minimum
-}
-
-// DCA ladder calculation: divides the bot's budget equally among
-// max concurrent deals, then within each deal splits budget across a base order
-// plus exponentially scaled safety orders (each SO_i = base * scale^i).
-function calculateDCABudget(
-  aggregateValue: number,
-  budgetPercentage: number,
-  maxConcurrentDeals: number,
-  maxSafetyOrders: number,
-  safetyOrderVolumeScale: number,
-  exchangeMinimum: number
-): DCABudgetBreakdown {
-  // Calculate total bot budget
-  const totalBudget = (aggregateValue * budgetPercentage) / 100
-
-  // Budget per deal (divided by max concurrent deals)
-  // NOTE: We divide by maxConcurrentDeals, NOT numPairs
-  // The bot can analyze many pairs but only open maxConcurrentDeals positions at once
-  const budgetPerDeal = totalBudget / Math.max(1, maxConcurrentDeals)
-
-  // Calculate total capital needed for full DCA ladder
-  // Base order + SO1 + SO2 + ... + SO_n
-  // Where SO_i = BaseOrder * SafetyOrderScale^(i-1)
-  // Assuming safety orders start at 100% of base (default behavior)
-  const baseOrderSizeRatio = 1.0  // Base order is the unit
-  let totalRatio = baseOrderSizeRatio  // Start with base order
-
-  for (let i = 0; i < maxSafetyOrders; i++) {
-    const soRatio = Math.pow(safetyOrderVolumeScale, i)
-    totalRatio += soRatio
-  }
-
-  // Calculate ideal base order size
-  let baseOrderSize = budgetPerDeal / totalRatio
-  let minimumEnforced = false
-
-  // Enforce exchange minimum on base order
-  if (baseOrderSize < exchangeMinimum) {
-    baseOrderSize = exchangeMinimum
-    minimumEnforced = true
-  }
-
-  // Calculate each safety order and enforce minimums
-  const safetyOrders: { order: number; size: number; total: number }[] = []
-  let runningTotal = baseOrderSize
-
-  for (let i = 0; i < maxSafetyOrders; i++) {
-    let soSize = baseOrderSize * Math.pow(safetyOrderVolumeScale, i)
-
-    // Enforce exchange minimum on each safety order
-    if (soSize < exchangeMinimum) {
-      soSize = exchangeMinimum
-      minimumEnforced = true
-    }
-
-    runningTotal += soSize
-    safetyOrders.push({
-      order: i + 1,
-      size: soSize,
-      total: runningTotal
-    })
-  }
-
-  const totalCapitalPerDeal = runningTotal
-  const maxSimultaneousCapital = totalCapitalPerDeal * maxConcurrentDeals
-
-  // Calculate budget utilization PER DEAL, not against total bot budget
-  // Each deal should fit within budgetPerDeal
-  const budgetUtilization = (totalCapitalPerDeal / budgetPerDeal) * 100
-
-  // Check if minimum enforcement caused over-allocation
-  const isOverAllocated = minimumEnforced && budgetUtilization > 100
-
-  return {
-    totalBudget,
-    budgetPerDeal,
-    baseOrderSize,
-    safetyOrders,
-    totalCapitalPerDeal,
-    maxSimultaneousCapital,
-    budgetUtilization,
-    isOverAllocated,
-    minimumEnforced
-  }
-}
-
-// Normalize conditions from DB format (indicator) to frontend format (type)
-// DB stores: { indicator: "ai_buy", ... }
-// Frontend expects: { type: "ai_buy", ... }
-function normalizeCondition(c: any): Condition {
-  return {
-    ...c,
-    // Use 'type' if present, otherwise fallback to 'indicator'
-    type: (c.type || c.indicator) as ConditionType,
-    negate: c.negate || false,
-  }
-}
-
-// Convert stored conditions (which might be flat array or expression) to ConditionExpression
-function toConditionExpression(stored: any, logic: 'and' | 'or' = 'and'): ConditionExpression {
-  // Already in new format (has 'groups' array)
-  if (stored && stored.groups && Array.isArray(stored.groups)) {
-    return {
-      groups: stored.groups.map((g: any) => ({
-        ...g,
-        conditions: (g.conditions || []).map(normalizeCondition),
-      })),
-      groupLogic: stored.groupLogic || 'and',
-    }
-  }
-
-  // Old flat array format - convert to single group
-  if (Array.isArray(stored) && stored.length > 0) {
-    return {
-      groups: [{
-        id: `grp_legacy_${Date.now()}`,
-        conditions: stored.map(normalizeCondition),
-        logic,
-      }],
-      groupLogic: 'and',
-    }
-  }
-
-  // Empty or invalid - return empty expression
-  return createEmptyExpression()
-}
-
-// Check if entry conditions use bull_flag indicator (pattern-based entry)
-function hasBullFlagEntry(expression: ConditionExpression): boolean {
-  if (!expression?.groups) return false
-  return expression.groups.some(group =>
-    group.conditions?.some(c => c.type === 'bull_flag')
-  )
 }
 
 function DCABudgetConfigForm({
