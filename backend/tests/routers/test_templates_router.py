@@ -506,12 +506,17 @@ class TestSeedDefaults:
         tmpl = rows[0]
         assert tmpl.strategy_type == "indicator_based"
         assert tmpl.strategy_config.get("ai_risk_preset") == "speculative"
-        # Must have at least one ai_opinion buy condition so catalyst-mode AI fires.
+        # Must have at least one AI buy condition so catalyst-mode AI fires.
+        # Uses ai_buy (numeric) rather than ai_opinion (string-valued) so the
+        # frontend's number-input condition widget doesn't complain.
         boc = tmpl.strategy_config.get("base_order_conditions") or []
-        assert any(
-            (c.get("type") or c.get("indicator")) == "ai_opinion"
-            for c in boc
-        ), "Template must enable the AI indicator via an ai_opinion base-order condition"
+        ai_conditions = [
+            c for c in boc
+            if (c.get("type") or c.get("indicator")) == "ai_buy"
+        ]
+        assert ai_conditions, "Template must enable AI via an ai_buy base-order condition"
+        # Value must be numeric so the condition-builder's number input is happy.
+        assert isinstance(ai_conditions[0].get("value"), (int, float))
 
     @pytest.mark.asyncio
     async def test_seed_defaults_idempotent(self, db_session):

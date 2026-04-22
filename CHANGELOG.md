@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.165.4] - 2026-04-22
+
+### Fixed
+- **Speculative sample + template: use ai_buy instead of ai_opinion** — Copying the Speculative Catalyst Hunter sample (or loading the DB template) filled the form with an `ai_opinion` / `"buy"` condition. The condition-builder widget renders the value into a number input, so the string `"buy"` triggered a browser "cannot be parsed, or is out of range" warning loop. Both the sample and the DB template now use `ai_buy` with numeric value `1`, matching the existing AI-Autonomous sample's convention.
+
 ## [v2.165.3] - 2026-04-22
 
 ### Added

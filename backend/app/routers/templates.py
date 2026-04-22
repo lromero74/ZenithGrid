@@ -394,11 +394,15 @@ async def seed_default_templates(
                 # target_multiple/horizon, tight SL/TP, max-hold, and
                 # prefilter overrides on bot create.
                 "ai_risk_preset": "speculative",
-                # Enable the AI Spot Opinion indicator via an ai_opinion
+                # Enable the AI Spot Opinion indicator via an ai_buy
                 # base-order condition. Catalyst mode activates on this path
                 # because speculative_mode gets merged into the AI params.
+                # Uses ai_buy (numeric value 1) instead of ai_opinion ("buy")
+                # so the frontend's number-input condition widget doesn't
+                # complain about a non-numeric value — matches the existing
+                # AI-Autonomous sample convention.
                 "base_order_conditions": [
-                    {"type": "ai_opinion", "operator": "equals", "value": "buy"},
+                    {"type": "ai_buy", "operator": "equal", "value": 1},
                 ],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
