@@ -13,12 +13,12 @@
     {
       "file": "routers/accounts_query_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps); TTL caches for live Coinbase API calls shared across owner and members"
+      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
     },
     {
       "file": "routers/accounts_mutation_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution; split from accounts_router.py"
+      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router."
     },
     {
       "file": "routers/admin_router.py",
@@ -1198,6 +1198,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/account_cache.py",
+      "purpose": "In-memory TTL caches keyed by account_id for live-exchange endpoints (_TTL_REBALANCE_STATUS 30s, _TTL_DUST_SWEEP 60s). Shared by both accounts routers — the query router populates and serves; the mutation router invalidates on settings change. Protects the account owner's Coinbase API rate quota when multiple members of a shared account hit the same live endpoint. Extracted from accounts_query_router in v2.164.2 to break the cross-router import from accounts_mutation_router.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/account_responses.py",
       "purpose": "Shared response schemas and builders for account endpoints: RebalanceSettingsResponse pydantic DTO and build_rebalance_response(account) factory. Used by both accounts_query_router and accounts_mutation_router; extracted from accounts_query_router in Phase 5.3 so neither router has to reach into the other's private helpers.",
       "type": "infrastructure"
@@ -1795,6 +1800,10 @@
     }
   ],
   "schemas": [
+    {
+      "file": "schemas/accounts.py",
+      "purpose": "Shared Pydantic request/response schemas for the accounts routers: AccountBase, AccountCreate, AccountUpdate, AccountResponse, AccountWithBalance, AutoBuySettings, AutoBuySettingsUpdate, RebalanceSettingsUpdate, DustSweepSettingsUpdate. Extracted from accounts_query_router in v2.164.2 so accounts_mutation_router no longer cross-imports from another router."
+    },
     {
       "file": "schemas/dashboard.py",
       "purpose": "Dashboard statistics Pydantic response models"
