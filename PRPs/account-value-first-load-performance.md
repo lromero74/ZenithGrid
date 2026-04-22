@@ -45,6 +45,8 @@ Implemented on the follow-up branch:
 - remove the positions page's 10-second bot-metadata polling loop; bot labels/filters now use a long stale window instead of live polling
 - trim the backend `GET /positions` hot path by replacing eager-loaded `trades` and `pending_orders` collections with aggregate queries for trade counts / first-buy / last-buy / pending counts, plus targeted lookup only for active limit-close orders
 - scope the `GET /positions` blacklist query to just the symbols on the current page of results, and only preload bots for resize-budget calculation when a position lacks a strategy snapshot
+- feed the positions list's `computed_max_budget` calculation from the aggregated first-buy quote amount so the hot list route can still derive resize budgets without touching `position.trades`
+- stop expanding limit-close fill-history payloads on the positions list; the hot route now returns just the limit summary fields the card view actually uses
 - centralize BTC/USD and ETH/USD market-price fetch policy in a shared `useMarketPrice()` hook
 - switch `App`, `ClosedPositions`, and the positions hook to the shared market-price hook
 - add `frontend/src/pages/Dashboard.test.tsx` coverage for deferred query behavior
@@ -72,6 +74,8 @@ This latest pass trims one more avoidable source of overfetch:
 - the open positions screen now only stays on a 5-second cadence when there are actually active deals to watch
 - each active-deals refresh is now lighter on the backend because the positions list endpoint no longer hydrates every trade and pending order row just to compute summary fields for the list
 - the positions hot path also no longer pulls unrelated blacklist rows or unnecessary bot configs for positions that can compute their budget from the frozen snapshot alone
+- the remaining list-route budget calculation no longer has to lazy-load trade rows for snapshot-less positions; it reuses the first-buy size already pulled by the aggregate query
+- active limit-close rows also no longer JSON-parse and serialize fill-by-fill history on every poll; the list keeps only the summary stats the Positions cards render
 - the remaining high-frequency pressure is now concentrated mostly in the necessity of the active-deals 5-second refresh itself rather than in auxiliary summary queries, bot metadata churn, duplicate timer infrastructure, avoidable ORM overfetch, or broad supporting lookups
 
 ---

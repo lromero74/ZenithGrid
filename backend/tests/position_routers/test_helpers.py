@@ -64,6 +64,22 @@ class TestComputeResizeBudget:
 
     @patch("app.position_routers.helpers.calculate_expected_position_budget")
     @patch("app.position_routers.helpers.calculate_max_deal_cost")
+    def test_prefers_explicit_base_order_size_when_provided(self, mock_max_deal, mock_expected):
+        """Happy path: list callers can provide first-buy size without loading trades."""
+        mock_expected.return_value = 0.0
+        mock_max_deal.return_value = 0.04
+
+        position = MagicMock()
+        position.strategy_config_snapshot = {"max_safety_orders": 2}
+        position.trades = []
+
+        result = compute_resize_budget(position, None, base_order_size=0.01)
+
+        assert result == 0.04
+        mock_max_deal.assert_called_once_with({"max_safety_orders": 2}, 0.01)
+
+    @patch("app.position_routers.helpers.calculate_expected_position_budget")
+    @patch("app.position_routers.helpers.calculate_max_deal_cost")
     def test_falls_back_to_config_base_order_btc(self, mock_max_deal, mock_expected):
         """Edge case: no trades, uses config base_order_btc."""
         mock_expected.return_value = 0.0

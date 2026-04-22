@@ -4,7 +4,6 @@ Position Query Router
 Handles position listing, details, trades, AI logs, and P&L timeseries.
 """
 
-import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -20,7 +19,7 @@ from app.models import AIBotLog, AIOpinionLog, BlacklistedCoin, Bot, PendingOrde
 from app.auth.dependencies import get_current_user
 from app.services.account_access import accessible_account_ids
 from app.schemas import AIBotLogResponse, AIOpinionLogResponse, PositionResponse, TradeResponse
-from app.schemas.position import LimitOrderDetails, LimitOrderFill
+from app.schemas.position import LimitOrderDetails
 from app.constants import VALID_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -121,6 +120,7 @@ async def get_positions(
             buy_bounds_subquery.c.position_id,
             first_buy_trade.price.label("first_buy_price"),
             last_buy_trade.price.label("last_buy_price"),
+            first_buy_trade.quote_amount.label("first_buy_quote_amount"),
         )
         .outerjoin(
             first_buy_trade,
@@ -140,7 +140,7 @@ async def get_positions(
         )
     )
     buy_price_map = {
-        row.position_id: (row.first_buy_price, row.last_buy_price)
+        row.position_id: (row.first_buy_price, row.last_buy_price, row.first_buy_quote_amount)
         for row in buy_price_result
     }
 
@@ -194,7 +194,7 @@ async def get_positions(
         pos_response.pending_orders_count = pending_count_map.get(pos.id, 0)
 
         # Set first/last buy prices for DCA reference
-        first_buy_price, last_buy_price = buy_price_map.get(pos.id, (None, None))
+        first_buy_price, last_buy_price, first_buy_quote_amount = buy_price_map.get(pos.id, (None, None, None))
         pos_response.first_buy_price = first_buy_price
         pos_response.last_buy_price = last_buy_price
 
@@ -215,7 +215,7 @@ async def get_positions(
         # Compute resize budget for open positions
         if pos.status == "open":
             bot = bots_map.get(pos.bot_id) if pos.bot_id else None
-            computed = compute_resize_budget(pos, bot)
+            computed = compute_resize_budget(pos, bot, base_order_size=first_buy_quote_amount)
             if computed > 0:
                 pos_response.computed_max_budget = computed
 
@@ -224,10 +224,6 @@ async def get_positions(
             limit_order = limit_order_map.get(pos.limit_close_order_id)
 
             if limit_order:
-                fills_data: List = (
-                    json.loads(limit_order.fills) if isinstance(limit_order.fills, str) else (limit_order.fills or [])
-                )
-                fills = [LimitOrderFill(**fill) for fill in fills_data]
                 filled_amount = limit_order.base_amount - (limit_order.remaining_base_amount or limit_order.base_amount)
                 fill_percentage = (filled_amount / limit_order.base_amount * 100) if limit_order.base_amount > 0 else 0
 
@@ -236,7 +232,7 @@ async def get_positions(
                     remaining_amount=limit_order.remaining_base_amount or limit_order.base_amount,
                     filled_amount=filled_amount,
                     fill_percentage=fill_percentage,
-                    fills=fills,
+                    fills=[],
                     status=limit_order.status,
                 )
 

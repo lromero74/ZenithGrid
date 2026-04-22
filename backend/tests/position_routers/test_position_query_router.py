@@ -459,6 +459,60 @@ class TestGetPositions:
         assert result[0].limit_order_details.limit_price == pytest.approx(0.03)
         assert result[0].limit_order_details.filled_amount == pytest.approx(0.6)
         assert result[0].limit_order_details.fill_percentage == pytest.approx(60.0)
+        assert result[0].limit_order_details.fills == []
+
+    @pytest.mark.asyncio
+    async def test_computes_resize_budget_from_first_buy_size_without_loading_trades(self, db_session):
+        """Happy path: list endpoint derives computed_max_budget from aggregated first-buy size."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "resizebudget@example.com")
+        bot = await _create_bot(
+            db_session,
+            user,
+            account,
+            strategy_config={
+                "max_safety_orders": 2,
+                "safety_order_type": "percentage_of_base",
+                "safety_order_percentage": 50.0,
+                "safety_order_volume_scale": 1.0,
+            },
+        )
+        pos = await _create_position(
+            db_session,
+            account,
+            bot=bot,
+            status="open",
+            strategy_config_snapshot=None,
+        )
+
+        db_session.add(
+            Trade(
+                position_id=pos.id,
+                side="buy",
+                quote_amount=0.01,
+                base_amount=0.5,
+                price=0.02,
+                trade_type="initial",
+                timestamp=datetime.utcnow(),
+            )
+        )
+        await db_session.flush()
+
+        response_mock = MagicMock()
+        response_mock.headers = {}
+        result = await get_positions(
+            response=response_mock,
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert len(result) == 1
+        assert result[0].computed_max_budget == pytest.approx(0.02)
 
 
 # =============================================================================
