@@ -496,19 +496,19 @@ async def get_orderbook(
                 if paper_client and hasattr(paper_client, 'real_client') and paper_client.real_client:
                     account = paper_account  # Use paper account — its real_client has API creds
 
-            # Last resort: any active real CEX account in the system (order book is public data)
-            if not account:
-                system_result = await db.execute(
-                    select(Account).where(
-                        Account.type == "cex",
-                        Account.is_active.is_(True),
-                        Account.is_paper_trading.is_not(True),
-                    ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
-                )
-                account = system_result.scalar_one_or_none()
-
+        # Note: we used to fall back to "any active real CEX account in the system"
+        # as a last resort. That consumed the API rate budget of some
+        # unrelated user to satisfy a stranger's request — exposing that
+        # user to rate-limit exhaustion caused by strangers' activity.
+        # Removed in v2.166.6 per the multiuser-security audit.
         if not account:
-            raise HTTPException(status_code=503, detail="No exchange account configured")
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No exchange account configured for order-book lookup. "
+                    "Add a Coinbase CEX account in Settings."
+                ),
+            )
 
         coinbase = await get_exchange_client_for_account(db, account.id)
         if not coinbase:
