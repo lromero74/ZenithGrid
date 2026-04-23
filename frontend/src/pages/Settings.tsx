@@ -7,6 +7,7 @@ import { AIProvidersManager } from '../components/settings/AIProvidersManager'
 import { AICostDashboard } from '../components/settings/AICostDashboard'
 import { PortfolioManagement } from '../components/account/PortfolioManagement'
 import { SpeculativeAllocationSection } from '../components/settings/SpeculativeAllocationSection'
+import { SpeculativeWeightsHistory } from '../components/settings/SpeculativeWeightsHistory'
 import { BlacklistManager } from '../components/settings/BlacklistManager'
 import { ActiveSessions } from '../components/settings/ActiveSessions'
 import { AdminDisplayNameField } from '../components/settings/AdminDisplayNameField'
@@ -28,33 +29,59 @@ export default function Settings() {
   const { addToast } = useNotifications()
   const isAdmin = useIsAdmin()
 
-  // Speculative calibration dismiss-link handler — runs once on mount.
-  // The email link lands on /settings?dismiss_token=...&account_id=...;
-  // we POST to the dismiss endpoint, then clean the query string so a
-  // reload does not retry the dismiss (which would 403 on a consumed token).
+  // Speculative calibration link handlers — runs once on mount.
+  //
+  // The calibration email carries one of two signed-token links that
+  // both land on /settings:
+  //   1) ?dismiss_token=...&account_id=...
+  //   2) ?apply_token=...&account_id=...&proposal_id=...
+  //
+  // We POST the appropriate token, show a confirmation toast, then
+  // scrub the query string so a reload does not retry (tokens are
+  // single-use — a retry would 403 or 409).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const dismissToken = params.get('dismiss_token')
+    const applyToken = params.get('apply_token')
     const accountIdParam = params.get('account_id')
-    if (!dismissToken || !accountIdParam) return
+    if ((!dismissToken && !applyToken) || !accountIdParam) return
     const accountId = parseInt(accountIdParam, 10)
     if (!Number.isFinite(accountId)) return
+
     ;(async () => {
       try {
-        await speculativeBucketApi.dismissCalibrationAlert(accountId, dismissToken)
-        addToast({
-          type: 'success',
-          title: 'Calibration alert dismissed',
-          message: 'Next recalibration check will run in 30 days.',
-        })
+        if (applyToken) {
+          const proposalIdParam = params.get('proposal_id')
+          const proposalId = proposalIdParam ? parseInt(proposalIdParam, 10) : NaN
+          if (!Number.isFinite(proposalId)) {
+            addToast({
+              type: 'error',
+              title: 'Invalid apply link',
+              message: 'The link is missing a proposal id. Re-open the email and try again.',
+            })
+            return
+          }
+          await speculativeBucketApi.applyWeightsProposal(accountId, applyToken, proposalId)
+          addToast({
+            type: 'success',
+            title: 'Speculative weights updated',
+            message: 'The tuner\'s suggested weights are now active for your speculative bots.',
+          })
+        } else if (dismissToken) {
+          await speculativeBucketApi.dismissCalibrationAlert(accountId, dismissToken)
+          addToast({
+            type: 'success',
+            title: 'Calibration alert dismissed',
+            message: 'Next recalibration check will run in 30 days.',
+          })
+        }
       } catch (err) {
         addToast({
           type: 'error',
-          title: 'Could not dismiss calibration alert',
-          message: 'The link may have expired. Re-open the email and try again.',
+          title: applyToken ? 'Could not apply proposal' : 'Could not dismiss calibration alert',
+          message: 'The link may have expired or already been used. Re-open the email and try again.',
         })
       } finally {
-        // Strip the query params so a refresh does not re-hit the endpoint.
         const cleanUrl = window.location.pathname + window.location.hash
         window.history.replaceState({}, '', cleanUrl)
       }
@@ -978,6 +1005,7 @@ export default function Settings() {
               <div key={a.id}>
                 <div className="text-sm text-slate-300 mb-2">{a.name}</div>
                 <SpeculativeAllocationSection account={a} />
+                <SpeculativeWeightsHistory accountId={a.id} />
               </div>
             ))}
           </div>

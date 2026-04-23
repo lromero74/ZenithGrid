@@ -1453,6 +1453,32 @@ def initialize_database(project_root, db_config=None):
             "ON ai_opinion_log(position_id)"
         )
 
+        # Speculative weights proposals — auto-calibration history + state
+        # machine for the speculative preset scorer.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS speculative_weights_proposals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                account_id INTEGER,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                algorithm VARCHAR(40) NOT NULL,
+                sample_size INTEGER NOT NULL,
+                overall_win_rate_pct REAL NOT NULL,
+                baseline_weights TEXT NOT NULL,
+                proposed_weights TEXT NOT NULL,
+                divergence_pp REAL,
+                reason TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                decided_at TIMESTAMP,
+                decided_by INTEGER,
+                reverted_by_proposal_id INTEGER
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_spec_prop_user_status "
+            "ON speculative_weights_proposals(user_id, status)"
+        )
+
         # Scanner logs table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scanner_logs (

@@ -34,16 +34,25 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.config import settings
-from app.models import Account, Bot, User
+from app.models import Account, Bot, SpeculativeWeightsProposal, User
 from app.services.email_service import send_speculative_calibration_email
 from app.services.speculative_bucket_service import (
     _speculative_bot_filter,
     analyze_speculative_calibration,
 )
+from app.services.speculative_calibration_apply_token import (
+    build_apply_proposal_url,
+)
 from app.services.speculative_calibration_token import build_dismiss_url
+from app.services.speculative_weights_cache import get_effective_weights
+from app.services.speculative_weights_tuner import (
+    ALGORITHM_NAME,
+    PROPOSAL_MIN_SAMPLE_SIZE,
+    propose_weights,
+)
 from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -141,12 +150,35 @@ async def _check_user(db, user_id: int) -> None:
         user_id=user_id, account_id=account.id, base_url=base_url,
     )
 
+    # OPTIONAL: if the sample size is also past the auto-proposal threshold,
+    # compute a weight-adjustment proposal and include a one-click apply URL
+    # in the email alongside the existing Claude copy-paste block. Failure
+    # here MUST NOT block the alert — fall through with proposal=None.
+    proposal: Optional[SpeculativeWeightsProposal] = None
+    apply_url: Optional[str] = None
+    if analysis["total_closed"] >= PROPOSAL_MIN_SAMPLE_SIZE:
+        try:
+            proposal = await _create_proposal(db, user_id, account.id, analysis)
+            if proposal is not None:
+                apply_url = build_apply_proposal_url(
+                    user_id=user_id, account_id=account.id,
+                    proposal_id=proposal.id, base_url=base_url,
+                )
+        except Exception:
+            logger.exception(
+                "speculative_calibration_monitor: proposal generation "
+                "failed for user %s — sending alert without auto-proposal",
+                user_id,
+            )
+
     email_ok = False
     try:
         email_ok = send_speculative_calibration_email(
             to=user.email, analysis=analysis,
             user_first_name=first_name, user_id=user_id,
             dismiss_url=dismiss_url,
+            proposal=proposal,
+            apply_url=apply_url,
         )
     except Exception:
         logger.exception(
@@ -231,6 +263,73 @@ async def start_speculative_calibration_monitor() -> None:
         "speculative_calibration_monitor started (interval=%ss, cooldown=%sd)",
         CHECK_INTERVAL_SECONDS, COOLDOWN_DAYS,
     )
+
+
+async def _create_proposal(
+    db, user_id: int, account_id: int, analysis: dict,
+) -> Optional[SpeculativeWeightsProposal]:
+    """Run the tuner and persist a pending proposal row.
+
+    Returns None (and logs) when:
+    - the algorithm refuses (impossible clamp constraints), or
+    - the proposed weights are identical to current (no signal).
+
+    Supersedes any prior pending proposal for this user so inboxes
+    don't accumulate stale apply-links.
+    """
+    current = await get_effective_weights(db, user_id)
+    try:
+        proposed = propose_weights(
+            current_weights=current,
+            component_stats=analysis["components"],
+            overall_win_rate_pct=analysis["overall_win_rate_pct"],
+        )
+    except ValueError as exc:
+        logger.warning(
+            "speculative_weights_tuner refused to propose for user %s: %s",
+            user_id, exc,
+        )
+        return None
+
+    if proposed == current:
+        logger.info(
+            "speculative_calibration_monitor: tuner produced no change for "
+            "user %s — skipping proposal creation", user_id,
+        )
+        return None
+
+    # Supersede any prior pending proposals so the user only has one
+    # actionable proposal at a time.
+    await db.execute(
+        update(SpeculativeWeightsProposal)
+        .where(
+            SpeculativeWeightsProposal.user_id == user_id,
+            SpeculativeWeightsProposal.status == "pending",
+        )
+        .values(status="superseded", decided_at=datetime.utcnow())
+    )
+
+    row = SpeculativeWeightsProposal(
+        user_id=user_id,
+        account_id=account_id,
+        status="pending",
+        algorithm=ALGORITHM_NAME,
+        sample_size=analysis["total_closed"],
+        overall_win_rate_pct=analysis["overall_win_rate_pct"],
+        baseline_weights=current,
+        proposed_weights=proposed,
+        divergence_pp=analysis.get("divergence_pp"),
+        reason=(
+            f"Auto-generated from {analysis['total_closed']} closed positions "
+            f"(top={analysis.get('top_component')}, "
+            f"bottom={analysis.get('bottom_component')}, "
+            f"divergence={analysis.get('divergence_pp', 0):.1f}pp)"
+        ),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
 
 
 async def stop_speculative_calibration_monitor() -> None:

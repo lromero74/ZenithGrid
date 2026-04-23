@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.0] - 2026-04-23
+
+### Added
+- **Auto-calibration pipeline for speculative scorer weights (Phase 1 — proposal mode)** — The Phase F calibration email that previously said "open Claude and paste this prompt" now ALSO runs a built-in tuner and appends a one-click "Apply proposed weights" link alongside the existing Claude block. The tuner (proportional-to-alpha algorithm) looks at per-component win rates, nudges high performers up and low performers down, respects floor/ceiling and a ±5 per-cycle change cap, and produces a new weights dict that always sums to 100. Kicks in once you've accumulated ≥500 closed speculative positions — below that, only the standard email with the Claude prompt fires.
+- **Per-user scorer weights with full history** — New `trading.speculative_weights_proposals` table stores every proposal + its state machine (`pending` → `applied` / `rejected` / `superseded`). The scorer now resolves each user's effective weights from the latest `applied` row, falling back to the built-in defaults when none exists. Applied proposals take effect on the next AI evaluation (60-second cache, invalidated immediately on apply). One user's tuning never bleeds into another's.
+- **One-click apply endpoint + dismiss flow** — `POST /api/accounts/{id}/speculative-weights/apply-proposal` behind a short-lived JWT (30-day TTL, scoped to user_id + account_id + proposal_id). Clicking the email link lands on Settings, the page transparently POSTs the token, shows a success/failure toast, and scrubs the URL so a reload can't double-apply.
+- **Weight calibration history in Settings** — The Speculative Bucket card now renders a compact proposal history per account: status badges (applied / pending / superseded / reverted), the per-component deltas of each change (+3 volume_surge, −3 correlation_break, etc.), sample size, and date. Hidden on accounts with no history yet.
+
+### Changed
+- **`speculative_signals.WEIGHTS` renamed to `DEFAULT_WEIGHTS`** — The module constant now signals "these are the defaults used when a user has no applied proposal". A back-compat `WEIGHTS` alias stays in place so any external consumers still work. `score_speculative_setup()` gained an optional `weights` kwarg; existing callers behave identically.
+
 ## [v2.165.4] - 2026-04-22
 
 ### Fixed

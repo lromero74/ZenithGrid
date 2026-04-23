@@ -391,12 +391,56 @@ def send_invitation_email(
     return _send_email(to, subject, html_body, text_body)
 
 
+def _render_proposal_block(proposal, apply_url) -> str:
+    """Return the 'AUTOMATED PROPOSAL' section of the calibration email,
+    or empty string when no proposal was generated this cycle.
+
+    proposal: SpeculativeWeightsProposal ORM row (or any object with
+        baseline_weights, proposed_weights, algorithm attributes).
+    apply_url: clickable one-click apply URL.
+    """
+    if proposal is None or not apply_url:
+        return ""
+    baseline = dict(proposal.baseline_weights)
+    proposed = dict(proposal.proposed_weights)
+    bar = "━" * 44
+    lines = [
+        bar,
+        f"AUTOMATED PROPOSAL (algorithm: {proposal.algorithm})",
+        bar,
+        "",
+        "Based on your outcome data, the weight tuner suggests:",
+        "",
+        f"  {'Component':<24} {'Current':>8} → {'Proposed':>8}   {'(Δ)':>6}",
+    ]
+    # Render in a stable order — the baseline dict's insertion order.
+    for name, old in baseline.items():
+        new_w = proposed.get(name, old)
+        delta = new_w - old
+        lines.append(
+            f"  {name:<24} {old:>8} → {new_w:>8}   ({delta:+d})"
+        )
+    lines += [
+        "",
+        "One-click apply (no Claude conversation required):",
+        f"  {apply_url}",
+        "",
+        "Or, if you want to reason about these with Claude first, use",
+        "the block below instead. Either way your current weights stay",
+        "the same until you explicitly apply a change.",
+        "",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_speculative_calibration_text_body(
     *,
     analysis: dict,
     user_first_name: str,
     user_id: int,
     dismiss_url: str,
+    proposal=None,
+    apply_url: str = "",
 ) -> str:
     """Render the plain-text body for the speculative calibration alert.
 
@@ -446,6 +490,7 @@ def build_speculative_calibration_text_body(
         f"{component_lines}\n\n"
         f"Gap between top ({top}) and bottom ({bottom}):\n"
         f"  {divergence:.1f} percentage points\n\n"
+        f"{_render_proposal_block(proposal, apply_url)}"
         f"{bar}\n"
         "TO ACT ON THIS\n"
         f"{bar}\n\n"
@@ -510,6 +555,8 @@ def _build_speculative_calibration_html_body(
     user_first_name: str,
     user_id: int,
     dismiss_url: str,
+    proposal=None,
+    apply_url: str = "",
 ) -> str:
     """Wrap the plain-text body in a minimal HTML shell.
 
@@ -521,6 +568,7 @@ def _build_speculative_calibration_html_body(
     text_body = build_speculative_calibration_text_body(
         analysis=analysis, user_first_name=user_first_name,
         user_id=user_id, dismiss_url=dismiss_url,
+        proposal=proposal, apply_url=apply_url,
     )
     import html as _html
     escaped = _html.escape(text_body)
@@ -531,6 +579,14 @@ def _build_speculative_calibration_html_body(
         'style="color: #3b82f6;">'
         f'{_html.escape(dismiss_url)}</a>',
     )
+    # Same treatment for the apply link when present.
+    if apply_url:
+        escaped = escaped.replace(
+            _html.escape(apply_url),
+            f'<a href="{_html.escape(apply_url)}" '
+            'style="color: #3b82f6;">'
+            f'{_html.escape(apply_url)}</a>',
+        )
     return (
         '<div style="font-family: -apple-system, BlinkMacSystemFont,'
         " 'Segoe UI', Roboto, sans-serif; max-width: 720px;"
@@ -556,11 +612,17 @@ def send_speculative_calibration_email(
     user_first_name: str,
     user_id: int,
     dismiss_url: str,
+    proposal=None,
+    apply_url: str = "",
 ) -> bool:
     """Send the calibration alert email.
 
     `analysis` is the dict returned by
     app.services.speculative_bucket_service.analyze_speculative_calibration.
+
+    `proposal` / `apply_url` are Phase 1 auto-calibration extras. When
+    `proposal is None` the email body is byte-identical to the
+    Claude-only version — the proposal block renders as empty string.
     """
     if not settings.ses_enabled:
         logger.warning(
@@ -573,10 +635,12 @@ def send_speculative_calibration_email(
     text_body = build_speculative_calibration_text_body(
         analysis=analysis, user_first_name=user_first_name,
         user_id=user_id, dismiss_url=dismiss_url,
+        proposal=proposal, apply_url=apply_url,
     )
     html_body = _build_speculative_calibration_html_body(
         analysis=analysis, user_first_name=user_first_name,
         user_id=user_id, dismiss_url=dismiss_url,
+        proposal=proposal, apply_url=apply_url,
     )
     return _send_email(to, subject, html_body, text_body)
 

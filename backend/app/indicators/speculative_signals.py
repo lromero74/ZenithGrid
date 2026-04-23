@@ -30,10 +30,13 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-# Component weights. Sum MUST equal 100 so the returned score is a
-# clean percentage. Adjusting weights without re-checking this invariant
-# would silently break the 0-100 range contract.
-WEIGHTS: Dict[str, int] = {
+# Default component weights. Used when a user has never applied a
+# calibration proposal. Once a user applies a proposal via the auto-tuner
+# (speculative_weights_auto_calibration feature), their effective weights
+# come from that row via app.services.speculative_weights_cache.
+#
+# Sum MUST equal 100 so the returned score is a clean percentage.
+DEFAULT_WEIGHTS: Dict[str, int] = {
     "volume_surge":          25,   # abnormal volume vs 30d baseline
     "compression_breakout":  20,   # range expansion after tight coil
     "momentum_accelerating": 20,   # positive hourly momentum accelerating
@@ -42,7 +45,11 @@ WEIGHTS: Dict[str, int] = {
     "volume_vs_mcap":        15,   # high turnover = "in play"
 }
 
-assert sum(WEIGHTS.values()) == 100, "WEIGHTS must sum to 100"
+assert sum(DEFAULT_WEIGHTS.values()) == 100, "DEFAULT_WEIGHTS must sum to 100"
+
+# Back-compat alias for code that imports WEIGHTS directly. Safe because
+# it's a reference to the same dict; no callers mutate it.
+WEIGHTS = DEFAULT_WEIGHTS
 
 
 # Thresholds per component. Kept at the top of the file so a future
@@ -128,6 +135,7 @@ def score_speculative_setup(
     metrics: Dict[str, Any],
     btc_metrics: Optional[Dict[str, Any]] = None,
     product_id: str = "",
+    weights: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     """Score a catalyst-hunt setup on a 0-100 scale.
 
@@ -139,13 +147,16 @@ def score_speculative_setup(
         btc_metrics: Optional BTC reference metrics with at minimum
             {'momentum_1h': float}. Used by correlation_break only.
         product_id: Trading pair — passed through for logging.
+        weights: Override component weights. When None, DEFAULT_WEIGHTS
+            applies. Used by the auto-calibration pipeline to pass a
+            user's calibrated weights in place of the defaults.
 
     Returns:
         {
             "score": int 0-100,
             "components": {
                 "volume_surge":          {"fired": bool, "contribution": int},
-                ... one per WEIGHTS key ...
+                ... one per DEFAULT_WEIGHTS key ...
             },
         }
 
@@ -155,11 +166,12 @@ def score_speculative_setup(
     if not isinstance(metrics, dict):
         metrics = {}
 
+    effective_weights = weights if weights is not None else DEFAULT_WEIGHTS
     components: Dict[str, Dict[str, Any]] = {}
     total = 0
 
     for name, evaluator in _COMPONENT_EVALUATORS:
-        weight = WEIGHTS[name]
+        weight = effective_weights.get(name, DEFAULT_WEIGHTS[name])
         try:
             if name == "correlation_break":
                 fired = evaluator(metrics, btc_metrics)
