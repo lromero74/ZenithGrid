@@ -5,6 +5,8 @@
 **Created**: 2026-04-22
 **One-Pass Confidence Score**: 8/10
 
+> **Status (2026-04-23)**: Phase 1 (proposal mode) **shipped** in v2.166.0, with polish in v2.166.1 (security audit fixes), v2.166.2 (hygiene: ProposalStatus class + shared TTL constant), and v2.166.3 (test-coverage gaps). Phase 2 (auto-apply + auto-revert + rolling windows) remains deferred — it should be a **separate PRP** once enough real proposals have been generated through Phase 1 to validate the algorithm's suggestions. No real user has crossed the 500-closed-position threshold yet (feature shipped hours ago), so Phase 2 is data-blocked, not code-blocked.
+
 > **8/10** because the infrastructure (monitor, email, tokens, signed-URL endpoints, bucket-service tests, migration template, domain schemas) is all in place from v2.165.0–v2.165.4 and this PRP layers a clean, mechanically testable algorithm on top. The only real risk is the normalization-with-clamps math — that's where the unit-test blueprint below is most detailed. No LLM tuning, no schema gymnastics, no new infra.
 
 ---

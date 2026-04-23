@@ -5,6 +5,8 @@
 **Created**: 2026-04-22
 **One-Pass Confidence Score**: 7/10
 
+> **Status (2026-04-23)**: All 6 phases (A–F) **shipped** across v2.165.0–v2.165.4. Phase A (bucket infrastructure), Phase B (preset + catalyst-mode signals), Phase C (bucket endpoint + preset auto-population), Phase D (frontend UX), Phase E (polish in subsequent patches), Phase F (calibration alert monitor) are all live in production. The signal-quality follow-up mentioned below ("v2 once enough signal logs accumulate") has its own separate PRP — `PRPs/done/speculative-weights-auto-calibration.md`, Phase 1 of which shipped in v2.166.0.
+
 > **7/10** because the plumbing (preset defaults, AI prompt branch, bucket validator) is mechanical and well-scaffolded by existing patterns (`risk_presets.py`, `calculate_available_usd`, `AISpotOpinionEvaluator`), but the signal-quality work — tuning the doubling-probability scorer and prompt against real outcomes — will need iteration after first ship. Plan for a v2 once enough signal logs accumulate.
 
 ---
