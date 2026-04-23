@@ -16,13 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import PendingOrder, Position, User
-from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.account_access import manager_account_ids
+from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,12 +45,29 @@ async def _get_user_position(db: AsyncSession, position_id: int, user_id: int) -
     return position
 
 
+async def _exchange_for_position(db: AsyncSession, position: Position):
+    """Resolve the exchange client for the account that OWNS this position.
+
+    Must be used instead of the per-caller `get_coinbase` dependency for any
+    endpoint that mutates a position on behalf of a shared-account manager.
+    The manager's default CEX credentials are NOT where the position's
+    orders live; routing orders there would place sells against the wrong
+    broker's funds. Ships with v2.166.5 security patch.
+    """
+    exchange = await get_exchange_client_for_account(db, position.account_id)
+    if not exchange:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not create exchange client for this position's account.",
+        )
+    return exchange
+
+
 @router.post("/{position_id}/limit-close")
 async def limit_close_position(
     position_id: int,
     request: LimitCloseRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Close a position via limit order"""
@@ -64,12 +80,17 @@ async def limit_close_position(
         if position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position already has a pending limit close order")
 
+        # Resolve the exchange client FROM THE POSITION's account, not the
+        # caller's default CEX. This is the security fix — see
+        # _exchange_for_position docstring.
+        exchange = await _exchange_for_position(db, position)
+
         # Round size to proper precision using product precision data
         from decimal import Decimal
 
         from app.order_validation import get_product_minimums
 
-        minimums = await get_product_minimums(coinbase, position.product_id)
+        minimums = await get_product_minimums(exchange, position.product_id)
         base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
         total_base = Decimal(str(position.total_base_acquired))
 
@@ -88,8 +109,8 @@ async def limit_close_position(
         if request.time_in_force == "gtd" and not request.end_time:
             raise HTTPException(status_code=400, detail="end_time is required for GTD orders")
 
-        # Create limit sell order via Coinbase
-        order_result = await coinbase.create_limit_order(
+        # Create limit sell order via the POSITION's exchange client.
+        order_result = await exchange.create_limit_order(
             product_id=position.product_id,
             side="SELL",
             limit_price=request.limit_price,
@@ -206,7 +227,6 @@ async def get_position_ticker(
 @router.get("/{position_id}/slippage-check")
 async def check_market_close_slippage(
     position_id: int, db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user)
 ):
     """Check if closing at market would result in significant slippage"""
@@ -216,8 +236,10 @@ async def check_market_close_slippage(
         if position.status != "open":
             raise HTTPException(status_code=400, detail="Position is not open")
 
-        # Get ticker data including bid/ask
-        ticker = await coinbase.get_ticker(position.product_id)
+        # Use the position's exchange so the slippage figures reflect
+        # the broker where a real close order would actually route.
+        exchange = await _exchange_for_position(db, position)
+        ticker = await exchange.get_ticker(position.product_id)
         best_bid = float(ticker.get("best_bid", 0))
         best_ask = float(ticker.get("best_ask", 0))
         mark_price = (best_bid + best_ask) / 2 if best_bid and best_ask else float(ticker.get("price", 0))
@@ -264,7 +286,6 @@ async def check_market_close_slippage(
 @router.post("/{position_id}/cancel-limit-close")
 async def cancel_limit_close(
     position_id: int, db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE))
 ):
     """Cancel a pending limit close order"""
@@ -274,8 +295,10 @@ async def cancel_limit_close(
         if not position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
 
-        # Cancel the order on Coinbase
-        await coinbase.cancel_order(position.limit_close_order_id)
+        # Cancel via the POSITION's exchange client. A shared-account
+        # manager's default CEX does not hold this order.
+        exchange = await _exchange_for_position(db, position)
+        await exchange.cancel_order(position.limit_close_order_id)
 
         # Update pending order status
         pending_order_query = select(PendingOrder).where(PendingOrder.order_id == position.limit_close_order_id)
@@ -305,7 +328,6 @@ async def update_limit_close(
     position_id: int,
     request: UpdateLimitCloseRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Update the limit price for a pending limit close order using Coinbase's native Edit Order API"""
@@ -333,8 +355,10 @@ async def update_limit_close(
             f"new_price={formatted_price}"
         )
 
-        # Use Coinbase's native Edit Order API (atomic operation, preserves order in some cases)
-        edit_result = await coinbase.edit_order(
+        # Use the POSITION's exchange for the native Edit Order API so
+        # the edit hits the broker that actually holds the open order.
+        exchange = await _exchange_for_position(db, position)
+        edit_result = await exchange.edit_order(
             order_id=position.limit_close_order_id,
             price=formatted_price
         )

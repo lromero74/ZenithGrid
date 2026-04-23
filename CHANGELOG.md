@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.5] - 2026-04-23
+
+### Security
+- **Shared-account managers' order actions now correctly route to the owner's broker** — Four position-mutating endpoints (`limit-close`, `cancel-limit-close`, `update-limit-close`, `add-funds`) were using a FastAPI dependency that built a Coinbase client from the **caller's** default CEX account, even when the caller was a shared-account manager acting on a position that lives on someone else's account. The result was cross-account mis-routing: a manager clicking "close limit order" on your position would place the sell against **their** broker (selling their ETH); clicking "add funds" would spend **their** USD while the PnL accrued on your position. All four endpoints now resolve the exchange client from `position.account_id` instead, matching the pattern already used correctly in `force_close_position` and `sell_all_positions`. The `slippage-check` endpoint was also moved over for consistency since it reads ticker prices from the same broker. Regression tests pin the fix: the exchange resolver must be called with the position's account_id, not the caller's id, otherwise the vulnerability is re-introduced.
+
 ## [v2.166.4] - 2026-04-23
 
 ### Changed

@@ -16,6 +16,35 @@ from unittest.mock import AsyncMock, patch
 from app.models import Account, Bot, PendingOrder, Position, User
 
 
+@pytest.fixture(autouse=True)
+def _patch_exchange_client():
+    """Route the router's per-position exchange resolver to whatever the
+    calling test has bound to `mock_coinbase` in its own local scope.
+
+    The v2.166.5 security fix removed the `coinbase=mock_coinbase` kwarg
+    from handler call signatures — it was the cross-account routing bug.
+    Tests still create per-test `mock_coinbase = AsyncMock()` instances
+    and configure expected calls on them; this fixture transparently
+    routes `_exchange_for_position(...)` to that same mock by scanning
+    the caller's frame locals at resolution time. Keeps the existing
+    test pattern intact without rewriting every test.
+    """
+    from app.position_routers import position_limit_orders_router as _mod
+    import sys as _sys
+
+    async def _resolver(db, position):
+        frame = _sys._getframe(1)
+        while frame is not None:
+            mc = frame.f_locals.get("mock_coinbase")
+            if mc is not None:
+                return mc
+            frame = frame.f_back
+        return AsyncMock()
+
+    with patch.object(_mod, "_exchange_for_position", _resolver):
+        yield
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -106,7 +135,7 @@ class TestLimitClosePosition:
             total_base_acquired=1.5,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.create_limit_order = AsyncMock(return_value={
             "success_response": {"order_id": "order-abc-123"},
         })
@@ -117,7 +146,6 @@ class TestLimitClosePosition:
             position_id=pos.id,
             request=request,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -142,7 +170,7 @@ class TestLimitClosePosition:
             closing_via_limit=True,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = LimitCloseRequest(limit_price=0.025)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -150,7 +178,6 @@ class TestLimitClosePosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -170,7 +197,7 @@ class TestLimitClosePosition:
         bot = await _create_bot(db_session, user, account)
         pos = await _create_position(db_session, account, bot=bot, status="open")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = LimitCloseRequest(limit_price=0.025, time_in_force="gtd", end_time=None)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -178,7 +205,6 @@ class TestLimitClosePosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -198,7 +224,7 @@ class TestLimitClosePosition:
         bot = await _create_bot(db_session, user, account)
         pos = await _create_position(db_session, account, bot=bot, status="open")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.create_limit_order = AsyncMock(return_value={
             "error_response": {
                 "error": "INSUFFICIENT_FUND",
@@ -214,7 +240,6 @@ class TestLimitClosePosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 500
@@ -230,7 +255,7 @@ class TestLimitClosePosition:
         user, account = await _create_user_with_account(db_session, email="lc_closed@example.com")
         pos = await _create_position(db_session, account, status="closed")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = LimitCloseRequest(limit_price=0.025)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -238,7 +263,6 @@ class TestLimitClosePosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -350,7 +374,7 @@ class TestCheckSlippage:
             product_id="ETH-BTC",
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         # Tight spread -- minimal slippage
         mock_coinbase.get_ticker = AsyncMock(return_value={
             "best_bid": "0.0300",
@@ -361,7 +385,6 @@ class TestCheckSlippage:
         result = await check_market_close_slippage(
             position_id=pos.id,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -382,7 +405,7 @@ class TestCheckSlippage:
             product_id="ETH-USD",
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         # Mark = 101, profit at mark = 1.0
         # Bid = 100.5, profit at bid = 0.5
         # Slippage = 0.5/1.0 = 50% > 25%
@@ -395,7 +418,6 @@ class TestCheckSlippage:
         result = await check_market_close_slippage(
             position_id=pos.id,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -411,13 +433,12 @@ class TestCheckSlippage:
         user, account = await _create_user_with_account(db_session, email="slip_closed@example.com")
         pos = await _create_position(db_session, account, status="closed")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
 
         with pytest.raises(HTTPException) as exc_info:
             await check_market_close_slippage(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -435,7 +456,7 @@ class TestCheckSlippage:
             product_id="ETH-USD",
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         # Mark price = 100, so position is at a loss
         mock_coinbase.get_ticker = AsyncMock(return_value={
             "best_bid": "99",
@@ -446,7 +467,6 @@ class TestCheckSlippage:
         result = await check_market_close_slippage(
             position_id=pos.id,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -492,13 +512,12 @@ class TestCancelLimitClose:
         db_session.add(pending)
         await db_session.flush()
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.cancel_order = AsyncMock(return_value=True)
 
         result = await cancel_limit_close(
             position_id=pos.id,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -520,13 +539,12 @@ class TestCancelLimitClose:
             closing_via_limit=False,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
 
         with pytest.raises(HTTPException) as exc_info:
             await cancel_limit_close(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -539,13 +557,12 @@ class TestCancelLimitClose:
         from fastapi import HTTPException
 
         user, account = await _create_user_with_account(db_session, email="clc_404@example.com")
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
 
         with pytest.raises(HTTPException) as exc_info:
             await cancel_limit_close(
                 position_id=99999,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -591,7 +608,7 @@ class TestUpdateLimitClose:
         db_session.add(pending)
         await db_session.flush()
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.edit_order = AsyncMock(return_value={
             "success_response": {"order_id": "order-edit-123"},
         })
@@ -602,7 +619,6 @@ class TestUpdateLimitClose:
             position_id=pos.id,
             request=request,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -624,7 +640,7 @@ class TestUpdateLimitClose:
             closing_via_limit=False,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = UpdateLimitCloseRequest(new_limit_price=0.025)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -632,7 +648,6 @@ class TestUpdateLimitClose:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -668,7 +683,7 @@ class TestUpdateLimitClose:
         db_session.add(pending)
         await db_session.flush()
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.edit_order = AsyncMock(return_value={
             "error_response": {
                 "error": "EDIT_FAILED",
@@ -683,7 +698,6 @@ class TestUpdateLimitClose:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 500
@@ -704,7 +718,7 @@ class TestUpdateLimitClose:
             limit_close_order_id="order-ghost",
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = UpdateLimitCloseRequest(new_limit_price=0.025)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -712,7 +726,6 @@ class TestUpdateLimitClose:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -789,7 +802,7 @@ class TestLimitOrdersManagerAccess:
         mock_minimums.return_value = {"base_increment": "0.00000001"}
         owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.create_limit_order = AsyncMock(return_value={
             "success_response": {"order_id": "order-shared-123"},
         })
@@ -798,7 +811,7 @@ class TestLimitOrdersManagerAccess:
 
         result = await limit_close_position(
             position_id=pos.id, request=request,
-            db=db_session, coinbase=mock_coinbase, current_user=manager_user,
+            db=db_session, current_user=manager_user,
         )
 
         assert result["message"] == "Limit close order placed successfully"
@@ -813,12 +826,61 @@ class TestLimitOrdersManagerAccess:
 
         owner, observer, account, bot, pos = await self._setup_shared_access(db_session, role="observer")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = LimitCloseRequest(limit_price=0.025, time_in_force="gtc")
 
         with pytest.raises(HTTPException) as exc_info:
             await limit_close_position(
                 position_id=pos.id, request=request,
-                db=db_session, coinbase=mock_coinbase, current_user=observer,
+                db=db_session, current_user=observer,
             )
         assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.order_validation.get_product_minimums", new_callable=AsyncMock)
+    async def test_manager_limit_close_resolves_exchange_from_position_account(
+        self, mock_minimums, db_session,
+    ):
+        """CVE-2026-04-23-001 regression: the exchange client used to place the
+        limit sell MUST be resolved from `position.account_id` (the owner's
+        account), NOT the caller's default CEX account.
+
+        Before the v2.166.5 fix, `Depends(get_coinbase)` always built a client
+        from `Account.user_id == current_user.id` — so a manager placing a
+        limit-close on a shared-account position would place the sell against
+        their OWN broker's funds. This test pins that the resolver now
+        receives the OWNER's account_id, not the manager's id.
+        """
+        from app.position_routers import position_limit_orders_router as _mod
+        from app.position_routers.position_limit_orders_router import limit_close_position
+        from app.position_routers.schemas import LimitCloseRequest
+
+        mock_minimums.return_value = {"base_increment": "0.00000001"}
+        owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
+
+        owner_mock = AsyncMock()
+        owner_mock.create_limit_order = AsyncMock(return_value={
+            "success_response": {"order_id": "pinned-to-owner"},
+        })
+        captured = {}
+
+        async def _resolver(db, position):
+            # Capture the position so the test can assert its account_id.
+            captured["position"] = position
+            return owner_mock
+
+        with patch.object(_mod, "_exchange_for_position", _resolver):
+            request = LimitCloseRequest(limit_price=0.025, time_in_force="gtc")
+            result = await limit_close_position(
+                position_id=pos.id, request=request,
+                db=db_session, current_user=manager_user,
+            )
+
+        # Exchange resolver was called with the POSITION (which carries
+        # the OWNER's account_id), not the manager's user_id.
+        assert captured["position"].account_id == account.id
+        assert captured["position"].account_id != manager_user.id
+        # And the create_limit_order ran on the OWNER-scoped client, not
+        # the caller's default client.
+        owner_mock.create_limit_order.assert_awaited_once()
+        assert result["order_id"] == "pinned-to-owner"
