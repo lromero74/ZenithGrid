@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -84,7 +84,9 @@ async def get_scanner_logs(
     account_ids = await accessible_account_ids(db, current_user.id)
     bot_query = select(Bot).where(
         Bot.id == bot_id,
-        Bot.account_id.in_(account_ids) if account_ids else Bot.user_id == current_user.id
+        # Accessible if the user OWNS the bot OR has access to the bot's account.
+        # (Fix: old ternary hid owner-bots-without-account_id when user had any shared accounts.)
+        or_(Bot.user_id == current_user.id, Bot.account_id.in_(account_ids)),
     )
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()

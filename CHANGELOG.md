@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.6] - 2026-04-23
+
+### Security
+- **Order book endpoint no longer borrows other users' API credentials** — The `/api/orderbook/{product_id}` endpoint had a last-resort fallback that would grab any active CEX account in the system when the caller had no CEX account of their own. Even though the order-book data is public, this consumed the unrelated user's Coinbase API rate budget for strangers' requests. The fallback is removed — users without their own CEX account now get a 503 with a clear message to add one in Settings.
+
+### Fixed
+- **Bot-log endpoints no longer hide owner-bots when the user has shared accounts** — The bot access filter on AI logs, scanner logs, and indicator logs routers used a ternary (`Bot.account_id.in_(account_ids) if account_ids else Bot.user_id == current_user.id`) that silently excluded bots the user OWNS but which have no `account_id` set once the user accepted any shared-account invitation. Switched to `or_(Bot.user_id == current_user.id, Bot.account_id.in_(account_ids))` across all five affected sites. Not a security issue (over-restricted, never granted extra access), but a visible UX bug for users with both owned and shared bots.
+- **Cumulative-profit chart query now correctly filters closed positions** — `Position.closed_at is not None` was Python `is not`, evaluating to `True` at query-build time (the Column object's identity) and never reaching SQL. Same for `Position.profit_usd`. Replaced with `.isnot(None)` so the filters actually apply. No security impact — the separate `account_id` filter still scopes correctly — but the PnL chart was pulling unclosed rows that happened to have `status = 'closed'` flipped without a `closed_at` or `profit_usd`.
+
 ## [v2.166.5] - 2026-04-23
 
 ### Security

@@ -302,11 +302,15 @@ async def get_pnl_timeseries(
     Returns cumulative profit over time from closed positions.
     If account_id is provided, only returns data for that account.
     """
-    # Get closed positions ordered by close date
+    # Get closed positions ordered by close date.
+    # NB: .isnot(None) — not Python `is not None`, which evaluates at
+    # construction time to the Column object's Python identity (always
+    # True) and never reaches the SQL layer. Fixed in v2.166.6 per the
+    # multiuser-security audit's Low finding.
     query = select(Position).where(
         Position.status == "closed",
-        Position.closed_at is not None,
-        Position.profit_usd is not None
+        Position.closed_at.isnot(None),
+        Position.profit_usd.isnot(None),
     )
 
     user_account_ids = await accessible_account_ids(db, current_user.id)

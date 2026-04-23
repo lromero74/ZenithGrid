@@ -320,6 +320,49 @@ class TestGetOrderbook:
             await get_orderbook(product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user)
         assert exc_info.value.status_code == 503
 
+    @pytest.mark.asyncio
+    async def test_does_not_fall_back_to_other_users_cex_account(self):
+        """v2.166.6 regression: the old fallback grabbed ANY active CEX
+        account in the system when the caller had no account of their own.
+        That consumed another user's Coinbase API rate budget for strangers'
+        orderbook requests. The removed fallback must stay removed — if
+        lookup returns None, the endpoint returns 503 without a second
+        query that could hit another user's row.
+
+        Pins by scripting the mock DB to return a position-lookup-shaped
+        sequence: the caller's real CEX is None, the caller's paper CEX
+        is None, and ANY third query (the removed "any active CEX
+        system-wide" probe) is treated as a violation by returning a
+        sentinel account that the endpoint would otherwise use.
+        """
+        from fastapi import HTTPException
+        from app.routers.market_data_router import get_orderbook
+
+        # Build a sequence: None, None, then a VIOLATION-sentinel.
+        # Pre-fix code made 3 execute() calls; post-fix makes 2.
+        no_real = MagicMock()
+        no_real.scalar_one_or_none.return_value = None
+        no_paper = MagicMock()
+        no_paper.scalar_one_or_none.return_value = None
+        forbidden_other_user_account = MagicMock()
+        forbidden_other_user_account.id = 99999  # someone else's account
+        violation = MagicMock()
+        violation.scalar_one_or_none.return_value = forbidden_other_user_account
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(side_effect=[no_real, no_paper, violation])
+        mock_user = MagicMock()
+        mock_user.id = 1
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_orderbook(
+                product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user,
+            )
+        assert exc_info.value.status_code == 503
+        # Pin: at most 2 DB queries (real CEX lookup + paper CEX lookup).
+        # If a 3rd query fires, the vulnerable system-wide fallback is back.
+        assert mock_db.execute.await_count <= 2
+
 
 # =============================================================================
 # GET /api/market/btc-usd-price
