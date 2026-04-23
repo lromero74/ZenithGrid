@@ -87,6 +87,50 @@ class TestListProposals:
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_scoped_to_path_account_not_all_user_accounts(self, db_session, owner_account):
+        """A user with two speculative accounts must only see proposals for
+        the account in the URL path — not a merged list across both."""
+        user, account_a = owner_account
+        account_b = Account(
+            user_id=user.id, name="B", type="cex",
+            is_active=True, is_default=False, speculative_allocation_pct=5.0,
+        )
+        db_session.add(account_b)
+        await db_session.flush()
+
+        db_session.add_all([
+            SpeculativeWeightsProposal(
+                user_id=user.id, account_id=account_a.id, status="pending",
+                algorithm="proportional-alpha-v1", sample_size=500,
+                overall_win_rate_pct=15.0,
+                baseline_weights=dict(DEFAULT_WEIGHTS),
+                proposed_weights=dict(DEFAULT_WEIGHTS),
+                created_at=datetime.utcnow(),
+            ),
+            SpeculativeWeightsProposal(
+                user_id=user.id, account_id=account_b.id, status="pending",
+                algorithm="proportional-alpha-v1", sample_size=600,
+                overall_win_rate_pct=16.0,
+                baseline_weights=dict(DEFAULT_WEIGHTS),
+                proposed_weights=dict(DEFAULT_WEIGHTS),
+                created_at=datetime.utcnow(),
+            ),
+        ])
+        await db_session.flush()
+
+        result_a = await list_speculative_weights_proposals(
+            account_id=account_a.id, db=db_session, current_user=user,
+        )
+        result_b = await list_speculative_weights_proposals(
+            account_id=account_b.id, db=db_session, current_user=user,
+        )
+        assert len(result_a) == 1
+        assert len(result_b) == 1
+        # And the sample_size distinguishes them unambiguously.
+        assert result_a[0]["sample_size"] == 500
+        assert result_b[0]["sample_size"] == 600
+
+    @pytest.mark.asyncio
     async def test_other_user_proposals_not_leaked(self, db_session, owner_account):
         """Even if another user has proposals on some other account,
         owner's list must only return their own rows."""

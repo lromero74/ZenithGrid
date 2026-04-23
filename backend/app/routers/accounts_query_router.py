@@ -23,7 +23,7 @@ from app.database import get_db
 from app.encryption import mask_api_key
 from app.models import Account, Bot, User
 from app.models.sharing import AccountMembership
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import Perm, get_current_user, require_permission
 from app.schemas.accounts import AccountResponse, AutoBuySettings
 from app.services.account_access import accessible_accounts_filter
 from app.services.account_cache import (
@@ -485,12 +485,15 @@ async def get_speculative_bucket_route(
 async def list_speculative_weights_proposals(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_READ)),
 ):
     """List speculative-weights proposals for the caller on this account.
 
     Owner-only (the apply and dismiss flows are owner-only too). Returns
     in reverse chronological order so the latest proposal is first.
+
+    Scope is (user_id, account_id) both — a user with multiple speculative
+    accounts sees only the proposals the monitor tagged to THIS account.
     """
     from app.models import SpeculativeWeightsProposal
 
@@ -505,7 +508,10 @@ async def list_speculative_weights_proposals(
 
     stmt = (
         select(SpeculativeWeightsProposal)
-        .where(SpeculativeWeightsProposal.user_id == current_user.id)
+        .where(
+            SpeculativeWeightsProposal.user_id == current_user.id,
+            SpeculativeWeightsProposal.account_id == account_id,
+        )
         .order_by(SpeculativeWeightsProposal.created_at.desc())
         .limit(200)
     )
