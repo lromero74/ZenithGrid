@@ -328,6 +328,75 @@ async def dismiss_speculative_calibration_alert(
     return {"dismissed": True}
 
 
+@router.post("/{account_id}/speculative-weights/apply-proposal")
+async def apply_speculative_weights_proposal(
+    account_id: int,
+    apply_token: str = Query(..., description="Signed apply token from the calibration email"),
+    proposal_id: int = Query(..., description="ID of the pending proposal to apply"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.ACCOUNTS_WRITE)),
+):
+    """Apply a pending weights proposal to the user's speculative scorer.
+
+    Called from the one-click link in the calibration email. Verifies
+    ownership + token scope + proposal state, then transitions the
+    proposal to 'applied' and invalidates the per-user weights cache so
+    the next AI evaluation picks up the new weights.
+
+    See PRPs/speculative-weights-auto-calibration.md §Task F8.
+    """
+    from app.models import SpeculativeWeightsProposal
+    from app.services.speculative_calibration_apply_token import (
+        decode_apply_proposal_token,
+    )
+    from app.services.speculative_weights_cache import invalidate_weights_cache
+
+    # Ownership check — same 404-on-foreign-account pattern as dismiss.
+    query = select(Account).where(
+        Account.id == account_id, Account.user_id == current_user.id,
+    )
+    account = (await db.execute(query)).scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Token validation — every mismatch axis returns 403 (no over-disclosure
+    # about which check failed).
+    payload = decode_apply_proposal_token(apply_token)
+    if not payload:
+        raise HTTPException(status_code=403, detail="Invalid apply token")
+    if str(payload.get("sub")) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Invalid apply token")
+    if int(payload.get("account_id") or 0) != int(account_id):
+        raise HTTPException(status_code=403, detail="Invalid apply token")
+    if int(payload.get("proposal_id") or 0) != int(proposal_id):
+        raise HTTPException(status_code=403, detail="Invalid apply token")
+
+    proposal = await db.get(SpeculativeWeightsProposal, proposal_id)
+    if proposal is None or proposal.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    if proposal.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Proposal is '{proposal.status}', not pending",
+        )
+
+    proposal.status = "applied"
+    proposal.decided_at = datetime.utcnow()
+    proposal.decided_by = current_user.id
+    await db.commit()
+
+    invalidate_weights_cache(current_user.id)
+    logger.info(
+        "Speculative weights proposal %s applied by user %s (account %s)",
+        proposal_id, current_user.id, account_id,
+    )
+    return {
+        "applied": True,
+        "weights": proposal.proposed_weights,
+        "proposal_id": proposal_id,
+    }
+
+
 @router.post("/{account_id}/set-default")
 async def set_default_account(
     account_id: int,

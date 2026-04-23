@@ -93,6 +93,68 @@ class TestBuildTextBody:
         assert "account_id=7" in body
         assert "/settings?" in body
 
+    def test_proposal_block_absent_when_no_proposal(self, analysis):
+        """When no proposal was generated, the email body must NOT render
+        the AUTOMATED PROPOSAL section — just the Claude copy-paste block."""
+        body = build_speculative_calibration_text_body(
+            analysis=analysis, user_first_name="Louis", user_id=42,
+            dismiss_url="https://x/dismiss?t=abc",
+            proposal=None, apply_url="",
+        )
+        assert "AUTOMATED PROPOSAL" not in body
+        # Sanity: the Claude block is still there.
+        assert "COPY EVERYTHING BELOW THIS LINE" in body
+
+    def test_proposal_block_renders_before_after_table_and_apply_url(self, analysis):
+        class _FakeProposal:
+            algorithm = "proportional-alpha-v1"
+            baseline_weights = {
+                "volume_surge": 25, "compression_breakout": 20,
+                "momentum_accelerating": 20, "micro_mid_cap": 10,
+                "correlation_break": 10, "volume_vs_mcap": 15,
+            }
+            proposed_weights = {
+                "volume_surge": 28, "compression_breakout": 22,
+                "momentum_accelerating": 18, "micro_mid_cap": 10,
+                "correlation_break": 7, "volume_vs_mcap": 15,
+            }
+
+        body = build_speculative_calibration_text_body(
+            analysis=analysis, user_first_name="Louis", user_id=42,
+            dismiss_url="https://x/dismiss?t=abc",
+            proposal=_FakeProposal(),
+            apply_url="https://x/settings?apply_token=XYZ&account_id=7&proposal_id=42",
+        )
+        assert "AUTOMATED PROPOSAL" in body
+        assert "proportional-alpha-v1" in body
+        # Current → Proposed column header.
+        assert "Current" in body and "Proposed" in body
+        # Delta indicators for the changed components.
+        assert "(+3)" in body
+        assert "(-3)" in body
+        # Zero-delta component still rendered as ( 0).
+        assert "( +0)" in body or "(+0)" in body or "( 0)" in body
+        # Apply URL present.
+        assert "apply_token=XYZ" in body
+        assert "proposal_id=42" in body
+
+    def test_proposal_block_keeps_claude_prompt_intact(self, analysis):
+        """Both paths stay in the email — auto-proposal is additive."""
+        class _FakeProposal:
+            algorithm = "proportional-alpha-v1"
+            baseline_weights = {"volume_surge": 25}
+            proposed_weights = {"volume_surge": 28}
+
+        body = build_speculative_calibration_text_body(
+            analysis=analysis, user_first_name="Louis", user_id=42,
+            dismiss_url="https://x/dismiss?t=abc",
+            proposal=_FakeProposal(),
+            apply_url="https://x/apply",
+        )
+        assert "AUTOMATED PROPOSAL" in body
+        assert "COPY EVERYTHING BELOW THIS LINE" in body
+        assert "COPY EVERYTHING ABOVE THIS LINE" in body
+
     def test_lists_all_components_sorted_desc(self, analysis):
         body = build_speculative_calibration_text_body(
             analysis=analysis, user_first_name="Louis", user_id=42,

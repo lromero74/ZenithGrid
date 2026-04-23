@@ -779,3 +779,48 @@ class BlacklistedCoin(Base):
 
     # Relationships
     user = relationship("User", back_populates="blacklisted_coins")
+
+
+class SpeculativeWeightsProposal(Base):
+    """
+    Audit + state-machine row for every speculative-preset weight change.
+
+    One row per proposal. Status progresses:
+        pending → applied    (user clicked the apply link in the email)
+                ↘ rejected   (Phase 2+: user explicitly declined)
+                ↘ superseded (newer pending arrived before decision)
+                ↘ reverted   (Phase 2+: auto-revert on underperformance)
+
+    The latest row with `status='applied'` for a given `user_id` defines
+    the currently-effective scorer weights for that user. When no applied
+    row exists, the scorer falls back to DEFAULT_WEIGHTS in
+    app.indicators.speculative_signals.
+
+    See PRPs/speculative-weights-auto-calibration.md.
+    """
+
+    __tablename__ = "speculative_weights_proposals"
+    __table_args__ = {'schema': 'trading'}
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True)
+    status = Column(String(20), nullable=False, default="pending")
+    algorithm = Column(String(40), nullable=False)
+    sample_size = Column(Integer, nullable=False)
+    overall_win_rate_pct = Column(Float, nullable=False)
+    # Snapshot of weights at the moment the proposal was computed —
+    # NOT DEFAULT_WEIGHTS in general; reflects any prior applied proposal.
+    baseline_weights = Column(JSON, nullable=False)
+    proposed_weights = Column(JSON, nullable=False)
+    divergence_pp = Column(Float, nullable=True)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    decided_at = Column(DateTime, nullable=True)
+    decided_by = Column(Integer, ForeignKey("auth.users.id"), nullable=True)
+    # Phase 2 reserved — left null by Phase 1 code paths.
+    reverted_by_proposal_id = Column(
+        Integer,
+        ForeignKey("trading.speculative_weights_proposals.id"),
+        nullable=True,
+    )

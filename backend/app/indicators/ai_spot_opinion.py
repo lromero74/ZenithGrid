@@ -578,7 +578,15 @@ class AISpotOpinionEvaluator:
             from app.indicators.speculative_signals import (
                 score_speculative_setup, summarize_components_for_prompt,
             )
-            spec_score_result = score_speculative_setup(metrics, None, product_id)
+            from app.services.speculative_weights_cache import (
+                get_effective_weights,
+            )
+            # Resolve this user's calibrated weights — falls back to
+            # DEFAULT_WEIGHTS when they've never applied a proposal.
+            user_weights = await get_effective_weights(db, user_id)
+            spec_score_result = score_speculative_setup(
+                metrics, None, product_id, weights=user_weights,
+            )
             spec_score_block = summarize_components_for_prompt(spec_score_result)
 
         prompt = self._build_prompt(

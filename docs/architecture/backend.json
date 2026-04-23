@@ -13,12 +13,12 @@
     {
       "file": "routers/accounts_query_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). v2.164.6 adds GET /{account_id}/account-value-summary (fast totals for the dashboard/header, backed by account_value_summary_service) and an include_details query flag on GET /{account_id}/portfolio that returns totals only when false. v2.165.0 adds GET /{account_id}/speculative-bucket returning the speculative bucket snapshot (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) via speculative_bucket_service.get_speculative_bucket_info for the dashboard bucket card. Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
+      "purpose": "Read-only endpoints for trading accounts: listings, individual retrieval, portfolio/balance/bot queries, settings reads (auto-buy, rebalance, dust sweep, perps). v2.164.6 adds GET /{account_id}/account-value-summary (fast totals for the dashboard/header, backed by account_value_summary_service) and an include_details query flag on GET /{account_id}/portfolio that returns totals only when false. v2.165.0 adds GET /{account_id}/speculative-bucket returning the speculative bucket snapshot (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) via speculative_bucket_service.get_speculative_bucket_info for the dashboard bucket card. v2.166.0 adds GET /{account_id}/speculative-weights/proposals (owner-only) which returns the user's SpeculativeWeightsProposal history in reverse-chronological order, capped at 200 rows, powering the Settings weights-history table. Request/response schemas come from app.schemas.accounts; TTL caches for live Coinbase API calls come from app.services.account_cache (both extracted from this file in v2.164.2 to break the cross-router import)."
     },
     {
       "file": "routers/accounts_mutation_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router. v2.165.0 adds POST /{account_id}/speculative-calibration/dismiss which validates a JWT dismiss-token (speculative_calibration_token.decode_dismiss_token) from the calibration alert email and writes speculative_calibration_last_alerted_at to stamp the 30-day cooldown; AccountUpdate also accepts speculative_allocation_pct (0-50% cap enforced in the schema)."
+      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router. v2.165.0 adds POST /{account_id}/speculative-calibration/dismiss which validates a JWT dismiss-token (speculative_calibration_token.decode_dismiss_token) from the calibration alert email and writes speculative_calibration_last_alerted_at to stamp the 30-day cooldown; AccountUpdate also accepts speculative_allocation_pct (0-50% cap enforced in the schema). v2.166.0 adds POST /{account_id}/speculative-weights/apply-proposal (owner-only) which accepts apply_token + proposal_id query params, validates the JWT via speculative_calibration_apply_token.decode_apply_proposal_token (403 on any axis mismatch, 409 if the proposal is no longer pending), flips the SpeculativeWeightsProposal to applied, and calls speculative_weights_cache.invalidate_weights_cache(user_id) so the next scorer call picks up the new weights."
     },
     {
       "file": "routers/admin_router.py",
@@ -587,6 +587,29 @@
         "speculative_components"
       ],
       "purpose": "Per-call audit log of AI indicator (ai_spot_opinion) decisions. Written after every AISpotOpinionEvaluator.evaluate() call; outcome / realized_pnl_pct / closed_at are backfilled by the POSITION_CLOSED event-bus subscriber once the trade resolves. Read by the get_prior_ai_signals tool so the model can see how its own recent calls on a pair played out. model_used / input_tokens / output_tokens / cost_usd (added in migration 081) record the resolved model ID and per-call token usage + estimated USD cost, powering the Settings AI cost dashboard. doubling_probability_score / speculative_score / speculative_components (added in migration 083) store the AI-reported 0-100 likelihood of target_multiple hitting within target_horizon_hours plus the deterministic catalyst scorer output (total score + per-component breakdown from indicators.speculative_signals) for calibration analysis and the AI reasoning UI. 90-day retention via cleanup_old_ai_opinion_logs."
+    },
+    {
+      "name": "SpeculativeWeightsProposal",
+      "table": "speculative_weights_proposals",
+      "schema": "trading",
+      "key_fields": [
+        "id",
+        "user_id",
+        "account_id",
+        "status",
+        "algorithm",
+        "sample_size",
+        "overall_win_rate_pct",
+        "baseline_weights",
+        "proposed_weights",
+        "divergence_pp",
+        "reason",
+        "created_at",
+        "decided_at",
+        "decided_by",
+        "reverted_by_proposal_id"
+      ],
+      "purpose": "Auto-calibration proposal for the per-user speculative_signals component weights (v2.166.0, migration 084). Written by speculative_calibration_monitor whenever analyze_speculative_calibration produces a result with total_closed >= PROPOSAL_MIN_SAMPLE_SIZE; proposed_weights comes from speculative_weights_tuner.propose_weights (algorithm='proportional-alpha-v1'). status is one of pending / applied / rejected / superseded / reverted. Applying a proposal via POST /api/accounts/{id}/speculative-weights/apply-proposal flips status to applied and invalidates the speculative_weights_cache. reverted_by_proposal_id is a self-FK reserved for Phase 2 revert flows. user_id and decided_by are FKs to auth.users; account_id is a FK to trading.accounts. Indexed on (user_id, status) with a partial index for the latest-applied lookup on PostgreSQL."
     },
     {
       "name": "ScannerLog",
@@ -1335,7 +1358,7 @@
     },
     {
       "file": "services/email_service.py",
-      "purpose": "AWS SES email sending for verification, password reset, MFA codes. v2.165.0 adds send_speculative_calibration_email() with HTML/plain body builders that include verbatim copy-paste markers for the calibration alert so users can review the recommendation in email and click the signed dismiss link back into Settings.",
+      "purpose": "AWS SES email sending for verification, password reset, MFA codes. v2.165.0 adds send_speculative_calibration_email() with HTML/plain body builders that include verbatim copy-paste markers for the calibration alert so users can review the recommendation in email and click the signed dismiss link back into Settings. v2.166.0 extends send_speculative_calibration_email() and build_speculative_calibration_text_body() with optional proposal + apply_url params; new helper _render_proposal_block() renders the AUTOMATED PROPOSAL section (before/after weights table + one-click apply URL) between the components-performance block and the Claude copy-paste block, and the HTML wrapper rewrites the apply URL into an anchor tag.",
       "type": "infrastructure"
     },
     {
@@ -1344,14 +1367,29 @@
       "type": "trading"
     },
     {
+      "file": "services/speculative_calibration_apply_token.py",
+      "purpose": "JWT helpers for the one-click apply link in the calibration alert email (v2.166.0). Token type is 'speculative_calibration_apply_proposal' — distinct from the dismiss-token type so the two deep links cannot be cross-used. create_apply_proposal_token(account_id, user_id, proposal_id) issues a short-lived signed token, decode_apply_proposal_token(token) validates it for POST /api/accounts/{id}/speculative-weights/apply-proposal, and build_apply_proposal_url(account_id, user_id, proposal_id) produces the Settings deep link embedded in the email body.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/speculative_calibration_monitor.py",
-      "purpose": "Daily periodic task (24h interval) that runs analyze_speculative_calibration for every account with speculative_allocation_pct > 0, compares actual vs target hit-rate, and emails a calibration alert (via email_service.send_speculative_calibration_email) when the allocation should be adjusted. Enforces a 30-day per-user cooldown via Account.speculative_calibration_last_alerted_at so users aren't spammed. Also broadcasts a 'speculative_calibration_alert' WebSocket event to the account owner so the frontend can show a persistent toast with a 'Review in email' CTA. Wired into main.py startup/shutdown via start_speculative_calibration_monitor / stop_speculative_calibration_monitor.",
+      "purpose": "Daily periodic task (24h interval) that runs analyze_speculative_calibration for every account with speculative_allocation_pct > 0, compares actual vs target hit-rate, and emails a calibration alert (via email_service.send_speculative_calibration_email) when the allocation should be adjusted. Enforces a 30-day per-user cooldown via Account.speculative_calibration_last_alerted_at so users aren't spammed. Also broadcasts a 'speculative_calibration_alert' WebSocket event to the account owner so the frontend can show a persistent toast with a 'Review in email' CTA. Wired into main.py startup/shutdown via start_speculative_calibration_monitor / stop_speculative_calibration_monitor. v2.166.0: when analyze_speculative_calibration returns a result AND total_closed >= speculative_weights_tuner.PROPOSAL_MIN_SAMPLE_SIZE, calls _create_proposal(db, user_id, account_id, analysis) which runs the tuner and persists a pending SpeculativeWeightsProposal, superseding any prior pending row for the same user; the analysis + apply_url are threaded into send_speculative_calibration_email so the alert includes the one-click apply link. Proposal failures are logged but do NOT block the email send.",
       "type": "background"
     },
     {
       "file": "services/speculative_calibration_token.py",
       "purpose": "JWT dismiss-token helpers for the speculative calibration alert email. create_dismiss_token(account_id, user_id) issues a short-lived signed token, decode_dismiss_token(token) validates it for the POST /api/accounts/{id}/speculative-calibration/dismiss endpoint, and build_dismiss_url(account_id, user_id) produces the Settings deep link embedded in the email body (frontend reads ?dismiss_token=&account_id= on mount and posts back to dismiss).",
       "type": "infrastructure"
+    },
+    {
+      "file": "services/speculative_weights_cache.py",
+      "purpose": "Per-user effective speculative-signals weights lookup (v2.166.0). get_effective_weights(db, user_id) returns the user's latest applied SpeculativeWeightsProposal.proposed_weights, falling back to indicators.speculative_signals.DEFAULT_WEIGHTS when no applied proposal exists. 60-second TTL cache keyed by user_id; invalidate_weights_cache(user_id) is called by the apply-proposal endpoint so the next scorer call picks up the new weights immediately.",
+      "type": "trading"
+    },
+    {
+      "file": "services/speculative_weights_tuner.py",
+      "purpose": "Pure-function auto-calibration algorithm for the speculative_signals component weights (v2.166.0). propose_weights(analysis) implements proportional-to-alpha with clamp-and-normalize using module constants LEARNING_RATE=0.3, MAX_WEIGHT_CHANGE_PER_CYCLE=5, WEIGHT_FLOOR=5, WEIGHT_CEILING=40, PROPOSAL_MIN_SAMPLE_SIZE=500, ALGORITHM_NAME='proportional-alpha-v1'. Helpers _normalize_to_sum() and _integer_round_preserving_sum() keep the proposed weight vector as integers summing to 100. No I/O — consumed by speculative_calibration_monitor._create_proposal.",
+      "type": "trading"
     },
     {
       "file": "services/exchange_service.py",
@@ -1855,7 +1893,7 @@
   "indicators_module": [
     {
       "file": "indicators/ai_spot_opinion.py",
-      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). AISpotOpinionParams.ai_model_override is plumbed through to get_provider(model=...) so bots can pin a specific model. _call_llm returns a 5-tuple (signal, confidence, reasoning, tool_calls, usage_meta) where usage_meta = {model_used, input_tokens, output_tokens, cost_usd} (cost computed via indicators.ai_pricing.estimate_cost_usd). Every evaluation is persisted via ai_opinion_logger.log_opinion with the usage/cost fields. v2.165.0 adds catalyst mode: params gain speculative_mode, target_multiple, and target_horizon_hours; when speculative_mode is on the evaluator runs the deterministic indicators.speculative_signals scorer as a prefilter and asks the model for a doubling_probability_score (0-100) alongside the signal, so only pairs that clear the catalyst threshold reach the LLM."
+      "purpose": "AISpotOpinionEvaluator: AI-powered indicator combining technical metrics with LLM reasoning. Pre-fetches static context (portfolio / position) into the prompt, then runs a multi-turn provider tool loop that exposes the argument-taking tools (get_candle_window, get_recent_news, get_trade_history, get_prior_ai_signals). AISpotOpinionParams.ai_model_override is plumbed through to get_provider(model=...) so bots can pin a specific model. _call_llm returns a 5-tuple (signal, confidence, reasoning, tool_calls, usage_meta) where usage_meta = {model_used, input_tokens, output_tokens, cost_usd} (cost computed via indicators.ai_pricing.estimate_cost_usd). Every evaluation is persisted via ai_opinion_logger.log_opinion with the usage/cost fields. v2.165.0 adds catalyst mode: params gain speculative_mode, target_multiple, and target_horizon_hours; when speculative_mode is on the evaluator runs the deterministic indicators.speculative_signals scorer as a prefilter and asks the model for a doubling_probability_score (0-100) alongside the signal, so only pairs that clear the catalyst threshold reach the LLM. v2.166.0: in speculative_mode, evaluate() calls speculative_weights_cache.get_effective_weights(db, user_id) before scoring and threads the per-user weights into score_speculative_setup(..., weights=...) so auto-calibrated weights apply per-user."
     },
     {
       "file": "indicators/ai_opinion_logger.py",
@@ -1875,7 +1913,7 @@
     },
     {
       "file": "indicators/speculative_signals.py",
-      "purpose": "Deterministic 0-100 catalyst scorer used as the prefilter for the 'speculative' risk preset. Aggregates 6 weighted components (momentum, volume, volatility expansion, news/social catalysts, relative strength, structural breakout) into a single speculative_score plus a speculative_components breakdown; the output is consumed by ai_spot_opinion (catalyst mode) and persisted on AIOpinionLog for calibration analysis."
+      "purpose": "Deterministic 0-100 catalyst scorer used as the prefilter for the 'speculative' risk preset. Aggregates 6 weighted components (momentum, volume, volatility expansion, news/social catalysts, relative strength, structural breakout) into a single speculative_score plus a speculative_components breakdown; the output is consumed by ai_spot_opinion (catalyst mode) and persisted on AIOpinionLog for calibration analysis. v2.166.0 renames the module-level WEIGHTS constant to DEFAULT_WEIGHTS (with a back-compat alias WEIGHTS = DEFAULT_WEIGHTS), and score_speculative_setup() now takes an optional weights kwarg so per-user auto-calibrated weights from speculative_weights_cache can override the defaults."
     }
   ],
   "ai_tools": {
@@ -2266,7 +2304,7 @@
     }
   ],
   "migrations": {
-    "count": 93,
+    "count": 94,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2364,7 +2402,8 @@
       "080_ai_opinion_log.py",
       "081_ai_opinion_log_cost_fields.py",
       "082_speculative_bucket.py",
-      "083_ai_opinion_log_speculative.py"
+      "083_ai_opinion_log_speculative.py",
+      "084_speculative_weights_proposals.py"
     ]
   }
 }

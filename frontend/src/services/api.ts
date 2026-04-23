@@ -895,7 +895,31 @@ export const speculativeBucketApi = {
       null,
       { params: { dismiss_token: dismissToken } },
     ).then((res) => res.data),
+  applyWeightsProposal: (accountId: number, applyToken: string, proposalId: number) =>
+    api.post<{ applied: boolean; weights: Record<string, number>; proposal_id: number }>(
+      `/accounts/${accountId}/speculative-weights/apply-proposal`,
+      null,
+      { params: { apply_token: applyToken, proposal_id: proposalId } },
+    ).then((res) => res.data),
+  listWeightsProposals: (accountId: number) =>
+    api.get<SpeculativeWeightsProposal[]>(
+      `/accounts/${accountId}/speculative-weights/proposals`,
+    ).then((res) => res.data),
 };
+
+export interface SpeculativeWeightsProposal {
+  id: number
+  status: 'pending' | 'applied' | 'rejected' | 'superseded' | 'reverted'
+  algorithm: string
+  sample_size: number
+  overall_win_rate_pct: number
+  divergence_pp: number | null
+  baseline_weights: Record<string, number>
+  proposed_weights: Record<string, number>
+  created_at: string | null
+  decided_at: string | null
+  reason: string | null
+}
 
 // Reports & Goals
 import type {

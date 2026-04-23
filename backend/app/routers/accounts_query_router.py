@@ -481,6 +481,53 @@ async def get_speculative_bucket_route(
     )
 
 
+@router.get("/{account_id}/speculative-weights/proposals")
+async def list_speculative_weights_proposals(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List speculative-weights proposals for the caller on this account.
+
+    Owner-only (the apply and dismiss flows are owner-only too). Returns
+    in reverse chronological order so the latest proposal is first.
+    """
+    from app.models import SpeculativeWeightsProposal
+
+    # Ownership — only the account's user can see their proposal history.
+    account_row = await db.execute(
+        select(Account).where(
+            Account.id == account_id, Account.user_id == current_user.id,
+        )
+    )
+    if account_row.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    stmt = (
+        select(SpeculativeWeightsProposal)
+        .where(SpeculativeWeightsProposal.user_id == current_user.id)
+        .order_by(SpeculativeWeightsProposal.created_at.desc())
+        .limit(200)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "status": r.status,
+            "algorithm": r.algorithm,
+            "sample_size": r.sample_size,
+            "overall_win_rate_pct": r.overall_win_rate_pct,
+            "divergence_pp": r.divergence_pp,
+            "baseline_weights": r.baseline_weights,
+            "proposed_weights": r.proposed_weights,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "decided_at": r.decided_at.isoformat() if r.decided_at else None,
+            "reason": r.reason,
+        }
+        for r in rows
+    ]
+
+
 # =============================================================================
 # Auto-Buy BTC Settings (GET)
 # =============================================================================

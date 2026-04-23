@@ -38,7 +38,7 @@
     {
       "file": "pages/Settings.tsx",
       "route": "/settings",
-      "purpose": "User settings, password, accounts, AI credentials, blacklist config. v2.165.0 renders SpeculativeAllocationSection for the per-account speculative bucket cap (0-50%) and adds a mount-time effect that detects ?dismiss_token=&account_id= on the URL (deep link from the calibration alert email) and POSTs to speculativeBucketApi.dismissCalibrationAlert to stamp the 30-day cooldown."
+      "purpose": "User settings, password, accounts, AI credentials, blacklist config. v2.165.0 renders SpeculativeAllocationSection for the per-account speculative bucket cap (0-50%) and adds a mount-time effect that detects ?dismiss_token=&account_id= on the URL (deep link from the calibration alert email) and POSTs to speculativeBucketApi.dismissCalibrationAlert to stamp the 30-day cooldown. v2.166.0 extends the same mount-time effect to also recognize ?apply_token=&account_id=&proposal_id= URLs (the one-click apply link from the calibration alert email) and POSTs to speculativeBucketApi.applyWeightsProposal, and renders <SpeculativeWeightsHistory accountId={a.id}/> inside the Speculative Bucket card below each account's allocation section."
     },
     {
       "file": "pages/Login.tsx",
@@ -457,6 +457,10 @@
         "purpose": "Settings panel for the per-account speculative bucket cap (0-50%): slider + numeric input with a recommended-allocation hint. Persists speculative_allocation_pct via the accounts update endpoint and invalidates the bucket snapshot query on save. Added in v2.165.0."
       },
       {
+        "file": "components/settings/SpeculativeWeightsHistory.tsx",
+        "purpose": "Read-only collapsed table of past SpeculativeWeightsProposal rows per account (v2.166.0). Fetches via speculativeBucketApi.listWeightsProposals(accountId); renders status badges (applied / pending / superseded / reverted / rejected) with distinct colors and a summary of the before/after weight deltas. Self-hides when the account has no proposal history. Paired test file SpeculativeWeightsHistory.test.tsx covers the render paths with vitest."
+      },
+      {
         "file": "components/settings/BlacklistManager.tsx",
         "purpose": "Coin blacklist with AI review"
       },
@@ -859,7 +863,7 @@
       },
       {
         "name": "speculativeBucketApi",
-        "purpose": "Speculative bucket endpoints: get(accountId) -> SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) backing the Dashboard bucket card, and dismissCalibrationAlert({ account_id, dismiss_token }) which posts the signed token from the calibration alert email to stamp the 30-day cooldown. Added in v2.165.0."
+        "purpose": "Speculative bucket endpoints: get(accountId) -> SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) backing the Dashboard bucket card, and dismissCalibrationAlert({ account_id, dismiss_token }) which posts the signed token from the calibration alert email to stamp the 30-day cooldown. Added in v2.165.0. v2.166.0 adds applyWeightsProposal(accountId, token, proposalId) for the one-click apply link (POST /accounts/{id}/speculative-weights/apply-proposal) and listWeightsProposals(accountId) (GET /accounts/{id}/speculative-weights/proposals) which backs the SpeculativeWeightsHistory table; a new SpeculativeWeightsProposal TypeScript type is exported from api.ts."
       }
     ]
   },
@@ -932,7 +936,8 @@
         "AggregateValue",
         "DashboardStats",
         "Settings",
-        "SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) — added v2.165.0"
+        "SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) — added v2.165.0",
+        "SpeculativeWeightsProposal (id, account_id, status, algorithm, sample_size, baseline_weights, proposed_weights, divergence_pp, created_at, decided_at) — added v2.166.0"
       ],
       "market": [
         "Candle",
