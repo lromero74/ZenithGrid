@@ -5,7 +5,7 @@
 **Last Updated**: 2026-04-22
 **One-Pass Confidence Score**: 9/10
 
-> **Status (2026-04-22, after v2.164.13)**: Phase A (fast summary path) and Phase C (Dashboard fan-out + positions-list trims) are **complete**. The positions-list field/snapshot trimming sweep is **done** — further per-field trims are diminishing returns and should stop. Remaining open work is Phase B (Portfolio-page paper valuation) and/or fresh profiling to pick the next bottleneck. See the [Sweep Complete](#sweep-complete-2026-04-22-after-v216413) section below for measured payload reductions and which fields cannot be trimmed without breaking the UI.
+> **Status (2026-04-23)**: Phase A (fast summary path), Phase B (Portfolio-page paper valuation), and Phase C (Dashboard fan-out + positions-list trims) are **all complete**. Phase B shipped in commit `6fd02c56` ("Share paper account valuation path") — `account_service._build_paper_portfolio` now delegates to `paper_valuation_service.build_paper_holdings_and_totals` which uses bounded concurrency (`asyncio.Semaphore`), a shared price cache, and `asyncio.gather`. The positions-list field/snapshot trimming sweep is done — further per-field trims are diminishing returns. See the [Sweep Complete](#sweep-complete-2026-04-22-after-v216413) section below. **This PRP is effectively closed**; any further performance work should come from fresh profiling, not this document.
 
 ---
 
@@ -581,9 +581,11 @@ After Phase A proves stable:
 - optionally add background revalidation for the Portfolio page too
 
 Status:
-- still open — now the **highest-priority remaining item** in this PRP
-- reuse the bounded-concurrency helper already in `backend/app/services/paper_valuation_service.py`
-- gate this on fresh profiling first — Phase A + C may have reduced Portfolio-page pain enough that this is no longer the biggest win
+- **complete** (commit `6fd02c56` — "Share paper account valuation path")
+- `account_service._build_paper_portfolio` is now a thin delegator to
+  `paper_valuation_service.build_paper_holdings_and_totals`
+- Shared bounded-concurrency + per-asset cache + negative cache; the same
+  path that services the fast summary endpoint
 
 ### Phase C — Dashboard Startup Fan-Out
 
