@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.2] - 2026-04-23
+
+### Changed
+- **Proposal status values consolidated** — the five status strings (`pending`, `applied`, `rejected`, `superseded`, `reverted`) are now defined once in a `ProposalStatus` class in the models module and imported everywhere, replacing ~10 scattered hardcoded string literals. A typo at any call site would have been silent before.
+- **Calibration email link TTL now has one source of truth** — dismiss-token and apply-token modules both derive their 30-day TTL from a single `CALIBRATION_EMAIL_LINK_TTL_DAYS` constant, so they can no longer drift apart on a future tweak.
+- **Proposals-list row cap pulled to a named constant** — the implicit 200-row ceiling on the history endpoint now lives as `_MAX_PROPOSAL_HISTORY_ROWS`. No behavior change.
+
 ## [v2.166.1] - 2026-04-23
 
 ### Fixed

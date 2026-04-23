@@ -30,11 +30,16 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-# Token lifetime: long enough that the user can act on the email over a
-# weekend, short enough that a leaked inbox weeks later cannot silently
-# dismiss future alerts. 30 days matches the cooldown itself — one email
-# cycle.
-DISMISS_TOKEN_TTL_DAYS = 30
+# Shared TTL for calibration-email links (both dismiss and apply tokens use
+# it). Long enough that the user can act on the email over a weekend, short
+# enough that a leaked inbox weeks later cannot silently mutate scorer state
+# or dismiss future alerts. Happens to equal the monitor's COOLDOWN_DAYS
+# today but that's coincidence — the cooldown governs "how soon before the
+# NEXT alert fires", this governs "how long is the email's link valid".
+CALIBRATION_EMAIL_LINK_TTL_DAYS = 30
+
+# Back-compat alias — existing callers + tests reference this name.
+DISMISS_TOKEN_TTL_DAYS = CALIBRATION_EMAIL_LINK_TTL_DAYS
 
 _TOKEN_TYPE = "speculative_calibration_dismiss"
 

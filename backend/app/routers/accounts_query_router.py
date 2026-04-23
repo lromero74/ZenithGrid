@@ -481,6 +481,11 @@ async def get_speculative_bucket_route(
     )
 
 
+# Cap on the proposals-list response. Users only ever see a handful per
+# account; 200 is the "never scrolls" ceiling for the Settings panel.
+_MAX_PROPOSAL_HISTORY_ROWS = 200
+
+
 @router.get("/{account_id}/speculative-weights/proposals")
 async def list_speculative_weights_proposals(
     account_id: int,
@@ -513,7 +518,7 @@ async def list_speculative_weights_proposals(
             SpeculativeWeightsProposal.account_id == account_id,
         )
         .order_by(SpeculativeWeightsProposal.created_at.desc())
-        .limit(200)
+        .limit(_MAX_PROPOSAL_HISTORY_ROWS)
     )
     rows = (await db.execute(stmt)).scalars().all()
     return [

@@ -47,8 +47,11 @@ DEFAULT_WEIGHTS: Dict[str, int] = {
 
 assert sum(DEFAULT_WEIGHTS.values()) == 100, "DEFAULT_WEIGHTS must sum to 100"
 
-# Back-compat alias for code that imports WEIGHTS directly. Safe because
-# it's a reference to the same dict; no callers mutate it.
+# Alias kept intentionally: the calibration-alert email's "copy into Claude
+# Code" prompt block instructs the user to edit "the WEIGHTS dict in
+# speculative_signals.py" by name. Renaming it away from WEIGHTS would
+# make that prompt outdated mid-conversation. Safe as a reference: no
+# caller mutates it.
 WEIGHTS = DEFAULT_WEIGHTS
 
 

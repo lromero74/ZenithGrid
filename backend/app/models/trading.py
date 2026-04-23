@@ -781,6 +781,23 @@ class BlacklistedCoin(Base):
     user = relationship("User", back_populates="blacklisted_coins")
 
 
+class ProposalStatus:
+    """Stable state-machine values for SpeculativeWeightsProposal.status.
+
+    Kept as a plain class of string constants (not an Enum) so SQLAlchemy's
+    VARCHAR column and JSON-API responses serialize without adapter code.
+    Call sites must import from here rather than hardcode — a typo like
+    'appled' would otherwise slip through undetected.
+    """
+    PENDING = "pending"
+    APPLIED = "applied"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+    REVERTED = "reverted"
+
+    ALL = (PENDING, APPLIED, REJECTED, SUPERSEDED, REVERTED)
+
+
 class SpeculativeWeightsProposal(Base):
     """
     Audit + state-machine row for every speculative-preset weight change.
