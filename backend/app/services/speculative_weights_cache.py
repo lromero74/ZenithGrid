@@ -5,17 +5,16 @@ Every AI evaluation on a speculative-tagged bot resolves the user's
 currently-effective WEIGHTS via `get_effective_weights(db, user_id)`.
 Resolution order:
 
-  1. In-process cache if not expired (TTL = 60s).
+  1. In-process cache if not expired (TTL = `_CACHE_TTL_SECONDS`).
   2. Latest `status='applied'` row in `speculative_weights_proposals`
      for the given user_id.
   3. DEFAULT_WEIGHTS from `app.indicators.speculative_signals`.
 
-The cache is a plain in-process dict with a short TTL, keyed on user_id.
-It's thread-safe via Python's GIL for the dict operations; a slightly
-stale read (up to 60s) is acceptable — the scorer tolerates one extra
-eval on prior weights, and the apply-endpoint calls `invalidate_weights_cache`
-synchronously before returning 200 so the caller's next request
-always sees the new weights.
+The cache is a plain in-process dict keyed on user_id. It's thread-safe
+via Python's GIL for the dict operations; a slightly stale read is
+acceptable — the scorer tolerates one extra eval on prior weights, and
+the apply-endpoint calls `invalidate_weights_cache` synchronously before
+returning 200 so the caller's next request always sees the new weights.
 """
 
 from __future__ import annotations
@@ -57,13 +56,13 @@ async def get_effective_weights(
     # Lazy import — SpeculativeWeightsProposal lives in the trading models
     # module which imports other models; keeping this import local avoids
     # a circular import risk at module load time.
-    from app.models import SpeculativeWeightsProposal
+    from app.models import ProposalStatus, SpeculativeWeightsProposal
 
     stmt = (
         select(SpeculativeWeightsProposal.proposed_weights)
         .where(
             SpeculativeWeightsProposal.user_id == user_id,
-            SpeculativeWeightsProposal.status == "applied",
+            SpeculativeWeightsProposal.status == ProposalStatus.APPLIED,
         )
         .order_by(SpeculativeWeightsProposal.decided_at.desc())
         .limit(1)

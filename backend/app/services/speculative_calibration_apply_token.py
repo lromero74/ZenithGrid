@@ -19,10 +19,16 @@ from urllib.parse import quote
 from jose import JWTError, jwt
 
 from app.config import settings
+from app.services.speculative_calibration_token import (
+    CALIBRATION_EMAIL_LINK_TTL_DAYS,
+)
 
 logger = logging.getLogger(__name__)
 
-APPLY_TOKEN_TTL_DAYS = 30
+# Kept as a module-level alias so test files and any external callers can
+# still import `APPLY_TOKEN_TTL_DAYS` directly; the canonical value lives in
+# speculative_calibration_token so dismiss and apply can't drift.
+APPLY_TOKEN_TTL_DAYS = CALIBRATION_EMAIL_LINK_TTL_DAYS
 _TOKEN_TYPE = "speculative_calibration_apply_proposal"
 
 

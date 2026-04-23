@@ -37,7 +37,7 @@ from typing import Optional
 from sqlalchemy import select, update
 
 from app.config import settings
-from app.models import Account, Bot, SpeculativeWeightsProposal, User
+from app.models import Account, Bot, ProposalStatus, SpeculativeWeightsProposal, User
 from app.services.email_service import send_speculative_calibration_email
 from app.services.speculative_bucket_service import (
     _speculative_bot_filter,
@@ -304,15 +304,15 @@ async def _create_proposal(
         update(SpeculativeWeightsProposal)
         .where(
             SpeculativeWeightsProposal.user_id == user_id,
-            SpeculativeWeightsProposal.status == "pending",
+            SpeculativeWeightsProposal.status == ProposalStatus.PENDING,
         )
-        .values(status="superseded", decided_at=datetime.utcnow())
+        .values(status=ProposalStatus.SUPERSEDED, decided_at=datetime.utcnow())
     )
 
     row = SpeculativeWeightsProposal(
         user_id=user_id,
         account_id=account_id,
-        status="pending",
+        status=ProposalStatus.PENDING,
         algorithm=ALGORITHM_NAME,
         sample_size=analysis["total_closed"],
         overall_win_rate_pct=analysis["overall_win_rate_pct"],

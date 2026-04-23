@@ -345,7 +345,7 @@ async def apply_speculative_weights_proposal(
 
     See PRPs/speculative-weights-auto-calibration.md §Task F8.
     """
-    from app.models import SpeculativeWeightsProposal
+    from app.models import ProposalStatus, SpeculativeWeightsProposal
     from app.services.speculative_calibration_apply_token import (
         decode_apply_proposal_token,
     )
@@ -374,13 +374,13 @@ async def apply_speculative_weights_proposal(
     proposal = await db.get(SpeculativeWeightsProposal, proposal_id)
     if proposal is None or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    if proposal.status != "pending":
+    if proposal.status != ProposalStatus.PENDING:
         raise HTTPException(
             status_code=409,
             detail=f"Proposal is '{proposal.status}', not pending",
         )
 
-    proposal.status = "applied"
+    proposal.status = ProposalStatus.APPLIED
     proposal.decided_at = datetime.utcnow()
     proposal.decided_by = current_user.id
     await db.commit()
