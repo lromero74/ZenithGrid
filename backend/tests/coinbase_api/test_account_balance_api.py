@@ -813,6 +813,18 @@ class TestGetCurrencyBalance:
 class TestCalculateAggregateQuoteValue:
     """Tests for calculate_market_budget() — per-quote budget allocation."""
 
+    @pytest.fixture(autouse=True)
+    def _no_bulk_prices(self):
+        """Default: force the per-product fallback path so each test's
+        `mock_price` is exercised. Individual tests can override by
+        patching `list_products` themselves."""
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            yield
+
     def _mock_engine(self, positions_rows, base_held=0.0):
         """Patch get_sync_engine so conn.execute returns positions then base_held."""
         mock_conn = MagicMock()
@@ -943,3 +955,69 @@ class TestCalculateAggregateQuoteValue:
 
         # 0.5 BTC + (5 * 0.04) = 0.7 BTC
         assert result == pytest.approx(0.7)
+
+    @pytest.mark.asyncio
+    async def test_bulk_price_path_skips_per_product_fallback(self):
+        """Optimization: when the bulk endpoint resolves all products, the
+        per-product `get_current_price_func` must NOT be called. This is
+        what saves ~11s of rate-limit-lock time on the cold path."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "BTC", "available_balance": {"value": "1.0"}},
+            ],
+            "cursor": "",
+        })
+        mock_price = AsyncMock(return_value=9999.0)  # poisoned sentinel
+
+        # Override the autouse fixture: return a list_products payload
+        # covering ALL the position's products with real prices.
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[
+                {"product_id": "ETH-BTC", "price": "0.05"},
+            ],
+        ), self._mock_engine([("ETH-BTC", 10.0, 0.04)]):
+            result = await calculate_market_budget(
+                mock_request, "BTC", mock_price,
+                bypass_cache=True, account_id=206,
+            )
+
+        # Bulk path result: 1.0 BTC + 10 ETH * 0.05 BTC/ETH = 1.5 BTC
+        assert result == pytest.approx(1.5)
+        # Fallback was not needed.
+        mock_price.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_partial_bulk_result_falls_back_for_missing(self):
+        """When bulk returns prices for SOME products, the per-product
+        fallback handles the rest. Ensures delisted/unlisted coins
+        still get priced via ticker."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "BTC", "available_balance": {"value": "0.0"}},
+            ],
+            "cursor": "",
+        })
+
+        # Per-product fallback returns a known price for DELISTED-BTC.
+        async def _mock_price(pid):
+            return 0.02 if pid == "DELISTED-BTC" else None
+
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[
+                {"product_id": "ETH-BTC", "price": "0.05"},
+            ],
+        ), self._mock_engine([
+            ("ETH-BTC", 10.0, 0.04),
+            ("DELISTED-BTC", 5.0, 0.01),
+        ]):
+            result = await calculate_market_budget(
+                mock_request, "BTC", _mock_price,
+                bypass_cache=True, account_id=207,
+            )
+
+        # 0 BTC + (10 * 0.05 ETH-BTC bulk) + (5 * 0.02 DELISTED-BTC fallback) = 0.6 BTC
+        assert result == pytest.approx(0.6)

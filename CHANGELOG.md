@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.4] - 2026-04-23
+
+### Changed
+- **Bots-list endpoint ~6x faster on cold cache** — `GET /api/bots/` was spending up to 18s on the first request every 5 minutes pricing each of the user's ~75 position products one-by-one through an authenticated ticker endpoint that has a 150ms global rate-limit lock. Now uses a single cached (1-hour TTL) public bulk-product fetch that returns all ~600 Coinbase product prices at once, falling back to the per-product path only for products the bulk response didn't cover (delisted, bulk endpoint failure). Cold-path wall clock measured 18.0s → 3.2s in production. Same fix also benefits `calculate_market_budget` (aggregate BTC/USD budget values), which propagates to every caller of that function — trading signal processor, bot validation, account snapshots, bull-flag processor, batch analyzer.
+
 ## [v2.166.3] - 2026-04-23
 
 ### Changed

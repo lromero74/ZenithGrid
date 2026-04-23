@@ -108,6 +108,59 @@ async def list_products(bypass_cache: bool = False) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# Bulk price resolution
+# ---------------------------------------------------------------------------
+
+
+async def bulk_prices_for_products(product_ids: List[str]) -> Dict[str, float]:
+    """Resolve current prices for many products in one cached fetch.
+
+    Uses the 1-hour-cached ``list_products()`` endpoint to get ALL Coinbase
+    product prices, then filters to the requested IDs. Replaces the naive
+    pattern of N serial ``get_current_price(pid)`` calls, each of which
+    pays a ~150ms rate-limit lock on the authenticated ticker endpoint —
+    on cold cache that pattern costs 11+ seconds for 74 products.
+
+    Behavior:
+      * Empty input → ``{}`` with NO upstream call.
+      * Products missing from the bulk list → silently omitted. Caller
+        must fall back (e.g. use ``position.average_buy_price``).
+      * Products with price=0 / empty / missing → filtered out. A zero
+        price would poison downstream valuation math, so treat it as
+        "no price available" just like a missing product.
+      * Any exception from ``list_products()`` → ``{}``. The caller's
+        fallback path keeps the endpoint responsive on Coinbase outages.
+
+    Returns: ``{product_id: price_float}`` for products with valid prices.
+    """
+    if not product_ids:
+        return {}
+
+    try:
+        products = await list_products()
+    except Exception:
+        logger.exception("bulk_prices_for_products: list_products failed")
+        return {}
+
+    wanted = set(product_ids)
+    prices: Dict[str, float] = {}
+    for p in products:
+        pid = p.get("product_id")
+        if not pid or pid not in wanted:
+            continue
+        raw = p.get("price")
+        if raw in (None, "", 0, "0"):
+            continue
+        try:
+            price = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if price > 0:
+            prices[pid] = price
+    return prices
+
+
+# ---------------------------------------------------------------------------
 # Single product
 # ---------------------------------------------------------------------------
 
