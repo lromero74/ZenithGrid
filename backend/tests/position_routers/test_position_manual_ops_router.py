@@ -13,6 +13,32 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.models import Account, Bot, Position, User
 
 
+@pytest.fixture(autouse=True)
+def _patch_exchange_client():
+    """Route the router's per-position exchange resolver to whatever the
+    test has bound to `mock_coinbase` in its own local scope.
+
+    v2.166.5 removed the `coinbase=mock_coinbase` kwarg from
+    add_funds_to_position. Tests still create their own mock_coinbase;
+    this fixture makes `get_exchange_client_for_account(...)` return
+    that same object by scanning the caller's frame locals at resolution.
+    """
+    from app.position_routers import position_manual_ops_router as _mod
+    import sys as _sys
+
+    async def _resolver(db, account_id):
+        frame = _sys._getframe(1)
+        while frame is not None:
+            mc = frame.f_locals.get("mock_coinbase")
+            if mc is not None:
+                return mc
+            frame = frame.f_back
+        return AsyncMock()
+
+    with patch.object(_mod, "get_exchange_client_for_account", _resolver):
+        yield
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -103,7 +129,7 @@ class TestAddFundsToPosition:
             max_quote_allowed=0.25,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
 
         mock_trade = MagicMock()
@@ -117,7 +143,6 @@ class TestAddFundsToPosition:
             position_id=pos.id,
             request=request,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -143,7 +168,7 @@ class TestAddFundsToPosition:
             max_quote_allowed=0.25,
         )
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = AddFundsRequest(btc_amount=0.02)  # 0.24 + 0.02 = 0.26 > 0.25
 
         with pytest.raises(HTTPException) as exc_info:
@@ -151,7 +176,6 @@ class TestAddFundsToPosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -167,7 +191,7 @@ class TestAddFundsToPosition:
         user, account = await _create_user_with_account(db_session, email="af_closed@example.com")
         pos = await _create_position(db_session, account, status="closed")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = AddFundsRequest(btc_amount=0.01)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -175,7 +199,6 @@ class TestAddFundsToPosition:
                 position_id=pos.id,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -189,7 +212,7 @@ class TestAddFundsToPosition:
         from fastapi import HTTPException
 
         user, account = await _create_user_with_account(db_session, email="af_404@example.com")
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = AddFundsRequest(btc_amount=0.01)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -197,7 +220,6 @@ class TestAddFundsToPosition:
                 position_id=99999,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -218,7 +240,7 @@ class TestAddFundsToPosition:
         db_session.add(user)
         await db_session.flush()
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = AddFundsRequest(btc_amount=0.01)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -226,7 +248,6 @@ class TestAddFundsToPosition:
                 position_id=1,
                 request=request,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -414,7 +435,7 @@ class TestManualOpsManagerAccess:
 
         owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
 
         mock_trade = MagicMock()
@@ -426,7 +447,7 @@ class TestManualOpsManagerAccess:
 
         result = await add_funds_to_position(
             position_id=pos.id, request=request,
-            db=db_session, coinbase=mock_coinbase, current_user=manager_user,
+            db=db_session, current_user=manager_user,
         )
 
         assert "Added" in result["message"]
@@ -441,15 +462,66 @@ class TestManualOpsManagerAccess:
 
         owner, observer, account, bot, pos = await self._setup_shared_access(db_session, role="observer")
 
-        mock_coinbase = AsyncMock()
+        mock_coinbase = AsyncMock()  # noqa: F841  (frame-scanned by _patch_exchange_client fixture)
         request = AddFundsRequest(btc_amount=0.005)
 
         with pytest.raises(HTTPException) as exc_info:
             await add_funds_to_position(
                 position_id=pos.id, request=request,
-                db=db_session, coinbase=mock_coinbase, current_user=observer,
+                db=db_session, current_user=observer,
             )
         assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_manual_ops_router.execute_buy", new_callable=AsyncMock)
+    @patch("app.position_routers.position_manual_ops_router.TradingClient")
+    async def test_manager_add_funds_resolves_exchange_from_position_account(
+        self, mock_tc_cls, mock_buy, db_session,
+    ):
+        """CVE-2026-04-23-001 regression for add_funds_to_position.
+
+        Before the v2.166.5 fix, a manager on a shared account clicking
+        "add funds" would spend their OWN USD via Depends(get_coinbase)
+        while the position's PnL accrued on the owner's account. This test
+        pins that `get_exchange_client_for_account` now receives the
+        position's account_id (owner), not the manager's id.
+        """
+        from app.position_routers import position_manual_ops_router as _mod
+        from app.position_routers.position_manual_ops_router import add_funds_to_position
+        from app.position_routers.schemas import AddFundsRequest
+
+        owner, manager_user, account, bot, pos = await self._setup_shared_access(db_session)
+
+        owner_mock = AsyncMock()
+        owner_mock.get_current_price = AsyncMock(return_value=0.03)
+        captured = {}
+
+        async def _resolver(db, account_id):
+            captured["account_id"] = account_id
+            return owner_mock
+
+        mock_trade = MagicMock()
+        mock_trade.id = 101
+        mock_trade.base_amount = 0.166
+        mock_buy.return_value = mock_trade
+
+        with patch.object(_mod, "get_exchange_client_for_account", _resolver):
+            request = AddFundsRequest(btc_amount=0.005)
+            result = await add_funds_to_position(
+                position_id=pos.id, request=request,
+                db=db_session, current_user=manager_user,
+            )
+
+        # The exchange was resolved using the OWNER's account, not the
+        # manager's user_id. If this ever flips back, the vulnerability
+        # is re-introduced.
+        assert captured["account_id"] == account.id
+        assert captured["account_id"] != manager_user.id
+        assert result["trade_id"] == 101
+        # execute_buy was called with the owner-scoped exchange client.
+        mock_buy.assert_awaited_once()
+        _, buy_kwargs = mock_buy.call_args
+        assert buy_kwargs.get("coinbase") is owner_mock
 
     @pytest.mark.asyncio
     async def test_manager_can_update_notes_on_shared_account_position(self, db_session):

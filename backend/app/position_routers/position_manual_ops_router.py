@@ -10,14 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import get_quote_currency
 from app.database import get_db
 from app.models import Position, User
-from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
 from app.auth.dependencies import require_permission, Perm
 from app.services.account_access import manager_account_ids
+from app.services.exchange_service import get_exchange_client_for_account
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
 
@@ -30,7 +29,6 @@ async def add_funds_to_position(
     position_id: int,
     request: AddFundsRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Manually add funds to a position (manual safety order)"""
@@ -67,18 +65,29 @@ async def add_funds_to_position(
                 ),
             )
 
+        # Resolve the exchange client FROM THE POSITION's account, not the
+        # caller's default CEX. Otherwise a shared-account manager's manual
+        # safety order would spend the MANAGER's funds while the PnL accrues
+        # on the owner's position. Ships with the v2.166.5 security patch.
+        exchange = await get_exchange_client_for_account(db, position.account_id)
+        if not exchange:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not create exchange client for this position's account.",
+            )
+
         # Get current price for the position's product
-        current_price = await coinbase.get_current_price(position.product_id)
+        current_price = await exchange.get_current_price(position.product_id)
 
         # Get bot for this position (required for execute_buy)
         if not position.bot:
             raise HTTPException(status_code=400, detail="Position has no associated bot")
 
         # Execute buy using modular function
-        trading_client = TradingClient(coinbase)
+        trading_client = TradingClient(exchange)
         trade = await execute_buy(
             db=db,
-            coinbase=coinbase,
+            coinbase=exchange,
             trading_client=trading_client,
             bot=position.bot,
             product_id=position.product_id,
