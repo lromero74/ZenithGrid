@@ -658,25 +658,39 @@ async def calculate_market_budget(
         if positions and get_current_price_func:
             unique_products = list({p[0] for p in positions if p[0]})
 
-            async def fetch_price(pid: str):
-                try:
-                    return (pid, await get_current_price_func(pid))
-                except Exception:
-                    return (pid, None)
+            # Prefer one bulk, 1-hour-cached fetch over N serial
+            # per-product ticker calls. Each ticker call pays a ~150ms
+            # auth rate-limit lock so 74 products cost ~11s of lock-wait
+            # on cold cache. Bulk fetch is ~1 call, independent of N.
+            # Fall back to per-product on empty bulk result (e.g. if
+            # the public endpoint fails and returns {}).
+            from app.coinbase_api.public_market_data import (
+                bulk_prices_for_products,
+            )
+            price_map = await bulk_prices_for_products(unique_products)
 
-            # Batch fetch prices (15 at a time to avoid rate limits)
-            price_map = {}
-            batch_size = 15
-            for i in range(0, len(unique_products), batch_size):
-                batch = unique_products[i:i + batch_size]
-                results = await asyncio.gather(
-                    *[fetch_price(pid) for pid in batch]
-                )
-                for pid, price in results:
-                    if price is not None:
-                        price_map[pid] = price
-                if i + batch_size < len(unique_products):
-                    await asyncio.sleep(0.1)
+            missing = [pid for pid in unique_products if pid not in price_map]
+            if missing:
+                # Fallback for the products the bulk fetch didn't cover
+                # (delisted, or the bulk call failed entirely). Keeps the
+                # result parity with the original serial-batched path.
+                async def fetch_price(pid: str):
+                    try:
+                        return (pid, await get_current_price_func(pid))
+                    except Exception:
+                        return (pid, None)
+
+                batch_size = 15
+                for i in range(0, len(missing), batch_size):
+                    batch = missing[i:i + batch_size]
+                    results = await asyncio.gather(
+                        *[fetch_price(pid) for pid in batch]
+                    )
+                    for pid, price in results:
+                        if price is not None:
+                            price_map[pid] = price
+                    if i + batch_size < len(missing):
+                        await asyncio.sleep(0.1)
 
             for product_id, amount, avg_price in positions:
                 if amount:

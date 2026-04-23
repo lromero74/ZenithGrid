@@ -7,7 +7,7 @@ aggregate value fetching for bot listings.
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -93,9 +93,22 @@ class TestFetchAggregateValues:
 class TestFetchPositionPrices:
     """Tests for fetch_position_prices()."""
 
+    @pytest.fixture(autouse=True)
+    def _no_bulk_prices(self):
+        """Default: force the per-product fallback path so tests written
+        against the old serial-batched behavior still exercise it.
+        Individual tests can opt into the bulk path by patching
+        list_products themselves."""
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            yield
+
     @pytest.mark.asyncio
     async def test_happy_path_all_prices(self):
-        """Happy path: all products priced successfully."""
+        """Happy path: all products priced successfully via per-product fallback."""
         from app.services.bot_stats_service import fetch_position_prices
 
         coinbase = AsyncMock()
@@ -104,6 +117,50 @@ class TestFetchPositionPrices:
         prices = await fetch_position_prices(coinbase, ["BTC-USD", "ETH-USD"])
         assert prices["BTC-USD"] == 50000.0
         assert prices["ETH-USD"] == 3000.0
+
+    @pytest.mark.asyncio
+    async def test_bulk_path_skips_per_product_calls(self):
+        """Optimization: when the bulk endpoint returns prices for all
+        products, the per-product ticker path must NOT be called. This
+        is what saves ~11s on the /api/bots/ cold path."""
+        from app.services.bot_stats_service import fetch_position_prices
+
+        coinbase = AsyncMock()
+        coinbase.get_current_price = AsyncMock(return_value=9999.0)  # poisoned
+
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[
+                {"product_id": "BTC-USD", "price": "60000.0"},
+                {"product_id": "ETH-USD", "price": "3000.0"},
+            ],
+        ):
+            prices = await fetch_position_prices(coinbase, ["BTC-USD", "ETH-USD"])
+
+        assert prices == {"BTC-USD": 60000.0, "ETH-USD": 3000.0}
+        coinbase.get_current_price.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_partial_bulk_falls_back_for_missing(self):
+        """Mixed: bulk covers BTC-USD, per-product handles the rest."""
+        from app.services.bot_stats_service import fetch_position_prices
+
+        coinbase = AsyncMock()
+        coinbase.get_current_price = AsyncMock(return_value=42.0)
+
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            return_value=[
+                {"product_id": "BTC-USD", "price": "60000.0"},
+            ],
+        ):
+            prices = await fetch_position_prices(coinbase, ["BTC-USD", "DELISTED-USD"])
+
+        assert prices["BTC-USD"] == 60000.0
+        assert prices["DELISTED-USD"] == 42.0
+        coinbase.get_current_price.assert_awaited_once_with("DELISTED-USD")
 
     @pytest.mark.asyncio
     async def test_empty_products_returns_empty(self):

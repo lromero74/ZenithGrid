@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.coinbase_api.public_market_data import (
     PublicMarketDataClient,
     _public_request,
+    bulk_prices_for_products,
     get_btc_usd_price,
     get_candles,
     get_current_price,
@@ -179,6 +180,95 @@ class TestListProducts:
 
         assert len(result) == 1
         assert mock_request.call_count == 1
+
+
+class TestBulkPricesForProducts:
+    """Bulk price resolution via the cached list_products endpoint.
+
+    This is the hot-path optimization that replaces N serial per-product
+    ticker calls (each paying a ~150ms rate-limit lock) with ONE cached
+    bulk fetch. Used by calculate_market_budget and fetch_position_prices
+    to make the bots-list endpoint's cold call ~10x faster.
+    """
+
+    @pytest.mark.asyncio
+    async def test_returns_mapping_for_requested_products(self):
+        mock_request = AsyncMock(return_value={
+            "products": [
+                {"product_id": "BTC-USD", "price": "60000.0"},
+                {"product_id": "ETH-USD", "price": "3000.0"},
+                {"product_id": "SOL-USD", "price": "150.0"},
+                {"product_id": "XRP-USD", "price": "0.5"},
+            ]
+        })
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            result = await bulk_prices_for_products(["BTC-USD", "SOL-USD"])
+        assert result == {"BTC-USD": 60000.0, "SOL-USD": 150.0}
+
+    @pytest.mark.asyncio
+    async def test_missing_products_omitted(self):
+        """Delisted/unknown products just don't appear in the result —
+        caller handles fallback (e.g. use position.average_buy_price)."""
+        mock_request = AsyncMock(return_value={
+            "products": [{"product_id": "BTC-USD", "price": "60000.0"}]
+        })
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            result = await bulk_prices_for_products(["BTC-USD", "DELISTED-USD"])
+        assert result == {"BTC-USD": 60000.0}
+        assert "DELISTED-USD" not in result
+
+    @pytest.mark.asyncio
+    async def test_zero_or_missing_price_filtered(self):
+        """Products with price=0, empty string, or missing price field
+        are excluded — they'd poison downstream valuation math."""
+        mock_request = AsyncMock(return_value={
+            "products": [
+                {"product_id": "BTC-USD", "price": "60000.0"},
+                {"product_id": "ZERO-USD", "price": "0"},
+                {"product_id": "NONE-USD", "price": None},
+                {"product_id": "EMPTY-USD", "price": ""},
+                {"product_id": "MISSING-USD"},  # no price key at all
+            ]
+        })
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            result = await bulk_prices_for_products([
+                "BTC-USD", "ZERO-USD", "NONE-USD", "EMPTY-USD", "MISSING-USD",
+            ])
+        assert result == {"BTC-USD": 60000.0}
+
+    @pytest.mark.asyncio
+    async def test_empty_input_returns_empty_dict_without_fetch(self):
+        """Short-circuit: no products to price, no API call."""
+        mock_request = AsyncMock()
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            result = await bulk_prices_for_products([])
+        assert result == {}
+        mock_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_uses_list_products_cache(self):
+        """Two calls back-to-back hit the 1-hour list_products cache —
+        only one underlying HTTP fetch. This is the whole point of the
+        optimization: subsequent callers don't pay the API cost."""
+        mock_request = AsyncMock(return_value={
+            "products": [{"product_id": "BTC-USD", "price": "60000.0"}]
+        })
+        with patch("app.coinbase_api.public_market_data._public_request", mock_request):
+            await bulk_prices_for_products(["BTC-USD"])
+            await bulk_prices_for_products(["BTC-USD"])
+        assert mock_request.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_list_products_error(self):
+        """Upstream failure must not crash the caller — return empty dict
+        so calculate_market_budget can fall back to average_buy_price."""
+        with patch(
+            "app.coinbase_api.public_market_data.list_products",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("coinbase on fire"),
+        ):
+            result = await bulk_prices_for_products(["BTC-USD", "ETH-USD"])
+        assert result == {}
 
 
 # ---------------------------------------------------------------------------

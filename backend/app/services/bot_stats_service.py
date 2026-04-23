@@ -45,8 +45,23 @@ async def fetch_aggregate_values(coinbase) -> Tuple[Optional[float], Optional[fl
 async def fetch_position_prices(
     coinbase, unique_products: List[str], batch_size: int = 15
 ) -> Dict[str, float]:
-    """Batch-fetch current prices for a list of product IDs."""
-    position_prices = {}
+    """Batch-fetch current prices for a list of product IDs.
+
+    Prefers one bulk-cached fetch over N serial per-product ticker calls
+    (the latter pays a ~150ms auth rate-limit lock per call, which
+    dominates cold-path latency when the list grows past ~20 products).
+    Falls back to the per-product path for any IDs the bulk call didn't
+    cover (delisted coins, bulk endpoint failure).
+    """
+    if not unique_products:
+        return {}
+
+    from app.coinbase_api.public_market_data import bulk_prices_for_products
+    position_prices: Dict[str, float] = await bulk_prices_for_products(unique_products)
+
+    missing = [pid for pid in unique_products if pid not in position_prices]
+    if not missing:
+        return position_prices
 
     async def fetch_price(product_id: str):
         try:
@@ -55,13 +70,13 @@ async def fetch_position_prices(
         except Exception:
             return (product_id, None)
 
-    for i in range(0, len(unique_products), batch_size):
-        batch = unique_products[i:i + batch_size]
+    for i in range(0, len(missing), batch_size):
+        batch = missing[i:i + batch_size]
         batch_results = await asyncio.gather(*[fetch_price(pid) for pid in batch])
         for pid, price in batch_results:
             if price is not None:
                 position_prices[pid] = price
-        if i + batch_size < len(unique_products):
+        if i + batch_size < len(missing):
             await asyncio.sleep(0.2)
 
     return position_prices
