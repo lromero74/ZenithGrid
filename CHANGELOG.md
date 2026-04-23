@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.3] - 2026-04-23
+
+### Changed
+- **Auto-calibration test coverage tightened** — internal test sweep found five previously-unexercised branches in the code shipped in v2.166.0–v2.166.2: the DB-exception fallback path in the per-user weights cache (trading keeps working when a query fails), the SQLite JSON-string parse branch (values coerced back to int), the apply endpoint's token-sub-mismatch rejection (forged token with wrong subject), the integer-rounding shave-down path, and the tuner's public-API ValueError propagation on impossible clamp constraints. No behavior changes — just more confident that regressions stay caught.
+
 ## [v2.166.2] - 2026-04-23
 
 ### Changed

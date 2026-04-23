@@ -172,6 +172,27 @@ class TestApplyProposalEndpoint:
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
+    async def test_token_sub_mismatch_rejected(self, db_session, owner_user_account):
+        """Defense-in-depth: if someone forges a token for the right account
+        + proposal but a DIFFERENT sub claim, the endpoint must reject 403
+        even though the ownership + proposal loads would both succeed.
+        This is the guard at router.py's `payload['sub'] != current_user.id`
+        check — earlier test cases hit the account-ownership 404 first
+        and never exercise this specific branch."""
+        user, account = owner_user_account
+        prop = await _make_pending_proposal(db_session, user.id, account.id)
+        # Token claims to be minted for user 99999, but caller is `user`.
+        forged = create_apply_proposal_token(
+            user_id=99999, account_id=account.id, proposal_id=prop.id,
+        )
+        with pytest.raises(HTTPException) as exc:
+            await apply_speculative_weights_proposal(
+                account_id=account.id, apply_token=forged, proposal_id=prop.id,
+                db=db_session, current_user=user,
+            )
+        assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_expired_token_403(self, db_session, owner_user_account):
         user, account = owner_user_account
         prop = await _make_pending_proposal(db_session, user.id, account.id)
