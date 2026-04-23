@@ -129,6 +129,54 @@ class TestCacheBehavior:
         assert weights == DEFAULT_WEIGHTS  # still the cached value
 
     @pytest.mark.asyncio
+    async def test_db_exception_falls_back_to_defaults_and_logs(self, db_session, caplog):
+        """If the DB hiccups mid-scorer-eval we must NOT break trading —
+        the scorer falls back to DEFAULT_WEIGHTS and logs the exception.
+        Regression guard against anyone narrowing the `except Exception`
+        to a more specific exception class and accidentally letting a
+        new error propagate."""
+        import logging as _logging
+        invalidate_weights_cache()
+
+        class _Exploding:
+            async def execute(self, _stmt):
+                raise RuntimeError("DB is on fire")
+
+        with caplog.at_level(_logging.ERROR):
+            weights = await get_effective_weights(_Exploding(), user_id=123)
+
+        assert weights == DEFAULT_WEIGHTS
+        # Logger must record the failure so ops can find it.
+        assert any("get_effective_weights" in r.message for r in caplog.records)
+
+
+class TestParseWeights:
+    """The JSON-column round-trip. PG JSONB gives us a dict; SQLite TEXT
+    can give us a JSON-encoded string. Both paths must decode to the
+    same int-valued dict so the scorer sees consistent types."""
+
+    def test_parses_dict_input(self):
+        from app.services.speculative_weights_cache import _parse_weights
+        raw = {"volume_surge": 25, "correlation_break": 10}
+        assert _parse_weights(raw) == {"volume_surge": 25, "correlation_break": 10}
+
+    def test_parses_json_string_input_and_coerces_to_int(self):
+        """SQLite TEXT fallback: the column stores the JSON as a string.
+        String values inside the JSON (e.g. from a migration quirk) must
+        be coerced to int so the scorer's arithmetic stays pure-int."""
+        from app.services.speculative_weights_cache import _parse_weights
+        raw = '{"volume_surge": "25", "correlation_break": 10}'
+        result = _parse_weights(raw)
+        assert result == {"volume_surge": 25, "correlation_break": 10}
+        assert all(isinstance(v, int) for v in result.values())
+
+    def test_none_input_returns_defaults(self):
+        from app.services.speculative_weights_cache import _parse_weights
+        assert _parse_weights(None) == DEFAULT_WEIGHTS
+
+
+class TestInvalidation:
+    @pytest.mark.asyncio
     async def test_invalidate_clears_cache(self, db_session):
         invalidate_weights_cache()
         user = await _user(db_session, email="invalidate@t.com")

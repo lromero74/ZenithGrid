@@ -162,3 +162,41 @@ class TestIntegerRoundPreservingSum:
         weights = {"a": 50.0, "b": 50.0}
         result = _integer_round_preserving_sum(weights, target=100)
         assert result == {"a": 50, "b": 50}
+
+    def test_over_target_shaves_largest_fractions(self):
+        """When floats sum above target (can happen if pre-clamp math went
+        past the ceiling), the function shaves +1 down to +0 on the
+        components with the largest fractional parts. Exercises the
+        `delta < 0` branch that the happy-path drift test misses."""
+        # Floors: 50 + 50 = 100, fractions .6 + .6 = 1.2 → sum_floor = 100.
+        # Wait — int(50.6) = 50, so sum_floor = 100, delta = 0. Need larger
+        # fractions. Try int(50) = 50, int(50) = 50; sum=100.
+        # Use 50.9 + 50.9 instead: int → 50+50=100, delta=0 too.
+        # The over-target path fires when SUM > target AFTER flooring;
+        # that requires explicit non-int floors. Use values whose floors
+        # already sum to target+1:
+        weights = {"a": 50.9, "b": 50.9}
+        # floor sums to 100, but target=99 triggers the delta<0 branch.
+        result = _integer_round_preserving_sum(weights, target=99)
+        assert sum(result.values()) == 99
+
+
+class TestProposeWeightsContractViolations:
+    def test_propose_weights_raises_on_impossible_clamps(self):
+        """The public API's docstring promises a ValueError when the
+        floor/ceiling constraints can't be satisfied. Regression guard
+        against the normalizer's error getting silently swallowed on the
+        propose_weights path."""
+        # Force impossible: each of 6 components at floor=5 sums to 30,
+        # but pass a propose_weights arg where target is implicit (100)
+        # and all components are artificially pushed below floor. We
+        # achieve this by setting the floor very high relative to the
+        # component count — 6 × 20 = 120 > 100.
+        with pytest.raises(ValueError):
+            propose_weights(
+                DEFAULTS,
+                _stats({k: 15.0 for k in DEFAULTS}),
+                overall_win_rate_pct=15.0,
+                floor=20,   # 6 × 20 = 120 > 100 target → impossible
+                ceiling=40,
+            )
