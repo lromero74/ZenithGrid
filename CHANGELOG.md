@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.8] - 2026-04-24
+
+### Changed
+- **PWA icons updated to front-view neon truck** — swapped the tab/home-screen icons (16/32/180/192/512) to a dedicated square front-view of the neon truck with glowing headlights. Much more recognizable at small favicon sizes than the previous three-quarter view cropped from the login hero.
+
 ## [v2.166.7] - 2026-04-24
 
 ### Added
