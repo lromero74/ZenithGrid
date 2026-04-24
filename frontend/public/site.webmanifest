@@ -1,0 +1,21 @@
+{
+  "name": "Zenith Grid",
+  "short_name": "Zenith Grid",
+  "description": "Autonomous Trading. Road-Tested.",
+  "icons": [
+    {
+      "src": "/zenithgrid-truck-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/zenithgrid-truck-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#00d4ff",
+  "background_color": "#0a0f1e",
+  "display": "standalone",
+  "start_url": "/"
+}

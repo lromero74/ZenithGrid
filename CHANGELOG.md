@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.7] - 2026-04-24
+
+### Added
+- **PWA icon + home-screen support** — neon truck icons (16/32/180/192/512) cropped from the login hero image, plus `site.webmanifest`, `apple-touch-icon`, and theme color so the app installs with a branded Zenith Grid icon on iOS and Android.
+
+### Changed
+- **Initial `<title>` is "Zenith Grid"** instead of the generic "Trading Platform" for a cleaner pre-load tab label. The brand-driven runtime title (`${shortName} - ${tagline}`) continues to override it once `BrandContext` resolves.
+
 ## [v2.166.6] - 2026-04-23
 
 ### Security
