@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.9] - 2026-04-24
+
+### Fixed
+- **Frontend test suite: 339 pre-existing `localStorage` failures resolved** — `jsdom@28` ships `window.localStorage` / `sessionStorage` as empty plain objects rather than `Storage` instances, so any test that called `localStorage.clear()` / `getItem()` / `setItem()` crashed with `TypeError: ... is not a function`. Added an in-memory Web Storage polyfill in `src/test/setup.ts` that installs real `getItem` / `setItem` / `removeItem` / `clear` / `key` / `length` when jsdom's slot is missing them. Suite goes from 2326 passed / 339 failed → **2669 passed / 0 failed (108 files)**. No product code touched.
+
 ## [v2.166.8] - 2026-04-24
 
 ### Changed
