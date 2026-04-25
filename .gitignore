@@ -107,3 +107,4 @@ backend/backups/
 CLAUDE.md
 .claude-musings.md
 backend/db_backups/
+.claude/scheduled_tasks.lock
