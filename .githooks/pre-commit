@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Pre-commit secret scan. Blocks commits that introduce hardcoded
+# credentials (JWT secrets, AWS keys, API tokens, generic high-
+# entropy strings). Activate per-clone with:
+#
+#     git config core.hooksPath .githooks
+#
+# Why this exists: in 2026-04 we found a hardcoded JWT secret in
+# internal/freetier/trial.go that had been live in source for
+# ~6 months before being noticed during dead-code cleanup. Hook
+# would have caught it at commit time.
+
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    cat <<'EOF' >&2
+✗ gitleaks is not installed but is required for the pre-commit
+  secret scan. Install it and try again:
+
+      brew install gitleaks       # macOS
+      sudo dnf install gitleaks   # Fedora
+      go install github.com/gitleaks/gitleaks/v8@latest
+
+  To bypass the scan for one commit (NOT recommended), use:
+
+      git commit --no-verify
+EOF
+    exit 1
+fi
+
+# `gitleaks protect --staged` scans only what's about to be committed,
+# not the full repo history. Sub-second on small diffs.
+# --redact masks any found secrets in the output so the value isn't
+# echoed back into the developer's terminal scrollback.
+gitleaks protect --staged --redact --config .gitleaks.toml
