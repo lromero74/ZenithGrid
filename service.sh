@@ -819,6 +819,16 @@ case "${1:-}" in
         # Restart backend if requested
         if [ "$SERVICE_TARGET" = "backend" ] \
             || [ "$SERVICE_TARGET" = "both" ]; then
+            # Force cleanup of stale uvicorn processes (mirrors RTS commit
+            # 62f9a08). Distrobox + user-systemd sometimes leaves a podman
+            # exec wrapper holding port 8100 after the unit "stopped",
+            # causing the next start to die with "address already in use".
+            # Killing inside the box first ensures a clean rebind.
+            if [ "$(hostname)" = "fedora" ]; then
+                echo -e "${BLUE}Cleaning up stale uvicorn processes in zenith-box...${NC}"
+                distrobox enter zenith-box -- pkill -f uvicorn || true
+                sleep 1
+            fi
             echo -e "${BLUE}Restarting backend...${NC}"
             sudo systemctl restart "$BACKEND_SERVICE"
             sleep 2
