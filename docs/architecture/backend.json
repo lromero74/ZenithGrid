@@ -2015,6 +2015,10 @@
     {
       "file": "utils/url_utils.py",
       "purpose": "URL normalization, feed deduplication, and SSRF protection (validates URLs do not target internal/private/loopback/link-local addresses or AWS metadata endpoint)"
+    },
+    {
+      "file": "utils/db_corruption.py",
+      "purpose": "is_db_corruption_error(): detects PostgreSQL physical bad-block/storage I/O errors by message signature (no asyncpg import). Lets monitor loops degrade gracefully on corruption instead of aborting a cycle or spamming tracebacks; non-corruption errors still propagate (fail fast)."
     }
   ],
   "auth_modules": [

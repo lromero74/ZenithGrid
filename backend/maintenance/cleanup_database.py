@@ -19,8 +19,8 @@ Usage:
     python3 cleanup_database.py [--db-path PATH] [--log-path PATH]
 
 Defaults:
-    --db-path:  /home/ec2-user/ZenithGrid/backend/trading.db
-    --log-path: /home/ec2-user/cleanup-database.log
+    --db-path:  /home/louis/ZenithGrid/backend/trading.db
+    --log-path: /home/louis/cleanup-database.log
 """
 
 import sqlite3
@@ -28,8 +28,8 @@ import os
 import argparse
 from datetime import datetime
 
-DEFAULT_DB_PATH = "/home/ec2-user/ZenithGrid/backend/trading.db"
-DEFAULT_LOG_PATH = "/home/ec2-user/cleanup-database.log"
+DEFAULT_DB_PATH = "/home/louis/ZenithGrid/backend/trading.db"
+DEFAULT_LOG_PATH = "/home/louis/cleanup-database.log"
 
 # Retention periods in days
 NEWS_RETENTION_DAYS = 14

@@ -15,14 +15,16 @@ around is gone, but the direct-load approach still works.
 """
 
 import importlib.util
+import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+_here = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
     "app.indicators.ai_spot_opinion",
-    "/home/ec2-user/ZenithGrid/backend/app/indicators/ai_spot_opinion.py",
+    os.path.join(_here, "../../app/indicators/ai_spot_opinion.py"),
 )
 _mod = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("app.indicators.ai_spot_opinion", _mod)

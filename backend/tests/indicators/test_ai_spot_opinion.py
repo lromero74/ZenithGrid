@@ -14,6 +14,7 @@ Covers:
 import json
 import importlib
 import importlib.util
+import os
 import sys
 import pytest
 from datetime import datetime, timedelta
@@ -21,9 +22,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 # Avoid circular import through app.indicators.__init__ -> strategies -> indicators
 # by importing the module directly without triggering __init__.py
+_here = os.path.dirname(os.path.abspath(__file__))
 _mod_spec = importlib.util.spec_from_file_location(
     "app.indicators.ai_spot_opinion",
-    "/home/ec2-user/ZenithGrid/backend/app/indicators/ai_spot_opinion.py",
+    os.path.join(_here, "../../app/indicators/ai_spot_opinion.py"),
 )
 _mod = importlib.util.module_from_spec(_mod_spec)
 sys.modules.setdefault("app.indicators.ai_spot_opinion", _mod)
