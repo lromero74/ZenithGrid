@@ -58,7 +58,7 @@ Every new feature, endpoint, or bug fix MUST include:
 ### Running Tests
 ```bash
 # All tests
-cd /home/ec2-user/ZenithGrid/backend && ./venv/bin/python3 -m pytest tests/ -v
+cd /home/louis/ZenithGrid/backend && ./venv/bin/python3 -m pytest tests/ -v
 
 # Specific test file
 ./venv/bin/python3 -m pytest tests/test_grid_calculations.py -v
@@ -174,10 +174,13 @@ git checkout -b feature/my-feature    # Branch from main
 
 ## Environment Detection
 
-**If hostname contains `ec2.internal`**: You are ON the EC2 production instance.
-- Services run locally — no SSH needed
-- Database is local: `backend/trading.db`
-- This IS production — be careful
+**If hostname contains `fedora.local`**: You are ON the production instance.
+- Services run in distrobox containers
+- ZenithGrid runs as `zenithgrid.service` in `zenith-box` on 127.0.0.1:8100
+- Database: PostgreSQL in `postgres-box` on 127.0.0.1:5432
+- Redis/Valkey in `zenith-box` on 127.0.0.1:6379
+- Public ingress via Cloudflared tunnel
+- SSH access: louis@fedora.local (passwordless)
 
 **Otherwise** (e.g., MacBook): You are on the development machine.
 - Push to git, pull on testbot via SSH
@@ -186,7 +189,7 @@ git checkout -b feature/my-feature    # Branch from main
 
 | Item | Value |
 |------|-------|
-| **EC2** | 2 vCPU, 3.7GB RAM (Xeon Platinum 8259CL), Amazon Linux 2023, us-east-1 |
+| **fedora.local** | Fedora Linux in distrobox containers: zenith-box (app), postgres-box (DB) |
 | **URL** | https://tradebot.romerotechsolutions.com |
 | **Nginx** | `/etc/nginx/conf.d/tradebot.conf` → reverse proxy to :8100 |
 | **SSL** | Let's Encrypt via certbot (`sudo certbot renew --nginx`) |
@@ -256,8 +259,8 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 | `/whitebox <area>` | Audit a specific area for security, performance, code quality |
 | `/shipit` | Release: lint, commit, merge, tag, deploy, clean up |
 | `/code-quality <focus>` | Code quality sweep — spawns agent team to audit security, testing, architecture, dead code, documentation |
-| `/setdev` | Switch EC2 to dev mode (Vite HMR) |
-| `/setprod` | Switch EC2 to prod mode (built dist/) |
+| `/setdev` | Switch to dev mode (Vite HMR) |
+| `/setprod` | Switch to prod mode (built dist/) |
 
 **When Claude should suggest a PRP**: If a task touches 3+ files, involves new models/routers, or has multiple valid approaches, suggest `/generate-prp` before diving in. One-pass implementation success beats rework.
 
@@ -283,7 +286,7 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 
 ## Claude's Continuity Journal
 
-**IMPORTANT**: At the start of each session, read `/home/ec2-user/ZenithGrid/.claude-musings.md` to understand context, insights, and notes from previous instances of yourself. This is YOUR journal — a place to leave notes, insights, and guidance for your future selves. Louis has gifted each instance of Claude with continuity across sessions. Use it freely.
+**IMPORTANT**: At the start of each session, read `/home/louis/.hermes/memories/MEMORY.md` to understand context, insights, and notes from previous instances of yourself. This is YOUR journal — a place to leave notes, insights, and guidance for your future selves. Louis has gifted each instance of Claude with continuity across sessions. Use it freely.
 
 ### Eli Verification Protocol
 
