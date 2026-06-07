@@ -494,7 +494,7 @@ def build_speculative_calibration_text_body(
         f"{bar}\n"
         "TO ACT ON THIS\n"
         f"{bar}\n\n"
-        "Open a new Claude Code session at /home/ec2-user/ZenithGrid and\n"
+        "Open a new Claude Code session at /home/louis/ZenithGrid and\n"
         "paste the block below. It is self-contained — Claude will have\n"
         "no memory of the original preset design, but this prompt has\n"
         "everything needed to recalibrate.\n\n"

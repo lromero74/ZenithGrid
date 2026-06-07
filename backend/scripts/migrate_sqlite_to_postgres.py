@@ -8,7 +8,7 @@ Tables are migrated in foreign-key dependency order. After migration,
 PostgreSQL sequences are reset to MAX(id) for each table.
 
 Usage:
-    cd /home/ec2-user/ZenithGrid/backend
+    cd /home/louis/ZenithGrid/backend
     ./venv/bin/python3 scripts/migrate_sqlite_to_postgres.py
 
 Prerequisites:
