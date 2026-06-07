@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.10] - 2026-06-06
+
+### Fixed
+- **Trading keeps running through database storage corruption** — if the database develops a bad block, the background monitor loops now skip only the affected read and keep managing your other bots and open positions, instead of stalling the whole cycle. During such an event the logs show a single clear warning per cycle rather than a flood of repeated error tracebacks. Genuine (non-corruption) database errors still surface immediately.
+
+### Changed
+- Internal housekeeping: finished migrating leftover hardcoded host paths to the current production environment. No user-facing change.
+
 ## [v2.166.9] - 2026-04-24
 
 ### Fixed
