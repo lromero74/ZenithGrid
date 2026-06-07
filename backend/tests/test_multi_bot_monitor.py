@@ -1366,3 +1366,64 @@ class TestMonitorLoop:
 
         # Reached iteration 2 → outer except branch worked
         assert call_count["n"] == 2
+
+
+class TestGetActiveBotsCorruption:
+    """get_active_bots() degrades gracefully on PostgreSQL data corruption.
+
+    A corrupt block in one query must not blank out the whole monitor cycle:
+    the other query's results still come through, and unrelated DB errors
+    still propagate (fail fast).
+    """
+
+    def _ok_result(self, items):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = items
+        return result
+
+    def _corruption_error(self):
+        from sqlalchemy.exc import OperationalError
+        return OperationalError(
+            "SELECT", {},
+            Exception('could not read block 3 in file "base/1/2": Input/output error'),
+        )
+
+    @pytest.mark.asyncio
+    async def test_corruption_on_active_query_returns_inactive_only(self, db_session):
+        """Corruption on the active-bots query → active dropped, inactive still returned."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        inactive_bot = _make_bot(bot_id=2, is_active=False)
+
+        db_session.execute = AsyncMock(side_effect=[
+            self._corruption_error(),
+            self._ok_result([inactive_bot]),
+        ])
+
+        bots = await monitor.get_active_bots(db_session)
+        assert bots == [inactive_bot]
+
+    @pytest.mark.asyncio
+    async def test_corruption_on_both_queries_returns_empty(self, db_session):
+        """Corruption on both queries → empty list, no crash."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+
+        db_session.execute = AsyncMock(side_effect=[
+            self._corruption_error(),
+            self._corruption_error(),
+        ])
+
+        bots = await monitor.get_active_bots(db_session)
+        assert bots == []
+
+    @pytest.mark.asyncio
+    async def test_non_corruption_db_error_propagates(self, db_session):
+        """A non-corruption DB error must NOT be swallowed (fail fast)."""
+        from sqlalchemy.exc import ProgrammingError
+
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        db_session.execute = AsyncMock(side_effect=ProgrammingError(
+            "SELECT", {}, Exception("relation \"bots\" does not exist"),
+        ))
+
+        with pytest.raises(ProgrammingError):
+            await monitor.get_active_bots(db_session)

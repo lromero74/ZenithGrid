@@ -16,7 +16,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.utils.db_corruption import is_db_corruption_error
 
 from app.constants import (
     CANDLE_CACHE_DEFAULT_TTL,
@@ -374,22 +377,39 @@ class MultiBotMonitor:
         """
         from app.models import Position
 
-        # Get all active bots
-        active_query = select(Bot).where(Bot.is_active)
-        active_result = await db.execute(active_query)
-        active_bots = list(active_result.scalars().all())
+        # Get all active bots. Tolerate physical DB corruption (bad blocks) by
+        # degrading to an empty result for the affected query rather than aborting
+        # the entire monitor cycle — other bots stay manageable.
+        try:
+            active_query = select(Bot).where(Bot.is_active)
+            active_result = await db.execute(active_query)
+            active_bots = list(active_result.scalars().all())
+        except DBAPIError as e:
+            if not is_db_corruption_error(e):
+                raise
+            logger.warning(f"Database corruption reading active bots; skipping them this cycle: {e}")
+            active_bots = []
 
         # Get inactive bots that have open positions
         # Use subquery to avoid DISTINCT on JSON columns (PG can't compare JSON for equality)
-        inactive_bot_ids = (
-            select(Bot.id)
-            .join(Position, Position.bot_id == Bot.id)
-            .where(Bot.is_active == False, Position.status == "open")  # noqa: E712
-            .distinct()
-        )
-        inactive_with_positions_query = select(Bot).where(Bot.id.in_(inactive_bot_ids))
-        inactive_result = await db.execute(inactive_with_positions_query)
-        inactive_bots_with_positions = list(inactive_result.scalars().all())
+        try:
+            inactive_bot_ids = (
+                select(Bot.id)
+                .join(Position, Position.bot_id == Bot.id)
+                .where(Bot.is_active == False, Position.status == "open")  # noqa: E712
+                .distinct()
+            )
+            inactive_with_positions_query = select(Bot).where(Bot.id.in_(inactive_bot_ids))
+            inactive_result = await db.execute(inactive_with_positions_query)
+            inactive_bots_with_positions = list(inactive_result.scalars().all())
+        except DBAPIError as e:
+            if not is_db_corruption_error(e):
+                raise
+            logger.warning(
+                f"Database corruption reading stopped bots with open positions; "
+                f"skipping them this cycle: {e}"
+            )
+            inactive_bots_with_positions = []
 
         # Combine both lists
         all_bots = active_bots + inactive_bots_with_positions
@@ -1022,7 +1042,10 @@ class MultiBotMonitor:
                 logger.info("Monitor loop cancelled — exiting cleanly")
                 raise  # propagate so the task is marked cancelled
             except Exception as e:
-                logger.error(f"Error in monitor loop: {e}", exc_info=True)
+                if is_db_corruption_error(e):
+                    logger.warning(f"Database corruption in monitor loop; retrying next cycle: {e}")
+                else:
+                    logger.error(f"Error in monitor loop: {e}", exc_info=True)
                 # Wait a bit before retrying
                 await asyncio.sleep(10)
 

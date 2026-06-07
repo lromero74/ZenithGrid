@@ -17,6 +17,7 @@ from app.middleware.intrusion_detect import IntrusionDetector
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
+from app.utils.db_corruption import is_db_corruption_error
 from app.position_routers import perps_router
 from app.routers import account_value_router  # Account value history tracking
 from app.routers import account_sharing_router  # Account co-management & invitations
@@ -296,7 +297,10 @@ async def run_limit_order_monitor():
                     sweep_counter = 0
                     await sweep_orphaned_pending_orders(db)
         except Exception as e:
-            logger.error(f"Error in limit order monitor loop: {e}")
+            if is_db_corruption_error(e):
+                logger.warning(f"Database corruption in limit order monitor loop; retrying next cycle: {e}")
+            else:
+                logger.error(f"Error in limit order monitor loop: {e}")
 
         # Check every 10 seconds
         await asyncio.sleep(10)
@@ -349,7 +353,10 @@ async def run_order_reconciliation_monitor():
                 first_run = False
 
         except Exception as e:
-            logger.error(f"Error in order reconciliation monitor loop: {e}")
+            if is_db_corruption_error(e):
+                logger.warning(f"Database corruption in order reconciliation monitor loop; retrying next cycle: {e}")
+            else:
+                logger.error(f"Error in order reconciliation monitor loop: {e}")
             if first_run:
                 logger.error(f"Startup order reconciliation error: {e}")
                 first_run = False
@@ -394,7 +401,10 @@ async def run_missing_order_detector():
                             f"{account.id}: {e}"
                         )
         except Exception as e:
-            logger.error(f"Error in missing order detector loop: {e}")
+            if is_db_corruption_error(e):
+                logger.warning(f"Database corruption in missing order detector loop; retrying next cycle: {e}")
+            else:
+                logger.error(f"Error in missing order detector loop: {e}")
 
         # Check every 5 minutes
         await asyncio.sleep(300)

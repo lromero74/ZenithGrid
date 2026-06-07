@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import async_session_maker
 from app.models import Account, Position
+from app.utils.db_corruption import is_db_corruption_error
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,10 @@ class PerpsMonitor:
                 logger.info("Perps monitor loop cancelled — exiting cleanly")
                 raise
             except Exception as e:
-                logger.error(f"Perps monitor error: {e}", exc_info=True)
+                if is_db_corruption_error(e):
+                    logger.warning(f"Database corruption in perps monitor loop; retrying next cycle: {e}")
+                else:
+                    logger.error(f"Perps monitor error: {e}", exc_info=True)
 
             await asyncio.sleep(self.interval_seconds)
 
