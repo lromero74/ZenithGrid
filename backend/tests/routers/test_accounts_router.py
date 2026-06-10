@@ -184,6 +184,110 @@ class TestListAccounts:
         assert result[0].bot_count == 1
 
 
+class TestListAccountsSharedOwnerBatch:
+    """Owner display names for shared accounts come from ONE batched query.
+
+    The old code called db.get(User, ...) inside the per-account loop — one
+    SELECT per distinct owner (N+1).
+    """
+
+    async def _make_shared_accounts(self, db_session, viewer, n=3):
+        from app.models.sharing import AccountMembership
+
+        accounts = []
+        for i in range(n):
+            owner = User(
+                id=100 + i, email=f"owner{i}@test.com", hashed_password="x",
+                is_active=True, is_superuser=False, display_name=f"Owner {i}",
+            )
+            db_session.add(owner)
+            await db_session.flush()
+            account = Account(
+                user_id=owner.id, name=f"Shared {i}", type="cex",
+                exchange="coinbase", is_active=True,
+            )
+            db_session.add(account)
+            await db_session.flush()
+            db_session.add(AccountMembership(
+                account_id=account.id, user_id=viewer.id,
+                role="observer", expires_at=None,
+            ))
+            accounts.append(account)
+        await db_session.flush()
+        return accounts
+
+    @staticmethod
+    def _user_selects(statements):
+        """SELECTs of user rows themselves — excludes the groups selectin-load
+        that fires automatically whenever User objects materialize."""
+        return [
+            s for s in statements
+            if "users" in s.lower()
+            and "user_groups" not in s.lower()
+            and s.lstrip().lower().startswith("select")
+        ]
+
+    @pytest.mark.asyncio
+    async def test_shared_by_correct_for_each_owner(self, db_session, test_user):
+        """Happy path: every shared account reports its own owner's name."""
+        from app.routers.accounts_query_router import list_accounts
+
+        await self._make_shared_accounts(db_session, test_user, n=3)
+
+        result = await list_accounts(db=db_session, current_user=test_user)
+        shared = {a.name: a.shared_by for a in result if a.name.startswith("Shared")}
+        assert shared == {f"Shared {i}": f"Owner {i}" for i in range(3)}
+
+    @pytest.mark.asyncio
+    async def test_owner_lookup_is_single_query(self, db_session, test_user, async_engine):
+        """The owner lookup must be one IN-clause SELECT, not one per owner."""
+        from sqlalchemy import event
+        from app.routers.accounts_query_router import list_accounts
+
+        await self._make_shared_accounts(db_session, test_user, n=3)
+
+        statements = []
+
+        def _record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        sync_engine = async_engine.sync_engine
+        event.listen(sync_engine, "before_cursor_execute", _record)
+        try:
+            await list_accounts(db=db_session, current_user=test_user)
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", _record)
+
+        user_selects = self._user_selects(statements)
+        assert len(user_selects) <= 1, (
+            f"Expected a single batched owner query, got {len(user_selects)}:\n"
+            + "\n---\n".join(user_selects)
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_shared_accounts_skips_owner_query(
+        self, db_session, test_user, test_account, async_engine,
+    ):
+        """Edge case: with only owned accounts, no owner query runs at all."""
+        from sqlalchemy import event
+        from app.routers.accounts_query_router import list_accounts
+
+        statements = []
+
+        def _record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        sync_engine = async_engine.sync_engine
+        event.listen(sync_engine, "before_cursor_execute", _record)
+        try:
+            result = await list_accounts(db=db_session, current_user=test_user)
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", _record)
+
+        assert all(a.shared_by is None for a in result)
+        assert self._user_selects(statements) == []
+
+
 # =============================================================================
 # get_account
 # =============================================================================

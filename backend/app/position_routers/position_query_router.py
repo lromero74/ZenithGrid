@@ -739,23 +739,32 @@ async def get_position(
     pending_count_result = await db.execute(pending_count_query)
     pending_count = pending_count_result.scalar()
 
-    # Get buy trades for first/last buy prices (needed for DCA tick marks)
-    buy_trades_query = (
-        select(Trade)
+    # First/last buy prices (needed for DCA tick marks) — two LIMIT-1 lookups
+    # instead of materializing every buy trade. Tie-break on id so trades with
+    # identical timestamps keep their insertion order.
+    first_buy_query = (
+        select(Trade.price)
         .where(Trade.position_id == position.id, Trade.side == "buy")
-        .order_by(Trade.timestamp)
+        .order_by(Trade.timestamp.asc(), Trade.id.asc())
+        .limit(1)
     )
-    buy_trades_result = await db.execute(buy_trades_query)
-    buy_trades = buy_trades_result.scalars().all()
+    last_buy_query = (
+        select(Trade.price)
+        .where(Trade.position_id == position.id, Trade.side == "buy")
+        .order_by(Trade.timestamp.desc(), Trade.id.desc())
+        .limit(1)
+    )
+    first_buy_price = (await db.execute(first_buy_query)).scalar_one_or_none()
+    last_buy_price = (await db.execute(last_buy_query)).scalar_one_or_none()
 
     pos_response = PositionResponse.model_validate(position)
     pos_response.trade_count = trade_count
     pos_response.pending_orders_count = pending_count
 
     # Set first/last buy prices for DCA reference
-    if buy_trades:
-        pos_response.first_buy_price = buy_trades[0].price
-        pos_response.last_buy_price = buy_trades[-1].price
+    if first_buy_price is not None:
+        pos_response.first_buy_price = first_buy_price
+        pos_response.last_buy_price = last_buy_price
 
     # Check if position's coin is blacklisted
     base_symbol = position.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"

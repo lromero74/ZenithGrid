@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
@@ -71,9 +71,14 @@ class _Accumulator:
     output_tokens: int = 0
     cost_usd: float = 0.0
 
-    def add(self, *, input_tokens: Optional[int], output_tokens: Optional[int],
-            cost_usd: Optional[float]) -> None:
-        self.calls += 1
+    def merge(self, *, calls: int, input_tokens: Optional[int],
+              output_tokens: Optional[int], cost_usd: Optional[float]) -> None:
+        """Fold one SQL-aggregated (provider, model) row into this bucket.
+
+        Multiple raw rows can normalize to the same bucket (e.g. ai_model
+        'openai' and 'gpt' both slug to 'gpt'), so this accumulates.
+        """
+        self.calls += int(calls or 0)
         self.input_tokens += int(input_tokens or 0)
         self.output_tokens += int(output_tokens or 0)
         self.cost_usd += float(cost_usd or 0.0)
@@ -106,29 +111,44 @@ async def cost_summary(
         )
 
     since = datetime.utcnow() - timedelta(days=days)
-    stmt = select(AIOpinionLog).where(
-        and_(
-            AIOpinionLog.user_id == current_user.id,
-            AIOpinionLog.created_at >= since,
+    # Aggregate in SQL — one row per raw (ai_model, model_used) pair instead of
+    # one ORM object per logged call. Provider-slug normalization ('openai' →
+    # 'gpt') happens in Python over the handful of aggregated rows, merging
+    # buckets where slugs collide.
+    stmt = (
+        select(
+            AIOpinionLog.ai_model,
+            AIOpinionLog.model_used,
+            func.count().label("calls"),
+            func.sum(func.coalesce(AIOpinionLog.input_tokens, 0)).label("input_tokens"),
+            func.sum(func.coalesce(AIOpinionLog.output_tokens, 0)).label("output_tokens"),
+            func.sum(func.coalesce(AIOpinionLog.cost_usd, 0.0)).label("cost_usd"),
         )
+        .where(
+            and_(
+                AIOpinionLog.user_id == current_user.id,
+                AIOpinionLog.created_at >= since,
+            )
+        )
+        .group_by(AIOpinionLog.ai_model, AIOpinionLog.model_used)
     )
     result = await db.execute(stmt)
-    rows = result.scalars().all()
+    grouped_rows = result.all()
 
     by_model: Dict[Tuple[str, str], _Accumulator] = {}
     by_provider: Dict[str, _Accumulator] = {}
 
-    for row in rows:
+    for row in grouped_rows:
         provider = _provider_slug(row.ai_model)
         model_key = row.model_used or _LEGACY_MODEL_LABEL
-        model_bucket = by_model.setdefault((provider, model_key), _Accumulator())
-        model_bucket.add(
+        by_model.setdefault((provider, model_key), _Accumulator()).merge(
+            calls=row.calls,
             input_tokens=row.input_tokens,
             output_tokens=row.output_tokens,
             cost_usd=row.cost_usd,
         )
-        provider_bucket = by_provider.setdefault(provider, _Accumulator())
-        provider_bucket.add(
+        by_provider.setdefault(provider, _Accumulator()).merge(
+            calls=row.calls,
             input_tokens=row.input_tokens,
             output_tokens=row.output_tokens,
             cost_usd=row.cost_usd,

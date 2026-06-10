@@ -794,6 +794,41 @@ class TestGetPosition:
         assert result.first_buy_price == 0.02
         assert result.last_buy_price == 0.015
 
+    @pytest.mark.asyncio
+    async def test_buy_prices_ignore_interleaved_sells(self, db_session):
+        """Edge case: sells between buys must not affect first/last buy price."""
+        from app.position_routers.position_query_router import get_position
+
+        user, account = await _create_user_with_account(db_session)
+        pos = await _create_position(db_session, account, status="open")
+
+        now = datetime.utcnow()
+        rows = [
+            ("buy", 0.02, 0),
+            ("sell", 0.03, 1),
+            ("buy", 0.015, 2),
+            ("sell", 0.01, 3),
+        ]
+        for side, price, minute in rows:
+            db_session.add(Trade(
+                position_id=pos.id,
+                side=side,
+                quote_amount=0.01,
+                base_amount=0.5,
+                price=price,
+                trade_type="dca" if side == "buy" else "sell",
+                timestamp=now + timedelta(minutes=minute),
+            ))
+        await db_session.flush()
+
+        result = await get_position(
+            position_id=pos.id,
+            db=db_session,
+            current_user=user,
+        )
+        assert result.first_buy_price == 0.02
+        assert result.last_buy_price == 0.015
+
 
 # =============================================================================
 # GET /positions/{position_id}/trades

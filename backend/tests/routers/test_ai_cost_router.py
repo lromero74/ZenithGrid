@@ -191,6 +191,48 @@ class TestCostSummaryLegacyRows:
         assert by_provider["claude"].calls == 1
 
 
+class TestCostSummaryProviderNormalization:
+    async def test_openai_and_gpt_rows_merge_into_one_bucket(self, db_session, current_user):
+        """'openai' normalizes to 'gpt' — rows stored under either raw value
+        must merge into a single (gpt, model) bucket, not two."""
+        from app.routers.ai_cost_router import cost_summary
+
+        await _add_log(db_session, ai_model="openai", model_used="gpt-4o",
+                       input_tokens=10, output_tokens=5, cost_usd=0.01)
+        await _add_log(db_session, ai_model="gpt", model_used="gpt-4o",
+                       input_tokens=20, output_tokens=10, cost_usd=0.02)
+        await db_session.commit()
+
+        result = await cost_summary(days=7, db=db_session, current_user=current_user)
+
+        assert len(result.by_model) == 1
+        bucket = result.by_model[0]
+        assert (bucket.provider, bucket.model_used) == ("gpt", "gpt-4o")
+        assert bucket.calls == 2
+        assert bucket.input_tokens == 30
+        assert bucket.output_tokens == 15
+        assert bucket.cost_usd == pytest.approx(0.03)
+
+        by_provider = {b.provider: b for b in result.by_provider}
+        assert list(by_provider) == ["gpt"]
+        assert by_provider["gpt"].calls == 2
+
+    async def test_null_tokens_and_cost_counted_as_zero(self, db_session, current_user):
+        """Rows with NULL token/cost fields count as calls but contribute zero
+        to the sums (SQL SUM must not turn the whole bucket NULL)."""
+        from app.routers.ai_cost_router import cost_summary
+
+        await _add_log(db_session, input_tokens=None, output_tokens=None, cost_usd=None)
+        await _add_log(db_session, input_tokens=100, output_tokens=50, cost_usd=0.01)
+        await db_session.commit()
+
+        result = await cost_summary(days=7, db=db_session, current_user=current_user)
+        assert result.total_calls == 2
+        assert result.total_input_tokens == 100
+        assert result.total_output_tokens == 50
+        assert result.total_cost_usd == pytest.approx(0.01)
+
+
 class TestCostSummaryInputValidation:
     async def test_rejects_zero_or_negative_days(self, db_session, current_user):
         from fastapi import HTTPException
