@@ -9,7 +9,7 @@ seen/unseen marking, and cache stats.
 import pytest
 from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
@@ -211,6 +211,10 @@ class TestMarkContentSeen:
     async def test_mark_seen_success(self, mock_session_maker, test_user):
         """Happy path: marks article as seen."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
+        exec_result = MagicMock()
+        exec_result.scalar.return_value = None  # no existing row -> insert path
+        mock_db.execute = AsyncMock(return_value=exec_result)
         mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
 

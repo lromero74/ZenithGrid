@@ -9,12 +9,7 @@ Both null = keep forever (existing behaviour, no data change).
 If both are set, a report is deleted only when BOTH limits are exceeded.
 """
 
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from migrations.db_utils import get_migration_connection, safe_add_column  # noqa: E402
+from migrations.db_utils import get_migration_connection, safe_add_column
 
 
 def run():

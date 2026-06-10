@@ -30,6 +30,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 1
         account.exchange = "mt5"
@@ -63,6 +64,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 2
         account.exchange = "mt5"
@@ -92,6 +94,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 3
         account.exchange = "mt5"
@@ -112,6 +115,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 4
         account.exchange = "mt5"
@@ -162,6 +166,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 5
         account.exchange = "mt5"
@@ -211,6 +216,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 6
         account.exchange = "mt5"
@@ -259,6 +265,7 @@ class TestCheckAccount:
         from app.services.prop_guard_monitor import _check_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         account = MagicMock()
         account.id = 7
         account.exchange = "bybit"
@@ -359,6 +366,7 @@ class TestGetAccountEquity:
         mock_client._inner = mock_inner
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_session_ctx = AsyncMock()
         mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -394,6 +402,7 @@ class TestKillAccount:
         from app.services.prop_guard_monitor import _kill_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         state = MagicMock()
         state.is_killed = False
         account = MagicMock()
@@ -406,6 +415,7 @@ class TestKillAccount:
         mock_client._inner = mock_inner
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_session_ctx = AsyncMock()
         mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -431,6 +441,7 @@ class TestKillAccount:
         from app.services.prop_guard_monitor import _kill_account
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         state = MagicMock()
         state.is_killed = False
         account = MagicMock()

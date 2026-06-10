@@ -131,7 +131,9 @@ class TestRecordMetricSnapshot:
     async def test_records_snapshot_successfully(self):
         """Happy path: snapshot is committed to DB."""
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.__aenter__ = AsyncMock(return_value=mock_session)
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
@@ -148,6 +150,7 @@ class TestRecordMetricSnapshot:
     async def test_logs_warning_on_db_error(self):
         """Failure: DB error is caught and logged, does not raise."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.__aenter__ = AsyncMock(side_effect=Exception("DB connection failed"))
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
@@ -173,7 +176,9 @@ class TestPruneOldSnapshots:
         mms._last_prune_time = 0.0
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.__aenter__ = AsyncMock(return_value=mock_session)
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
@@ -193,7 +198,9 @@ class TestPruneOldSnapshots:
         mms._last_prune_time = time.monotonic()
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.__aenter__ = AsyncMock(return_value=mock_session)
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
@@ -212,8 +219,10 @@ class TestPruneOldSnapshots:
         mms._last_prune_time = 0.0
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_session.execute.side_effect = Exception("DB error")
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.__aenter__ = AsyncMock(return_value=mock_session)
         mock_db.__aexit__ = AsyncMock(return_value=False)
 
@@ -249,6 +258,7 @@ class TestGetMetricHistoryData:
         mock_result.all.return_value = [row1, row2]
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.execute.return_value = mock_result
         mock_db.__aenter__ = AsyncMock(return_value=mock_db)
         mock_db.__aexit__ = AsyncMock(return_value=False)
@@ -281,6 +291,7 @@ class TestGetMetricHistoryData:
         mock_result.all.return_value = rows
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.execute.return_value = mock_result
         mock_db.__aenter__ = AsyncMock(return_value=mock_db)
         mock_db.__aexit__ = AsyncMock(return_value=False)
@@ -303,6 +314,7 @@ class TestGetMetricHistoryData:
         mock_result.all.return_value = []
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_db.execute.return_value = mock_result
         mock_db.__aenter__ = AsyncMock(return_value=mock_db)
         mock_db.__aexit__ = AsyncMock(return_value=False)

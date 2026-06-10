@@ -61,6 +61,7 @@ def _make_position(**overrides):
 
 def _make_exchange(**overrides):
     exchange = AsyncMock()
+    exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
     exchange.get_order = AsyncMock(return_value={
         "filled_size": "1.0",
         "filled_value": "3000.0",

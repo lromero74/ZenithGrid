@@ -2,6 +2,7 @@ import asyncio
 from app.utils.timeutil import utcnow, utcfromtimestamp
 import concurrent.futures
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -67,6 +68,7 @@ from app.services.speculative_calibration_monitor import (
     start_speculative_calibration_monitor,
     stop_speculative_calibration_monitor,
 )
+from app.static_cache import CachedStaticFiles, HTML_CACHE_CONTROL
 from app.services.shutdown_manager import shutdown_manager
 from app.services.brand_service import get_brand
 from app.services.websocket_manager import ws_manager
@@ -74,7 +76,24 @@ from app.services.websocket_manager import ws_manager
 logger = logging.getLogger(__name__)
 
 _brand = get_brand()
-app = FastAPI(title=f"{_brand['shortName']} Trading Platform", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # startup_event/shutdown_event are defined later in this module; the
+    # forward references resolve at startup time, after the module is loaded.
+    await startup_event()
+    try:
+        yield
+    finally:
+        await shutdown_event()
+
+
+app = FastAPI(
+    title=f"{_brand['shortName']} Trading Platform",
+    docs_url=None, redoc_url=None, openapi_url=None,
+    lifespan=_lifespan,
+)
 
 # TTS thread pool — created at module level (no async dependency) so it is
 # available in tests without triggering startup_event(). max_workers=2 keeps
@@ -440,8 +459,8 @@ def _wire_event_bus_subscribers() -> None:
     )
 
 
-# Startup/Shutdown events
-@app.on_event("startup")
+# Startup/Shutdown handlers — wired via the _lifespan context above
+# (@app.on_event is deprecated in FastAPI)
 async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
     global missing_order_detector_task
@@ -588,7 +607,6 @@ async def _cancel_task(task: Optional[asyncio.Task]) -> None:
         pass
 
 
-@app.on_event("shutdown")
 async def shutdown_event():
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
@@ -818,17 +836,19 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 # ---------------------------------------------------------------------------
 _frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 if _frontend_dist.exists():
-    # Serve JS/CSS/image assets
-    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="frontend-assets")
+    # Serve JS/CSS/image assets — content-hashed, so cached as immutable
+    app.mount("/assets", CachedStaticFiles(directory=str(_frontend_dist / "assets")), name="frontend-assets")
 
-    # SPA catch-all: any non-API route returns index.html for client-side routing
+    # SPA catch-all: any non-API route returns index.html for client-side routing.
+    # no-cache: a stale cached index.html points at chunk hashes deleted by the
+    # last rebuild — the app then boots from a 404 and shows a blank screen.
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
         # Serve actual files from dist/ if they exist (e.g. favicon, manifest)
         file_path = _frontend_dist / full_path
         if full_path and file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        return FileResponse(str(_frontend_dist / "index.html"))
+            return FileResponse(str(file_path), headers={"Cache-Control": HTML_CACHE_CONTROL})
+        return FileResponse(str(_frontend_dist / "index.html"), headers={"Cache-Control": HTML_CACHE_CONTROL})
 
 
 if __name__ == "__main__":

@@ -73,6 +73,7 @@ class TestLogOrderToHistory:
     @pytest.mark.asyncio
     async def test_happy_path_success_order(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         position = MagicMock()
@@ -96,6 +97,7 @@ class TestLogOrderToHistory:
     @pytest.mark.asyncio
     async def test_failed_order_with_error_message(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
 
@@ -139,6 +141,7 @@ class TestSaveAiLog:
     @pytest.mark.asyncio
     async def test_saves_log_for_ai_bot(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.strategy_type = "ai_autonomous"
@@ -161,6 +164,7 @@ class TestSaveAiLog:
     @pytest.mark.asyncio
     async def test_skips_log_for_non_ai_bot(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.strategy_type = "indicator_based"
         bot.strategy_config = {"base_order_conditions": []}
@@ -172,6 +176,7 @@ class TestSaveAiLog:
     @pytest.mark.asyncio
     async def test_handles_no_position(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.strategy_type = "ai_autonomous"

@@ -190,7 +190,7 @@
     "bot_routers": [
       {
         "file": "bot_routers/bot_crud_router.py",
-        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected — notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset."
+        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected \u2014 notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset."
       },
       {
         "file": "bot_routers/bot_control_router.py",
@@ -244,7 +244,7 @@
       },
       {
         "file": "position_routers/panic_sell_router.py",
-        "purpose": "Emergency liquidation: POST /api/positions/panic-sell initiates background task with 4 ordered phases: (1) stopping_bots — stop active bots, (2) stopping_rebalancers — disable rebalancers/auto-buy/zero reserves (must precede position closing so rebalancers cannot buy into other bases during sells), (3) closing_positions — cancel or market-sell open positions (resets closing_via_limit before selling; passes force_market=True to bypass profit check), (4) converting — optional portfolio conversion to target currency; GET /api/positions/panic-sell-status/{task_id} polls in-memory _panic_tasks dict for phase progress; POST /api/positions/panic-sell-send-mfa sends email OTP or returns TOTP method; MFA verification required (TOTP or email OTP with token_type='action_mfa'); PanicSellRequest fields: account_id, action, target_currency, stop_bots, stop_portfolio_rebalancer, stop_bot_rebalancer, stop_auto_buy, zero_min_balances, mfa_code, confirm"
+        "purpose": "Emergency liquidation: POST /api/positions/panic-sell initiates background task with 4 ordered phases: (1) stopping_bots \u2014 stop active bots, (2) stopping_rebalancers \u2014 disable rebalancers/auto-buy/zero reserves (must precede position closing so rebalancers cannot buy into other bases during sells), (3) closing_positions \u2014 cancel or market-sell open positions (resets closing_via_limit before selling; passes force_market=True to bypass profit check), (4) converting \u2014 optional portfolio conversion to target currency; GET /api/positions/panic-sell-status/{task_id} polls in-memory _panic_tasks dict for phase progress; POST /api/positions/panic-sell-send-mfa sends email OTP or returns TOTP method; MFA verification required (TOTP or email OTP with token_type='action_mfa'); PanicSellRequest fields: account_id, action, target_currency, stop_bots, stop_portfolio_rebalancer, stop_bot_rebalancer, stop_auto_buy, zero_min_balances, mfa_code, confirm"
       },
       {
         "file": "position_routers/dependencies.py",
@@ -451,7 +451,7 @@
         "speculative_allocation_pct",
         "speculative_calibration_last_alerted_at"
       ],
-      "purpose": "Trading account (CEX/DEX/paper/prop). v2.165.0 adds speculative_allocation_pct (0-50% cap, default 0; caps the 'speculative' bucket used by the high-risk doubling preset) and speculative_calibration_last_alerted_at (timestamp stamped when a calibration alert is acknowledged — drives the 30-day per-user cooldown in speculative_calibration_monitor)."
+      "purpose": "Trading account (CEX/DEX/paper/prop). v2.165.0 adds speculative_allocation_pct (0-50% cap, default 0; caps the 'speculative' bucket used by the high-risk doubling preset) and speculative_calibration_last_alerted_at (timestamp stamped when a calibration alert is acknowledged \u2014 drives the 30-day per-user cooldown in speculative_calibration_monitor)."
     },
     {
       "name": "Bot",
@@ -1223,12 +1223,12 @@
   "services": [
     {
       "file": "services/account_access.py",
-      "purpose": "Shared filter utilities for multi-user account access — SQLAlchemy filter clauses and helper functions that check both ownership (account.user_id) and active membership (AccountMembership with non-expired expires_at). Supports 'manager' (read+write) and 'shadow' (read-only) roles. Used across routers and services to enforce tenant isolation + shared-access semantics consistently.",
+      "purpose": "Shared filter utilities for multi-user account access \u2014 SQLAlchemy filter clauses and helper functions that check both ownership (account.user_id) and active membership (AccountMembership with non-expired expires_at). Supports 'manager' (read+write) and 'shadow' (read-only) roles. Used across routers and services to enforce tenant isolation + shared-access semantics consistently.",
       "type": "infrastructure"
     },
     {
       "file": "services/account_cache.py",
-      "purpose": "In-memory TTL caches keyed by account_id for live-exchange endpoints (_TTL_REBALANCE_STATUS 30s, _TTL_DUST_SWEEP 60s). Shared by both accounts routers — the query router populates and serves; the mutation router invalidates on settings change. Protects the account owner's Coinbase API rate quota when multiple members of a shared account hit the same live endpoint. Extracted from accounts_query_router in v2.164.2 to break the cross-router import from accounts_mutation_router.",
+      "purpose": "In-memory TTL caches keyed by account_id for live-exchange endpoints (_TTL_REBALANCE_STATUS 30s, _TTL_DUST_SWEEP 60s). Shared by both accounts routers \u2014 the query router populates and serves; the mutation router invalidates on settings change. Protects the account owner's Coinbase API rate quota when multiple members of a shared account hit the same live endpoint. Extracted from accounts_query_router in v2.164.2 to break the cross-router import from accounts_mutation_router.",
       "type": "infrastructure"
     },
     {
@@ -1253,7 +1253,7 @@
     },
     {
       "file": "services/account_value_summary_service.py",
-      "purpose": "Fast dashboard/header value totals per account (get_account_value_summary) — 60s api_cache with force_fresh bypass. Paper accounts prefer the most recent AccountValueSnapshot (returned with is_stale=true) while a bounded-concurrency live rebuild runs in the background via _schedule_paper_summary_refresh / _refresh_paper_summary_cache; CEX accounts call get_cex_portfolio(include_details=False); other backends fall back to get_portfolio_for_account. Introduced in v2.164.6 so first-paint doesn't block on the full portfolio payload.",
+      "purpose": "Fast dashboard/header value totals per account (get_account_value_summary) \u2014 60s api_cache with force_fresh bypass. Paper accounts prefer the most recent AccountValueSnapshot (returned with is_stale=true) while a bounded-concurrency live rebuild runs in the background via _schedule_paper_summary_refresh / _refresh_paper_summary_cache; CEX accounts call get_cex_portfolio(include_details=False); other backends fall back to get_portfolio_for_account. Introduced in v2.164.6 so first-paint doesn't block on the full portfolio payload.",
       "type": "infrastructure"
     },
     {
@@ -1368,7 +1368,7 @@
     },
     {
       "file": "services/speculative_calibration_apply_token.py",
-      "purpose": "JWT helpers for the one-click apply link in the calibration alert email (v2.166.0). Token type is 'speculative_calibration_apply_proposal' — distinct from the dismiss-token type so the two deep links cannot be cross-used. create_apply_proposal_token(account_id, user_id, proposal_id) issues a short-lived signed token, decode_apply_proposal_token(token) validates it for POST /api/accounts/{id}/speculative-weights/apply-proposal, and build_apply_proposal_url(account_id, user_id, proposal_id) produces the Settings deep link embedded in the email body.",
+      "purpose": "JWT helpers for the one-click apply link in the calibration alert email (v2.166.0). Token type is 'speculative_calibration_apply_proposal' \u2014 distinct from the dismiss-token type so the two deep links cannot be cross-used. create_apply_proposal_token(account_id, user_id, proposal_id) issues a short-lived signed token, decode_apply_proposal_token(token) validates it for POST /api/accounts/{id}/speculative-weights/apply-proposal, and build_apply_proposal_url(account_id, user_id, proposal_id) produces the Settings deep link embedded in the email body.",
       "type": "infrastructure"
     },
     {
@@ -1388,7 +1388,7 @@
     },
     {
       "file": "services/speculative_weights_tuner.py",
-      "purpose": "Pure-function auto-calibration algorithm for the speculative_signals component weights (v2.166.0). propose_weights(analysis) implements proportional-to-alpha with clamp-and-normalize using module constants LEARNING_RATE=0.3, MAX_WEIGHT_CHANGE_PER_CYCLE=5, WEIGHT_FLOOR=5, WEIGHT_CEILING=40, PROPOSAL_MIN_SAMPLE_SIZE=500, ALGORITHM_NAME='proportional-alpha-v1'. Helpers _normalize_to_sum() and _integer_round_preserving_sum() keep the proposed weight vector as integers summing to 100. No I/O — consumed by speculative_calibration_monitor._create_proposal.",
+      "purpose": "Pure-function auto-calibration algorithm for the speculative_signals component weights (v2.166.0). propose_weights(analysis) implements proportional-to-alpha with clamp-and-normalize using module constants LEARNING_RATE=0.3, MAX_WEIGHT_CHANGE_PER_CYCLE=5, WEIGHT_FLOOR=5, WEIGHT_CEILING=40, PROPOSAL_MIN_SAMPLE_SIZE=500, ALGORITHM_NAME='proportional-alpha-v1'. Helpers _normalize_to_sum() and _integer_round_preserving_sum() keep the proposed weight vector as integers summing to 100. No I/O \u2014 consumed by speculative_calibration_monitor._create_proposal.",
       "type": "trading"
     },
     {
@@ -1438,7 +1438,7 @@
     },
     {
       "file": "services/limit_order_monitor.py",
-      "purpose": "Monitors pending limit orders and updates positions on fill. v2.166.12: check_all_pending_limit_orders(db) is the per-cycle entry point (called by main.py's loop) — groups positions by account so the exchange client is resolved once per account; bot display names for fill notifications are cached per monitor instance",
+      "purpose": "Monitors pending limit orders and updates positions on fill. v2.166.12: check_all_pending_limit_orders(db) is the per-cycle entry point (called by main.py's loop) \u2014 groups positions by account so the exchange client is resolved once per account; bot display names for fill notifications are cached per monitor instance",
       "type": "background"
     },
     {
@@ -1468,7 +1468,7 @@
     },
     {
       "file": "services/paper_valuation_service.py",
-      "purpose": "Shared paper-account valuation helpers used by both the dashboard summary and the Portfolio page so totals stay consistent without hammering Coinbase. build_paper_holdings_and_totals(account) loads JSON paper_balances, fetches the public BTC/USD price, then prices each non-stable asset with an asyncio.Semaphore(PAPER_PRICE_CONCURRENCY=5) — USD pair first, BTC pair fallback — and returns holdings + total_usd_value/total_btc_value. Stables (USD/USDC/USDT) short-circuit to $1. Extracted from account_service._build_paper_portfolio in v2.164.6.",
+      "purpose": "Shared paper-account valuation helpers used by both the dashboard summary and the Portfolio page so totals stay consistent without hammering Coinbase. build_paper_holdings_and_totals(account) loads JSON paper_balances, fetches the public BTC/USD price, then prices each non-stable asset with an asyncio.Semaphore(PAPER_PRICE_CONCURRENCY=5) \u2014 USD pair first, BTC pair fallback \u2014 and returns holdings + total_usd_value/total_btc_value. Stables (USD/USDC/USDT) short-circuit to $1. Extracted from account_service._build_paper_portfolio in v2.164.6.",
       "type": "trading"
     },
     {
@@ -1866,6 +1866,10 @@
     {
       "file": "registry.py",
       "purpose": "ServiceRegistry injection point for four backend abstractions: event_bus, broadcast, rate_limiter, credentials (v2.131.0)"
+    },
+    {
+      "file": "app/static_cache.py",
+      "purpose": "v2.166.18: SPA cache policy \u2014 CachedStaticFiles marks content-hashed dist/assets as immutable; HTML_CACHE_CONTROL (no-cache) keeps index.html always revalidated so stale shells never reference deleted chunk hashes (blank-screen fix)"
     }
   ],
   "schemas": [
@@ -1920,7 +1924,7 @@
     "description": "Callable functions the AI spot-opinion indicator exposes to the LLM via tool-use. Each module registers a Tool instance into a shared REGISTRY at import time. Static (no-arg) tools are pre-fetched and injected into the prompt; argument-taking tools are offered to the model inside the provider tool loop.",
     "base": {
       "file": "indicators/ai_tools/base.py",
-      "purpose": "Shared registry: Tool dataclass, ToolContext (db, user_id, product_id, current_price, bot, position, account_id, is_sell_check), REGISTRY, register(), get_schemas_for(), and execute() (fail-open — tool errors become {\"error\": ...} so the model loop never breaks)."
+      "purpose": "Shared registry: Tool dataclass, ToolContext (db, user_id, product_id, current_price, bot, position, account_id, is_sell_check), REGISTRY, register(), get_schemas_for(), and execute() (fail-open \u2014 tool errors become {\"error\": ...} so the model loop never breaks)."
     },
     "tools": [
       {
@@ -1957,17 +1961,29 @@
         "name": "get_prior_ai_signals",
         "file": "indicators/ai_tools/prior_ai_signals.py",
         "kind": "argument-taking (provider tool loop)",
-        "purpose": "Last N closed AI opinions for this user + product from trading.ai_opinion_log with outcome / realized_pnl_pct backfilled — lets the model see whether its own recent calls on this pair have paid off."
+        "purpose": "Last N closed AI opinions for this user + product from trading.ai_opinion_log with outcome / realized_pnl_pct backfilled \u2014 lets the model see whether its own recent calls on this pair have paid off."
       }
     ]
   },
   "ai_providers": {
     "description": "Adapters that implement the LLMProvider protocol (async call_with_tools(system, user, tools, tool_ctx, max_turns) -> (text, calls, usage)). The canonical tool schema is Anthropic's shape; each adapter translates it into its own call format, emits NormalizedToolCall records, and sums a TokenUsage(input_tokens, output_tokens) across every turn of the tool loop so upstream code (the evaluator, logger, cost dashboard) never branches on provider.",
     "files": [
-      {"file": "indicators/ai_providers/base.py", "purpose": "LLMProvider protocol, NormalizedToolCall dataclass, TokenUsage dataclass (input_tokens, output_tokens), get_provider(model=...) lookup, summarize_output() helper."},
-      {"file": "indicators/ai_providers/anthropic_provider.py", "purpose": "Claude adapter — native Anthropic tool-use format; accumulates usage.input_tokens / usage.output_tokens across tool-loop turns and returns TokenUsage."},
-      {"file": "indicators/ai_providers/openai_provider.py", "purpose": "OpenAI GPT adapter — translates canonical tool schemas to OpenAI function-call shape; accumulates prompt/completion token counts across turns and returns TokenUsage."},
-      {"file": "indicators/ai_providers/gemini_provider.py", "purpose": "Google Gemini adapter — translates canonical tool schemas to Gemini function-declaration shape; accumulates usageMetadata prompt/candidates token counts across turns and returns TokenUsage."}
+      {
+        "file": "indicators/ai_providers/base.py",
+        "purpose": "LLMProvider protocol, NormalizedToolCall dataclass, TokenUsage dataclass (input_tokens, output_tokens), get_provider(model=...) lookup, summarize_output() helper."
+      },
+      {
+        "file": "indicators/ai_providers/anthropic_provider.py",
+        "purpose": "Claude adapter \u2014 native Anthropic tool-use format; accumulates usage.input_tokens / usage.output_tokens across tool-loop turns and returns TokenUsage."
+      },
+      {
+        "file": "indicators/ai_providers/openai_provider.py",
+        "purpose": "OpenAI GPT adapter \u2014 translates canonical tool schemas to OpenAI function-call shape; accumulates prompt/completion token counts across turns and returns TokenUsage."
+      },
+      {
+        "file": "indicators/ai_providers/gemini_provider.py",
+        "purpose": "Google Gemini adapter \u2014 translates canonical tool schemas to Gemini function-declaration shape; accumulates usageMetadata prompt/candidates token counts across turns and returns TokenUsage."
+      }
     ]
   },
   "price_feeds": [
