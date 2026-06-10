@@ -20,12 +20,15 @@ asyncpg), so importing its classes would break imports outside production.
 from sqlalchemy.exc import DBAPIError
 
 # Substrings found in PostgreSQL physical-corruption / storage I/O errors.
-# Compared case-insensitively.
+# Compared case-insensitively. Deliberately NOT included: a bare
+# "could not open file" — it also matches misconfiguration (Permission denied)
+# and missing files (No such file or directory), which should fail fast rather
+# than be retried as warnings. Open failures caused by bad storage still match
+# via their "Input/output error" errno text.
 _CORRUPTION_SIGNATURES = (
     "could not read block",
     "invalid page",
     "missing chunk number",
-    "could not open file",
     "input/output error",
 )
 

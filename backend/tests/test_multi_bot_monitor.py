@@ -1427,3 +1427,90 @@ class TestGetActiveBotsCorruption:
 
         with pytest.raises(ProgrammingError):
             await monitor.get_active_bots(db_session)
+
+
+class _AbortedTransactionSession:
+    """Fake session mimicking PostgreSQL aborted-transaction semantics.
+
+    On real PostgreSQL a failed statement aborts the transaction: every
+    subsequent statement raises InFailedSQLTransaction until rollback().
+    AsyncMock side-effect lists can't express that, so the earlier corruption
+    tests would pass even without a rollback in get_active_bots().
+    """
+
+    def __init__(self, outcomes):
+        self._outcomes = list(outcomes)  # per-execute: an Exception to raise or a result
+        self._aborted = False
+        self.rollback_count = 0
+
+    async def execute(self, *args, **kwargs):
+        from sqlalchemy.exc import OperationalError
+        if self._aborted:
+            raise OperationalError(
+                "SELECT", {},
+                Exception("current transaction is aborted, commands ignored until end of transaction block"),
+            )
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            self._aborted = True
+            raise outcome
+        return outcome
+
+    async def rollback(self):
+        self._aborted = False
+        self.rollback_count += 1
+
+
+class TestGetActiveBotsCorruptionRollback:
+    """get_active_bots() must roll back after a corruption error.
+
+    Without the rollback, the aborted PG transaction makes the second query
+    (and everything else the monitor cycle does with the same session) fail
+    with InFailedSQLTransaction — defeating the graceful degradation.
+    """
+
+    def _ok_result(self, items):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = items
+        return result
+
+    def _corruption_error(self):
+        from sqlalchemy.exc import OperationalError
+        return OperationalError(
+            "SELECT", {},
+            Exception('could not read block 3 in file "base/1/2": Input/output error'),
+        )
+
+    @pytest.mark.asyncio
+    async def test_corruption_on_first_query_rolls_back_so_second_query_runs(self):
+        """Corruption on the active-bots query → rollback → inactive query still succeeds."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        inactive_bot = _make_bot(bot_id=2, is_active=False)
+
+        session = _AbortedTransactionSession([
+            self._corruption_error(),
+            self._ok_result([inactive_bot]),
+        ])
+
+        bots = await monitor.get_active_bots(session)
+        assert bots == [inactive_bot]
+        assert session.rollback_count == 1
+
+    @pytest.mark.asyncio
+    async def test_corruption_on_second_query_rolls_back_leaving_session_usable(self):
+        """Corruption on the inactive query → rollback → caller's next query on the
+        same session (the rest of the monitor cycle) still works."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        active_bot = _make_bot(bot_id=1, is_active=True)
+
+        session = _AbortedTransactionSession([
+            self._ok_result([active_bot]),
+            self._corruption_error(),
+            self._ok_result([]),  # the monitor cycle's next query
+        ])
+
+        bots = await monitor.get_active_bots(session)
+        assert bots == [active_bot]
+
+        follow_up = await session.execute("SELECT 1")
+        assert follow_up.scalars().all() == []

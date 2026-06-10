@@ -357,9 +357,9 @@ async def run_order_reconciliation_monitor():
                 logger.warning(f"Database corruption in order reconciliation monitor loop; retrying next cycle: {e}")
             else:
                 logger.error(f"Error in order reconciliation monitor loop: {e}")
-            if first_run:
-                logger.error(f"Startup order reconciliation error: {e}")
-                first_run = False
+                if first_run:
+                    logger.error(f"Startup order reconciliation error: {e}")
+            first_run = False
 
         # Check every 60 seconds (less frequent than limit orders)
         await asyncio.sleep(60)

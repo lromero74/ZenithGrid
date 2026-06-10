@@ -388,6 +388,9 @@ class MultiBotMonitor:
             if not is_db_corruption_error(e):
                 raise
             logger.warning(f"Database corruption reading active bots; skipping them this cycle: {e}")
+            # The failed statement aborts the PG transaction — roll back so the
+            # next query on this session doesn't die with InFailedSQLTransaction.
+            await db.rollback()
             active_bots = []
 
         # Get inactive bots that have open positions
@@ -409,6 +412,9 @@ class MultiBotMonitor:
                 f"Database corruption reading stopped bots with open positions; "
                 f"skipping them this cycle: {e}"
             )
+            # Roll back the aborted transaction so the rest of the monitor
+            # cycle can keep using this session.
+            await db.rollback()
             inactive_bots_with_positions = []
 
         # Combine both lists
