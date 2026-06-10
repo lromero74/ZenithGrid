@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, MutableRefObject } from 'react'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData, Range } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time, LineData, Range } from 'lightweight-charts'
+import { loadChartLib } from '../../../utils/chartLib'
 import {
   calculateSMA,
   calculateEMA,
@@ -433,8 +434,15 @@ export function useIndicators({
   // Create and manage charts for oscillator indicators
   useEffect(() => {
     const oscillators = indicators.filter(i => ['rsi', 'macd', 'stochastic'].includes(i.type))
+    let cancelled = false
 
-    oscillators.forEach(indicator => {
+    // lightweight-charts is imported lazily; by the time oscillators are
+    // added the main chart has usually loaded it already, so this resolves
+    // from the shared cached import.
+    loadChartLib().then(({ createChart, ColorType }) => {
+      if (cancelled) return
+
+      oscillators.forEach(indicator => {
       // Check if chart already exists
       if (indicatorChartsRef.current.has(indicator.id)) return
 
@@ -489,6 +497,7 @@ export function useIndicators({
       ;(chart as any).__resizeHandler = handleIndicatorResize
 
       indicatorChartsRef.current.set(indicator.id, chart)
+      })
     })
 
     // Remove charts for indicators that no longer exist
@@ -518,6 +527,10 @@ export function useIndicators({
         indicatorChartsRef.current.delete(id)
       }
     })
+
+    return () => {
+      cancelled = true
+    }
   }, [indicators, indicatorChartsRef, syncAllChartsToRange, syncCallbacksRef])
 
   // Cleanup indicator charts when component unmounts

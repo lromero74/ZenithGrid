@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from 'react'
+import { useState, useRef, useEffect, memo, lazy, Suspense } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot, Trade } from '../../../types'
@@ -9,7 +9,6 @@ import {
   formatBaseAmount,
   formatQuoteAmount,
   AISentimentIcon,
-  DealChart,
   PriceBar,
 } from '../../../components/positions'
 import { GridVisualizer } from '../../../components/trading/GridVisualizer'
@@ -18,6 +17,11 @@ import { api, botsApi } from '../../../services/api'
 import { useConfirm } from '../../../contexts/ConfirmContext'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import { useQueryClient } from '@tanstack/react-query'
+
+// Lazy: DealChart pulls in lightweight-charts; only load it when a card is expanded
+const DealChart = lazy(() =>
+  import('../../../components/positions/DealChart').then((m) => ({ default: m.DealChart }))
+)
 
 interface PositionCardProps {
   position: PositionWithPnL
@@ -618,12 +622,14 @@ export const PositionCard = memo(function PositionCard({
             />
           ) : (
             /* Default Deal Chart for non-grid positions */
-            <DealChart
-              position={position}
-              productId={position.product_id || "ETH-BTC"}
-              currentPrice={currentPrice}
-              trades={trades}
-            />
+            <Suspense fallback={<div className="h-40 flex items-center justify-center text-slate-500 text-sm">Loading chart...</div>}>
+              <DealChart
+                position={position}
+                productId={position.product_id || "ETH-BTC"}
+                currentPrice={currentPrice}
+                trades={trades}
+              />
+            </Suspense>
           )}
         </div>
       )}
