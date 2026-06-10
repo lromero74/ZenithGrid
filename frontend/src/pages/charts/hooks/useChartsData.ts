@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useAccountPortfolio } from '../../../hooks/useAccountPortfolio'
 import { authFetch, api } from '../../../services/api'
 import type { CandleData } from '../../../utils/indicators'
 
@@ -14,19 +15,11 @@ export function useChartsData(
   const lastUpdateRef = useRef<string>('')
   const candleDataRef = useRef<CandleData[]>([])
 
-  // Fetch portfolio to get coins we hold (uses shared cache)
-  const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio'],
-    queryFn: async () => {
-      const response = await authFetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json()
-    },
-    refetchInterval: 60000,
-    staleTime: 30000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  })
+  // Portfolio (held coins) — shared, account-scoped cache entry with the
+  // other pages (one 60s poll app-wide instead of one per page)
+  const { data: portfolio } = useAccountPortfolio<{
+    holdings?: { asset: string }[]
+  }>(accountId)
 
   // Fetch all available products (exchange-aware via account_id)
   const { data: productsData } = useQuery({

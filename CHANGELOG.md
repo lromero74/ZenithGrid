@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.12] - 2026-06-10
+
+### Changed
+- **Performance pass across the platform — fewer API calls, faster pages.** Every change either reduces or leaves unchanged the number of requests to Coinbase and other third parties; nothing new bursts against exchange rate limits.
+  - **Trading engine**: identical candle requests made at the same time now share one exchange call instead of each hitting the API; the seven chart timeframes per pair are fetched in parallel (capped at three in flight) instead of one after another; the limit-order checker connects once per account instead of once per position.
+  - **Database**: added indexes for the position-detail and pending-order lookups that run constantly (pending-order lookups previously scanned the whole table), and several screens now ask the database for exactly what they need instead of loading every row — most visibly the AI cost summary, which no longer loads every logged AI call to add up totals.
+  - **Web app**: the Portfolio, Bots, and Charts pages now share one portfolio refresh instead of each polling separately; invitation checks ride the existing real-time push with only a slow safety-net poll (previously every user polled every 60 seconds plus on every tab focus, forever); Dashboard widgets refresh on staggered timers so returning to the tab no longer fires five requests at once.
+
 ## [v2.166.11] - 2026-06-10
 
 ### Fixed

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { botsApi, templatesApi, accountApi, rebalanceApi, authFetch, api } from '../../../services/api'
+import { useAccountPortfolio } from '../../../hooks/useAccountPortfolio'
+import { botsApi, templatesApi, accountApi, rebalanceApi, api } from '../../../services/api'
 import type { Bot } from '../../../types'
 import { convertProductsToTradingPairs, DEFAULT_TRADING_PAIRS, type TradingPair } from '../../../components/bots'
 import { TimeRange } from '../../../components/trading/PnLChart'
@@ -30,22 +31,10 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     queryFn: botsApi.getStrategies,
   })
 
-  // Fetch portfolio data for percentage calculations (account-specific)
-  const { data: portfolio, isLoading: portfolioLoading } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: async () => {
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      const response = await authFetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json()
-    },
-    refetchInterval: 60000, // Update every 60 seconds
-    placeholderData: keepPreviousData, // Keep portfolio value visible while refetching
-  })
+  // Portfolio data for percentage calculations — shared cache entry with the
+  // other pages (one 60s poll app-wide instead of one per page)
+  const { data: portfolio, isLoading: portfolioLoading } =
+    useAccountPortfolio(selectedAccount?.id)
 
   // Fetch aggregate BTC/USD values for minimum percentage validation
   const { data: aggregateData } = useQuery({

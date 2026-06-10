@@ -3,9 +3,10 @@ import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDow
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { authFetch, api } from '../services/api'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
+import { useAccountPortfolio } from '../hooks/useAccountPortfolio'
 import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { CandleData } from '../utils/indicators/types'
@@ -74,31 +75,11 @@ function Portfolio() {
   const isObserver = selectedAccount?.membership_role === 'shadow'
   const canWriteAccounts = usePermission('accounts', 'write') && !isObserver
 
-  // Fetch portfolio with optional cache bypass
-  const fetchPortfolio = async (forceFresh = false): Promise<PortfolioData> => {
-    const qs = forceFresh ? '?force_fresh=true' : ''
-    if (selectedAccount) {
-      const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio${qs}`)
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json() as Promise<PortfolioData>
-    }
-    const response = await authFetch(`/api/account/portfolio${qs}`)
-    if (!response.ok) throw new Error('Failed to fetch portfolio')
-    return response.json() as Promise<PortfolioData>
-  }
-
-  // Use React Query with account-specific key to support CEX/DEX switching.
-  // Always force_fresh so the backend bypasses its cache and fetches live exchange data.
-  // 10-minute interval keeps the portfolio warm without hammering the exchange API.
-  const { data: portfolio, isLoading: loading, error, isFetching, refetch: refetchPortfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: () => fetchPortfolio(true),
-    refetchInterval: 60000, // 60 seconds
-    staleTime: 0, // Always consider data stale so navigating to the page refreshes immediately
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    enabled: true,
-  })
+  // Shared portfolio query (live flavor: force_fresh so the backend bypasses
+  // its cache and fetches live exchange data on this page).
+  const {
+    data: portfolio, isLoading: loading, error, isFetching, refetch: refetchPortfolio,
+  } = useAccountPortfolio<PortfolioData>(selectedAccount?.id, { live: true })
 
   // Refresh portfolio after any completed trade (buy or sell) from any page
   useEffect(() => {
