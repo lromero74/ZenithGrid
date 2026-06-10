@@ -87,8 +87,12 @@ def detect_os():
         return 'unknown'
 
 
-def run_command(cmd, cwd=None, capture_output=False, check=True):
-    """Run a shell command and return the result."""
+def run_command(cmd, cwd=None, capture_output=False, check=True, env=None):
+    """Run a shell command and return the result.
+
+    env: optional environment mapping for the subprocess. When None the
+    current process environment is inherited.
+    """
     try:
         result = subprocess.run(
             cmd,
@@ -96,7 +100,8 @@ def run_command(cmd, cwd=None, capture_output=False, check=True):
             cwd=cwd,
             capture_output=capture_output,
             text=True,
-            check=check
+            check=check,
+            env=env
         )
         return result
     except subprocess.CalledProcessError as e:
@@ -135,14 +140,20 @@ def get_service_commands(os_type, project_root):
             'backend': {
                 'stop': f'launchctl unload ~/Library/LaunchAgents/{backend_plist}.plist 2>/dev/null || true',
                 'start': f'launchctl load ~/Library/LaunchAgents/{backend_plist}.plist',
-                'restart': f'launchctl unload ~/Library/LaunchAgents/{backend_plist}.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/{backend_plist}.plist',
+                'restart': (
+                    f'launchctl unload ~/Library/LaunchAgents/{backend_plist}.plist 2>/dev/null; '
+                    f'launchctl load ~/Library/LaunchAgents/{backend_plist}.plist'
+                ),
                 'status': f'launchctl list | grep {backend_plist} || echo "Service not running"',
                 'exists': f'test -f ~/Library/LaunchAgents/{backend_plist}.plist',
             },
             'frontend': {
                 'stop': f'launchctl unload ~/Library/LaunchAgents/{frontend_plist}.plist 2>/dev/null || true',
                 'start': f'launchctl load ~/Library/LaunchAgents/{frontend_plist}.plist',
-                'restart': f'launchctl unload ~/Library/LaunchAgents/{frontend_plist}.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/{frontend_plist}.plist',
+                'restart': (
+                    f'launchctl unload ~/Library/LaunchAgents/{frontend_plist}.plist 2>/dev/null; '
+                    f'launchctl load ~/Library/LaunchAgents/{frontend_plist}.plist'
+                ),
                 'status': f'launchctl list | grep {frontend_plist} || echo "Service not running"',
                 'exists': f'test -f ~/Library/LaunchAgents/{frontend_plist}.plist',
             },
@@ -270,7 +281,10 @@ def show_changelog(project_root, changelog_arg):
     if is_exact:
         print(f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC}")
     else:
-        print(f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
+        print(
+            f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC} "
+            f"{Colors.YELLOW}(uncommitted changes){Colors.ENDC}"
+        )
 
     # Check if updates available and show brief message
     try:
@@ -285,7 +299,10 @@ def show_changelog(project_root, changelog_arg):
         if unpulled_commits:
             commit_count = len(unpulled_commits.split('\n'))
             print()
-            print(f"{Colors.YELLOW}📦 {commit_count} update(s) available - run 'python3 update.py' to apply{Colors.ENDC}")
+            print(
+                f"{Colors.YELLOW}📦 {commit_count} update(s) available - "
+                f"run 'python3 update.py' to apply{Colors.ENDC}"
+            )
     except Exception:
         pass  # Ignore errors checking for unpulled changes
 
@@ -610,7 +627,10 @@ def install_pip_dependencies(project_root, dry_run=False):
         if result.stdout:
             # Show relevant lines (filter out "Requirement already satisfied")
             lines = result.stdout.strip().split('\n')
-            new_installs = [l for l in lines if 'Successfully installed' in l or 'Installing' in l]
+            new_installs = [
+                ln for ln in lines
+                if 'Successfully installed' in ln or 'Installing' in ln
+            ]
             if new_installs:
                 for line in new_installs:
                     print_info(f"  {line.strip()}")
@@ -653,18 +673,22 @@ def determine_services_to_restart(changed_files):
             continue
 
         # Backend files - Python code in backend/, requirements, migrations
-        if (filepath.startswith('backend/') or
+        if (
+            filepath.startswith('backend/') or
             filepath.startswith('migrations/') or
-            'requirements' in filepath.lower()):
+            'requirements' in filepath.lower()
+        ):
             services.add('backend')
 
         # Frontend files - React/TypeScript code, package.json, etc.
-        if (filepath.startswith('frontend/') or
+        if (
+            filepath.startswith('frontend/') or
             'package.json' in filepath or
             'package-lock.json' in filepath or
             'vite.config' in filepath or
             'tailwind.config' in filepath or
-            'tsconfig' in filepath):
+            'tsconfig' in filepath
+        ):
             services.add('frontend')
 
         # .env files affect both services
@@ -861,6 +885,12 @@ def run_migrations(project_root, dry_run=False):
     success_count = 0
     skip_count = 0
 
+    # Newer migrations import the `migrations` package (e.g.
+    # `from migrations.db_utils import ...`). Running a migration as a script
+    # puts the migrations/ dir on sys.path, not backend/, so that import fails
+    # unless backend/ is on PYTHONPATH. Inject it here.
+    migration_env = {**os.environ, 'PYTHONPATH': str(backend_dir)}
+
     for migration in migration_files:
         migration_name = migration.name
 
@@ -872,7 +902,8 @@ def run_migrations(project_root, dry_run=False):
             result = run_command(
                 f'{venv_python} migrations/{migration_name}',
                 cwd=backend_dir,
-                capture_output=True
+                capture_output=True,
+                env=migration_env
             )
 
             output = result.stdout.strip() if result.stdout else ''

@@ -1,0 +1,38 @@
+# ZenithGrid backend — systemd *user* unit for the fedora.local production host.
+#
+# Install to: ~/.config/systemd/user/zenithgrid.service
+# Then:       systemctl --user daemon-reload && systemctl --user enable --now zenithgrid
+#
+# The app runs as uvicorn *inside* the `zenith-box` distrobox (podman) container.
+#
+# IMPORTANT — orphan-on-stop fix (ExecStop / ExecStopPost):
+#   `distrobox enter` is a thin `podman exec` client. The uvicorn server runs in
+#   the container's own process tree, NOT in this unit's cgroup, so systemd's
+#   KillMode=mixed only kills the podman-exec client — the in-container uvicorn
+#   survives and keeps holding :8100. The next restart then crash-loops with
+#   "[Errno 98] address already in use". ExecStop/ExecStopPost explicitly signal
+#   uvicorn inside the container. The '[u]vicorn' bracket-glob matches the real
+#   uvicorn process but NOT the pkill wrapper itself (whose argv contains the
+#   literal '[u]vicorn ...'), avoiding a self-kill.
+
+[Unit]
+Description=ZenithGrid Trading Bot Backend (FastAPI) running in zenith-box distrobox
+After=default.target podman.socket postgres.service
+Wants=podman.socket
+Requires=postgres.service
+
+[Service]
+Type=simple
+EnvironmentFile=/home/louis/ZenithGrid/backend/.env.banmonitor
+ExecStartPre=/usr/bin/distrobox enter --name zenith-box -- /bin/true
+ExecStartPre=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c 'find /home/louis/ZenithGrid/backend -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true'
+ExecStart=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c 'cd "$HOME/ZenithGrid/backend" && exec ./venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8100'
+ExecStop=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -TERM -f '[u]vicorn app.main:app' || true"
+ExecStopPost=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -KILL -f '[u]vicorn app.main:app' || true"
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

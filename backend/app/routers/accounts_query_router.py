@@ -98,11 +98,17 @@ async def list_accounts(
 
         # Get bot counts for all accounts in a single aggregate query
         account_ids = [a.id for a in accounts]
-        count_q = select(
-            Bot.account_id, func.count(Bot.id).label("cnt")
-        ).where(Bot.account_id.in_(account_ids)).group_by(Bot.account_id)
-        count_result = await db.execute(count_q)
-        bot_counts = {row.account_id: row.cnt for row in count_result}
+        bot_counts = {}
+        if account_ids:
+            try:
+                count_q = select(
+                    Bot.account_id, func.count(Bot.id).label("cnt")
+                ).where(Bot.account_id.in_(account_ids)).group_by(Bot.account_id)
+                count_result = await db.execute(count_q)
+                bot_counts = {row.account_id: row.cnt for row in count_result}
+            except Exception as e:
+                logger.warning(f"Bot count query failed (possibly corrupted table): {e}")
+                bot_counts = {}
 
         # Get member counts for all accounts (non-owner members only)
         member_count_q = select(
@@ -219,10 +225,14 @@ async def get_default_account(
             raise HTTPException(status_code=404, detail="No accounts configured")
 
         # Get bot count with aggregate query
-        bot_count_result = await db.execute(
-            select(func.count(Bot.id)).where(Bot.account_id == account.id)
-        )
-        bot_count = bot_count_result.scalar() or 0
+        try:
+            bot_count_result = await db.execute(
+                select(func.count(Bot.id)).where(Bot.account_id == account.id)
+            )
+            bot_count = bot_count_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Bot count query failed for default account: {e}")
+            bot_count = 0
 
         return AccountResponse(
             id=account.id,
@@ -275,10 +285,14 @@ async def get_account(
             raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
 
         # Get bot count with aggregate query
-        bot_count_result = await db.execute(
-            select(func.count(Bot.id)).where(Bot.account_id == account.id)
-        )
-        bot_count = bot_count_result.scalar() or 0
+        try:
+            bot_count_result = await db.execute(
+                select(func.count(Bot.id)).where(Bot.account_id == account.id)
+            )
+            bot_count = bot_count_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Bot count query failed for account {account.id}: {e}")
+            bot_count = 0
 
         # Resolve membership role and owner info for shared accounts
         is_owner = account.user_id == current_user.id
@@ -367,9 +381,14 @@ async def get_account_bots(
             raise HTTPException(status_code=404, detail="Not found")
 
         # Get bots
-        bot_query = select(Bot).where(Bot.account_id == account_id)
-        bot_result = await db.execute(bot_query)
-        bots = bot_result.scalars().all()
+        bots = []
+        try:
+            bot_query = select(Bot).where(Bot.account_id == account_id)
+            bot_result = await db.execute(bot_query)
+            bots = bot_result.scalars().all()
+        except Exception as e:
+            logger.warning(f"Bot query failed for account {account_id}: {e}")
+            bots = []
 
         return {
             "account_id": account_id,

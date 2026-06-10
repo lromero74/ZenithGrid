@@ -11,6 +11,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from app.models import Account, Bot, User
 
@@ -1952,3 +1953,113 @@ class TestSweepDust:
         assert result["failed"] == 1
         assert result["details"][0]["coin"] == "DOGE"
         assert result["errors"][0]["coin"] == "ADA"
+
+
+# =============================================================================
+# Bot-count corruption resilience
+# =============================================================================
+
+
+class _BotQueryFailingSession:
+    """Wraps a real AsyncSession but raises on any query touching the `bots`
+    table, simulating a corrupted/unreadable bots table. Every other operation
+    (account/member queries, flush, commit, refresh) passes through unchanged.
+
+    Used to exercise the bot-count guards that let the accounts API degrade
+    gracefully (count -> 0, bots -> []) instead of returning HTTP 500 when the
+    bots table can't be read.
+    """
+
+    def __init__(self, real_session):
+        self._real = real_session
+
+    async def execute(self, statement, *args, **kwargs):
+        if "bots" in str(statement).lower():
+            raise OperationalError(
+                "SELECT ... FROM bots", {},
+                Exception("simulated corrupted bots table"),
+            )
+        return await self._real.execute(statement, *args, **kwargs)
+
+    def __getattr__(self, name):
+        # Delegate everything else (flush, commit, refresh, add, get, ...) to
+        # the wrapped session. _real is set in __init__ so no recursion here.
+        return getattr(self._real, name)
+
+
+class TestBotCountCorruptionResilience:
+    """A corrupted bots table must not take down the whole accounts API.
+
+    Each guarded endpoint should still return its account data with the bot
+    count degraded to 0 (or an empty bots list), rather than raising 500.
+    """
+
+    @pytest.mark.asyncio
+    async def test_list_accounts_degrades_when_bot_count_fails(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure case: bot-count query raises -> accounts still returned, count 0."""
+        from app.routers.accounts_query_router import list_accounts
+        session = _BotQueryFailingSession(db_session)
+        result = await list_accounts(
+            include_inactive=False, db=session, current_user=test_user,
+        )
+        assert len(result) == 1
+        assert result[0].name == "Main Account"
+        assert result[0].bot_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_account_degrades_when_bot_count_fails(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure case: single-account bot-count raises -> account returned, count 0."""
+        from app.routers.accounts_query_router import get_account
+        session = _BotQueryFailingSession(db_session)
+        result = await get_account(
+            account_id=test_account.id, db=session, current_user=test_user,
+        )
+        assert result.id == test_account.id
+        assert result.bot_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_default_account_degrades_when_bot_count_fails(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure case: default-account bot-count raises -> account returned, count 0."""
+        from app.routers.accounts_query_router import get_default_account
+        session = _BotQueryFailingSession(db_session)
+        result = await get_default_account(db=session, current_user=test_user)
+        assert result.id == test_account.id
+        assert result.bot_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_account_bots_degrades_when_query_fails(
+        self, db_session, test_user, test_account,
+    ):
+        """Failure case: bots query raises -> empty bots list, not 500."""
+        from app.routers.accounts_query_router import get_account_bots
+        session = _BotQueryFailingSession(db_session)
+        result = await get_account_bots(
+            account_id=test_account.id, db=session, current_user=test_user,
+        )
+        assert result["account_id"] == test_account.id
+        assert result["bots"] == []
+        assert result["bot_count"] == 0
+
+    @pytest.mark.asyncio
+    @patch("app.routers.accounts_mutation_router.clear_exchange_client_cache")
+    @patch("app.routers.accounts_mutation_router.encrypt_value", side_effect=lambda v: f"enc:{v}")
+    async def test_update_account_degrades_when_bot_count_fails(
+        self, mock_encrypt, mock_clear, db_session, test_user, test_account,
+    ):
+        """Failure case: post-update bot-count raises -> update still succeeds, count 0."""
+        from app.routers.accounts_mutation_router import update_account
+        from app.schemas.accounts import AccountUpdate
+        session = _BotQueryFailingSession(db_session)
+        update_data = AccountUpdate(name="Renamed Account")
+        result = await update_account(
+            account_id=test_account.id, account_data=update_data,
+            db=session, current_user=test_user,
+        )
+        assert result.name == "Renamed Account"
+        assert result.bot_count == 0

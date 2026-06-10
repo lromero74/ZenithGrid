@@ -3,6 +3,11 @@ uvicorn==0.32.1
 websockets==13.1
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
+# PostgreSQL drivers (production runs on PostgreSQL): asyncpg is the async
+# driver the app uses at runtime; psycopg2-binary is the sync driver used by
+# backend/migrations/db_utils.py to run schema migrations.
+asyncpg==0.31.0
+psycopg2-binary==2.9.12
 greenlet==3.2.4
 pydantic==2.10.3
 pydantic-settings==2.6.1

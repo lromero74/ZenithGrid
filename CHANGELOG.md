@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.13] - 2026-06-10
+
+### Fixed
+- **Your accounts screens keep working even if bot records can't be read.** If the database's bot table becomes temporarily unreadable (for example during a storage-corruption event), the Accounts list and detail pages now still load and simply show a bot count of zero, instead of failing the whole page with an error.
+- **Database migrations now apply correctly on PostgreSQL installs.** The migration runner was missing the PostgreSQL driver and didn't make migrations importable or point them at the right schema, so newer migrations could silently fail to apply on PostgreSQL. They now run correctly.
+- **The backend service restarts cleanly.** On the containerized production host, stopping the service used to leave the old process holding its network port, so the next start crash-looped with "address already in use." The service now shuts its in-container process down on stop, so restarts and upgrades come up correctly the first time.
+
+### Added
+- PostgreSQL drivers (asyncpg, psycopg2) are now declared as project dependencies, so fresh installs on PostgreSQL work without installing those packages by hand.
+
 ## [v2.166.12] - 2026-06-10
 
 ### Changed

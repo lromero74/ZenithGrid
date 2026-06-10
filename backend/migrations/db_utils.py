@@ -57,10 +57,22 @@ def get_migration_connection():
         host = host_port.split(":")[0] if ":" in host_port else host_port
         port = int(host_port.split(":")[1]) if ":" in host_port else 5432
 
-        return psycopg2.connect(
+        conn = psycopg2.connect(
             host=host, port=port, dbname=dbname,
             user=user, password=password
         )
+        # Application tables live in the `trading` (and sibling) schemas, not
+        # in `public`. The role's default search_path may not include them, so
+        # mirror the app's runtime search_path (see app/database.py) here. This
+        # lets migrations reference unqualified table names (e.g. "trades")
+        # regardless of how the migration is invoked.
+        with conn.cursor() as cur:
+            cur.execute(
+                "SET search_path TO "
+                "auth, trading, reporting, social, content, system, public"
+            )
+        conn.commit()
+        return conn
     else:
         # SQLite
         db_path = os.path.join(_backend_dir, "trading.db")
