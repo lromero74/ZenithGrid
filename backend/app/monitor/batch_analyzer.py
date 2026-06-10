@@ -18,6 +18,23 @@ from app.utils.candle_utils import prepare_market_context
 
 logger = logging.getLogger(__name__)
 
+# The 7 timeframes fetched per pair for batch analysis: (granularity, lookback).
+_BATCH_TIMEFRAMES = (
+    ("FIVE_MINUTE", 100),
+    ("ONE_MINUTE", 300),
+    ("THREE_MINUTE", 100),
+    ("TEN_MINUTE", 100),
+    ("ONE_HOUR", 100),
+    ("FIFTEEN_MINUTE", 100),
+    ("FOUR_HOUR", 100),
+)
+
+# Cap on concurrent candle fetches per pair. Cache misses hit the exchange
+# API, so this bounds the burst against the rate budget while still
+# overlapping the network waits. Synthetic timeframes coalesce onto their
+# base fetch inside get_candles_cached, so total call count never increases.
+_CANDLE_FETCH_CONCURRENCY = 3
+
 
 async def _calculate_batch_budget(monitor, bot: Bot, open_positions: list) -> dict:
     """Calculate budget availability for new positions.
@@ -215,13 +232,26 @@ async def _fetch_batch_market_data(
                     logger.info(f"  🔄 Retry {attempt}/{max_retries-1} for {product_id}")
                     await asyncio.sleep(0.5 * attempt)
 
-                candles = await monitor.get_candles_cached(product_id, "FIVE_MINUTE", 100)
-                one_min_candles = await monitor.get_candles_cached(product_id, "ONE_MINUTE", 300)
-                three_min_candles = await monitor.get_candles_cached(product_id, "THREE_MINUTE", 100)
-                ten_min_candles = await monitor.get_candles_cached(product_id, "TEN_MINUTE", 100)
-                one_hour_candles = await monitor.get_candles_cached(product_id, "ONE_HOUR", 100)
-                fifteen_min_candles = await monitor.get_candles_cached(product_id, "FIFTEEN_MINUTE", 100)
-                four_hour_candles = await monitor.get_candles_cached(product_id, "FOUR_HOUR", 100)
+                # Fetch all timeframes concurrently (bounded — see
+                # _CANDLE_FETCH_CONCURRENCY) instead of 7 serial awaits.
+                fetch_semaphore = asyncio.Semaphore(_CANDLE_FETCH_CONCURRENCY)
+
+                async def _fetch_timeframe(granularity: str, lookback: int):
+                    async with fetch_semaphore:
+                        return await monitor.get_candles_cached(product_id, granularity, lookback)
+
+                (
+                    candles,
+                    one_min_candles,
+                    three_min_candles,
+                    ten_min_candles,
+                    one_hour_candles,
+                    fifteen_min_candles,
+                    four_hour_candles,
+                ) = await asyncio.gather(*[
+                    _fetch_timeframe(granularity, lookback)
+                    for granularity, lookback in _BATCH_TIMEFRAMES
+                ])
 
                 if not candles or len(candles) == 0:
                     last_error = "No candles available from API"

@@ -249,6 +249,10 @@ class MultiBotMonitor:
         # Shared across all bots monitoring the same product_id:granularity
         # TTL is per-timeframe (e.g., 15-min candles cached for 15 minutes)
         self._candle_cache: Dict[str, tuple] = {}  # product_id:granularity -> (timestamp, candles)
+        # Per-key fetch locks: concurrent cache misses for the same key share
+        # one exchange call (request coalescing) instead of fanning out
+        # identical API requests — pairs are processed concurrently.
+        self._candle_fetch_locks: Dict[str, asyncio.Lock] = {}
 
         # Cache for exchange clients per account (with lock for concurrent safety)
         self._exchange_cache: Dict[int, ExchangeClient] = {}
@@ -269,13 +273,14 @@ class MultiBotMonitor:
         """Evict expired/stale entries from all in-memory caches. Returns counts."""
         now = datetime.utcnow().timestamp()
 
-        # Candle cache — remove expired entries
+        # Candle cache — remove expired entries (and their fetch locks)
         stale_candles = [
             k for k, (ts, _) in self._candle_cache.items()
             if now - ts > CANDLE_CACHE_DEFAULT_TTL
         ]
         for k in stale_candles:
             del self._candle_cache[k]
+            self._candle_fetch_locks.pop(k, None)
 
         # Previous indicators — remove entries for bots not in _bot_next_check
         active_bot_ids = set(self._bot_next_check.keys())
@@ -446,22 +451,45 @@ class MultiBotMonitor:
         # Candle data is public (same for all users/accounts)
         cache_key = f"{product_id}:{granularity}"
 
-        # Check cache with per-timeframe TTL
-        now = datetime.utcnow().timestamp()
-        if cache_key in self._candle_cache:
-            cached_time, cached_candles = self._candle_cache[cache_key]
-            # Get TTL for this specific timeframe (falls back to default for unknown timeframes)
-            cache_ttl = CANDLE_CACHE_TTL.get(granularity, CANDLE_CACHE_DEFAULT_TTL)
-            age_seconds = now - cached_time
-            if age_seconds < cache_ttl:
-                # Cache hit - log occasionally for monitoring (every ~5 minutes)
-                if int(now) % 300 < 10:  # Log for 10 seconds every 5 minutes
-                    logger.debug(
-                        f"📦 Cache hit: {product_id} {granularity} (age: {int(age_seconds)}s, TTL: {cache_ttl}s)"
-                    )
-                return cached_candles
+        cached = self._cached_candles_if_fresh(cache_key, product_id, granularity)
+        if cached is not None:
+            return cached
 
-        # Fetch new candles
+        # Coalesce concurrent misses for the same key into ONE fetch — pairs
+        # are processed concurrently, and duplicate fetches burn exchange
+        # rate budget for identical public data.
+        lock = self._candle_fetch_locks.setdefault(cache_key, asyncio.Lock())
+        async with lock:
+            cached = self._cached_candles_if_fresh(cache_key, product_id, granularity)
+            if cached is not None:
+                return cached
+            return await self._fetch_candles(cache_key, product_id, granularity, lookback_candles)
+
+    def _cached_candles_if_fresh(
+        self, cache_key: str, product_id: str, granularity: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Return cached candles if present and within their TTL, else None."""
+        if cache_key not in self._candle_cache:
+            return None
+        now = datetime.utcnow().timestamp()
+        cached_time, cached_candles = self._candle_cache[cache_key]
+        # Get TTL for this specific timeframe (falls back to default for unknown timeframes)
+        cache_ttl = CANDLE_CACHE_TTL.get(granularity, CANDLE_CACHE_DEFAULT_TTL)
+        age_seconds = now - cached_time
+        if age_seconds >= cache_ttl:
+            return None
+        # Cache hit - log occasionally for monitoring (every ~5 minutes)
+        if int(now) % 300 < 10:  # Log for 10 seconds every 5 minutes
+            logger.debug(
+                f"📦 Cache hit: {product_id} {granularity} (age: {int(age_seconds)}s, TTL: {cache_ttl}s)"
+            )
+        return cached_candles
+
+    async def _fetch_candles(
+        self, cache_key: str, product_id: str, granularity: str, lookback_candles: int
+    ) -> List[Dict[str, Any]]:
+        """Fetch candles from the exchange (or aggregate a synthetic timeframe) and cache them."""
+        now = datetime.utcnow().timestamp()
         try:
             import time
 

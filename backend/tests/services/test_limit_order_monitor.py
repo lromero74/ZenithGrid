@@ -33,6 +33,7 @@ def _make_position(**overrides):
     pos.profit_quote = overrides.get("profit_quote", None)
     pos.profit_percentage = overrides.get("profit_percentage", None)
     pos.direction = overrides.get("direction", "long")
+    pos.account_id = overrides.get("account_id", 5)
     pos.get_quote_currency = MagicMock(return_value=overrides.get("quote_currency", "BTC"))
     return pos
 
@@ -53,6 +54,144 @@ def _make_pending_order(**overrides):
     po.time_in_force = overrides.get("time_in_force", "gtc")
     po.created_at = overrides.get("created_at", datetime.utcnow() - timedelta(seconds=30))
     return po
+
+
+# ---------------------------------------------------------------------------
+# check_all_pending_limit_orders tests
+# ---------------------------------------------------------------------------
+
+class TestCheckAllPendingLimitOrders:
+    """check_all_pending_limit_orders() groups positions by account so each
+    exchange client is resolved once per account, not once per position."""
+
+    def _exec_result(self, positions):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = positions
+        return result
+
+    @pytest.mark.asyncio
+    async def test_one_client_lookup_per_account(self):
+        """Happy path: 3 positions on 2 accounts → 2 client lookups, 3 checks."""
+        from app.services.limit_order_monitor import check_all_pending_limit_orders
+
+        db = MagicMock()
+        positions = [
+            _make_position(id=1, account_id=10),
+            _make_position(id=2, account_id=10),
+            _make_position(id=3, account_id=20),
+        ]
+        db.execute = AsyncMock(return_value=self._exec_result(positions))
+
+        with patch(
+            "app.services.limit_order_monitor.get_exchange_client_for_account",
+            new_callable=AsyncMock, return_value=MagicMock(),
+        ) as get_client, patch.object(
+            LimitOrderMonitor, "check_single_position_limit_order",
+            new_callable=AsyncMock,
+        ) as check_one:
+            await check_all_pending_limit_orders(db)
+
+        assert get_client.await_count == 2
+        assert {c.args[1] for c in get_client.await_args_list} == {10, 20}
+        assert check_one.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_positions_without_account_are_skipped(self):
+        """Edge case: positions with no account_id get no client lookup or check."""
+        from app.services.limit_order_monitor import check_all_pending_limit_orders
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=self._exec_result(
+            [_make_position(id=1, account_id=None)]
+        ))
+
+        with patch(
+            "app.services.limit_order_monitor.get_exchange_client_for_account",
+            new_callable=AsyncMock,
+        ) as get_client, patch.object(
+            LimitOrderMonitor, "check_single_position_limit_order",
+            new_callable=AsyncMock,
+        ) as check_one:
+            await check_all_pending_limit_orders(db)
+
+        get_client.assert_not_awaited()
+        check_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_account_without_client_skips_its_positions(self):
+        """Failure case: no exchange client for an account → its positions are
+        skipped, other accounts still processed."""
+        from app.services.limit_order_monitor import check_all_pending_limit_orders
+
+        db = MagicMock()
+        positions = [
+            _make_position(id=1, account_id=10),
+            _make_position(id=2, account_id=20),
+        ]
+        db.execute = AsyncMock(return_value=self._exec_result(positions))
+
+        async def client_for(db_arg, account_id):
+            return MagicMock() if account_id == 20 else None
+
+        with patch(
+            "app.services.limit_order_monitor.get_exchange_client_for_account",
+            new_callable=AsyncMock, side_effect=client_for,
+        ), patch.object(
+            LimitOrderMonitor, "check_single_position_limit_order",
+            new_callable=AsyncMock,
+        ) as check_one:
+            await check_all_pending_limit_orders(db)
+
+        assert check_one.await_count == 1
+        checked = check_one.await_args_list[0].args[0]
+        assert checked.id == 2
+
+
+# ---------------------------------------------------------------------------
+# _get_bot_name cache tests
+# ---------------------------------------------------------------------------
+
+class TestGetBotNameCache:
+    """Bot display names are fetched once per monitor instance, not per fill."""
+
+    def _name_result(self, name):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = name
+        return result
+
+    @pytest.mark.asyncio
+    async def test_repeated_lookups_query_once(self):
+        """Happy path: same bot_id twice → one SELECT."""
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=self._name_result("My Bot"))
+        monitor = LimitOrderMonitor(db, MagicMock())
+
+        assert await monitor._get_bot_name(10) == "My Bot"
+        assert await monitor._get_bot_name(10) == "My Bot"
+        assert db.execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_none_bot_id_skips_query(self):
+        """Edge case: positions without a bot never hit the database."""
+        db = MagicMock()
+        db.execute = AsyncMock()
+        monitor = LimitOrderMonitor(db, MagicMock())
+
+        assert await monitor._get_bot_name(None) is None
+        db.execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_distinct_bots_query_independently(self):
+        """Failure-avoidance: the cache must not leak one bot's name to another."""
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[
+            self._name_result("Bot A"), self._name_result("Bot B"),
+        ])
+        monitor = LimitOrderMonitor(db, MagicMock())
+
+        assert await monitor._get_bot_name(1) == "Bot A"
+        assert await monitor._get_bot_name(2) == "Bot B"
+        assert db.execute.await_count == 2
 
 
 # ---------------------------------------------------------------------------
