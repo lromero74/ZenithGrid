@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.19] - 2026-06-10
+
+### Fixed
+- **Fresh installs work on Python 3.13/3.14 again.** The pinned dependency versions (FastAPI, pydantic, uvicorn) had fallen behind what production actually runs; the old pydantic pin had no prebuilt packages for newer Python versions, so a fresh `pip install -r requirements.txt` failed trying to compile from source. Pins now match the production-proven versions (fastapi 0.136.3, pydantic 2.13.4, pydantic-settings 2.14.1, uvicorn 0.49.0), verified with a clean install and full test run on Python 3.14.
+
+### Changed
+- Test suite stays at zero warnings on Python 3.14 as well (replaced a deprecated asyncio helper in two tests; added the `httpx2` test dependency that newer Starlette's test client prefers).
+
 ## [v2.166.18] - 2026-06-10
 
 ### Fixed

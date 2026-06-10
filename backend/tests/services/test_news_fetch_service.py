@@ -78,9 +78,9 @@ class TestFetchAllNews:
     @pytest.mark.asyncio
     async def test_fetch_all_news_is_async(self):
         """Verify fetch_all_news is an async coroutine function."""
-        import asyncio
+        import inspect
         from app.services.news_fetch_service import fetch_all_news
-        assert asyncio.iscoroutinefunction(fetch_all_news)
+        assert inspect.iscoroutinefunction(fetch_all_news)
 
     @pytest.mark.asyncio
     async def test_fetch_all_news_deduplicates_urls(self):
@@ -104,9 +104,9 @@ class TestFetchAllVideos:
     @pytest.mark.asyncio
     async def test_fetch_all_videos_is_async(self):
         """Verify fetch_all_videos is an async function."""
-        import asyncio
+        import inspect
         from app.services.news_fetch_service import fetch_all_videos
-        assert asyncio.iscoroutinefunction(fetch_all_videos)
+        assert inspect.iscoroutinefunction(fetch_all_videos)
 
     @pytest.mark.asyncio
     async def test_fetch_all_videos_returns_cache_dict(self):
