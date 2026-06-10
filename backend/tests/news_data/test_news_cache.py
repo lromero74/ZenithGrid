@@ -16,6 +16,8 @@ Covers:
 import json
 import pytest
 from datetime import datetime, timedelta
+
+from app.utils.timeutil import utcnow
 from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
 
@@ -65,13 +67,13 @@ class TestPruneOldItems:
     """Tests for prune_old_items — date-based item removal."""
 
     def test_keeps_recent_items(self):
-        now = datetime.now().isoformat()
+        now = utcnow().isoformat()
         items = [{"url": "https://a.com", "published": now}]
         result = prune_old_items(items, max_age_days=14)
         assert len(result) == 1
 
     def test_removes_old_items(self):
-        old_date = (datetime.now() - timedelta(days=30)).isoformat()
+        old_date = (utcnow() - timedelta(days=30)).isoformat()
         items = [{"url": "https://old.com", "published": old_date}]
         result = prune_old_items(items, max_age_days=14)
         assert len(result) == 0
@@ -92,21 +94,21 @@ class TestPruneOldItems:
         assert len(result) == 1
 
     def test_handles_z_suffix_dates(self):
-        now = datetime.now().isoformat() + "Z"
+        now = utcnow().isoformat() + "Z"
         items = [{"url": "https://z.com", "published": now}]
         result = prune_old_items(items, max_age_days=14)
         assert len(result) == 1
 
     def test_boundary_just_inside_cutoff_kept(self):
         # One second newer than the cutoff should be kept
-        just_inside = (datetime.now() - timedelta(days=14) + timedelta(seconds=1)).isoformat()
+        just_inside = (utcnow() - timedelta(days=14) + timedelta(seconds=1)).isoformat()
         items = [{"url": "https://edge.com", "published": just_inside}]
         result = prune_old_items(items, max_age_days=14)
         assert len(result) == 1
 
     def test_boundary_just_outside_cutoff_pruned(self):
         # One second older than cutoff should be removed
-        just_outside = (datetime.now() - timedelta(days=14) - timedelta(seconds=1)).isoformat()
+        just_outside = (utcnow() - timedelta(days=14) - timedelta(seconds=1)).isoformat()
         items = [{"url": "https://edge.com", "published": just_outside}]
         result = prune_old_items(items, max_age_days=14)
         assert len(result) == 0
@@ -115,8 +117,8 @@ class TestPruneOldItems:
         assert prune_old_items([], max_age_days=14) == []
 
     def test_mixed_old_and_new(self):
-        now = datetime.now().isoformat()
-        old = (datetime.now() - timedelta(days=30)).isoformat()
+        now = utcnow().isoformat()
+        old = (utcnow() - timedelta(days=30)).isoformat()
         items = [
             {"url": "https://new.com", "published": now},
             {"url": "https://old.com", "published": old},
@@ -128,7 +130,7 @@ class TestPruneOldItems:
         assert "https://old.com" not in urls
 
     def test_custom_max_age(self):
-        three_days_ago = (datetime.now() - timedelta(days=3)).isoformat()
+        three_days_ago = (utcnow() - timedelta(days=3)).isoformat()
         items = [{"url": "https://a.com", "published": three_days_ago}]
         # With 2-day max age, this should be pruned
         result = prune_old_items(items, max_age_days=2)
@@ -224,7 +226,7 @@ class TestLoadCache:
     @patch("app.news_data.news_cache.CACHE_FILE")
     def test_fresh_cache_returned(self, mock_path):
         mock_path.exists.return_value = True
-        cache_data = {"cached_at": datetime.now().isoformat(), "items": []}
+        cache_data = {"cached_at": utcnow().isoformat(), "items": []}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_cache()
         assert result is not None
@@ -233,7 +235,7 @@ class TestLoadCache:
     @patch("app.news_data.news_cache.CACHE_FILE")
     def test_expired_cache_returns_none(self, mock_path):
         mock_path.exists.return_value = True
-        old_time = (datetime.now() - timedelta(minutes=NEWS_CACHE_CHECK_MINUTES + 5)).isoformat()
+        old_time = (utcnow() - timedelta(minutes=NEWS_CACHE_CHECK_MINUTES + 5)).isoformat()
         cache_data = {"cached_at": old_time, "items": []}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_cache()
@@ -242,7 +244,7 @@ class TestLoadCache:
     @patch("app.news_data.news_cache.CACHE_FILE")
     def test_for_merge_returns_expired_cache(self, mock_path):
         mock_path.exists.return_value = True
-        old_time = (datetime.now() - timedelta(hours=2)).isoformat()
+        old_time = (utcnow() - timedelta(hours=2)).isoformat()
         cache_data = {"cached_at": old_time, "items": ["old_item"]}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_cache(for_merge=True)
@@ -275,7 +277,7 @@ class TestSaveCache:
 
     @patch("app.news_data.news_cache.CACHE_FILE", new_callable=lambda: MagicMock(spec=Path))
     def test_save_writes_json(self, mock_path):
-        data = {"cached_at": datetime.now().isoformat(), "items": []}
+        data = {"cached_at": utcnow().isoformat(), "items": []}
         m = mock_open()
         with patch("builtins.open", m):
             save_cache(data)
@@ -287,7 +289,7 @@ class TestSaveCache:
     @patch("builtins.open", side_effect=PermissionError("No write access"))
     def test_save_handles_write_error(self, mock_file):
         """Should log error, not raise."""
-        save_cache({"cached_at": datetime.now().isoformat()})
+        save_cache({"cached_at": utcnow().isoformat()})
         # No exception raised
 
 
@@ -306,7 +308,7 @@ class TestLoadVideoCache:
     @patch("app.news_data.news_cache.VIDEO_CACHE_FILE")
     def test_fresh_cache_returned(self, mock_path):
         mock_path.exists.return_value = True
-        cache_data = {"cached_at": datetime.now().isoformat(), "videos": []}
+        cache_data = {"cached_at": utcnow().isoformat(), "videos": []}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_video_cache()
         assert result is not None
@@ -314,7 +316,7 @@ class TestLoadVideoCache:
     @patch("app.news_data.news_cache.VIDEO_CACHE_FILE")
     def test_expired_returns_none(self, mock_path):
         mock_path.exists.return_value = True
-        old = (datetime.now() - timedelta(minutes=NEWS_CACHE_CHECK_MINUTES + 5)).isoformat()
+        old = (utcnow() - timedelta(minutes=NEWS_CACHE_CHECK_MINUTES + 5)).isoformat()
         cache_data = {"cached_at": old}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_video_cache()
@@ -323,7 +325,7 @@ class TestLoadVideoCache:
     @patch("app.news_data.news_cache.VIDEO_CACHE_FILE")
     def test_for_merge_returns_expired(self, mock_path):
         mock_path.exists.return_value = True
-        old = (datetime.now() - timedelta(hours=3)).isoformat()
+        old = (utcnow() - timedelta(hours=3)).isoformat()
         cache_data = {"cached_at": old, "videos": ["v1"]}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_video_cache(for_merge=True)
@@ -347,7 +349,7 @@ class TestSaveVideoCache:
     def test_save_writes_data(self):
         m = mock_open()
         with patch("builtins.open", m):
-            save_video_cache({"cached_at": datetime.now().isoformat(), "videos": []})
+            save_video_cache({"cached_at": utcnow().isoformat(), "videos": []})
         m.assert_called_once()
 
     @patch("builtins.open", side_effect=OSError("Disk full"))
@@ -370,7 +372,7 @@ class TestLoadFearGreedCache:
     @patch("app.news_data.news_cache.FEAR_GREED_CACHE_FILE")
     def test_fresh_cache(self, mock_path):
         mock_path.exists.return_value = True
-        cache_data = {"cached_at": datetime.now().isoformat(), "value": 42}
+        cache_data = {"cached_at": utcnow().isoformat(), "value": 42}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_fear_greed_cache()
         assert result is not None
@@ -379,7 +381,7 @@ class TestLoadFearGreedCache:
     @patch("app.news_data.news_cache.FEAR_GREED_CACHE_FILE")
     def test_expired_cache(self, mock_path):
         mock_path.exists.return_value = True
-        old = (datetime.now() - timedelta(minutes=FEAR_GREED_CACHE_MINUTES + 5)).isoformat()
+        old = (utcnow() - timedelta(minutes=FEAR_GREED_CACHE_MINUTES + 5)).isoformat()
         cache_data = {"cached_at": old}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_fear_greed_cache()
@@ -401,7 +403,7 @@ class TestLoadBlockHeightCache:
     @patch("app.news_data.news_cache.BLOCK_HEIGHT_CACHE_FILE")
     def test_fresh_cache(self, mock_path):
         mock_path.exists.return_value = True
-        cache_data = {"cached_at": datetime.now().isoformat(), "height": 880000}
+        cache_data = {"cached_at": utcnow().isoformat(), "height": 880000}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_block_height_cache()
         assert result is not None
@@ -410,7 +412,7 @@ class TestLoadBlockHeightCache:
     @patch("app.news_data.news_cache.BLOCK_HEIGHT_CACHE_FILE")
     def test_expired_cache(self, mock_path):
         mock_path.exists.return_value = True
-        old = (datetime.now() - timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES + 5)).isoformat()
+        old = (utcnow() - timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES + 5)).isoformat()
         cache_data = {"cached_at": old}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_block_height_cache()
@@ -432,7 +434,7 @@ class TestLoadUsDebtCache:
     @patch("app.news_data.news_cache.US_DEBT_CACHE_FILE")
     def test_fresh_cache(self, mock_path):
         mock_path.exists.return_value = True
-        cache_data = {"cached_at": datetime.now().isoformat(), "debt": 36000000000000}
+        cache_data = {"cached_at": utcnow().isoformat(), "debt": 36000000000000}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_us_debt_cache()
         assert result is not None
@@ -440,7 +442,7 @@ class TestLoadUsDebtCache:
     @patch("app.news_data.news_cache.US_DEBT_CACHE_FILE")
     def test_expired_cache(self, mock_path):
         mock_path.exists.return_value = True
-        old = (datetime.now() - timedelta(hours=US_DEBT_CACHE_HOURS + 1)).isoformat()
+        old = (utcnow() - timedelta(hours=US_DEBT_CACHE_HOURS + 1)).isoformat()
         cache_data = {"cached_at": old}
         with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
             result = load_us_debt_cache()
@@ -482,7 +484,7 @@ class TestGenericMarketMetricsCaches:
     def test_load_fresh_cache_returned(self, load_fn, save_fn, cache_file_attr):
         with patch(f"app.news_data.news_cache.{cache_file_attr}") as mock_path:
             mock_path.exists.return_value = True
-            cache_data = {"cached_at": datetime.now().isoformat(), "value": 42}
+            cache_data = {"cached_at": utcnow().isoformat(), "value": 42}
             with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
                 result = load_fn()
             assert result is not None
@@ -501,7 +503,7 @@ class TestGenericMarketMetricsCaches:
     def test_load_expired_returns_none(self, load_fn, save_fn, cache_file_attr):
         with patch(f"app.news_data.news_cache.{cache_file_attr}") as mock_path:
             mock_path.exists.return_value = True
-            old = (datetime.now() - timedelta(minutes=MARKET_METRICS_CACHE_MINUTES + 5)).isoformat()
+            old = (utcnow() - timedelta(minutes=MARKET_METRICS_CACHE_MINUTES + 5)).isoformat()
             cache_data = {"cached_at": old}
             with patch("builtins.open", mock_open(read_data=json.dumps(cache_data))):
                 result = load_fn()
@@ -520,7 +522,7 @@ class TestGenericMarketMetricsCaches:
     def test_save_writes_data(self, save_fn):
         m = mock_open()
         with patch("builtins.open", m):
-            save_fn({"cached_at": datetime.now().isoformat(), "value": 99})
+            save_fn({"cached_at": utcnow().isoformat(), "value": 99})
         m.assert_called_once()
 
     @pytest.mark.parametrize("save_fn", [
@@ -542,7 +544,7 @@ class TestSaveFearGreedCache:
     def test_save_writes(self):
         m = mock_open()
         with patch("builtins.open", m):
-            save_fear_greed_cache({"cached_at": datetime.now().isoformat(), "value": 50})
+            save_fear_greed_cache({"cached_at": utcnow().isoformat(), "value": 50})
         m.assert_called_once()
 
 
@@ -556,7 +558,7 @@ class TestSaveBlockHeightCache:
     def test_save_writes(self):
         m = mock_open()
         with patch("builtins.open", m):
-            save_block_height_cache({"cached_at": datetime.now().isoformat(), "height": 880000})
+            save_block_height_cache({"cached_at": utcnow().isoformat(), "height": 880000})
         m.assert_called_once()
 
 
@@ -570,7 +572,7 @@ class TestSaveUsDebtCache:
     def test_save_writes(self):
         m = mock_open()
         with patch("builtins.open", m):
-            save_us_debt_cache({"cached_at": datetime.now().isoformat(), "debt": 36000000000000})
+            save_us_debt_cache({"cached_at": utcnow().isoformat(), "debt": 36000000000000})
         m.assert_called_once()
 
 

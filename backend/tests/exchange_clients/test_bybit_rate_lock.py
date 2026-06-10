@@ -97,7 +97,7 @@ class TestByBitRateLimitSlotReservation:
         with mock.patch("app.exchange_clients.bybit_client.asyncio.sleep", side_effect=mock_sleep), \
              mock.patch("app.exchange_clients.bybit_client.asyncio.to_thread", new=mock.AsyncMock(return_value={})):
             # Trigger a rate-limited call
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 client._rate_limited_call(lambda: {})
             )
 

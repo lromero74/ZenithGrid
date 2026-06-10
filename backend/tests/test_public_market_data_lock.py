@@ -117,7 +117,7 @@ class TestRateLimitFunctionality:
             mock_client_cls.return_value = mock_client_instance
 
             # First call: sets _last_request_time
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 public_market_data._public_request("/test")
             )
             first_time = public_market_data._last_request_time
@@ -125,7 +125,7 @@ class TestRateLimitFunctionality:
 
             # Second call immediately: should trigger sleep and reserve slot
             public_market_data._last_request_time = time.monotonic()  # Simulate recent request
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 public_market_data._public_request("/test")
             )
 

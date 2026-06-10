@@ -109,7 +109,7 @@ class TestGetExchangeClientCache:
 
         try:
             db = mock.AsyncMock()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 exchange_service.get_exchange_client_for_account(db, 99999)
             )
             assert result is sentinel
@@ -142,7 +142,7 @@ class TestGetExchangeClientCache:
 
         try:
             db = mock.AsyncMock()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 exchange_service.get_exchange_client_for_account(db, 88888)
             )
             assert result is sentinel, "double-check should return cached client"
