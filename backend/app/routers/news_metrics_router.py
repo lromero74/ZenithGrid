@@ -6,7 +6,7 @@ All fetch logic lives in services/market_metrics_service.py.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -279,7 +279,7 @@ async def get_btc_supply(current_user: User = Depends(get_current_user)):
 
     height = cache.get("height", 0)
     result = calculate_btc_supply(height)
-    result["cached_at"] = cache.get("timestamp", datetime.utcnow().isoformat())
+    result["cached_at"] = cache.get("timestamp", utcnow().isoformat())
     return result
 
 

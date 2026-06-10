@@ -13,7 +13,7 @@ Membership roles:
              (auto-buy thresholds, rebalance config, dust sweep config)
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import List
 
 from sqlalchemy import or_, select
@@ -32,7 +32,7 @@ def _active_membership_clauses(uid: int):
         AccountMembership.user_id == uid,
         or_(
             AccountMembership.expires_at.is_(None),
-            AccountMembership.expires_at > datetime.utcnow(),
+            AccountMembership.expires_at > utcnow(),
         ),
     )
 

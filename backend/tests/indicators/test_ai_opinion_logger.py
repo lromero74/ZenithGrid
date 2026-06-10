@@ -13,6 +13,7 @@ Covers:
 """
 
 from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
 from unittest.mock import patch
 
 from sqlalchemy import select
@@ -55,7 +56,7 @@ async def _make_position(db, bot, account, user):
     p = Position(
         bot_id=bot.id, account_id=account.id, user_id=user.id,
         product_id="ETH-USD", status="open",
-        opened_at=datetime.utcnow(), average_buy_price=100.0,
+        opened_at=utcnow(), average_buy_price=100.0,
         total_quote_spent=100.0, total_base_acquired=1.0,
     )
     db.add(p)
@@ -206,7 +207,7 @@ class TestBackfillOutcome:
                 reasoning="r", tool_calls=[], ai_model="claude",
             )
 
-        closed_at = datetime.utcnow()
+        closed_at = utcnow()
         await backfill_outcome(
             db=db_session, position_id=pos.id,
             realized_pnl_pct=2.5, closed_at=closed_at,
@@ -236,7 +237,7 @@ class TestBackfillOutcome:
         await backfill_outcome(
             db=db_session, position_id=pos.id,
             realized_pnl_pct=-3.2,
-            closed_at=datetime.utcnow() - timedelta(minutes=1),
+            closed_at=utcnow() - timedelta(minutes=1),
         )
         row = (await db_session.execute(
             select(AIOpinionLog).where(AIOpinionLog.position_id == pos.id)
@@ -248,7 +249,7 @@ class TestBackfillOutcome:
         # Should not raise, nothing to update.
         await backfill_outcome(
             db=db_session, position_id=99999,
-            realized_pnl_pct=1.0, closed_at=datetime.utcnow(),
+            realized_pnl_pct=1.0, closed_at=utcnow(),
         )
         rows = (await db_session.execute(select(AIOpinionLog))).scalars().all()
         assert rows == []
@@ -276,7 +277,7 @@ class TestBackfillOutcome:
 
         await backfill_outcome(
             db=db_session, position_id=pos_a.id,
-            realized_pnl_pct=1.0, closed_at=datetime.utcnow(),
+            realized_pnl_pct=1.0, closed_at=utcnow(),
         )
 
         row_a = (await db_session.execute(

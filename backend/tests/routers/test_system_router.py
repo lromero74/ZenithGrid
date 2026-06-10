@@ -6,7 +6,8 @@ changelog, AI providers, shutdown management, and trading pair monitor.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 from app.models import MarketData, User
@@ -226,7 +227,7 @@ class TestTradesEndpoint:
             email="trades@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -252,7 +253,7 @@ class TestSignalsEndpoint:
             email="signals@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -285,7 +286,7 @@ class TestMarketDataEndpoint:
 
         # Insert some market data
         md = MarketData(
-            timestamp=datetime.utcnow() - timedelta(hours=1),
+            timestamp=utcnow() - timedelta(hours=1),
             price=50000.0,
         )
         db_session.add(md)
@@ -301,7 +302,7 @@ class TestMarketDataEndpoint:
         from app.routers.system_router import get_market_data
 
         old_md = MarketData(
-            timestamp=datetime.utcnow() - timedelta(hours=48),
+            timestamp=utcnow() - timedelta(hours=48),
             price=45000.0,
         )
         db_session.add(old_md)

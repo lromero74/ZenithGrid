@@ -6,6 +6,7 @@ US debt ceiling legislation using AI providers.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
@@ -102,7 +103,7 @@ class TestCacheOperations:
     def test_save_cache_handles_write_error(self, tmp_path):
         """Failure: write error is caught and logged."""
         monitor = DebtCeilingMonitor()
-        monitor._last_check = datetime.utcnow()
+        monitor._last_check = utcnow()
 
         # Use a directory path instead of file to cause write error
         bad_path = tmp_path / "nonexistent_dir" / "cache.json"

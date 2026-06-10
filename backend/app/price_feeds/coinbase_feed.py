@@ -6,7 +6,7 @@ Wraps the existing CoinbaseClient to provide unified price access.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from decimal import Decimal
 from typing import List, Optional
 
@@ -73,7 +73,7 @@ class CoinbasePriceFeed(PriceFeed):
                 quote=quote,
                 bid=bid,
                 ask=ask,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 taker_fee_pct=self.TAKER_FEE_PCT,
                 maker_fee_pct=self.MAKER_FEE_PCT,
             )
@@ -127,7 +127,7 @@ class CoinbasePriceFeed(PriceFeed):
                 exchange_type="cex",
                 base=base,
                 quote=quote,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 bids=bids,
                 asks=asks,
             )

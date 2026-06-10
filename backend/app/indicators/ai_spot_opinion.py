@@ -31,6 +31,7 @@ Usage:
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import json
 import logging
@@ -208,7 +209,7 @@ class AISpotOpinionEvaluator:
 
         # Parse timeframe (e.g., "15m" -> 15 minutes)
         timeframe_seconds = self._timeframe_to_seconds(timeframe)
-        elapsed = (datetime.utcnow() - last_check).total_seconds()
+        elapsed = (utcnow() - last_check).total_seconds()
 
         return elapsed >= timeframe_seconds
 
@@ -228,7 +229,7 @@ class AISpotOpinionEvaluator:
     def _update_last_check(self, product_id: str, timeframe: str):
         """Update last check timestamp."""
         cache_key = f"{product_id}:{timeframe}"
-        self._last_check_cache[cache_key] = datetime.utcnow()
+        self._last_check_cache[cache_key] = utcnow()
 
     def _calculate_metrics(self, candles: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate all technical indicators."""

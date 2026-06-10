@@ -5,6 +5,7 @@ Handles AI bot reasoning/thinking log creation and retrieval.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -50,7 +51,7 @@ async def create_ai_bot_log(
         current_price=log_data.current_price,
         position_status=log_data.position_status,
         context=log_data.context,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
     )
 
     db.add(log_entry)

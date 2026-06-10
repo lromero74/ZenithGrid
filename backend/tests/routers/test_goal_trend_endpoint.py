@@ -9,7 +9,8 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from sqlalchemy import func, select
 
@@ -38,8 +39,8 @@ class TestGoalTrendEndpoint:
             target_value=1000.0,
             income_period="monthly",
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -73,8 +74,8 @@ class TestGoalTrendEndpoint:
             target_currency="USD",
             target_value=100000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=60),
-            target_date=datetime.utcnow() + timedelta(days=305),
+            start_date=utcnow() - timedelta(days=60),
+            target_date=utcnow() + timedelta(days=305),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -110,8 +111,8 @@ class TestGoalTrendEndpoint:
             target_currency="USD",
             target_value=100000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()

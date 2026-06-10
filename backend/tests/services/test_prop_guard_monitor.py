@@ -10,8 +10,9 @@ Covers:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -123,7 +124,7 @@ class TestCheckAccount:
         state.daily_start_equity = 100000.0
         state.initial_deposit = 100000.0
         state.daily_pnl = 0.0
-        state.daily_start_timestamp = datetime.utcnow()
+        state.daily_start_timestamp = utcnow()
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = state
@@ -173,7 +174,7 @@ class TestCheckAccount:
         state.daily_start_equity = 92000.0
         state.initial_deposit = 100000.0
         state.daily_pnl = 0.0
-        state.daily_start_timestamp = datetime.utcnow()
+        state.daily_start_timestamp = utcnow()
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = state
@@ -222,7 +223,7 @@ class TestCheckAccount:
         state.daily_start_equity = 99000.0
         state.initial_deposit = 100000.0
         state.daily_pnl = -1000.0
-        state.daily_start_timestamp = datetime.utcnow() - timedelta(days=2)
+        state.daily_start_timestamp = utcnow() - timedelta(days=2)
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = state
@@ -295,7 +296,7 @@ class TestGetAccountEquity:
         ws_mgr = MagicMock()
         ws_mgr.state.connected = True
         ws_mgr.state.equity = 98000.0
-        ws_mgr.state.equity_timestamp = datetime.utcnow()
+        ws_mgr.state.equity_timestamp = utcnow()
 
         with patch(
             "app.exchange_clients.bybit_ws.get_ws_manager",
@@ -349,7 +350,7 @@ class TestGetAccountEquity:
         ws_mgr = MagicMock()
         ws_mgr.state.connected = True
         ws_mgr.state.equity = 90000.0
-        ws_mgr.state.equity_timestamp = datetime.utcnow() - timedelta(seconds=120)
+        ws_mgr.state.equity_timestamp = utcnow() - timedelta(seconds=120)
 
         mock_inner = AsyncMock()
         mock_inner.get_equity.return_value = 91000.0

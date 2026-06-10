@@ -9,6 +9,7 @@ shared across users. Word timings stored in DB as JSON.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import base64
 import hashlib
 import json
@@ -16,7 +17,6 @@ import logging
 import re
 import shutil
 import time
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import edge_tts
@@ -399,7 +399,7 @@ async def _update_tts_history(
 
         if history:
             history.last_voice_id = voice_id
-            history.last_played_at = datetime.utcnow()
+            history.last_played_at = utcnow()
         else:
             history = UserArticleTTSHistory(
                 user_id=user_id,

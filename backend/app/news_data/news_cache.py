@@ -3,6 +3,7 @@ Cache loading and saving functions for news, videos, and other data.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -118,7 +119,7 @@ def load_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
 
         # Check if cache needs refresh (15 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.utcnow() - cached_at
+        cache_age = utcnow() - cached_at
 
         if for_merge:
             # For merging, return cache regardless of age
@@ -146,7 +147,7 @@ def save_cache(data: Dict[str, Any]) -> None:
 
 def prune_old_items(items: List[Dict], max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> List[Dict]:
     """Remove items older than max_age_days based on published date."""
-    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    cutoff = utcnow() - timedelta(days=max_age_days)
     pruned = []
     removed_count = 0
 
@@ -214,7 +215,7 @@ def load_video_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
 
         # Check if cache needs refresh (15 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.utcnow() - cached_at
+        cache_age = utcnow() - cached_at
 
         if for_merge:
             # For merging, return cache regardless of age
@@ -254,7 +255,7 @@ def load_fear_greed_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (15 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
+        if not stale and utcnow() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
             logger.info("Fear/Greed cache expired")
             return None
 
@@ -288,7 +289,7 @@ def load_block_height_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (10 minutes)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
+        if not stale and utcnow() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
             logger.info("Block height cache expired")
             return None
 
@@ -322,7 +323,7 @@ def load_us_debt_cache(stale: bool = False) -> Optional[Dict[str, Any]]:
 
         # Check if cache is expired (24 hours)
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if not stale and datetime.utcnow() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
+        if not stale and utcnow() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
             logger.info("US debt cache expired")
             return None
 
@@ -359,7 +360,7 @@ def _load_market_metrics_cache(
             cache = json.load(f)
 
         cached_at = _parse_naive_utc(cache.get("cached_at", "2000-01-01"))
-        if not stale and datetime.utcnow() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
+        if not stale and utcnow() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
             logger.info(f"{name} cache expired")
             return None
 

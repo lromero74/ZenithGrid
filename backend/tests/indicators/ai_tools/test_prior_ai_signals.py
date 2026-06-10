@@ -12,7 +12,8 @@ Covers:
 - Registry — tool is registered under its name
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from app.indicators.ai_tools import REGISTRY, ToolContext, execute
 from app.models import AIOpinionLog, User
@@ -48,7 +49,7 @@ async def _make_opinion(
         ai_model=ai_model,
         tool_calls=tool_calls,
         is_sell_check=is_sell_check,
-        created_at=datetime.utcnow() - timedelta(days=created_days_ago),
+        created_at=utcnow() - timedelta(days=created_days_ago),
         outcome=outcome,
         realized_pnl_pct=realized_pnl_pct,
     )

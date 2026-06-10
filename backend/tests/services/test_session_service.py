@@ -10,7 +10,8 @@ Covers:
 - get_user_sessions
 """
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from app.exceptions import RateLimitError, SessionLimitError
 
@@ -53,7 +54,7 @@ class TestCreateSession:
             session_id="sess-001",
             ip_address="1.2.3.4",
             user_agent="TestBrowser/1.0",
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=utcnow() + timedelta(minutes=30),
             db=db_session,
         )
         assert session.id is not None
@@ -128,7 +129,7 @@ class TestCheckSessionValid:
         await create_session(
             user_id=test_user.id, session_id="sess-valid-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=utcnow() + timedelta(hours=1),
             db=db_session,
         )
         valid = await check_session_valid("sess-valid-1", db_session)
@@ -149,7 +150,7 @@ class TestCheckSessionValid:
         await create_session(
             user_id=test_user.id, session_id="sess-valid-3",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() - timedelta(minutes=1),
+            expires_at=utcnow() - timedelta(minutes=1),
             db=db_session,
         )
         valid = await check_session_valid("sess-valid-3", db_session)
@@ -256,7 +257,7 @@ class TestCheckSessionLimits:
             ip_address="1.2.3.4", user_agent=None, expires_at=None, db=db_session,
         )
         session.is_active = False
-        session.ended_at = datetime.utcnow() - timedelta(minutes=20)
+        session.ended_at = utcnow() - timedelta(minutes=20)
 
         policy = {"relogin_cooldown_minutes": 10}
         # Should not raise — cooldown has passed
@@ -268,7 +269,7 @@ class TestCheckSessionLimits:
         await create_session(
             user_id=test_user.id, session_id="ip-hint-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            expires_at=utcnow() + timedelta(minutes=10),
             db=db_session,
         )
 
@@ -284,7 +285,7 @@ class TestCheckSessionLimits:
         await create_session(
             user_id=test_user.id, session_id="sim-hint-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            expires_at=utcnow() + timedelta(minutes=5),
             db=db_session,
         )
 
@@ -305,7 +306,7 @@ class TestCheckSessionLimits:
         await create_session(
             user_id=test_user.id, session_id="exp-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() - timedelta(minutes=5),
+            expires_at=utcnow() - timedelta(minutes=5),
             db=db_session,
         )
         policy = {"max_simultaneous_sessions": 1}
@@ -324,13 +325,13 @@ class TestExpireStaleSessionsForUser:
         await create_session(
             user_id=test_user.id, session_id="stale-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() - timedelta(minutes=5),
+            expires_at=utcnow() - timedelta(minutes=5),
             db=db_session,
         )
         await create_session(
             user_id=test_user.id, session_id="fresh-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=utcnow() + timedelta(hours=1),
             db=db_session,
         )
 
@@ -361,13 +362,13 @@ class TestExpireAllStaleSessions:
         await create_session(
             user_id=test_user.id, session_id="bulk-stale-1",
             ip_address="1.2.3.4", user_agent=None,
-            expires_at=datetime.utcnow() - timedelta(minutes=10),
+            expires_at=utcnow() - timedelta(minutes=10),
             db=db_session,
         )
         await create_session(
             user_id=test_user.id, session_id="bulk-stale-2",
             ip_address="5.6.7.8", user_agent=None,
-            expires_at=datetime.utcnow() - timedelta(minutes=1),
+            expires_at=utcnow() - timedelta(minutes=1),
             db=db_session,
         )
         count = await expire_all_stale_sessions(db_session)

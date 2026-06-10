@@ -5,7 +5,7 @@ Covers bot configuration validation against exchange minimum order sizes.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -26,7 +26,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -44,7 +44,7 @@ async def _make_cex_account(db_session, user, is_paper=False, api_key_name="key-
         exchange="coinbase",
         api_key_name=api_key_name if not is_paper else None,
         api_private_key=api_private_key if not is_paper else None,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(account)
     await db_session.flush()

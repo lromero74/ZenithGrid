@@ -6,7 +6,7 @@ balance retrieval, and portfolio conversion orchestration.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from sqlalchemy import select
@@ -445,7 +445,7 @@ async def get_generic_cex_portfolio(
             total_in_positions_btc += pos.total_quote_spent
 
     # Calculate realized P&L
-    now = datetime.utcnow()
+    now = utcnow()
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
     pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}

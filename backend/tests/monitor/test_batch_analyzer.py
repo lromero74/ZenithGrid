@@ -5,7 +5,7 @@ Tests batch analysis orchestration: market data collection, budget calculation,
 AI batch analysis dispatch, result processing, error tracking, and DB commit.
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -498,7 +498,7 @@ class TestBatchAnalyzerErrorTracking:
 
         pos = _make_position(product_id="ETH-BTC")
         pos.last_error_message = "Previous error"
-        pos.last_error_timestamp = datetime.utcnow()
+        pos.last_error_timestamp = utcnow()
 
         bot = _make_bot(product_ids=["ETH-BTC"])
         strategy = _make_strategy({"ETH-BTC": {"signal_type": "hold", "confidence": 0, "reasoning": "ok"}})

@@ -7,8 +7,8 @@ and the update_env_file helper.
 """
 
 import inspect
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Account, Settings, User
@@ -302,7 +302,7 @@ class TestGetCoinbaseDependency:
             email="nocoinbase@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -321,7 +321,7 @@ class TestGetCoinbaseDependency:
             email="nocreds@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()

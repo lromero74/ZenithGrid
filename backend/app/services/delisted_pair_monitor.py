@@ -7,6 +7,7 @@ Daily background job that:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import json
 import logging
 from datetime import datetime
@@ -235,7 +236,7 @@ class TradingPairMonitor:
             return False
 
         try:
-            now = int(datetime.utcnow().timestamp())
+            now = int(utcnow().timestamp())
             one_day_ago = now - 86400
 
             candles = await self._exchange_client.get_candles(
@@ -400,7 +401,7 @@ class TradingPairMonitor:
             dict with summary of changes made
         """
         results = {
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": utcnow().isoformat(),
             "bots_checked": 0,
             "pairs_removed": 0,
             "pairs_added": 0,
@@ -573,7 +574,7 @@ class TradingPairMonitor:
         if detected:
             results["detected_stable_pairs"] = detected
 
-        self._last_check = datetime.utcnow()
+        self._last_check = utcnow()
         return results
 
     def get_status(self) -> dict:

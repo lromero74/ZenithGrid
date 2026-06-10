@@ -9,7 +9,7 @@ Endpoints for monitoring and controlling PropGuard safety system:
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -156,7 +156,7 @@ async def reset_kill_switch(
     # Reset daily start to current equity
     if state.current_equity:
         state.daily_start_equity = state.current_equity
-        state.daily_start_timestamp = datetime.utcnow()
+        state.daily_start_timestamp = utcnow()
         state.daily_pnl = 0.0
 
     await db.commit()
@@ -193,7 +193,7 @@ async def manual_kill(
     )
     state = result.scalar_one_or_none()
 
-    now = datetime.utcnow()
+    now = utcnow()
     reason = "Manual kill switch activated by user"
 
     if state:
@@ -264,7 +264,7 @@ async def get_propguard_history(
     await _get_prop_account(db, account_id, user)
 
     from datetime import timedelta
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = utcnow() - timedelta(hours=hours)
 
     result = await db.execute(
         select(PropFirmEquitySnapshot).where(

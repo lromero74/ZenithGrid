@@ -6,7 +6,8 @@ code-quality Phase 5.1.
 """
 
 import logging
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select
@@ -125,7 +126,7 @@ async def _run_new_position_preflight(
 
     deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
     if deal_cooldown > 0:
-        cooldown_cutoff = datetime.utcnow() - timedelta(seconds=deal_cooldown)
+        cooldown_cutoff = utcnow() - timedelta(seconds=deal_cooldown)
         recent_close_query = select(Position).where(
             Position.bot_id == bot.id,
             Position.product_id == product_id,
@@ -135,7 +136,7 @@ async def _run_new_position_preflight(
         recent_result = await db.execute(recent_close_query)
         recently_closed = recent_result.scalars().first()
         if recently_closed:
-            elapsed = (datetime.utcnow() - recently_closed.closed_at).total_seconds()
+            elapsed = (utcnow() - recently_closed.closed_at).total_seconds()
             remaining = deal_cooldown - elapsed
             reason = f"Deal cooldown active for {product_id} ({int(remaining)}s remaining)"
             logger.debug(f"Should buy: FALSE - {reason}")
@@ -477,8 +478,8 @@ async def _execute_buy_trade(
                     if is_new_position and position:
                         position.status = "failed"
                         position.last_error_message = f"Slippage guard: {guard_reason}"
-                        position.last_error_timestamp = datetime.utcnow()
-                        position.closed_at = datetime.utcnow()
+                        position.last_error_timestamp = utcnow()
+                        position.closed_at = utcnow()
                         await db.commit()
                     return {
                         "action": "hold",
@@ -517,8 +518,8 @@ async def _execute_buy_trade(
             # This prevents orphaned positions showing as "open" with 0 trades
             position.status = "failed"
             position.last_error_message = f"Initial buy failed: {str(e)}"
-            position.last_error_timestamp = datetime.utcnow()
-            position.closed_at = datetime.utcnow()
+            position.last_error_timestamp = utcnow()
+            position.closed_at = utcnow()
             await db.commit()
             return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
 

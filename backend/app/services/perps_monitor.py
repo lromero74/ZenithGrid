@@ -9,8 +9,8 @@ Periodically syncs open perps positions with Coinbase INTX exchange state:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select
@@ -227,7 +227,7 @@ class PerpsMonitor:
             profit_pct = (profit / cost_basis * 100) if cost_basis > 0 else 0
 
             position.status = "closed"
-            position.closed_at = datetime.utcnow()
+            position.closed_at = utcnow()
             position.sell_price = fill_price
             position.profit_quote = profit
             position.profit_percentage = profit_pct

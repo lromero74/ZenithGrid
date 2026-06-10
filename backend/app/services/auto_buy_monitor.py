@@ -9,6 +9,7 @@ IMPORTANT: Respects bot reservations - only converts funds that are truly free
 (not reserved by any bot's budget or tied up in open positions).
 """
 import logging
+from app.utils.timeutil import utcnow
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -111,7 +112,7 @@ class AutoBuyMonitor:
 
     def _should_check_account(self, account: Account) -> bool:
         """Check if enough time has passed to process this account"""
-        now = datetime.utcnow()
+        now = utcnow()
         last_check = self._account_timers.get(account.id)
 
         if not last_check:
@@ -156,7 +157,7 @@ class AutoBuyMonitor:
 
             # Update timer for this account (lock guards cross-thread access)
             with self._account_timers_lock:
-                self._account_timers[account.id] = datetime.utcnow()
+                self._account_timers[account.id] = utcnow()
 
         except Exception as e:
             logger.error(f"Auto-buy failed for account {account.id}: {e}", exc_info=True)
@@ -304,7 +305,7 @@ class AutoBuyMonitor:
                     side="BUY",
                     size=btc_size,
                     price=current_price,
-                    placed_at=datetime.utcnow(),
+                    placed_at=utcnow(),
                 )
 
                 logger.info(
@@ -324,7 +325,7 @@ class AutoBuyMonitor:
             return
 
         async with self._get_sm()() as db:
-            now = datetime.utcnow()
+            now = utcnow()
             orders_to_remove = []
 
             for order_id, pending in list(self._pending_orders.items()):
@@ -394,7 +395,7 @@ class AutoBuyMonitor:
                 side=pending.side,
                 size=pending.size,
                 price=new_price,
-                placed_at=datetime.utcnow(),
+                placed_at=utcnow(),
             )
 
             logger.info(

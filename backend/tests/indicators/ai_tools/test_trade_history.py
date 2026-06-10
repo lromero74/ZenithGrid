@@ -11,7 +11,8 @@ Covers:
 - Validation — n clamped to 1..20
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from app.indicators.ai_tools import REGISTRY, ToolContext, execute
 from app.models import Account, Bot, Position, User
@@ -50,7 +51,7 @@ async def _make_closed_position(
     closed_days_ago=1,
     exit_reason="take_profit",
 ):
-    closed_at = datetime.utcnow() - timedelta(days=closed_days_ago)
+    closed_at = utcnow() - timedelta(days=closed_days_ago)
     opened_at = closed_at - timedelta(minutes=hold_minutes)
     p = Position(
         bot_id=bot.id,
@@ -157,7 +158,7 @@ class TestGetTradeHistory:
         p = Position(
             bot_id=bot.id, account_id=account.id, user_id=user.id,
             product_id="ETH-USD", status="open",
-            opened_at=datetime.utcnow(), average_buy_price=100.0,
+            opened_at=utcnow(), average_buy_price=100.0,
             total_quote_spent=100.0, total_base_acquired=1.0,
         )
         db_session.add(p)

@@ -12,7 +12,7 @@ Covers:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.strategies.bull_flag_scanner import (
@@ -128,7 +128,7 @@ class TestClearVolumeCache:
         """After clearing, cache should be empty."""
         # Poke the module-level cache
         import app.strategies.bull_flag_scanner as bfs
-        bfs._volume_sma_cache["TEST-USD"] = (123.0, datetime.utcnow())
+        bfs._volume_sma_cache["TEST-USD"] = (123.0, utcnow())
         assert "TEST-USD" in bfs._volume_sma_cache
 
         clear_volume_cache()

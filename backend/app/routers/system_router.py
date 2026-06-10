@@ -12,9 +12,10 @@ Handles system-level endpoints:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -48,7 +49,7 @@ router = APIRouter(tags=["system"])
 
 # Captured once at process start — lets the frontend detect actual restarts
 # vs. just a tag push (where the live git version changes but the process hasn't restarted).
-_STARTUP_TIME = datetime.utcnow().isoformat()
+_STARTUP_TIME = utcnow().isoformat()
 
 # Short-lived cache for git version — avoids spawning a subprocess on every health/version poll.
 _version_cache: Optional[str] = None
@@ -480,7 +481,7 @@ async def get_status(
         connection_ok = await coinbase.test_connection()
         monitor_status = await price_monitor.get_status()
 
-        return {"api_connected": connection_ok, "monitor": monitor_status, "timestamp": datetime.utcnow().isoformat()}
+        return {"api_connected": connection_ok, "monitor": monitor_status, "timestamp": utcnow().isoformat()}
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
@@ -648,7 +649,7 @@ async def get_market_data(
     current_user: User = Depends(get_current_user)
 ):
     """Get market data for charting (global — price/indicator data is not user-specific)"""
-    start_time = datetime.utcnow() - timedelta(hours=hours)
+    start_time = utcnow() - timedelta(hours=hours)
     query = select(MarketData).where(MarketData.timestamp >= start_time).order_by(MarketData.timestamp)
     result = await db.execute(query)
     data = result.scalars().all()

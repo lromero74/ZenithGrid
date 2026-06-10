@@ -16,8 +16,8 @@ database modules (avoids circular imports).
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from app.exchange_clients.base import ExchangeClient
@@ -158,14 +158,14 @@ class PropGuardClient(ExchangeClient):
                 if state:
                     state.is_killed = True
                     state.kill_reason = reason
-                    state.kill_timestamp = datetime.utcnow()
+                    state.kill_timestamp = utcnow()
                 else:
                     state = PropFirmState(
                         account_id=self._account_id,
                         initial_deposit=self._initial_deposit,
                         is_killed=True,
                         kill_reason=reason,
-                        kill_timestamp=datetime.utcnow(),
+                        kill_timestamp=utcnow(),
                     )
                     db.add(state)
                 await db.commit()
@@ -188,7 +188,7 @@ class PropGuardClient(ExchangeClient):
                 state = result.scalar_one_or_none()
                 if state:
                     state.current_equity = equity
-                    state.current_equity_timestamp = datetime.utcnow()
+                    state.current_equity_timestamp = utcnow()
                     await db.commit()
         except Exception as e:
             logger.error(
@@ -210,7 +210,7 @@ class PropGuardClient(ExchangeClient):
             eq = self._ws_state.equity
             eq_ts = self._ws_state.equity_timestamp
             if eq > 0 and eq_ts:
-                age = (datetime.utcnow() - eq_ts).total_seconds()
+                age = (utcnow() - eq_ts).total_seconds()
                 if age <= self._WS_EQUITY_MAX_AGE_SECONDS:
                     return eq
                 logger.warning(
@@ -403,7 +403,7 @@ class PropGuardClient(ExchangeClient):
                     )
                 )
                 state = result.scalar_one_or_none()
-                now = datetime.utcnow()
+                now = utcnow()
                 if state:
                     state.daily_start_equity = equity
                     state.daily_start_timestamp = now

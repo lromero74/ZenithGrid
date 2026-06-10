@@ -17,8 +17,9 @@ Coverage:
 """
 
 import json
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
@@ -157,7 +158,7 @@ class TestAccessibleAccountsFilter:
             account_id=acct.id,
             user_id=member.id,
             role="observer",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=utcnow() - timedelta(hours=1),
         )
         db_session.add(m)
         await db_session.commit()
@@ -345,8 +346,8 @@ async def _make_goal(db, user: User, name: str = "Test Goal") -> ReportGoal:
         target_currency="USD",
         target_value=1000.0,
         time_horizon_months=12,
-        start_date=datetime.utcnow(),
-        target_date=datetime.utcnow() + timedelta(days=365),
+        start_date=utcnow(),
+        target_date=utcnow() + timedelta(days=365),
     )
     db.add(goal)
     await db.flush()
@@ -405,7 +406,7 @@ class TestListExpenseItemsAccess:
 
 
 async def _make_report(db, user: User) -> Report:
-    now = datetime.utcnow()
+    now = utcnow()
     report = Report(
         user_id=user.id,
         period_start=now - timedelta(days=30),

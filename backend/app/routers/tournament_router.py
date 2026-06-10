@@ -5,7 +5,7 @@ Endpoints for creating, joining, starting, and managing multiplayer tournaments.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -272,7 +272,7 @@ async def start_tournament(
         raise HTTPException(status_code=400, detail="Need at least 2 players to start")
 
     tournament.status = "active"
-    tournament.started_at = datetime.utcnow()
+    tournament.started_at = utcnow()
     await db.commit()
 
     return {

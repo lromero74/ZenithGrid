@@ -12,12 +12,13 @@ Covers:
 """
 
 import json
+from app.utils.timeutil import utcnow
 import importlib
 import importlib.util
 import os
 import sys
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Avoid circular import through app.indicators.__init__ -> strategies -> indicators
@@ -169,7 +170,7 @@ class TestTimeGating:
 
     def test_second_check_after_enough_time_allowed(self):
         evaluator = AISpotOpinionEvaluator()
-        evaluator._last_check_cache["BTC-USD:15m"] = datetime.utcnow() - timedelta(minutes=20)
+        evaluator._last_check_cache["BTC-USD:15m"] = utcnow() - timedelta(minutes=20)
         assert evaluator._should_check_now("BTC-USD", "15m") is True
 
     def test_different_products_independent(self):

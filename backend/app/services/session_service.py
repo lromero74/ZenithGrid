@@ -4,6 +4,7 @@ Session lifecycle management service.
 Handles creating, validating, ending, and enforcing session limits.
 """
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -69,8 +70,8 @@ async def check_session_limits(
         last_ended = result.scalar()
         if last_ended:
             cooldown_until = last_ended + timedelta(minutes=cooldown_minutes)
-            if datetime.utcnow() < cooldown_until:
-                retry_after = int((cooldown_until - datetime.utcnow()).total_seconds())
+            if utcnow() < cooldown_until:
+                retry_after = int((cooldown_until - utcnow()).total_seconds())
                 raise RateLimitError(
                     f"Please wait {retry_after} seconds before logging in again",
                     retry_after=retry_after,
@@ -137,7 +138,7 @@ async def _earliest_expiry_hint(
     if not earliest:
         return None
 
-    remaining = int((earliest - datetime.utcnow()).total_seconds())
+    remaining = int((earliest - utcnow()).total_seconds())
     if remaining <= 0:
         return None
     if remaining < 60:
@@ -161,7 +162,7 @@ async def end_session(session_id: str, db: AsyncSession) -> bool:
     session = result.scalar_one_or_none()
     if session:
         session.is_active = False
-        session.ended_at = datetime.utcnow()
+        session.ended_at = utcnow()
         return True
     return False
 
@@ -181,9 +182,9 @@ async def check_session_valid(session_id: str, db: AsyncSession) -> bool:
         return False
 
     # Check expiry
-    if session.expires_at and datetime.utcnow() > session.expires_at:
+    if session.expires_at and utcnow() > session.expires_at:
         session.is_active = False
-        session.ended_at = datetime.utcnow()
+        session.ended_at = utcnow()
         return False
 
     return True
@@ -191,7 +192,7 @@ async def check_session_valid(session_id: str, db: AsyncSession) -> bool:
 
 async def expire_stale_sessions_for_user(user_id: int, db: AsyncSession):
     """Mark expired sessions as inactive for a specific user."""
-    now = datetime.utcnow()
+    now = utcnow()
     result = await db.execute(
         select(ActiveSession).where(
             and_(
@@ -211,7 +212,7 @@ async def expire_stale_sessions_for_user(user_id: int, db: AsyncSession):
 
 async def expire_all_stale_sessions(db: AsyncSession) -> int:
     """Bulk cleanup: mark all expired active sessions as inactive."""
-    now = datetime.utcnow()
+    now = utcnow()
     result = await db.execute(
         select(ActiveSession).where(
             and_(

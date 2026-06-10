@@ -7,9 +7,9 @@ cached live summary or the most recent snapshot so first login stays fast.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import threading
-from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict
 
@@ -97,7 +97,7 @@ async def get_account_value_summary(
             "total_usd_value": float(portfolio.get("total_usd_value", 0.0) or 0.0),
             "total_btc_value": float(portfolio.get("total_btc_value", 0.0) or 0.0),
             "btc_usd_price": float(portfolio.get("btc_usd_price", 0.0) or 0.0),
-            "as_of": datetime.utcnow().isoformat(),
+            "as_of": utcnow().isoformat(),
             "is_stale": False,
             "is_refreshing": False,
         }
@@ -109,7 +109,7 @@ async def get_account_value_summary(
             "total_usd_value": float(portfolio.get("total_usd_value", 0.0) or 0.0),
             "total_btc_value": float(portfolio.get("total_btc_value", 0.0) or 0.0),
             "btc_usd_price": float(portfolio.get("btc_usd_price", 0.0) or 0.0),
-            "as_of": datetime.utcnow().isoformat(),
+            "as_of": utcnow().isoformat(),
             "is_stale": False,
             "is_refreshing": False,
         }
@@ -163,7 +163,7 @@ async def _build_live_paper_account_value_summary(account: Account) -> Dict[str,
         "total_usd_value": valuation["total_usd_value"],
         "total_btc_value": valuation["total_btc_value"],
         "btc_usd_price": valuation["btc_usd_price"],
-        "as_of": datetime.utcnow().isoformat(),
+        "as_of": utcnow().isoformat(),
         "is_stale": False,
         "is_refreshing": False,
     }

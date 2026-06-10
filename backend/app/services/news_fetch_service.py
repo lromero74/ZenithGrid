@@ -9,6 +9,7 @@ Routers import from here — never the reverse.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow, utcfromtimestamp
 import html as html_module
 import logging
 import re
@@ -291,7 +292,7 @@ async def fetch_reddit_news(
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
                     source=source_id,
                     source_name=config["name"],
-                    published=datetime.utcfromtimestamp(post_data.get("created_utc", 0)).isoformat() + "Z",
+                    published=utcfromtimestamp(post_data.get("created_utc", 0)).isoformat() + "Z",
                     summary=post_data.get("selftext", "")[:200] if post_data.get("selftext") else None,
                     thumbnail=thumbnail,
                     category=config.get("category", "CryptoCurrency"),
@@ -452,7 +453,7 @@ async def store_article_in_db(
         cached_thumbnail_path=cached_thumbnail_path,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.utcnow(),
+        fetched_at=utcnow(),
     )
     db.add(article)
     return article
@@ -491,7 +492,7 @@ async def store_video_in_db(
         thumbnail_url=item.thumbnail,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.utcnow(),
+        fetched_at=utcnow(),
     )
     db.add(video)
     return video
@@ -511,7 +512,7 @@ async def cleanup_old_videos(
     min_keep videos or videos within max_age_days, per source.
     Videos with no source_id use flat max_age_days cutoff."""
     # Use naive datetime to match SQLite's naive storage (avoids aware vs naive comparison)
-    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    cutoff = utcnow() - timedelta(days=max_age_days)
     total_deleted = 0
 
     # Per-source cleanup
@@ -575,7 +576,7 @@ async def cleanup_articles_with_images(
         # Collect image paths and article IDs that will be deleted
         # We need to query before deleting
         # Use naive datetime to match SQLite's naive storage
-        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+        cutoff = utcnow() - timedelta(days=max_age_days)
         paths_to_delete = []
         article_ids_to_delete = []
 
@@ -760,7 +761,7 @@ async def fetch_all_news(session_maker=None) -> None:
     except Exception as e:
         logger.warning(f"Post-fetch article cleanup failed: {e}")
 
-    _last_news_refresh = datetime.utcnow()
+    _last_news_refresh = utcnow()
 
 
 async def fetch_all_videos(session_maker=None) -> Dict[str, Any]:
@@ -816,7 +817,7 @@ async def fetch_all_videos(session_maker=None) -> Dict[str, Any]:
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.utcnow()
+    now = utcnow()
     cache_data = {
         "videos": merged_items,
         "sources": sources_list,
@@ -826,5 +827,5 @@ async def fetch_all_videos(session_maker=None) -> Dict[str, Any]:
     }
     save_video_cache(cache_data)
 
-    _last_video_refresh = datetime.utcnow()
+    _last_video_refresh = utcnow()
     return cache_data

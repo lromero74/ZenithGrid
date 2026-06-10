@@ -9,7 +9,8 @@ Covers:
 - Cooldown active -> 429
 """
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from app.models import Group, User
 from app.auth_routers.helpers import (
@@ -180,7 +181,7 @@ class TestRefreshSessionCheck:
             session_id="refresh-test-2",
             ip_address="1.2.3.4",
             user_agent=None,
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=utcnow() + timedelta(hours=1),
             db=db_session,
         )
 

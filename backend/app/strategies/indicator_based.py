@@ -19,6 +19,7 @@ Migration from old strategies:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
@@ -960,8 +961,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         # See PRPs/high-risk-doubling-preset.md §Recommended Design §5.
         max_hold_hours = self.config.get("speculative_max_hold_hours")
         if max_hold_hours and getattr(position, "opened_at", None) is not None:
-            from datetime import datetime
-            age_seconds = (datetime.utcnow() - position.opened_at).total_seconds()
+            age_seconds = (utcnow() - position.opened_at).total_seconds()
             if age_seconds >= float(max_hold_hours) * 3600.0:
                 return (
                     True,

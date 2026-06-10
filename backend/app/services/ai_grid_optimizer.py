@@ -5,6 +5,7 @@ Uses AI to continuously analyze grid performance and optimize parameters.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -58,9 +59,9 @@ async def analyze_grid_performance(
     initialized_at = (
         datetime.fromisoformat(grid_state["initialized_at"])
         if "initialized_at" in grid_state
-        else datetime.utcnow()
+        else utcnow()
     )
-    hours_running = (datetime.utcnow() - initialized_at).total_seconds() / 3600
+    hours_running = (utcnow() - initialized_at).total_seconds() / 3600
 
     # Breakout frequency
     breakout_count = grid_state.get("breakout_count", 0)
@@ -307,7 +308,7 @@ async def apply_ai_recommendations(
         grid_state["ai_adjustments"] = []
 
     grid_state["ai_adjustments"].append({
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utcnow().isoformat(),
         "confidence": confidence,
         "adjustments": adjustments,
         "reasoning": recommendations.get("reasoning", ""),
@@ -372,7 +373,7 @@ async def run_ai_grid_optimization(
 
     if last_ai_check:
         last_check_time = datetime.fromisoformat(last_ai_check)
-        minutes_elapsed = (datetime.utcnow() - last_check_time).total_seconds() / 60
+        minutes_elapsed = (utcnow() - last_check_time).total_seconds() / 60
 
         if minutes_elapsed < interval_minutes:
             # Not yet time for AI check
@@ -397,7 +398,7 @@ async def run_ai_grid_optimization(
 
     if not recommendations:
         logger.info(f"No AI recommendations generated for bot {bot.id}")
-        grid_state["last_ai_check"] = datetime.utcnow().isoformat()
+        grid_state["last_ai_check"] = utcnow().isoformat()
         bot.strategy_config["grid_state"] = grid_state
         await db.commit()
         return None
@@ -408,7 +409,7 @@ async def run_ai_grid_optimization(
     )
 
     # Update last check time
-    grid_state["last_ai_check"] = datetime.utcnow().isoformat()
+    grid_state["last_ai_check"] = utcnow().isoformat()
     bot.strategy_config["grid_state"] = grid_state
     await db.commit()
 

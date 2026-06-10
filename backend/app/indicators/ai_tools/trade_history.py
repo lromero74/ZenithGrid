@@ -8,8 +8,9 @@ Uses `trading.positions` directly — no separate log table required.
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List
 
 from sqlalchemy import select
@@ -48,7 +49,7 @@ async def _run(input: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     lookback_days = max(_MIN_DAYS, min(_MAX_DAYS, lookback_days))
     n = max(_MIN_N, min(_MAX_N, n))
 
-    cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+    cutoff = utcnow() - timedelta(days=lookback_days)
     stmt = (
         select(Position)
         .where(Position.user_id == ctx.user_id)

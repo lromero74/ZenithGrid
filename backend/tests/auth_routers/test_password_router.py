@@ -9,7 +9,8 @@ Covers the /forgot-password and /reset-password endpoints:
 - tokens_valid_after is bumped on reset so old JWTs stop working (v2.26.3)
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -51,7 +52,7 @@ async def _mk_user(db_session, email: str = "alice@example.com") -> User:
         hashed_password="$2b$12$fakefakefakefakefakeufakefakefakefakefakefakefakefa",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -63,10 +64,10 @@ async def _mk_reset_token(
 ) -> EmailVerificationToken:
     token = EmailVerificationToken(
         user_id=user_id,
-        token=f"reset-{user_id}-{int(datetime.utcnow().timestamp())}",
+        token=f"reset-{user_id}-{int(utcnow().timestamp())}",
         token_type="password_reset",
-        expires_at=datetime.utcnow() + timedelta(hours=expires_in_hours),
-        used_at=datetime.utcnow() if used else None,
+        expires_at=utcnow() + timedelta(hours=expires_in_hours),
+        used_at=utcnow() if used else None,
     )
     db_session.add(token)
     await db_session.flush()
@@ -103,7 +104,7 @@ class TestForgotPassword:
         )).scalars().all()
         assert len(tokens) == 1
         assert tokens[0].used_at is None
-        assert tokens[0].expires_at > datetime.utcnow()
+        assert tokens[0].expires_at > utcnow()
 
     @pytest.mark.asyncio
     async def test_unknown_email_returns_generic_success(self, db_session):
@@ -161,7 +162,7 @@ class TestResetPassword:
         user = await _mk_user(db_session, "reset-happy@example.com")
         token = await _mk_reset_token(db_session, user.id)
 
-        before_ts = datetime.utcnow() - timedelta(seconds=1)
+        before_ts = utcnow() - timedelta(seconds=1)
         result = await reset_password(
             request=ResetPasswordRequest(token=token.token, new_password="NewP@ssword1"),
             db=db_session,

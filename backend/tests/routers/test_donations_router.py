@@ -3,7 +3,8 @@ Tests for donation tracking endpoints.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from app.models import User
 from app.models.donations import Donation
@@ -44,7 +45,7 @@ class TestGetDonationGoal:
     @pytest.mark.asyncio
     async def test_get_goal_returns_current_month_progress(self, db_session, sample_user, goal_setting):
         """Confirmed donations in current month are summed correctly."""
-        now = datetime.utcnow()
+        now = utcnow()
         db_session.add(Donation(
             user_id=1, amount=50.0, currency="USD", payment_method="paypal",
             status="confirmed", donation_date=now,
@@ -70,7 +71,7 @@ class TestGetDonationGoal:
     @pytest.mark.asyncio
     async def test_goal_only_counts_confirmed(self, db_session, sample_user, goal_setting):
         """Pending and rejected donations are excluded from the meter."""
-        now = datetime.utcnow()
+        now = utcnow()
         db_session.add(Donation(
             user_id=1, amount=100.0, currency="USD", payment_method="paypal",
             status="pending", donation_date=now,
@@ -99,7 +100,7 @@ class TestGetDonationGoal:
     @pytest.mark.asyncio
     async def test_goal_resets_each_month(self, db_session, sample_user, goal_setting):
         """Donations from prior months are not counted."""
-        now = datetime.utcnow()
+        now = utcnow()
         last_month = now.replace(day=1) - timedelta(days=1)
         db_session.add(Donation(
             user_id=1, amount=999.0, currency="USD", payment_method="btc",
@@ -135,7 +136,7 @@ class TestReportDonation:
         donation = Donation(
             user_id=1, amount=25.0, currency="USD",
             payment_method="cashapp", status="pending",
-            donation_date=datetime.utcnow(),
+            donation_date=utcnow(),
         )
         db_session.add(donation)
         await db_session.commit()
@@ -166,7 +167,7 @@ class TestAdminConfirmReject:
         donation = Donation(
             user_id=1, amount=50.0, currency="USD",
             payment_method="btc", status="pending",
-            donation_date=datetime.utcnow(),
+            donation_date=utcnow(),
         )
         db_session.add(donation)
         await db_session.commit()
@@ -187,7 +188,7 @@ class TestAdminConfirmReject:
         donation = Donation(
             user_id=1, amount=50.0, currency="USD",
             payment_method="venmo", status="pending",
-            donation_date=datetime.utcnow(),
+            donation_date=utcnow(),
         )
         db_session.add(donation)
         await db_session.commit()
@@ -206,7 +207,7 @@ class TestAdminConfirmReject:
             amount=100.0, currency="BTC",
             payment_method="btc", status="confirmed",
             confirmed_by=1, donor_name="Anonymous",
-            donation_date=datetime.utcnow(),
+            donation_date=utcnow(),
         )
         db_session.add(donation)
         await db_session.commit()

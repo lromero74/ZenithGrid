@@ -6,6 +6,7 @@ Handles batch analysis of multiple trading pairs using AI batch analysis
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 from typing import Any, Dict, List
 
@@ -421,13 +422,12 @@ async def _execute_batch_analysis(
 def _update_position_errors(open_positions: list, failed_pairs: dict, successful_pairs: set):
     """Log errors to positions that failed market data fetch and clear stale errors."""
     if failed_pairs:
-        from datetime import datetime
         logger.info(f"  💾 Logging {len(failed_pairs)} market data errors to positions...")
         for product_id, error_msg in failed_pairs.items():
             position = next((p for p in open_positions if p.product_id == product_id), None)
             if position:
                 position.last_error_message = f"Market data fetch failed: {error_msg}"
-                position.last_error_timestamp = datetime.utcnow()
+                position.last_error_timestamp = utcnow()
                 logger.info(f"    📝 Position #{position.id} ({product_id}): Error logged")
 
     if successful_pairs:

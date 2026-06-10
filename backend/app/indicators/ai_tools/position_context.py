@@ -1,6 +1,7 @@
 """get_position_context — expose entry, time held, unrealized PnL, DCAs to the AI."""
 
 from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict
 
 from sqlalchemy import func, select
@@ -37,8 +38,8 @@ async def _run(input: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     )
     dca_count = int((await ctx.db.execute(stmt)).scalar() or 0)
 
-    opened_at: datetime = position.opened_at or datetime.utcnow()
-    minutes_held = max(0, int((datetime.utcnow() - opened_at).total_seconds() // 60))
+    opened_at: datetime = position.opened_at or utcnow()
+    minutes_held = max(0, int((utcnow() - opened_at).total_seconds() // 60))
 
     avg_price = float(position.average_buy_price or position.entry_price or 0.0)
     current_price = float(ctx.current_price or 0.0)

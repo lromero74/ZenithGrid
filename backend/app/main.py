@@ -1,7 +1,7 @@
 import asyncio
+from app.utils.timeutil import utcnow, utcfromtimestamp
 import concurrent.futures
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -418,12 +418,11 @@ def _wire_event_bus_subscribers() -> None:
         next scheduler tick rather than calling run_once() directly. This preserves
         max_instances=1 + coalesce=True protection against concurrent runs.
         """
-        from datetime import datetime
         for job_id in ("auto_buy_monitor", "rebalance_monitor"):
             try:
                 job = _scheduler.get_job(job_id)
                 if job:
-                    job.modify(next_run_time=datetime.utcnow())
+                    job.modify(next_run_time=utcnow())
             except Exception:
                 pass  # Graceful degradation — periodic polling still runs
 
@@ -564,7 +563,7 @@ async def startup_event():
 
     # ── APScheduler: Tier 2 & 3 background jobs ───────────────────────────────
     from app.scheduler import scheduler, register_jobs
-    startup_time = datetime.utcnow()
+    startup_time = utcnow()
     register_jobs(startup_time)
     scheduler.start()
     logger.info(f"APScheduler started — {len(scheduler.get_jobs())} jobs registered")
@@ -676,10 +675,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                 return
 
             # Check bulk revocation (password change)
-            from datetime import datetime
             iat = payload.get("iat")
             if user.tokens_valid_after and iat:
-                token_issued = datetime.utcfromtimestamp(iat)
+                token_issued = utcfromtimestamp(iat)
                 if token_issued < user.tokens_valid_after:
                     await websocket.close(code=4001, reason="Session expired")
                     return

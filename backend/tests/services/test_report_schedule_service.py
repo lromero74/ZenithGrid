@@ -8,6 +8,7 @@ Covers:
 """
 
 from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -150,7 +151,7 @@ class TestCreateScheduleRecord:
             email="sched@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -191,7 +192,7 @@ class TestCreateScheduleRecord:
             email="sched_bad@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -215,7 +216,7 @@ class TestCreateScheduleRecord:
             email="sched_nogoals@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -241,7 +242,7 @@ class TestCreateScheduleRecord:
             email="sched_period@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -266,7 +267,7 @@ class TestCreateScheduleRecord:
             email="sched_recip@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -308,7 +309,7 @@ class TestUpdateScheduleRecord:
             email="update_sched@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -338,7 +339,7 @@ class TestUpdateScheduleRecord:
             email="update_404@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -356,7 +357,7 @@ class TestUpdateScheduleRecord:
             email="update_recomp@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -394,7 +395,7 @@ class TestUpdateScheduleRecord:
             email="update_goals@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -423,7 +424,7 @@ class TestUpdateScheduleRecord:
             email="update_strip@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -475,7 +476,7 @@ class TestApplyRetention:
         from datetime import timedelta
         r = MagicMock()
         r.id = report_id
-        r.created_at = datetime.utcnow() - timedelta(days=days_old)
+        r.created_at = utcnow() - timedelta(days=days_old)
         return r
 
     @pytest.mark.asyncio

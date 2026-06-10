@@ -3,9 +3,9 @@ TOTP MFA endpoints: setup, verify-setup, disable, verify (during login).
 """
 
 import base64
+from app.utils.timeutil import utcnow
 import io
 import logging
-from datetime import datetime
 
 import pyotp
 import qrcode
@@ -123,7 +123,7 @@ async def mfa_verify_setup(
     # Store the encrypted secret and enable MFA
     current_user.totp_secret = encrypt_value(request.secret_key)
     current_user.mfa_enabled = True
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 
@@ -174,7 +174,7 @@ async def mfa_disable(
     # Disable MFA and clear secret
     current_user.mfa_enabled = False
     current_user.totp_secret = None
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 
@@ -245,7 +245,7 @@ async def mfa_verify(
     # MFA verified — issue full tokens
     # Update last_login_at (non-critical — don't block login if DB is locked)
     try:
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = utcnow()
         await db.commit()
         await db.refresh(user)
     except Exception as e:

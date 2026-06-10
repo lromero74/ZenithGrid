@@ -1,6 +1,6 @@
 """Social models: friendships, friend requests, blocked users, game results, tournaments, chat."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import (
     Boolean,
@@ -30,7 +30,7 @@ class Friendship(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     friend_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", foreign_keys=[user_id])
     friend = relationship("User", foreign_keys=[friend_id])
@@ -48,7 +48,7 @@ class FriendRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     from_user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     to_user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     from_user = relationship("User", foreign_keys=[from_user_id])
     to_user = relationship("User", foreign_keys=[to_user_id])
@@ -66,7 +66,7 @@ class BlockedUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     blocker_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     blocked_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     blocker = relationship("User", foreign_keys=[blocker_id])
     blocked = relationship("User", foreign_keys=[blocked_id])
@@ -87,7 +87,7 @@ class GameResult(Base):
     game_id = Column(String, nullable=False, index=True)
     mode = Column(String, nullable=False)  # "vs", "race"
     started_at = Column(DateTime, nullable=False)
-    finished_at = Column(DateTime, default=datetime.utcnow)
+    finished_at = Column(DateTime, default=utcnow)
     result_data = Column(JSON, nullable=True)
     tournament_id = Column(Integer, ForeignKey("social.tournaments.id"), nullable=True)
 
@@ -136,7 +136,7 @@ class GameHighScore(Base):
     score = Column(Integer, nullable=False, default=0)
     score_type = Column(String(20), nullable=False, default="high_score")
     difficulty = Column(String(20), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     __table_args__ = (
         UniqueConstraint('user_id', 'game_id', 'score_type', name='uq_user_game_score_type'),
@@ -157,7 +157,7 @@ class Tournament(Base):
     game_ids = Column(JSON, nullable=False)
     config = Column(JSON, nullable=True)
     status = Column(String, default="pending")  # "pending", "active", "completed"
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
 
@@ -178,7 +178,7 @@ class TournamentPlayer(Base):
     total_score = Column(Integer, default=0)
     placement = Column(Integer, nullable=True)
     archived = Column(Boolean, default=False)
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=utcnow)
 
     tournament = relationship("Tournament", back_populates="players")
     user = relationship("User", foreign_keys=[user_id])
@@ -198,7 +198,7 @@ class TournamentDeleteVote(Base):
         Integer, ForeignKey("social.tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
-    voted_at = Column(DateTime, default=datetime.utcnow)
+    voted_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("tournament_id", "user_id", name="uq_tournament_delete_vote"),
@@ -218,8 +218,8 @@ class ChatChannel(Base):
     type = Column(String, nullable=False)  # "dm", "group", "channel"
     name = Column(String, nullable=True)   # null for DMs, required for group/channel
     created_by = Column(Integer, ForeignKey("auth.users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     creator = relationship("User", foreign_keys=[created_by])
     members = relationship("ChatChannelMember", back_populates="channel", cascade="all, delete-orphan")
@@ -235,7 +235,7 @@ class ChatChannelMember(Base):
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String, default="member")  # "owner", "admin", "member"
     last_read_at = Column(DateTime, nullable=True)
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=utcnow)
 
     channel = relationship("ChatChannel", back_populates="members")
     user = relationship("User", foreign_keys=[user_id])
@@ -259,7 +259,7 @@ class ChatMessage(Base):
     is_pinned = Column(Boolean, default=False)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     channel = relationship("ChatChannel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
@@ -280,7 +280,7 @@ class ChatMessageReaction(Base):
     message_id = Column(Integer, ForeignKey("social.chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False)
     emoji = Column(String(32), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     message = relationship("ChatMessage", back_populates="reactions")
     user = relationship("User", foreign_keys=[user_id])

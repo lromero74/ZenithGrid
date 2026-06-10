@@ -10,7 +10,7 @@ Covers endpoints:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -28,7 +28,7 @@ async def _create_user_with_account(db_session, email="actions@example.com"):
         email=email,
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -69,7 +69,7 @@ async def _create_position(db_session, account, bot=None, **overrides):
         account_id=account.id,
         product_id="ETH-BTC",
         status="open",
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=1.0,
         max_quote_allowed=0.25,
         total_quote_spent=0.01,
@@ -171,7 +171,7 @@ class TestCancelPosition:
             email="noaccount@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -840,7 +840,7 @@ class TestResizeAllBudgets:
         # Create a second account for the same user
         account2 = Account(
             user_id=user.id, name="Second Account", type="cex",
-            exchange="coinbase", is_active=True, created_at=datetime.utcnow(),
+            exchange="coinbase", is_active=True, created_at=utcnow(),
         )
         db_session.add(account2)
         await db_session.flush()
@@ -895,7 +895,7 @@ class TestResizeAllBudgets:
             email="resize_empty_a@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user_a)
         await db_session.flush()

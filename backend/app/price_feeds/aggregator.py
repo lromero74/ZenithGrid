@@ -6,6 +6,7 @@ Used by arbitrage strategies to identify profitable opportunities.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -220,7 +221,7 @@ class PriceAggregator:
             return AggregatedPrice(
                 base=base,
                 quote=quote,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 all_quotes=[],
             )
 
@@ -231,7 +232,7 @@ class PriceAggregator:
         return AggregatedPrice(
             base=base,
             quote=quote,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
             best_buy=best_buy,
             best_sell=best_sell,
             all_quotes=valid_quotes,
@@ -276,8 +277,8 @@ class PriceAggregator:
 
             # Create opportunity
             return ArbitrageOpportunity(
-                id=f"{base}-{quote}-{datetime.utcnow().timestamp()}",
-                timestamp=datetime.utcnow(),
+                id=f"{base}-{quote}-{utcnow().timestamp()}",
+                timestamp=utcnow(),
                 product_id=f"{base}-{quote}",
                 base=base,
                 quote=quote,
@@ -293,7 +294,7 @@ class PriceAggregator:
                 estimated_profit_pct=profit_calc["net_profit_pct"],
                 max_quantity=Decimal("100"),  # Would need orderbook depth for accurate value
                 min_quantity=min_quantity,
-                expires_at=datetime.utcnow(),  # Expires immediately - prices change fast
+                expires_at=utcnow(),  # Expires immediately - prices change fast
                 confidence=Decimal("80"),  # Base confidence, would adjust based on liquidity
             )
 

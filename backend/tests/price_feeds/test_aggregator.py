@@ -12,8 +12,8 @@ Covers:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -38,7 +38,7 @@ def _make_quote(
         exchange=exchange, exchange_type=exchange_type,
         base=base, quote=quote,
         bid=bid, ask=ask,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         taker_fee_pct=taker_fee, maker_fee_pct=Decimal("0.4"),
         gas_estimate_usd=gas,
     )
@@ -62,14 +62,14 @@ class TestAggregatedPrice:
     """Tests for AggregatedPrice dataclass and properties."""
 
     def test_product_id(self):
-        ap = AggregatedPrice(base="ETH", quote="USD", timestamp=datetime.utcnow())
+        ap = AggregatedPrice(base="ETH", quote="USD", timestamp=utcnow())
         assert ap.product_id == "ETH-USD"
 
     def test_spread_with_buy_and_sell(self):
         buy_quote = _make_quote(exchange="exchange_a", ask=Decimal("50100"), bid=Decimal("50000"))
         sell_quote = _make_quote(exchange="exchange_b", ask=Decimal("50200"), bid=Decimal("50150"))
         ap = AggregatedPrice(
-            base="BTC", quote="USD", timestamp=datetime.utcnow(),
+            base="BTC", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=sell_quote,
         )
         # spread = best_sell.bid - best_buy.ask = 50150 - 50100 = 50
@@ -78,7 +78,7 @@ class TestAggregatedPrice:
     def test_spread_none_when_no_buy(self):
         sell_quote = _make_quote()
         ap = AggregatedPrice(
-            base="BTC", quote="USD", timestamp=datetime.utcnow(),
+            base="BTC", quote="USD", timestamp=utcnow(),
             best_buy=None, best_sell=sell_quote,
         )
         assert ap.spread is None
@@ -86,7 +86,7 @@ class TestAggregatedPrice:
     def test_spread_none_when_no_sell(self):
         buy_quote = _make_quote()
         ap = AggregatedPrice(
-            base="BTC", quote="USD", timestamp=datetime.utcnow(),
+            base="BTC", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=None,
         )
         assert ap.spread is None
@@ -95,14 +95,14 @@ class TestAggregatedPrice:
         buy_quote = _make_quote(ask=Decimal("1000"), bid=Decimal("999"))
         sell_quote = _make_quote(ask=Decimal("1050"), bid=Decimal("1020"))
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=sell_quote,
         )
         # spread = 1020 - 1000 = 20, spread_pct = (20 / 1000) * 100 = 2.0
         assert ap.spread_pct == Decimal("2.0")
 
     def test_spread_pct_none_when_no_quotes(self):
-        ap = AggregatedPrice(base="ETH", quote="USD", timestamp=datetime.utcnow())
+        ap = AggregatedPrice(base="ETH", quote="USD", timestamp=utcnow())
         assert ap.spread_pct is None
 
     def test_calculate_profit_basic(self):
@@ -115,7 +115,7 @@ class TestAggregatedPrice:
             taker_fee=Decimal("0"), exchange_type="cex",
         )
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=sell_quote,
         )
         profit = ap.calculate_profit(Decimal("1"), include_fees=False, include_gas=False)
@@ -138,7 +138,7 @@ class TestAggregatedPrice:
             exchange_type="cex",
         )
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=sell_quote,
         )
         profit = ap.calculate_profit(Decimal("1"), include_fees=True, include_gas=False)
@@ -155,7 +155,7 @@ class TestAggregatedPrice:
             taker_fee=Decimal("0"), exchange_type="cex",
         )
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=sell_quote,
         )
         profit = ap.calculate_profit(Decimal("1"), include_fees=False, include_gas=True)
@@ -165,7 +165,7 @@ class TestAggregatedPrice:
     def test_calculate_profit_none_when_no_buy(self):
         sell_quote = _make_quote()
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=None, best_sell=sell_quote,
         )
         assert ap.calculate_profit(Decimal("1")) is None
@@ -173,7 +173,7 @@ class TestAggregatedPrice:
     def test_calculate_profit_none_when_no_sell(self):
         buy_quote = _make_quote()
         ap = AggregatedPrice(
-            base="ETH", quote="USD", timestamp=datetime.utcnow(),
+            base="ETH", quote="USD", timestamp=utcnow(),
             best_buy=buy_quote, best_sell=None,
         )
         assert ap.calculate_profit(Decimal("1")) is None

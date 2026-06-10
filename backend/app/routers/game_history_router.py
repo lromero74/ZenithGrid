@@ -6,7 +6,7 @@ game history visibility/privacy settings.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from enum import StrEnum
 from typing import Optional
 
@@ -318,7 +318,7 @@ async def update_game_score(
     if existing:
         if is_better:
             existing.score = score
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utcnow()
             await db.commit()
             return {"game_id": game_id, "score": score, "updated": True}
         return {"game_id": game_id, "score": existing.score, "updated": False}

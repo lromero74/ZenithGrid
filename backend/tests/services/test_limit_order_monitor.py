@@ -6,7 +6,8 @@ and updates positions when they fill.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.limit_order_monitor import LimitOrderMonitor
@@ -52,7 +53,7 @@ def _make_pending_order(**overrides):
     po.limit_price = overrides.get("limit_price", 0.002)
     po.is_manual = overrides.get("is_manual", False)
     po.time_in_force = overrides.get("time_in_force", "gtc")
-    po.created_at = overrides.get("created_at", datetime.utcnow() - timedelta(seconds=30))
+    po.created_at = overrides.get("created_at", utcnow() - timedelta(seconds=30))
     return po
 
 
@@ -422,7 +423,7 @@ class TestCheckBidFallback:
 
         position = _make_position()
         pending_order = _make_pending_order(
-            created_at=datetime.utcnow() - timedelta(seconds=120),
+            created_at=utcnow() - timedelta(seconds=120),
         )
 
         # Mock bot query
@@ -445,7 +446,7 @@ class TestCheckBidFallback:
 
         position = _make_position()
         pending_order = _make_pending_order(
-            created_at=datetime.utcnow() - timedelta(seconds=10),  # Only 10 seconds
+            created_at=utcnow() - timedelta(seconds=10),  # Only 10 seconds
         )
 
         mock_bot = MagicMock()
@@ -469,7 +470,7 @@ class TestCheckBidFallback:
 
         position = _make_position()
         pending_order = _make_pending_order(
-            created_at=datetime.utcnow() - timedelta(seconds=120),
+            created_at=utcnow() - timedelta(seconds=120),
         )
 
         mock_bot = MagicMock()

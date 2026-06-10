@@ -11,8 +11,8 @@ Background async task that runs every 30 seconds to:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -103,9 +103,9 @@ async def _check_account(db, account):
             account_id=account.id,
             initial_deposit=account.prop_initial_deposit or 100000.0,
             daily_start_equity=equity,
-            daily_start_timestamp=datetime.utcnow(),
+            daily_start_timestamp=utcnow(),
             current_equity=equity,
-            current_equity_timestamp=datetime.utcnow(),
+            current_equity_timestamp=utcnow(),
         )
         db.add(state)
         logger.info(
@@ -120,12 +120,12 @@ async def _check_account(db, account):
 
     # Update current equity
     state.current_equity = equity
-    state.current_equity_timestamp = datetime.utcnow()
+    state.current_equity_timestamp = utcnow()
 
     # Check daily reset
     if should_reset_daily(state.daily_start_timestamp):
         state.daily_start_equity = equity
-        state.daily_start_timestamp = datetime.utcnow()
+        state.daily_start_timestamp = utcnow()
         state.daily_pnl = 0.0
         logger.info(
             f"PropGuard: Daily reset for account "
@@ -160,7 +160,7 @@ async def _check_account(db, account):
         total_drawdown_pct=total_dd,
         daily_pnl=state.daily_pnl or 0.0,
         is_killed=False,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
     ))
 
     # Check daily drawdown limit
@@ -202,7 +202,7 @@ async def _get_account_equity(account) -> float:
             eq = ws_mgr.state.equity
             eq_ts = ws_mgr.state.equity_timestamp
             if eq > 0 and eq_ts:
-                age = (datetime.utcnow() - eq_ts).total_seconds()
+                age = (utcnow() - eq_ts).total_seconds()
                 if age <= 60:
                     return eq
                 logger.warning(
@@ -284,7 +284,7 @@ async def _kill_account(db, state, account, reason: str):
     """Trigger kill switch for an account."""
     state.is_killed = True
     state.kill_reason = reason
-    state.kill_timestamp = datetime.utcnow()
+    state.kill_timestamp = utcnow()
 
     # Emergency liquidation
     try:

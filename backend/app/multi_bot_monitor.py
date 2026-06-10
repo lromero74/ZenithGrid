@@ -10,9 +10,9 @@ Processing logic is split into focused modules:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import contextvars
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -271,7 +271,7 @@ class MultiBotMonitor:
 
     def cleanup_caches(self) -> dict:
         """Evict expired/stale entries from all in-memory caches. Returns counts."""
-        now = datetime.utcnow().timestamp()
+        now = utcnow().timestamp()
 
         # Candle cache — remove expired entries (and their fetch locks)
         stale_candles = [
@@ -471,7 +471,7 @@ class MultiBotMonitor:
         """Return cached candles if present and within their TTL, else None."""
         if cache_key not in self._candle_cache:
             return None
-        now = datetime.utcnow().timestamp()
+        now = utcnow().timestamp()
         cached_time, cached_candles = self._candle_cache[cache_key]
         # Get TTL for this specific timeframe (falls back to default for unknown timeframes)
         cache_ttl = CANDLE_CACHE_TTL.get(granularity, CANDLE_CACHE_DEFAULT_TTL)
@@ -489,7 +489,7 @@ class MultiBotMonitor:
         self, cache_key: str, product_id: str, granularity: str, lookback_candles: int
     ) -> List[Dict[str, Any]]:
         """Fetch candles from the exchange (or aggregate a synthetic timeframe) and cache them."""
-        now = datetime.utcnow().timestamp()
+        now = utcnow().timestamp()
         try:
             import time
 
@@ -888,9 +888,9 @@ class MultiBotMonitor:
                     )
 
                     # Update timestamp BEFORE processing to prevent race condition
-                    local_bot.last_signal_check = datetime.utcnow()
+                    local_bot.last_signal_check = utcnow()
                     if needs_ai_analysis:
-                        local_bot.last_ai_check = datetime.utcnow()
+                        local_bot.last_ai_check = utcnow()
                     await db.commit()
 
                     logger.debug(f"Calling process_bot for {local_bot.name} (AI: {needs_ai_analysis})...")
@@ -900,7 +900,7 @@ class MultiBotMonitor:
                     # Calculate and store next check time (aligned to candle boundaries)
                     if bot_check_interval is None:
                         bot_check_interval = calculate_bot_check_interval(local_bot.strategy_config or {})
-                    current_timestamp = int(datetime.utcnow().timestamp())
+                    current_timestamp = int(utcnow().timestamp())
                     next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
                     self._bot_next_check[bot.id] = next_check_timestamp
                     next_check_in = next_check_timestamp - current_timestamp
@@ -946,7 +946,7 @@ class MultiBotMonitor:
                         # On first iteration after restart, stagger bots to avoid
                         # SQLite lock contention from all bots writing at once.
                         if not self._bot_next_check and len(bots) > 5:
-                            current_ts = int(datetime.utcnow().timestamp())
+                            current_ts = int(utcnow().timestamp())
                             for i, bot in enumerate(bots):
                                 # Spread bots across the first 30 seconds (groups of 5 every 2s)
                                 delay = (i // 5) * 2
@@ -964,7 +964,7 @@ class MultiBotMonitor:
 
                                 # Phase 2 Optimization: Smart check scheduling
                                 bot_check_interval = calculate_bot_check_interval(bot.strategy_config or {})
-                                current_timestamp = int(datetime.utcnow().timestamp())
+                                current_timestamp = int(utcnow().timestamp())
 
                                 # Check if this bot is due for a check
                                 if bot.id in self._bot_next_check:
@@ -980,7 +980,7 @@ class MultiBotMonitor:
                                 # Determine if we need AI analysis
                                 ai_check_interval = bot.check_interval_seconds or self.interval_seconds
                                 needs_ai_analysis = True
-                                now = datetime.utcnow()
+                                now = utcnow()
 
                                 if bot.last_ai_check:
                                     time_since_last_ai_check = (now - bot.last_ai_check).total_seconds()

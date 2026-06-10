@@ -8,7 +8,8 @@ Covers:
 - Concentration flag — high when 4+ positions share the same base asset
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from app.indicators.ai_tools import REGISTRY, ToolContext, execute
 from app.models import Account, Bot, Position, User
@@ -47,7 +48,7 @@ async def _make_position(db, bot, account, user, *, product_id, spent=100.0,
         user_id=user.id,
         product_id=product_id,
         status=status,
-        opened_at=datetime.utcnow() - timedelta(minutes=opened_minutes_ago),
+        opened_at=utcnow() - timedelta(minutes=opened_minutes_ago),
         average_buy_price=100.0,
         entry_price=100.0,
         total_quote_spent=spent,

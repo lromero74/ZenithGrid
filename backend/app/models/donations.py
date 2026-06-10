@@ -1,6 +1,6 @@
 """Donation tracking models."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -23,8 +23,8 @@ class Donation(Base):
     notes = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="pending")
     confirmed_by = Column(Integer, ForeignKey("auth.users.id"), nullable=True)
-    donation_date = Column(DateTime, nullable=False, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    donation_date = Column(DateTime, nullable=False, default=utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User", foreign_keys=[user_id])

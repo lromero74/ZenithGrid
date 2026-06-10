@@ -6,10 +6,10 @@ Connections are scoped by user_id so notifications only reach the owning user.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
-from datetime import datetime
 
 from fastapi import WebSocket
 
@@ -196,7 +196,7 @@ class WebSocketManager:
             "profit": event.profit,
             "profit_percentage": event.profit_percentage,
             "is_paper_trading": event.is_paper_trading,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
         logger.info(
             f"Broadcasting order fill: {event.fill_type} for {event.product_id} "

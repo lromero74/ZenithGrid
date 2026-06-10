@@ -12,7 +12,7 @@ Affected routers:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from fastapi import HTTPException
 
@@ -68,8 +68,8 @@ async def _make_bot(
         strategy_config={"base_order_percentage": 5.0},
         is_active=is_active,
         check_interval_seconds=300,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db.add(bot)
     await db.flush()
@@ -290,7 +290,7 @@ class TestBotCrudManagerAccess:
             account_id=account.id,
             product_id="ETH-BTC",
             status="open",
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
             initial_quote_balance=1.0,
             max_quote_allowed=0.25,
             total_quote_spent=0.01,

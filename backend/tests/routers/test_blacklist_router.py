@@ -6,9 +6,9 @@ user overrides, category settings, AI provider settings, and AI review trigger.
 """
 
 import inspect
+from app.utils.timeutil import utcnow
 
 import pytest
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -47,7 +47,7 @@ async def admin_user(db_session):
 async def global_blacklist_entry(db_session):
     entry = BlacklistedCoin(
         id=1, symbol="DOGE", reason="[QUESTIONABLE] Meme coin",
-        user_id=None, created_at=datetime.utcnow(),
+        user_id=None, created_at=utcnow(),
     )
     db_session.add(entry)
     await db_session.flush()
@@ -58,7 +58,7 @@ async def global_blacklist_entry(db_session):
 async def user_override(db_session, test_user):
     entry = BlacklistedCoin(
         id=10, symbol="SHIB", reason="[BLACKLISTED] Too risky",
-        user_id=test_user.id, created_at=datetime.utcnow(),
+        user_id=test_user.id, created_at=utcnow(),
     )
     db_session.add(entry)
     await db_session.flush()
@@ -235,7 +235,7 @@ class TestListBlacklistedCoins:
         # Create a user override for DOGE specifically
         doge_override = BlacklistedCoin(
             id=20, symbol="DOGE", reason="[APPROVED] I like it",
-            user_id=test_user.id, created_at=datetime.utcnow(),
+            user_id=test_user.id, created_at=utcnow(),
         )
         db_session.add(doge_override)
         await db_session.flush()
@@ -655,7 +655,7 @@ class TestCheckIfBlacklisted:
         """Edge case: entry with unprefixed reason defaults to BLACKLISTED."""
         entry = BlacklistedCoin(
             symbol="BAD", reason="just a plain reason",
-            user_id=None, created_at=datetime.utcnow(),
+            user_id=None, created_at=utcnow(),
         )
         db_session.add(entry)
         await db_session.flush()
@@ -729,7 +729,7 @@ class TestListBlacklistedCoinsTenantIsolation:
         # Create user override on DOGE
         override = BlacklistedCoin(
             symbol="DOGE", reason="[APPROVED] Ownr override",
-            user_id=test_user.id, created_at=datetime.utcnow(),
+            user_id=test_user.id, created_at=utcnow(),
         )
         db_session.add(override)
         await db_session.flush()

@@ -6,7 +6,7 @@ This allows users to see which conditions matched and why.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,7 @@ async def log_indicator_evaluation(
         async with sm() as log_db:
             log_entry = IndicatorLog(
                 bot_id=bot_id,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 product_id=product_id,
                 phase=phase,
                 conditions_met=conditions_met,

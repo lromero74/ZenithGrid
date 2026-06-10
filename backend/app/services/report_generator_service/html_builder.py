@@ -5,8 +5,8 @@ Part of the report_generator_service package.
 """
 
 import json
+from app.utils.timeutil import utcnow
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import markdown as _md
@@ -434,7 +434,7 @@ def _report_footer(brand: dict) -> str:
         <p style="color: #64748b; font-size: 12px; margin: 0;">
             &copy; {brand['copyright']}</p>
         <p style="color: #475569; font-size: 11px; margin: 5px 0 0 0;">
-            Generated on {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}</p>
+            Generated on {utcnow().strftime('%B %d, %Y at %H:%M UTC')}</p>
     </div>"""
 
 

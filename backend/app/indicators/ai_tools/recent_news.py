@@ -7,8 +7,9 @@ no external fetch. Lets the model check for catalysts before confirming a
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List
 
 from sqlalchemy import or_, select
@@ -56,7 +57,7 @@ async def _run(input: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
 
     base = get_base_currency(ctx.product_id)
     aliases = _aliases_for(base)
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    cutoff = utcnow() - timedelta(hours=max_age_hours)
 
     title_clauses = [NewsArticle.title.ilike(f"%{alias}%") for alias in aliases]
     summary_clauses = [NewsArticle.summary.ilike(f"%{alias}%") for alias in aliases]

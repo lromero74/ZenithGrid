@@ -6,6 +6,7 @@ Also includes bot stats and clone operations.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -460,7 +461,7 @@ async def update_bot(
         bot.strategy_type, bot.strategy_config, quote_currency, entity_name=bot.name,
     )
 
-    bot.updated_at = datetime.utcnow()
+    bot.updated_at = utcnow()
 
     # Recalculate bidirectional reservations if config or budget changed
     config_changed = bot_update.strategy_config is not None
@@ -605,8 +606,8 @@ async def clone_bot(
         reserved_usd_for_longs=0.0,
         reserved_btc_for_shorts=0.0,
         is_active=False,  # Start stopped
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
         user_id=current_user.id,
     )
 
@@ -709,8 +710,8 @@ async def copy_bot_to_account(
         reserved_btc_for_shorts=0.0,
         is_active=False,  # Start stopped
         check_interval_seconds=original_bot.check_interval_seconds,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
         user_id=current_user.id,
     )
 

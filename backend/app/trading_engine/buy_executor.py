@@ -4,8 +4,8 @@ Handles market and limit buy orders
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,7 +73,7 @@ async def _validate_and_reject(
         # Save error to position for UI display (only for DCA orders)
         if commit_on_error:
             position.last_error_message = error_msg
-            position.last_error_timestamp = datetime.utcnow()
+            position.last_error_timestamp = utcnow()
             await db.commit()
         raise ValueError(error_msg)
 
@@ -142,7 +142,7 @@ async def _create_buy_trade_record(
     """
     trade = Trade(
         position_id=position.id,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         side="buy",
         quote_amount=actual_quote_amount,
         base_amount=actual_base_amount,
@@ -312,7 +312,7 @@ async def _submit_buy_market_order(
             )
             if commit_on_error:
                 position.last_error_message = error_msg
-                position.last_error_timestamp = datetime.utcnow()
+                position.last_error_timestamp = utcnow()
                 await db.commit()
             raise ValueError(error_msg)
 
@@ -358,7 +358,7 @@ async def _submit_buy_market_order(
 
             if commit_on_error:
                 position.last_error_message = full_error
-                position.last_error_timestamp = datetime.utcnow()
+                position.last_error_timestamp = utcnow()
                 await db.commit()
 
             raise ValueError(f"Exchange order failed: {full_error}")
@@ -396,7 +396,7 @@ async def _submit_buy_market_order(
         if position:
             if not position.last_error_message:
                 position.last_error_message = str(e)
-                position.last_error_timestamp = datetime.utcnow()
+                position.last_error_timestamp = utcnow()
             try:
                 await db.commit()
             except Exception:
@@ -621,7 +621,7 @@ async def execute_limit_buy(
         base_amount=base_amount,
         trade_type=trade_type,
         status="pending",
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
 
     db.add(pending_order)
@@ -736,7 +736,7 @@ async def _create_close_short_trade_record(
 
     trade = Trade(
         position_id=position.id,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         side="buy",
         base_amount=filled_size,
         quote_amount=usd_spent_to_close,
@@ -748,7 +748,7 @@ async def _create_close_short_trade_record(
     db.add(trade)
 
     position.status = "closed"
-    position.closed_at = datetime.utcnow()
+    position.closed_at = utcnow()
     position.profit_quote = profit_quote
     position.profit_percentage = profit_percentage
     position.profit_usd = profit_usd

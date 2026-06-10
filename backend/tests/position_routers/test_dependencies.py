@@ -6,7 +6,7 @@ for the authenticated user's active CEX account.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import MagicMock, patch
 
 from app.exchange_clients.factory import ExchangeClientConfig, CoinbaseCredentials
@@ -31,7 +31,7 @@ class TestGetCoinbase:
             email="noaccount@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -51,7 +51,7 @@ class TestGetCoinbase:
             email="nocreds@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -83,7 +83,7 @@ class TestGetCoinbase:
             email="paperonly@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -120,7 +120,7 @@ class TestGetCoinbase:
             email="valid@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -162,7 +162,7 @@ class TestGetCoinbase:
             email="encrypted@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -202,7 +202,7 @@ class TestGetCoinbase:
             email="badclient@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -234,7 +234,7 @@ class TestGetCoinbase:
             email="inactive@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()

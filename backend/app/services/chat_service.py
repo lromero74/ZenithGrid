@@ -6,7 +6,7 @@ All queries are scoped by user_id to ensure data isolation.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -570,7 +570,7 @@ async def send_message(
 
     # Touch channel updated_at
     if channel:
-        channel.updated_at = datetime.utcnow()
+        channel.updated_at = utcnow()
 
     await db.commit()
     await db.refresh(msg)
@@ -609,7 +609,7 @@ async def edit_message(
         raise ValueError("Cannot edit a deleted message")
 
     msg.content = new_content
-    msg.edited_at = datetime.utcnow()
+    msg.edited_at = utcnow()
     await db.commit()
     await db.refresh(msg)
 
@@ -635,7 +635,7 @@ async def delete_message(
         if member.role not in ("owner", "admin"):
             raise ValueError("You can only delete your own messages")
 
-    msg.deleted_at = datetime.utcnow()
+    msg.deleted_at = utcnow()
     await db.commit()
 
     return {"id": msg.id, "channel_id": msg.channel_id}
@@ -646,7 +646,7 @@ async def delete_message(
 async def mark_read(db: AsyncSession, channel_id: int, user_id: int) -> None:
     """Mark all messages in a channel as read for this user."""
     member = await _validate_membership(db, channel_id, user_id)
-    member.last_read_at = datetime.utcnow()
+    member.last_read_at = utcnow()
     await db.commit()
 
 
@@ -808,7 +808,7 @@ async def rename_channel(
         raise ValueError("Name cannot be empty")
 
     channel.name = new_name
-    channel.updated_at = datetime.utcnow()
+    channel.updated_at = utcnow()
     await db.commit()
 
 

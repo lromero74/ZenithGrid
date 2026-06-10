@@ -12,7 +12,7 @@ Verifies:
 3. _account_timers writes in the monitor loop also acquire the lock
 """
 import threading
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 _THREADING_LOCK_TYPE = type(threading.Lock())
 
@@ -44,8 +44,8 @@ class TestAutoBuyMonitorThreadSafety:
 
         monitor = AutoBuyMonitor()
         # Seed some timers
-        monitor._account_timers[1] = datetime.utcnow()
-        monitor._account_timers[2] = datetime.utcnow()
+        monitor._account_timers[1] = utcnow()
+        monitor._account_timers[2] = utcnow()
 
         errors = []
 
@@ -100,8 +100,8 @@ class TestRebalanceMonitorThreadSafety:
         from app.services.rebalance_monitor import RebalanceMonitor
 
         monitor = RebalanceMonitor()
-        monitor._account_timers[10] = datetime.utcnow()
-        monitor._account_timers[20] = datetime.utcnow()
+        monitor._account_timers[10] = utcnow()
+        monitor._account_timers[20] = utcnow()
 
         errors = []
 

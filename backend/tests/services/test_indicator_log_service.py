@@ -6,8 +6,9 @@ and cleaning up old logs.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from app.models import Bot, IndicatorLog, User, Account
@@ -158,7 +159,7 @@ class TestGetIndicatorLogs:
                 phase="base_order",
                 conditions_met=True,
                 conditions_detail=[{"type": "RSI"}],
-                timestamp=datetime.utcnow() - timedelta(minutes=i),
+                timestamp=utcnow() - timedelta(minutes=i),
             )
             db_session.add(log)
         await db_session.commit()
@@ -215,7 +216,7 @@ class TestGetIndicatorLogs:
             log = IndicatorLog(
                 bot_id=bot.id, product_id="ETH-BTC", phase="base_order",
                 conditions_met=True, conditions_detail=[{"idx": i}],
-                timestamp=datetime.utcnow() - timedelta(minutes=i),
+                timestamp=utcnow() - timedelta(minutes=i),
             )
             db_session.add(log)
         await db_session.commit()
@@ -244,7 +245,7 @@ class TestCleanupOldIndicatorLogs:
             log = IndicatorLog(
                 bot_id=bot.id, product_id="ETH-BTC", phase="base_order",
                 conditions_met=True, conditions_detail=[{"idx": i}],
-                timestamp=datetime.utcnow() - timedelta(hours=i * 2),
+                timestamp=utcnow() - timedelta(hours=i * 2),
             )
             db_session.add(log)
         await db_session.commit()

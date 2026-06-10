@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.15] - 2026-06-10
+
+### Changed
+- Internal: replaced the deprecated `datetime.utcnow()` / `datetime.utcfromtimestamp()` calls throughout the backend with a small naive-UTC helper, clearing ~970 Python deprecation warnings from the test suite. Behavior is unchanged — timestamps are computed exactly as before — this just future-proofs the code against Python removing those APIs.
+
 ## [v2.166.14] - 2026-06-10
 
 ### Fixed

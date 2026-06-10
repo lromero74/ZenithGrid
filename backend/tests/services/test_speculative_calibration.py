@@ -13,7 +13,7 @@ Thresholds (all must hold to return a non-None result):
 - top_component.win_rate - bottom_component.win_rate >= 20pp
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 import pytest
 
@@ -65,7 +65,7 @@ async def _make_closed_position(db, bot, *, profit_pct):
     pos = Position(
         bot_id=bot.id, account_id=bot.account_id, user_id=bot.user_id,
         product_id="HYPE-USD", status="closed",
-        opened_at=datetime.utcnow(), closed_at=datetime.utcnow(),
+        opened_at=utcnow(), closed_at=utcnow(),
         average_buy_price=1.0, total_quote_spent=50.0, total_base_acquired=50.0,
         profit_percentage=profit_pct,
     )

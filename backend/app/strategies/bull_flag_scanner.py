@@ -6,6 +6,7 @@ Used by the BullFlagStrategy to find entry opportunities.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import random
 from datetime import datetime, timedelta
@@ -105,15 +106,15 @@ async def calculate_volume_sma_50(
     cache_key = product_id
     if not force_refresh and cache_key in _volume_sma_cache:
         cached_value, cached_time = _volume_sma_cache[cache_key]
-        cache_age = datetime.utcnow() - cached_time
+        cache_age = utcnow() - cached_time
         if cache_age < timedelta(hours=VOLUME_SMA_CACHE_HOURS):
             return cached_value
 
     try:
         # Fetch 55 days of daily candles (extra buffer for calculation)
         # Calculate start/end timestamps (Coinbase API requires these, not limit)
-        end_time = int(datetime.utcnow().timestamp())
-        start_time = int((datetime.utcnow() - timedelta(days=55)).timestamp())
+        end_time = int(utcnow().timestamp())
+        start_time = int((utcnow() - timedelta(days=55)).timestamp())
         candles = await exchange_client.get_candles(
             product_id=product_id,
             granularity="ONE_DAY",
@@ -142,7 +143,7 @@ async def calculate_volume_sma_50(
         avg_volume = sum(volumes) / len(volumes)
 
         # Cache the result
-        _volume_sma_cache[cache_key] = (avg_volume, datetime.utcnow())
+        _volume_sma_cache[cache_key] = (avg_volume, utcnow())
 
         logger.debug(f"{product_id} 50-day avg volume: {avg_volume:.2f}")
         return avg_volume
@@ -662,8 +663,8 @@ async def scan_for_bull_flag_opportunities(
         vol_ratio = vol_data["vol_ratio"]
 
         try:
-            pattern_end_time = int(datetime.utcnow().timestamp())
-            pattern_start_time = int((datetime.utcnow() - timedelta(minutes=lookback_minutes)).timestamp())
+            pattern_end_time = int(utcnow().timestamp())
+            pattern_start_time = int((utcnow() - timedelta(minutes=lookback_minutes)).timestamp())
             candles = await exchange_client.get_candles(
                 product_id=product_id,
                 granularity=timeframe,

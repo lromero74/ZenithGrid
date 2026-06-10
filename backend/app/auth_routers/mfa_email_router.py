@@ -3,9 +3,10 @@ Email MFA endpoints: verify-email-code, verify-email-link, email/enable, email/d
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -81,14 +82,14 @@ async def mfa_verify_email_code(
             detail="Invalid verification code.",
         )
 
-    if token_record.expires_at < datetime.utcnow():
+    if token_record.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Verification code has expired. Please login again.",
         )
 
     # Mark token as used
-    token_record.used_at = datetime.utcnow()
+    token_record.used_at = utcnow()
     await db.commit()
 
     logger.info(f"MFA email code verified, user logged in: {user.email}")
@@ -129,7 +130,7 @@ async def mfa_verify_email_link(
             detail="This verification link has already been used.",
         )
 
-    if token_record.expires_at < datetime.utcnow():
+    if token_record.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="This verification link has expired. Please login again.",
@@ -143,7 +144,7 @@ async def mfa_verify_email_link(
         )
 
     # Mark token as used
-    token_record.used_at = datetime.utcnow()
+    token_record.used_at = utcnow()
     await db.commit()
 
     logger.info(f"MFA email link verified, user logged in: {user.email}")
@@ -188,7 +189,7 @@ async def mfa_email_enable(
         )
 
     current_user.mfa_email_enabled = True
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 
@@ -245,7 +246,7 @@ async def mfa_email_disable(
         )
 
     current_user.mfa_email_enabled = False
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 
@@ -302,7 +303,7 @@ async def mfa_resend_email(
     )
     old_tokens = result.scalars().all()
     for old_token in old_tokens:
-        old_token.used_at = datetime.utcnow()
+        old_token.used_at = utcnow()
 
     # Create new token
     token_str = uuid.uuid4().hex
@@ -312,7 +313,7 @@ async def mfa_resend_email(
         token=token_str,
         verification_code=verify_code,
         token_type="mfa_email",
-        expires_at=datetime.utcnow() + timedelta(
+        expires_at=utcnow() + timedelta(
             minutes=settings.mfa_email_code_lifetime_minutes
         ),
     )

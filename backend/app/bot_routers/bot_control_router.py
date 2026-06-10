@@ -6,8 +6,9 @@ Respects seasonality restrictions when enabled.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -88,7 +89,7 @@ async def start_bot(
             detail=f"Cannot start bot: {reason}. Disable seasonality tracking to override."
         )
 
-    now = datetime.utcnow()
+    now = utcnow()
     bot.is_active = True
     bot.last_started_at = now
     bot.updated_at = now
@@ -124,7 +125,7 @@ async def stop_bot(
     if not bot.is_active:
         return {"message": f"Bot '{bot.name}' is already inactive"}
 
-    now = datetime.utcnow()
+    now = utcnow()
     # Accumulate time from the current run session before clearing last_started_at
     if bot.last_started_at is not None:
         elapsed = (now - bot.last_started_at).total_seconds()
@@ -170,9 +171,9 @@ async def force_run_bot(
 
     # Set last_signal_check to a time that's past the interval
     # This ensures the bot will be processed on the next monitor cycle
-    force_time = datetime.utcnow() - timedelta(seconds=check_interval + 60)
+    force_time = utcnow() - timedelta(seconds=check_interval + 60)
     bot.last_signal_check = force_time
-    bot.updated_at = datetime.utcnow()
+    bot.updated_at = utcnow()
 
     await db.commit()
 
@@ -223,7 +224,7 @@ async def cancel_all_positions(
     for position in positions:
         try:
             position.status = "cancelled"
-            position.closed_at = datetime.utcnow()
+            position.closed_at = utcnow()
             cancelled_count += 1
         except Exception as e:
             failed_count += 1

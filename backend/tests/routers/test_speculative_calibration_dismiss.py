@@ -11,7 +11,7 @@ email. The endpoint:
 Calls the router function directly (matches Phase C endpoint tests).
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -52,12 +52,12 @@ class TestDismissEndpoint:
         user, account = owner_user_account
         token = create_dismiss_token(user_id=user.id, account_id=account.id)
 
-        before = datetime.utcnow()
+        before = utcnow()
         result = await dismiss_speculative_calibration_alert(
             account_id=account.id, dismiss_token=token,
             db=db_session, current_user=user,
         )
-        after = datetime.utcnow()
+        after = utcnow()
 
         assert result["dismissed"] is True
         # The cooldown timestamp should be updated to ~now.
@@ -124,8 +124,8 @@ class TestDismissEndpoint:
         expired_payload = {
             "sub": str(user.id), "account_id": account.id,
             "type": "speculative_calibration_dismiss",
-            "exp": datetime.utcnow() - timedelta(days=1),
-            "iat": datetime.utcnow() - timedelta(days=40),
+            "exp": utcnow() - timedelta(days=1),
+            "iat": utcnow() - timedelta(days=40),
         }
         expired = jwt.encode(
             expired_payload, settings.jwt_secret_key,
@@ -150,8 +150,8 @@ class TestDismissEndpoint:
             {
                 "sub": str(user.id), "account_id": account.id,
                 "type": "access",  # wrong type
-                "exp": datetime.utcnow() + timedelta(hours=1),
-                "iat": datetime.utcnow(),
+                "exp": utcnow() + timedelta(hours=1),
+                "iat": utcnow(),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )

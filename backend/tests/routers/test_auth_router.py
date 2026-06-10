@@ -6,6 +6,7 @@ password change, email verification, MFA, rate limiting, and helper functions.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -501,7 +502,7 @@ class TestLoginEndpoint:
             mfa_enabled=False,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -528,7 +529,7 @@ class TestLoginEndpoint:
             email="wrongpw@example.com",
             hashed_password=hash_password("CorrectPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -569,7 +570,7 @@ class TestLoginEndpoint:
             email="disabled@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -598,7 +599,7 @@ class TestLoginEndpoint:
             mfa_email_enabled=False,
             totp_secret="encrypted-secret",
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -654,7 +655,7 @@ class TestRefreshEndpoint:
             mfa_enabled=False,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -677,7 +678,7 @@ class TestRefreshEndpoint:
             email="refreshfail@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -699,7 +700,7 @@ class TestRefreshEndpoint:
             email="refreshinactive@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -748,7 +749,7 @@ class TestChangePasswordEndpoint:
             email="changepw@example.com",
             hashed_password=hash_password("OldPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -774,7 +775,7 @@ class TestChangePasswordEndpoint:
             email="changepwfail@example.com",
             hashed_password=hash_password("CurrentPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -808,7 +809,7 @@ class TestRegisterEndpoint:
             hashed_password=hash_password("AdminPass1"),
             is_active=True,
             is_superuser=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(admin)
         await db_session.flush()
@@ -840,7 +841,7 @@ class TestRegisterEndpoint:
             hashed_password=hash_password("RegularPass1"),
             is_active=True,
             is_superuser=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(regular_user)
         await db_session.flush()
@@ -860,13 +861,13 @@ class TestRegisterEndpoint:
             hashed_password=hash_password("AdminPass1"),
             is_active=True,
             is_superuser=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         existing = User(
             email="exists@example.com",
             hashed_password=hash_password("ExistPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add_all([admin, existing])
         await db_session.flush()
@@ -931,7 +932,7 @@ class TestVerifyEmail:
             hashed_password=hash_password("TestPass1"),
             is_active=True,
             email_verified=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -940,7 +941,7 @@ class TestVerifyEmail:
             user_id=user.id,
             token="valid-token-123",
             token_type="email_verify",
-            expires_at=datetime.utcnow() + timedelta(hours=24),
+            expires_at=utcnow() + timedelta(hours=24),
         )
         db_session.add(token)
         await db_session.flush()
@@ -971,7 +972,7 @@ class TestVerifyEmail:
             hashed_password=hash_password("TestPass1"),
             is_active=True,
             email_verified=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -980,7 +981,7 @@ class TestVerifyEmail:
             user_id=user.id,
             token="expired-token-123",
             token_type="email_verify",
-            expires_at=datetime.utcnow() - timedelta(hours=1),  # Already expired
+            expires_at=utcnow() - timedelta(hours=1),  # Already expired
         )
         db_session.add(token)
         await db_session.flush()
@@ -1002,7 +1003,7 @@ class TestVerifyEmail:
             hashed_password=hash_password("TestPass1"),
             is_active=True,
             email_verified=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1011,8 +1012,8 @@ class TestVerifyEmail:
             user_id=user.id,
             token="used-token-123",
             token_type="email_verify",
-            expires_at=datetime.utcnow() + timedelta(hours=24),
-            used_at=datetime.utcnow(),  # Already used
+            expires_at=utcnow() + timedelta(hours=24),
+            used_at=utcnow(),  # Already used
         )
         db_session.add(token)
         await db_session.flush()
@@ -1041,7 +1042,7 @@ class TestResetPassword:
             email="reset@example.com",
             hashed_password=hash_password("OldPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1050,7 +1051,7 @@ class TestResetPassword:
             user_id=user.id,
             token="reset-token-abc",
             token_type="password_reset",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=utcnow() + timedelta(hours=1),
         )
         db_session.add(token)
         await db_session.flush()
@@ -1097,7 +1098,7 @@ class TestAcceptTerms:
             mfa_enabled=False,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
             terms_accepted_at=None,
         )
         db_session.add(user)
@@ -1155,7 +1156,7 @@ class TestLastSeenHistory:
             is_active=True,
             last_seen_history_count=0,
             last_seen_failed_count=0,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1207,7 +1208,7 @@ class TestSignupEndpoint:
             email="dupe@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(existing)
         await db_session.flush()
@@ -1243,7 +1244,7 @@ class TestForgotPassword:
             email="forgot@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1288,7 +1289,7 @@ class TestTrustedDevices:
             email="devices@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1305,7 +1306,7 @@ class TestTrustedDevices:
             email="devicesactive@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1315,7 +1316,7 @@ class TestTrustedDevices:
             device_id="device-abc-123",
             device_name="Chrome on Mac",
             ip_address="1.2.3.4",
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         db_session.add(device)
         await db_session.flush()
@@ -1333,7 +1334,7 @@ class TestTrustedDevices:
             email="revoke@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1341,7 +1342,7 @@ class TestTrustedDevices:
         device = TrustedDevice(
             user_id=user.id,
             device_id="device-to-revoke",
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         db_session.add(device)
         await db_session.flush()
@@ -1359,7 +1360,7 @@ class TestTrustedDevices:
             email="revoke404@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1377,7 +1378,7 @@ class TestTrustedDevices:
             email="revokeall@example.com",
             hashed_password=hash_password("TestPass1"),
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1386,7 +1387,7 @@ class TestTrustedDevices:
             device = TrustedDevice(
                 user_id=user.id,
                 device_id=f"device-{i}",
-                expires_at=datetime.utcnow() + timedelta(days=30),
+                expires_at=utcnow() + timedelta(days=30),
             )
             db_session.add(device)
         await db_session.flush()
@@ -1414,7 +1415,7 @@ class TestMfaEmailEndpoints:
             is_active=True,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1435,7 +1436,7 @@ class TestMfaEmailEndpoints:
             is_active=True,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1457,7 +1458,7 @@ class TestMfaEmailEndpoints:
             is_active=True,
             mfa_email_enabled=False,
             email_verified=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1480,7 +1481,7 @@ class TestMfaEmailEndpoints:
             is_active=True,
             mfa_email_enabled=True,
             mfa_enabled=False,  # No TOTP
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1514,7 +1515,7 @@ class TestLoginLastLoginAtResilience:
             mfa_enabled=False,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1576,7 +1577,7 @@ class TestLoginLastLoginAtResilience:
             mfa_email_enabled=False,
             email_verified=True,
             display_name="Pre Resolve",
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1621,7 +1622,7 @@ class TestLoginLastLoginAtResilience:
             mfa_enabled=False,
             mfa_email_enabled=False,
             email_verified=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()

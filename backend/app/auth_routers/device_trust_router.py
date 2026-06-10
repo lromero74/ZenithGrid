@@ -3,7 +3,7 @@ Device trust management endpoints: list, revoke, revoke-all.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,7 +35,7 @@ async def list_trusted_devices(
         select(TrustedDevice)
         .where(
             TrustedDevice.user_id == current_user.id,
-            TrustedDevice.expires_at > datetime.utcnow(),
+            TrustedDevice.expires_at > utcnow(),
         )
         .order_by(TrustedDevice.created_at.desc())
     )

@@ -7,6 +7,7 @@ seen/unseen marking, and cache stats.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -1070,11 +1071,11 @@ class TestGetVideosForUserPostgresDialect:
         filter is skipped."""
         video_a = VideoArticle(
             id=1, source_id=10, url="https://a.test/1",
-            title="A", published_at=datetime.utcnow(),
+            title="A", published_at=utcnow(),
         )
         video_b = VideoArticle(
             id=2, source_id=10, url="https://b.test/2",
-            title="B", published_at=datetime.utcnow(),
+            title="B", published_at=utcnow(),
         )
 
         dialect = type("FakeDialect", (), {"name": "postgresql"})()
@@ -1115,7 +1116,7 @@ class TestGetVideosForUserPostgresDialect:
     async def test_sqlite_fallback_applies_python_retention(self):
         """SQLite fallback: retention_days filter runs in Python and
         excludes videos older than per-subscription retention window."""
-        now = datetime.utcnow()
+        now = utcnow()
         fresh = VideoArticle(
             id=1, source_id=10, url="https://fresh.test",
             title="Fresh", published_at=now - timedelta(days=2),
@@ -1157,7 +1158,7 @@ class TestGetVideosForUserPostgresDialect:
         rather than crashing on None.dialect."""
         video = VideoArticle(
             id=1, source_id=10, url="https://x.test",
-            title="X", published_at=datetime.utcnow(),
+            title="X", published_at=utcnow(),
         )
 
         mock_db = AsyncMock()

@@ -7,8 +7,8 @@ portfolio, sell_portfolio_to_base, and helper functions
 """
 
 import json
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -28,7 +28,7 @@ async def user_with_paper_account(db_session):
         email="paperonly@example.com",
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -62,7 +62,7 @@ async def user_with_live_account(db_session):
         email="livetrader@example.com",
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -121,7 +121,7 @@ class TestGetUserPaperAccount:
             email="noaccts@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -148,7 +148,7 @@ class TestGetCoinbaseFromDb:
             email="noacct_coinbase@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -167,7 +167,7 @@ class TestGetCoinbaseFromDb:
             email="nocreds_coinbase@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -262,7 +262,7 @@ class TestGetBalances:
             email="nobalances@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -281,7 +281,7 @@ class TestGetBalances:
             email="wrongid@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -475,7 +475,7 @@ class TestSellPortfolioToBase:
             email="noacct_sell@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()

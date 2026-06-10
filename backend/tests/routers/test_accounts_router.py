@@ -7,6 +7,7 @@ link_perps_portfolio, and the _mask_key_name helper.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
@@ -62,7 +63,7 @@ async def test_account(db_session, test_user):
         id=1, user_id=test_user.id, name="Main Account",
         type="cex", exchange="coinbase", is_default=True, is_active=True,
         api_key_name="my-api-key-name-12345",
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        created_at=utcnow(), updated_at=utcnow(),
     )
     db_session.add(account)
     await db_session.flush()
@@ -75,7 +76,7 @@ async def test_account_dex(db_session, test_user):
         id=2, user_id=test_user.id, name="DEX Wallet",
         type="dex", is_default=False, is_active=True,
         wallet_address="0x1234567890abcdef1234567890abcdef12345678",
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        created_at=utcnow(), updated_at=utcnow(),
     )
     db_session.add(account)
     await db_session.flush()
@@ -152,7 +153,7 @@ class TestListAccounts:
         inactive = Account(
             id=10, user_id=test_user.id, name="Disabled",
             type="cex", is_default=False, is_active=False,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(inactive)
         await db_session.flush()
@@ -408,7 +409,7 @@ class TestCreateAccount:
         mock_account = Account(
             id=5, user_id=test_user.id, name="New Account",
             type="cex", exchange="coinbase", is_default=False, is_active=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         mock_create.return_value = mock_account
 
@@ -1041,7 +1042,7 @@ class TestRebalanceStatus:
             rebalance_target_btc_pct=25.0,
             rebalance_target_eth_pct=25.0,
             rebalance_target_usdc_pct=25.0,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1083,7 +1084,7 @@ class TestRebalanceStatus:
         account = Account(
             id=11, user_id=test_user.id, name="Empty Paper",
             type="cex", is_paper_trading=True, paper_balances=None,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1167,7 +1168,7 @@ class TestRebalanceStatus:
             id=12, user_id=test_user.id, name="Altcoin Paper",
             type="cex", is_paper_trading=True,
             paper_balances=json.dumps({"USD": 100.0, "BTC": 0.1, "SOL": 10.0}),
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1210,7 +1211,7 @@ class TestRebalanceStatus:
             id=13, user_id=test_user.id, name="Altcoin BTC-pair Paper",
             type="cex", is_paper_trading=True,
             paper_balances=json.dumps({"USD": 0.0, "BTC": 0.0, "RUNE": 100.0}),
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1220,7 +1221,7 @@ class TestRebalanceStatus:
             account_id=account.id, user_id=test_user.id,
             product_id="RUNE-BTC", status="open", direction="long",
             total_base_acquired=100.0,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -1267,7 +1268,7 @@ class TestAllocationIncludesOpenPositions:
         account = Account(
             user_id=user.id, name=f"Alloc {email_suffix}",
             type="cex", exchange="coinbase", is_default=True, is_active=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1292,7 +1293,7 @@ class TestAllocationIncludesOpenPositions:
             max_quote_allowed=2000.0,
             total_quote_spent=2000.0,
             average_buy_price=2000.0,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -1334,7 +1335,7 @@ class TestAllocationIncludesOpenPositions:
             max_quote_allowed=0.05,
             total_quote_spent=0.05,
             average_buy_price=0.05,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -1379,8 +1380,8 @@ class TestAllocationIncludesOpenPositions:
             max_quote_allowed=2000.0,
             total_quote_spent=2000.0,
             average_buy_price=2000.0,
-            opened_at=datetime.utcnow(),
-            closed_at=datetime.utcnow(),
+            opened_at=utcnow(),
+            closed_at=utcnow(),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -1421,7 +1422,7 @@ class TestAllocationIncludesOpenPositions:
             max_quote_allowed=150.0,
             total_quote_spent=150.0,
             average_buy_price=15.0,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -1557,7 +1558,7 @@ class TestRebalanceReserveDeployable:
             min_balance_eth=0.0,
             min_balance_usdc=0.0,
             min_balance_usdt=0.0,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1586,7 +1587,7 @@ class TestRebalanceReserveDeployable:
             min_balance_usd=5000.0,  # Reserve > actual balance
             min_balance_btc=0.0, min_balance_eth=0.0,
             min_balance_usdc=0.0, min_balance_usdt=0.0,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1617,7 +1618,7 @@ class TestRebalanceReserveDeployable:
             rebalance_target_eth_pct=None,
             rebalance_target_usdc_pct=None,
             rebalance_target_usdt_pct=None,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1661,12 +1662,12 @@ class TestGetDefaultAccount:
         acct1 = Account(
             id=100, user_id=test_user.id, name="First", type="cex",
             is_default=False, is_active=True,
-            created_at=datetime(2024, 1, 1), updated_at=datetime.utcnow(),
+            created_at=datetime(2024, 1, 1), updated_at=utcnow(),
         )
         acct2 = Account(
             id=101, user_id=test_user.id, name="Second", type="cex",
             is_default=False, is_active=True,
-            created_at=datetime(2024, 6, 1), updated_at=datetime.utcnow(),
+            created_at=datetime(2024, 6, 1), updated_at=utcnow(),
         )
         db_session.add_all([acct1, acct2])
         await db_session.flush()
@@ -1745,7 +1746,7 @@ class TestGetPerpsPortfolioStatus:
         foreign_account = Account(
             id=500, user_id=other_user.id, name="Other",
             type="cex", is_active=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(foreign_account)
         await db_session.flush()
@@ -1776,7 +1777,7 @@ class TestGetDustSweepSettings:
             id=700, user_id=test_user.id, name="Paper Dust",
             type="cex", is_paper_trading=True,
             paper_balances=json.dumps({"USD": 1000.0}),
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()
@@ -1810,7 +1811,7 @@ class TestGetDustSweepSettings:
             type="cex", is_paper_trading=True,
             paper_balances=json.dumps({"USD": 100.0, "DOGE": 50.0}),
             dust_sweep_threshold_usd=1.0,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(account)
         await db_session.flush()

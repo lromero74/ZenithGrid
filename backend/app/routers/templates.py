@@ -5,6 +5,7 @@ Handles CRUD operations for bot templates.
 """
 
 from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -221,7 +222,7 @@ async def update_template(
     if template_update.split_budget_across_pairs is not None:
         template.split_budget_across_pairs = template_update.split_budget_across_pairs
 
-    template.updated_at = datetime.utcnow()
+    template.updated_at = utcnow()
 
     try:
         await db.commit()

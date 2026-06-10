@@ -1,7 +1,8 @@
 """Tests for app/strategies/grid_trading.py — calculations + strategy class"""
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.strategies.grid_trading import (
@@ -491,7 +492,7 @@ class TestAnalyzeSignal:
         })
         candles = [{"close": 60}] * 10
         # Last breakout was 5 min ago, cooldown is 15 min
-        recent_time = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
+        recent_time = (utcnow() - timedelta(minutes=5)).isoformat()
 
         result = await strategy.analyze_signal(
             candles, 60.0,
@@ -518,7 +519,7 @@ class TestAnalyzeSignal:
         })
         candles = [{"close": 60}] * 10
         # Last breakout was 20 min ago, cooldown is 15 min → expired
-        old_time = (datetime.utcnow() - timedelta(minutes=20)).isoformat()
+        old_time = (utcnow() - timedelta(minutes=20)).isoformat()
 
         result = await strategy.analyze_signal(
             candles, 60.0,
@@ -581,7 +582,7 @@ class TestAnalyzeSignal:
             "ai_adjustment_interval_minutes": 60,
         })
         candles = [{"close": 50}] * 10
-        old_time = (datetime.utcnow() - timedelta(minutes=120)).isoformat()
+        old_time = (utcnow() - timedelta(minutes=120)).isoformat()
 
         result = await strategy.analyze_signal(
             candles, 50.0,
@@ -604,7 +605,7 @@ class TestAnalyzeSignal:
             "ai_adjustment_interval_minutes": 120,
         })
         candles = [{"close": 50}] * 10
-        recent_time = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+        recent_time = (utcnow() - timedelta(minutes=10)).isoformat()
 
         result = await strategy.analyze_signal(
             candles, 50.0,

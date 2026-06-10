@@ -5,7 +5,8 @@ Covers AI bot log creation, retrieval with filters, and unified decision logs.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from fastapi import HTTPException
 
 from app.models import AIBotLog, Bot, IndicatorLog, User
@@ -23,7 +24,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -38,8 +39,8 @@ async def _make_bot(db_session, user, name="AILogBot", strategy_type="gemini_dca
         product_id="ETH-BTC",
         product_ids=["ETH-BTC"],
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db_session.add(bot)
     await db_session.flush()
@@ -60,7 +61,7 @@ async def _make_ai_log(db_session, bot, thinking="AI reasoning", decision="hold"
         product_id=product_id,
         position_id=position_id,
         context=context,
-        timestamp=timestamp or datetime.utcnow(),
+        timestamp=timestamp or utcnow(),
     )
     db_session.add(log)
     await db_session.flush()
@@ -79,7 +80,7 @@ async def _make_indicator_log(db_session, bot, product_id="ETH-BTC",
         conditions_detail=[{"type": "rsi", "result": True}],
         indicators_snapshot={"rsi": 45.0},
         current_price=current_price,
-        timestamp=timestamp or datetime.utcnow(),
+        timestamp=timestamp or utcnow(),
     )
     db_session.add(log)
     await db_session.flush()
@@ -177,7 +178,7 @@ class TestCreateAIBotLog:
         owner = _make_user()
         other = User(
             email="other-ai@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add_all([owner, other])
         await db_session.flush()
@@ -211,8 +212,8 @@ class TestGetAIBotLogs:
 
         bot = await _make_bot(db_session, user)
 
-        old_time = datetime.utcnow() - timedelta(hours=2)
-        new_time = datetime.utcnow()
+        old_time = utcnow() - timedelta(hours=2)
+        new_time = utcnow()
         await _make_ai_log(db_session, bot, decision="buy", timestamp=old_time)
         await _make_ai_log(db_session, bot, decision="hold", timestamp=new_time)
 
@@ -257,12 +258,12 @@ class TestGetAIBotLogs:
         await db_session.flush()
 
         bot = await _make_bot(db_session, user)
-        old_time = datetime.utcnow() - timedelta(hours=48)
-        new_time = datetime.utcnow()
+        old_time = utcnow() - timedelta(hours=48)
+        new_time = utcnow()
         await _make_ai_log(db_session, bot, decision="old", timestamp=old_time)
         await _make_ai_log(db_session, bot, decision="new", timestamp=new_time)
 
-        since = datetime.utcnow() - timedelta(hours=1)
+        since = utcnow() - timedelta(hours=1)
         result = await get_ai_bot_logs(
             bot_id=bot.id, limit=50, offset=0, since=since,
             db=db_session, current_user=user
@@ -316,7 +317,7 @@ class TestGetAIBotLogs:
 
         bot = await _make_bot(db_session, user)
         for i in range(5):
-            ts = datetime.utcnow() - timedelta(minutes=i)
+            ts = utcnow() - timedelta(minutes=i)
             await _make_ai_log(db_session, bot, decision=f"d{i}", timestamp=ts)
 
         result = await get_ai_bot_logs(
@@ -346,9 +347,9 @@ class TestGetUnifiedDecisionLogs:
 
         bot = await _make_bot(db_session, user)
 
-        t1 = datetime.utcnow() - timedelta(minutes=10)
-        t2 = datetime.utcnow() - timedelta(minutes=5)
-        t3 = datetime.utcnow()
+        t1 = utcnow() - timedelta(minutes=10)
+        t2 = utcnow() - timedelta(minutes=5)
+        t3 = utcnow()
 
         await _make_ai_log(db_session, bot, decision="buy", timestamp=t1)
         await _make_indicator_log(db_session, bot, timestamp=t2)

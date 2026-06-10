@@ -6,6 +6,7 @@ completed trade stats, and realized PnL endpoints.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -26,7 +27,7 @@ async def _create_user_with_account(db_session, email="test@example.com"):
         email=email,
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -51,7 +52,7 @@ async def _create_position(db_session, account, bot=None, **overrides):
         account_id=account.id,
         product_id="ETH-BTC",
         status="open",
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=1.0,
         max_quote_allowed=0.25,
         total_quote_spent=0.01,
@@ -106,7 +107,7 @@ class TestGetPositions:
             base_amount=0.5,
             price=0.02,
             trade_type="initial",
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(trade)
         await db_session.flush()
@@ -135,7 +136,7 @@ class TestGetPositions:
             email="noaccount@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -164,7 +165,7 @@ class TestGetPositions:
         await _create_position(db_session, account, status="open")
         await _create_position(
             db_session, account, status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             profit_usd=10.0,
         )
 
@@ -343,7 +344,7 @@ class TestGetPositions:
                 base_amount=0.5,
                 price=0.02,
                 trade_type="initial",
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
             ),
             Trade(
                 position_id=pos.id,
@@ -352,7 +353,7 @@ class TestGetPositions:
                 base_amount=0.55,
                 price=0.018,
                 trade_type="safety_order_1",
-                timestamp=datetime.utcnow() + timedelta(minutes=1),
+                timestamp=utcnow() + timedelta(minutes=1),
             ),
             Trade(
                 position_id=pos.id,
@@ -361,7 +362,7 @@ class TestGetPositions:
                 base_amount=1.05,
                 price=0.02,
                 trade_type="take_profit",
-                timestamp=datetime.utcnow() + timedelta(minutes=2),
+                timestamp=utcnow() + timedelta(minutes=2),
             ),
         ]
         db_session.add_all(trades)
@@ -435,7 +436,7 @@ class TestGetPositions:
                     "price": 0.03,
                     "base_amount": 0.6,
                     "quote_amount": 0.018,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
             ],
         )
@@ -494,7 +495,7 @@ class TestGetPositions:
                 base_amount=0.5,
                 price=0.02,
                 trade_type="initial",
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
             )
         )
         await db_session.flush()
@@ -750,7 +751,7 @@ class TestGetPosition:
             email="noaccounts@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -780,7 +781,7 @@ class TestGetPosition:
                 base_amount=0.5,
                 price=price,
                 trade_type="initial" if i == 0 else f"safety_order_{i}",
-                timestamp=datetime.utcnow() + timedelta(minutes=i),
+                timestamp=utcnow() + timedelta(minutes=i),
             )
             db_session.add(trade)
         await db_session.flush()
@@ -802,7 +803,7 @@ class TestGetPosition:
         user, account = await _create_user_with_account(db_session)
         pos = await _create_position(db_session, account, status="open")
 
-        now = datetime.utcnow()
+        now = utcnow()
         rows = [
             ("buy", 0.02, 0),
             ("sell", 0.03, 1),
@@ -853,7 +854,7 @@ class TestGetPositionTrades:
             base_amount=0.5,
             price=0.02,
             trade_type="initial",
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(trade)
         await db_session.flush()
@@ -922,7 +923,7 @@ class TestGetPositionAiLogs:
         log = AIBotLog(
             bot_id=bot.id,
             position_id=pos.id,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
             thinking="Market is bullish, RSI at 30",
             decision="buy",
             confidence=85.0,
@@ -1002,7 +1003,7 @@ class TestGetPositionAiOpinion:
             user_id=user.id, account_id=account.id, bot_id=bot.id, position_id=pos.id,
             product_id=pos.product_id, signal="buy", confidence=60,
             reasoning="early read", ai_model="claude",
-            created_at=datetime.utcnow() - timedelta(minutes=10),
+            created_at=utcnow() - timedelta(minutes=10),
         )
         newer = AIOpinionLog(
             user_id=user.id, account_id=account.id, bot_id=bot.id, position_id=pos.id,
@@ -1011,7 +1012,7 @@ class TestGetPositionAiOpinion:
             ai_model="claude",
             tool_calls=[{"name": "get_candle_window", "input": {"granularity": "ONE_HOUR"},
                          "output_summary": "last 24 candles", "turn": 1}],
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add_all([older, newer])
         await db_session.flush()
@@ -1077,7 +1078,7 @@ class TestGetPositionAiOpinion:
             user_id=user1.id, account_id=account1.id, bot_id=bot.id, position_id=pos.id,
             product_id=pos.product_id, signal="buy", confidence=90,
             reasoning="owner-only", ai_model="claude",
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         ))
         await db_session.flush()
 
@@ -1109,7 +1110,7 @@ class TestGetPnlTimeseries:
             await _create_position(
                 db_session, account, bot=bot,
                 status="closed",
-                closed_at=datetime.utcnow() - timedelta(days=2 - i),
+                closed_at=utcnow() - timedelta(days=2 - i),
                 profit_usd=profit,
                 profit_quote=profit / 50000.0,
                 btc_usd_price_at_close=50000.0,
@@ -1153,7 +1154,7 @@ class TestGetPnlTimeseries:
             email="nopnl@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1177,7 +1178,7 @@ class TestGetPnlTimeseries:
         await _create_position(
             db_session, account, bot=bot,
             status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             profit_usd=100.0,
             profit_quote=0.002,
             product_id="ETH-BTC",
@@ -1214,7 +1215,7 @@ class TestGetCompletedTradesStats:
             await _create_position(
                 db_session, account,
                 status="closed",
-                closed_at=datetime.utcnow(),
+                closed_at=utcnow(),
                 profit_usd=profit,
                 product_id="ETH-USD",
                 btc_usd_price_at_close=50000.0,
@@ -1257,7 +1258,7 @@ class TestGetCompletedTradesStats:
             email="nostats@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1306,11 +1307,9 @@ class TestGetRealizedPnl:
             btc_usd_price_at_close=50000.0,
         )
 
-        # Patch only within the specific module to avoid breaking SQLAlchemy's
-        # datetime type processor which uses isinstance(value, datetime.datetime).
-        with patch("app.position_routers.position_query_router.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = fixed_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        # Patch the module's "now" source (utcnow helper); real datetime(...)
+        # construction is left intact for the period-boundary math.
+        with patch("app.position_routers.position_query_router.utcnow", return_value=fixed_now):
             result = await get_realized_pnl(
                 account_id=None,
                 db=db_session,
@@ -1329,7 +1328,7 @@ class TestGetRealizedPnl:
             email="noreal@test.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -1353,7 +1352,7 @@ class TestGetRealizedPnl:
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             profit_usd=50.0,
             profit_quote=0.001,
             product_id="ETH-BTC",
@@ -1379,7 +1378,7 @@ class TestGetRealizedPnl:
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             product_id="BAND-USD",
             profit_usd=0.17,
             profit_quote=None,  # NULL — this is the bug scenario
@@ -1405,7 +1404,7 @@ class TestGetRealizedPnl:
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             product_id="ETH-USDC",
             profit_usd=25.0,
             profit_quote=None,
@@ -1428,7 +1427,7 @@ class TestGetRealizedPnl:
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow(),
+            closed_at=utcnow(),
             product_id="ETH-BTC",
             profit_usd=50.0,
             profit_quote=None,  # NULL on non-USD pair

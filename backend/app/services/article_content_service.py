@@ -22,6 +22,7 @@ from sqlalchemy import select
 from app.database import async_session_maker
 from app.models import ContentSource, NewsArticle
 from app.news_data import ArticleContentResponse
+from app.utils.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,6 @@ async def get_source_scrape_policy(url: str) -> Tuple[bool, int]:
 async def _mark_content_fetch_failed(url: str):
     """Persist that content extraction failed so we never re-fetch."""
     try:
-        from datetime import datetime
         async with async_session_maker() as db:
             result = await db.execute(
                 select(NewsArticle).where(NewsArticle.url == url)
@@ -162,7 +162,7 @@ async def _mark_content_fetch_failed(url: str):
             db_article = result.scalar_one_or_none()
             if db_article:
                 db_article.content_fetch_failed = True
-                db_article.content_fetched_at = datetime.utcnow()
+                db_article.content_fetched_at = utcnow()
                 await db.commit()
     except Exception as e:
         logger.warning(f"Failed to mark content_fetch_failed for {url}: {e}")
@@ -181,7 +181,6 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
     Results are cached persistently in the database so all users benefit.
     Only allows fetching from domains in the content_sources database table.
     """
-    from datetime import datetime
 
     # L1: Check in-memory cache (fast, short-lived)
     now = time.time()
@@ -401,7 +400,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
                 db_article = db_result.scalar_one_or_none()
                 if db_article:
                     db_article.content = extracted
-                    db_article.content_fetched_at = datetime.utcnow()
+                    db_article.content_fetched_at = utcnow()
                     await db.commit()
         except Exception as e:
             logger.warning(f"Failed to persist article content to DB: {e}")

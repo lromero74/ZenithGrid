@@ -6,7 +6,7 @@ code-quality Phase 5.1.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -39,7 +39,7 @@ async def _record_signal(
     """
     signal = Signal(
         position_id=position.id,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         signal_type=signal_type,
         macd_value=(signal_data or {}).get("macd_value", 0),
         macd_signal=(signal_data or {}).get("macd_signal", 0),

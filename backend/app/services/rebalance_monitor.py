@@ -10,6 +10,7 @@ are rebalanced — funds in open bot positions are untouched.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 import threading
 from datetime import datetime, timedelta
@@ -40,7 +41,7 @@ _CACHE_TTL_SECONDS = 21600  # 6 hours — covers the longest rebalancer check in
 
 def set_account_gate_data(account_id: int, data: dict) -> None:
     """Store fresh allocation data for the bot-gate lookup."""
-    _allocation_cache[account_id] = (datetime.utcnow(), data)
+    _allocation_cache[account_id] = (utcnow(), data)
 
 
 def get_account_gate_data(account_id: int) -> Optional[dict]:
@@ -49,7 +50,7 @@ def get_account_gate_data(account_id: int) -> Optional[dict]:
     if not entry:
         return None
     ts, payload = entry
-    if (datetime.utcnow() - ts).total_seconds() > _CACHE_TTL_SECONDS:
+    if (utcnow() - ts).total_seconds() > _CACHE_TTL_SECONDS:
         return None
     return payload
 
@@ -377,7 +378,7 @@ def should_dust_sweep(last_sweep_at: Optional[datetime]) -> bool:
     """
     if last_sweep_at is None:
         return True
-    elapsed = datetime.utcnow() - last_sweep_at
+    elapsed = utcnow() - last_sweep_at
     return elapsed >= timedelta(days=DUST_SWEEP_INTERVAL_DAYS)
 
 
@@ -548,7 +549,7 @@ class RebalanceMonitor:
                     await self._process_account(account, db)
 
     def _should_check_account(self, account: Account) -> bool:
-        now = datetime.utcnow()
+        now = utcnow()
         last_check = self._account_timers.get(account.id)
         if not last_check:
             return True
@@ -619,7 +620,7 @@ class RebalanceMonitor:
                 if swept:
                     # Balances are stale after sweeps; skip rebalancing this cycle
                     with self._account_timers_lock:
-                        self._account_timers[account.id] = datetime.utcnow()
+                        self._account_timers[account.id] = utcnow()
                     return
 
             # Load minimum balance reserves
@@ -647,7 +648,7 @@ class RebalanceMonitor:
                     )
                 # Skip normal rebalancing this cycle — balances are stale
                 # after top-up trades. Next cycle will rebalance if needed.
-                self._account_timers[account.id] = datetime.utcnow()
+                self._account_timers[account.id] = utcnow()
                 return
 
             # Phase 2: Build portfolio-composition view — free_balances +
@@ -719,7 +720,7 @@ class RebalanceMonitor:
                     f"ETH={agg_current['eth_pct']:.1f}%, "
                     f"USDC={agg_current['usdc_pct']:.1f}%)"
                 )
-                self._account_timers[account.id] = datetime.utcnow()
+                self._account_timers[account.id] = utcnow()
                 return
 
             current = calculate_current_allocations(portfolio_balances, prices)
@@ -748,7 +749,7 @@ class RebalanceMonitor:
                     f"Rebalance: no actionable trades for account "
                     f"{account.name}"
                 )
-                self._account_timers[account.id] = datetime.utcnow()
+                self._account_timers[account.id] = utcnow()
                 return
 
             logger.info(
@@ -763,7 +764,7 @@ class RebalanceMonitor:
                 await self._execute_trade(client, account, trade, prices)
 
             with self._account_timers_lock:
-                self._account_timers[account.id] = datetime.utcnow()
+                self._account_timers[account.id] = utcnow()
 
         except Exception as e:
             logger.error(
@@ -985,7 +986,7 @@ class RebalanceMonitor:
 
             if not sweeps:
                 # Update timestamp even if nothing to sweep
-                account.dust_last_sweep_at = datetime.utcnow()
+                account.dust_last_sweep_at = utcnow()
                 await db.commit()
                 return []
 
@@ -1036,7 +1037,7 @@ class RebalanceMonitor:
                         "error": str(e),
                     })
 
-            account.dust_last_sweep_at = datetime.utcnow()
+            account.dust_last_sweep_at = utcnow()
             await db.commit()
             return results
 

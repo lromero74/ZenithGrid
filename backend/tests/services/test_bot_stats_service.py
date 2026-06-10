@@ -6,6 +6,7 @@ aggregate value fetching for bot listings.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -226,7 +227,7 @@ def _make_position(
     pos.btc_usd_price_at_close = btc_usd_price_at_close
     pos.btc_usd_price_at_open = btc_usd_price_at_open
     pos.total_quote_spent = total_quote_spent
-    pos.closed_at = closed_at or datetime.utcnow()
+    pos.closed_at = closed_at or utcnow()
     pos.status = status
     pos.exit_reason = exit_reason
     pos.total_base_acquired = 0.0
@@ -237,7 +238,7 @@ def _make_bot(days_old: float = 10, total_running_seconds: float = 0.0,
               is_active: bool = False, last_started_at=None) -> MagicMock:
     """Helper: create a bot mock with all running-time fields set."""
     bot = MagicMock()
-    bot.created_at = datetime.utcnow() - timedelta(days=days_old)
+    bot.created_at = utcnow() - timedelta(days=days_old)
     bot.total_running_seconds = total_running_seconds
     bot.is_active = is_active
     bot.last_started_at = last_started_at
@@ -310,13 +311,13 @@ class TestCalculateBotPnl:
             profit_usd=100.0,
             total_quote_spent=500.0,
             btc_usd_price_at_close=50000.0,
-            closed_at=datetime.utcnow() - timedelta(days=20),
+            closed_at=utcnow() - timedelta(days=20),
         )
         recent_pos = _make_position(
             profit_usd=50.0,
             total_quote_spent=200.0,
             btc_usd_price_at_close=50000.0,
-            closed_at=datetime.utcnow() - timedelta(days=2),
+            closed_at=utcnow() - timedelta(days=2),
         )
 
         result = calculate_bot_pnl(
@@ -355,7 +356,7 @@ class TestCalculateBotPnl:
         from app.services.bot_stats_service import calculate_bot_pnl
 
         bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=10)
+        bot.created_at = utcnow() - timedelta(days=10)
         bot.total_running_seconds = 86400.0 * 3  # 3 days stored
         bot.is_active = False
         bot.last_started_at = None
@@ -368,7 +369,7 @@ class TestCalculateBotPnl:
         """Active bot: aggregate_running_days adds current session to stored seconds."""
         from app.services.bot_stats_service import calculate_bot_pnl
 
-        now = datetime.utcnow()
+        now = utcnow()
         bot = MagicMock()
         bot.created_at = now - timedelta(days=10)
         bot.total_running_seconds = 86400.0 * 2  # 2 days previously accumulated
@@ -385,7 +386,7 @@ class TestCalculateBotPnl:
         from app.services.bot_stats_service import calculate_bot_pnl
 
         bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=5)
+        bot.created_at = utcnow() - timedelta(days=5)
         bot.total_running_seconds = 0.0
         bot.is_active = False
         bot.last_started_at = None
@@ -448,7 +449,7 @@ class TestCalculateBotPnl:
         from app.services.bot_stats_service import calculate_bot_pnl
 
         bot = MagicMock()
-        bot.created_at = datetime.utcnow() - timedelta(days=7)
+        bot.created_at = utcnow() - timedelta(days=7)
         bot.total_running_seconds = 0.0
         bot.is_active = False
         bot.last_started_at = None

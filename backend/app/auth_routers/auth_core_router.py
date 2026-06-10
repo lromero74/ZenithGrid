@@ -3,10 +3,11 @@ Core authentication endpoints: login, refresh, logout, register, signup, /me, ch
 """
 
 import json
+from app.utils.timeutil import utcnow, utcfromtimestamp
 import logging
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -132,7 +133,7 @@ async def login(
                     )
                 )
                 device = result.scalar_one_or_none()
-                if device and device.expires_at > datetime.utcnow():
+                if device and device.expires_at > utcnow():
                     trusted = True
                     logger.info(f"MFA skipped via trusted device for user: {user.email}")
 
@@ -155,7 +156,7 @@ async def login(
                     token=token_str,
                     verification_code=verify_code,
                     token_type="mfa_email",
-                    expires_at=datetime.utcnow() + timedelta(
+                    expires_at=utcnow() + timedelta(
                         minutes=settings.mfa_email_code_lifetime_minutes
                     ),
                 )
@@ -196,7 +197,7 @@ async def login(
 
     # Update last_login_at (non-critical — don't block login if DB is locked)
     try:
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = utcnow()
         await db.commit()
     except Exception as e:
         await db.rollback()
@@ -212,7 +213,7 @@ async def login(
             session_id_str = str(uuid.uuid4())
             timeout = policy.get("session_timeout_minutes")
             if timeout:
-                session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
+                session_expires_at = utcnow() + timedelta(minutes=timeout)
             await create_session(
                 user_id=user_id,
                 session_id=session_id_str,
@@ -294,7 +295,7 @@ async def refresh_token(
     # Check bulk revocation (password change)
     iat = payload.get("iat")
     if user.tokens_valid_after and iat:
-        token_issued = datetime.utcfromtimestamp(iat)
+        token_issued = utcfromtimestamp(iat)
         if token_issued < user.tokens_valid_after:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -369,11 +370,11 @@ async def change_password(
 
     # Hash and save new password
     current_user.hashed_password = hash_password(request.new_password)
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = utcnow()
 
     # Invalidate all existing sessions by setting tokens_valid_after
     # Any token with iat < this timestamp will be rejected by decode_token()
-    current_user.tokens_valid_after = datetime.utcnow()
+    current_user.tokens_valid_after = utcnow()
 
     await db.commit()
 
@@ -409,7 +410,7 @@ async def register(
         is_active=True,
         is_superuser=False,
         email_verified=True,
-        email_verified_at=datetime.utcnow(),
+        email_verified_at=utcnow(),
     )
 
     db.add(new_user)
@@ -495,7 +496,7 @@ async def logout(
                 revoked = RevokedToken(
                     jti=jti,
                     user_id=current_user.id,
-                    expires_at=datetime.utcfromtimestamp(exp),
+                    expires_at=utcfromtimestamp(exp),
                 )
                 db.add(revoked)
 
@@ -574,7 +575,7 @@ async def signup(
         is_superuser=False,
         email_verified=False,
         mfa_email_enabled=True,
-        last_login_at=datetime.utcnow(),
+        last_login_at=utcnow(),
     )
 
     db.add(new_user)
@@ -625,7 +626,7 @@ async def signup(
         token=token_str,
         verification_code=verify_code,
         token_type="email_verify",
-        expires_at=datetime.utcnow() + timedelta(hours=24),
+        expires_at=utcnow() + timedelta(hours=24),
     )
     db.add(verification_token)
     await db.commit()

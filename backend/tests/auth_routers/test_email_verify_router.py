@@ -9,7 +9,8 @@ Covers /verify-email, /resend-verification, /verify-email-code:
 - resend-verification: rate limit + already-verified short-circuit
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 from unittest.mock import patch
 
 import pytest
@@ -36,8 +37,8 @@ async def _mk_user(db_session, email: str, verified: bool = False) -> User:
         is_active=True,
         is_superuser=False,
         email_verified=verified,
-        email_verified_at=datetime.utcnow() if verified else None,
-        created_at=datetime.utcnow(),
+        email_verified_at=utcnow() if verified else None,
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -58,8 +59,8 @@ async def _mk_verify_token(
         token=token,
         verification_code=code,
         token_type="email_verify",
-        expires_at=datetime.utcnow() + timedelta(hours=expires_in_hours),
-        used_at=datetime.utcnow() if used else None,
+        expires_at=utcnow() + timedelta(hours=expires_in_hours),
+        used_at=utcnow() if used else None,
     )
     db_session.add(rec)
     await db_session.flush()

@@ -12,7 +12,8 @@ Covers:
 - proposal-creation failure does not block the email send
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -194,7 +195,7 @@ class TestProposalCreation:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights=prior_applied,
-            decided_at=datetime.utcnow() - timedelta(days=45),
+            decided_at=utcnow() - timedelta(days=45),
         ))
         await db_session.flush()
 

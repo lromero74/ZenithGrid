@@ -15,7 +15,8 @@ Functions tested:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy import and_, delete
@@ -170,7 +171,7 @@ class TestCleanupFailedConditionLogsLogic:
         from app.models import IndicatorLog, AIBotLog
         from sqlalchemy import and_, delete
 
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        cutoff_time = utcnow() - timedelta(hours=24)
 
         indicator_delete_query = delete(IndicatorLog).where(
             and_(
@@ -212,7 +213,7 @@ class TestCleanupOldFailedOrdersLogic:
         mock_db.commit = AsyncMock()
 
         from app.models import OrderHistory
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        cutoff_time = utcnow() - timedelta(hours=24)
 
         query = delete(OrderHistory).where(
             and_(
@@ -234,7 +235,7 @@ class TestCleanupOldFailedOrdersLogic:
         mock_db.commit = AsyncMock()
 
         from app.models import OrderHistory
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        cutoff_time = utcnow() - timedelta(hours=24)
 
         result = await mock_db.execute(
             delete(OrderHistory).where(
@@ -263,7 +264,7 @@ class TestCleanupExpiredRevokedTokensLogic:
         mock_db.commit = AsyncMock()
 
         from app.models import RevokedToken
-        now = datetime.utcnow()
+        now = utcnow()
 
         result = await mock_db.execute(
             delete(RevokedToken).where(RevokedToken.expires_at < now)
@@ -279,7 +280,7 @@ class TestCleanupExpiredRevokedTokensLogic:
 
         with pytest.raises(Exception, match="connection lost"):
             from app.models import RevokedToken
-            now = datetime.utcnow()
+            now = utcnow()
             await mock_db.execute(
                 delete(RevokedToken).where(RevokedToken.expires_at < now)
             )
@@ -303,7 +304,7 @@ class TestCleanupOldReportsLogic:
         mock_db.commit = AsyncMock()
 
         from app.models import Report
-        cutoff_date = datetime.utcnow() - timedelta(days=730)
+        cutoff_date = utcnow() - timedelta(days=730)
 
         result = await mock_db.execute(
             delete(Report).where(Report.created_at < cutoff_date)
@@ -321,7 +322,7 @@ class TestCleanupOldReportsLogic:
         mock_db.commit = AsyncMock()
 
         from app.models import Report
-        cutoff_date = datetime.utcnow() - timedelta(days=730)
+        cutoff_date = utcnow() - timedelta(days=730)
 
         result = await mock_db.execute(
             delete(Report).where(Report.created_at < cutoff_date)
@@ -352,12 +353,12 @@ class TestCleanupOldAIOpinionLogs:
         old = AIOpinionLog(
             user_id=user.id, product_id="ETH-USD",
             signal="buy", confidence=70, is_sell_check=False,
-            created_at=datetime.utcnow() - timedelta(days=120),
+            created_at=utcnow() - timedelta(days=120),
         )
         fresh = AIOpinionLog(
             user_id=user.id, product_id="ETH-USD",
             signal="buy", confidence=70, is_sell_check=False,
-            created_at=datetime.utcnow() - timedelta(days=1),
+            created_at=utcnow() - timedelta(days=1),
         )
         db_session.add_all([old, fresh])
         await db_session.commit()
@@ -391,7 +392,7 @@ class TestCleanupOldAIOpinionLogs:
         row = AIOpinionLog(
             user_id=user.id, product_id="ETH-USD",
             signal="hold", confidence=60, is_sell_check=False,
-            created_at=datetime.utcnow() - timedelta(days=5),
+            created_at=utcnow() - timedelta(days=5),
         )
         db_session.add(row)
         await db_session.commit()

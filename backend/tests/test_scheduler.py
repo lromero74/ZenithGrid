@@ -4,7 +4,8 @@ Tests for APScheduler configuration.
 TDD: Written before implementing app/scheduler.py
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 from unittest import mock
 
 import pytest
@@ -29,7 +30,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         # We expect exactly 22 jobs:
@@ -48,7 +49,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         job_ids = [j.id for j in sched.get_jobs()]
@@ -59,7 +60,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         job = sched.get_job("auto_buy_monitor")
@@ -72,7 +73,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         job = sched.get_job("rebalance_monitor")
@@ -85,7 +86,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         cleanup_job_ids = [
@@ -104,7 +105,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
 
         job = sched.get_job("account_snapshot")
@@ -125,7 +126,7 @@ class TestSchedulerSetup:
         from app.scheduler import register_jobs
 
         sched = AsyncIOScheduler()
-        startup_time = datetime.utcnow()
+        startup_time = utcnow()
         register_jobs(startup_time, scheduler=sched)
         job_ids = [j.id for j in sched.get_jobs()]
         assert len(job_ids) == len(set(job_ids)), (

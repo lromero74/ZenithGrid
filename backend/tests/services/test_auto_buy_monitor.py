@@ -6,7 +6,8 @@ to BTC when balances exceed configured minimums.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.auto_buy_monitor import AutoBuyMonitor, AutoBuyPendingOrder
@@ -21,7 +22,7 @@ class TestAutoBuyPendingOrder:
 
     def test_create_pending_order_with_valid_fields(self):
         """Happy path: dataclass stores all fields correctly."""
-        now = datetime.utcnow()
+        now = utcnow()
         order = AutoBuyPendingOrder(
             order_id="order-123",
             account_id=1,
@@ -96,7 +97,7 @@ class TestShouldCheckAccount:
         account.auto_buy_check_interval_minutes = 5
 
         # Set last check to 1 minute ago
-        monitor._account_timers[1] = datetime.utcnow() - timedelta(minutes=1)
+        monitor._account_timers[1] = utcnow() - timedelta(minutes=1)
 
         result = monitor._should_check_account(account)
         assert result is False
@@ -109,7 +110,7 @@ class TestShouldCheckAccount:
         account.auto_buy_check_interval_minutes = 5
 
         # Set last check to 6 minutes ago
-        monitor._account_timers[1] = datetime.utcnow() - timedelta(minutes=6)
+        monitor._account_timers[1] = utcnow() - timedelta(minutes=6)
 
         result = monitor._should_check_account(account)
         assert result is True
@@ -122,7 +123,7 @@ class TestShouldCheckAccount:
         account.auto_buy_check_interval_minutes = None
 
         # Set last check to 4 minutes ago (less than default 5)
-        monitor._account_timers[1] = datetime.utcnow() - timedelta(minutes=4)
+        monitor._account_timers[1] = utcnow() - timedelta(minutes=4)
 
         result = monitor._should_check_account(account)
         assert result is False
@@ -278,7 +279,7 @@ class TestCheckPendingOrders:
             side="BUY",
             size=0.01,
             price=49000.0,
-            placed_at=datetime.utcnow() - timedelta(minutes=3),
+            placed_at=utcnow() - timedelta(minutes=3),
         )
         monitor._pending_orders["old-order-1"] = old_order
 
@@ -321,7 +322,7 @@ class TestCheckPendingOrders:
             side="BUY",
             size=0.01,
             price=49000.0,
-            placed_at=datetime.utcnow() - timedelta(minutes=3),
+            placed_at=utcnow() - timedelta(minutes=3),
         )
         monitor._pending_orders["filled-order"] = old_order
 

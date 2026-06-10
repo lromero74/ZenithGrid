@@ -7,7 +7,7 @@ Covers:
 """
 
 import time
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +35,7 @@ def _make_user(**overrides):
     user.updated_at = overrides.get("updated_at", None)
     user.display_name = overrides.get("display_name", None)
     user.email_verified = overrides.get("email_verified", True)
-    user.terms_accepted_at = overrides.get("terms_accepted_at", datetime.utcnow())
+    user.terms_accepted_at = overrides.get("terms_accepted_at", utcnow())
     return user
 
 

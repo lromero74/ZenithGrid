@@ -1,7 +1,8 @@
 """Tests for app/auth/dependencies.py"""
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 from jose import jwt
@@ -50,7 +51,7 @@ def mock_settings():
 
 class TestDecodeToken:
     def test_valid_token_decoded(self, mock_settings):
-        payload = {"sub": "1", "type": "access", "exp": datetime.utcnow() + timedelta(hours=1)}
+        payload = {"sub": "1", "type": "access", "exp": utcnow() + timedelta(hours=1)}
         token = _make_token(payload)
 
         result = decode_token(token)
@@ -59,7 +60,7 @@ class TestDecodeToken:
         assert result["type"] == "access"
 
     def test_expired_token_raises_401(self, mock_settings):
-        payload = {"sub": "1", "type": "access", "exp": datetime.utcnow() - timedelta(hours=1)}
+        payload = {"sub": "1", "type": "access", "exp": utcnow() - timedelta(hours=1)}
         token = _make_token(payload)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -67,7 +68,7 @@ class TestDecodeToken:
         assert exc_info.value.status_code == 401
 
     def test_invalid_signature_raises_401(self, mock_settings):
-        payload = {"sub": "1", "type": "access", "exp": datetime.utcnow() + timedelta(hours=1)}
+        payload = {"sub": "1", "type": "access", "exp": utcnow() + timedelta(hours=1)}
         token = _make_token(payload, secret="wrong-secret")
 
         with pytest.raises(HTTPException) as exc_info:
@@ -161,7 +162,7 @@ class TestGetCurrentUser:
     async def test_wrong_token_type_raises_401(self, mock_settings):
         payload = {
             "sub": "1", "type": "refresh",
-            "exp": datetime.utcnow() + timedelta(hours=1),
+            "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
 
@@ -178,7 +179,7 @@ class TestGetCurrentUser:
     async def test_user_not_found_raises_401(self, mock_settings):
         payload = {
             "sub": "999", "type": "access", "jti": "test-jti",
-            "exp": datetime.utcnow() + timedelta(hours=1),
+            "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
 
@@ -204,7 +205,7 @@ class TestGetCurrentUser:
     async def test_inactive_user_raises_403(self, mock_settings):
         payload = {
             "sub": "1", "type": "access", "jti": "test-jti",
-            "exp": datetime.utcnow() + timedelta(hours=1),
+            "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
 
@@ -229,13 +230,13 @@ class TestGetCurrentUser:
     @pytest.mark.asyncio
     async def test_bulk_revocation_raises_401(self, mock_settings):
         """Token issued before password change is rejected"""
-        old_iat = datetime.utcnow() - timedelta(hours=2)
-        password_change_time = datetime.utcnow() - timedelta(hours=1)
+        old_iat = utcnow() - timedelta(hours=2)
+        password_change_time = utcnow() - timedelta(hours=1)
 
         payload = {
             "sub": "1", "type": "access", "jti": "test-jti",
             "iat": int(old_iat.timestamp()),
-            "exp": datetime.utcnow() + timedelta(hours=1),
+            "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
 
@@ -261,8 +262,8 @@ class TestGetCurrentUser:
     async def test_valid_token_returns_user(self, mock_settings):
         payload = {
             "sub": "1", "type": "access", "jti": "test-jti",
-            "iat": int(datetime.utcnow().timestamp()),
-            "exp": datetime.utcnow() + timedelta(hours=1),
+            "iat": int(utcnow().timestamp()),
+            "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
 

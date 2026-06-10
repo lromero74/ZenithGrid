@@ -6,12 +6,13 @@ Includes persistent portfolio cache that survives restarts.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import json
 import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,10 @@ class CacheEntry:
 
     def __init__(self, value: Any, ttl_seconds: int):
         self.value = value
-        self.expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        self.expires_at = utcnow() + timedelta(seconds=ttl_seconds)
 
     def is_expired(self) -> bool:
-        return datetime.utcnow() >= self.expires_at
+        return utcnow() >= self.expires_at
 
 
 class SimpleCache:
@@ -213,7 +214,7 @@ class PersistentPortfolioCache:
             path = self._path(user_id)
             try:
                 data = dict(portfolio_data)
-                data["_saved_at"] = datetime.utcnow().isoformat()
+                data["_saved_at"] = utcnow().isoformat()
                 with open(path, "w") as f:
                     json.dump(data, f)
             except Exception as e:

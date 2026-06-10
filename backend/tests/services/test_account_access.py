@@ -10,7 +10,8 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from app.models import Account, User
 from app.models.sharing import AccountMembership
@@ -134,7 +135,7 @@ class TestAccessibleAccountIds:
         owner = await _make_user(db_session, "owner5@example.com")
         member = await _make_user(db_session, "member5@example.com")
         account = await _make_account(db_session, owner)
-        expired_at = datetime.utcnow() - timedelta(hours=1)
+        expired_at = utcnow() - timedelta(hours=1)
         await _make_membership(db_session, account, member, role="observer", expires_at=expired_at)
 
         ids = await accessible_account_ids(db_session, member.id)
@@ -149,7 +150,7 @@ class TestAccessibleAccountIds:
         owner = await _make_user(db_session, "owner6@example.com")
         member = await _make_user(db_session, "member6@example.com")
         account = await _make_account(db_session, owner)
-        future_expiry = datetime.utcnow() + timedelta(days=30)
+        future_expiry = utcnow() + timedelta(days=30)
         await _make_membership(db_session, account, member, role="observer", expires_at=future_expiry)
 
         ids = await accessible_account_ids(db_session, member.id)
@@ -259,7 +260,7 @@ class TestManagerAccountIds:
         owner = await _make_user(db_session, "mgr_owner4@example.com")
         manager = await _make_user(db_session, "mgr_user4@example.com")
         account = await _make_account(db_session, owner)
-        expired_at = datetime.utcnow() - timedelta(hours=2)
+        expired_at = utcnow() - timedelta(hours=2)
         await _make_membership(db_session, account, manager, role="manager", expires_at=expired_at)
 
         ids = await manager_account_ids(db_session, manager.id)
@@ -304,7 +305,7 @@ class TestManagerAccountIds:
         owner = await _make_user(db_session, "mgr_owner7@example.com")
         manager = await _make_user(db_session, "mgr_user7@example.com")
         account = await _make_account(db_session, owner)
-        future_expiry = datetime.utcnow() + timedelta(days=7)
+        future_expiry = utcnow() + timedelta(days=7)
         await _make_membership(db_session, account, manager, role="manager", expires_at=future_expiry)
 
         ids = await manager_account_ids(db_session, manager.id)

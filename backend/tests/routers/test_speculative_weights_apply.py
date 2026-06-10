@@ -6,7 +6,8 @@ dismiss-endpoint test pattern exactly — each failure mode gets its own
 case so regressions are easy to localize.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -146,7 +147,7 @@ class TestApplyProposalEndpoint:
         user, account = owner_user_account
         prop = await _make_pending_proposal(db_session, user.id, account.id)
         prop.status = "applied"
-        prop.decided_at = datetime.utcnow()
+        prop.decided_at = utcnow()
         prop.decided_by = user.id
         await db_session.flush()
 
@@ -200,8 +201,8 @@ class TestApplyProposalEndpoint:
             {
                 "sub": str(user.id), "account_id": account.id, "proposal_id": prop.id,
                 "type": "speculative_calibration_apply_proposal",
-                "exp": datetime.utcnow() - timedelta(days=1),
-                "iat": datetime.utcnow() - timedelta(days=40),
+                "exp": utcnow() - timedelta(days=1),
+                "iat": utcnow() - timedelta(days=40),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )

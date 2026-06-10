@@ -5,8 +5,8 @@ Covers paper trading endpoints: get balance, deposit, withdraw, and reset.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime
 
 from app.models import Account, Position, User
 from app.routers.paper_trading_router import DEFAULT_PAPER_BALANCES
@@ -24,7 +24,7 @@ async def paper_user(db_session):
         email="paper@example.com",
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -58,7 +58,7 @@ async def paper_user_no_account(db_session):
         email="nopaper@example.com",
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -105,7 +105,7 @@ class TestGetPaperBalance:
             email="emptybalances@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -324,7 +324,7 @@ class TestResetPaperAccount:
             status="open",
             total_base_acquired=0.001,
             total_quote_spent=50.0,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(position)
         await db_session.flush()
@@ -355,7 +355,7 @@ class TestResetPaperAccount:
         position = Position(
             account_id=account.id, product_id="BTC-USD", status="open",
             total_base_acquired=0.001, total_quote_spent=50.0,
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
         )
         db_session.add(position)
         await db_session.flush()

@@ -6,7 +6,7 @@ that detect and fix positions with missing fill data.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.order_reconciliation_monitor import (
@@ -29,7 +29,7 @@ def _make_position(**overrides):
     pos.total_base_acquired = overrides.get("total_base_acquired", 0)
     pos.total_quote_spent = overrides.get("total_quote_spent", 0.0)
     pos.average_buy_price = overrides.get("average_buy_price", 0.0)
-    pos.opened_at = overrides.get("opened_at", datetime.utcnow())
+    pos.opened_at = overrides.get("opened_at", utcnow())
     pos.closed_at = overrides.get("closed_at", None)
     pos.last_error_message = overrides.get("last_error_message", None)
     pos.last_error_timestamp = overrides.get("last_error_timestamp", None)

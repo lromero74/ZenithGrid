@@ -17,8 +17,9 @@ user A cannot read, update, or delete user B's goals/schedules/reports.
 """
 
 import inspect
+from app.utils.timeutil import utcnow
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -86,7 +87,7 @@ async def _make_goal(
     db, user_id, account_id=None, target_type="balance", target_currency="USD",
     target_value=1000.0, time_horizon_months=12, name="My Goal",
 ):
-    start = datetime.utcnow()
+    start = utcnow()
     g = ReportGoal(
         user_id=user_id,
         account_id=account_id,
@@ -124,7 +125,7 @@ async def _make_report(
     db, user_id, schedule_id=None, account_id=None,
     html_content=None, pdf_content=None, ai_summary=None,
 ):
-    now = datetime.utcnow()
+    now = utcnow()
     r = Report(
         user_id=user_id,
         account_id=account_id,
@@ -471,7 +472,7 @@ class TestUpdateGoal:
         """Failure: target_date in the past returns 400."""
         user = await _make_user(db_session, "updp@example.com")
         goal = await _make_goal(db_session, user.id)
-        past_date = datetime.utcnow() - timedelta(days=10)
+        past_date = utcnow() - timedelta(days=10)
 
         body = GoalUpdate(target_date=past_date)
         with pytest.raises(HTTPException) as exc:
