@@ -111,6 +111,7 @@ class TestCreateExchangeAccount:
     async def test_creates_cex_account_successfully(self):
         """Happy path: CEX account created, connection tested, returned."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -153,6 +154,7 @@ class TestCreateExchangeAccount:
     async def test_invalid_account_type_raises(self):
         """Failure: invalid account type raises ValidationError."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -166,6 +168,7 @@ class TestCreateExchangeAccount:
     async def test_cex_without_exchange_raises(self):
         """Failure: CEX account without exchange field raises."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -180,6 +183,7 @@ class TestCreateExchangeAccount:
     async def test_unsupported_exchange_raises(self):
         """Failure: unsupported exchange name raises ValidationError."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -194,6 +198,7 @@ class TestCreateExchangeAccount:
     async def test_dex_without_chain_id_raises(self):
         """Failure: DEX account without chain_id raises."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -210,6 +215,7 @@ class TestCreateExchangeAccount:
     async def test_dex_without_wallet_address_raises(self):
         """Failure: DEX account without wallet_address raises."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -226,6 +232,7 @@ class TestCreateExchangeAccount:
     async def test_connection_test_failure_deletes_account(self):
         """Failure: failed connection test deletes account and raises."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -268,6 +275,7 @@ class TestCreateExchangeAccount:
     async def test_unsupported_prop_firm_raises(self):
         """Failure: unsupported prop firm raises ValidationError."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -293,6 +301,7 @@ class TestGetPortfolioForAccount:
     async def test_account_not_found_raises(self):
         """Failure: non-existent account raises NotFoundError."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -307,6 +316,7 @@ class TestGetPortfolioForAccount:
     async def test_paper_trading_routes_to_build_paper_portfolio(self):
         """Happy path: paper trading account calls _build_paper_portfolio."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -332,6 +342,7 @@ class TestGetPortfolioForAccount:
     async def test_cex_coinbase_routes_to_cex_portfolio(self):
         """Happy path: CEX coinbase account routes to get_cex_portfolio."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -357,6 +368,7 @@ class TestGetPortfolioForAccount:
     async def test_cex_bybit_routes_to_generic_portfolio(self):
         """Happy path: bybit account routes to get_generic_cex_portfolio."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 
@@ -382,6 +394,7 @@ class TestGetPortfolioForAccount:
     async def test_dex_routes_to_dex_portfolio(self):
         """Happy path: DEX account routes to get_dex_portfolio."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         user = MagicMock()
         user.id = 1
 

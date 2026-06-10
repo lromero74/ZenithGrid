@@ -206,7 +206,9 @@ class TestCheckSinglePositionLimitOrder:
     async def test_no_order_id_returns_early(self):
         """Edge case: position has no limit_close_order_id."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position(limit_close_order_id=None)
@@ -221,11 +223,13 @@ class TestCheckSinglePositionLimitOrder:
     async def test_no_pending_order_in_db_returns_early(self):
         """Edge case: no PendingOrder record found for the order ID."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = None
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -238,12 +242,14 @@ class TestCheckSinglePositionLimitOrder:
     async def test_filled_order_triggers_completion(self):
         """Happy path: FILLED order triggers _process_order_completion."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order()
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = pending_order
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_order = AsyncMock(return_value={
             "status": "FILLED",
             "filled_size": "5.0",
@@ -260,6 +266,7 @@ class TestCheckSinglePositionLimitOrder:
     async def test_open_order_checks_partial_fills_and_bid_fallback(self):
         """Happy path: OPEN order triggers partial fill check and bid fallback."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order()
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = pending_order
@@ -271,6 +278,7 @@ class TestCheckSinglePositionLimitOrder:
             "filled_value": "0",
         }
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_order = AsyncMock(return_value=order_data)
 
         monitor = LimitOrderMonitor(db, exchange)
@@ -285,12 +293,14 @@ class TestCheckSinglePositionLimitOrder:
     async def test_exchange_returns_none_order_data(self):
         """Failure: exchange returns None for order data."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order()
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = pending_order
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_order = AsyncMock(return_value=None)
 
         monitor = LimitOrderMonitor(db, exchange)
@@ -312,11 +322,13 @@ class TestProcessPartialFills:
     async def test_new_partial_fill_creates_trade(self, mock_ws):
         """Happy path: new partial fill detected, trade created."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         # Provide a result object for the bot-name lookup used to enrich notifications.
         bot_name_result = MagicMock()
         bot_name_result.scalars.return_value.first.return_value = "TestBot"
         db.execute = AsyncMock(return_value=bot_name_result)
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position(total_quote_received=None, total_quote_spent=0.01)
@@ -351,7 +363,9 @@ class TestProcessPartialFills:
     async def test_no_new_fills_does_not_create_trade(self, mock_ws):
         """Edge case: filled_size unchanged from previous check."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -375,7 +389,9 @@ class TestProcessPartialFills:
     async def test_zero_filled_size_does_nothing(self, mock_ws):
         """Edge case: zero filled size, no action taken."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -403,7 +419,9 @@ class TestCheckBidFallback:
     async def test_manual_order_skips_fallback(self):
         """Edge case: manual orders should never be auto-adjusted."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -418,7 +436,9 @@ class TestCheckBidFallback:
     async def test_fallback_not_enabled_returns_early(self):
         """Edge case: limit_order_fallback_enabled is False."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -441,7 +461,9 @@ class TestCheckBidFallback:
     async def test_fallback_skipped_when_not_timed_out(self):
         """Edge case: order not yet timed out."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -465,7 +487,9 @@ class TestCheckBidFallback:
     async def test_fallback_skipped_for_partially_filled_order(self):
         """Edge case: partially filled order should not be adjusted."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -499,7 +523,9 @@ class TestProcessOrderCompletion:
     async def test_filled_order_closes_position(self, mock_ws):
         """Happy path: FILLED order closes position and calculates profit."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         monitor = LimitOrderMonitor(db, exchange)
 
@@ -539,7 +565,9 @@ class TestProcessOrderCompletion:
     async def test_cancelled_order_resets_position_flags(self, mock_ws):
         """Happy path: CANCELLED order resets closing flags."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -560,7 +588,9 @@ class TestProcessOrderCompletion:
     async def test_expired_order_resets_position_flags(self, mock_ws):
         """Happy path: EXPIRED order also resets flags."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position()
@@ -586,7 +616,9 @@ class TestCancelAndReplaceOrder:
     async def test_successful_cancel_and_replace(self):
         """Happy path: cancel succeeds, new order placed at bid."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.cancel_order = AsyncMock(return_value={"success": True})
         exchange.get_order = AsyncMock(return_value={"status": "CANCELLED", "filled_size": "0"})
         exchange.create_limit_order = AsyncMock(return_value={
@@ -613,7 +645,9 @@ class TestCancelAndReplaceOrder:
     async def test_cancel_fails_raises_exception(self):
         """Failure: cancel returns failure, raises exception."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.cancel_order = AsyncMock(return_value={"success": False, "error": "not found"})
         monitor = LimitOrderMonitor(db, exchange)
 
@@ -627,7 +661,9 @@ class TestCancelAndReplaceOrder:
     async def test_replacement_failure_clears_limit_flags(self):
         """Failure: replacement order fails, position flags cleared for re-evaluation."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.cancel_order = AsyncMock(return_value={"success": True})
         exchange.get_order = AsyncMock(return_value={"status": "CANCELLED", "filled_size": "0"})
         exchange.create_limit_order = AsyncMock(side_effect=Exception("API timeout"))
@@ -648,7 +684,9 @@ class TestCancelAndReplaceOrder:
     async def test_cancel_detects_filled_order(self, mock_complete):
         """Edge case: cancelled order was actually filled between check and cancel."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.cancel_order = AsyncMock(return_value={"success": True})
         exchange.get_order = AsyncMock(return_value={
             "status": "FILLED",
@@ -679,6 +717,7 @@ class TestPaperOrderAutoResolution:
     async def test_paper_order_auto_resolved_as_filled(self, mock_ws):
         """Happy path: paper order detected and auto-resolved via _process_order_completion."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order(
             order_id="paper-abc123",
             base_amount=5.0,
@@ -690,6 +729,7 @@ class TestPaperOrderAutoResolution:
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         mock_ws.broadcast_order_fill = AsyncMock()
 
@@ -726,12 +766,14 @@ class TestPaperOrderAutoResolution:
     async def test_real_order_not_auto_resolved(self):
         """Edge case: real order (no paper- prefix) goes through normal flow."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order(order_id="real-order-123")
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = pending_order
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_order = AsyncMock(return_value={
             "status": "OPEN",
             "filled_size": "0",
@@ -752,6 +794,7 @@ class TestPaperOrderAutoResolution:
     async def test_paper_order_uses_limit_price_for_fill(self, mock_ws):
         """Paper order auto-resolution uses limit_price * base_amount as fill value."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         pending_order = _make_pending_order(
             order_id="paper-xyz",
             base_amount=10.0,
@@ -763,6 +806,7 @@ class TestPaperOrderAutoResolution:
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
         mock_ws.broadcast_order_fill = AsyncMock()
 
@@ -786,11 +830,13 @@ class TestPaperOrderAutoResolution:
     async def test_paper_order_no_pending_record_clears_flags(self):
         """Edge case: paper order with no PendingOrder record still returns early."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = None  # No pending order
         db.execute = AsyncMock(return_value=mock_result)
 
         exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)  # sync method on the real client
         monitor = LimitOrderMonitor(db, exchange)
 
         position = _make_position(limit_close_order_id="paper-missing")
@@ -816,6 +862,7 @@ class TestSweepOrphanedPendingOrders:
         po2 = _make_pending_order(order_id="order-2", status="pending")
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         # Return tuples of (PendingOrder, position_status)
         mock_result.all.return_value = [(po1, "closed"), (po2, "cancelled")]
@@ -834,6 +881,7 @@ class TestSweepOrphanedPendingOrders:
         from app.services.limit_order_monitor import sweep_orphaned_pending_orders
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         mock_result.all.return_value = []
         db.execute = AsyncMock(return_value=mock_result)
@@ -849,6 +897,7 @@ class TestSweepOrphanedPendingOrders:
         from app.services.limit_order_monitor import sweep_orphaned_pending_orders
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         db.execute = AsyncMock(side_effect=Exception("DB connection error"))
 
         count = await sweep_orphaned_pending_orders(db)

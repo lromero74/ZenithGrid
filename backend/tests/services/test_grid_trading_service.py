@@ -116,6 +116,7 @@ class TestCancelGridOrders:
     @pytest.mark.asyncio
     async def test_cancels_all_pending_orders(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         position = MagicMock()
@@ -147,6 +148,7 @@ class TestCancelGridOrders:
     @pytest.mark.asyncio
     async def test_no_pending_orders(self):
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         position = MagicMock()
@@ -166,6 +168,7 @@ class TestCancelGridOrders:
     async def test_exchange_cancel_failure_falls_back_to_individual(self):
         """When batch cancel fails, falls back to individual cancels; DB still updated."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         position = MagicMock()
@@ -201,6 +204,7 @@ class TestInitializeGrid:
     async def test_long_mode_places_buy_orders_at_all_levels(self):
         """Happy path: long mode places buy orders at every level."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -247,6 +251,7 @@ class TestInitializeGrid:
     async def test_neutral_mode_places_buy_and_sell_orders(self):
         """Happy path: neutral mode places buy below and sell above price."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 2
         bot.product_id = "ETH-USD"
@@ -291,6 +296,7 @@ class TestInitializeGrid:
     async def test_neutral_mode_no_buy_levels_raises(self):
         """Failure: neutral mode with no levels below current price raises."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 3
         bot.product_id = "BTC-USD"
@@ -323,6 +329,7 @@ class TestInitializeGrid:
     async def test_unsupported_grid_mode_raises(self):
         """Failure: unsupported grid mode raises ValueError."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 4
         bot.product_id = "BTC-USD"
@@ -355,6 +362,7 @@ class TestInitializeGrid:
     async def test_skips_levels_below_minimum_order_size(self):
         """Edge case: levels below min order size are skipped with warning."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 5
         bot.product_id = "BTC-USD"
@@ -403,6 +411,7 @@ class TestInitializeGrid:
     async def test_exchange_order_failure_continues(self):
         """Edge case: one exchange order fails, others still get placed."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 6
         bot.product_id = "BTC-USD"
@@ -461,6 +470,7 @@ class TestHandleGridOrderFill:
     async def test_neutral_buy_fill_places_sell_order(self):
         """Happy path: neutral grid buy fill places sell at next level."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -508,6 +518,7 @@ class TestHandleGridOrderFill:
     async def test_long_mode_accumulates_no_sell(self):
         """Happy path: long grid buy fill does NOT place sell order."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 2
         bot.product_id = "BTC-USD"
@@ -540,6 +551,7 @@ class TestHandleGridOrderFill:
     async def test_neutral_sell_fill_places_buy_order(self):
         """Happy path: neutral grid sell fill places buy at next level down."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 3
         bot.product_id = "BTC-USD"
@@ -582,6 +594,7 @@ class TestHandleGridOrderFill:
     async def test_no_opposite_levels_returns_none(self):
         """Edge case: no opposite levels available returns None."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 4
         bot.product_id = "BTC-USD"
@@ -622,6 +635,7 @@ class TestDetectAndHandleBreakout:
     async def test_no_breakout_returns_false(self):
         """Happy path: price within range returns False."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.bot_config = {
             "enable_dynamic_adjustment": True,
@@ -644,6 +658,7 @@ class TestDetectAndHandleBreakout:
     async def test_upward_breakout_triggers_rebalance(self):
         """Happy path: price above upper+threshold triggers rebalance."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -684,6 +699,7 @@ class TestDetectAndHandleBreakout:
     async def test_dynamic_adjustment_disabled_returns_false(self):
         """Edge case: returns False when enable_dynamic_adjustment is False."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.bot_config = {"enable_dynamic_adjustment": False}
         position = MagicMock()
@@ -699,6 +715,7 @@ class TestDetectAndHandleBreakout:
     async def test_no_grid_state_returns_false(self):
         """Edge case: returns False when grid_state is empty."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.bot_config = {
             "enable_dynamic_adjustment": True,
@@ -880,6 +897,7 @@ class TestRebalanceGridOnBreakout:
         from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -932,6 +950,7 @@ class TestRebalanceGridOnBreakout:
         from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 2
         bot.bot_config = {
@@ -970,6 +989,7 @@ class TestRebalanceGridOnBreakout:
         from app.services.grid_trading_service import GridRebalanceParams, rebalance_grid_on_breakout
 
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 3
         bot.bot_config = {
@@ -1015,6 +1035,7 @@ class TestDetectAndHandleBreakoutAdditional:
     async def test_downward_breakout_triggers_rebalance(self):
         """Happy path: price below lower-threshold triggers downward rebalance."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -1055,6 +1076,7 @@ class TestDetectAndHandleBreakoutAdditional:
     async def test_price_at_threshold_boundary_no_breakout(self):
         """Edge case: price exactly at threshold boundary does NOT trigger."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.bot_config = {
             "enable_dynamic_adjustment": True,
@@ -1078,6 +1100,7 @@ class TestDetectAndHandleBreakoutAdditional:
     async def test_geometric_grid_type_uses_geometric_levels(self):
         """Edge case: geometric grid type uses calculate_geometric_levels."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -1115,6 +1138,7 @@ class TestDetectAndHandleBreakoutAdditional:
     async def test_missing_range_bounds_returns_false(self):
         """Edge case: grid_state with missing range bounds returns False."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.bot_config = {
             "enable_dynamic_adjustment": True,
@@ -1145,6 +1169,7 @@ class TestHandleGridOrderFillAdditional:
     async def test_buy_fill_exchange_error_returns_none(self):
         """Failure: exchange error when placing sell response returns None."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"
@@ -1180,6 +1205,7 @@ class TestHandleGridOrderFillAdditional:
     async def test_buy_fill_no_order_id_in_response_returns_none(self):
         """Edge case: exchange returns response without order_id."""
         db = AsyncMock()
+        db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         bot = MagicMock()
         bot.id = 1
         bot.product_id = "BTC-USD"

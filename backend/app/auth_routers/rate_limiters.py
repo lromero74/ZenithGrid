@@ -138,17 +138,22 @@ async def _db_cleanup():
 # ---------------------------------------------------------------------------
 
 def _fire_and_forget(coro):
-    """Schedule a coroutine as a tracked task. Drops under backpressure."""
+    """Schedule a coroutine as a tracked task. Drops under backpressure.
+
+    Dropped coroutines are closed — leaving them unclosed leaks a
+    "coroutine was never awaited" RuntimeWarning at garbage collection.
+    """
     import asyncio
     try:
         loop = asyncio.get_running_loop()
         if len(_pending_db_tasks) >= _MAX_PENDING_DB_TASKS:
-            return  # Drop under backpressure — prevents unbounded task pile-up
+            coro.close()  # Drop under backpressure — prevents unbounded task pile-up
+            return
         task = loop.create_task(coro)
         _pending_db_tasks.add(task)
         task.add_done_callback(_pending_db_tasks.discard)
     except RuntimeError:
-        pass  # No event loop (test context)
+        coro.close()  # No event loop (test context)
 
 
 def _prune_memory():

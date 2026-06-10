@@ -628,6 +628,9 @@ class TestStartStop:
 
     def test_start_sets_running(self):
         monitor = MultiBotMonitor()
+        # monitor_loop must not produce a real coroutine here — create_task is
+        # mocked, so the coroutine would never be awaited
+        monitor.monitor_loop = MagicMock()
         with patch("app.multi_bot_monitor.asyncio.create_task"):
             monitor.start()
         assert monitor.running is True

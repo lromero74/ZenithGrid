@@ -175,6 +175,7 @@ class TestGetOrCreateTTSUsesExecutor:
         mock_cached.word_timings = json.dumps([{"text": "hi", "startTime": 0.0, "endTime": 0.3}])
 
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = mock_cached
         mock_db.execute = AsyncMock(return_value=mock_result)
@@ -214,6 +215,7 @@ class TestGetOrCreateTTSUsesExecutor:
     async def test_cache_miss_write_uses_run_in_executor(self):
         """Happy path: cache miss writes file via run_in_executor, not blocking write_bytes()."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # .add is sync — AsyncMock leaks an unawaited coroutine
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = None  # cache miss
         mock_db.execute = AsyncMock(return_value=mock_result)

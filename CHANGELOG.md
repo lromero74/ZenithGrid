@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.18] - 2026-06-10
+
+### Fixed
+- **Blank white screen after an update (seen on mobile).** The app's HTML page was served without cache headers, so browsers could keep a stale copy that pointed at JavaScript files deleted by the next deploy — the app then failed to boot. The HTML is now always revalidated (`no-cache`), and the versioned JavaScript/CSS files are cached as immutable for a year, which also makes repeat visits faster. If you currently see a blank screen, one hard refresh fixes it permanently.
+- **News article dates from non-UTC feeds are now read correctly.** Published timestamps like `14:30+05:00` had their timezone stripped instead of converted, shifting them by up to several hours — which could prune fresh articles or keep stale ones.
+
+### Changed
+- **Test suite now runs with zero warnings** (down from 129): the backend migrated from FastAPI's deprecated `on_event` startup/shutdown hooks to the lifespan API, a deprecated SQLAlchemy union query pattern was modernized, dropped fire-and-forget coroutines are now closed properly, and dozens of test mocks were corrected (several were silently patching the wrong target or running real code unintentionally).
+- Internal: migration files no longer hack `sys.path` (the migration runner provides the import path since v2.166.13).
+
+### Security
+- Upgraded `python-jose` (JWT library) from 3.3.0 to 3.5.0, picking up the fixes for CVE-2024-33663 and CVE-2024-33664.
+
 ## [v2.166.17] - 2026-06-10
 
 ### Fixed

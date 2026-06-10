@@ -5,7 +5,7 @@ Cache loading and saving functions for news, videos, and other data.
 import json
 from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -13,10 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_naive_utc(iso_str: str) -> datetime:
-    """Parse ISO datetime string, stripping timezone info to get naive UTC."""
+    """Parse ISO datetime string and return naive UTC.
+
+    Offset-aware inputs are converted to UTC before the tzinfo is dropped —
+    stripping a non-UTC offset without converting would shift the timestamp
+    by that offset.
+    """
     dt = datetime.fromisoformat(iso_str)
     if dt.tzinfo is not None:
-        dt = dt.replace(tzinfo=None)
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
 

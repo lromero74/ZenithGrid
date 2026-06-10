@@ -642,13 +642,22 @@ class TestParseNaiveUtc:
         assert result.minute == 30
         assert result.tzinfo is None
 
-    def test_non_utc_timezone_stripped_without_conversion(self):
-        """Edge case: non-UTC tz (e.g., +05:00) -> strips it (no conversion)."""
+    def test_non_utc_timezone_converted_to_utc(self):
+        """Edge case: non-UTC tz (e.g., +05:00) -> converted to UTC, then naive."""
         from app.news_data.news_cache import _parse_naive_utc
 
         result = _parse_naive_utc("2025-06-15T14:30:00+05:00")
-        # The function strips tzinfo but does NOT convert — so hour stays 14
-        assert result == datetime(2025, 6, 15, 14, 30, 0)
+        # 14:30 at +05:00 is 09:30 UTC — the offset must be converted, not
+        # stripped, or published dates from non-UTC feeds shift by the offset
+        assert result == datetime(2025, 6, 15, 9, 30, 0)
+        assert result.tzinfo is None
+
+    def test_negative_offset_converted_to_utc(self):
+        """Edge case: negative offset (-04:00) -> converted to UTC, then naive."""
+        from app.news_data.news_cache import _parse_naive_utc
+
+        result = _parse_naive_utc("2025-06-15T14:30:00-04:00")
+        assert result == datetime(2025, 6, 15, 18, 30, 0)
         assert result.tzinfo is None
 
     def test_microseconds_preserved(self):

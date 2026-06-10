@@ -6,7 +6,6 @@ for their trading bots. The .env file keys remain as system-wide fallback for se
 news analysis and coin categorization.
 """
 
-import os
 import sqlite3
 from pathlib import Path
 

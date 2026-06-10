@@ -210,13 +210,14 @@ async def get_unified_decision_logs(
             IndicatorLog.timestamp >= since
         )
 
-    # UNION ALL both queries
-    union_stmt = union_all(ai_logs_stmt, indicator_logs_stmt)
+    # UNION ALL both queries — wrap in an explicit subquery (SelectBase.c
+    # directly on a union is deprecated in SQLAlchemy 1.4+)
+    union_subq = union_all(ai_logs_stmt, indicator_logs_stmt).subquery()
 
     # Apply ORDER BY and pagination at SQL level
     final_query = (
-        select(union_stmt.c)  # Select all columns from union result
-        .order_by(desc(union_stmt.c.timestamp))
+        select(union_subq)
+        .order_by(desc(union_subq.c.timestamp))
         .limit(limit)
         .offset(offset)
     )

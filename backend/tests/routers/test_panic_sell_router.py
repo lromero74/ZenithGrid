@@ -610,7 +610,11 @@ class TestPanicSellConversion:
             "app.position_routers.panic_sell_router.get_exchange_client_for_account",
             new_callable=AsyncMock,
             return_value=mock_exchange,
-        ), patch("asyncio.ensure_future") as mock_ensure_future:
+        ), patch("asyncio.ensure_future") as mock_ensure_future, patch(
+            # sync MagicMock: ensure_future is mocked, so a real coroutine
+            # would be created but never awaited
+            "app.position_routers.panic_sell_router.run_portfolio_conversion", new=MagicMock()
+        ):
             await _execute_panic_sell(
                 db_session, task_id, account.id, "sell", "USD",
                 stop_bots=False, stop_portfolio_rebalancer=False,
@@ -852,7 +856,8 @@ class TestPanicSellForceMarket:
             with patch("app.trading_engine_v2.StrategyTradingEngine",
                        return_value=mock_engine):
                 with patch("app.strategies.StrategyRegistry"):
-                    with patch("app.services.portfolio_conversion_service.run_portfolio_conversion"):
+                    with patch("app.position_routers.panic_sell_router.run_portfolio_conversion",
+                               new_callable=AsyncMock):
                         await _execute_panic_sell(
                             db_session, task_id, account.id, "sell", None,
                             stop_bots=False, stop_portfolio_rebalancer=False,
