@@ -339,6 +339,55 @@ class TestGetCandlesCached:
 
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_concurrent_misses_same_key_coalesce_into_one_fetch(self):
+        """N concurrent callers for the same pair/timeframe share ONE exchange
+        call. Critical for the exchange rate budget — pairs are processed
+        concurrently, so without coalescing a cold cache fans out N identical
+        API requests."""
+        exchange = _make_exchange()
+        monitor = MultiBotMonitor(exchange=exchange)
+        candles = [{"open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 100}]
+
+        async def slow_fetch(**kwargs):
+            await asyncio.sleep(0.02)
+            return list(candles)
+
+        exchange.get_candles = AsyncMock(side_effect=slow_fetch)
+
+        with patch("app.multi_bot_monitor.fill_candle_gaps", return_value=candles), \
+             patch("app.multi_bot_monitor.timeframe_to_seconds", return_value=300):
+            results = await asyncio.gather(*[
+                monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 100)
+                for _ in range(5)
+            ])
+
+        assert all(r == candles for r in results)
+        assert exchange.get_candles.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_misses_different_keys_fetch_independently(self):
+        """Coalescing is per pair/timeframe — distinct keys still fetch in
+        parallel rather than serializing behind one global lock."""
+        exchange = _make_exchange()
+        monitor = MultiBotMonitor(exchange=exchange)
+        candles = [{"open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 100}]
+
+        async def slow_fetch(**kwargs):
+            await asyncio.sleep(0.02)
+            return list(candles)
+
+        exchange.get_candles = AsyncMock(side_effect=slow_fetch)
+
+        with patch("app.multi_bot_monitor.fill_candle_gaps", return_value=candles), \
+             patch("app.multi_bot_monitor.timeframe_to_seconds", return_value=300):
+            await asyncio.gather(
+                monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 100),
+                monitor.get_candles_cached("ADA-BTC", "FIVE_MINUTE", 100),
+            )
+
+        assert exchange.get_candles.await_count == 2
+
 
 # ===========================================================================
 # Class: TestProcessBot

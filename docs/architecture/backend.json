@@ -1438,7 +1438,7 @@
     },
     {
       "file": "services/limit_order_monitor.py",
-      "purpose": "Monitors pending limit orders and updates positions on fill",
+      "purpose": "Monitors pending limit orders and updates positions on fill. v2.166.12: check_all_pending_limit_orders(db) is the per-cycle entry point (called by main.py's loop) — groups positions by account so the exchange client is resolved once per account; bot display names for fill notifications are cached per monitor instance",
       "type": "background"
     },
     {
@@ -2407,7 +2407,8 @@
       "081_ai_opinion_log_cost_fields.py",
       "082_speculative_bucket.py",
       "083_ai_opinion_log_speculative.py",
-      "084_speculative_weights_proposals.py"
+      "084_speculative_weights_proposals.py",
+      "085_more_performance_indexes.py"
     ]
   }
 }

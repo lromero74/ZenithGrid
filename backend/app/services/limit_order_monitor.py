@@ -10,16 +10,51 @@ Exchange-agnostic: works with any ExchangeClient implementation
 
 import logging
 from datetime import datetime
+from typing import Dict, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import PendingOrder, Position, Trade
+from app.services.exchange_service import get_exchange_client_for_account
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 
 logger = logging.getLogger(__name__)
+
+
+async def check_all_pending_limit_orders(db: AsyncSession) -> None:
+    """Check every position with a pending limit close order.
+
+    Groups positions by account so the exchange client is resolved once per
+    account instead of once per position.
+    """
+    result = await db.execute(
+        select(Position).where(
+            Position.closing_via_limit.is_(True),
+            Position.limit_close_order_id.isnot(None),
+            Position.status == "open",
+        )
+    )
+    positions = result.scalars().all()
+
+    positions_by_account: Dict[int, list] = {}
+    for position in positions:
+        if position.account_id:
+            positions_by_account.setdefault(position.account_id, []).append(position)
+
+    for account_id, account_positions in positions_by_account.items():
+        exchange = await get_exchange_client_for_account(db, account_id)
+        if not exchange:
+            logger.warning(
+                f"No exchange client for account {account_id}; "
+                f"skipping {len(account_positions)} pending limit order(s) this cycle"
+            )
+            continue
+        monitor = LimitOrderMonitor(db, exchange)
+        for position in account_positions:
+            await monitor.check_single_position_limit_order(position)
 
 
 class LimitOrderMonitor:
@@ -28,6 +63,19 @@ class LimitOrderMonitor:
     def __init__(self, db: AsyncSession, exchange: ExchangeClient):
         self.db = db
         self.exchange = exchange
+        # Bot display names looked up for fill notifications — cached for the
+        # life of this monitor (one cycle) so repeated fills don't re-query.
+        self._bot_name_cache: Dict[int, Optional[str]] = {}
+
+    async def _get_bot_name(self, bot_id: Optional[int]) -> Optional[str]:
+        """Bot display name for notifications, cached per monitor instance."""
+        if not bot_id:
+            return None
+        if bot_id not in self._bot_name_cache:
+            from app.models import Bot
+            result = await self.db.execute(select(Bot.name).where(Bot.id == bot_id))
+            self._bot_name_cache[bot_id] = result.scalars().first()
+        return self._bot_name_cache[bot_id]
 
     async def check_single_position_limit_order(self, position: Position):
         """Check a single position's limit order status"""
@@ -130,13 +178,8 @@ class LimitOrderMonitor:
                     )
                     self.db.add(trade)
 
-                    # Fetch bot name for notification
-                    from app.models import Bot
-                    bot_name = None
-                    if position.bot_id:
-                        bot_query = select(Bot.name).where(Bot.id == position.bot_id)
-                        bot_name_result = await self.db.execute(bot_query)
-                        bot_name = bot_name_result.scalars().first()
+                    # Fetch bot name for notification (cached per monitor)
+                    bot_name = await self._get_bot_name(position.bot_id)
 
                     # Broadcast partial fill notification
                     is_paper = (hasattr(self.exchange, 'is_paper_trading')

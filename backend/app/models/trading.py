@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -569,7 +570,11 @@ class Position(Base):
 
 class Trade(Base):
     __tablename__ = "trades"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # Position detail filters by position_id and orders by timestamp
+        Index("ix_trades_position_timestamp", "position_id", "timestamp"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("trading.positions.id"), index=True)
@@ -619,7 +624,11 @@ class PendingOrder(Base):
     """
 
     __tablename__ = "pending_orders"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # Pending-order counts filter by position_id(s) + status='pending'
+        Index("ix_pending_orders_position_status", "position_id", "status"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=False)

@@ -185,29 +185,29 @@ async def reset_paper_account(
     paper_bots = bots_result.scalars().all()
     bot_ids = [bot.id for bot in paper_bots]
 
-    # Count items before deletion (for logging)
+    # Fetch positions and pending orders once each — the same objects serve
+    # both the deletion counts and the ORM deletes (cascades handle trades).
     positions_result = await db.execute(
         select(Position).where(Position.account_id == paper_account.id)
     )
     positions = positions_result.scalars().all()
     position_count = len(positions)
 
-    pending_result = await db.execute(
-        select(PendingOrder).where(PendingOrder.bot_id.in_(bot_ids)) if bot_ids else select(PendingOrder).where(False)
-    )
-    pending_count = len(pending_result.scalars().all())
+    pending_orders = []
+    if bot_ids:
+        pending_orders_result = await db.execute(
+            select(PendingOrder).where(PendingOrder.bot_id.in_(bot_ids))
+        )
+        pending_orders = pending_orders_result.scalars().all()
+    pending_count = len(pending_orders)
 
     # Delete all positions (cascade will delete trades)
     for position in positions:
         await db.delete(position)
 
     # Delete all pending orders for paper bots
-    if bot_ids:
-        pending_orders_result = await db.execute(
-            select(PendingOrder).where(PendingOrder.bot_id.in_(bot_ids))
-        )
-        for order in pending_orders_result.scalars().all():
-            await db.delete(order)
+    for order in pending_orders:
+        await db.delete(order)
 
     # Reset balances to defaults
     paper_account.paper_balances = json.dumps(DEFAULT_PAPER_BALANCES)

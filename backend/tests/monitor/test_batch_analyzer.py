@@ -392,6 +392,72 @@ class TestBatchAnalyzerMarketData:
         assert call_count > 1
 
 
+class TestBatchMarketDataConcurrency:
+    """Per-pair timeframe fetches run concurrently with bounded parallelism.
+
+    The cap matters: candle fetches hit the exchange API on cache misses, and
+    an unbounded gather would burst 7 requests at once against the rate budget.
+    """
+
+    @pytest.mark.asyncio
+    async def test_timeframes_fetched_concurrently_and_bounded(self):
+        import asyncio
+        from app.monitor.batch_analyzer import (
+            _fetch_batch_market_data, _CANDLE_FETCH_CONCURRENCY,
+        )
+
+        monitor = _make_monitor()
+        candles = [
+            {"open": 0.05, "high": 0.052, "low": 0.049, "close": 0.051, "volume": 100}
+        ] * 50
+
+        active = 0
+        max_active = 0
+
+        async def tracked(product_id, granularity, lookback=100):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return list(candles)
+
+        monitor.get_candles_cached = AsyncMock(side_effect=tracked)
+
+        with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}):
+            pairs_data, failed_pairs, successful = await _fetch_batch_market_data(
+                monitor, ["ETH-BTC"], [],
+            )
+
+        assert "ETH-BTC" in pairs_data
+        assert failed_pairs == {}
+        # All 7 timeframes still requested exactly once
+        assert monitor.get_candles_cached.await_count == 7
+        # Actually concurrent (was serial), but capped at the rate-budget bound
+        assert max_active > 1
+        assert max_active <= _CANDLE_FETCH_CONCURRENCY
+
+    @pytest.mark.asyncio
+    async def test_fetch_failure_still_marks_open_position_pair_failed(self):
+        """A timeframe fetch error inside the concurrent gather still routes a
+        pair with an open position to failed_pairs instead of crashing the
+        batch (failed_pairs only tracks open-position pairs, as before)."""
+        from app.monitor.batch_analyzer import _fetch_batch_market_data
+
+        monitor = _make_monitor()
+        monitor.get_candles_cached = AsyncMock(side_effect=Exception("API 500"))
+        open_position = _make_position(product_id="FAIL-BTC")
+
+        with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
+             patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
+            pairs_data, failed_pairs, successful = await _fetch_batch_market_data(
+                monitor, ["FAIL-BTC"], [open_position],
+            )
+
+        assert pairs_data == {}
+        assert "FAIL-BTC" in failed_pairs
+
+
 # ===========================================================================
 # Class: TestBatchAnalyzerErrorTracking
 # ===========================================================================

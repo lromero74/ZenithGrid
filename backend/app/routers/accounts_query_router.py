@@ -126,6 +126,16 @@ async def list_accounts(
         membership_result = await db.execute(membership_q)
         memberships = {m.account_id: m for m in membership_result.scalars().all()}
 
+        # Batch-fetch the owners of shared accounts for the shared_by display
+        # name (one IN-clause query instead of one db.get per account).
+        shared_owner_ids = {a.user_id for a in accounts if a.id not in owned_ids}
+        shared_owners = {}
+        if shared_owner_ids:
+            owners_result = await db.execute(
+                select(User).where(User.id.in_(shared_owner_ids))
+            )
+            shared_owners = {u.id: u for u in owners_result.scalars().all()}
+
         response = []
         for account in accounts:
             bot_count = bot_counts.get(account.id, 0)
@@ -137,7 +147,7 @@ async def list_accounts(
             if not is_owner:
                 m = memberships.get(account.id)
                 membership_role = m.role if m and not m.is_expired else None
-                owner_user = await db.get(User, account.user_id)
+                owner_user = shared_owners.get(account.user_id)
                 if owner_user:
                     shared_by = owner_user.display_name or owner_user.email
 

@@ -64,6 +64,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   })
   useEffect(() => { try { localStorage.setItem('zenith-bots-projection-basis', projectionBasis) } catch { /* ignored */ } }, [projectionBasis])
 
+  // Dashboard poll intervals are staggered (30/33/36/39/42s) so the queries
+  // drift apart instead of firing as a 5-request burst every 30 seconds
+  // (worst on tab restore, when all of them refetch at once).
+
   // Fetch all bots with projection data (filtered by account if selected)
   const { data: bots = [] } = useQuery({
     queryKey: ['dashboard-bots', selectedAccount?.id, projectionBasis],
@@ -76,7 +80,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { data: openPositions = [] } = useQuery({
     queryKey: ['open-positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll('open', 100, selectedAccount?.id),
-    refetchInterval: 30000, // 30 seconds
+    refetchInterval: 33000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   })
@@ -85,7 +89,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll('closed', 1000, selectedAccount?.id),
-    refetchInterval: 30000, // 30 seconds
+    refetchInterval: 36000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   })
@@ -103,7 +107,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       return response.json()
     },
     enabled: deferredQueriesEnabled && !!selectedAccount,
-    refetchInterval: 30000, // 30 seconds
+    refetchInterval: 39000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     staleTime: 15000,
@@ -129,7 +133,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       return response.json()
     },
     enabled: deferredQueriesEnabled && isPropFirm && !!selectedAccount?.id,
-    refetchInterval: 30000,
+    refetchInterval: 42000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   })

@@ -695,6 +695,10 @@
       {
         "file": "hooks/useMarketPrice.ts",
         "purpose": "Shared market-price hook for product endpoints such as BTC-USD and ETH-USD: React Query against marketDataApi.getPrice(productId) keyed by productId with common polling/staleness policy so header/pages reuse one fetch path. Introduced in v2.164.8."
+      },
+      {
+        "file": "hooks/useAccountPortfolio.ts",
+        "purpose": "Single shared portfolio query keyed by ['account-portfolio', accountId]: Portfolio/Bots/Charts pages previously ran three separate 60s polls with mismatched keys and endpoints. The Portfolio page passes { live: true } for a force_fresh (backend cache bypass) flavor under an isolated cache key. Introduced in v2.166.12."
       }
     ],
     "page_specific": {

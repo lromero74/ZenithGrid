@@ -342,7 +342,9 @@ export function AccountProvider({ children }: AccountProviderProps) {
     },
   })
 
-  // Pending invitations query — poll every 60s for new invitations
+  // Pending invitations — the WebSocket push below is the primary delivery
+  // path; this is only a slow safety-net poll for when the socket is down.
+  // (Was a 60s poll + focus refetch, app-wide, 24/7 — needless API load.)
   const {
     data: pendingInvitations = [],
     refetch: refetchInvitations,
@@ -350,8 +352,9 @@ export function AccountProvider({ children }: AccountProviderProps) {
     queryKey: ['invitations', 'pending'],
     queryFn: invitationsApi.getPending,
     staleTime: 30000,
-    refetchInterval: 60000,
-    refetchOnWindowFocus: true,
+    refetchInterval: 300000, // 5 minutes (fallback only)
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 
   // Listen for real-time invitation push from WebSocket (via custom DOM event)

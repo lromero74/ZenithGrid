@@ -333,6 +333,74 @@ class TestResetPaperAccount:
         assert result["deleted"]["positions"] == 1
 
     @pytest.mark.asyncio
+    async def test_reset_deletes_pending_orders_with_single_fetch(
+        self, db_session, paper_user, async_engine,
+    ):
+        """Pending orders are deleted, counted correctly, and fetched ONCE.
+
+        The old code ran the same SELECT twice — once to count, once to delete.
+        """
+        from sqlalchemy import event, select
+        from app.models import Bot, PendingOrder
+        from app.routers.paper_trading_router import reset_paper_account
+
+        user, account = paper_user
+        bot = Bot(
+            user_id=user.id, account_id=account.id, name="PaperBot",
+            product_id="BTC-USD", is_active=False,
+        )
+        db_session.add(bot)
+        await db_session.flush()
+
+        position = Position(
+            account_id=account.id, product_id="BTC-USD", status="open",
+            total_base_acquired=0.001, total_quote_spent=50.0,
+            opened_at=datetime.utcnow(),
+        )
+        db_session.add(position)
+        await db_session.flush()
+
+        for i in range(2):
+            db_session.add(PendingOrder(
+                position_id=position.id, bot_id=bot.id,
+                order_id=f"paper-order-{i}", product_id="BTC-USD",
+                side="BUY", order_type="LIMIT", limit_price=50000.0,
+                quote_amount=10.0, trade_type=f"safety_order_{i + 1}",
+                status="pending",
+            ))
+        await db_session.flush()
+
+        statements = []
+
+        def _record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        sync_engine = async_engine.sync_engine
+        event.listen(sync_engine, "before_cursor_execute", _record)
+        try:
+            result = await reset_paper_account(current_user=user, db=db_session)
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", _record)
+
+        assert result["deleted"]["pending_orders"] == 2
+
+        remaining = (await db_session.execute(select(PendingOrder))).scalars().all()
+        assert remaining == []
+
+        # Only the explicit bot_id-filtered fetch — ORM cascade loads during
+        # position deletion filter by position_id and are not the double-fetch
+        # under test. Match bot_id in the WHERE clause, not the column list.
+        pending_selects = [
+            s for s in statements
+            if "pending_orders" in s.lower()
+            and "pending_orders.bot_id in" in s.lower()
+            and s.lstrip().lower().startswith("select")
+        ]
+        assert len(pending_selects) <= 1, (
+            f"Expected one pending_orders SELECT, got {len(pending_selects)}"
+        )
+
+    @pytest.mark.asyncio
     async def test_reset_no_paper_account_returns_404(self, db_session, paper_user_no_account):
         """Failure: user without paper account gets 404."""
         from fastapi import HTTPException

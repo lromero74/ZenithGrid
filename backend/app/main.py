@@ -205,7 +205,10 @@ async def run_limit_order_monitor():
     from app.database import async_session_maker
     from app.models import Position
     from app.services.exchange_service import get_exchange_client_for_account
-    from app.services.limit_order_monitor import sweep_orphaned_pending_orders
+    from app.services.limit_order_monitor import (
+        check_all_pending_limit_orders,
+        sweep_orphaned_pending_orders,
+    )
 
     # Run startup reconciliation once
     logger.info("Running startup reconciliation for limit orders...")
@@ -273,23 +276,9 @@ async def run_limit_order_monitor():
     while True:
         try:
             async with async_session_maker() as db:
-                # Get positions with pending limit close orders
-                result = await db.execute(
-                    select(Position).where(
-                        Position.closing_via_limit.is_(True),
-                        Position.limit_close_order_id.isnot(None),
-                        Position.status == "open"
-                    )
-                )
-                positions = result.scalars().all()
-
-                for position in positions:
-                    # Get exchange client for this position's account
-                    if position.account_id:
-                        exchange = await get_exchange_client_for_account(db, position.account_id)
-                        if exchange:
-                            monitor = LimitOrderMonitor(db, exchange)
-                            await monitor.check_single_position_limit_order(position)
+                # Check pending limit close orders (grouped by account so the
+                # exchange client is resolved once per account, not per position)
+                await check_all_pending_limit_orders(db)
 
                 # Periodic orphaned record sweep (every ~5 minutes)
                 sweep_counter += 1
