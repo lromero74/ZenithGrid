@@ -13,7 +13,7 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true — state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag. v2.164.10: secondary summary widgets now refresh every 2 minutes instead of every minute, while the main open-deals feed remains adaptive."
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true \u2014 state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag. v2.164.10: secondary summary widgets now refresh every 2 minutes instead of every minute, while the main open-deals feed remains adaptive. v2.166.16: open-positions list is virtualized via VirtualizedPositionList (@tanstack/react-virtual, window scrolling, dynamic row measurement) so only visible PositionCards render at the 100-per-page setting; LightweightChartModal and DealChart (inside PositionCard) are code-split via React.lazy so the chart library loads only when a chart is opened."
     },
     {
       "file": "pages/ClosedPositions.tsx",
@@ -23,7 +23,7 @@
     {
       "file": "pages/Portfolio.tsx",
       "route": "/portfolio",
-      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts; always fetches with force_fresh=true (bypasses backend cache); listens for portfolio:trade-completed DOM event (dispatched by NotificationContext on order fills) to trigger immediate refresh; 60-second polling interval; Holdings table has Hide Dust toggle: state hideDust (boolean, default true, persisted to localStorage key 'portfolio:hideDust'); dustCount useMemo counts holdings with usd_value < $1; sortedHoldings filters out dust rows when hideDust=true; toggle button label shows 'Dust hidden (N)' or 'Show all'; empty state message mentions dust when hideDust=true"
+      "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts; always fetches with force_fresh=true (bypasses backend cache); listens for portfolio:trade-completed DOM event (dispatched by NotificationContext on order fills) to trigger immediate refresh; 60-second polling interval; Holdings table has Hide Dust toggle: state hideDust (boolean, default true, persisted to localStorage key 'portfolio:hideDust'); dustCount useMemo counts holdings with usd_value < $1; sortedHoldings filters out dust rows when hideDust=true; toggle button label shows 'Dust hidden (N)' or 'Show all'; empty state message mentions dust when hideDust=true v2.166.16: the per-asset candlestick chart modal is extracted to pages/portfolio/PortfolioChartModal.tsx and loaded via React.lazy, so lightweight-charts is fetched only when a chart is opened and the holdings table renders without it."
     },
     {
       "file": "pages/News.tsx",
@@ -33,7 +33,7 @@
     {
       "file": "pages/Charts.tsx",
       "route": "/charts",
-      "purpose": "Technical analysis with multiple indicators, timeframes, chart types"
+      "purpose": "Technical analysis with multiple indicators, timeframes, chart types v2.166.16: useChartManagement/useIndicators import lightweight-charts lazily through utils/chartLib.loadChartLib(); useChartManagement exposes chartReady, which gates the series/data effects (the chart is now created asynchronously)."
     },
     {
       "file": "pages/Settings.tsx",
@@ -134,7 +134,7 @@
       },
       {
         "file": "components/PanicSellModal.tsx",
-        "purpose": "Multi-step emergency liquidation wizard: configure (action, target currency, options checkboxes) → confirm (typed CONFIRM gate) → mfa (TOTP or email OTP input) → progress (live phase indicators polled via useQuery refetchInterval:1500ms) → done (completion summary); PHASES order matches backend: stopping_bots → stopping_rebalancers → closing_positions → converting → completed; 14 tests in PanicSellModal.test.tsx"
+        "purpose": "Multi-step emergency liquidation wizard: configure (action, target currency, options checkboxes) \u2192 confirm (typed CONFIRM gate) \u2192 mfa (TOTP or email OTP input) \u2192 progress (live phase indicators polled via useQuery refetchInterval:1500ms) \u2192 done (completion summary); PHASES order matches backend: stopping_bots \u2192 stopping_rebalancers \u2192 closing_positions \u2192 converting \u2192 completed; 14 tests in PanicSellModal.test.tsx"
       },
       {
         "file": "components/PositionLogsModal.tsx",
@@ -179,6 +179,10 @@
       {
         "file": "pages/positions/helpers.ts",
         "purpose": "Position page helper functions"
+      },
+      {
+        "file": "pages/positions/components/VirtualizedPositionList.tsx",
+        "purpose": "v2.166.16: windowed list for position rows using @tanstack/react-virtual useWindowVirtualizer; dynamic measurement via measureElement (rows vary: expanded cards, group headers); generic over row type with renderItem render prop"
       }
     ],
     "charts": [
@@ -217,6 +221,10 @@
       {
         "file": "pages/charts/helpers.ts",
         "purpose": "Charts page helper functions"
+      },
+      {
+        "file": "pages/portfolio/PortfolioChartModal.tsx",
+        "purpose": "v2.166.16: per-asset candlestick+volume chart modal extracted from Portfolio.tsx; statically imports lightweight-charts but is itself loaded via React.lazy so the library stays out of the Portfolio chunk"
       }
     ],
     "logs_and_analysis": [
@@ -368,7 +376,7 @@
       },
       {
         "file": "components/reports/ExpenseItemsEditor.tsx",
-        "purpose": "Expense items CRUD editor for expenses-type goals; supports item_type toggle (Expense | Savings Target); savings-target form shows target amount, target date, current balance, assumed growth rate, and recurring toggle; savings items display with green piggy-bank badge and progress percentage. Split in Phase 5 (1338 -> 1041 LOC) — renders SortableExpenseRow per item and imports frequency/due-date helpers from ExpenseItemsEditor.helpers.ts."
+        "purpose": "Expense items CRUD editor for expenses-type goals; supports item_type toggle (Expense | Savings Target); savings-target form shows target amount, target date, current balance, assumed growth rate, and recurring toggle; savings items display with green piggy-bank badge and progress percentage. Split in Phase 5 (1338 -> 1041 LOC) \u2014 renders SortableExpenseRow per item and imports frequency/due-date helpers from ExpenseItemsEditor.helpers.ts."
       },
       {
         "file": "components/reports/SortableExpenseRow.tsx",
@@ -633,7 +641,7 @@
         "NotificationProvider",
         "useNotifications"
       ],
-      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async — before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session). v2.165.0 adds a handler for the 'speculative_calibration_alert' event broadcast by speculative_calibration_monitor: surfaces a persistent toast with a 'Review in email' CTA until the user acknowledges."
+      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async \u2014 before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session). v2.165.0 adds a handler for the 'speculative_calibration_alert' event broadcast by speculative_calibration_monitor: surfaces a persistent toast with a 'Review in email' CTA until the user acknowledges."
     },
     {
       "file": "contexts/VideoPlayerContext.tsx",
@@ -741,7 +749,7 @@
         },
         {
           "file": "pages/positions/hooks/usePositionMutations.ts",
-          "purpose": "Close, add funds, update settings, save notes; when force-close response contains requires_confirmation:true, returns {success:false, slippageBlocked:true, slippageWarning} instead of showing an error toast — caller (Positions.tsx) handles this by showing the inline slippage override confirm dialog"
+          "purpose": "Close, add funds, update settings, save notes; when force-close response contains requires_confirmation:true, returns {success:false, slippageBlocked:true, slippageWarning} instead of showing an error toast \u2014 caller (Positions.tsx) handles this by showing the inline slippage override confirm dialog"
         },
         {
           "file": "pages/positions/hooks/usePositionTrades.ts",
@@ -940,8 +948,8 @@
         "AggregateValue",
         "DashboardStats",
         "Settings",
-        "SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) — added v2.165.0",
-        "SpeculativeWeightsProposal (id, account_id, status, algorithm, sample_size, baseline_weights, proposed_weights, divergence_pp, created_at, decided_at) — added v2.166.0"
+        "SpeculativeBucketInfo (bucket_usd, used_usd, remaining_usd, utilization_pct, open_speculative_positions, speculative_allocation_pct) \u2014 added v2.165.0",
+        "SpeculativeWeightsProposal (id, account_id, status, algorithm, sample_size, baseline_weights, proposed_weights, divergence_pp, created_at, decided_at) \u2014 added v2.166.0"
       ],
       "market": [
         "Candle",
@@ -1004,6 +1012,10 @@
     {
       "file": "constants/voices.ts",
       "purpose": "TTS voice definitions (Microsoft Edge TTS Neural and Multilingual Neural voices including davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi added in v2.137), CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter \u2014 child voices are automatically swapped for adult voices when article content matches"
+    },
+    {
+      "file": "utils/chartLib.ts",
+      "purpose": "v2.166.16: loadChartLib() \u2014 shared single-flight dynamic import of lightweight-charts; all chart hooks/components that defer the library go through this so it is fetched at most once"
     }
   ]
 }
