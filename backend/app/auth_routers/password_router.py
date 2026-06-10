@@ -3,8 +3,9 @@ Password reset endpoints: forgot-password, reset-password.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -73,7 +74,7 @@ async def forgot_password(
         user_id=user.id,
         token=token_str,
         token_type="password_reset",
-        expires_at=datetime.utcnow() + timedelta(hours=1),
+        expires_at=utcnow() + timedelta(hours=1),
     )
     db.add(reset_token)
     await db.commit()
@@ -122,7 +123,7 @@ async def reset_password(
             detail="This reset link has already been used.",
         )
 
-    if token_record.expires_at < datetime.utcnow():
+    if token_record.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This reset link has expired. Please request a new one.",
@@ -137,9 +138,9 @@ async def reset_password(
 
     # Update password and invalidate all existing sessions
     user.hashed_password = hash_password(request.new_password)
-    user.updated_at = datetime.utcnow()
-    user.tokens_valid_after = datetime.utcnow()
-    token_record.used_at = datetime.utcnow()
+    user.updated_at = utcnow()
+    user.tokens_valid_after = utcnow()
+    token_record.used_at = utcnow()
 
     await db.commit()
 

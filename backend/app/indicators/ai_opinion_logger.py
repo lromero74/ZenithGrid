@@ -15,6 +15,7 @@ PnL% → "win"/"loss"/"breakeven" is trivially unit-testable.
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import logging
 from datetime import datetime
@@ -162,7 +163,7 @@ async def on_position_closed(
                 db=session,
                 position_id=payload.position_id,
                 realized_pnl_pct=float(pnl_pct),
-                closed_at=datetime.utcnow(),
+                closed_at=utcnow(),
             )
     except Exception:
         logger.exception(

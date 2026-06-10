@@ -6,7 +6,7 @@ Ownership is always determined by account.user_id — these models
 cover non-owner access only (role in: 'manager', 'shadow').
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -40,7 +40,7 @@ class AccountMembership(Base):
     invited_by_user_id = Column(
         Integer, ForeignKey("auth.users.id", ondelete="SET NULL"), nullable=True
     )
-    joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    joined_at = Column(DateTime, default=utcnow, nullable=False)
     expires_at = Column(DateTime, nullable=True)  # NULL = no expiry
 
     # Relationships
@@ -51,7 +51,7 @@ class AccountMembership(Base):
     @property
     def is_expired(self) -> bool:
         """True if this membership has a set expiry that has already passed."""
-        return self.expires_at is not None and self.expires_at < datetime.utcnow()
+        return self.expires_at is not None and self.expires_at < utcnow()
 
 
 class AccountInvitation(Base):
@@ -81,7 +81,7 @@ class AccountInvitation(Base):
     accepted_at = Column(DateTime, nullable=True)
     declined_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     account = relationship("Account", lazy="select")
     invited_by = relationship("User", foreign_keys=[invited_by_user_id], lazy="select")
@@ -93,7 +93,7 @@ class AccountInvitation(Base):
             self.accepted_at is None
             and self.declined_at is None
             and self.revoked_at is None
-            and self.expires_at > datetime.utcnow()
+            and self.expires_at > utcnow()
         )
 
 
@@ -122,4 +122,4 @@ class AccountMembershipEvent(Base):
     old_role = Column(String(20), nullable=True)
     new_role = Column(String(20), nullable=True)
     notes = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

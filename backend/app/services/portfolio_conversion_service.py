@@ -2,8 +2,8 @@
 Portfolio conversion service with progress tracking and execution.
 """
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from app.services.exchange_service import get_exchange_client_for_account
@@ -40,7 +40,7 @@ def init_task(task_id: str, user_id: int) -> None:
         "failed_count": 0,
         "errors": [],
         "message": "Initializing...",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": utcnow().isoformat(),
         "completed_at": None,
     }
 
@@ -71,7 +71,7 @@ def update_task_progress(
             "failed_count": 0,
             "errors": [],
             "message": "",
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": utcnow().isoformat(),
             "completed_at": None,
         }
 
@@ -93,7 +93,7 @@ def update_task_progress(
         task["errors"] = errors
 
     if status == "completed" or status == "failed":
-        task["completed_at"] = datetime.utcnow().isoformat()
+        task["completed_at"] = utcnow().isoformat()
 
     # Calculate progress percentage
     if task["total"] > 0:
@@ -106,7 +106,7 @@ def cleanup_old_tasks():
     """Clean up tasks older than 1 hour"""
     from datetime import datetime, timedelta
 
-    cutoff = datetime.utcnow() - timedelta(hours=1)
+    cutoff = utcnow() - timedelta(hours=1)
     to_remove = []
 
     for task_id, task in _conversion_tasks.items():

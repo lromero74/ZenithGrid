@@ -10,7 +10,7 @@ Handles all limit order operations for positions:
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -307,7 +307,7 @@ async def cancel_limit_close(
 
         if pending_order:
             pending_order.status = "canceled"
-            pending_order.canceled_at = datetime.utcnow()
+            pending_order.canceled_at = utcnow()
 
         # Reset position limit close flags
         position.closing_via_limit = False

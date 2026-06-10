@@ -10,7 +10,7 @@ Covers:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
@@ -31,7 +31,7 @@ async def _create_user(db_session, email="user@example.com") -> User:
         hashed_password="hashed",
         is_active=True,
         is_superuser=True,  # superuser bypasses RBAC for simplicity in these tests
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -413,7 +413,7 @@ class TestRebalancerSharedMemberAccess:
         member = User(
             email="reb_shadow@example.com",
             hashed_password="x", is_active=True, is_superuser=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(member)
         await db_session.flush()
@@ -450,7 +450,7 @@ class TestRebalancerSharedMemberAccess:
         manager = User(
             email="reb_manager@example.com",
             hashed_password="x", is_active=True, is_superuser=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(manager)
         await db_session.flush()

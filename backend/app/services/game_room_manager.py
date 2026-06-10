@@ -7,6 +7,7 @@ game results are persisted separately via game_result_service.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -35,7 +36,7 @@ class GameRoom:
     status: str = "waiting"  # "waiting", "playing", "finished"
     disconnected_players: Set[int] = field(default_factory=set)
     disconnect_times: Dict[int, datetime] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
@@ -140,7 +141,7 @@ class GameRoomManager:
             return False
 
         room.disconnected_players.add(user_id)
-        room.disconnect_times[user_id] = datetime.utcnow()
+        room.disconnect_times[user_id] = utcnow()
         logger.info(f"User {user_id} marked disconnected in room {room_id}")
         return True
 
@@ -160,7 +161,7 @@ class GameRoomManager:
         # Check if reconnect window has expired
         dc_time = room.disconnect_times.get(user_id)
         if dc_time:
-            elapsed = (datetime.utcnow() - dc_time).total_seconds()
+            elapsed = (utcnow() - dc_time).total_seconds()
             if elapsed > RECONNECT_WINDOW_SECONDS:
                 logger.info(f"Reconnect window expired for user {user_id} in room {room_id}")
                 return None
@@ -187,7 +188,7 @@ class GameRoomManager:
         # Check window
         dc_time = room.disconnect_times.get(user_id)
         if dc_time:
-            elapsed = (datetime.utcnow() - dc_time).total_seconds()
+            elapsed = (utcnow() - dc_time).total_seconds()
             if elapsed > RECONNECT_WINDOW_SECONDS:
                 # Window expired — clean up
                 self.leave_room(room_id, user_id)
@@ -201,7 +202,7 @@ class GameRoomManager:
         if not room:
             return []
 
-        now = datetime.utcnow()
+        now = utcnow()
         expired = []
         for uid in list(room.disconnected_players):
             dc_time = room.disconnect_times.get(uid)
@@ -253,7 +254,7 @@ class GameRoomManager:
             raise ValueError("Cannot start: not all players ready")
 
         room.status = "playing"
-        room.started_at = datetime.utcnow()
+        room.started_at = utcnow()
         logger.info(f"Game started in room {room_id}")
         return room
 
@@ -306,7 +307,7 @@ class GameRoomManager:
             raise ValueError("Room not found")
 
         room.status = "finished"
-        room.finished_at = datetime.utcnow()
+        room.finished_at = utcnow()
         room.result = result
         logger.info(f"Game finished in room {room_id}")
         return result
@@ -330,7 +331,7 @@ class GameRoomManager:
 
     def cleanup_stale_rooms(self) -> int:
         """Remove rooms older than ROOM_TTL_SECONDS. Returns count of cleaned rooms."""
-        now = datetime.utcnow()
+        now = utcnow()
         stale_ids = [
             room_id for room_id, room in self._rooms.items()
             if (now - room.created_at).total_seconds() > ROOM_TTL_SECONDS

@@ -7,7 +7,7 @@ and the clear_monitor_exchange_cache() helper.
 """
 
 import asyncio
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -284,7 +284,7 @@ class TestGetCandlesCached:
         monitor = MultiBotMonitor(exchange=exchange)
         cached = [{"close": 99}]
         # Set a fresh timestamp
-        monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (datetime.utcnow().timestamp(), cached)
+        monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (utcnow().timestamp(), cached)
 
         result = await monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 100)
         assert result is cached
@@ -297,7 +297,7 @@ class TestGetCandlesCached:
         monitor = MultiBotMonitor(exchange=exchange)
         old_candles = [{"close": 99}]
         # Set an old timestamp (10 minutes ago)
-        expired_time = datetime.utcnow().timestamp() - 600
+        expired_time = utcnow().timestamp() - 600
         monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (expired_time, old_candles)
 
         new_candles = [{"open": 1, "high": 2, "low": 0.5, "close": 2, "volume": 50}]
@@ -859,7 +859,7 @@ class TestCleanupCaches:
 
     def test_cleanup_evicts_expired_candles(self):
         monitor = MultiBotMonitor()
-        now = datetime.utcnow().timestamp()
+        now = utcnow().timestamp()
         # Fresh entry: should stay
         monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (now, [{"close": 1}])
         # Old entry: should evict (TTL is CANDLE_CACHE_DEFAULT_TTL; use huge age)
@@ -1230,7 +1230,7 @@ class TestMonitorLoop:
         due_bot = _make_bot(bot_id=1, name="Due")
         not_due_bot = _make_bot(bot_id=2, name="NotDue")
 
-        current_ts = int(datetime.utcnow().timestamp())
+        current_ts = int(utcnow().timestamp())
         monitor._bot_next_check = {
             due_bot.id: current_ts - 60,        # 60s overdue
             not_due_bot.id: current_ts + 600,   # 10min in the future
@@ -1353,7 +1353,7 @@ class TestMonitorLoop:
         monitor.running = True
 
         active_bot = _make_bot(bot_id=1, name="Active", product_ids=["ETH-BTC"])
-        current_ts = int(datetime.utcnow().timestamp())
+        current_ts = int(utcnow().timestamp())
 
         # Seed caches with stale entries that no active bot references
         monitor._previous_indicators_cache = {

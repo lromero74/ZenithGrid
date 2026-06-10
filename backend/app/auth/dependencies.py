@@ -8,7 +8,6 @@ creating circular dependencies.
 """
 
 import logging
-from datetime import datetime
 from enum import StrEnum
 from typing import Optional
 
@@ -22,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models import Group, RevokedToken, Role, User
+from app.utils.timeutil import utcfromtimestamp
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ async def get_current_user(
     # Check bulk revocation (password change sets tokens_valid_after)
     iat = payload.get("iat")
     if user.tokens_valid_after and iat:
-        token_issued = datetime.utcfromtimestamp(iat)
+        token_issued = utcfromtimestamp(iat)
         if token_issued < user.tokens_valid_after:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

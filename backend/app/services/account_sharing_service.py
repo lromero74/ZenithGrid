@@ -15,8 +15,9 @@ Security invariants enforced here:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,7 +76,7 @@ async def create_invitation(
             AccountInvitation.accepted_at.is_(None),
             AccountInvitation.declined_at.is_(None),
             AccountInvitation.revoked_at.is_(None),
-            AccountInvitation.expires_at > datetime.utcnow(),
+            AccountInvitation.expires_at > utcnow(),
         )
     )
     if dup.scalar_one_or_none():
@@ -91,7 +92,7 @@ async def create_invitation(
         invited_by_user_id=inviter.id,
         role=role,
         token=token,
-        expires_at=datetime.utcnow() + timedelta(days=INVITATION_TTL_DAYS),
+        expires_at=utcnow() + timedelta(days=INVITATION_TTL_DAYS),
     )
     db.add(invitation)
     await db.flush()
@@ -159,7 +160,7 @@ async def accept_invitation(
     )
     db.add(membership)
 
-    invitation.accepted_at = datetime.utcnow()
+    invitation.accepted_at = utcnow()
     await db.flush()
 
     await _log_event(
@@ -186,7 +187,7 @@ async def decline_invitation(
     invitation = await _get_pending_invitation(db, token)
     _assert_email_match(invitation, current_user)
 
-    invitation.declined_at = datetime.utcnow()
+    invitation.declined_at = utcnow()
     await db.flush()
 
     await _log_event(
@@ -221,7 +222,7 @@ async def revoke_invitation(
     if not invitation.is_pending:
         raise ValueError("Invitation is no longer pending and cannot be revoked.")
 
-    invitation.revoked_at = datetime.utcnow()
+    invitation.revoked_at = utcnow()
     await db.flush()
 
     await _log_event(
@@ -385,7 +386,7 @@ async def list_pending_invitations_for_account(
             AccountInvitation.accepted_at.is_(None),
             AccountInvitation.declined_at.is_(None),
             AccountInvitation.revoked_at.is_(None),
-            AccountInvitation.expires_at > datetime.utcnow(),
+            AccountInvitation.expires_at > utcnow(),
         )
     )
     return [
@@ -412,7 +413,7 @@ async def list_pending_invitations_for_user(
             AccountInvitation.accepted_at.is_(None),
             AccountInvitation.declined_at.is_(None),
             AccountInvitation.revoked_at.is_(None),
-            AccountInvitation.expires_at > datetime.utcnow(),
+            AccountInvitation.expires_at > utcnow(),
         )
     )
     invitations = result.scalars().all()

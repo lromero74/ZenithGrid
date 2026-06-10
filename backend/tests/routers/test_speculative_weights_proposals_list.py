@@ -4,7 +4,8 @@ Tests for GET /api/accounts/{id}/speculative-weights/proposals.
 Owner-only read endpoint surfacing a user's full proposal history.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -56,8 +57,8 @@ class TestListProposals:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 22},
-            created_at=datetime.utcnow() - timedelta(days=30),
-            decided_at=datetime.utcnow() - timedelta(days=30),
+            created_at=utcnow() - timedelta(days=30),
+            decided_at=utcnow() - timedelta(days=30),
         )
         newer = SpeculativeWeightsProposal(
             user_id=user.id, account_id=account.id, status="pending",
@@ -65,7 +66,7 @@ class TestListProposals:
             overall_win_rate_pct=16.0,
             baseline_weights={**DEFAULT_WEIGHTS, "volume_surge": 22},
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 27},
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add_all([older, newer])
         await db_session.flush()
@@ -105,7 +106,7 @@ class TestListProposals:
                 overall_win_rate_pct=15.0,
                 baseline_weights=dict(DEFAULT_WEIGHTS),
                 proposed_weights=dict(DEFAULT_WEIGHTS),
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
             ),
             SpeculativeWeightsProposal(
                 user_id=user.id, account_id=account_b.id, status="pending",
@@ -113,7 +114,7 @@ class TestListProposals:
                 overall_win_rate_pct=16.0,
                 baseline_weights=dict(DEFAULT_WEIGHTS),
                 proposed_weights=dict(DEFAULT_WEIGHTS),
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
             ),
         ])
         await db_session.flush()
@@ -146,7 +147,7 @@ class TestListProposals:
                 overall_win_rate_pct=15.0,
                 baseline_weights=dict(DEFAULT_WEIGHTS),
                 proposed_weights=dict(DEFAULT_WEIGHTS),
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
             ),
             SpeculativeWeightsProposal(
                 user_id=other.id, account_id=None, status="pending",
@@ -154,7 +155,7 @@ class TestListProposals:
                 overall_win_rate_pct=15.0,
                 baseline_weights=dict(DEFAULT_WEIGHTS),
                 proposed_weights=dict(DEFAULT_WEIGHTS),
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
             ),
         ])
         await db_session.flush()

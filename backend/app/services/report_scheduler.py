@@ -6,6 +6,7 @@ Also provides the generate_report_for_schedule function used by manual triggers.
 """
 
 import calendar
+from app.utils.timeutil import utcnow
 import json
 import logging
 from dataclasses import dataclass
@@ -39,7 +40,7 @@ async def run_report_scheduler_once(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            now = datetime.utcnow()
+            now = utcnow()
 
             # Find enabled schedules that are due
             result = await db.execute(
@@ -193,7 +194,7 @@ async def _advance_schedule_timing(
     schedule: "ReportSchedule", db: AsyncSession,
 ) -> None:
     """Update last_run_at/next_run_at for an automated run."""
-    schedule.last_run_at = datetime.utcnow()
+    schedule.last_run_at = utcnow()
     if schedule.schedule_type:
         schedule.next_run_at = compute_next_run_flexible(
             schedule, schedule.last_run_at,
@@ -231,7 +232,7 @@ async def generate_report_for_schedule(
         generate_pdf,
     )
 
-    now = datetime.utcnow()
+    now = utcnow()
 
     # Compute period bounds using new flexible logic
     if schedule.schedule_type:
@@ -351,7 +352,7 @@ async def generate_report_for_schedule(
         ))
         if email_sent:
             report.delivery_status = "sent"
-            report.delivered_at = datetime.utcnow()
+            report.delivered_at = utcnow()
             report.delivery_recipients = schedule.recipients
         else:
             report.delivery_status = "failed"

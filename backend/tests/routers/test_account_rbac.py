@@ -15,6 +15,7 @@ Covers:
 """
 
 import inspect
+from app.utils.timeutil import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -60,13 +61,12 @@ async def _create_group(db_session, name: str, roles: list[Role]) -> Group:
 
 
 async def _create_user(db_session, email: str, groups: list[Group], is_superuser=False) -> User:
-    from datetime import datetime
     user = User(
         email=email,
         hashed_password="hashed",
         is_active=True,
         is_superuser=is_superuser,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     user.groups = groups
     db_session.add(user)

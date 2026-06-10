@@ -5,7 +5,7 @@ Focus: code-quality sweep v2.160.4 Phase 2.3 — template name-uniqueness
 must not leak information about other users' templates.
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import patch
 
 import pytest
@@ -38,7 +38,7 @@ async def user_a(db_session):
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(u)
     await db_session.flush()
@@ -52,7 +52,7 @@ async def user_b(db_session):
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(u)
     await db_session.flush()

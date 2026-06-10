@@ -7,7 +7,7 @@ Handles position CRUD operations:
 - Creating new positions
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import List, Optional
 
 from sqlalchemy import desc, func, select
@@ -306,7 +306,7 @@ async def create_position(
         product_id=product_id,  # Use the engine's product_id (specific pair being traded)
         status="open",
         direction=direction,  # "long" or "short" for bidirectional DCA
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=quote_balance,
         max_quote_allowed=max_quote,  # Expected total based on order sizes
         total_quote_spent=0.0,

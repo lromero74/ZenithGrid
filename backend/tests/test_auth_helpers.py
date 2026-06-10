@@ -7,6 +7,7 @@ MFA token decoding.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -157,7 +158,7 @@ class TestCreateMfaToken:
         token = create_mfa_token(user_id=5)
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         # exp should be within 5 minutes + a few seconds tolerance
-        now_ts = datetime.utcnow().timestamp()
+        now_ts = utcnow().timestamp()
         assert payload["exp"] - now_ts <= 305  # 5 min + 5 sec tolerance
         assert payload["exp"] - now_ts > 200  # At least ~3 min
 
@@ -197,8 +198,8 @@ class TestDeviceTrustToken:
             "sub": 1,
             "type": "device_trust",
             "device_id": "dev-old",
-            "exp": datetime.utcnow() - timedelta(days=1),
-            "iat": datetime.utcnow() - timedelta(days=31),
+            "exp": utcnow() - timedelta(days=1),
+            "iat": utcnow() - timedelta(days=31),
         }
         expired_token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
         result = decode_device_trust_token(expired_token)
@@ -472,8 +473,8 @@ class TestDecodeMfaToken:
         payload = {
             "sub": "99",
             "type": "mfa",
-            "exp": datetime.utcnow() - timedelta(minutes=10),
-            "iat": datetime.utcnow() - timedelta(minutes=15),
+            "exp": utcnow() - timedelta(minutes=10),
+            "iat": utcnow() - timedelta(minutes=15),
         }
         expired_token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
         with pytest.raises(HTTPException) as exc_info:

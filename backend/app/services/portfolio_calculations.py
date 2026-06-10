@@ -6,7 +6,7 @@ Extracted from portfolio_service.py. No DB, cache, or API calls here.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 
 def _build_portfolio_holdings(
@@ -260,7 +260,7 @@ def _compute_closed_pnl(closed_positions: list) -> tuple:
     """
     pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
     pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-    now = datetime.utcnow()
+    now = utcnow()
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     for position in closed_positions:

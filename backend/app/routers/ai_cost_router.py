@@ -14,10 +14,11 @@ This router never writes — it's read-only aggregation over the user's own rows
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -110,7 +111,7 @@ async def cost_summary(
             detail=f"`days` must be between 1 and {_MAX_DAYS}",
         )
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     # Aggregate in SQL — one row per raw (ai_model, model_used) pair instead of
     # one ORM object per logged call. Provider-slug normalization ('openai' →
     # 'gpt') happens in Python over the handful of aggregated rows, merging

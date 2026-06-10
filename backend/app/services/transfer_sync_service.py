@@ -9,6 +9,7 @@ Can be called on-demand via API or scheduled as a daily background task.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -40,7 +41,7 @@ async def sync_transfers(
         Count of newly inserted transfers
     """
     if not since:
-        since = datetime.utcnow() - timedelta(days=90)
+        since = utcnow() - timedelta(days=90)
 
     try:
         client = await get_coinbase_for_account(account)

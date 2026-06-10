@@ -15,7 +15,8 @@ Coverage:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from app.models import Account, User
 from app.models.sharing import AccountInvitation, AccountMembership, AccountMembershipEvent
@@ -135,7 +136,7 @@ async def pending_invitation(db_session, shared_account, owner):
         invited_by_user_id=owner.id,
         role="manager",
         token="validtoken123abc",
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=utcnow() + timedelta(days=7),
     )
     db_session.add(inv)
     await db_session.flush()
@@ -151,7 +152,7 @@ async def expired_invitation(db_session, shared_account, owner):
         invited_by_user_id=owner.id,
         role="manager",
         token="expiredtoken456def",
-        expires_at=datetime.utcnow() - timedelta(days=1),
+        expires_at=utcnow() - timedelta(days=1),
     )
     db_session.add(inv)
     await db_session.flush()
@@ -388,8 +389,8 @@ class TestAcceptInvitation:
             invited_by_user_id=owner.id,
             role="shadow",
             token="revokedtoken789",
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            revoked_at=datetime.utcnow(),
+            expires_at=utcnow() + timedelta(days=7),
+            revoked_at=utcnow(),
         )
         db_session.add(inv)
         await db_session.flush()
@@ -528,7 +529,7 @@ class TestListMembers:
             user_id=member_user.id,
             role="shadow",
             invited_by_user_id=owner.id,
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=utcnow() - timedelta(hours=1),
         )
         db_session.add(expired)
         await db_session.flush()
@@ -813,7 +814,7 @@ class TestGetAccountRole:
             user_id=member_user.id,
             role="manager",
             invited_by_user_id=owner.id,
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=utcnow() - timedelta(hours=1),
         )
         db_session.add(expired)
         await db_session.flush()
@@ -891,34 +892,34 @@ class TestAccountInvitationIsPending:
 
     def test_fresh_invitation_is_pending(self):
         inv = AccountInvitation(
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=utcnow() + timedelta(days=7),
         )
         assert inv.is_pending is True
 
     def test_accepted_invitation_not_pending(self):
         inv = AccountInvitation(
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            accepted_at=datetime.utcnow(),
+            expires_at=utcnow() + timedelta(days=7),
+            accepted_at=utcnow(),
         )
         assert inv.is_pending is False
 
     def test_declined_invitation_not_pending(self):
         inv = AccountInvitation(
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            declined_at=datetime.utcnow(),
+            expires_at=utcnow() + timedelta(days=7),
+            declined_at=utcnow(),
         )
         assert inv.is_pending is False
 
     def test_revoked_invitation_not_pending(self):
         inv = AccountInvitation(
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            revoked_at=datetime.utcnow(),
+            expires_at=utcnow() + timedelta(days=7),
+            revoked_at=utcnow(),
         )
         assert inv.is_pending is False
 
     def test_expired_invitation_not_pending(self):
         inv = AccountInvitation(
-            expires_at=datetime.utcnow() - timedelta(seconds=1),
+            expires_at=utcnow() - timedelta(seconds=1),
         )
         assert inv.is_pending is False
 
@@ -936,11 +937,11 @@ class TestAccountMembershipIsExpired:
         assert m.is_expired is False
 
     def test_future_expiry_not_expired(self):
-        m = AccountMembership(expires_at=datetime.utcnow() + timedelta(days=30))
+        m = AccountMembership(expires_at=utcnow() + timedelta(days=30))
         assert m.is_expired is False
 
     def test_past_expiry_is_expired(self):
-        m = AccountMembership(expires_at=datetime.utcnow() - timedelta(seconds=1))
+        m = AccountMembership(expires_at=utcnow() - timedelta(seconds=1))
         assert m.is_expired is True
 
 
@@ -987,7 +988,7 @@ class TestInviteRateLimit:
             invited_by_user_id=owner.id,
             role="shadow",
             token="freshtoken999",
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=utcnow() + timedelta(days=7),
         )
         mock_inv.id = 999
 

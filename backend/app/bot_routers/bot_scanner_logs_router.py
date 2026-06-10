@@ -5,6 +5,7 @@ Handles scanner/monitor log creation and retrieval for non-AI strategies.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import List, Optional
 
@@ -45,7 +46,7 @@ async def create_scanner_log(
         current_price=log_data.current_price,
         volume_ratio=log_data.volume_ratio,
         pattern_data=log_data.pattern_data,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
     )
 
     db.add(log_entry)
@@ -146,7 +147,7 @@ async def clear_scanner_logs(
     delete_query = delete(ScannerLog).where(ScannerLog.bot_id == bot_id)
 
     if older_than_hours:
-        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        cutoff = utcnow() - timedelta(hours=older_than_hours)
         delete_query = delete_query.where(ScannerLog.timestamp < cutoff)
 
     result = await db.execute(delete_query)

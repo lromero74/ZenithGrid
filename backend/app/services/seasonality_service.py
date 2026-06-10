@@ -7,7 +7,7 @@ Extracted from seasonality_router.py. Contains:
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, Optional
 
 from app.services.season_detector import SeasonalityStatus
@@ -45,13 +45,13 @@ async def auto_manage_bots(
 
         if status.mode == "risk_off" and quote_currency == "BTC":
             bot.is_active = False
-            bot.updated_at = datetime.utcnow()
+            bot.updated_at = utcnow()
             disabled_btc += 1
             logger.info(f"Seasonality: Auto-disabled BTC bot '{bot.name}' (ID: {bot.id}) - Risk-Off mode")
 
         elif status.mode == "risk_on" and quote_currency == "USD":
             bot.is_active = False
-            bot.updated_at = datetime.utcnow()
+            bot.updated_at = utcnow()
             disabled_usd += 1
             logger.info(f"Seasonality: Auto-disabled USD bot '{bot.name}' (ID: {bot.id}) - Risk-On mode")
 

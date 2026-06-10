@@ -7,7 +7,7 @@ Extracted from MultiBotMonitor.process_bull_flag_bot().
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict
 
 from sqlalchemy import select
@@ -92,7 +92,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                         if order:
                             # Update position
                             position.status = "closed"
-                            position.closed_at = datetime.utcnow()
+                            position.closed_at = utcnow()
                             position.close_price = current_price
                             await db.commit()
 
@@ -236,7 +236,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                         account_id=bot.account_id,
                         product_id=product_id,
                         status="open",
-                        opened_at=datetime.utcnow(),
+                        opened_at=utcnow(),
                         average_buy_price=current_price,
                         total_base_acquired=quantity,
                         total_quote_spent=usd_amount,

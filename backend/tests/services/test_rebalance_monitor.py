@@ -6,6 +6,7 @@ and the rebalance monitor lifecycle.
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -1043,26 +1044,26 @@ class TestDustSweepCadence:
 
     def test_should_sweep_after_30_days(self):
         """Happy path: sweep if last sweep was >30 days ago."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         from app.services.rebalance_monitor import should_dust_sweep
 
-        last_sweep = datetime.utcnow() - timedelta(days=31)
+        last_sweep = utcnow() - timedelta(days=31)
         assert should_dust_sweep(last_sweep) is True
 
     def test_should_not_sweep_within_30_days(self):
         """Edge case: skip sweep if last sweep was <30 days ago."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         from app.services.rebalance_monitor import should_dust_sweep
 
-        last_sweep = datetime.utcnow() - timedelta(days=15)
+        last_sweep = utcnow() - timedelta(days=15)
         assert should_dust_sweep(last_sweep) is False
 
     def test_should_sweep_exactly_30_days(self):
         """Edge case: sweep at exactly 30 days."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         from app.services.rebalance_monitor import should_dust_sweep
 
-        last_sweep = datetime.utcnow() - timedelta(days=30)
+        last_sweep = utcnow() - timedelta(days=30)
         assert should_dust_sweep(last_sweep) is True
 
 

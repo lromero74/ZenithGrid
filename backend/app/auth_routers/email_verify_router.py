@@ -3,9 +3,10 @@ Email verification endpoints: verify-email, resend-verification, verify-email-co
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -55,14 +56,14 @@ async def verify_email(
             detail="This verification link has already been used.",
         )
 
-    if token_record.expires_at < datetime.utcnow():
+    if token_record.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This verification link has expired. Please request a new one.",
         )
 
     # Mark token as used and verify user
-    token_record.used_at = datetime.utcnow()
+    token_record.used_at = utcnow()
     user = await get_user_by_id(db, token_record.user_id)
     if not user:
         raise HTTPException(
@@ -71,7 +72,7 @@ async def verify_email(
         )
 
     user.email_verified = True
-    user.email_verified_at = datetime.utcnow()
+    user.email_verified_at = utcnow()
     await db.commit()
     await db.refresh(user)
 
@@ -117,7 +118,7 @@ async def resend_verification(
         token=token_str,
         verification_code=verify_code,
         token_type="email_verify",
-        expires_at=datetime.utcnow() + timedelta(hours=24),
+        expires_at=utcnow() + timedelta(hours=24),
     )
     db.add(verification_token)
     await db.commit()
@@ -173,16 +174,16 @@ async def verify_email_code(
             detail="Invalid verification code.",
         )
 
-    if token_record.expires_at < datetime.utcnow():
+    if token_record.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This code has expired. Please request a new one.",
         )
 
     # Mark token as used and verify user
-    token_record.used_at = datetime.utcnow()
+    token_record.used_at = utcnow()
     current_user.email_verified = True
-    current_user.email_verified_at = datetime.utcnow()
+    current_user.email_verified_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 

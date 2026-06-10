@@ -5,7 +5,8 @@ Covers scanner log creation, retrieval with filters, and log deletion.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from fastapi import HTTPException
 
 from app.models import Bot, ScannerLog, User
@@ -23,7 +24,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -38,8 +39,8 @@ async def _make_bot(db_session, user, name="ScannerBot"):
         product_id="BTC-USD",
         product_ids=["BTC-USD"],
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db_session.add(bot)
     await db_session.flush()
@@ -61,7 +62,7 @@ async def _make_scanner_log(db_session, bot, product_id="BTC-USD",
         current_price=current_price,
         volume_ratio=volume_ratio,
         pattern_data=pattern_data,
-        timestamp=timestamp or datetime.utcnow(),
+        timestamp=timestamp or utcnow(),
     )
     db_session.add(log)
     await db_session.flush()
@@ -168,7 +169,7 @@ class TestCreateScannerLog:
         owner = _make_user()
         other = User(
             email="other-scanner@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add_all([owner, other])
         await db_session.flush()
@@ -207,8 +208,8 @@ class TestGetScannerLogs:
 
         bot = await _make_bot(db_session, user)
 
-        t1 = datetime.utcnow() - timedelta(hours=2)
-        t2 = datetime.utcnow()
+        t1 = utcnow() - timedelta(hours=2)
+        t2 = utcnow()
         await _make_scanner_log(db_session, bot, decision="rejected", timestamp=t1)
         await _make_scanner_log(db_session, bot, decision="passed", timestamp=t2)
 
@@ -296,12 +297,12 @@ class TestGetScannerLogs:
         await db_session.flush()
 
         bot = await _make_bot(db_session, user)
-        old_time = datetime.utcnow() - timedelta(hours=48)
-        new_time = datetime.utcnow()
+        old_time = utcnow() - timedelta(hours=48)
+        new_time = utcnow()
         await _make_scanner_log(db_session, bot, timestamp=old_time)
         await _make_scanner_log(db_session, bot, timestamp=new_time)
 
-        since = datetime.utcnow() - timedelta(hours=1)
+        since = utcnow() - timedelta(hours=1)
         result = await get_scanner_logs(
             bot_id=bot.id, limit=100, offset=0, since=since,
             db=db_session, current_user=user
@@ -382,8 +383,8 @@ class TestClearScannerLogs:
         await db_session.flush()
 
         bot = await _make_bot(db_session, user)
-        old_time = datetime.utcnow() - timedelta(hours=48)
-        new_time = datetime.utcnow()
+        old_time = utcnow() - timedelta(hours=48)
+        new_time = utcnow()
         await _make_scanner_log(db_session, bot, timestamp=old_time)
         await _make_scanner_log(db_session, bot, timestamp=old_time)
         await _make_scanner_log(db_session, bot, timestamp=new_time)
@@ -435,7 +436,7 @@ class TestClearScannerLogs:
         owner = _make_user()
         other = User(
             email="other-clear@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add_all([owner, other])
         await db_session.flush()

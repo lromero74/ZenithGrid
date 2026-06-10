@@ -8,10 +8,11 @@ Covers:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import os
 import time
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock
 
 from app.cache import CacheEntry, SimpleCache, PersistentPortfolioCache
@@ -33,7 +34,7 @@ class TestCacheEntry:
     def test_expired_after_ttl(self):
         """Happy path: entry is expired when expires_at is in the past."""
         entry = CacheEntry("value", ttl_seconds=60)
-        entry.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        entry.expires_at = utcnow() - timedelta(seconds=1)
         assert entry.is_expired() is True
 
     def test_stores_value(self):
@@ -45,7 +46,7 @@ class TestCacheEntry:
         """Edge case: TTL of 0 means expires immediately (or near-immediately)."""
         entry = CacheEntry("value", ttl_seconds=0)
         # Might not be expired instantly due to timing, but should be expired very soon
-        entry.expires_at = datetime.utcnow() - timedelta(milliseconds=1)
+        entry.expires_at = utcnow() - timedelta(milliseconds=1)
         assert entry.is_expired() is True
 
 
@@ -78,7 +79,7 @@ class TestSimpleCache:
         cache = SimpleCache()
         await cache.set("key1", "value1", ttl_seconds=60)
         # Manually expire the entry
-        cache._cache["key1"].expires_at = datetime.utcnow() - timedelta(seconds=1)
+        cache._cache["key1"].expires_at = utcnow() - timedelta(seconds=1)
         result = await cache.get("key1")
         assert result is None
         assert "key1" not in cache._cache
@@ -134,7 +135,7 @@ class TestSimpleCache:
         cache = SimpleCache()
         await cache.set("fresh", "value1", ttl_seconds=60)
         await cache.set("stale", "value2", ttl_seconds=60)
-        cache._cache["stale"].expires_at = datetime.utcnow() - timedelta(seconds=1)
+        cache._cache["stale"].expires_at = utcnow() - timedelta(seconds=1)
         await cache.cleanup_expired()
         assert await cache.get("fresh") == "value1"
         assert "stale" not in cache._cache

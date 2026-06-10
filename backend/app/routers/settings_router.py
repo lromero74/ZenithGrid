@@ -8,8 +8,8 @@ Handles settings-related endpoints:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import os
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -256,7 +256,7 @@ async def update_setting_by_key(
 
     # Update the value
     setting.value = value
-    setting.updated_at = datetime.utcnow()
+    setting.updated_at = utcnow()
 
     await db.commit()
     await db.refresh(setting)

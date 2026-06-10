@@ -6,7 +6,7 @@ Extracted from routers/ai_credentials_router.py to avoid service→router import
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from sqlalchemy import select
@@ -51,7 +51,7 @@ async def get_user_api_key(
 
     if credential and credential.api_key:
         # Update last_used_at
-        credential.last_used_at = datetime.utcnow()
+        credential.last_used_at = utcnow()
         await db.commit()
         # Decrypt if encrypted
         api_key = credential.api_key

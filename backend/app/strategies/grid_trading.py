@@ -19,6 +19,7 @@ Key Features:
 """
 
 import bisect
+from app.utils.timeutil import utcnow
 import logging
 import statistics
 from datetime import datetime
@@ -643,7 +644,7 @@ class GridTradingStrategy(TradingStrategy):
                 can_rebalance = True
                 if last_breakout_time and cooldown_minutes > 0:
                     last_breakout = datetime.fromisoformat(last_breakout_time)
-                    minutes_elapsed = (datetime.utcnow() - last_breakout).total_seconds() / 60
+                    minutes_elapsed = (utcnow() - last_breakout).total_seconds() / 60
 
                     if minutes_elapsed < cooldown_minutes:
                         can_rebalance = False
@@ -674,7 +675,7 @@ class GridTradingStrategy(TradingStrategy):
                 should_run_ai = True
             else:
                 last_check_time = datetime.fromisoformat(last_ai_check)
-                minutes_elapsed = (datetime.utcnow() - last_check_time).total_seconds() / 60
+                minutes_elapsed = (utcnow() - last_check_time).total_seconds() / 60
                 if minutes_elapsed >= interval_minutes:
                     should_run_ai = True
 
@@ -692,7 +693,7 @@ class GridTradingStrategy(TradingStrategy):
             "current_price": current_price,
             "breakout_direction": breakout_direction,
             "ai_optimization_due": ai_optimization_signal,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
 
     async def should_buy(

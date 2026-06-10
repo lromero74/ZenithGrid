@@ -6,7 +6,8 @@ Functions log errors and return cleanly (never re-raise) so APScheduler reschedu
 """
 
 import logging
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +33,7 @@ async def cleanup_old_decision_logs(session_maker=None):
             retention_days = await get_log_retention_days(db)
 
             if retention_days > 0:
-                cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+                cutoff_date = utcnow() - timedelta(days=retention_days)
 
                 closed_positions_query = select(Position.id).where(
                     and_(
@@ -96,7 +97,7 @@ async def cleanup_failed_condition_logs(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = utcnow() - timedelta(hours=24)
 
             indicator_delete_query = delete(IndicatorLog).where(
                 and_(
@@ -139,7 +140,7 @@ async def cleanup_old_failed_orders(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = utcnow() - timedelta(hours=24)
 
             failed_delete_query = delete(OrderHistory).where(
                 and_(
@@ -169,7 +170,7 @@ async def cleanup_expired_revoked_tokens(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            now = datetime.utcnow()
+            now = utcnow()
             result = await db.execute(
                 delete(RevokedToken).where(RevokedToken.expires_at < now)
             )
@@ -192,7 +193,7 @@ async def cleanup_old_reports(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            cutoff_date = datetime.utcnow() - timedelta(days=730)
+            cutoff_date = utcnow() - timedelta(days=730)
 
             result = await db.execute(
                 delete(Report).where(Report.created_at < cutoff_date)
@@ -219,7 +220,7 @@ async def cleanup_expired_sessions(session_maker=None):
         async with sm() as db:
             expired_count = await expire_all_stale_sessions(db)
 
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = utcnow() - timedelta(days=30)
             result = await db.execute(
                 delete(ActiveSession).where(
                     and_(
@@ -271,7 +272,7 @@ async def cleanup_old_ai_opinion_logs(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            cutoff = datetime.utcnow() - timedelta(days=AI_OPINION_LOG_RETENTION_DAYS)
+            cutoff = utcnow() - timedelta(days=AI_OPINION_LOG_RETENTION_DAYS)
             result = await db.execute(
                 delete(AIOpinionLog).where(AIOpinionLog.created_at < cutoff)
             )
@@ -294,7 +295,7 @@ async def cleanup_old_rate_limit_attempts(session_maker=None):
     sm = session_maker or _default_session_maker
     try:
         async with sm() as db:
-            cutoff = datetime.utcnow() - timedelta(hours=1)
+            cutoff = utcnow() - timedelta(hours=1)
             from app.models import RateLimitAttempt
             result = await db.execute(
                 delete(RateLimitAttempt).where(

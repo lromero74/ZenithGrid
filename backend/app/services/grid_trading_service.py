@@ -9,8 +9,8 @@ Handles grid bot lifecycle:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -256,13 +256,13 @@ async def initialize_grid(
 
     # Create grid state
     grid_state = {
-        "initialized_at": datetime.utcnow().isoformat(),
+        "initialized_at": utcnow().isoformat(),
         "current_range_upper": grid_config["upper_limit"],
         "current_range_lower": grid_config["lower_limit"],
         "grid_levels": placed_orders,
         "total_buy_orders": buy_orders_placed,
         "total_sell_orders": sell_orders_placed,
-        "last_rebalance": datetime.utcnow().isoformat(),
+        "last_rebalance": utcnow().isoformat(),
         "total_profit_quote": 0.0,
         "breakout_count": 0,
         "grid_type": grid_config["grid_type"],
@@ -339,7 +339,7 @@ async def cancel_grid_orders(
                     logger.error(f"Failed to cancel order {order.order_id}: {e2}")
 
     # Update all pending orders in DB regardless of exchange result
-    now = datetime.utcnow()
+    now = utcnow()
     for order in pending_orders:
         order.status = "cancelled"
         order.canceled_at = now
@@ -549,7 +549,7 @@ async def rebalance_grid_on_breakout(params: GridRebalanceParams) -> Dict[str, A
     old_grid_state = params.bot.bot_config.get("grid_state", {})
     new_grid_state["breakout_count"] = old_grid_state.get("breakout_count", 0) + 1
     new_grid_state["last_breakout_direction"] = params.breakout_direction
-    new_grid_state["last_breakout_time"] = datetime.utcnow().isoformat()
+    new_grid_state["last_breakout_time"] = utcnow().isoformat()
     new_grid_state["previous_range_upper"] = old_grid_state.get("current_range_upper")
     new_grid_state["previous_range_lower"] = old_grid_state.get("current_range_lower")
 

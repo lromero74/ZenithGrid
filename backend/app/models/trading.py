@@ -1,6 +1,6 @@
 """Trading models: accounts, bots, positions, trades, orders."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from sqlalchemy import (
@@ -55,8 +55,8 @@ class Account(Base):
     wallet_type = Column(String, nullable=True)  # "metamask", "walletconnect", "private_key"
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     last_used_at = Column(DateTime, nullable=True)
 
     # Auto-buy BTC settings
@@ -200,8 +200,8 @@ class Bot(Base):
     reserved_btc_for_shorts = Column(Float, default=0.0)  # BTC reserved for short positions
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     # Last time signal was checked (technical conditions + positions)
     last_signal_check = Column(DateTime, nullable=True)
     # Last time AI analysis was performed (expensive operation)
@@ -348,7 +348,7 @@ class BotRebalancerGroup(Base):
     max_total_pct = Column(Float, default=100.0)
     overweight_tolerance_pct = Column(Float, default=5.0)
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 
 class BotProduct(Base):
@@ -358,7 +358,7 @@ class BotProduct(Base):
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (UniqueConstraint("bot_id", "product_id", name="uq_bot_product"), {'schema': 'trading'})
 
@@ -385,8 +385,8 @@ class BotTemplate(Base):
 
     # Template metadata
     is_default = Column(Boolean, default=False)  # System preset vs user-created
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Relationships
     user = relationship("User", back_populates="bot_templates")
@@ -411,7 +411,7 @@ class BotTemplateProduct(Base):
         Integer, ForeignKey("trading.bot_templates.id", ondelete="CASCADE"), nullable=False, index=True
     )
     product_id = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (UniqueConstraint("template_id", "product_id", name="uq_template_product"), {'schema': 'trading'})
 
@@ -436,7 +436,7 @@ class Position(Base):
     user_deal_number = Column(Integer, nullable=True, index=True)
     product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
-    opened_at = Column(DateTime, default=datetime.utcnow)
+    opened_at = Column(DateTime, default=utcnow)
     closed_at = Column(DateTime, nullable=True)
 
     # Bidirectional DCA Grid Bot - Direction Tracking
@@ -578,7 +578,7 @@ class Trade(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("trading.positions.id"), index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
 
     side = Column(String)  # buy, sell
     quote_amount = Column(Float)  # Amount of quote currency (BTC or USD)
@@ -603,7 +603,7 @@ class Signal(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
 
     signal_type = Column(String)  # macd_cross_up, macd_cross_down
     macd_value = Column(Float)
@@ -652,7 +652,7 @@ class PendingOrder(Base):
     status = Column(
         String, nullable=False, default="pending"
     )  # "pending", "partially_filled", "filled", "canceled", "expired"
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     filled_at = Column(DateTime, nullable=True)
     canceled_at = Column(DateTime, nullable=True)
 
@@ -692,7 +692,7 @@ class OrderHistory(Base):
     __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     # Bot and position references
     bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=False)
@@ -755,7 +755,7 @@ class AIOpinionLog(Base):
     cost_usd = Column(Float, nullable=True, default=0.0)
     tool_calls = Column(JSON, nullable=True)  # list[{name,input,output_summary,turn}]
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     # Backfilled on POSITION_CLOSED — null until the position actually closes.
     outcome = Column(String, nullable=True)   # "win" | "loss" | "breakeven"
@@ -784,7 +784,7 @@ class BlacklistedCoin(Base):
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     symbol = Column(String, index=True)  # e.g., "ICP", "EOS", "DOGE" - unique per user, not globally
     reason = Column(Text, nullable=True)  # Why the coin is blacklisted
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     user = relationship("User", back_populates="blacklisted_coins")
@@ -841,7 +841,7 @@ class SpeculativeWeightsProposal(Base):
     proposed_weights = Column(JSON, nullable=False)
     divergence_pp = Column(Float, nullable=True)
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     decided_at = Column(DateTime, nullable=True)
     decided_by = Column(Integer, ForeignKey("auth.users.id"), nullable=True)
     # Phase 2 reserved — left null by Phase 1 code paths.

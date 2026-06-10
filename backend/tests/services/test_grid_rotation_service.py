@@ -8,7 +8,8 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.grid_rotation_service import (
@@ -62,7 +63,7 @@ class TestEvaluateGridRotation:
     @pytest.mark.asyncio
     async def test_rotation_not_yet_time(self, db_session):
         """Edge case: interval not reached returns False."""
-        recent = datetime.utcnow().isoformat()
+        recent = utcnow().isoformat()
         bot = _make_bot({
             "enable_time_rotation": True,
             "rotation_interval_hours": 48,
@@ -76,7 +77,7 @@ class TestEvaluateGridRotation:
     @pytest.mark.asyncio
     async def test_rotation_time_reached_sufficient_profit(self, db_session):
         """Happy path: interval reached with sufficient profit returns True."""
-        old_time = (datetime.utcnow() - timedelta(hours=50)).isoformat()
+        old_time = (utcnow() - timedelta(hours=50)).isoformat()
         bot = _make_bot({
             "enable_time_rotation": True,
             "rotation_interval_hours": 48,
@@ -92,7 +93,7 @@ class TestEvaluateGridRotation:
     @pytest.mark.asyncio
     async def test_rotation_time_reached_insufficient_profit(self, db_session):
         """Edge case: interval reached but insufficient profit returns False."""
-        old_time = (datetime.utcnow() - timedelta(hours=50)).isoformat()
+        old_time = (utcnow() - timedelta(hours=50)).isoformat()
         bot = _make_bot({
             "enable_time_rotation": True,
             "rotation_interval_hours": 48,
@@ -109,8 +110,8 @@ class TestEvaluateGridRotation:
     async def test_rotation_uses_last_rotation_over_initialized_at(self, db_session):
         """Edge case: prefers last_rotation time over initialized_at."""
         # Grid was initialized 100 hours ago, but last rotation was 10 hours ago
-        old_init = (datetime.utcnow() - timedelta(hours=100)).isoformat()
-        recent_rotation = (datetime.utcnow() - timedelta(hours=10)).isoformat()
+        old_init = (utcnow() - timedelta(hours=100)).isoformat()
+        recent_rotation = (utcnow() - timedelta(hours=10)).isoformat()
         bot = _make_bot({
             "enable_time_rotation": True,
             "rotation_interval_hours": 48,
@@ -128,7 +129,7 @@ class TestEvaluateGridRotation:
     @pytest.mark.asyncio
     async def test_rotation_zero_profit_threshold(self, db_session):
         """Edge case: zero min_profit_to_rotate means any profit triggers rotation."""
-        old_time = (datetime.utcnow() - timedelta(hours=50)).isoformat()
+        old_time = (utcnow() - timedelta(hours=50)).isoformat()
         bot = _make_bot({
             "enable_time_rotation": True,
             "rotation_interval_hours": 48,

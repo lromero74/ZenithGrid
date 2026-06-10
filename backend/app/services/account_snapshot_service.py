@@ -6,8 +6,9 @@ Runs once per day via scheduled task.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from collections import defaultdict
@@ -174,7 +175,7 @@ async def capture_account_snapshot(db: AsyncSession, account: Account, session_m
         total_usd = portfolio.get("total_usd_value", 0.0)
 
         # Create snapshot with today's date (00:00:00)
-        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snapshot_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Check if snapshot already exists for today
         result = await db.execute(
@@ -294,7 +295,7 @@ async def get_account_value_history(
     Returns:
         List of daily snapshots with values (aggregated if account_id is None)
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = utcnow() - timedelta(days=days)
 
     if account_id is not None:
         # Single account mode - return snapshots for specific account only
@@ -415,7 +416,7 @@ async def get_daily_activity(
 
     Returns flat list of aggregated records sorted by date.
     """
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utcnow() - timedelta(days=days)
 
     # --- Closed positions ---
     pos_filters = [

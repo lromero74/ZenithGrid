@@ -8,7 +8,7 @@ Covers:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.trading_engine.signal_processor import (
@@ -210,7 +210,7 @@ class TestIsDuplicateFailedOrder:
             error_message="Insufficient funds",
             quote_amount=100.0,
             price=3000.0,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(order)
         await db_session.commit()
@@ -236,7 +236,7 @@ class TestIsDuplicateFailedOrder:
             error_message="Insufficient funds",
             quote_amount=100.0,
             price=3000.0,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(order)
         await db_session.commit()
@@ -265,7 +265,7 @@ class TestIsDuplicateFailedOrder:
             error_message="Budget exhausted",
             quote_amount=50.0,
             price=3000.0,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(order)
         await db_session.commit()

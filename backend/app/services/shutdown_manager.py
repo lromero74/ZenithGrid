@@ -6,6 +6,7 @@ Ensures no orders are mid-execution before allowing shutdown.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime
 from typing import Optional
@@ -97,7 +98,7 @@ class ShutdownManager:
             - message: str - Human-readable status
         """
         self._shutting_down = True
-        self._shutdown_requested_at = datetime.utcnow()
+        self._shutdown_requested_at = utcnow()
         self._shutdown_event.clear()
 
         logger.info(f"Shutdown requested - {self._in_flight_count} orders in-flight")
@@ -117,7 +118,7 @@ class ShutdownManager:
 
         try:
             await asyncio.wait_for(self._shutdown_event.wait(), timeout=timeout)
-            waited = (datetime.utcnow() - self._shutdown_requested_at).total_seconds()
+            waited = (utcnow() - self._shutdown_requested_at).total_seconds()
             logger.info(f"All in-flight orders completed after {waited:.1f}s - ready for shutdown")
             return {
                 "ready": True,

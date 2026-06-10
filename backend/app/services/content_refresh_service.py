@@ -10,6 +10,8 @@ responses from the database.
 import logging
 from datetime import datetime
 
+from app.utils.timeutil import utcnow
+
 logger = logging.getLogger(__name__)
 
 # Cache refresh intervals (in seconds) — kept for status reporting
@@ -49,7 +51,7 @@ class ContentRefreshService:
         try:
             logger.info("Content refresh: Fetching news articles...")
             await fetch_func(session_maker=session_maker)
-            self._last_news_refresh = datetime.utcnow()
+            self._last_news_refresh = utcnow()
             logger.info("Content refresh: News articles updated successfully")
         except Exception as e:
             logger.error(f"Content refresh: Failed to refresh news: {e}")
@@ -59,7 +61,7 @@ class ContentRefreshService:
         try:
             logger.info("Content refresh: Fetching videos...")
             await fetch_func(session_maker=session_maker)
-            self._last_video_refresh = datetime.utcnow()
+            self._last_video_refresh = utcnow()
             logger.info("Content refresh: Videos updated successfully")
         except Exception as e:
             logger.error(f"Content refresh: Failed to refresh videos: {e}")

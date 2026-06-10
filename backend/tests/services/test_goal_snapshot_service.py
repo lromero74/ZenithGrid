@@ -11,7 +11,8 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 from sqlalchemy import select
@@ -135,8 +136,8 @@ class TestCaptureGoalSnapshots:
             target_value=1000.0,
             income_period="monthly",
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -164,8 +165,8 @@ class TestCaptureGoalSnapshots:
             target_currency="USD",
             target_value=100000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -193,8 +194,8 @@ class TestCaptureGoalSnapshots:
             target_currency="USD",
             target_value=0.0,  # Edge case
             time_horizon_months=6,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=150),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=150),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -227,8 +228,8 @@ class TestGetGoalTrendData:
             target_currency="USD",
             target_value=100000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -248,7 +249,7 @@ class TestGetGoalTrendData:
         db_session.add(user)
         await db_session.flush()
 
-        start = datetime.utcnow() - timedelta(days=60)
+        start = utcnow() - timedelta(days=60)
         target_date = start + timedelta(days=365)
 
         goal = ReportGoal(
@@ -310,8 +311,8 @@ class TestGetGoalTrendData:
             target_currency="USD",
             target_value=10000.0,
             time_horizon_months=6,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=150),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=150),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -332,7 +333,7 @@ async def _create_expense_goal_fixtures(db_session):
     db_session.add(user)
     await db_session.flush()
 
-    start = datetime.utcnow() - timedelta(days=30)
+    start = utcnow() - timedelta(days=30)
     target_date = start + timedelta(days=365)
 
     goal = ReportGoal(
@@ -393,7 +394,7 @@ class TestGetExpenseSnapshotValues:
             product_id="BTC-USD",
             status="closed",
             profit_usd=900.0,
-            closed_at=datetime.utcnow() - timedelta(days=5),
+            closed_at=utcnow() - timedelta(days=5),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -437,8 +438,8 @@ class TestGetExpenseSnapshotValues:
             expense_period="monthly",
             tax_withholding_pct=0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -513,7 +514,7 @@ class TestBackfillExpenseGoalSnapshots:
 
         # Should skip the existing date
         expected_days = (
-            datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             - snap_date
         ).days
         assert count == expected_days  # one less than total days
@@ -538,8 +539,8 @@ class TestBackfillExpenseGoalSnapshots:
             expense_period="monthly",
             tax_withholding_pct=0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=10),
-            target_date=datetime.utcnow() + timedelta(days=355),
+            start_date=utcnow() - timedelta(days=10),
+            target_date=utcnow() + timedelta(days=355),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -561,8 +562,8 @@ class TestBackfillExpenseGoalSnapshots:
             expense_period="monthly",
             tax_withholding_pct=0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() + timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=395),
+            start_date=utcnow() + timedelta(days=30),
+            target_date=utcnow() + timedelta(days=395),
         )
         db_session.add(future_goal)
         await db_session.flush()
@@ -610,8 +611,8 @@ class TestExpenseGoalTrendData:
             expense_period="monthly",
             tax_withholding_pct=10,
             time_horizon_months=6,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=150),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=150),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -630,7 +631,7 @@ class TestExpenseGoalTrendData:
         db_session.add(user)
         await db_session.flush()
 
-        start = datetime.utcnow() - timedelta(days=60)
+        start = utcnow() - timedelta(days=60)
         target_date = start + timedelta(days=365)
 
         goal = ReportGoal(
@@ -708,7 +709,7 @@ async def _create_multi_account_fixtures(db_session):
     db_session.add_all([live_account, paper_account])
     await db_session.flush()
 
-    start = datetime.utcnow() - timedelta(days=10)
+    start = utcnow() - timedelta(days=10)
     target_date = start + timedelta(days=365)
 
     goal = ReportGoal(
@@ -761,7 +762,7 @@ class TestExpenseSnapshotAccountFiltering:
             product_id="BTC-USD",
             status="closed",
             profit_usd=10.0,
-            closed_at=datetime.utcnow() - timedelta(days=2),
+            closed_at=utcnow() - timedelta(days=2),
         )
         # Paper account: huge profit ($5000) — should be EXCLUDED
         paper_pos = Position(
@@ -770,7 +771,7 @@ class TestExpenseSnapshotAccountFiltering:
             product_id="BTC-USD",
             status="closed",
             profit_usd=5000.0,
-            closed_at=datetime.utcnow() - timedelta(days=2),
+            closed_at=utcnow() - timedelta(days=2),
         )
         db_session.add_all([live_pos, paper_pos])
         await db_session.flush()
@@ -811,7 +812,7 @@ class TestExpenseSnapshotAccountFiltering:
         db_session.add(acct)
         await db_session.flush()
 
-        start = datetime.utcnow() - timedelta(days=10)
+        start = utcnow() - timedelta(days=10)
         goal = ReportGoal(
             user_id=user.id,
             account_id=None,  # No account filter
@@ -846,7 +847,7 @@ class TestExpenseSnapshotAccountFiltering:
             product_id="BTC-USD",
             status="closed",
             profit_usd=300.0,
-            closed_at=datetime.utcnow() - timedelta(days=2),
+            closed_at=utcnow() - timedelta(days=2),
         )
         db_session.add(pos)
         await db_session.flush()
@@ -948,8 +949,8 @@ class TestCaptureSnapshotAccountFiltering:
             target_currency="USD",
             target_value=10000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -961,7 +962,7 @@ class TestCaptureSnapshotAccountFiltering:
             product_id="BTC-USD",
             status="closed",
             profit_usd=50.0,
-            closed_at=datetime.utcnow() - timedelta(days=5),
+            closed_at=utcnow() - timedelta(days=5),
         )
         # Paper account: $9000 profit — should be EXCLUDED
         paper_pos = Position(
@@ -970,7 +971,7 @@ class TestCaptureSnapshotAccountFiltering:
             product_id="BTC-USD",
             status="closed",
             profit_usd=9000.0,
-            closed_at=datetime.utcnow() - timedelta(days=5),
+            closed_at=utcnow() - timedelta(days=5),
         )
         db_session.add_all([live_pos, paper_pos])
         await db_session.flush()
@@ -1029,14 +1030,14 @@ class TestPaperAccountGoalSnapshots:
             target_currency="USD",
             target_value=2000.0,
             time_horizon_months=6,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=150),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=150),
         )
         db_session.add(goal)
         await db_session.flush()
 
         # Create a snapshot for the paper account with $1000 value
-        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snapshot_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         snap = AccountValueSnapshot(
             account_id=paper_acct.id,
             user_id=user.id,
@@ -1091,14 +1092,14 @@ class TestPaperAccountGoalSnapshots:
             target_currency="USD",
             target_value=5000.0,
             time_horizon_months=12,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=335),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=335),
         )
         db_session.add(goal)
         await db_session.flush()
 
         # Paper account snapshot
-        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snapshot_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         snap = AccountValueSnapshot(
             account_id=paper_acct.id,
             user_id=user.id,
@@ -1151,8 +1152,8 @@ class TestPaperAccountGoalSnapshots:
             target_currency="USD",
             target_value=500.0,
             time_horizon_months=6,
-            start_date=datetime.utcnow() - timedelta(days=30),
-            target_date=datetime.utcnow() + timedelta(days=150),
+            start_date=utcnow() - timedelta(days=30),
+            target_date=utcnow() + timedelta(days=150),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -1164,12 +1165,12 @@ class TestPaperAccountGoalSnapshots:
             product_id="BTC-USD",
             status="closed",
             profit_usd=150.0,
-            closed_at=datetime.utcnow() - timedelta(days=5),
+            closed_at=utcnow() - timedelta(days=5),
         )
         db_session.add(pos)
         await db_session.flush()
 
-        snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        snapshot_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         snap = AccountValueSnapshot(
             account_id=paper_acct.id,
             user_id=user.id,
@@ -1213,7 +1214,7 @@ class TestPaperAccountGoalSnapshots:
         db_session.add(paper_acct)
         await db_session.flush()
 
-        start = datetime.utcnow() - timedelta(days=10)
+        start = utcnow() - timedelta(days=10)
         goal = ReportGoal(
             user_id=user.id,
             account_id=paper_acct.id,

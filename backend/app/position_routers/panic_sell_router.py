@@ -7,9 +7,9 @@ GET  /panic-sell-status/{task_id}
     Poll progress.
 """
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import uuid
-from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -69,7 +69,7 @@ def _init_task(task_id: str, user_id: int = None) -> None:
         "conversion_status_url": None,
         "errors": [],
         "progress_pct": 0,
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": utcnow().isoformat(),
         "completed_at": None,
     }
 
@@ -84,7 +84,7 @@ def _update_task(task_id: str, **kwargs) -> None:
     if total > 0:
         task["progress_pct"] = int((current / total) * 100)
     if kwargs.get("status") in ("completed", "failed"):
-        task["completed_at"] = datetime.utcnow().isoformat()
+        task["completed_at"] = utcnow().isoformat()
 
 
 @router.post("/panic-sell-send-mfa")
@@ -112,7 +112,7 @@ async def panic_sell_send_mfa(
             )
         )
         for old_token in old_result.scalars().all():
-            old_token.used_at = datetime.utcnow()
+            old_token.used_at = utcnow()
 
         verify_code = f"{random.randint(0, 999999):06d}"
         from datetime import timedelta
@@ -121,7 +121,7 @@ async def panic_sell_send_mfa(
             token=str(uuid.uuid4()).replace("-", ""),
             verification_code=verify_code,
             token_type="action_mfa",
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            expires_at=utcnow() + timedelta(minutes=10),
         )
         db.add(mfa_email_token)
         await db.commit()
@@ -258,7 +258,7 @@ async def _execute_panic_sell(
             select(Bot).where(Bot.account_id == account_id, Bot.is_active.is_(True))
         )
         active_bots = bots_result.scalars().all()
-        now = datetime.utcnow()
+        now = utcnow()
         for bot in active_bots:
             try:
                 if bot.last_started_at:
@@ -352,7 +352,7 @@ async def _execute_panic_sell(
     positions_failed = 0
 
     if action == "cancel":
-        now = datetime.utcnow()
+        now = utcnow()
         for idx, position in enumerate(positions, 1):
             try:
                 position.status = "cancelled"

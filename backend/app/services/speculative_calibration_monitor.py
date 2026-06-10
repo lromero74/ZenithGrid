@@ -28,10 +28,11 @@ Design rationale (see PRPs/high-risk-doubling-preset.md §Phase F):
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy import select, update
@@ -127,7 +128,7 @@ async def _check_user(db, user_id: int) -> None:
     # Cooldown check.
     last_alerted = account.speculative_calibration_last_alerted_at
     if last_alerted is not None:
-        age = datetime.utcnow() - last_alerted
+        age = utcnow() - last_alerted
         if age < timedelta(days=COOLDOWN_DAYS):
             return
 
@@ -215,7 +216,7 @@ async def _check_user(db, user_id: int) -> None:
         return
 
     # Both surfaces succeeded — stamp the cooldown.
-    account.speculative_calibration_last_alerted_at = datetime.utcnow()
+    account.speculative_calibration_last_alerted_at = utcnow()
     await db.commit()
     logger.info(
         "speculative_calibration_monitor: alerted user %s (account %s) —"
@@ -306,7 +307,7 @@ async def _create_proposal(
             SpeculativeWeightsProposal.user_id == user_id,
             SpeculativeWeightsProposal.status == ProposalStatus.PENDING,
         )
-        .values(status=ProposalStatus.SUPERSEDED, decided_at=datetime.utcnow())
+        .values(status=ProposalStatus.SUPERSEDED, decided_at=utcnow())
     )
 
     row = SpeculativeWeightsProposal(

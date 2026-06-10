@@ -7,6 +7,7 @@ and trend data retrieval for charting.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -39,7 +40,7 @@ async def capture_goal_snapshots(
     to paper trading accounts get the correct values.
     Returns the number of snapshots created/updated.
     """
-    snapshot_date = datetime.utcnow().replace(
+    snapshot_date = utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
@@ -142,7 +143,7 @@ async def capture_goal_snapshots(
 
         # Determine on_track
         total_duration = (goal.target_date - goal.start_date).total_seconds()
-        elapsed = (datetime.utcnow() - goal.start_date).total_seconds()
+        elapsed = (utcnow() - goal.start_date).total_seconds()
         time_pct = (elapsed / total_duration * 100) if total_duration > 0 else 100
         on_track = progress_pct >= time_pct
 
@@ -222,7 +223,7 @@ async def _get_expense_snapshot_values(
     period_days = period_multipliers.get(expense_period, 30)
 
     # Compute daily income from closed positions since goal start
-    now = datetime.utcnow()
+    now = utcnow()
     days_elapsed = max((now - goal.start_date).days, 1)
 
     profit_filters = [
@@ -279,7 +280,7 @@ async def backfill_goal_snapshots(
     if goal.target_type == "expenses":
         return await _backfill_expense_goal_snapshots(db, goal)
 
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     start = goal.start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if start > today:
@@ -471,7 +472,7 @@ async def _backfill_expense_goal_snapshots(
     """
     from app.services.expense_service import compute_expense_coverage
 
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     start = goal.start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if start > today:
@@ -622,7 +623,7 @@ async def get_goal_trend_data(
     and an array of data points for recharts.
     """
     start = from_date or goal.start_date
-    end = to_date or min(datetime.utcnow(), goal.target_date)
+    end = to_date or min(utcnow(), goal.target_date)
 
     # Query snapshots
     filters = [

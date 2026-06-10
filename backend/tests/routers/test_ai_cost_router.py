@@ -9,7 +9,8 @@ the shared `db_session` fixture (in-memory SQLite), bypassing the FastAPI
 dependency wiring — same pattern used by test_ai_credentials_router.py.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 
@@ -52,7 +53,7 @@ async def _add_log(db, **kwargs):
         output_tokens=50,
         cost_usd=0.003,
         tool_calls=[],
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     defaults.update(kwargs)
     row = AIOpinionLog(**defaults)
@@ -134,7 +135,7 @@ class TestCostSummaryWindow:
         """Rows older than `days` must not count."""
         from app.routers.ai_cost_router import cost_summary
 
-        now = datetime.utcnow()
+        now = utcnow()
         await _add_log(db_session, created_at=now - timedelta(days=2), cost_usd=0.01)
         await _add_log(db_session, created_at=now - timedelta(days=10), cost_usd=0.99)
         await db_session.commit()
@@ -147,7 +148,7 @@ class TestCostSummaryWindow:
         """Omitting the `days` kwarg must look back exactly seven days."""
         from app.routers.ai_cost_router import cost_summary
 
-        now = datetime.utcnow()
+        now = utcnow()
         await _add_log(db_session, created_at=now - timedelta(days=5), cost_usd=0.01)
         await _add_log(db_session, created_at=now - timedelta(days=8), cost_usd=0.99)
         await db_session.commit()
@@ -160,7 +161,7 @@ class TestCostSummaryWindow:
     async def test_larger_window_includes_older_rows(self, db_session, current_user):
         from app.routers.ai_cost_router import cost_summary
 
-        now = datetime.utcnow()
+        now = utcnow()
         await _add_log(db_session, created_at=now - timedelta(days=20), cost_usd=0.05)
         await db_session.commit()
 

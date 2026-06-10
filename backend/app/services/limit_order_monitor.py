@@ -9,7 +9,7 @@ Exchange-agnostic: works with any ExchangeClient implementation
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Dict, Optional
 
 from sqlalchemy import select
@@ -168,7 +168,7 @@ class LimitOrderMonitor:
                     # Create sell trade for the NEW partial fill
                     trade = Trade(
                         position_id=position.id,
-                        timestamp=datetime.utcnow(),
+                        timestamp=utcnow(),
                         side="sell",
                         quote_amount=new_fill_value,
                         base_amount=new_fill_size,
@@ -296,7 +296,7 @@ class LimitOrderMonitor:
                 return
 
             # Check if order has been pending long enough
-            time_elapsed = (datetime.utcnow() - pending_order.created_at).total_seconds()
+            time_elapsed = (utcnow() - pending_order.created_at).total_seconds()
             if time_elapsed < timeout_seconds:
                 return  # Not yet time to fallback
 
@@ -368,7 +368,7 @@ class LimitOrderMonitor:
 
                     # Update pending order with new price (same order_id)
                     pending_order.limit_price = best_bid
-                    pending_order.created_at = datetime.utcnow()
+                    pending_order.created_at = utcnow()
                     await self.db.commit()
 
                 except NotImplementedError:
@@ -498,7 +498,7 @@ class LimitOrderMonitor:
             position.closing_via_limit = False
             position.limit_close_order_id = None
             pending_order.status = "cancelled"
-            pending_order.canceled_at = datetime.utcnow()
+            pending_order.canceled_at = utcnow()
             await self.db.commit()
             raise
 
@@ -514,14 +514,14 @@ class LimitOrderMonitor:
             position.closing_via_limit = False
             position.limit_close_order_id = None
             pending_order.status = "cancelled"
-            pending_order.canceled_at = datetime.utcnow()
+            pending_order.canceled_at = utcnow()
             await self.db.commit()
             raise Exception("No order_id in replacement order response")
 
         # Update tracking
         pending_order.order_id = new_order_id
         pending_order.limit_price = best_bid
-        pending_order.created_at = datetime.utcnow()
+        pending_order.created_at = utcnow()
         pending_order.status = "pending"
         position.limit_close_order_id = new_order_id
 
@@ -561,7 +561,7 @@ class LimitOrderMonitor:
                     # Create sell trade for the final partial fill
                     trade = Trade(
                         position_id=position.id,
-                        timestamp=datetime.utcnow(),
+                        timestamp=utcnow(),
                         side="sell",
                         quote_amount=new_fill_value,
                         base_amount=new_fill_size,
@@ -578,7 +578,7 @@ class LimitOrderMonitor:
 
                 # Close the position
                 position.status = "closed"
-                position.closed_at = datetime.utcnow()
+                position.closed_at = utcnow()
                 position.sell_price = avg_fill_price
 
                 # Use accumulated total_quote_received (includes partial fills)
@@ -600,7 +600,7 @@ class LimitOrderMonitor:
 
                 # Update pending order
                 pending_order.status = "filled"
-                pending_order.filled_at = datetime.utcnow()
+                pending_order.filled_at = utcnow()
                 pending_order.filled_base_amount = filled_size
                 pending_order.filled_quote_amount = filled_value
                 pending_order.filled_price = avg_fill_price
@@ -683,7 +683,7 @@ class LimitOrderMonitor:
 
                 pending_order.status = order_status.lower()
                 if order_status == "CANCELLED":
-                    pending_order.canceled_at = datetime.utcnow()
+                    pending_order.canceled_at = utcnow()
 
                 position.closing_via_limit = False
                 position.limit_close_order_id = None

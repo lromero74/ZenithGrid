@@ -16,9 +16,10 @@ Sub-routers:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -81,7 +82,7 @@ async def get_videos_for_user(
 ) -> List[VideoArticle]:
     """Get videos filtered by user's subscriptions and retention."""
 
-    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     query = (
         select(VideoArticle, UserSourceSubscription.retention_days)
@@ -114,7 +115,7 @@ async def get_videos_for_user(
         query = query.where(VideoArticle.category == category)
 
     # Apply per-user retention filter (PostgreSQL: SQL, SQLite: Python fallback)
-    now = datetime.utcnow()
+    now = utcnow()
     use_sql_retention = db.bind.dialect.name == "postgresql" if db.bind else False
 
     interval_1day = literal_column("INTERVAL '1 day'")
@@ -146,7 +147,7 @@ async def get_videos_from_db_list(
     db: AsyncSession, category: Optional[str] = None
 ) -> List[VideoArticle]:
     """Legacy: get videos without user filtering (for internal use)."""
-    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
     conditions = [VideoArticle.published_at >= cutoff]
     if category:
         conditions.append(VideoArticle.category == category)
@@ -217,7 +218,7 @@ async def get_videos_from_db(
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.utcnow()
+    now = utcnow()
     return {
         "videos": video_items,
         "sources": sources_list,

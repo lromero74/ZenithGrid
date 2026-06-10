@@ -10,7 +10,7 @@ Covers endpoints:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, patch
 
 from app.models import Account, Bot, PendingOrder, Position, User
@@ -56,7 +56,7 @@ async def _create_user_with_account(db_session, email="limit@example.com"):
         email=email,
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -97,7 +97,7 @@ async def _create_position(db_session, account, bot=None, **overrides):
         account_id=account.id,
         product_id="ETH-BTC",
         status="open",
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=1.0,
         max_quote_allowed=0.25,
         total_quote_spent=0.01,
@@ -747,14 +747,14 @@ class TestLimitOrdersManagerAccess:
 
         owner = User(
             email="lo_owner@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add(owner)
         await db_session.flush()
 
         manager_user = User(
             email="lo_manager@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add(manager_user)
         await db_session.flush()
@@ -782,7 +782,7 @@ class TestLimitOrdersManagerAccess:
 
         pos = Position(
             bot_id=bot.id, account_id=account.id, product_id="ETH-BTC",
-            status="open", opened_at=datetime.utcnow(),
+            status="open", opened_at=utcnow(),
             initial_quote_balance=1.0, max_quote_allowed=0.25,
             total_quote_spent=0.01, total_base_acquired=1.5,
             average_buy_price=0.02,

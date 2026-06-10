@@ -6,8 +6,9 @@ IP geolocation, and shared MFA login completion logic.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 import bcrypt
@@ -49,7 +50,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(user_id: int, email: str, session_id: str = None) -> str:
     """Create a JWT access token with unique JTI for revocation support"""
     expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    expire = datetime.utcnow() + expires_delta
+    expire = utcnow() + expires_delta
 
     payload = {
         "sub": str(user_id),
@@ -57,7 +58,7 @@ def create_access_token(user_id: int, email: str, session_id: str = None) -> str
         "type": "access",
         "jti": str(uuid.uuid4()),
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
     if session_id:
         payload["sid"] = session_id
@@ -68,14 +69,14 @@ def create_access_token(user_id: int, email: str, session_id: str = None) -> str
 def create_refresh_token(user_id: int, session_id: str = None) -> str:
     """Create a JWT refresh token (longer-lived) with unique JTI for revocation support"""
     expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
-    expire = datetime.utcnow() + expires_delta
+    expire = utcnow() + expires_delta
 
     payload = {
         "sub": str(user_id),
         "type": "refresh",
         "jti": str(uuid.uuid4()),
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
     if session_id:
         payload["sid"] = session_id
@@ -85,13 +86,13 @@ def create_refresh_token(user_id: int, session_id: str = None) -> str:
 
 def create_mfa_token(user_id: int) -> str:
     """Create a short-lived JWT for MFA verification (5 minutes)"""
-    expire = datetime.utcnow() + timedelta(minutes=5)
+    expire = utcnow() + timedelta(minutes=5)
 
     payload = {
         "sub": str(user_id),
         "type": "mfa",
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
@@ -99,14 +100,14 @@ def create_mfa_token(user_id: int) -> str:
 
 def create_device_trust_token(user_id: int, device_id: str) -> str:
     """Create a 30-day device trust token to skip MFA on trusted devices."""
-    expire = datetime.utcnow() + timedelta(days=30)
+    expire = utcnow() + timedelta(days=30)
 
     payload = {
         "sub": str(user_id),
         "type": "device_trust",
         "device_id": device_id,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
@@ -216,7 +217,7 @@ async def _create_device_trust(
 ) -> Optional[str]:
     """Create a trusted device record and return the device trust JWT token."""
     device_uuid = str(uuid.uuid4())
-    expires = datetime.utcnow() + timedelta(days=30)
+    expires = utcnow() + timedelta(days=30)
     device_trust = create_device_trust_token(user.id, device_uuid)
 
     user_agent = request.headers.get("user-agent", "")
@@ -276,7 +277,7 @@ async def _complete_mfa_login(
 
     # Update last_login_at (non-critical — don't block login if DB is locked)
     try:
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = utcnow()
         await db.commit()
         await db.refresh(user)
     except Exception as e:
@@ -296,7 +297,7 @@ async def _complete_mfa_login(
             session_id = str(uuid.uuid4())
             timeout = policy.get("session_timeout_minutes")
             if timeout:
-                session_expires_at = datetime.utcnow() + timedelta(minutes=timeout)
+                session_expires_at = utcnow() + timedelta(minutes=timeout)
 
             await create_session(
                 user_id=user.id,

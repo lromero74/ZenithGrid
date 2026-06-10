@@ -1,6 +1,6 @@
 """Auth & RBAC models: users, groups, roles, permissions, sessions, tokens."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import (
     Boolean,
@@ -86,8 +86,8 @@ class User(Base):
     mfa_email_enabled = Column(Boolean, default=True)  # Email MFA — on by default for all new users
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     last_login_at = Column(DateTime, nullable=True)
 
     # Token revocation: tokens issued before this timestamp are invalid
@@ -127,7 +127,7 @@ class Group(Base):
     description = Column(String(255), nullable=True)
     is_system = Column(Boolean, default=False)
     session_policy = Column(JSON, nullable=True)  # Session limit policy for this group
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     roles = relationship("Role", secondary=group_roles, back_populates="groups", lazy="selectin")
     users = relationship("User", secondary=user_groups, back_populates="groups", lazy="selectin")
@@ -143,7 +143,7 @@ class Role(Base):
     description = Column(String(255), nullable=True)
     is_system = Column(Boolean, default=False)
     requires_mfa = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles", lazy="selectin")
     groups = relationship("Group", secondary=group_roles, back_populates="roles", lazy="selectin")
@@ -178,7 +178,7 @@ class TrustedDevice(Base):
     device_name = Column(String, nullable=True)  # Parsed from User-Agent
     ip_address = Column(String, nullable=True)
     location = Column(String, nullable=True)  # City, State, Country from IP geolocation
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=False)
 
     # Relationships
@@ -203,7 +203,7 @@ class EmailVerificationToken(Base):
     token = Column(String, unique=True, nullable=False, index=True)
     verification_code = Column(String, nullable=True)  # 6-digit code for manual entry
     token_type = Column(String, nullable=False, default="email_verify")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
 
@@ -227,7 +227,7 @@ class RevokedToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String, unique=True, nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    revoked_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=False)  # JWT's original expiry — for cleanup
 
     user = relationship("User")
@@ -243,7 +243,7 @@ class ActiveSession(Base):
     session_id = Column(String(36), unique=True, nullable=False, index=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(512), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, index=True)
@@ -265,4 +265,4 @@ class RateLimitAttempt(Base):
     id = Column(Integer, primary_key=True, index=True)
     category = Column(String(30), nullable=False, index=True)   # login, signup, forgot_pw, mfa, resend
     key = Column(String(255), nullable=False, index=True)       # IP address, email, or mfa_token
-    attempted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    attempted_at = Column(DateTime, default=utcnow, nullable=False)

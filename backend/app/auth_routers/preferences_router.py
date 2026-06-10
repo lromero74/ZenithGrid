@@ -3,7 +3,7 @@ User preference endpoints: accept-terms, last-seen-history.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ async def accept_terms(
     Users must accept terms before accessing the dashboard.
     This only needs to be done once per user.
     """
-    current_user.terms_accepted_at = datetime.utcnow()
+    current_user.terms_accepted_at = utcnow()
     await db.commit()
     await db.refresh(current_user)
 

@@ -10,9 +10,10 @@ URL shape:  {frontend_url}/settings?apply_token=...&account_id=...&proposal_id=.
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from urllib.parse import quote
 
@@ -36,14 +37,14 @@ def create_apply_proposal_token(
     *, user_id: int, account_id: int, proposal_id: int,
 ) -> str:
     """Issue a JWT scoped to (user_id, account_id, proposal_id)."""
-    expire = datetime.utcnow() + timedelta(days=APPLY_TOKEN_TTL_DAYS)
+    expire = utcnow() + timedelta(days=APPLY_TOKEN_TTL_DAYS)
     payload = {
         "sub": str(user_id),
         "account_id": int(account_id),
         "proposal_id": int(proposal_id),
         "type": _TOKEN_TYPE,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
     return jwt.encode(
         payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm,

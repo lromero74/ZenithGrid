@@ -6,6 +6,7 @@ and viewing/downloading generated reports.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -466,7 +467,7 @@ async def create_goal(
     """Create a new financial goal."""
     from dateutil.relativedelta import relativedelta
 
-    start_date = datetime.utcnow()
+    start_date = utcnow()
 
     if body.target_date:
         # Custom date provided — use it, back-compute horizon
@@ -530,7 +531,7 @@ async def update_goal(
     # Handle target_date vs time_horizon_months
     custom_target_date = update_data.pop("target_date", None)
     if custom_target_date is not None:
-        if custom_target_date <= datetime.utcnow():
+        if custom_target_date <= utcnow():
             raise HTTPException(
                 status_code=400, detail="target_date must be in the future"
             )
@@ -549,7 +550,7 @@ async def update_goal(
             months=goal.time_horizon_months
         )
 
-    goal.updated_at = datetime.utcnow()
+    goal.updated_at = utcnow()
     await db.commit()
     await db.refresh(goal)
     return _goal_to_dict(goal)

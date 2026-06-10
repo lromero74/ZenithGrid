@@ -10,9 +10,10 @@ Categories: login, signup, forgot_pw, resend, mfa
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
@@ -90,7 +91,7 @@ async def _db_record(category: str, key: str):
         from app.models.auth import RateLimitAttempt
         async with async_session_maker() as db:
             db.add(RateLimitAttempt(
-                category=category, key=key, attempted_at=datetime.utcnow(),
+                category=category, key=key, attempted_at=utcnow(),
             ))
             await db.commit()
     except Exception as e:
@@ -101,7 +102,7 @@ async def _db_count(category: str, key: str, window_seconds: int) -> int:
     """Count recent attempts from DB for a key (used to warm cold cache)."""
     try:
         from app.models.auth import RateLimitAttempt
-        cutoff = datetime.utcnow() - timedelta(seconds=window_seconds)
+        cutoff = utcnow() - timedelta(seconds=window_seconds)
         async with async_session_maker() as db:
             result = await db.execute(
                 select(func.count()).where(
@@ -120,7 +121,7 @@ async def _db_cleanup():
     """Delete attempts older than the largest window (1 hour)."""
     try:
         from app.models.auth import RateLimitAttempt
-        cutoff = datetime.utcnow() - timedelta(hours=1)
+        cutoff = utcnow() - timedelta(hours=1)
         async with async_session_maker() as db:
             await db.execute(
                 delete(RateLimitAttempt).where(

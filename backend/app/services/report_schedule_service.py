@@ -6,6 +6,7 @@ Separated from the router to keep router endpoints thin.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime, timedelta
 
@@ -35,7 +36,7 @@ def compute_next_run_for_new_schedule(body) -> datetime:
     sched.lookback_value = body.lookback_value
     sched.lookback_unit = body.lookback_unit
 
-    return compute_next_run_flexible(sched, datetime.utcnow())
+    return compute_next_run_flexible(sched, utcnow())
 
 
 async def create_schedule_record(
@@ -212,7 +213,7 @@ async def update_schedule_record(
             schedule.force_standard_days,
         )
         schedule.next_run_at = compute_next_run_flexible(
-            schedule, datetime.utcnow()
+            schedule, utcnow()
         )
 
     # Update goal links if provided
@@ -240,7 +241,7 @@ async def update_schedule_record(
         for gid in goal_ids:
             db.add(ReportScheduleGoal(schedule_id=schedule.id, goal_id=gid))
 
-    schedule.updated_at = datetime.utcnow()
+    schedule.updated_at = utcnow()
     await db.commit()
 
     # Refresh with goal_links
@@ -278,7 +279,7 @@ async def apply_retention(schedule: ReportSchedule, db: AsyncSession) -> int:
 
     n = len(reports)
     cutoff = (
-        datetime.utcnow() - timedelta(days=schedule.retention_days)
+        utcnow() - timedelta(days=schedule.retention_days)
         if schedule.retention_days is not None else None
     )
 

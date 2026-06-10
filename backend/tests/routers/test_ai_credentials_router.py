@@ -6,7 +6,7 @@ update by provider, delete, provider status, and _api_key_preview helper.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -36,7 +36,7 @@ async def claude_credential(db_session, test_user):
         id=1, user_id=test_user.id, provider="claude",
         api_key="sk-ant-FAKEKEYVALUE1234567890",
         is_active=True,
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        created_at=utcnow(), updated_at=utcnow(),
     )
     db_session.add(cred)
     await db_session.flush()

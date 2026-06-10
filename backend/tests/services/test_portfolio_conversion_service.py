@@ -1,6 +1,7 @@
 """Tests for app/services/portfolio_conversion_service.py"""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from app.services.portfolio_conversion_service import (
     get_task_progress,
@@ -85,7 +86,7 @@ class TestCleanupOldTasks:
         _conversion_tasks.clear()
 
     def test_removes_completed_tasks_older_than_1_hour(self):
-        old_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+        old_time = (utcnow() - timedelta(hours=2)).isoformat()
         _conversion_tasks["old-task"] = {
             "task_id": "old-task",
             "completed_at": old_time,
@@ -94,7 +95,7 @@ class TestCleanupOldTasks:
         assert "old-task" not in _conversion_tasks
 
     def test_keeps_recent_completed_tasks(self):
-        recent_time = datetime.utcnow().isoformat()
+        recent_time = utcnow().isoformat()
         _conversion_tasks["recent-task"] = {
             "task_id": "recent-task",
             "completed_at": recent_time,

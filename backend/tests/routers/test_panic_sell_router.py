@@ -24,7 +24,8 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.trading import Account, Bot, BotRebalancerGroup, Position
@@ -42,7 +43,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
 
 
@@ -71,17 +72,17 @@ async def _make_bot(db, account, is_active=True):
     bot = Bot(
         user_id=account.user_id,
         account_id=account.id,
-        name=f"bot_{datetime.utcnow().timestamp()}",
+        name=f"bot_{utcnow().timestamp()}",
         strategy_type="macd_dca",
         strategy_config={"base_order_percentage": 5.0},
         product_id="ETH-USD",
         product_ids=["ETH-USD"],
         is_active=is_active,
         check_interval_seconds=300,
-        last_started_at=datetime.utcnow() - timedelta(hours=1) if is_active else None,
+        last_started_at=utcnow() - timedelta(hours=1) if is_active else None,
         total_running_seconds=0.0,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db.add(bot)
     await db.flush()
@@ -95,7 +96,7 @@ async def _make_position(db, bot, status="open"):
         user_id=bot.user_id,
         product_id=bot.product_id,
         status=status,
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=1.0,
         max_quote_allowed=0.25,
         total_quote_spent=0.01,
@@ -172,7 +173,7 @@ class TestPanicSellAuth:
             hashed_password="hashed",
             is_active=True,
             is_superuser=False,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(other_user)
         await db_session.flush()

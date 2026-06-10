@@ -8,6 +8,7 @@ debt ceiling changes.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -69,7 +70,7 @@ class DebtCeilingMonitor:
         """Check for new debt ceiling legislation. Called by APScheduler weekly."""
         try:
             await self._check_for_updates()
-            self._last_check = datetime.utcnow()
+            self._last_check = utcnow()
             self._save_cache()
         except Exception as e:
             logger.error(f"Error in debt ceiling monitor: {e}")

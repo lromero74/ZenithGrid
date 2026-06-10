@@ -8,9 +8,9 @@ Read-only operations for trading accounts:
 """
 
 import json
+from app.utils.timeutil import utcnow
 import logging
 import time
-from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -117,7 +117,7 @@ async def list_accounts(
             AccountMembership.account_id.in_(account_ids),
             or_(
                 AccountMembership.expires_at.is_(None),
-                AccountMembership.expires_at > datetime.utcnow(),
+                AccountMembership.expires_at > utcnow(),
             ),
         ).group_by(AccountMembership.account_id)
         member_count_result = await db.execute(member_count_q)
@@ -316,7 +316,7 @@ async def get_account(
                 AccountMembership.account_id == account.id,
                 or_(
                     AccountMembership.expires_at.is_(None),
-                    AccountMembership.expires_at > datetime.utcnow(),
+                    AccountMembership.expires_at > utcnow(),
                 ),
             )
         )

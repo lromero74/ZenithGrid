@@ -20,9 +20,9 @@ Usage:
 """
 
 import argparse
+from app.utils.timeutil import utcnow
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any, Dict, Tuple
 
 from sqlalchemy import select
@@ -469,7 +469,7 @@ async def migrate_all_bots(db: AsyncSession, dry_run: bool = True) -> Dict[str, 
 
                 bot.strategy_type = new_strategy
                 bot.strategy_config = new_config
-                bot.updated_at = datetime.utcnow()
+                bot.updated_at = utcnow()
 
             stats["migrated"] += 1
 
@@ -540,7 +540,7 @@ async def migrate_position_snapshots(db: AsyncSession, dry_run: bool = True) -> 
             if not dry_run:
                 position.bot_config["strategy_type"] = new_strategy
                 position.bot_config["strategy_config"] = new_config
-                position.bot_config["_migrated_at"] = datetime.utcnow().isoformat()
+                position.bot_config["_migrated_at"] = utcnow().isoformat()
 
             stats["updated"] += 1
 

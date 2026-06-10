@@ -17,9 +17,10 @@ login flow — mixing a preset-domain token in there would muddy the layering.
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from urllib.parse import quote
 
@@ -46,13 +47,13 @@ _TOKEN_TYPE = "speculative_calibration_dismiss"
 
 def create_dismiss_token(*, user_id: int, account_id: int) -> str:
     """Issue a short-lived JWT scoped to (user_id, account_id)."""
-    expire = datetime.utcnow() + timedelta(days=DISMISS_TOKEN_TTL_DAYS)
+    expire = utcnow() + timedelta(days=DISMISS_TOKEN_TTL_DAYS)
     payload = {
         "sub": str(user_id),
         "account_id": int(account_id),
         "type": _TOKEN_TYPE,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow(),
     }
     return jwt.encode(
         payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm,

@@ -6,6 +6,7 @@ Shows which indicators matched, at what values, for non-AI bots.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import List, Optional
 
@@ -114,7 +115,7 @@ async def get_indicator_logs_summary(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = utcnow() - timedelta(hours=hours)
 
     # Build base query
     base_query = select(IndicatorLog).where(

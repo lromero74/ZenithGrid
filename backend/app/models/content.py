@@ -1,6 +1,6 @@
 """Content models: news, videos, sources, TTS, subscriptions."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import (
     Boolean,
@@ -41,8 +41,8 @@ class AIProviderCredential(Base):
 
     # Metadata
     is_active = Column(Boolean, default=True)  # Can disable without deleting
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     last_used_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -85,8 +85,8 @@ class NewsArticle(Base):
     source_id = Column(Integer, ForeignKey("content.content_sources.id"), nullable=True, index=True)
 
     # Metadata
-    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
-    created_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=utcnow, index=True)  # When we fetched it
+    created_at = Column(DateTime, default=utcnow)
 
     # Cached full article content (extracted via trafilatura, markdown format)
     content = Column(Text, nullable=True)
@@ -132,8 +132,8 @@ class VideoArticle(Base):
     source_id = Column(Integer, ForeignKey("content.content_sources.id"), nullable=True, index=True)
 
     # Metadata
-    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
-    created_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=utcnow, index=True)  # When we fetched it
+    created_at = Column(DateTime, default=utcnow)
 
 
 class ContentSource(Base):
@@ -162,7 +162,7 @@ class ContentSource(Base):
     crawl_delay_seconds = Column(Integer, default=0)          # robots.txt crawl-delay
     # Owner for custom sources (null for system)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     subscriptions = relationship("UserSourceSubscription", back_populates="source", cascade="all, delete-orphan")
@@ -184,7 +184,7 @@ class UserSourceSubscription(Base):
     is_subscribed = Column(Boolean, default=True)
     user_category = Column(String, nullable=True)  # Per-user category override
     retention_days = Column(Integer, nullable=True)  # Per-user visibility filter (days)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Unique constraint
     __table_args__ = (UniqueConstraint("user_id", "source_id", name="uq_user_source"), {'schema': 'content'})
@@ -209,7 +209,7 @@ class ArticleTTS(Base):
     word_timings = Column(Text, nullable=True)  # JSON array
     file_size_bytes = Column(Integer, nullable=True)
     content_hash = Column(String(8), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     created_by_user_id = Column(
         Integer, ForeignKey("auth.users.id"), nullable=True,
     )
@@ -232,7 +232,7 @@ class UserVoiceSubscription(Base):
     )
     voice_id = Column(String, nullable=False)
     is_enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("user_id", "voice_id", name="uq_user_voice"),
@@ -255,7 +255,7 @@ class UserArticleTTSHistory(Base):
         nullable=False, index=True,
     )
     last_voice_id = Column(String, nullable=False)
-    last_played_at = Column(DateTime, default=datetime.utcnow)
+    last_played_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint(
@@ -277,7 +277,7 @@ class UserContentSeenStatus(Base):
     )
     content_type = Column(String, nullable=False)   # "article" | "video"
     content_id = Column(Integer, nullable=False)     # news_articles.id or video_articles.id
-    seen_at = Column(DateTime, default=datetime.utcnow)
+    seen_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint(

@@ -6,6 +6,7 @@ Monthly goal progress is calculated from confirmed donations.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -78,7 +79,7 @@ async def get_donation_goal(
     current_user: User = Depends(require_permission(Perm.SOCIAL_CHAT)),
 ):
     """Get current quarter's donation goal progress."""
-    now = datetime.utcnow()
+    now = utcnow()
     quarter = (now.month - 1) // 3 + 1  # 1-4
     quarter_start_month = (quarter - 1) * 3 + 1  # 1, 4, 7, 10
     quarter_start = datetime(now.year, quarter_start_month, 1)
@@ -137,7 +138,7 @@ async def report_donation(
         tx_reference=data.tx_reference,
         donor_name=data.donor_name or current_user.display_name,
         status="pending",
-        donation_date=datetime.utcnow(),
+        donation_date=utcnow(),
     )
     db.add(donation)
     await db.commit()
@@ -225,7 +226,7 @@ async def add_donation(
         notes=data.notes,
         status="confirmed",
         confirmed_by=current_user.id,
-        donation_date=data.donation_date or datetime.utcnow(),
+        donation_date=data.donation_date or utcnow(),
     )
     db.add(donation)
     await db.commit()

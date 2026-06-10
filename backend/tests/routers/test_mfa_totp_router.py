@@ -10,7 +10,7 @@ Covers:
 Tests call endpoint functions directly with mocked dependencies.
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -38,7 +38,7 @@ def _make_user(**overrides):
     user.updated_at = overrides.get("updated_at", None)
     user.display_name = overrides.get("display_name", None)
     user.email_verified = overrides.get("email_verified", True)
-    user.terms_accepted_at = overrides.get("terms_accepted_at", datetime.utcnow())
+    user.terms_accepted_at = overrides.get("terms_accepted_at", utcnow())
     return user
 
 
@@ -362,8 +362,8 @@ class TestMfaVerify:
                 "is_active": True, "is_superuser": False,
                 "mfa_enabled": True, "mfa_email_enabled": False,
                 "email_verified": True,
-                "created_at": datetime.utcnow().isoformat(),
-                "last_login_at": datetime.utcnow().isoformat(),
+                "created_at": utcnow().isoformat(),
+                "last_login_at": utcnow().isoformat(),
             },
         ), patch(
             "app.auth_routers.mfa_totp_router.settings",
@@ -627,8 +627,8 @@ class TestMfaVerify:
                 "is_active": True, "is_superuser": False,
                 "mfa_enabled": True, "mfa_email_enabled": False,
                 "email_verified": True,
-                "created_at": datetime.utcnow().isoformat(),
-                "last_login_at": datetime.utcnow().isoformat(),
+                "created_at": utcnow().isoformat(),
+                "last_login_at": utcnow().isoformat(),
             },
         ), patch(
             "app.auth_routers.mfa_totp_router.settings",

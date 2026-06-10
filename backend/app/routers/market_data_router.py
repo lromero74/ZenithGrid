@@ -9,9 +9,9 @@ Handles market data endpoints:
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import time
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -73,7 +73,7 @@ async def get_ticker(product_id: str, coinbase: CoinbaseClient = Depends(get_coi
         return {
             "product_id": product_id,
             "price": current_price,
-            "time": datetime.utcnow().isoformat(),
+            "time": utcnow().isoformat(),
         }
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -112,7 +112,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
 
         return {
             "prices": prices,
-            "time": datetime.utcnow().isoformat(),
+            "time": utcnow().isoformat(),
         }
     except (HTTPException, AppError):
         raise
@@ -540,7 +540,7 @@ async def get_orderbook(
             "product_id": product_id,
             "bids": bids,
             "asks": asks,
-            "time": datetime.utcnow().isoformat(),
+            "time": utcnow().isoformat(),
         }
     except HTTPException:
         raise
@@ -560,7 +560,7 @@ async def get_btc_usd_price(coinbase: CoinbaseClient = Depends(get_coinbase)):
         price = await coinbase.get_btc_usd_price()
         return {
             "price": price,
-            "time": datetime.utcnow().isoformat(),
+            "time": utcnow().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error fetching BTC/USD price: {e}")
@@ -578,7 +578,7 @@ async def get_eth_usd_price(coinbase: CoinbaseClient = Depends(get_coinbase)):
         price = await coinbase.get_eth_usd_price()
         return {
             "price": price,
-            "time": datetime.utcnow().isoformat(),
+            "time": utcnow().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error fetching ETH/USD price: {e}")

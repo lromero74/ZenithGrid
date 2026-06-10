@@ -2,7 +2,8 @@
 Tests for app.services.speculative_calibration_apply_token.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from jose import jwt
 
@@ -29,7 +30,7 @@ class TestTokenRoundTrip:
             {
                 "sub": "7", "account_id": 13, "proposal_id": 42,
                 "type": "speculative_calibration_apply_proposal",
-                "exp": datetime.utcnow() - timedelta(days=1),
+                "exp": utcnow() - timedelta(days=1),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )
@@ -42,7 +43,7 @@ class TestTokenRoundTrip:
             {
                 "sub": "7", "account_id": 13, "proposal_id": 42,
                 "type": "speculative_calibration_dismiss",  # wrong type
-                "exp": datetime.utcnow() + timedelta(hours=1),
+                "exp": utcnow() + timedelta(hours=1),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )

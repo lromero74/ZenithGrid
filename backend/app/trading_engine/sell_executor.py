@@ -4,9 +4,9 @@ Handles market and limit sell orders
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import math
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,7 +238,7 @@ async def _create_sell_trade_record(
     # Record trade with actual fill data
     trade = Trade(
         position_id=position.id,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         side="sell",
         quote_amount=quote_received,
         base_amount=actual_base_sold,
@@ -254,7 +254,7 @@ async def _create_sell_trade_record(
 
     # Close position using actual fill data
     position.status = "closed"
-    position.closed_at = datetime.utcnow()
+    position.closed_at = utcnow()
     position.sell_price = actual_price
     position.total_quote_received = quote_received
     position.profit_quote = profit_quote
@@ -363,7 +363,7 @@ async def _create_short_sell_trade_record(
     """
     trade = Trade(
         position_id=position.id,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         side="sell",
         base_amount=actual_base_sold,
         quote_amount=quote_received,
@@ -538,7 +538,7 @@ async def _submit_short_sell_market_order(
         logger.error(f"Error executing short sell order: {e}")
         if commit_on_error:
             position.last_error_message = f"Short sell failed: {str(e)}"
-            position.last_error_timestamp = datetime.utcnow()
+            position.last_error_timestamp = utcnow()
             await db.commit()
         raise
     finally:
@@ -622,7 +622,7 @@ async def execute_sell_short(
         logger.error(f"  {error}")
         if commit_on_error:
             position.last_error_message = error
-            position.last_error_timestamp = datetime.utcnow()
+            position.last_error_timestamp = utcnow()
             await db.commit()
         raise ValueError(error)
 
@@ -749,7 +749,7 @@ async def execute_limit_sell(
         base_amount=base_amount,
         trade_type="limit_close",
         status="pending",
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
 
     db.add(pending_order)
@@ -900,7 +900,7 @@ async def _close_sell_position_as_dust(
     dust_profit = quote_value - spent
     dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
     position.status = "closed"
-    position.closed_at = datetime.utcnow()
+    position.closed_at = utcnow()
     position.close_price = current_price
     position.profit_quote = dust_profit
     position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
@@ -985,7 +985,7 @@ async def _submit_sell_market_order(
 
         try:
             position.last_error_message = f"Sell failed: {str(e)[:200]}"
-            position.last_error_timestamp = datetime.utcnow()
+            position.last_error_timestamp = utcnow()
             await db.commit()
         except Exception:
             logger.warning(

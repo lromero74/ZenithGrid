@@ -8,14 +8,15 @@ Covers:
 - Edge — no matches returns empty list
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 from app.indicators.ai_tools import REGISTRY, ToolContext, execute
 from app.models import NewsArticle
 
 
 async def _make_article(db, *, title, summary=None, hours_ago=1, source="cointelegraph"):
-    published = datetime.utcnow() - timedelta(hours=hours_ago)
+    published = utcnow() - timedelta(hours=hours_ago)
     article = NewsArticle(
         title=title,
         summary=summary,

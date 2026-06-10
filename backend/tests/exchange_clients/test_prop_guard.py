@@ -7,7 +7,8 @@ with pre-flight safety checks for prop firm accounts.
 All database interactions and inner client methods are mocked.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
@@ -109,7 +110,7 @@ def _make_prop_firm_state(
     state.kill_reason = kill_reason
     state.daily_start_equity = daily_start_equity
     state.daily_start_timestamp = (
-        daily_start_timestamp or datetime.utcnow()
+        daily_start_timestamp or utcnow()
     )
     state.initial_deposit = initial_deposit
     state.current_equity = current_equity
@@ -530,7 +531,7 @@ class TestPreflightEquity:
         ws_state = MagicMock()
         ws_state.connected = True
         ws_state.equity = 98000.0
-        ws_state.equity_timestamp = datetime.utcnow()
+        ws_state.equity_timestamp = utcnow()
 
         guard = PropGuardClient(
             inner=inner,
@@ -561,7 +562,7 @@ class TestPreflightEquity:
         ws_state = MagicMock()
         ws_state.connected = True
         ws_state.equity = 98000.0
-        ws_state.equity_timestamp = datetime.utcnow() - timedelta(seconds=120)
+        ws_state.equity_timestamp = utcnow() - timedelta(seconds=120)
 
         guard = PropGuardClient(
             inner=inner,

@@ -13,7 +13,8 @@ rollback (email failure must not advance the cooldown), and the happy
 path.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -115,7 +116,7 @@ class TestRunOnePass:
         user = await _user(db_session)
         account = await _account(
             db_session, user,
-            alerted_at=datetime.utcnow() - timedelta(days=10),
+            alerted_at=utcnow() - timedelta(days=10),
         )
         await _bot(db_session, user, account)
 
@@ -140,7 +141,7 @@ class TestRunOnePass:
         user = await _user(db_session)
         account = await _account(
             db_session, user,
-            alerted_at=datetime.utcnow() - timedelta(days=40),
+            alerted_at=utcnow() - timedelta(days=40),
         )
         await _bot(db_session, user, account)
 

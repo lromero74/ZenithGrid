@@ -9,9 +9,9 @@ Covers:
 """
 
 import importlib.util
+from app.utils.timeutil import utcnow
 import os
 import sys
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
@@ -82,7 +82,7 @@ async def _make_position(db, bot, account, user):
     p = Position(
         bot_id=bot.id, account_id=account.id, user_id=user.id,
         product_id="ETH-USD", status="open",
-        opened_at=datetime.utcnow(), average_buy_price=100.0,
+        opened_at=utcnow(), average_buy_price=100.0,
         total_quote_spent=100.0, total_base_acquired=1.0,
     )
     db.add(p)

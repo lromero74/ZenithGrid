@@ -6,7 +6,7 @@ Uses the DEXClient to fetch on-chain prices via quoter contracts.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from decimal import Decimal
 from typing import List, Optional
 
@@ -116,7 +116,7 @@ class DEXPriceFeed(PriceFeed):
                 quote=quote,
                 bid=bid_price,
                 ask=ask_price,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 taker_fee_pct=fee_pct,
                 maker_fee_pct=fee_pct,  # No maker/taker distinction on DEX
                 gas_estimate_usd=gas_estimate,
@@ -199,7 +199,7 @@ class DEXPriceFeed(PriceFeed):
                 exchange_type="dex",
                 base=base,
                 quote=quote,
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 bids=bids,
                 asks=asks,
             )

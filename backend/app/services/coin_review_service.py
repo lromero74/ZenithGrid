@@ -6,9 +6,9 @@ Runs as a background task inside the backend on a weekly schedule.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import json
 import logging
-from datetime import datetime
 from typing import Dict, List, Any
 
 from sqlalchemy import select
@@ -372,7 +372,7 @@ async def run_coin_review_once(session_maker=None):
     try:
         last_review = await _get_last_review_timestamp(session_maker=session_maker)
         if last_review:
-            age_seconds = (datetime.utcnow() - last_review).total_seconds()
+            age_seconds = (utcnow() - last_review).total_seconds()
             if age_seconds < 6 * 24 * 3600:  # < 6 days
                 logger.info(
                     f"Coin review: last ran {age_seconds / 3600:.0f}h ago, skipping"
@@ -422,7 +422,7 @@ async def run_weekly_review(standalone: bool = False, session_maker=None) -> Dic
 
     Returns dict with review results.
     """
-    start_time = datetime.utcnow()
+    start_time = utcnow()
     logger.info("=" * 60)
     logger.info(f"Starting weekly coin review at {start_time.isoformat()}")
     logger.info("=" * 60)
@@ -447,7 +447,7 @@ async def run_weekly_review(standalone: bool = False, session_maker=None) -> Dic
         stats = await update_coin_statuses(analysis, session_maker=session_maker)
 
         # Summary
-        end_time = datetime.utcnow()
+        end_time = utcnow()
         duration = (end_time - start_time).total_seconds()
 
         # Count by category
@@ -480,7 +480,7 @@ async def run_weekly_review(standalone: bool = False, session_maker=None) -> Dic
         return {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
 
 

@@ -12,6 +12,7 @@ pybit handles reconnection + re-subscription automatically.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import threading
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
@@ -40,7 +41,7 @@ class ByBitWSState:
     def equity(self, value: float):
         with self._lock:
             self._equity = value
-            self._equity_ts = datetime.utcnow()
+            self._equity_ts = utcnow()
 
     @property
     def equity_timestamp(self) -> Optional[datetime]:

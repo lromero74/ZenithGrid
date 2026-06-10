@@ -6,7 +6,7 @@ copy-to-account, stats, and strategy listing endpoints.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Account, Bot, Position, User
@@ -24,7 +24,7 @@ def _make_user(db_session, email="crud@example.com"):
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -41,8 +41,8 @@ async def _make_bot(db_session, user, name="TestBot", strategy_type="grid_tradin
         product_ids=[product_id],
         is_active=is_active,
         budget_percentage=5.0,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db_session.add(bot)
     await db_session.flush()
@@ -190,8 +190,8 @@ class TestCreateBot:
             product_id="ETH-BTC",
             product_ids=["ETH-BTC"],
             is_active=False,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
         db_session.add(bot)
         await db_session.flush()

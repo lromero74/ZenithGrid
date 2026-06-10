@@ -7,6 +7,7 @@ Easy to unit test in isolation.
 """
 
 import math
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -66,7 +67,7 @@ def should_reset_daily(
         True if we've crossed the reset time since last snapshot
     """
     if now is None:
-        now = datetime.utcnow()
+        now = utcnow()
 
     if daily_start_timestamp is None:
         return True  # No snapshot yet, need to create one

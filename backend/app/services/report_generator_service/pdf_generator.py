@@ -5,8 +5,8 @@ Part of the report_generator_service package.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import re as _re
-from datetime import datetime
 from typing import Dict, Optional
 
 from app.services.brand_service import get_brand
@@ -103,7 +103,7 @@ def _build_pdf_metadata(
             f"Account: {_sanitize_for_pdf(account_name)}",
             new_x="LMARGIN", new_y="NEXT",
         )
-    now_str = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
+    now_str = utcnow().strftime("%B %d, %Y at %H:%M UTC")
     pdf.cell(0, 6, f"Generated on {now_str}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
@@ -789,7 +789,7 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
     # Deposit hints
     _build_pdf_deposit_hints(pdf, g, coverage, pfx, curr)
     # Schedule tables (upcoming + lookahead)
-    _now = datetime.utcnow()
+    _now = utcnow()
     _meta = report_data.get("_schedule_meta", {})
     _build_pdf_schedule_tables(pdf, coverage, pfx, _now, _meta)
     # Projections

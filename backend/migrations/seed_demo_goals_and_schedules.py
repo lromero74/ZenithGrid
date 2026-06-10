@@ -11,7 +11,7 @@ Idempotent: skips users who already have goals.
 """
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 
@@ -19,9 +19,15 @@ logger = logging.getLogger(__name__)
 
 MIGRATION_NAME = "seed_demo_goals_and_schedules"
 
+
+def _utcnow():
+    """Naive UTC now (drop-in for the deprecated datetime.utcnow())."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 # Target date: ~12 months from now
-TARGET_DATE = (datetime.utcnow() + timedelta(days=365)).strftime("%Y-12-31 23:59:59")
-NOW = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+TARGET_DATE = (_utcnow() + timedelta(days=365)).strftime("%Y-12-31 23:59:59")
+NOW = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
 # Demo user configs — each user has a distinct expense personality
 DEMO_CONFIGS = {

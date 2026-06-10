@@ -14,7 +14,7 @@ Also covers helper functions:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Account, Position, User
@@ -31,7 +31,7 @@ async def _create_user_with_account(db_session, email="perps@example.com", **acc
         email=email,
         hashed_password="hashed",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -60,7 +60,7 @@ async def _create_perps_position(db_session, account, bot=None, **overrides):
         product_type="future",
         status="open",
         direction="long",
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=10000.0,
         max_quote_allowed=5000.0,
         total_quote_spent=1000.0,
@@ -364,7 +364,7 @@ class TestListPerpsPositions:
             product_id="ETH-BTC",
             product_type="spot",
             status="open",
-            opened_at=datetime.utcnow(),
+            opened_at=utcnow(),
             initial_quote_balance=1.0,
             max_quote_allowed=0.25,
             total_quote_spent=0.01,
@@ -958,7 +958,7 @@ class TestListPerpsPositionsAdditional:
             email="lp_noacct@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()

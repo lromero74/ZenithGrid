@@ -2,7 +2,8 @@
 Tests for the dismiss-token signing helpers.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from jose import jwt
@@ -29,7 +30,7 @@ class TestCreateDecodeDismissToken:
             {
                 "sub": "7", "account_id": 13,
                 "type": "speculative_calibration_dismiss",
-                "exp": datetime.utcnow() - timedelta(days=1),
+                "exp": utcnow() - timedelta(days=1),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )
@@ -39,7 +40,7 @@ class TestCreateDecodeDismissToken:
         wrong = jwt.encode(
             {
                 "sub": "7", "account_id": 13, "type": "access",
-                "exp": datetime.utcnow() + timedelta(hours=1),
+                "exp": utcnow() + timedelta(hours=1),
             },
             settings.jwt_secret_key, algorithm=settings.jwt_algorithm,
         )

@@ -5,7 +5,8 @@ Covers room lifecycle, player management, message routing,
 game state management, TTL cleanup, and room ID format.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from unittest.mock import AsyncMock
@@ -363,7 +364,7 @@ class TestStaleRoomCleanup:
 
     def test_stale_room_cleaned_up(self, manager):
         room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
-        room.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+        room.created_at = utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
 
         cleaned = manager.cleanup_stale_rooms()
         assert cleaned == 1
@@ -372,7 +373,7 @@ class TestStaleRoomCleanup:
 
     def test_cleanup_preserves_fresh_rooms(self, manager):
         stale = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
-        stale.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+        stale.created_at = utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
         manager.create_room(host_user_id=2, game_id="chess", mode="vs")  # fresh
 
         cleaned = manager.cleanup_stale_rooms()
@@ -384,7 +385,7 @@ class TestStaleRoomCleanup:
     def test_cleanup_frees_all_players_in_stale_room(self, manager):
         room = manager.create_room(host_user_id=1, game_id="chess", mode="vs")
         manager.join_room(room.room_id, 2)
-        room.created_at = datetime.utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
+        room.created_at = utcnow() - timedelta(seconds=ROOM_TTL_SECONDS + 1)
 
         manager.cleanup_stale_rooms()
         assert manager.get_user_room(1) is None
@@ -496,7 +497,7 @@ class TestDisconnectReconnect:
         manager.mark_disconnected(room.room_id, 2)
         # Push disconnect time past the window
         room.disconnect_times[2] = (
-            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+            utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
         )
         result = manager.reconnect_player(room.room_id, 2)
         assert result is None
@@ -506,7 +507,7 @@ class TestDisconnectReconnect:
         manager.mark_disconnected(room.room_id, 2)
         # Still within window
         room.disconnect_times[2] = (
-            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS - 10)
+            utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS - 10)
         )
         result = manager.reconnect_player(room.room_id, 2)
         assert result is room
@@ -526,7 +527,7 @@ class TestDisconnectReconnect:
         room = _make_playing_room(manager)
         manager.mark_disconnected(room.room_id, 2)
         room.disconnect_times[2] = (
-            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+            utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
         )
         pending = manager.get_pending_rejoin(2)
         assert pending is None
@@ -541,7 +542,7 @@ class TestDisconnectReconnect:
         room = _make_playing_room(manager)
         manager.mark_disconnected(room.room_id, 2)
         room.disconnect_times[2] = (
-            datetime.utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
+            utcnow() - timedelta(seconds=RECONNECT_WINDOW_SECONDS + 10)
         )
         expired = manager.expire_disconnected_players(room.room_id)
         assert expired == [2]

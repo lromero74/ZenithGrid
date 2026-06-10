@@ -8,8 +8,9 @@ Extracted from news_router.py. Contains:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import math
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import desc, func, literal_column, select
@@ -83,7 +84,7 @@ async def get_articles_for_user(
     - user_category override applied in response layer, not here
     """
 
-    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     query = (
         select(NewsArticle, UserSourceSubscription.retention_days)
@@ -115,7 +116,7 @@ async def get_articles_for_user(
     if category:
         query = query.where(NewsArticle.category == category)
 
-    now = datetime.utcnow()
+    now = utcnow()
     use_sql_retention = db.bind.dialect.name == "postgresql" if db.bind else False
 
     interval_1day = literal_column("INTERVAL '1 day'")
@@ -162,7 +163,7 @@ async def get_articles_from_db(
 ) -> tuple[List[NewsArticle], int]:
     """Get articles without user filtering (for internal use)."""
 
-    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     conditions = [NewsArticle.published_at >= cutoff]
     if category:
@@ -260,7 +261,7 @@ def build_news_response(
         else 1
     )
 
-    now = datetime.utcnow()
+    now = utcnow()
     return {
         "news": news_items,
         "sources": sources_list,

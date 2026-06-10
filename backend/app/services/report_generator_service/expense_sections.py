@@ -5,6 +5,7 @@ Part of the report_generator_service package.
 """
 
 from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, Optional
 
 from app.services.report_generator_service.expense_schedule import (
@@ -553,7 +554,7 @@ def _build_expense_upcoming_html(
     schedule_meta: Optional[Dict[str, Any]],
 ) -> str:
     """Build the Upcoming tab: upcoming items table + lookahead preview."""
-    now = datetime.utcnow()
+    now = utcnow()
     upcoming_raw = _get_upcoming_items(items, now)
     upcoming_items = [(sort_key, item.get("due_day"), item) for sort_key, item in upcoming_raw]
 

@@ -1,6 +1,6 @@
 """get_portfolio_context — expose other open positions on the same account to the AI."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Any, Dict, List
 
 from sqlalchemy import select
@@ -49,7 +49,7 @@ async def _run(input: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     )
     rows = (await ctx.db.execute(stmt)).scalars().all()
 
-    now = datetime.utcnow()
+    now = utcnow()
     others: List[Dict[str, Any]] = []
     same_quote_exposure = 0.0
     same_quote_count = 0

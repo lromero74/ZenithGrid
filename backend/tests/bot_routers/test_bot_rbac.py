@@ -10,7 +10,7 @@ Verifies that:
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from fastapi import HTTPException
 
 from app.auth.dependencies import (
@@ -62,7 +62,7 @@ async def _create_user(db_session, email: str, groups: list[Group], is_superuser
         hashed_password="hashed",
         is_active=True,
         is_superuser=is_superuser,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     user.groups = groups
     db_session.add(user)

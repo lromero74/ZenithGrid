@@ -1,6 +1,6 @@
 """Reporting models: snapshots, goals, expenses, schedules, reports, transfers."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import (
     Boolean,
@@ -41,7 +41,7 @@ class AccountValueSnapshot(Base):
     unrealized_pnl_usd = Column(Float, nullable=True)   # From USD-pair open positions
     unrealized_pnl_btc = Column(Float, nullable=True)   # From BTC-pair open positions (in BTC)
     btc_usd_price = Column(Float, nullable=True)         # BTC/USD price at snapshot time
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Unique constraint: one snapshot per account per day
     __table_args__ = (
@@ -67,7 +67,7 @@ class MetricSnapshot(Base):
     id = Column(Integer, primary_key=True, index=True)
     metric_name = Column(String, nullable=False, index=True)
     value = Column(Float, nullable=False)
-    recorded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    recorded_at = Column(DateTime, nullable=False, default=utcnow, index=True)
 
 
 class PropFirmState(Base):
@@ -108,9 +108,9 @@ class PropFirmState(Base):
     total_pnl = Column(Float, default=0.0)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
     # Relationships
@@ -137,7 +137,7 @@ class PropFirmEquitySnapshot(Base):
     total_drawdown_pct = Column(Float, default=0.0)
     daily_pnl = Column(Float, default=0.0)
     is_killed = Column(Boolean, default=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
 
 class ReportGoal(Base):
@@ -162,12 +162,12 @@ class ReportGoal(Base):
     income_period = Column(String, nullable=True)  # "daily"/"weekly"/"monthly"/"yearly" (for income goals)
     lookback_days = Column(Integer, nullable=True)  # null=all-time; 7/14/30/90/365
     time_horizon_months = Column(Integer, nullable=False)  # 1, 6, 12, 24, 60, 120
-    start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    start_date = Column(DateTime, nullable=False, default=utcnow)
     target_date = Column(DateTime, nullable=False)  # Computed: start_date + horizon
     is_active = Column(Boolean, default=True)
     achieved_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Expenses goal fields
     expense_period = Column(String, nullable=True)  # weekly/monthly/quarterly/yearly
@@ -225,8 +225,8 @@ class ExpenseItem(Base):
     percent_basis = Column(String, nullable=True)  # 'pre_tax' or 'post_tax'
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Savings target fields (item_type = 'savings_target')
     item_type = Column(String, default="expense")  # 'expense' | 'savings_target'
@@ -265,7 +265,7 @@ class GoalProgressSnapshot(Base):
     target_value = Column(Float, nullable=False, default=0.0)
     progress_pct = Column(Float, nullable=False, default=0.0)
     on_track = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("goal_id", "snapshot_date", name="uq_goal_snapshot_date"),
@@ -305,8 +305,8 @@ class ReportSchedule(Base):
     generate_ai_summary = Column(Boolean, default=True)
     last_run_at = Column(DateTime, nullable=True)
     next_run_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Chart display settings
     chart_horizon = Column(String, default="auto")  # "auto", "elapsed", "full", or integer days
@@ -378,7 +378,7 @@ class Report(Base):
     delivered_at = Column(DateTime, nullable=True)
     delivery_recipients = Column(JSON, nullable=True)  # Snapshot of who received it
     delivery_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     user = relationship("User", back_populates="reports")
@@ -413,7 +413,7 @@ class AccountTransfer(Base):
     occurred_at = Column(DateTime, nullable=False, index=True)
     source = Column(String, default="coinbase_api")  # 'coinbase_api' or 'manual'
     original_type = Column(String, nullable=True)  # Coinbase txn type: cardspend, fiat_withdrawal, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     user = relationship("User", back_populates="account_transfers")

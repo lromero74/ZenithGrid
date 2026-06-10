@@ -5,7 +5,8 @@ Covers indicator log retrieval with filters and indicator log summary.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from fastapi import HTTPException
 
 from app.models import Account, Bot, IndicatorLog, User
@@ -24,7 +25,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -39,8 +40,8 @@ async def _make_bot(db_session, user, name="IndicatorBot"):
         product_id="ETH-BTC",
         product_ids=["ETH-BTC"],
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db_session.add(bot)
     await db_session.flush()
@@ -61,7 +62,7 @@ async def _make_indicator_log(db_session, bot, product_id="ETH-BTC",
         ],
         indicators_snapshot={"rsi": 25.0, "macd": 0.001},
         current_price=current_price,
-        timestamp=timestamp or datetime.utcnow(),
+        timestamp=timestamp or utcnow(),
     )
     db_session.add(log)
     await db_session.flush()
@@ -87,8 +88,8 @@ class TestGetIndicatorLogs:
 
         bot = await _make_bot(db_session, user)
 
-        t1 = datetime.utcnow() - timedelta(hours=2)
-        t2 = datetime.utcnow()
+        t1 = utcnow() - timedelta(hours=2)
+        t2 = utcnow()
         await _make_indicator_log(db_session, bot, phase="base_order", timestamp=t1)
         await _make_indicator_log(db_session, bot, phase="take_profit", timestamp=t2)
 
@@ -176,12 +177,12 @@ class TestGetIndicatorLogs:
         await db_session.flush()
 
         bot = await _make_bot(db_session, user)
-        old_time = datetime.utcnow() - timedelta(hours=48)
-        new_time = datetime.utcnow()
+        old_time = utcnow() - timedelta(hours=48)
+        new_time = utcnow()
         await _make_indicator_log(db_session, bot, timestamp=old_time)
         await _make_indicator_log(db_session, bot, timestamp=new_time)
 
-        since = datetime.utcnow() - timedelta(hours=1)
+        since = utcnow() - timedelta(hours=1)
         result = await get_indicator_logs(
             bot_id=bot.id, limit=50, offset=0, since=since,
             db=db_session, current_user=user
@@ -234,7 +235,7 @@ class TestGetIndicatorLogs:
 
         bot = await _make_bot(db_session, user)
         for i in range(5):
-            ts = datetime.utcnow() - timedelta(minutes=i)
+            ts = utcnow() - timedelta(minutes=i)
             await _make_indicator_log(db_session, bot, timestamp=ts)
 
         result = await get_indicator_logs(
@@ -264,7 +265,7 @@ class TestGetIndicatorLogsSummary:
 
         bot = await _make_bot(db_session, user)
 
-        now = datetime.utcnow()
+        now = utcnow()
         await _make_indicator_log(
             db_session, bot, phase="base_order",
             conditions_met=True, product_id="ETH-BTC",
@@ -316,8 +317,8 @@ class TestGetIndicatorLogsSummary:
 
         bot = await _make_bot(db_session, user)
 
-        old_time = datetime.utcnow() - timedelta(hours=48)
-        new_time = datetime.utcnow() - timedelta(hours=1)
+        old_time = utcnow() - timedelta(hours=48)
+        new_time = utcnow() - timedelta(hours=1)
         await _make_indicator_log(db_session, bot, timestamp=old_time)
         await _make_indicator_log(db_session, bot, timestamp=new_time)
 
@@ -390,7 +391,7 @@ class TestGetIndicatorLogsSummary:
             user_id=owner.id, account_id=account.id, name="OwnerBot",
             strategy_type="indicator_dca", strategy_config={"indicators": ["rsi"]},
             product_id="ETH-BTC", product_ids=["ETH-BTC"], is_active=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(bot)
         await db_session.flush()
@@ -423,7 +424,7 @@ class TestGetIndicatorLogsSummary:
             user_id=owner.id, account_id=account.id, name="OwnerBot2",
             strategy_type="indicator_dca", strategy_config={"indicators": ["rsi"]},
             product_id="ETH-BTC", product_ids=["ETH-BTC"], is_active=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=utcnow(), updated_at=utcnow(),
         )
         db_session.add(bot)
         await db_session.flush()
@@ -447,7 +448,7 @@ class TestGetIndicatorLogsSummary:
 
         bot = await _make_bot(db_session, user)
 
-        now = datetime.utcnow()
+        now = utcnow()
         await _make_indicator_log(
             db_session, bot, product_id="ETH-BTC",
             timestamp=now - timedelta(hours=1)

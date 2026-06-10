@@ -8,7 +8,8 @@ Covers /mfa/devices (list / revoke single / revoke all):
 - Cross-user isolation: user A cannot list, revoke, or revoke-all user B's devices
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -23,7 +24,7 @@ async def _mk_user(db_session, email: str) -> User:
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db_session.add(user)
     await db_session.flush()
@@ -44,8 +45,8 @@ async def _mk_device(
         device_name=name,
         ip_address="127.0.0.1",
         location="Local",
-        created_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
+        created_at=utcnow(),
+        expires_at=utcnow() + timedelta(days=expires_in_days),
     )
     db_session.add(device)
     await db_session.flush()

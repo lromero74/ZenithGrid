@@ -4,7 +4,7 @@ Shared across routers that gate destructive operations (panic-sell,
 account deletion, etc.). Supports both TOTP (authenticator app) and
 email-based MFA.
 """
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 import pyotp
@@ -61,7 +61,7 @@ async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> N
                     EmailVerificationToken.token_type == "action_mfa",
                     EmailVerificationToken.verification_code == mfa_code,
                     EmailVerificationToken.used_at.is_(None),
-                    EmailVerificationToken.expires_at > datetime.utcnow(),
+                    EmailVerificationToken.expires_at > utcnow(),
                 )
             )
         )
@@ -75,7 +75,7 @@ async def verify_mfa(db: AsyncSession, user: User, mfa_code: Optional[str]) -> N
                 message="Too many invalid MFA attempts. Please try again later.",
             )
             raise HTTPException(status_code=403, detail="Invalid or expired MFA code")
-        token_record.used_at = datetime.utcnow()
+        token_record.used_at = utcnow()
         await db.commit()
         clear_user_failures(user_id=user.id, bucket="mfa_verify")
         return

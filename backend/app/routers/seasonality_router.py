@@ -11,7 +11,7 @@ When enabled:
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -76,14 +76,14 @@ async def set_setting(db: AsyncSession, key: str, value: str, value_type: str = 
 
     if setting:
         setting.value = value
-        setting.updated_at = datetime.utcnow()
+        setting.updated_at = utcnow()
     else:
         setting = Settings(
             key=key,
             value=value,
             value_type=value_type,
             description=description,
-            updated_at=datetime.utcnow()
+            updated_at=utcnow()
         )
         db.add(setting)
 
@@ -174,7 +174,7 @@ async def toggle_seasonality(
         await set_setting(
             db,
             "seasonality_last_transition",
-            datetime.utcnow().isoformat(),
+            utcnow().isoformat(),
             "string",
             "Timestamp of last mode transition"
         )

@@ -7,7 +7,8 @@ Covers:
 - Failure — position with no trades returns dca_count=0
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 
@@ -47,7 +48,7 @@ async def _make_position(db, bot, account, user, *, opened_minutes_ago=30, avg_p
         user_id=user.id,
         product_id="ETH-USD",
         status="open",
-        opened_at=datetime.utcnow() - timedelta(minutes=opened_minutes_ago),
+        opened_at=utcnow() - timedelta(minutes=opened_minutes_ago),
         average_buy_price=avg_price,
         entry_price=avg_price,
         total_quote_spent=100.0,

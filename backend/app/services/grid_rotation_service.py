@@ -6,6 +6,7 @@ Keeps losing positions to wait for recovery.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import Any, Dict
 
@@ -54,7 +55,7 @@ async def evaluate_grid_rotation(
         last_rotation = initialized_at
 
     last_rotation_time = datetime.fromisoformat(last_rotation)
-    hours_elapsed = (datetime.utcnow() - last_rotation_time).total_seconds() / 3600
+    hours_elapsed = (utcnow() - last_rotation_time).total_seconds() / 3600
 
     if hours_elapsed < rotation_interval_hours:
         # Not yet time to rotate
@@ -181,7 +182,7 @@ async def execute_grid_rotation(
                 for level_data in grid_levels:
                     if level_data.get("level_index") == level_info["level_index"]:
                         level_data["status"] = "rotated"
-                        level_data["rotated_at"] = datetime.utcnow().isoformat()
+                        level_data["rotated_at"] = utcnow().isoformat()
                         level_data["locked_profit"] = level_info["profit"]
                         break
 
@@ -191,7 +192,7 @@ async def execute_grid_rotation(
             logger.error(f"Error closing level {level_info['level_index']}: {e}")
 
     # Update grid state
-    grid_state["last_rotation"] = datetime.utcnow().isoformat()
+    grid_state["last_rotation"] = utcnow().isoformat()
     grid_state["total_rotations"] = grid_state.get("total_rotations", 0) + 1
     grid_state["grid_levels"] = grid_levels
 
@@ -200,7 +201,7 @@ async def execute_grid_rotation(
         grid_state["rotation_history"] = []
 
     grid_state["rotation_history"].append({
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utcnow().isoformat(),
         "levels_closed": closed_count,
         "total_locked_profit": total_locked_profit,
         "profitable_levels": len(profitable_levels),

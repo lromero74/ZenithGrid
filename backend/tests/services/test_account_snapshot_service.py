@@ -9,7 +9,8 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
@@ -84,8 +85,8 @@ class TestGetAccountValueHistory:
         """Happy path: returns snapshots ordered by date."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        date1 = datetime.utcnow() - timedelta(days=30)
-        date2 = datetime.utcnow() - timedelta(days=29)
+        date1 = utcnow() - timedelta(days=30)
+        date2 = utcnow() - timedelta(days=29)
         await _create_snapshot(db_session, acct.id, user.id, date1, 1.0, 50000.0)
         await _create_snapshot(db_session, acct.id, user.id, date2, 1.1, 55000.0)
         await db_session.commit()
@@ -103,8 +104,8 @@ class TestGetAccountValueHistory:
         """Edge case: only snapshots within the day limit are returned."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        old_date = datetime.utcnow() - timedelta(days=400)
-        recent_date = datetime.utcnow() - timedelta(days=10)
+        old_date = utcnow() - timedelta(days=400)
+        recent_date = utcnow() - timedelta(days=10)
         await _create_snapshot(db_session, acct.id, user.id, old_date, 1.0, 50000.0)
         await _create_snapshot(db_session, acct.id, user.id, recent_date, 1.1, 55000.0)
         await db_session.commit()
@@ -120,7 +121,7 @@ class TestGetAccountValueHistory:
         user = await _create_user(db_session)
         real_acct = await _create_account(db_session, user.id, name="Real", is_paper=False)
         paper_acct = await _create_account(db_session, user.id, name="Paper", is_paper=True)
-        date = datetime.utcnow() - timedelta(days=30)
+        date = utcnow() - timedelta(days=30)
         await _create_snapshot(db_session, real_acct.id, user.id, date, 1.0, 50000.0)
         await _create_snapshot(db_session, paper_acct.id, user.id, date, 10.0, 500000.0)
         await db_session.commit()
@@ -138,7 +139,7 @@ class TestGetAccountValueHistory:
         user = await _create_user(db_session)
         real_acct = await _create_account(db_session, user.id, name="Real", is_paper=False)
         paper_acct = await _create_account(db_session, user.id, name="Paper", is_paper=True)
-        date = datetime.utcnow() - timedelta(days=30)
+        date = utcnow() - timedelta(days=30)
         await _create_snapshot(db_session, real_acct.id, user.id, date, 1.0, 50000.0)
         await _create_snapshot(db_session, paper_acct.id, user.id, date, 10.0, 500000.0)
         await db_session.commit()
@@ -157,7 +158,7 @@ class TestGetAccountValueHistory:
         user = await _create_user(db_session)
         acct1 = await _create_account(db_session, user.id, name="Acct1")
         acct2 = await _create_account(db_session, user.id, name="Acct2")
-        date = datetime.utcnow() - timedelta(days=30)
+        date = utcnow() - timedelta(days=30)
         await _create_snapshot(db_session, acct1.id, user.id, date, 1.0, 50000.0)
         await _create_snapshot(db_session, acct2.id, user.id, date, 2.0, 100000.0)
         await db_session.commit()
@@ -192,8 +193,8 @@ class TestGetLatestSnapshot:
         """Happy path: returns the latest snapshot."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        date1 = datetime.utcnow() - timedelta(days=30)
-        date2 = datetime.utcnow() - timedelta(days=29)
+        date1 = utcnow() - timedelta(days=30)
+        date2 = utcnow() - timedelta(days=29)
         await _create_snapshot(db_session, acct.id, user.id, date1, 1.0, 50000.0)
         await _create_snapshot(db_session, acct.id, user.id, date2, 1.5, 75000.0)
         await db_session.commit()
@@ -219,7 +220,7 @@ class TestGetLatestSnapshot:
         """Edge case: paper trading excluded from latest snapshot."""
         user = await _create_user(db_session)
         paper_acct = await _create_account(db_session, user.id, name="Paper", is_paper=True)
-        date = datetime.utcnow() - timedelta(days=30)
+        date = utcnow() - timedelta(days=30)
         await _create_snapshot(db_session, paper_acct.id, user.id, date, 10.0, 500000.0)
         await db_session.commit()
 
@@ -510,7 +511,7 @@ class TestPortionFieldsInHistory:
         """Happy path: snapshots with portion data include them in response."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        date = datetime.utcnow() - timedelta(days=5)
+        date = utcnow() - timedelta(days=5)
         await _create_snapshot(
             db_session, acct.id, user.id, date, 2.0, 100000.0,
             usd_portion=60000.0, btc_portion=0.8
@@ -528,7 +529,7 @@ class TestPortionFieldsInHistory:
         """Edge case: pre-migration snapshots return null portion fields."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        date = datetime.utcnow() - timedelta(days=5)
+        date = utcnow() - timedelta(days=5)
         await _create_snapshot(db_session, acct.id, user.id, date, 1.0, 50000.0)
         await db_session.commit()
 
@@ -544,7 +545,7 @@ class TestPortionFieldsInHistory:
         user = await _create_user(db_session)
         acct1 = await _create_account(db_session, user.id, name="Acct1")
         acct2 = await _create_account(db_session, user.id, name="Acct2")
-        date = datetime.utcnow() - timedelta(days=5)
+        date = utcnow() - timedelta(days=5)
         await _create_snapshot(
             db_session, acct1.id, user.id, date, 1.0, 50000.0,
             usd_portion=30000.0, btc_portion=0.5
@@ -568,7 +569,7 @@ class TestPortionFieldsInHistory:
         """Happy path: single-account mode includes portion fields."""
         user = await _create_user(db_session)
         acct = await _create_account(db_session, user.id)
-        date = datetime.utcnow() - timedelta(days=5)
+        date = utcnow() - timedelta(days=5)
         await _create_snapshot(
             db_session, acct.id, user.id, date, 1.5, 75000.0,
             usd_portion=45000.0, btc_portion=0.3

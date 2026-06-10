@@ -5,7 +5,8 @@ Resolves a user's currently-effective scorer weights. Falls back through:
   in-process cache → latest applied proposal → DEFAULT_WEIGHTS.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 
@@ -43,7 +44,7 @@ class TestGetEffectiveWeights:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 22},
-            decided_at=datetime.utcnow() - timedelta(days=2),
+            decided_at=utcnow() - timedelta(days=2),
         )
         db_session.add(older)
         await db_session.flush()
@@ -54,7 +55,7 @@ class TestGetEffectiveWeights:
             overall_win_rate_pct=16.0,
             baseline_weights={**DEFAULT_WEIGHTS, "volume_surge": 22},
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 28},
-            decided_at=datetime.utcnow(),
+            decided_at=utcnow(),
         )
         db_session.add(newer)
         await db_session.flush()
@@ -92,7 +93,7 @@ class TestGetEffectiveWeights:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 30},
-            decided_at=datetime.utcnow(),
+            decided_at=utcnow(),
         ))
         await db_session.flush()
 
@@ -121,7 +122,7 @@ class TestCacheBehavior:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 40},
-            decided_at=datetime.utcnow(),
+            decided_at=utcnow(),
         ))
         await db_session.flush()
 
@@ -191,7 +192,7 @@ class TestInvalidation:
             overall_win_rate_pct=15.0,
             baseline_weights=dict(DEFAULT_WEIGHTS),
             proposed_weights={**DEFAULT_WEIGHTS, "volume_surge": 35},
-            decided_at=datetime.utcnow(),
+            decided_at=utcnow(),
         ))
         await db_session.flush()
 

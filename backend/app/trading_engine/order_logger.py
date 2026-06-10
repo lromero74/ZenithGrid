@@ -7,8 +7,8 @@ Handles logging of:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,7 +79,7 @@ async def save_ai_log(
         position_status=position_status,
         product_id=product_id,  # Track which pair this analysis is for
         context=signal_data,  # Store full signal data for reference
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
     )
 
     db.add(ai_log)
@@ -126,7 +126,7 @@ async def log_order_to_history(
     """
     try:
         order_history = OrderHistory(
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
             bot_id=bot.id,
             position_id=position.id if position else None,
             product_id=entry.product_id,

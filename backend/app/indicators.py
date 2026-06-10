@@ -8,7 +8,7 @@ Provides calculators for technical analysis indicators:
 These indicators are used by trading strategies to generate buy/sell signals.
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import List, Optional, Tuple
 
 import pandas as pd
@@ -123,7 +123,7 @@ class MACDCalculator:
         new_row = pd.DataFrame(
             [
                 {
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": utcnow(),
                     "price": price,
                     "macd_value": None,
                     "macd_signal": None,
@@ -150,7 +150,7 @@ class MACDCalculator:
 
         # Create and save market data
         market_data = MarketData(
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
             price=price,
             macd_value=macd_value,
             macd_signal=macd_signal,

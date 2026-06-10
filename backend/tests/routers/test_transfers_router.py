@@ -11,6 +11,7 @@ Covers:
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -346,7 +347,7 @@ class TestCreateManualTransfer:
                 transfer_type="refund",
                 amount=100.0,
                 currency="USD",
-                occurred_at=datetime.utcnow(),
+                occurred_at=utcnow(),
             )
 
     def test_manual_transfer_schema_rejects_negative_amount(self):
@@ -360,7 +361,7 @@ class TestCreateManualTransfer:
                 transfer_type="deposit",
                 amount=-50.0,
                 currency="USD",
-                occurred_at=datetime.utcnow(),
+                occurred_at=utcnow(),
             )
 
 
@@ -515,7 +516,7 @@ class TestGetRecentSummary:
             amount=1000.0,
             currency="USD",
             amount_usd=1000.0,
-            occurred_at=datetime.utcnow() - timedelta(days=5),
+            occurred_at=utcnow() - timedelta(days=5),
             source="manual",
         )
         db_session.add(t)

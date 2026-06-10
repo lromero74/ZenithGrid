@@ -5,7 +5,7 @@ Handles basic position actions: cancel, force-close, and update settings.
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -58,7 +58,7 @@ async def cancel_position(
 
         # Mark position as cancelled
         position.status = "cancelled"
-        position.closed_at = datetime.utcnow()
+        position.closed_at = utcnow()
 
         await db.commit()
 

@@ -4,6 +4,7 @@ and account-scoped filtering for goals, schedules, and reports.
 """
 
 import math
+from app.utils.timeutil import utcnow
 import pytest
 from datetime import datetime, timedelta
 from sqlalchemy import select
@@ -32,8 +33,8 @@ async def expense_goal(db_session):
         target_value=5000.0,
         expense_period="monthly",
         time_horizon_months=12,
-        start_date=datetime.utcnow(),
-        target_date=datetime.utcnow() + timedelta(days=365),
+        start_date=utcnow(),
+        target_date=utcnow() + timedelta(days=365),
     )
     db_session.add(goal)
     await db_session.flush()
@@ -354,8 +355,8 @@ async def account_scope_setup(db_session):
         target_currency="USD",
         target_value=10000.0,
         time_horizon_months=12,
-        start_date=datetime.utcnow(),
-        target_date=datetime.utcnow() + timedelta(days=365),
+        start_date=utcnow(),
+        target_date=utcnow() + timedelta(days=365),
     )
     goal_paper = ReportGoal(
         user_id=user.id,
@@ -365,8 +366,8 @@ async def account_scope_setup(db_session):
         target_currency="USD",
         target_value=5000.0,
         time_horizon_months=6,
-        start_date=datetime.utcnow(),
-        target_date=datetime.utcnow() + timedelta(days=180),
+        start_date=utcnow(),
+        target_date=utcnow() + timedelta(days=180),
     )
     db_session.add_all([goal_live, goal_paper])
     await db_session.flush()
@@ -481,8 +482,8 @@ class TestAccountScopedGoals:
             target_currency="USD",
             target_value=1000.0,
             time_horizon_months=3,
-            start_date=datetime.utcnow(),
-            target_date=datetime.utcnow() + timedelta(days=90),
+            start_date=utcnow(),
+            target_date=utcnow() + timedelta(days=90),
         )
         db_session.add(goal)
         await db_session.flush()
@@ -823,7 +824,7 @@ async def metrics_user_with_data(db_session):
     db_session.add(account)
     await db_session.flush()
 
-    now = datetime.utcnow()
+    now = utcnow()
 
     # Create closed positions with known profit in last 30 days
     for i in range(3):
@@ -948,7 +949,7 @@ class TestGetUserTradingMetrics:
         db_session.add(account)
         await db_session.flush()
 
-        now = datetime.utcnow()
+        now = utcnow()
         # Negative profit position
         pos = Position(
             user_id=user.id,

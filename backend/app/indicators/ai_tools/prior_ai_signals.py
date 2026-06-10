@@ -11,8 +11,9 @@ position or not (pre-filter failures are logged with signal='hold').
 """
 
 from __future__ import annotations
+from app.utils.timeutil import utcnow
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List
 
 from sqlalchemy import select
@@ -34,7 +35,7 @@ async def _run(input: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     days = max(_MIN_DAYS, min(_MAX_DAYS, days))
     limit = max(_MIN_LIMIT, min(_MAX_LIMIT, limit))
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utcnow() - timedelta(days=days)
     stmt = (
         select(AIOpinionLog)
         .where(AIOpinionLog.user_id == ctx.user_id)

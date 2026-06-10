@@ -9,6 +9,7 @@ Gathers metrics for report generation:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -409,7 +410,7 @@ async def compute_goal_progress(
         progress = (current_value / target * 100) if target > 0 else 0
 
     # Check if on track based on time elapsed
-    now = datetime.utcnow()
+    now = utcnow()
     total_duration = (goal.target_date - goal.start_date).total_seconds()
     elapsed = (now - goal.start_date).total_seconds()
     time_pct = (elapsed / total_duration * 100) if total_duration > 0 else 100
@@ -457,7 +458,7 @@ async def _compute_income_goal_progress(
     period_days = period_multipliers.get(goal.income_period or "monthly", 30)
 
     # Use the schedule's period bounds as the lookback window
-    now = datetime.utcnow()
+    now = utcnow()
     lookback_start = period_start or goal.start_date
     lookback_end = period_end or now
 
@@ -583,7 +584,7 @@ async def _compute_expenses_goal_progress(
     period_days = period_multipliers.get(expense_period, 30)
 
     # Calculate income using same logic as income goals
-    now = datetime.utcnow()
+    now = utcnow()
     lookback_start = period_start or goal.start_date
     lookback_end = period_end or now
     lookback_days_actual = max((lookback_end - lookback_start).days, 1)
@@ -879,7 +880,7 @@ async def get_user_trading_metrics(
     """
     from datetime import timedelta
 
-    now = datetime.utcnow()
+    now = utcnow()
     lookback_days = 30
     cutoff = now - timedelta(days=lookback_days)
 
@@ -939,7 +940,7 @@ async def get_annual_return_pct(
     """
     from datetime import timedelta
 
-    now = datetime.utcnow()
+    now = utcnow()
     lookback_days = 30
     cutoff = now - timedelta(days=lookback_days)
 

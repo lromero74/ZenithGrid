@@ -5,7 +5,7 @@ TDD: These tests are written BEFORE the rate limiting implementation.
 They verify that repeated requests trigger 429 Too Many Requests.
 """
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -33,7 +33,7 @@ def _make_user(**overrides):
     user.updated_at = overrides.get("updated_at", None)
     user.display_name = overrides.get("display_name", None)
     user.email_verified = overrides.get("email_verified", True)
-    user.terms_accepted_at = overrides.get("terms_accepted_at", datetime.utcnow())
+    user.terms_accepted_at = overrides.get("terms_accepted_at", utcnow())
     user.tokens_valid_after = overrides.get("tokens_valid_after", None)
     return user
 

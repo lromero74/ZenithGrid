@@ -16,6 +16,7 @@ Covers:
 """
 
 import pytest
+from app.utils.timeutil import utcnow
 from unittest.mock import MagicMock, patch
 
 from app.strategies.indicator_based import IndicatorBasedStrategy
@@ -1096,14 +1097,14 @@ class TestSpeculativeMaxHoldExit:
 
     @pytest.mark.asyncio
     async def test_exits_when_past_max_hold(self):
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         strategy = _make_strategy({
             "speculative_max_hold_hours": 24,
             "take_profit_percentage": 999.0,  # not reachable
             "stop_loss_enabled": False,
         })
         position = _make_mock_position()
-        position.opened_at = datetime.utcnow() - timedelta(hours=25)
+        position.opened_at = utcnow() - timedelta(hours=25)
         signal = {"take_profit_signal": False}
 
         should, reason = await strategy.should_sell(signal, position, current_price=101.0)
@@ -1114,14 +1115,14 @@ class TestSpeculativeMaxHoldExit:
 
     @pytest.mark.asyncio
     async def test_does_not_exit_before_max_hold(self):
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         strategy = _make_strategy({
             "speculative_max_hold_hours": 24,
             "take_profit_percentage": 999.0,
             "stop_loss_enabled": False,
         })
         position = _make_mock_position()
-        position.opened_at = datetime.utcnow() - timedelta(hours=23)
+        position.opened_at = utcnow() - timedelta(hours=23)
         signal = {"take_profit_signal": False}
 
         should, reason = await strategy.should_sell(signal, position, current_price=101.0)
@@ -1133,14 +1134,14 @@ class TestSpeculativeMaxHoldExit:
     async def test_not_active_when_config_missing(self):
         """Regression guard: non-speculative bots (no speculative_max_hold_hours
         key) behave exactly like before — no time-based forced exit."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         strategy = _make_strategy({
             # No speculative_max_hold_hours at all
             "take_profit_percentage": 999.0,
             "stop_loss_enabled": False,
         })
         position = _make_mock_position()
-        position.opened_at = datetime.utcnow() - timedelta(days=365)  # 1 year old
+        position.opened_at = utcnow() - timedelta(days=365)  # 1 year old
         signal = {"take_profit_signal": False}
 
         should, reason = await strategy.should_sell(signal, position, current_price=101.0)
@@ -1152,14 +1153,14 @@ class TestSpeculativeMaxHoldExit:
     async def test_fires_before_tp(self):
         """If both TP and max-hold would trigger simultaneously, max-hold wins —
         it runs first so the bucket slot is always released on schedule."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         strategy = _make_strategy({
             "speculative_max_hold_hours": 24,
             "take_profit_percentage": 3.0,  # easily reachable
             "trailing_take_profit": False,
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
-        position.opened_at = datetime.utcnow() - timedelta(hours=25)
+        position.opened_at = utcnow() - timedelta(hours=25)
         signal = {"take_profit_signal": False}
 
         should, reason = await strategy.should_sell(signal, position, current_price=105.0)

@@ -25,6 +25,7 @@ from app.models import (
     group_roles, role_permissions, user_groups,
 )
 from app.auth.dependencies import require_permission, Perm
+from app.utils.timeutil import utcfromtimestamp
 
 logger = logging.getLogger(__name__)
 
@@ -843,12 +844,11 @@ async def get_ban_details(
 
 
 def _format_ban_snapshot(snapshot):
-    from datetime import datetime
     return {
         "currently_banned": snapshot.currently_banned,
         "total_banned": snapshot.total_banned,
         "total_failed": snapshot.total_failed,
-        "last_updated": datetime.utcfromtimestamp(snapshot.last_updated).isoformat()
+        "last_updated": utcfromtimestamp(snapshot.last_updated).isoformat()
         if snapshot.last_updated > 0 else None,
         "banned_ips": [
             {

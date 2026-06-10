@@ -9,6 +9,7 @@ Endpoints for managing deposit/withdrawal tracking:
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -259,7 +260,7 @@ async def get_recent_summary(
     - Deposit note below projection table
     - Account value chart annotations
     """
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = utcnow() - timedelta(days=30)
 
     result = await db.execute(
         select(AccountTransfer).where(

@@ -6,6 +6,7 @@ goal trend analytics, and financial metrics.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import List, Optional
 
@@ -536,7 +537,7 @@ async def update_expense_item(
 
     for key, value in update_data.items():
         setattr(item, key, value)
-    item.updated_at = datetime.utcnow()
+    item.updated_at = utcnow()
 
     await recalculate_goal_target(db, goal)
     await db.commit()

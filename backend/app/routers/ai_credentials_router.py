@@ -14,6 +14,7 @@ news analysis and coin categorization.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from datetime import datetime
 from typing import List, Optional
 
@@ -236,7 +237,7 @@ async def create_or_update_ai_credential(
             # Update existing
             existing.api_key = encrypt_value(credential_data.api_key)
             existing.is_active = True
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utcnow()
             credential = existing
             logger.info(f"Updated AI credential for user {current_user.id}: {provider}")
         else:
@@ -353,7 +354,7 @@ async def update_ai_credential(
         if credential_data.is_active is not None:
             credential.is_active = credential_data.is_active
 
-        credential.updated_at = datetime.utcnow()
+        credential.updated_at = utcnow()
 
         await db.commit()
         await db.refresh(credential)

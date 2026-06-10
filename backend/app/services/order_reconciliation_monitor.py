@@ -9,7 +9,8 @@ Exchange-agnostic: works with any ExchangeClient implementation.
 """
 
 import logging
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +44,7 @@ class OrderReconciliationMonitor:
         try:
             # Find open positions with zero base acquired (orphaned orders)
             # Only check positions opened within last 24 hours to avoid re-checking old issues
-            twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+            twenty_four_hours_ago = utcnow() - timedelta(hours=24)
 
             conditions = [
                 Position.status == "open",
@@ -125,7 +126,7 @@ class OrderReconciliationMonitor:
                     f"marking position as failed"
                 )
                 position.status = "failed"
-                position.closed_at = datetime.utcnow()
+                position.closed_at = utcnow()
                 position.last_error_message = f"Initial order {order_status} with no fills"
                 await self.db.commit()
                 return
@@ -194,7 +195,7 @@ class MissingOrderDetector:
             from app.models import PendingOrder
 
             # Get all open positions + recently closed positions (last 7 days)
-            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+            seven_days_ago = utcnow() - timedelta(days=7)
 
             conditions = (Position.status == "open") | (
                 (Position.status == "closed") & (Position.closed_at >= seven_days_ago)

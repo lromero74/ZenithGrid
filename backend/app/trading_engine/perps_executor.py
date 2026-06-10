@@ -4,7 +4,7 @@ Handles opening and closing INTX perpetual futures positions with bracket TP/SL
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -263,7 +263,7 @@ async def execute_perps_close(
 
         # Update position
         position.status = "closed"
-        position.closed_at = datetime.utcnow()
+        position.closed_at = utcnow()
         position.sell_price = current_price
         position.profit_quote = profit_usdc
         position.profit_percentage = profit_pct

@@ -4,7 +4,8 @@ Tests for the rebalancer gate helpers in rebalance_monitor.py:
   - quote_is_overweight
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 
 class TestAllocationCache:
@@ -103,7 +104,7 @@ class TestQuoteIsOverweight:
         from app.services.rebalance_monitor import quote_is_overweight, _CACHE_TTL_SECONDS
         from app.services import rebalance_monitor
         rebalance_monitor._allocation_cache[5] = (
-            datetime.utcnow() - timedelta(seconds=_CACHE_TTL_SECONDS + 1),
+            utcnow() - timedelta(seconds=_CACHE_TTL_SECONDS + 1),
             {"agg_current": {"usdc_pct": 80.0, "btc_pct": 20.0, "usd_pct": 0.0, "eth_pct": 0.0},
              "targets": {"usdc_pct": 50.0, "btc_pct": 50.0, "usd_pct": 0.0, "eth_pct": 0.0},
              "threshold": 5.0}

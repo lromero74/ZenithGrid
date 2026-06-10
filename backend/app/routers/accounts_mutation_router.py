@@ -9,7 +9,7 @@ Write operations for trading accounts:
 """
 
 import logging
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -175,7 +175,7 @@ async def update_account(
         if credentials_changed:
             clear_exchange_client_cache(account_id)
 
-        account.updated_at = datetime.utcnow()
+        account.updated_at = utcnow()
 
         await db.commit()
         await db.refresh(account)
@@ -323,7 +323,7 @@ async def dismiss_speculative_calibration_alert(
     if int(payload.get("account_id") or 0) != int(account_id):
         raise HTTPException(status_code=403, detail="Invalid dismiss token")
 
-    account.speculative_calibration_last_alerted_at = datetime.utcnow()
+    account.speculative_calibration_last_alerted_at = utcnow()
     await db.commit()
     logger.info(
         "Speculative calibration alert dismissed for account %s (user %s)",
@@ -385,7 +385,7 @@ async def apply_speculative_weights_proposal(
         )
 
     proposal.status = ProposalStatus.APPLIED
-    proposal.decided_at = datetime.utcnow()
+    proposal.decided_at = utcnow()
     proposal.decided_by = current_user.id
     await db.commit()
 
@@ -424,7 +424,7 @@ async def set_default_account(
 
         # Set this one as default
         account.is_default = True
-        account.updated_at = datetime.utcnow()
+        account.updated_at = utcnow()
 
         await db.commit()
 

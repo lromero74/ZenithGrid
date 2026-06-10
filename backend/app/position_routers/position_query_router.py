@@ -5,6 +5,7 @@ Handles position listing, details, trades, AI logs, and P&L timeseries.
 """
 
 import logging
+from app.utils.timeutil import utcnow
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -574,7 +575,7 @@ async def get_realized_pnl(
     - QTD (quarter to date - since 1st of current quarter)
     - YTD (year to date - since January 1st of current year)
     """
-    now = datetime.utcnow()
+    now = utcnow()
     # Start of today (midnight UTC)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     # Yesterday (previous day, full 24 hours)
@@ -839,7 +840,7 @@ async def get_position_ai_logs(
         if position.closed_at:
             time_after = position.closed_at + timedelta(seconds=30)
         else:
-            time_after = datetime.utcnow() + timedelta(days=365)
+            time_after = utcnow() + timedelta(days=365)
 
         query = select(AIBotLog).where(
             (AIBotLog.position_id == position_id)

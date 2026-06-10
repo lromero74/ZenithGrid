@@ -6,11 +6,11 @@ Uses real market data for price feeds but fakes order fills and balance updates.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import json
 import logging
 import uuid
 from contextvars import ContextVar
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -363,8 +363,8 @@ class PaperTradingClient(ExchangeClient):
             "filled_value": str(actual_funds),
             "average_filled_price": str(fill_price),
             "total_fees": "0",
-            "created_time": datetime.utcnow().isoformat(),
-            "done_time": datetime.utcnow().isoformat(),
+            "created_time": utcnow().isoformat(),
+            "done_time": utcnow().isoformat(),
             "done_reason": "filled",
             "paper_trading": True,
         }

@@ -6,8 +6,9 @@ projections for bot listings. Extracted from bot_crud_router.list_bots().
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -102,7 +103,7 @@ def calculate_bot_pnl(
     }
     timeframe_days = timeframe_days_map.get(projection_timeframe, None)
     cutoff_date = (
-        datetime.utcnow() - timedelta(days=timeframe_days) if timeframe_days else None
+        utcnow() - timedelta(days=timeframe_days) if timeframe_days else None
     )
 
     # Single pass over closed_positions: accumulate all metrics at once
@@ -147,7 +148,7 @@ def calculate_bot_pnl(
 
     # Calculate derived metrics
     if timeframe_days is None:
-        days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
+        days_in_recent_period = max(1, (utcnow() - bot.created_at).total_seconds() / 86400)
     else:
         days_in_recent_period = timeframe_days
 
@@ -155,7 +156,7 @@ def calculate_bot_pnl(
     avg_daily_pnl_btc = recent_pnl_btc / days_in_recent_period
 
     # Trades per day (all-time)
-    days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
+    days_active = (utcnow() - bot.created_at).total_seconds() / 86400
     trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
 
     # Win rate: exclude manual closes (user intervention) from denominator
@@ -171,11 +172,11 @@ def calculate_bot_pnl(
     # Aggregate running days: stored seconds + current session (if active)
     running_secs = bot.total_running_seconds or 0.0
     if bot.is_active and bot.last_started_at is not None:
-        running_secs += (datetime.utcnow() - bot.last_started_at).total_seconds()
+        running_secs += (utcnow() - bot.last_started_at).total_seconds()
     aggregate_running_days = running_secs / 86400.0
 
     # Calendar days since creation
-    calendar_days = (datetime.utcnow() - bot.created_at).total_seconds() / 86400.0
+    calendar_days = (utcnow() - bot.created_at).total_seconds() / 86400.0
 
     # PnL per active day (only when bot has meaningful running time; else same as avg_daily)
     if aggregate_running_days >= 0.01:

@@ -6,8 +6,9 @@ parameter adjustments.
 """
 
 import json
+from app.utils.timeutil import utcnow
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Bot, PendingOrder, Position, Trade
@@ -66,7 +67,7 @@ def _make_grid_state(
         "total_profit_quote": total_profit,
         "breakout_count": breakout_count,
         "initialized_at": (
-            datetime.utcnow() - timedelta(hours=hours_ago)
+            utcnow() - timedelta(hours=hours_ago)
         ).isoformat(),
     }
 
@@ -634,7 +635,7 @@ class TestRunAiGridOptimization:
             "ai_adjustment_interval_minutes": 120,
             "grid_state": {
                 "last_ai_check": (
-                    datetime.utcnow() - timedelta(minutes=30)
+                    utcnow() - timedelta(minutes=30)
                 ).isoformat(),
             },
         })
@@ -653,7 +654,7 @@ class TestRunAiGridOptimization:
         """Happy path: full optimization pipeline runs end-to-end."""
         grid_state = _make_grid_state(num_levels=10, filled=5)
         grid_state["last_ai_check"] = (
-            datetime.utcnow() - timedelta(hours=3)
+            utcnow() - timedelta(hours=3)
         ).isoformat()
 
         bot = _make_bot(strategy_config={

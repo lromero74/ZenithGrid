@@ -1,6 +1,6 @@
 """System models: settings, market data, bot/scanner/indicator logs."""
 
-from datetime import datetime
+from app.utils.timeutil import utcnow
 
 from sqlalchemy import (
     Boolean,
@@ -27,7 +27,7 @@ class Settings(Base):
     value = Column(String)
     value_type = Column(String)  # float, int, string, bool
     description = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class MarketData(Base):
@@ -35,7 +35,7 @@ class MarketData(Base):
     __table_args__ = {'schema': 'system'}
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
     price = Column(Float)
 
     # MACD indicators
@@ -54,7 +54,7 @@ class AIBotLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
     position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True, index=True)  # Link to position
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
     # AI thinking/reasoning content
     thinking = Column(Text)  # The AI's reasoning process
@@ -83,7 +83,7 @@ class ScannerLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
     # What was scanned
     product_id = Column(String, nullable=False)  # Trading pair (e.g., "BTC-USD")
@@ -112,7 +112,7 @@ class IndicatorLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("trading.bots.id"), index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
     # What was evaluated
     product_id = Column(String, nullable=False)  # Trading pair (e.g., "ETH-BTC")

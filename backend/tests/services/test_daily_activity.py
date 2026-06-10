@@ -11,7 +11,8 @@ Tests cover:
 - Paper trading exclusion by default
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.timeutil import utcnow
 
 import pytest
 
@@ -57,7 +58,7 @@ class TestGetDailyActivity:
     async def test_happy_path_positions_and_transfers(self, db_session):
         """Positions and transfers produce correct aggregated records."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         # Add a winning trade (USD pair)
         pos = Position(
@@ -109,7 +110,7 @@ class TestGetDailyActivity:
     async def test_same_day_aggregation(self, db_session):
         """Two BTC wins on the same day → single record with count: 2."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
         yesterday = now - timedelta(days=1)
 
         for profit in [0.001, 0.002]:
@@ -138,7 +139,7 @@ class TestGetDailyActivity:
     async def test_line_assignment_usd_pair(self, db_session):
         """ADA-USD trade → usd line."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         pos = Position(
             user_id=user.id,
@@ -164,7 +165,7 @@ class TestGetDailyActivity:
     async def test_line_assignment_btc_pair(self, db_session):
         """ETH-BTC trade → btc line, uses profit_quote."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         pos = Position(
             user_id=user.id,
@@ -190,7 +191,7 @@ class TestGetDailyActivity:
     async def test_btc_deposit_on_btc_line(self, db_session):
         """BTC deposit → btc line, uses raw amount."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         transfer = AccountTransfer(
             user_id=user.id,
@@ -215,7 +216,7 @@ class TestGetDailyActivity:
     async def test_usd_withdrawal(self, db_session):
         """USD withdrawal → usd line, withdrawal category."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         transfer = AccountTransfer(
             user_id=user.id,
@@ -248,7 +249,7 @@ class TestGetDailyActivity:
     async def test_paper_trading_excluded_by_default(self, db_session):
         """Paper trading positions excluded by default."""
         user, account = await _seed_user_and_account(db_session, paper_trading=True)
-        now = datetime.utcnow()
+        now = utcnow()
 
         pos = Position(
             user_id=user.id,
@@ -277,7 +278,7 @@ class TestGetDailyActivity:
     async def test_outside_range_excluded(self, db_session):
         """Positions/transfers outside the day range are excluded."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         # Position closed 60 days ago — outside 30-day range
         pos = Position(
@@ -300,7 +301,7 @@ class TestGetDailyActivity:
     async def test_zero_profit_excluded(self, db_session):
         """Positions with zero profit are excluded (break-even)."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         pos = Position(
             user_id=user.id,
@@ -322,7 +323,7 @@ class TestGetDailyActivity:
     async def test_account_id_filter(self, db_session):
         """When account_id is specified, only that account's data is returned."""
         user, account = await _seed_user_and_account(db_session)
-        now = datetime.utcnow()
+        now = utcnow()
 
         # Create a second account
         account2 = Account(

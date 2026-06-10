@@ -14,6 +14,7 @@ Also includes metric snapshot recording and pruning.
 """
 
 import asyncio
+from app.utils.timeutil import utcnow
 import logging
 import time
 from datetime import datetime, timedelta
@@ -94,7 +95,7 @@ async def record_metric_snapshot(metric_name: str, value: float) -> None:
             db.add(MetricSnapshot(
                 metric_name=metric_name,
                 value=value,
-                recorded_at=datetime.utcnow(),
+                recorded_at=utcnow(),
             ))
             await db.commit()
     except Exception as e:
@@ -109,7 +110,7 @@ async def prune_old_snapshots() -> None:
         return
     _last_prune_time = now
     try:
-        cutoff = datetime.utcnow() - timedelta(days=METRIC_SNAPSHOT_PRUNE_DAYS)
+        cutoff = utcnow() - timedelta(days=METRIC_SNAPSHOT_PRUNE_DAYS)
         async with async_session_maker() as db:
             await db.execute(
                 delete(MetricSnapshot).where(MetricSnapshot.recorded_at < cutoff)
@@ -139,7 +140,7 @@ async def fetch_btc_block_height() -> Dict[str, Any]:
             height_text = await response.text()
             height = int(height_text.strip())
 
-            now = datetime.utcnow()
+            now = utcnow()
             cache_data = {
                 "height": height,
                 "timestamp": now.isoformat(),
@@ -283,7 +284,7 @@ async def fetch_us_debt() -> Dict[str, Any]:
                     debt_ceiling = amount_trillion * 1_000_000_000_000
                     headroom = debt_ceiling - total_debt
 
-        now = datetime.utcnow()
+        now = utcnow()
         cache_data = {
             "total_debt": total_debt,
             "debt_per_second": debt_per_second,
@@ -323,7 +324,7 @@ async def fetch_fear_greed_index() -> Dict[str, Any]:
             data = await response.json()
             fng_data = data.get("data", [{}])[0]
 
-            now = datetime.utcnow()
+            now = utcnow()
             cache_data = {
                 "data": {
                     "value": int(fng_data.get("value", 50)),
@@ -364,7 +365,7 @@ async def fetch_btc_dominance() -> Dict[str, Any]:
             eth_dominance = global_data.get("market_cap_percentage", {}).get("eth", 0)
             total_mcap = global_data.get("total_market_cap", {}).get("usd", 0)
 
-            now = datetime.utcnow()
+            now = utcnow()
             cache_data = {
                 "btc_dominance": round(btc_dominance, 2),
                 "eth_dominance": round(eth_dominance, 2),
@@ -430,7 +431,7 @@ async def fetch_altseason_index() -> Dict[str, Any]:
             else:
                 season = "Neutral"
 
-            now = datetime.utcnow()
+            now = utcnow()
             cache_data = {
                 "altseason_index": altseason_index,
                 "season": season,
@@ -487,7 +488,7 @@ async def fetch_stablecoin_mcap() -> Dict[str, Any]:
                 else:
                     others_mcap += mcap
 
-            now = datetime.utcnow()
+            now = utcnow()
             cache_data = {
                 "total_stablecoin_mcap": total_mcap,
                 "usdt_mcap": usdt_mcap,
@@ -533,7 +534,7 @@ async def fetch_mempool_stats() -> Dict[str, Any]:
             else:
                 fee_data = await response.json()
 
-        now = datetime.utcnow()
+        now = utcnow()
         cache_data = {
             "tx_count": mempool_data.get("count", 0),
             "vsize": mempool_data.get("vsize", 0),
@@ -591,7 +592,7 @@ async def fetch_hash_rate() -> Dict[str, Any]:
                 diff_data = await response.json()
                 difficulty = diff_data.get("difficultyChange", 0)
 
-        now = datetime.utcnow()
+        now = utcnow()
         cache_data = {
             "hash_rate_eh": round(hash_rate_eh, 2),
             "difficulty": difficulty,
@@ -628,7 +629,7 @@ async def fetch_lightning_stats() -> Dict[str, Any]:
             response_data = await response.json()
             data = response_data.get("latest", response_data)
 
-        now = datetime.utcnow()
+        now = utcnow()
         cache_data = {
             "channel_count": data.get("channel_count", 0),
             "node_count": data.get("node_count", 0),
@@ -682,7 +683,7 @@ async def fetch_ath_data() -> Dict[str, Any]:
             except (ValueError, TypeError):
                 logger.warning("Unparseable ATH date %r from CoinGecko", ath_date_str, exc_info=True)
 
-        now = datetime.utcnow()
+        now = utcnow()
         cache_data = {
             "current_price": round(current_price, 2),
             "ath": round(ath, 2),
@@ -707,7 +708,7 @@ async def fetch_ath_data() -> Dict[str, Any]:
 async def fetch_btc_rsi() -> Dict[str, Any]:
     """Fetch BTC-USD daily candles from Coinbase and calculate RSI(14)."""
     try:
-        now = int(datetime.utcnow().timestamp())
+        now = int(utcnow().timestamp())
         start = now - (25 * 24 * 60 * 60)
 
         session = await get_shared_session()
@@ -745,7 +746,7 @@ async def fetch_btc_rsi() -> Dict[str, Any]:
             else:
                 zone = "neutral"
 
-            now_dt = datetime.utcnow()
+            now_dt = utcnow()
             cache_data = {
                 "rsi": rsi,
                 "zone": zone,
@@ -800,7 +801,7 @@ async def get_metric_history_data(
     max_points: int,
 ) -> Dict[str, Any]:
     """Fetch and downsample metric history for sparkline charts."""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utcnow() - timedelta(days=days)
     async with read_async_session_maker() as db:
         result = await db.execute(
             select(MetricSnapshot.value, MetricSnapshot.recorded_at)

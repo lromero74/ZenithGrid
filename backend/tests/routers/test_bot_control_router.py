@@ -5,7 +5,8 @@ Covers bot start/stop/force-run/cancel-all-positions/sell-all-positions endpoint
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -25,7 +26,7 @@ def _make_user():
         hashed_password="hashed",
         is_active=True,
         is_superuser=False,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     return user
 
@@ -42,8 +43,8 @@ async def _make_bot(db_session, user, name="ControlBot", strategy_type="macd_dca
         product_ids=[product_id],
         is_active=is_active,
         check_interval_seconds=300,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db_session.add(bot)
     await db_session.flush()
@@ -57,7 +58,7 @@ async def _make_position(db_session, bot, status="open"):
         user_id=bot.user_id,
         product_id=bot.product_id,
         status=status,
-        opened_at=datetime.utcnow(),
+        opened_at=utcnow(),
         initial_quote_balance=1.0,
         max_quote_allowed=0.25,
         total_quote_spent=0.01,
@@ -109,7 +110,7 @@ class TestStartBot:
         db_session.add(user)
         await db_session.flush()
 
-        before = datetime.utcnow()
+        before = utcnow()
         bot = await _make_bot(db_session, user, is_active=False)
         assert bot.last_started_at is None  # Not set before start
 
@@ -154,7 +155,7 @@ class TestStartBot:
         owner = _make_user()
         other = User(
             email="other@example.com", hashed_password="hashed",
-            is_active=True, created_at=datetime.utcnow(),
+            is_active=True, created_at=utcnow(),
         )
         db_session.add_all([owner, other])
         await db_session.flush()
@@ -253,7 +254,7 @@ class TestStopBot:
 
         bot = await _make_bot(db_session, user, is_active=True)
         # Simulate bot was started 1 hour ago
-        bot.last_started_at = datetime.utcnow() - timedelta(hours=1)
+        bot.last_started_at = utcnow() - timedelta(hours=1)
         bot.total_running_seconds = 0.0
         await db_session.flush()
 
@@ -275,7 +276,7 @@ class TestStopBot:
         bot = await _make_bot(db_session, user, is_active=True)
         # Simulate bot previously ran for 3.5 days, then was started 0.4 days ago
         bot.total_running_seconds = 3.5 * 86400  # 302400 seconds
-        bot.last_started_at = datetime.utcnow() - timedelta(days=0.4)
+        bot.last_started_at = utcnow() - timedelta(days=0.4)
         await db_session.flush()
 
         await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
@@ -319,7 +320,7 @@ class TestStopBot:
 
         # First run: simulate 3.5 days
         await start_bot(bot_id=bot.id, db=db_session, current_user=user)
-        bot.last_started_at = datetime.utcnow() - timedelta(days=3.5)
+        bot.last_started_at = utcnow() - timedelta(days=3.5)
         await db_session.flush()
         await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
 
@@ -328,7 +329,7 @@ class TestStopBot:
 
         # Second run: simulate 0.4 days
         await start_bot(bot_id=bot.id, db=db_session, current_user=user)
-        bot.last_started_at = datetime.utcnow() - timedelta(days=0.4)
+        bot.last_started_at = utcnow() - timedelta(days=0.4)
         await db_session.flush()
         await stop_bot(bot_id=bot.id, db=db_session, current_user=user)
 
@@ -383,14 +384,14 @@ class TestForceRunBot:
         await db_session.flush()
 
         bot = await _make_bot(db_session, user, is_active=True)
-        bot.last_signal_check = datetime.utcnow()
+        bot.last_signal_check = utcnow()
 
         result = await force_run_bot(bot_id=bot.id, db=db_session, current_user=user)
 
         assert "will run on next monitor cycle" in result["message"]
         assert result["note"] is not None
         # last_signal_check should be set far enough in the past
-        expected_cutoff = datetime.utcnow() - timedelta(seconds=300)
+        expected_cutoff = utcnow() - timedelta(seconds=300)
         assert bot.last_signal_check < expected_cutoff
 
     @pytest.mark.asyncio

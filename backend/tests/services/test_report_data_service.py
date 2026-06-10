@@ -567,9 +567,7 @@ class TestComputeGoalProgress:
         goal = _make_goal(target_type="balance", target_value=10000.0)
         # Goal: start_date=2024-01-01, target_date=2026-01-01 (2 years)
         # Mock utcnow to mid-point (50% time elapsed)
-        with patch("app.services.report_data_service.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2025, 1, 1)
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        with patch("app.services.report_data_service.utcnow", return_value=datetime(2025, 1, 1)):
             result = await compute_goal_progress(
                 db_session, goal,
                 current_usd=6000.0, current_btc=0.1,

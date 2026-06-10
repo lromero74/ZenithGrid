@@ -6,7 +6,8 @@ manual_kill, get_propguard_history, and _get_prop_account helper.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from app.utils.timeutil import utcnow
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -39,7 +40,7 @@ async def prop_account(db_session, test_user):
         prop_daily_drawdown_pct=4.5,
         prop_total_drawdown_pct=9.0,
         prop_initial_deposit=100000.0,
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        created_at=utcnow(), updated_at=utcnow(),
     )
     db_session.add(account)
     await db_session.flush()
@@ -52,7 +53,7 @@ async def non_prop_account(db_session, test_user):
         id=2, user_id=test_user.id, name="Regular Account",
         type="cex", exchange="coinbase", is_default=False, is_active=True,
         prop_firm=None,
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        created_at=utcnow(), updated_at=utcnow(),
     )
     db_session.add(account)
     await db_session.flush()
@@ -65,9 +66,9 @@ async def prop_state(db_session, prop_account):
         id=1, account_id=prop_account.id,
         initial_deposit=100000.0,
         daily_start_equity=99000.0,
-        daily_start_timestamp=datetime.utcnow(),
+        daily_start_timestamp=utcnow(),
         current_equity=98500.0,
-        current_equity_timestamp=datetime.utcnow(),
+        current_equity_timestamp=utcnow(),
         is_killed=False,
         daily_pnl=-500.0,
         total_pnl=-1500.0,
@@ -84,10 +85,10 @@ async def killed_prop_state(db_session, prop_account):
         initial_deposit=100000.0,
         daily_start_equity=99000.0,
         current_equity=95000.0,
-        current_equity_timestamp=datetime.utcnow(),
+        current_equity_timestamp=utcnow(),
         is_killed=True,
         kill_reason="Daily drawdown limit exceeded",
-        kill_timestamp=datetime.utcnow(),
+        kill_timestamp=utcnow(),
         daily_pnl=-4000.0,
         total_pnl=-5000.0,
     )
@@ -340,7 +341,7 @@ class TestGetPropguardHistory:
             total_drawdown_pct=1.0,
             daily_pnl=-1000.0,
             is_killed=False,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
         )
         db_session.add(snapshot)
         await db_session.flush()
@@ -376,7 +377,7 @@ class TestGetPropguardHistory:
             total_drawdown_pct=2.0,
             daily_pnl=-2000.0,
             is_killed=False,
-            timestamp=datetime.utcnow() - timedelta(hours=48),
+            timestamp=utcnow() - timedelta(hours=48),
         )
         db_session.add(old_snapshot)
         await db_session.flush()

@@ -6,7 +6,7 @@ input validation, and error handling.
 """
 
 import pytest
-from datetime import datetime
+from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Account, User
@@ -57,7 +57,7 @@ class TestMarketSell:
             email="trader@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -106,7 +106,7 @@ class TestMarketSell:
             email="noaccount@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -127,7 +127,7 @@ class TestMarketSell:
             email="noclient@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -161,7 +161,7 @@ class TestMarketSell:
             email="badproduct@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -197,7 +197,7 @@ class TestMarketSell:
             email="zerosize@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -233,7 +233,7 @@ class TestMarketSell:
             email="negsize@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -268,7 +268,7 @@ class TestMarketSell:
             email="rejected@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -309,7 +309,7 @@ class TestMarketSell:
             email="specificacct@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
@@ -353,7 +353,7 @@ class TestMarketSell:
             email="exception@example.com",
             hashed_password="hashed",
             is_active=True,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db_session.add(user)
         await db_session.flush()
