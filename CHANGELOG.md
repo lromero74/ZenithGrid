@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.11] - 2026-06-10
+
+### Fixed
+- **Corruption recovery now actually keeps the monitor cycle alive** — when a database read failed due to a bad storage block, the recovery path left the database transaction in an aborted state, so the very next read in the same cycle failed anyway and the whole cycle was lost. The transaction is now rolled back after a corruption error, so the remaining reads in the cycle (and your other bots) genuinely keep working.
+- **Startup order reconciliation no longer logs a duplicate error during storage corruption** — a corruption event during the startup pass now produces the single concise warning it was supposed to, instead of also emitting the full startup error line.
+- **Fewer false corruption alarms** — file-permission problems and missing database files are no longer mistaken for storage corruption; they surface immediately as real errors instead of being silently retried, so genuine misconfiguration gets noticed right away.
+
 ## [v2.166.10] - 2026-06-06
 
 ### Fixed
