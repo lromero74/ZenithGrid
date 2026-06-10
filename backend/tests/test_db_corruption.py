@@ -46,3 +46,15 @@ class TestIsDbCorruptionError:
     def test_non_database_exception_not_flagged(self):
         """Non-DBAPI exceptions are never corruption, even with a matching string."""
         assert is_db_corruption_error(ValueError("could not read block")) is False
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            'could not open file "pg_hba.conf": Permission denied',
+            'could not open file "base/16384/16385": No such file or directory',
+        ],
+    )
+    def test_open_failure_without_io_error_not_flagged(self, message):
+        """File-open failures from misconfiguration or missing files are not
+        storage corruption — they must fail fast, not be retried as warnings."""
+        assert is_db_corruption_error(_wrap(message)) is False
