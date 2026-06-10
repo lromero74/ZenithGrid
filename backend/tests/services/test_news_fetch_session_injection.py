@@ -38,7 +38,7 @@ class TestGetNewsSourcesFromDbInjection:
         mock_session.execute = AsyncMock(return_value=mock_result)
         mock_sm.return_value = mock_session
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             get_news_sources_from_db(session_maker=mock_sm)
         )
         mock_sm.assert_called_once()
@@ -70,7 +70,7 @@ class TestGetVideoSourcesFromDbInjection:
         mock_session.execute = AsyncMock(return_value=mock_result)
         mock_sm.return_value = mock_session
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             get_video_sources_from_db(session_maker=mock_sm)
         )
         mock_sm.assert_called_once()

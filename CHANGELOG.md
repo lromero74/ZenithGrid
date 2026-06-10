@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.17] - 2026-06-10
+
+### Fixed
+- **The backend test suite now passes in a bare environment** — a fresh checkout with no Redis server, no `.env`, and no local secrets runs `pytest tests/` fully green, in any timezone:
+  - The Redis integration test now skips cleanly (with a reason) when no Redis server is reachable, instead of failing.
+  - The encrypted-credential masking test generates an ephemeral key instead of requiring `ENCRYPTION_KEY` in `.env`.
+  - Seven tests that called `asyncio.get_event_loop()` (deprecated, and broken under newer pytest-asyncio) now use `asyncio.run()`.
+  - Tests that built timestamps with local time (`datetime.now()`) or converted naive UTC datetimes with `.timestamp()` were timezone-dependent — they failed on any machine not set to UTC. They now build timestamps in UTC, matching the code under test.
+
+### Added
+- The `redis` Python package is now declared in `requirements.txt` — the backend imports it at runtime (rate limiting, broadcasts), but fresh installs previously had to install it by hand.
+
 ## [v2.166.16] - 2026-06-10
 
 ### Changed

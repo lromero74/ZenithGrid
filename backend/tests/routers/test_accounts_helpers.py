@@ -31,10 +31,21 @@ class TestMaskApiKey:
         result = mask_api_key("123456789")
         assert result == "1234****6789"
 
-    def test_handles_encrypted_value(self):
-        """Encrypted values should be decrypted before masking."""
-        from app.encryption import encrypt_value
-        encrypted = encrypt_value("test_api_key_1234")
+    def test_handles_encrypted_value(self, monkeypatch):
+        """Encrypted values should be decrypted before masking.
+
+        Uses an ephemeral Fernet key so the test runs in bare environments
+        (no .env / ENCRYPTION_KEY). monkeypatch restores the real key and
+        cached MultiFernet afterwards.
+        """
+        from cryptography.fernet import Fernet
+        from app import encryption
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "encryption_key", Fernet.generate_key().decode())
+        monkeypatch.setattr(encryption, "_fernet", None)  # re-init from the patched key
+
+        encrypted = encryption.encrypt_value("test_api_key_1234")
         result = mask_api_key(encrypted)
         assert result is not None
         assert "****" in result

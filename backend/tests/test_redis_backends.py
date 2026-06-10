@@ -274,6 +274,27 @@ class TestRedisSubscriberRouting:
 # redis_client module
 # ---------------------------------------------------------------------------
 
+def _redis_server_reachable() -> bool:
+    """True if the configured Redis server accepts TCP connections.
+
+    Used to skip (not fail) the live-server integration test in bare
+    environments — CI containers and fresh dev machines have no Redis.
+    """
+    import socket
+    from urllib.parse import urlparse
+
+    from app.config import settings
+
+    parsed = urlparse(settings.redis_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 6379
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 class TestRedisClient:
     """Unit tests for the redis_client singleton."""
 
@@ -291,6 +312,7 @@ class TestRedisClient:
         assert client is not None
         await client.aclose()
 
+    @pytest.mark.skipif(not _redis_server_reachable(), reason="requires a running Redis server")
     @pytest.mark.asyncio
     async def test_redis_ping(self):
         """Integration: Redis responds to PING (requires Redis running)."""

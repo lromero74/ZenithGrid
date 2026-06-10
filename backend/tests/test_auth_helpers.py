@@ -8,7 +8,7 @@ MFA token decoding.
 
 import pytest
 from app.utils.timeutil import utcnow
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -158,7 +158,8 @@ class TestCreateMfaToken:
         token = create_mfa_token(user_id=5)
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         # exp should be within 5 minutes + a few seconds tolerance
-        now_ts = utcnow().timestamp()
+        # Attach UTC before .timestamp() — naive datetimes are read as local time
+        now_ts = utcnow().replace(tzinfo=timezone.utc).timestamp()
         assert payload["exp"] - now_ts <= 305  # 5 min + 5 sec tolerance
         assert payload["exp"] - now_ts > 200  # At least ~3 min
 

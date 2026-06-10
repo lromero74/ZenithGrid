@@ -2,7 +2,7 @@
 
 import pytest
 from app.utils.timeutil import utcnow
-from datetime import timedelta
+from datetime import timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 from jose import jwt
@@ -235,7 +235,7 @@ class TestGetCurrentUser:
 
         payload = {
             "sub": "1", "type": "access", "jti": "test-jti",
-            "iat": int(old_iat.timestamp()),
+            "iat": int(old_iat.replace(tzinfo=timezone.utc).timestamp()),
             "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)
@@ -262,7 +262,7 @@ class TestGetCurrentUser:
     async def test_valid_token_returns_user(self, mock_settings):
         payload = {
             "sub": "1", "type": "access", "jti": "test-jti",
-            "iat": int(utcnow().timestamp()),
+            "iat": int(utcnow().replace(tzinfo=timezone.utc).timestamp()),
             "exp": utcnow() + timedelta(hours=1),
         }
         token = _make_token(payload)

@@ -7,6 +7,7 @@ aiosqlite==0.20.0
 # driver the app uses at runtime; psycopg2-binary is the sync driver used by
 # backend/migrations/db_utils.py to run schema migrations.
 asyncpg==0.31.0
+redis>=7.4.0  # app/redis_client.py imports redis.asyncio (rate limits, broadcasts)
 psycopg2-binary==2.9.12
 greenlet==3.2.4
 pydantic==2.10.3
