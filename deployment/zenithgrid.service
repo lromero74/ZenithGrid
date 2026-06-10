@@ -11,9 +11,16 @@
 #   KillMode=mixed only kills the podman-exec client — the in-container uvicorn
 #   survives and keeps holding :8100. The next restart then crash-loops with
 #   "[Errno 98] address already in use". ExecStop/ExecStopPost explicitly signal
-#   uvicorn inside the container. The '[u]vicorn' bracket-glob matches the real
-#   uvicorn process but NOT the pkill wrapper itself (whose argv contains the
-#   literal '[u]vicorn ...'), avoiding a self-kill.
+#   uvicorn to shut down.
+#
+#   Two subtleties in the pkill pattern:
+#   1. distrobox containers share the HOST pid namespace, so a pkill here can see
+#      EVERY app on the box. Sibling apps (e.g. tampa-re-investor) also run
+#      `uvicorn app.main:app`, so the pattern MUST include this app's unique
+#      `--port 8100` or it will kill them too. Match the full host+port string.
+#   2. The leading '[u]' bracket-glob matches the real uvicorn process but NOT
+#      the pkill wrapper itself (whose argv contains the literal '[u]vicorn ...'),
+#      avoiding a self-kill.
 
 [Unit]
 Description=ZenithGrid Trading Bot Backend (FastAPI) running in zenith-box distrobox
@@ -27,8 +34,8 @@ EnvironmentFile=/home/louis/ZenithGrid/backend/.env.banmonitor
 ExecStartPre=/usr/bin/distrobox enter --name zenith-box -- /bin/true
 ExecStartPre=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c 'find /home/louis/ZenithGrid/backend -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true'
 ExecStart=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c 'cd "$HOME/ZenithGrid/backend" && exec ./venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8100'
-ExecStop=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -TERM -f '[u]vicorn app.main:app' || true"
-ExecStopPost=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -KILL -f '[u]vicorn app.main:app' || true"
+ExecStop=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -TERM -f '[u]vicorn app.main:app --host 127.0.0.1 --port 8100' || true"
+ExecStopPost=/usr/bin/distrobox enter --name zenith-box -- /bin/bash -c "pkill -KILL -f '[u]vicorn app.main:app --host 127.0.0.1 --port 8100' || true"
 Restart=on-failure
 RestartSec=10
 KillMode=mixed

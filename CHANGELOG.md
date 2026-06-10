@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.14] - 2026-06-10
+
+### Fixed
+- **Stopping or restarting ZenithGrid now only ever touches ZenithGrid.** The previous release's clean-restart fix matched its shutdown signal too broadly, so on a server hosting several apps it could also signal another app's process. The shutdown now targets ZenithGrid's own listener (port 8100) specifically, leaving every other app on the host untouched.
+
 ## [v2.166.13] - 2026-06-10
 
 ### Fixed
