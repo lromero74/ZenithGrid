@@ -181,10 +181,14 @@ async def update_account(
         await db.refresh(account)
 
         # Get bot count with aggregate query
-        bot_count_result = await db.execute(
-            select(func.count(Bot.id)).where(Bot.account_id == account.id)
-        )
-        bot_count = bot_count_result.scalar() or 0
+        try:
+            bot_count_result = await db.execute(
+                select(func.count(Bot.id)).where(Bot.account_id == account.id)
+            )
+            bot_count = bot_count_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Bot count query failed after update: {e}")
+            bot_count = 0
 
         logger.info(f"Updated account: {account.name} (id={account.id})")
 
