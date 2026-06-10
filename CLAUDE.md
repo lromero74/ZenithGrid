@@ -134,7 +134,12 @@ git checkout -b feature/my-feature    # Branch from main
 # Major (X+1.0.0): breaking changes (rare, user specifies)
 ```
 
-**Repo hygiene**: Keep tidy — local AND remote. Delete merged branches. One-off scripts go in `scripts/`.
+**Repo hygiene**: Keep tidy — local AND remote. Delete merged branches. Don't leave loose files in the tree or commit `.bak`/`.fixed` copies (git history is the backup). Script locations:
+- `scripts/` (root, **tracked**) — permanent, shared tooling worth committing.
+- `backend/scripts/` (**gitignored**) — throwaway/local backend helpers; drop & forget.
+- `scratch/` (root, **gitignored**) — any other throwaway scripts/experiments. See `scratch/README.md`.
+
+These ignored dirs ignore their contents wholesale, so put throwaway scripts there instead of growing `.gitignore` per file.
 
 ## Service Management
 

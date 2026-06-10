@@ -47,11 +47,17 @@ backend/tts_cache/
 # Domain blacklist cache (downloaded at runtime)
 backend/blacklists/
 
-# Environment variables
+# Environment variables — ignore .env and every per-env file (.env.local,
+# .env.banmonitor, .env.bak, …); keep the committed template.
 .env
-.env.local
-.env.bak*
-*.env.bak*
+.env.*
+!.env.example
+
+# Scratch space: throwaway / one-off scripts & experiments. Drop them here (or
+# in backend/scripts/) instead of leaving them loose in the tree. Contents are
+# ignored; the README is tracked so the directory and its purpose persist.
+scratch/*
+!scratch/README.md
 
 # Node
 node_modules/
