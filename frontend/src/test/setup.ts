@@ -40,3 +40,19 @@ if (needsPolyfill(globalThis.sessionStorage)) {
   Object.defineProperty(globalThis, 'sessionStorage', { value: ss, configurable: true, writable: true })
   Object.defineProperty(window, 'sessionStorage', { value: ss, configurable: true, writable: true })
 }
+
+// jsdom does not implement ResizeObserver, which chart components use to
+// track container width. A no-op stub is enough for tests — layout never
+// actually changes in jsdom.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class NoopResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    value: NoopResizeObserver,
+    configurable: true,
+    writable: true,
+  })
+}

@@ -6,7 +6,8 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, render, waitFor } from '@testing-library/react'
+import { createElement } from 'react'
 
 // Build a mock chart factory
 function createMockSeries() {
@@ -59,6 +60,19 @@ vi.mock('lightweight-charts', () => ({
     return lastCreatedChart
   }),
   ColorType: { Solid: 'Solid' },
+}))
+
+// Controllable deferred for the lazy chart-lib loader so tests decide
+// exactly when the "dynamic import" resolves.
+let libDeferred: { promise: Promise<unknown>; resolve: (v: unknown) => void }
+function makeLibDeferred() {
+  let resolve!: (v: unknown) => void
+  const promise = new Promise((r) => { resolve = r })
+  return { promise, resolve }
+}
+
+vi.mock('../../../utils/chartLib', () => ({
+  loadChartLib: () => libDeferred.promise,
 }))
 
 vi.mock('../helpers', () => ({
@@ -291,5 +305,71 @@ describe('useChartManagement sync reentrancy guard', () => {
     // Both indicator charts should have been synced
     expect(mockChart1.timeScale().setVisibleRange).toHaveBeenCalledTimes(1)
     expect(mockChart2.timeScale().setVisibleRange).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useChartManagement async chart creation (lazy lightweight-charts)', () => {
+  beforeEach(() => {
+    libDeferred = makeLibDeferred()
+    // vi.restoreAllMocks() does not clear module-factory vi.fn()s — call
+    // counts accumulate across tests unless cleared here. Also reinstate the
+    // implementation so created charts are tracked.
+    vi.mocked(createChart).mockClear()
+    vi.mocked(createChart).mockImplementation(((_container: unknown, _options: unknown) => {
+      lastCreatedChart = createMockChart()
+      return lastCreatedChart
+    }) as never)
+  })
+
+  function resolveLib() {
+    libDeferred.resolve({ createChart, ColorType: { Solid: 'Solid' } })
+  }
+
+  // Harness that actually attaches the container ref so the mount effect
+  // proceeds past the null-container guard.
+  function makeHarness() {
+    const states: boolean[] = []
+    let latest: ReturnType<typeof useChartManagement> | null = null
+    function Harness() {
+      const api = useChartManagement('candlestick', 'BTC-USD', { current: new Map() } as any)
+      states.push(api.chartReady)
+      latest = api
+      return createElement('div', { ref: api.chartContainerRef })
+    }
+    return { Harness, states, getLatest: () => latest! }
+  }
+
+  test('chartReady starts false and flips true after the library loads', async () => {
+    const { Harness, states, getLatest } = makeHarness()
+    render(createElement(Harness))
+
+    expect(states[0]).toBe(false)
+    expect(getLatest().chartReady).toBe(false)
+
+    await act(async () => { resolveLib() })
+    await waitFor(() => expect(getLatest().chartReady).toBe(true))
+    expect(createChart).toHaveBeenCalled()
+  })
+
+  test('creates main + volume series once the chart is ready', async () => {
+    const { Harness, getLatest } = makeHarness()
+    render(createElement(Harness))
+
+    await act(async () => { resolveLib() })
+    await waitFor(() => expect(getLatest().chartReady).toBe(true))
+    expect(lastCreatedChart.addCandlestickSeries).toHaveBeenCalledTimes(1)
+    expect(lastCreatedChart.addHistogramSeries).toHaveBeenCalledTimes(1)
+    expect(getLatest().mainSeriesRef.current).not.toBeNull()
+    expect(getLatest().volumeSeriesRef.current).not.toBeNull()
+  })
+
+  test('skips chart creation when unmounted before the library resolves', async () => {
+    const { Harness } = makeHarness()
+    const { unmount } = render(createElement(Harness))
+    unmount() // library has not resolved yet
+
+    await act(async () => { resolveLib() })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(createChart).not.toHaveBeenCalled()
   })
 })

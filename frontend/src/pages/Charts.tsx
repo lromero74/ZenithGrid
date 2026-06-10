@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAccount } from '../contexts/AccountContext'
 import { BarChart2, X, Settings, Search, Activity } from 'lucide-react'
-import { IChartApi } from 'lightweight-charts'
+import type { IChartApi } from 'lightweight-charts'
 import {
   calculateHeikinAshi,
   TIME_INTERVALS,
@@ -59,6 +59,7 @@ function Charts() {
     isCleanedUpRef,
     syncCallbacksRef,
     syncAllChartsToRange,
+    chartReady,
   } = useChartManagement(chartType, selectedPair, indicatorChartsRef)
 
   // Initialize indicators hook (manages all indicator state and rendering)
@@ -92,9 +93,11 @@ function Charts() {
     lastUpdateRef,
   } = useChartsData(selectedPair, selectedInterval)
 
-  // Update chart data when candles are fetched or display settings change
+  // Update chart data when candles are fetched or display settings change.
+  // chartReady gates this: the chart is created asynchronously (lazy library
+  // import), and refs alone would not re-trigger the effect once it exists.
   useEffect(() => {
-    if (!mainSeriesRef.current || !volumeSeriesRef.current || isCleanedUpRef.current) return
+    if (!chartReady || !mainSeriesRef.current || !volumeSeriesRef.current || isCleanedUpRef.current) return
     if (!candleDataRef.current.length) return
 
     const candles = candleDataRef.current
@@ -132,7 +135,7 @@ function Charts() {
         }
       }
     }
-  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef, dataVersion])
+  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef, dataVersion, chartReady])
 
   const filteredIndicators = filterIndicators(indicatorSearch)
 

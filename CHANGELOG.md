@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.166.16] - 2026-06-10
+
+### Changed
+- **Pages load faster: the charting library now loads only when you open a chart.** The Portfolio, Positions, and Charts pages no longer download and parse the charting engine up front — it is fetched the first time a chart actually appears (opening an asset chart, expanding a position, or landing on the Charts page). The Portfolio holdings table and the positions list now render without waiting for it.
+- **The open-positions list stays smooth with 100 positions per page.** The list is now virtualized, so only the position cards on screen are rendered instead of all 100 at once — scrolling no longer lags on large pages. Grouping headers, card expansion, charts, notes, and pagination all work exactly as before.
+
 ## [v2.166.15] - 2026-06-10
 
 ### Changed

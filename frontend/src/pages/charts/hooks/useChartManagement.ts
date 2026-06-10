@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, Range } from 'lightweight-charts'
+import { useEffect, useRef, useState } from 'react'
+import type { IChartApi, ISeriesApi, Time, Range } from 'lightweight-charts'
+import { loadChartLib } from '../../../utils/chartLib'
 import { getPriceFormat } from '../helpers'
 
 export function useChartManagement(
@@ -14,6 +15,9 @@ export function useChartManagement(
   const isSyncingRef = useRef<boolean>(false)
   const syncCallbacksRef = useRef<Map<string, (timeRange: Range<Time> | null) => void>>(new Map())
   const isCleanedUpRef = useRef<boolean>(false)
+  // Flips true once the (lazily imported) library has loaded and the chart
+  // exists — downstream effects must depend on this, not on the refs.
+  const [chartReady, setChartReady] = useState(false)
 
   // Sync all charts to a given time range (called when any chart is scrolled/zoomed)
   const syncAllChartsToRange = (sourceChartId: string, timeRange: Range<Time> | null) => {
@@ -49,84 +53,90 @@ export function useChartManagement(
     }
   }
 
-  // Initialize main chart
+  // Initialize main chart (lightweight-charts is imported lazily)
   useEffect(() => {
     if (!chartContainerRef.current) return
 
     isCleanedUpRef.current = false
+    let disposed = false
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#1e293b' },
-        textColor: '#94a3b8',
-      },
-      grid: {
-        vertLines: { color: '#334155' },
-        horzLines: { color: '#334155' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 500,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-        rightOffset: 5,
-      },
-      rightPriceScale: {
-        visible: true,
-        borderVisible: true,
-        borderColor: '#334155',
-        autoScale: true,
+    loadChartLib().then(({ createChart, ColorType }) => {
+      if (disposed || !chartContainerRef.current) return
+
+      const chart = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#1e293b' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#334155' },
+          horzLines: { color: '#334155' },
+        },
+        width: chartContainerRef.current.clientWidth,
+        height: 500,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
+          rightOffset: 5,
+        },
+        rightPriceScale: {
+          visible: true,
+          borderVisible: true,
+          borderColor: '#334155',
+          autoScale: true,
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.2,
+          },
+        },
+        leftPriceScale: {
+          visible: false,
+        },
+        crosshair: {
+          mode: 1,
+        },
+      })
+
+      chartRef.current = chart
+
+      // Subscribe main chart to sync all charts when it's scrolled/zoomed
+      const mainSyncCallback = (timeRange: Range<Time> | null) => {
+        syncAllChartsToRange('main', timeRange)
+      }
+      chart.timeScale().subscribeVisibleTimeRangeChange(mainSyncCallback)
+      syncCallbacksRef.current.set('main', mainSyncCallback)
+
+      const volumeSeries = chart.addHistogramSeries({
+        priceFormat: {
+          type: 'volume',
+        },
+        priceScaleId: 'volume',
+      })
+
+      chart.priceScale('volume').applyOptions({
+        scaleMargins: {
+          top: 0.85,
+          bottom: 0,
+        },
+      })
+
+      // Ensure the right price scale is visible
+      chart.priceScale('right').applyOptions({
         scaleMargins: {
           top: 0.1,
           bottom: 0.2,
         },
-      },
-      leftPriceScale: {
-        visible: false,
-      },
-      crosshair: {
-        mode: 1,
-      },
+      })
+
+      volumeSeriesRef.current = volumeSeries
+      setChartReady(true)
     })
-
-    chartRef.current = chart
-
-    // Subscribe main chart to sync all charts when it's scrolled/zoomed
-    const mainSyncCallback = (timeRange: Range<Time> | null) => {
-      syncAllChartsToRange('main', timeRange)
-    }
-    chart.timeScale().subscribeVisibleTimeRangeChange(mainSyncCallback)
-    syncCallbacksRef.current.set('main', mainSyncCallback)
-
-    const volumeSeries = chart.addHistogramSeries({
-      priceFormat: {
-        type: 'volume',
-      },
-      priceScaleId: 'volume',
-    })
-
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: {
-        top: 0.85,
-        bottom: 0,
-      },
-    })
-
-    // Ensure the right price scale is visible
-    chart.priceScale('right').applyOptions({
-      scaleMargins: {
-        top: 0.1,
-        bottom: 0.2,
-      },
-    })
-
-    volumeSeriesRef.current = volumeSeries
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
           width: chartContainerRef.current.clientWidth,
         })
       }
@@ -135,7 +145,9 @@ export function useChartManagement(
     window.addEventListener('resize', handleResize)
 
     return () => {
+      disposed = true
       isCleanedUpRef.current = true
+      setChartReady(false)
       window.removeEventListener('resize', handleResize)
       // Unsubscribe main chart from time scale changes
       const mainCallback = syncCallbacksRef.current.get('main')
@@ -153,9 +165,9 @@ export function useChartManagement(
     }
   }, [])
 
-  // Update chart type when changed
+  // Update chart type when changed (waits for the async chart creation)
   useEffect(() => {
-    if (!chartRef.current || isCleanedUpRef.current) return
+    if (!chartReady || !chartRef.current || isCleanedUpRef.current) return
 
     if (mainSeriesRef.current) {
       try {
@@ -217,9 +229,10 @@ export function useChartManagement(
         priceFormat: priceFormat,
       })
     }
-  }, [chartType, selectedPair])
+  }, [chartType, selectedPair, chartReady])
 
   return {
+    chartReady,
     chartContainerRef,
     chartRef,
     mainSeriesRef,

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, lazy, Suspense } from 'react'
 import type { Bot } from '../types'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -9,7 +9,8 @@ import { useNotifications } from '../contexts/NotificationContext'
 import type { Position } from '../types'
 import PositionLogsModal from '../components/positions/PositionLogsModal'
 import TradingViewChartModal from '../components/trading/TradingViewChartModal'
-import LightweightChartModal from '../components/trading/LightweightChartModal'
+// Lazy: pulls in lightweight-charts only when a chart modal is opened
+const LightweightChartModal = lazy(() => import('../components/trading/LightweightChartModal'))
 import { LimitCloseModal } from '../components/positions/LimitCloseModal'
 import { SlippageWarningModal } from '../components/positions/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/positions/EditPositionSettingsModal'
@@ -26,6 +27,7 @@ import {
   OverallStatsPanel,
   FilterPanel,
   PositionCard,
+  VirtualizedPositionList,
   CloseConfirmModal,
   NotesModal,
   TradeHistoryModal,
@@ -276,6 +278,18 @@ export default function Positions() {
     navigate('/bots', { state: { editBot: bot } })
   }, [navigate])
 
+  // Rows for the virtualized list — group headers are attached to the first
+  // position of each group so a row renders header + card together.
+  const positionRows = useMemo(() => {
+    let lastGroupKey: string | null = null
+    return openPositions.map((position: Position) => {
+      const groupKey = groupBy !== 'none' ? getGroupKey(position) : null
+      const showHeader = groupKey !== null && groupKey !== lastGroupKey
+      if (showHeader) lastGroupKey = groupKey
+      return { position, groupKey, showHeader }
+    })
+  }, [openPositions, groupBy, getGroupKey])
+
   // Pre-compute bot lookup map for O(1) access in PositionCard
   const botsById = useMemo(
     () => new Map((bots || []).map((b: Bot) => [b.id, b])),
@@ -490,46 +504,42 @@ export default function Positions() {
               </div>
             </div>
 
-            {/* Position Cards — with optional grouping headers */}
-            {(() => {
-              let lastGroupKey: string | null = null
-              return openPositions.map((position) => {
-                const groupKey = groupBy !== 'none' ? getGroupKey(position) : null
-                const showHeader = groupKey !== null && groupKey !== lastGroupKey
-                if (showHeader) lastGroupKey = groupKey
-                return (
-                  <div key={position.id}>
-                    {showHeader && (
-                      <div className="px-3 py-1.5 mb-1 mt-3 bg-slate-700/50 rounded text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        {groupKey}
-                      </div>
-                    )}
-                    <PositionCard
-                      position={position}
-                      currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
-                      bots={bots}
-                      bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
-                      btcUsdPrice={btcUsdPrice}
-                      trades={trades}
-                      selectedPosition={selectedPosition}
-                      onTogglePosition={togglePosition}
-                      onOpenChart={handleOpenChart}
-                      onOpenLightweightChart={handleOpenLightweightChart}
-                      onOpenLimitClose={handleOpenLimitClose}
-                      onOpenLogs={handleOpenLogs}
-                      onOpenAddFunds={openAddFundsModal}
-                      onOpenEditSettings={handleOpenEditSettings}
-                      onOpenNotes={openNotesModal}
-                      onOpenTradeHistory={handleOpenTradeHistory}
-                      onCheckSlippage={handleCheckSlippage}
-                      onRefetch={refetchPositions}
-                      onEditBot={handleEditBot}
-                      canWrite={canWritePositions}
-                    />
-                  </div>
-                )
-              })
-            })()}
+            {/* Position Cards — virtualized so only visible cards render */}
+            <VirtualizedPositionList
+              items={positionRows}
+              getItemKey={(index) => positionRows[index].position.id}
+              renderItem={({ position, groupKey, showHeader }) => (
+                <div>
+                  {showHeader && (
+                    <div className="px-3 py-1.5 mb-1 mt-3 bg-slate-700/50 rounded text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      {groupKey}
+                    </div>
+                  )}
+                  <PositionCard
+                    position={position}
+                    currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
+                    bots={bots}
+                    bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
+                    btcUsdPrice={btcUsdPrice}
+                    trades={trades}
+                    selectedPosition={selectedPosition}
+                    onTogglePosition={togglePosition}
+                    onOpenChart={handleOpenChart}
+                    onOpenLightweightChart={handleOpenLightweightChart}
+                    onOpenLimitClose={handleOpenLimitClose}
+                    onOpenLogs={handleOpenLogs}
+                    onOpenAddFunds={openAddFundsModal}
+                    onOpenEditSettings={handleOpenEditSettings}
+                    onOpenNotes={openNotesModal}
+                    onOpenTradeHistory={handleOpenTradeHistory}
+                    onCheckSlippage={handleCheckSlippage}
+                    onRefetch={refetchPositions}
+                    onEditBot={handleEditBot}
+                    canWrite={canWritePositions}
+                  />
+                </div>
+              )}
+            />
 
             {/* Pagination controls */}
             {totalCount > 0 && (
@@ -653,13 +663,17 @@ export default function Positions() {
         position={chartModalPosition}
       />
 
-      {/* Lightweight Chart Modal */}
-      <LightweightChartModal
-        isOpen={showLightweightChart}
-        onClose={() => setShowLightweightChart(false)}
-        symbol={lightweightChartSymbol}
-        position={lightweightChartPosition}
-      />
+      {/* Lightweight Chart Modal (lazy — loads lightweight-charts on demand) */}
+      {showLightweightChart && (
+        <Suspense fallback={null}>
+          <LightweightChartModal
+            isOpen={showLightweightChart}
+            onClose={() => setShowLightweightChart(false)}
+            symbol={lightweightChartSymbol}
+            position={lightweightChartPosition}
+          />
+        </Suspense>
+      )}
 
       {/* Notes Modal */}
       <NotesModal

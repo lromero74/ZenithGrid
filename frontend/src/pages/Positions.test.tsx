@@ -108,6 +108,8 @@ vi.mock('./positions/components', () => ({
   OverallStatsPanel: () => React.createElement('div', null, 'Overall Stats'),
   FilterPanel: () => React.createElement('div', null, 'Filter Panel'),
   PositionCard: () => React.createElement('div', null, 'Position Card'),
+  VirtualizedPositionList: ({ items, renderItem }: { items: unknown[]; renderItem: (item: unknown, i: number) => React.ReactNode }) =>
+    React.createElement('div', null, items.map((item, i) => React.createElement('div', { key: i }, renderItem(item, i)))),
   CloseConfirmModal: () => null,
   NotesModal: () => null,
   TradeHistoryModal: () => null,
