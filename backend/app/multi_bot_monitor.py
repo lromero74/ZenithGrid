@@ -74,6 +74,36 @@ def is_rebalancer_bot_overweight(bot_id: int) -> bool:
     return bot_id in _rebalancer_bot_overweight
 
 
+async def clear_rebalancer_gates_for_account(
+    db: AsyncSession,
+    account_id: int,
+) -> int:
+    """Drop in-memory rebalancer gate state for one account.
+
+    Called when the user disables portfolio rebalancing so the monitor
+    stops blocking bots that were gated by stale or now-irrelevant data.
+    Looks up the account's bot IDs from the DB so the in-memory sets are
+    only cleared for this account (no cross-account leaks).
+
+    Returns the number of bot IDs removed from the gated sets.
+    """
+    from sqlalchemy import select
+    from app.models import Bot
+    res = await db.execute(
+        select(Bot.id).where(Bot.account_id == account_id)
+    )
+    bot_ids = {row[0] for row in res.all()}
+    removed = 0
+    for bid in bot_ids:
+        if bid in _rebalancer_gated_bots:
+            _rebalancer_gated_bots.discard(bid)
+            removed += 1
+        if bid in _rebalancer_bot_overweight:
+            _rebalancer_bot_overweight.discard(bid)
+            removed += 1
+    return removed
+
+
 # Per-task exchange client context (each asyncio.Task gets its own copy)
 # This allows parallel bot processing without shared mutable state
 _ctx_exchange: contextvars.ContextVar[Optional["ExchangeClient"]] = contextvars.ContextVar(

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.0] - 2026-06-11
+
+### Fixed
+- **Turning off portfolio rebalancing no longer leaves bots stuck "Rebalancer paused".** When you disable rebalancing on an account, the account's in-memory rebalancer gate cache is now invalidated and any bots currently in the gate/overweight sets are released, so they resume normal trading on the next monitor cycle. Previously, a stale 6-hour cache could keep showing the "Rebalancer paused" badge on bots that should have been un-paused, with a backend restart being the only way to clear it.
+
 ## [v2.166.19] - 2026-06-10
 
 ### Fixed

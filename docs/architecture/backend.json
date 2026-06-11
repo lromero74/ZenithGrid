@@ -18,7 +18,7 @@
     {
       "file": "routers/accounts_mutation_router.py",
       "prefix": "/api/accounts",
-      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router. v2.165.0 adds POST /{account_id}/speculative-calibration/dismiss which validates a JWT dismiss-token (speculative_calibration_token.decode_dismiss_token) from the calibration alert email and writes speculative_calibration_last_alerted_at to stamp the 30-day cooldown; AccountUpdate also accepts speculative_allocation_pct (0-50% cap enforced in the schema). v2.166.0 adds POST /{account_id}/speculative-weights/apply-proposal (owner-only) which accepts apply_token + proposal_id query params, validates the JWT via speculative_calibration_apply_token.decode_apply_proposal_token (403 on any axis mismatch, 409 if the proposal is no longer pending), flips the SpeculativeWeightsProposal to applied, and calls speculative_weights_cache.invalidate_weights_cache(user_id) so the next scorer call picks up the new weights."
+      "purpose": "Write endpoints for trading accounts: creation, update, deletion (MFA-gated), default account selection, settings updates (auto-buy, rebalance, dust sweep), perps portfolio linking, dust sweep execution. Imports Pydantic schemas from app.schemas.accounts and the shared TTL cache dict from app.services.account_cache; no longer reaches into accounts_query_router. v2.165.0 adds POST /{account_id}/speculative-calibration/dismiss which validates a JWT dismiss-token (speculative_calibration_token.decode_dismiss_token) from the calibration alert email and writes speculative_calibration_last_alerted_at to stamp the 30-day cooldown; AccountUpdate also accepts speculative_allocation_pct (0-50% cap enforced in the schema). v2.166.0 adds POST /{account_id}/speculative-weights/apply-proposal (owner-only) which accepts apply_token + proposal_id query params, validates the JWT via speculative_calibration_apply_token.decode_apply_proposal_token (403 on any axis mismatch, 409 if the proposal is no longer pending), flips the SpeculativeWeightsProposal to applied, and calls speculative_weights_cache.invalidate_weights_cache(user_id) so the next scorer call picks up the new weights. v2.167.0 makes PUT /{account_id}/rebalance-settings invalidate the rebalancer gate cache and clear the in-memory _rebalancer_gated_bots / _rebalancer_bot_overweight sets for the account when enabled flips from true to false, so disabling portfolio rebalancing actually un-pauses the affected bots."
     },
     {
       "file": "routers/admin_router.py",
@@ -1503,7 +1503,7 @@
     },
     {
       "file": "services/rebalance_monitor.py",
-      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data.",
       "type": "background"
     },
     {
