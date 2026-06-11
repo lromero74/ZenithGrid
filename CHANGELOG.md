@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.12] - 2026-06-12
+
+### Fixed
+- **Transient Coinbase auth rejections (HTTP 401) are now retried with fresh credentials.** Authenticated requests regenerate their JWT/HMAC signature on each attempt and retry 401s (alongside the existing 429 handling) with exponential backoff, instead of failing immediately. This smooths over short-lived clock-skew / token-timing rejections that previously surfaced as spurious errors. Persistent 401s still raise after the retries are exhausted.
+- **`service.sh status` no longer errors on older Bash.** Replaced a Bash 4+ uppercase expansion with a portable equivalent so the status command works on stock macOS Bash 3.2.
+
 ## [v2.167.11] - 2026-06-12
 
 ### Fixed
