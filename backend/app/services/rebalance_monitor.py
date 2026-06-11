@@ -55,6 +55,17 @@ def get_account_gate_data(account_id: int) -> Optional[dict]:
     return payload
 
 
+def clear_account_gate_data(account_id: int) -> None:
+    """Invalidate the gate cache for one account.
+
+    Called when the user disables portfolio rebalancing on the account.
+    Without this, the monitor's 6h-stale cache would continue flagging bots
+    as overweight even though no new data will ever be written (the
+    rebalancer service is off).  See multi_bot_monitor.py for the gate logic.
+    """
+    _allocation_cache.pop(account_id, None)
+
+
 def quote_is_overweight(account_id: int, quote_currency: str) -> bool:
     """Check if a bot's quote currency is overweight for the given account.
 

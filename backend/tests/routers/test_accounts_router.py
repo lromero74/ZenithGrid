@@ -1021,6 +1021,127 @@ class TestRebalanceSettings:
         # Percentages remain at defaults
         assert result.target_usd_pct == pytest.approx(34.0)
 
+    @pytest.mark.asyncio
+    async def test_disable_rebalancing_clears_gate_cache(
+        self, db_session, test_user, test_account,
+    ):
+        """Disabling portfolio rebalancing must invalidate the account's
+        gate cache so the next monitor cycle fails open instead of holding
+        bots in a stale 'overweight' state.
+        """
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.schemas.accounts import RebalanceSettingsUpdate
+        from app.services import rebalance_monitor
+
+        # Pre-seed the gate cache for this account (as if a rebalancer
+        # cycle had just run and reported the account as overweight).
+        rebalance_monitor.set_account_gate_data(
+            test_account.id,
+            {
+                "agg_current": {"usd_pct": 99.0, "btc_pct": 1.0, "eth_pct": 0.0, "usdc_pct": 0.0},
+                "targets": {"usd_pct": 34.0, "btc_pct": 33.0, "eth_pct": 33.0, "usdc_pct": 0.0},
+                "threshold": 5.0,
+            },
+        )
+        assert rebalance_monitor.get_account_gate_data(test_account.id) is not None
+
+        # Account must already have rebalancing on for the disable to be meaningful.
+        test_account.rebalance_enabled = True
+        await db_session.flush()
+
+        # Disable rebalancing.
+        settings = RebalanceSettingsUpdate(enabled=False)
+        result = await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+        assert result.enabled is False
+
+        # Gate cache for this account must be gone.
+        assert rebalance_monitor.get_account_gate_data(test_account.id) is None
+
+    @pytest.mark.asyncio
+    async def test_disable_rebalancing_discards_in_memory_gated_bots(
+        self, db_session, test_user, test_account,
+    ):
+        """Disabling portfolio rebalancing must clear any bots currently
+        held in the in-memory _rebalancer_gated_bots and
+        _rebalancer_bot_overweight sets for the account.
+        """
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.schemas.accounts import RebalanceSettingsUpdate
+        from app import multi_bot_monitor
+
+        # Create two bots on this account and mark them gated.
+        bot_a = Bot(
+            user_id=test_user.id, account_id=test_account.id, name="A",
+            strategy_type="indicator_based", is_active=True, budget_percentage=50,
+        )
+        bot_b = Bot(
+            user_id=test_user.id, account_id=test_account.id, name="B",
+            strategy_type="indicator_based", is_active=True, budget_percentage=50,
+        )
+        db_session.add_all([bot_a, bot_b])
+        await db_session.flush()
+        await db_session.refresh(bot_a)
+        await db_session.refresh(bot_b)
+        bot_a_id = bot_a.id
+        bot_b_id = bot_b.id
+        multi_bot_monitor._rebalancer_gated_bots.update([bot_a_id, bot_b_id])
+        multi_bot_monitor._rebalancer_bot_overweight.update([bot_a_id, bot_b_id])
+        assert multi_bot_monitor.is_rebalancer_gated(bot_a_id)
+        assert multi_bot_monitor.is_rebalancer_gated(bot_b_id)
+        assert multi_bot_monitor.is_rebalancer_bot_overweight(bot_a_id)
+        assert multi_bot_monitor.is_rebalancer_bot_overweight(bot_b_id)
+
+        test_account.rebalance_enabled = True
+        await db_session.flush()
+        settings = RebalanceSettingsUpdate(enabled=False)
+        await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+
+        # Only this account's bots are cleared (no cross-account leaks).
+        assert not multi_bot_monitor.is_rebalancer_gated(bot_a_id)
+        assert not multi_bot_monitor.is_rebalancer_gated(bot_b_id)
+        assert not multi_bot_monitor.is_rebalancer_bot_overweight(bot_a_id)
+        assert not multi_bot_monitor.is_rebalancer_bot_overweight(bot_b_id)
+
+    @pytest.mark.asyncio
+    async def test_enabling_rebalancing_does_not_clear_gate_cache(
+        self, db_session, test_user, test_account,
+    ):
+        """Edge case: enabling rebalancing must NOT wipe the gate cache —
+        the cache will be refreshed on the next rebalancer cycle and we
+        don't want to risk a window where the cache is empty.
+        """
+        from app.routers.accounts_mutation_router import update_rebalance_settings
+        from app.schemas.accounts import RebalanceSettingsUpdate
+        from app.services import rebalance_monitor
+
+        rebalance_monitor.set_account_gate_data(
+            test_account.id,
+            {
+                "agg_current": {"usd_pct": 50.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 0.0},
+                "targets": {"usd_pct": 50.0, "btc_pct": 50.0, "eth_pct": 0.0, "usdc_pct": 0.0},
+                "threshold": 5.0,
+            },
+        )
+
+        test_account.rebalance_enabled = False
+        await db_session.flush()
+        settings = RebalanceSettingsUpdate(
+            enabled=True, target_usd_pct=34.0, target_btc_pct=33.0, target_eth_pct=33.0,
+        )
+        await update_rebalance_settings(
+            account_id=test_account.id, settings=settings,
+            db=db_session, current_user=test_user,
+        )
+
+        # Cache should still be there.
+        assert rebalance_monitor.get_account_gate_data(test_account.id) is not None
+
 
 # =============================================================================
 # Rebalance Status (paper trading support)

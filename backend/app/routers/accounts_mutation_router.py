@@ -44,6 +44,8 @@ from app.schemas.accounts import (
 )
 from app.services.account_cache import _TTL_REBALANCE_STATUS
 from app.services.account_responses import RebalanceSettingsResponse, build_rebalance_response
+from app.services import rebalance_monitor
+from app import multi_bot_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -632,6 +634,12 @@ async def update_rebalance_settings(
 
     # Update fields
     if settings.enabled is not None:
+        # Disabling portfolio rebalancing: clear the gate cache and the
+        # in-memory gated-bot sets so the monitor stops blocking bots on
+        # stale or now-irrelevant data.  See bug fix v2.167.0.
+        if settings.enabled is False and account.rebalance_enabled is True:
+            rebalance_monitor.clear_account_gate_data(account.id)
+            await multi_bot_monitor.clear_rebalancer_gates_for_account(db, account.id)
         account.rebalance_enabled = settings.enabled
     if settings.target_usd_pct is not None:
         account.rebalance_target_usd_pct = settings.target_usd_pct
