@@ -29,7 +29,7 @@ cd frontend && npx tsc --noEmit
 
 ### Testing Before Commits
 1. Restart services: `./bot.sh restart --dev --both`
-2. Check backend logs: `sudo journalctl -u trading-bot-backend -f`
+2. Check backend logs locally with `./bot.sh logs`; for production use `ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'`
 3. Check frontend loads: http://localhost:5173
 4. Verify key features work:
    - Dashboard loads with stats
@@ -120,15 +120,14 @@ cd frontend && npx tsc --noEmit
 
 ### Backend Issues
 ```bash
-# View live logs (EC2 / systemd)
-sudo journalctl -u trading-bot-backend -f
+# View live production logs (fedora.local / user-systemd)
+ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'
 
 # View live logs (local / bot.sh)
 tail -f .pids/backend.log
 
-# Test database
-sqlite3 backend/trading.db ".tables"
-sqlite3 backend/trading.db "SELECT * FROM positions WHERE status='open';"
+# Production database is PostgreSQL in postgres-box on fedora.local.
+# Local/dev database details depend on your .env.
 
 # Check API docs
 # Visit http://localhost:8100/docs when backend is running

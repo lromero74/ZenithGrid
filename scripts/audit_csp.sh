@@ -75,7 +75,7 @@ print_found "connect" $CONNECT_DOMAINS
 # --- Step 2: Read CSP from nginx ---
 
 if [ ! -f "$NGINX_CONF" ]; then
-    echo "WARNING: $NGINX_CONF not found — skipping CSP check (run on EC2)"
+    echo "WARNING: $NGINX_CONF not found — skipping CSP check (run on fedora.local)"
     exit 0
 fi
 

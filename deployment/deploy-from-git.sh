@@ -1,13 +1,13 @@
 #!/bin/bash
-# Deployment script for EC2 instance
-# Pulls latest changes from origin/main and restarts the backend service
+# Deployment script for fedora.local production host
+# Pulls latest changes from origin/main and restarts zenithgrid.service
 # Preserves .env file with production credentials
 
 set -e
 
 echo "🚀 Deploying from origin/main..."
 
-cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften
+cd ~/ZenithGrid
 
 # Backup .env file (in case it gets overwritten)
 cp backend/.env backend/.env.backup
@@ -25,9 +25,9 @@ else
 fi
 
 # Restart backend service
-echo "🔄 Restarting trading-bot-backend service..."
-sudo systemctl restart trading-bot-backend
+echo "🔄 Restarting zenithgrid user service..."
+systemctl --user restart zenithgrid
 
 echo "✅ Deployment complete!"
 echo "📊 Service status:"
-sudo systemctl status trading-bot-backend --no-pager | head -5
+systemctl --user status zenithgrid --no-pager | head -5

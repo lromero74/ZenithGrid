@@ -99,8 +99,8 @@ npm run dev
 
 View logs directly:
 ```bash
-sudo journalctl -u trading-bot-backend -f   # Backend logs
-sudo journalctl -u trading-bot-frontend -f  # Frontend logs
+./bot.sh logs                               # Local service logs
+ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'  # Production backend logs
 ```
 
 ---

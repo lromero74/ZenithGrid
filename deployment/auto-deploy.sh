@@ -1,6 +1,6 @@
 #!/bin/bash
-# Auto-deployment script - checks for git changes and deploys intelligently
-# Runs every minute via systemd timer
+# Auto-deployment script for fedora.local - checks for git changes and deploys intelligently
+# Runs every minute via a user-systemd timer
 
 set -e
 
@@ -74,8 +74,8 @@ fi
 
 # Restart services as needed
 if [ "$RESTART_BACKEND" = true ]; then
-    log "🔄 Restarting backend service..."
-    sudo systemctl restart trading-bot-backend
+    log "🔄 Restarting zenithgrid user service..."
+    systemctl --user restart zenithgrid
     log "✅ Backend restarted"
 fi
 

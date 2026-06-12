@@ -28,14 +28,14 @@
       "routing": "react-router-dom"
     },
     "deployment": {
-      "platform": "AWS EC2 (Amazon Linux 2023)",
-      "process_manager": "systemd",
+      "platform": "fedora.local self-hosted Fedora with distrobox containers",
+      "process_manager": "user-systemd",
       "services": [
-        "trading-bot-backend",
-        "trading-bot-frontend (dev mode only)",
+        "zenithgrid.service (enters zenith-box)",
+        "PostgreSQL in postgres-box",
         "nginx"
       ],
-      "reverse_proxy": "Nginx with Let's Encrypt SSL",
+      "reverse_proxy": "Cloudflared public ingress to Nginx reverse proxy",
       "public_url": "https://tradebot.romerotechsolutions.com",
       "frontend_serving": "PROD mode: built dist/ served by FastAPI backend behind Nginx. DEV mode: Vite dev server with HMR."
     }

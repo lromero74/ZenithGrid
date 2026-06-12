@@ -87,7 +87,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Exchanges**: Coinbase Advanced Trade (HMAC/CDP), ByBit V5 (linear perps), MT5 Bridge, DEX (Ethereum/L2s)
 - **AI**: Multi-provider support (Claude, GPT, Gemini, Grok, Groq)
 - **Auth**: JWT + TOTP MFA + Email MFA + email verification + trusted devices
-- **Deployment**: Nginx + Let's Encrypt SSL + systemd (AWS EC2 or self-hosted)
+- **Deployment**: Nginx + Cloudflared/HTTPS + user-systemd (current prod: `fedora.local` with distrobox)
 
 ## 📋 Prerequisites
 
@@ -441,8 +441,8 @@ python3 update.py --yes
 
 ### Backend won't start
 ```bash
-# Check logs
-sudo journalctl -u trading-bot-backend -f
+# Check production logs on fedora.local
+ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'
 
 # Common issues:
 # - Missing API credentials (add to backend/.env)

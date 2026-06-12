@@ -189,7 +189,7 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 - SSH access: louis@fedora.local (passwordless)
 
 **Otherwise** (e.g., MacBook): You are on the development machine.
-- Push to git, pull on testbot via SSH
+- Production SSH target is `louis@fedora.local`. Push locally, then pull/deploy on `fedora.local` as documented above.
 
 ## Infrastructure Quick Reference
 

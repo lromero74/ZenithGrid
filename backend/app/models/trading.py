@@ -225,9 +225,13 @@ class Bot(Base):
     products = relationship("BotProduct", back_populates="bot", cascade="all, delete-orphan", lazy="selectin")
 
     def get_trading_pairs(self):
-        """Get list of trading pairs for this bot from the junction table"""
+        """Get configured trading pairs, supporting both current and legacy storage."""
         if self.products:
-            return [bp.product_id for bp in self.products]
+            return [bp.product_id for bp in self.products if bp.product_id]
+        if self.product_ids:
+            return [pid for pid in self.product_ids if pid]
+        if self.product_id:
+            return [self.product_id]
         return ["ETH-BTC"]  # Default fallback
 
     def get_quote_currency(self):

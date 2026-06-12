@@ -1,4 +1,4 @@
-Switch the EC2 environment to DEV mode (Vite dev server with HMR).
+Switch the local/self-hosted environment to DEV mode (Vite dev server with HMR).
 
 In dev mode, the Vite dev server on port 5173 serves the frontend with hot module replacement, and proxies `/api` requests to the backend on port 8100. Nginx routes `/ws` directly to the backend (WebSocket proxying through Vite is fragile).
 

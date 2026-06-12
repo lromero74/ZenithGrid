@@ -6,12 +6,12 @@
 
 ## Context
 
-The Zenith Grid trading platform on EC2 needs to send transactional emails (email verification for signup, password reset) via Amazon SES. The backend uses `boto3` with IAM instance role auth (no API keys needed in code). All SES API calls go over HTTPS (port 443), so no SMTP/port 25 issues.
+The Zenith Grid trading platform on `fedora.local` needs to send transactional emails (email verification for signup, password reset) via Amazon SES. The backend uses `boto3`; on the current self-hosted production box, credentials should come from the host/container environment rather than an EC2 instance role. All SES API calls go over HTTPS (port 443), so no SMTP/port 25 issues.
 
 - **Region**: us-east-1
 - **Sender email**: noreply@romerotechsolutions.com
 - **Domain**: romerotechsolutions.com
-- **EC2 instance**: the one running ZenithGrid (tagged with "trade" in name)
+- **Production host**: `louis@fedora.local`, app in `zenith-box`
 
 ---
 
@@ -59,72 +59,14 @@ aws ses verify-email-identity --email-address your-test-email@example.com --regi
 
 ---
 
-## Step 3: Attach SES permission to the EC2 instance role
+## Step 3: Provide SES credentials to production
 
-The EC2 instance needs an IAM role with SES send permissions.
+The current production host is not EC2, so there is no instance role to attach. Create or use an IAM principal with SES send permissions and expose credentials to the `zenithgrid.service` environment, preferably via the host/user environment or a systemd user drop-in read by the service.
 
-### Find the EC2 instance:
-
-```bash
-INSTANCE_ID=$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=*trade*" \
-  --query "Reservations[0].Instances[0].InstanceId" \
-  --output text --region us-east-1)
-
-echo "Instance ID: $INSTANCE_ID"
-```
-
-### Check if instance already has an IAM role:
+### Create an IAM user or role policy:
 
 ```bash
-PROFILE_ARN=$(aws ec2 describe-instances \
-  --instance-ids $INSTANCE_ID \
-  --query "Reservations[0].Instances[0].IamInstanceProfile.Arn" \
-  --output text --region us-east-1)
-
-echo "Instance Profile ARN: $PROFILE_ARN"
-```
-
-### If NO instance profile (shows "None"):
-
-```bash
-# Create the IAM role
-aws iam create-role --role-name ZenithGridEC2Role \
-  --assume-role-policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "ec2.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }]
-  }'
-
-# Create instance profile and attach role
-aws iam create-instance-profile --instance-profile-name ZenithGridEC2Profile
-aws iam add-role-to-instance-profile \
-  --instance-profile-name ZenithGridEC2Profile \
-  --role-name ZenithGridEC2Role
-
-# Associate profile with EC2 instance
-aws ec2 associate-iam-instance-profile \
-  --instance-id $INSTANCE_ID \
-  --iam-instance-profile Name=ZenithGridEC2Profile
-```
-
-### If instance already has a profile, find the role name:
-
-```bash
-ROLE_NAME=$(echo $PROFILE_ARN | awk -F'/' '{print $NF}')
-# Note: instance profile name and role name might differ
-# You may need to look it up:
-aws iam get-instance-profile --instance-profile-name $ROLE_NAME \
-  --query "InstanceProfile.Roles[0].RoleName" --output text
-```
-
-### Attach SES send policy to the role:
-
-```bash
-ROLE_NAME=ZenithGridEC2Role  # <-- adjust if your role has a different name
+ROLE_NAME=ZenithGridSesSender  # or the IAM user/role used by production
 
 aws iam put-role-policy --role-name $ROLE_NAME \
   --policy-name SES-SendEmail \
@@ -142,12 +84,13 @@ aws iam put-role-policy --role-name $ROLE_NAME \
 
 ## Step 4: Verify it works
 
-After DNS propagation and SES verification, test from the EC2 instance:
+After DNS propagation and SES verification, test from the production host:
 
 ```bash
-# SSH to EC2 and test
-ssh testbot
-cd ZenithGrid/backend
+# SSH to fedora.local and test inside the app container
+ssh louis@fedora.local
+distrobox enter --name zenith-box
+cd ~/ZenithGrid/backend
 ./venv/bin/python3 -c "
 import boto3
 client = boto3.client('ses', region_name='us-east-1')
@@ -156,7 +99,7 @@ print('Send quota:', client.get_send_quota())
 "
 ```
 
-No code changes or backend restarts needed on EC2. The `boto3` library is already installed and the app picks up IAM role credentials automatically.
+No code changes are needed. If you change service environment variables, restart `zenithgrid.service` from the host with `systemctl --user restart zenithgrid`.
 
 ---
 

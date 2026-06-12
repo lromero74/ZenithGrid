@@ -1,7 +1,7 @@
 # ZenithGrid — Scalability & Microservices Roadmap
 
 **Written:** 2026-03-21
-**Context:** App is a layered monolith running on EC2 t2.micro (1 vCPU, 1GB RAM, ~200 users). Good internal structure, tight coupling at the data layer.
+**Context:** App is a layered monolith running on `fedora.local` with the app in the `zenith-box` distrobox and PostgreSQL in `postgres-box`. Good internal structure, tight coupling at the data layer.
 
 This document is divided into three phases:
 - **Phase 1 — Immediate wins** (low risk, high bang-for-buck, no architecture change)
@@ -480,7 +480,7 @@ Extract services **in this order** — easiest to hardest. Each one requires Pha
 ## Infrastructure Required Per Phase
 
 ### Phase 1 — No new infrastructure
-All changes are code-only. Already on EC2 + PostgreSQL.
+All changes are code-only. Already on the `fedora.local` host with PostgreSQL in `postgres-box`.
 
 ### Phase 2 — Add Redis
 Redis is the only new dependency for Phase 2. It enables:
@@ -488,7 +488,7 @@ Redis is the only new dependency for Phase 2. It enables:
 - Distributed rate limiting (2.6)
 - APScheduler job store (1.2) — optional, SQLAlchemy store also works
 
-A single `redis-server` on the same EC2 instance is sufficient at current scale.
+A single Redis/Valkey instance on the same `fedora.local` host is sufficient at current scale.
 
 ### Phase 3 — Container orchestration + service mesh
 Each extracted service runs as its own process (Docker container). You'll need:
@@ -502,8 +502,8 @@ Each extracted service runs as its own process (Docker container). You'll need:
 At the point you're doing Phase 3, you're likely also moving off t2.micro. The natural upgrade path is:
 ```
 t2.micro (now)
-  → t3.small (more RAM, burst CPU) — ~$15/mo, handles ~1K users
-  → t3.medium + RDS PostgreSQL — ~$50/mo, handles ~5K users
+  → larger self-hosted Fedora box or VM (more RAM/CPU), handles ~1K users
+  → managed PostgreSQL plus larger app host, handles ~5K users
   → ECS Fargate (per-service containers) — scales on demand
 ```
 

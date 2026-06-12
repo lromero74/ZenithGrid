@@ -1,4 +1,4 @@
-Switch the EC2 environment to PROD mode (frontend served from dist/ by backend).
+Switch the local/self-hosted environment to PROD mode (frontend served from dist/ by backend).
 
 In prod mode, the backend on port 8100 serves both the API and the built frontend from `frontend/dist/`. The Vite dev server is not used. Nginx points everything (including `/ws`) to port 8100.
 

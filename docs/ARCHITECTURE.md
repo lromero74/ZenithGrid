@@ -13,12 +13,12 @@
 | Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) + Email MFA (AWS SES) |
 | Encryption | MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation |
 | Email | AWS SES (IAM role auth, us-east-1) |
-| Deployment | AWS EC2 (Amazon Linux 2023) + Nginx + Let's Encrypt SSL + systemd |
+| Deployment | `fedora.local` self-hosted Fedora + distrobox containers + Nginx + Cloudflared + user-systemd |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
 
-The backend runs as a systemd service (`trading-bot-backend`) on port 8100.
-Nginx reverse-proxies HTTPS (port 443) to the backend, with Let's Encrypt SSL via Certbot.
+The backend runs as the user-systemd service `zenithgrid.service` on `fedora.local`, entering the `zenith-box` distrobox and serving FastAPI on `127.0.0.1:8100`.
+Nginx reverse-proxies HTTPS traffic to the backend, and public ingress is handled through the Cloudflared tunnel for `tradebot.romerotechsolutions.com`.
 Public URL: `https://tradebot.romerotechsolutions.com`
 In **PROD mode**, the frontend is a production build (`vite build`) served by the FastAPI backend.
 In **DEV mode**, a separate Vite dev server provides HMR for frontend development.
@@ -34,10 +34,11 @@ graph TB
         FE[React Frontend<br/>production build]
     end
 
-    subgraph "EC2 Instance"
-        NGX[Nginx<br/>:443 HTTPS<br/>Let's Encrypt SSL]
-        BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
-        DB[(PostgreSQL<br/>zenithgrid)]
+    subgraph "fedora.local"
+        CF[Cloudflared Tunnel]
+        NGX[Nginx<br/>HTTPS reverse proxy]
+        BE[zenithgrid.service<br/>zenith-box<br/>FastAPI :8100<br/>serves frontend + API]
+        DB[(PostgreSQL<br/>postgres-box<br/>zenithgrid)]
         BG[Background Tasks<br/>23 scheduled jobs]
         SES[AWS SES<br/>Email Service]
     end
@@ -52,7 +53,8 @@ graph TB
         MKT[Market Data<br/>Fear&Greed / Dominance]
     end
 
-    FE <-->|HTTPS| NGX
+    FE <-->|HTTPS| CF
+    CF --> NGX
     NGX <-->|reverse proxy| BE
     BE <--> DB
     BG --> DB

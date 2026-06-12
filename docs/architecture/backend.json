@@ -2150,7 +2150,7 @@
       "provider": "AWS SES",
       "region": "us-east-1",
       "sender": "noreply@romerotechsolutions.com",
-      "auth": "IAM role (ZenithGridEC2Role)",
+      "auth": "Production runs on fedora.local; SES credentials are provided via host/container environment",
       "features": [
         "Email verification",
         "Password reset",
