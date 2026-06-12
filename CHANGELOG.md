@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.4] - 2026-06-12
+
+### Fixed
+- **The delisted-pair pruning job now cleans normalized bot pairs too.** Bots using the `bot_products` junction table now have delisted pairs removed from that table, not only from legacy JSON `product_ids`, so the startup/manual cleanup job matches the scanner's active pair source.
+
 ## [v2.167.3] - 2026-06-12
 
 ### Fixed

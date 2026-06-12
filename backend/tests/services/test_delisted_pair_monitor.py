@@ -261,6 +261,43 @@ class TestCheckAndSyncPairs:
 
     @pytest.mark.asyncio
     @patch('app.database.async_session_maker')
+    async def test_delisted_pair_removed_from_bot_products_junction(self, mock_session_maker):
+        """Delisted pairs stored in bot_products must be removed too."""
+        mock_db = AsyncMock()
+        mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        active_bp = MagicMock()
+        active_bp.product_id = "ETH-USD"
+        delisted_bp = MagicMock()
+        delisted_bp.product_id = "MEDIA-USD"
+
+        mock_bot = MagicMock()
+        mock_bot.id = 1
+        mock_bot.name = "JunctionBot"
+        mock_bot.product_id = None
+        mock_bot.product_ids = []
+        mock_bot.products = [active_bp, delisted_bp]
+        mock_bot.strategy_config = {"auto_add_new_pairs": False}
+        bot_result = MagicMock()
+        bot_result.scalars.return_value.all.return_value = [mock_bot]
+        mock_db.execute = AsyncMock(return_value=bot_result)
+        mock_db.delete = AsyncMock()
+
+        monitor = TradingPairMonitor()
+        available = {"ETH-USD"}
+        monitor._btc_pairs = set()
+        monitor._usd_pairs = {"ETH-USD"}
+
+        with patch.object(monitor, 'get_available_products', new_callable=AsyncMock, return_value=available):
+            results = await monitor.check_and_sync_pairs()
+
+        assert results["pairs_removed"] == 1
+        mock_db.delete.assert_awaited_once_with(delisted_bp)
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @patch('app.database.async_session_maker')
     async def test_new_pair_added_when_auto_add_enabled(self, mock_session_maker):
         """Happy path: new pair added when auto_add_new_pairs is enabled."""
         mock_db = AsyncMock()

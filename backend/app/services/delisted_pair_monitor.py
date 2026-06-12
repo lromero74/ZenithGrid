@@ -16,7 +16,7 @@ from typing import Dict, List, Set
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Bot, Account
+from app.models import Bot, BotProduct, Account
 from app.services.exchange_service import get_exchange_client_for_account
 from app.multi_bot_monitor import filter_pairs_by_allowed_categories
 
@@ -451,12 +451,19 @@ class TradingPairMonitor:
                             all_bot_pairs.add(bot.product_id)
                         continue  # single-pair bot: nothing more to do
 
-                    if not bot.product_ids:
+                    junction_products = list(getattr(bot, "products", []) or [])
+                    junction_pairs = {
+                        bp.product_id for bp in junction_products if bp.product_id
+                    }
+                    json_pairs = list(bot.product_ids or [])
+                    configured_pairs = list(junction_pairs or json_pairs)
+
+                    if not configured_pairs:
                         continue
 
-                    all_bot_pairs.update(bot.product_ids)
-                    current_pairs = set(bot.product_ids)
-                    quote_currency = self._get_quote_currency(bot.product_ids)
+                    all_bot_pairs.update(configured_pairs)
+                    current_pairs = set(configured_pairs)
+                    quote_currency = self._get_quote_currency(configured_pairs)
 
                     # Determine which pairs to check against
                     if quote_currency == "BTC":
@@ -509,8 +516,11 @@ class TradingPairMonitor:
 
                     # Remove delisted pairs
                     if delisted_pairs:
-                        new_pair_list = [p for p in bot.product_ids if p not in delisted_pairs]
-                        bot.product_ids = new_pair_list
+                        if json_pairs:
+                            bot.product_ids = [p for p in json_pairs if p not in delisted_pairs]
+                        for bot_product in junction_products:
+                            if bot_product.product_id in delisted_pairs:
+                                await db.delete(bot_product)
                         bot_change["removed_pairs"] = list(delisted_pairs)
                         results["pairs_removed"] += len(delisted_pairs)
                         changes_made = True
@@ -522,10 +532,14 @@ class TradingPairMonitor:
 
                     # Add new pairs (only if auto_add_new_pairs is enabled)
                     if new_pairs:
-                        updated_pairs = list(bot.product_ids) + list(new_pairs)
-                        # Sort for consistency
-                        updated_pairs.sort()
-                        bot.product_ids = updated_pairs
+                        if junction_pairs:
+                            for product_id in sorted(new_pairs):
+                                db.add(BotProduct(bot_id=bot.id, product_id=product_id))
+                        else:
+                            updated_pairs = list(bot.product_ids or []) + list(new_pairs)
+                            # Sort for consistency
+                            updated_pairs.sort()
+                            bot.product_ids = updated_pairs
                         bot_change["added_pairs"] = list(new_pairs)
                         results["pairs_added"] += len(new_pairs)
                         changes_made = True
