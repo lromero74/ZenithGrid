@@ -162,6 +162,44 @@ async def cleanup_old_failed_orders(session_maker=None):
         logger.error(f"Error in failed order cleanup job: {e}", exc_info=True)
 
 
+async def cleanup_invalid_minimum_size_failed_orders(session_maker=None) -> int:
+    """
+    Remove failed order-history rows created by the old sub-minimum order bug.
+
+    These are local pre-validation failures, not exchange executions. Successful
+    orders and unrelated failed orders stay visible for audit/debugging.
+    """
+    sm = session_maker or _default_session_maker
+    try:
+        async with sm() as db:
+            delete_query = delete(OrderHistory).where(
+                and_(
+                    OrderHistory.status == 'failed',
+                    OrderHistory.error_message.ilike(
+                        "Order size % is below minimum % for %"
+                    ),
+                )
+            )
+            result = await db.execute(delete_query)
+            deleted_count = result.rowcount or 0
+
+            await db.commit()
+
+            if deleted_count > 0:
+                logger.info(
+                    "🧹 Cleaned up %d invalid minimum-size failed order records",
+                    deleted_count,
+                )
+            else:
+                logger.debug("No invalid minimum-size failed order records to clean up")
+
+            return deleted_count
+
+    except Exception as e:
+        logger.error(f"Error in invalid minimum-size failed order cleanup job: {e}", exc_info=True)
+        return 0
+
+
 async def cleanup_expired_revoked_tokens(session_maker=None):
     """
     Remove expired entries from revoked_tokens table.

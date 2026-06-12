@@ -161,6 +161,7 @@ def register_jobs(startup_time: datetime, scheduler: AsyncIOScheduler = schedule
         max_instances=1,
         coalesce=True,
         replace_existing=True,
+        next_run_time=startup_time + timedelta(seconds=45),
     )
 
     # --- Cleanup jobs ---

@@ -246,6 +246,95 @@ class TestCleanupOldFailedOrdersLogic:
         await mock_db.commit()
 
 
+class TestCleanupInvalidMinimumSizeFailedOrders:
+    """Tests for targeted cleanup of bug-created minimum-size failures."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_only_minimum_size_failed_order_history(self, db_session):
+        """Sub-minimum failed orders are purged without hiding other failures."""
+        from contextlib import asynccontextmanager
+
+        from sqlalchemy import select
+
+        from app.cleanup_jobs import cleanup_invalid_minimum_size_failed_orders
+        from app.models import Account, Bot, OrderHistory, User
+
+        user = User(email="cleanup-min-size@example.com", hashed_password="x")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        account = Account(user_id=user.id, name="Coinbase", type="cex", exchange="coinbase")
+        db_session.add(account)
+        await db_session.commit()
+        await db_session.refresh(account)
+
+        bot = Bot(
+            user_id=user.id,
+            account_id=account.id,
+            name="CleanupBot",
+            strategy_type="macd_dca",
+            strategy_config={},
+            product_ids=["AAVE-USD"],
+        )
+        db_session.add(bot)
+        await db_session.commit()
+        await db_session.refresh(bot)
+
+        stale_bug_row = OrderHistory(
+            bot_id=bot.id,
+            product_id="AAVE-USD",
+            side="BUY",
+            order_type="MARKET",
+            trade_type="initial",
+            quote_amount=0.09197886407657788,
+            price=100.0,
+            status="failed",
+            error_message=(
+                "Order size 0.09197886407657788 USD is below "
+                "minimum 1 USD for AAVE-USD"
+            ),
+        )
+        legitimate_failure = OrderHistory(
+            bot_id=bot.id,
+            product_id="SOL-USD",
+            side="BUY",
+            order_type="MARKET",
+            trade_type="initial",
+            quote_amount=10.0,
+            price=100.0,
+            status="failed",
+            error_message="Coinbase returned insufficient funds",
+        )
+        successful_order = OrderHistory(
+            bot_id=bot.id,
+            product_id="AAVE-USD",
+            side="BUY",
+            order_type="MARKET",
+            trade_type="initial",
+            quote_amount=2.0,
+            price=100.0,
+            status="success",
+            order_id="ok-1",
+        )
+        db_session.add_all([stale_bug_row, legitimate_failure, successful_order])
+        await db_session.commit()
+
+        @asynccontextmanager
+        async def _maker():
+            yield db_session
+
+        deleted = await cleanup_invalid_minimum_size_failed_orders(session_maker=_maker)
+
+        remaining = (await db_session.execute(select(OrderHistory))).scalars().all()
+        remaining_errors = {row.error_message for row in remaining}
+
+        assert deleted == 1
+        assert stale_bug_row.error_message not in remaining_errors
+        assert legitimate_failure.error_message in remaining_errors
+        assert any(row.order_id == "ok-1" for row in remaining)
+
+
 # ---------------------------------------------------------------------------
 # cleanup_expired_revoked_tokens — structure test
 # ---------------------------------------------------------------------------

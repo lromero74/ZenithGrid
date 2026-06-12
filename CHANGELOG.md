@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.3] - 2026-06-12
+
+### Fixed
+- **Configured delisted pairs are skipped before candle scans.** The multi-bot monitor now filters configured trading pairs through the cached Coinbase product list before pair processing, while still preserving pairs that have open positions so they can be managed or exited. The daily pair-pruning job also runs shortly after startup.
+- **Bug-created sub-minimum failed orders can be purged from history.** Added a targeted cleanup for failed order-history rows whose error matches `Order size ... is below minimum ...`, leaving successful orders and unrelated failures intact.
+
 ## [v2.167.2] - 2026-06-12
 
 ### Fixed

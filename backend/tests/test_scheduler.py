@@ -133,6 +133,25 @@ class TestSchedulerSetup:
             f"Duplicate job IDs found: {[jid for jid in job_ids if job_ids.count(jid) > 1]}"
         )
 
+    def test_trading_pair_monitor_runs_shortly_after_startup(self):
+        """Delisted configured pairs are pruned soon after app startup."""
+        from app.scheduler import register_jobs
+
+        sched = AsyncIOScheduler()
+        startup_time = utcnow()
+        register_jobs(startup_time, scheduler=sched)
+
+        job = sched.get_job("trading_pair_monitor")
+        assert job is not None
+        expected_min = startup_time + timedelta(seconds=35)
+        expected_max = startup_time + timedelta(seconds=55)
+        nrt = job.next_run_time
+        if nrt.tzinfo is not None:
+            nrt = nrt.replace(tzinfo=None)
+        assert expected_min <= nrt <= expected_max, (
+            f"trading_pair_monitor next_run_time {nrt} not in expected range"
+        )
+
 
 class TestErrorListener:
     """Tests for the error listener behavior."""

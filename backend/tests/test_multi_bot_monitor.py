@@ -512,6 +512,95 @@ class TestProcessBot:
         assert result.get("action") == "skip"
 
     @pytest.mark.asyncio
+    async def test_unavailable_configured_pair_is_skipped_before_processing(self, db_session):
+        """Configured pairs missing from the product cache should not hit candles/API."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        bot = _make_bot(
+            product_ids=["AAVE-USD", "MEDIA-USD", "SOL-USD"],
+            strategy_config={"max_concurrent_deals": 5},
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        mock_strategy = MagicMock(spec=[])
+        processed_pairs = []
+
+        async def fake_pair(monitor_self, db, bot_, product_id, **kwargs):
+            processed_pairs.append(product_id)
+            return {"action": "none", "pair": product_id}
+
+        with patch(
+            "app.multi_bot_monitor.StrategyRegistry.get_strategy",
+            return_value=mock_strategy,
+        ), patch(
+            "app.multi_bot_monitor.get_available_trading_products",
+            new_callable=AsyncMock,
+            return_value={"AAVE-USD", "SOL-USD"},
+        ), patch(
+            "app.multi_bot_monitor._process_bot_pair",
+            side_effect=fake_pair,
+        ), patch(
+            "app.multi_bot_monitor.asyncio.sleep",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.multi_bot_monitor.async_session_maker"
+        ) as mock_session_maker:
+            mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await monitor.process_bot(db_session, bot)
+
+        assert set(processed_pairs) == {"AAVE-USD", "SOL-USD"}
+        assert "MEDIA-USD" not in result
+
+    @pytest.mark.asyncio
+    async def test_unavailable_pair_with_open_position_is_still_processed(self, db_session):
+        """Existing positions must remain manageable even if the pair leaves listings."""
+        monitor = MultiBotMonitor(exchange=_make_exchange())
+        bot = _make_bot(
+            product_ids=["AAVE-USD", "MEDIA-USD"],
+            strategy_config={"max_concurrent_deals": 5},
+        )
+
+        pos = _make_position(product_id="MEDIA-USD")
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [pos]
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        mock_strategy = MagicMock(spec=[])
+        processed_pairs = []
+
+        async def fake_pair(monitor_self, db, bot_, product_id, **kwargs):
+            processed_pairs.append(product_id)
+            return {"action": "none", "pair": product_id}
+
+        with patch(
+            "app.multi_bot_monitor.StrategyRegistry.get_strategy",
+            return_value=mock_strategy,
+        ), patch(
+            "app.multi_bot_monitor.get_available_trading_products",
+            new_callable=AsyncMock,
+            return_value={"AAVE-USD"},
+        ), patch(
+            "app.multi_bot_monitor._process_bot_pair",
+            side_effect=fake_pair,
+        ), patch(
+            "app.multi_bot_monitor.asyncio.sleep",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.multi_bot_monitor.async_session_maker"
+        ) as mock_session_maker:
+            mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await monitor.process_bot(db_session, bot)
+
+        assert set(processed_pairs) == {"AAVE-USD", "MEDIA-USD"}
+        assert "MEDIA-USD" in result
+
+    @pytest.mark.asyncio
     async def test_process_bot_returns_error_on_exception(self, db_session):
         """Exceptions in processing are caught and returned as error dict."""
         monitor = MultiBotMonitor(exchange=_make_exchange())

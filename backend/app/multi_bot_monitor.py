@@ -104,6 +104,16 @@ async def clear_rebalancer_gates_for_account(
     return removed
 
 
+async def get_available_trading_products(db: AsyncSession) -> set[str]:
+    """Return currently listed products, using the delisted-pair monitor cache."""
+    from app.services.delisted_pair_monitor import trading_pair_monitor
+
+    cached = getattr(trading_pair_monitor, "_available_products", set()) or set()
+    if cached:
+        return set(cached)
+    return await trading_pair_monitor.get_available_products(db)
+
+
 # Per-task exchange client context (each asyncio.Task gets its own copy)
 # This allows parallel bot processing without shared mutable state
 _ctx_exchange: contextvars.ContextVar[Optional["ExchangeClient"]] = contextvars.ContextVar(
@@ -617,6 +627,25 @@ class MultiBotMonitor:
             open_pos_result = await db.execute(open_pos_query)
             open_positions = list(open_pos_result.scalars().all())
             pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+
+            # Skip configured products Coinbase no longer lists before reaching candle
+            # fetches. Existing positions are preserved so they can still be managed.
+            available_products = await get_available_trading_products(db)
+            if available_products:
+                before_count = len(trading_pairs)
+                trading_pairs = [
+                    p for p in trading_pairs
+                    if p in available_products or p in pairs_with_positions
+                ]
+                skipped = before_count - len(trading_pairs)
+                if skipped:
+                    logger.warning(
+                        "  Skipped %d unavailable/delisted configured pair(s) for %s",
+                        skipped, bot.name,
+                    )
+                if not trading_pairs:
+                    logger.info("  No listed trading pairs to scan after availability filter")
+                    return {"action": "skip", "reason": "No listed trading pairs to scan"}
 
             # Filter out stable/pegged pairs if bot config says to skip them
             skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
