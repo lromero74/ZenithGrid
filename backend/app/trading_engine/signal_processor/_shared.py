@@ -217,6 +217,23 @@ async def _handle_ai_failsafe(
 
     logger.warning(f"  🛡️ FAILSAFE ACTIVATED: {failsafe_reason}")
 
+    # Re-fetch position from DB to guard against TOCTOU: the limit order
+    # monitor or a concurrent pair task could have closed the position
+    # between the initial fetch and this failsafe execution.
+    from app.trading_engine.position_manager import get_active_position
+    fresh_position = await get_active_position(db, bot, product_id)
+    if fresh_position is None or fresh_position.status != "open":
+        logger.warning(
+            f"  ⚠️ Position #{position.id} was closed by another process "
+            f"before failsafe could execute — skipping"
+        )
+        return {
+            "action": "failsafe_position_already_closed",
+            "reason": "Position closed by another process before failsafe execution",
+            "position_id": position.id,
+        }
+    position = fresh_position
+
     # Check if limit close order already pending
     if position.closing_via_limit:
         logger.warning(
@@ -277,10 +294,15 @@ async def _handle_ai_failsafe(
 async def _calculate_budget(
     ctx: TradeContext, position: Optional[Position],
     quote_currency: str, aggregate_value: Optional[float],
+    effective_max_deals: Optional[int] = None,
 ) -> tuple:
     """Calculate budget allocation for the bot.
 
     Returns (quote_balance, aggregate_value) tuple.
+
+    Args:
+        effective_max_deals: Pre-computed soft-ceiling-clamped max deals.
+            If None, falls back to raw max_concurrent_deals from strategy config.
     """
     db, exchange, trading_client = ctx.db, ctx.exchange, ctx.trading_client
     bot, product_id = ctx.bot, ctx.product_id
@@ -298,13 +320,17 @@ async def _calculate_budget(
     reserved_balance = bot.get_reserved_balance(aggregate_value)
     logger.debug(f"Reserved balance (total bot budget): {reserved_balance:.8f}")
     if reserved_balance > 0:
-        # Check if budget should be split across concurrent deals
-        max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
+        # Use soft-ceiling-clamped max deals if provided, else raw config value
+        deals_for_split = (
+            effective_max_deals
+            if effective_max_deals is not None
+            else max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
+        )
 
         # Only split budget if split_budget_across_pairs is enabled
         # (deal-based: each deal gets full budget by default)
         if bot.split_budget_across_pairs:
-            per_position_budget = reserved_balance / max_concurrent_deals
+            per_position_budget = reserved_balance / deals_for_split
         else:
             per_position_budget = reserved_balance
 
@@ -328,7 +354,7 @@ async def _calculate_budget(
             logger.info(
                 f"  💰 Bot budget ({split_mode}):"
                 f" {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}),"
-                f" Max deals: {max_concurrent_deals},"
+                f" Max deals: {deals_for_split},"
                 f" Per-position: {per_position_budget:.8f},"
                 f" In positions: {total_in_positions:.8f},"
                 f" Available: {quote_balance:.8f}"
@@ -336,7 +362,7 @@ async def _calculate_budget(
         else:
             logger.info(
                 f"  💰 Bot reserved balance ({split_mode}): {reserved_balance},"
-                f" Max deals: {max_concurrent_deals},"
+                f" Max deals: {deals_for_split},"
                 f" Per-position: {per_position_budget:.8f},"
                 f" In positions: {total_in_positions},"
                 f" Available: {quote_balance}"
@@ -377,14 +403,22 @@ async def calculate_soft_ceiling(
     max_min_quote = 0.0
     product_ids = bot.product_ids or [bot.product_id]
 
+    # Group by quote currency — pairs sharing the same quote (e.g. all *-USD)
+    # share the same minimum. Query one per unique quote, not one per pair.
+    quote_currency_map: dict = {}  # quote_currency -> (product_id, min_quote)
     for pid in product_ids:
+        quote_ccy = pid.split("-")[1] if "-" in pid else "BTC"
+        if quote_ccy not in quote_currency_map:
+            quote_currency_map[quote_ccy] = pid  # first pair as representative
+
+    for quote_ccy, rep_pid in quote_currency_map.items():
         try:
-            min_info = await get_product_minimums(exchange, pid)
+            min_info = await get_product_minimums(exchange, rep_pid)
             min_quote = float(min_info.get("quote_min_size", 0.0001))
             if min_quote > max_min_quote:
                 max_min_quote = min_quote
         except Exception as e:
-            logger.warning(f"Failed to get minimums for {pid} during soft ceiling calc: {e}")
+            logger.warning(f"Failed to get minimums for {rep_pid} ({quote_ccy}) during soft ceiling calc: {e}")
 
     if max_min_quote <= 0:
         max_min_quote = 1.0  # Fallback for USD pairs

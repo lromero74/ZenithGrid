@@ -286,7 +286,7 @@ async def run_limit_order_monitor():
                     logger.info(f"Fixed position {pos.id}: cleared closing_via_limit")
                 await db.commit()
     except Exception as e:
-        logger.error(f"Error in startup reconciliation: {e}")
+        logger.error(f"Error in startup reconciliation: {e}", exc_info=True)
 
     # Main monitoring loop
     sweep_counter = 0
@@ -308,7 +308,7 @@ async def run_limit_order_monitor():
             if is_db_corruption_error(e):
                 logger.warning(f"Database corruption in limit order monitor loop; retrying next cycle: {e}")
             else:
-                logger.error(f"Error in limit order monitor loop: {e}")
+                logger.error(f"Error in limit order monitor loop: {e}", exc_info=True)
 
         # Check every 10 seconds
         await asyncio.sleep(10)
@@ -364,9 +364,9 @@ async def run_order_reconciliation_monitor():
             if is_db_corruption_error(e):
                 logger.warning(f"Database corruption in order reconciliation monitor loop; retrying next cycle: {e}")
             else:
-                logger.error(f"Error in order reconciliation monitor loop: {e}")
+                logger.error(f"Error in order reconciliation monitor loop: {e}", exc_info=True)
                 if first_run:
-                    logger.error(f"Startup order reconciliation error: {e}")
+                    logger.error(f"Startup order reconciliation error: {e}", exc_info=True)
             first_run = False
 
         # Check every 60 seconds (less frequent than limit orders)
@@ -412,7 +412,7 @@ async def run_missing_order_detector():
             if is_db_corruption_error(e):
                 logger.warning(f"Database corruption in missing order detector loop; retrying next cycle: {e}")
             else:
-                logger.error(f"Error in missing order detector loop: {e}")
+                logger.error(f"Error in missing order detector loop: {e}", exc_info=True)
 
         # Check every 5 minutes
         await asyncio.sleep(300)

@@ -191,6 +191,7 @@ async def fetch_og_meta(session: aiohttp.ClientSession, url: str) -> Dict[str, O
 
             return result
     except Exception:
+        logger.warning("Failed to fetch OG meta for %s, returning partial result", url, exc_info=True)
         return result
 
 

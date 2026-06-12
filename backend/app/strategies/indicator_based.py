@@ -50,6 +50,9 @@ from app.strategies.safety_order_calculator import (
 
 logger = logging.getLogger(__name__)
 
+# Track QFL base_timeframe fallback warnings — log once per product+TF combo, not every cycle
+_qfl_base_fallback_warned: set = set()
+
 
 @StrategyRegistry.register
 class IndicatorBasedStrategy(TradingStrategy):
@@ -376,10 +379,15 @@ class IndicatorBasedStrategy(TradingStrategy):
         base_candles = candles_by_timeframe.get(base_timeframe)  # None if same TF or not fetched
 
         if base_timeframe != crack_timeframe and base_candles is None:
-            logger.warning(
-                f"QFL: base_timeframe={base_timeframe} candles not available in candles_by_timeframe; "
-                f"falling back to crack_timeframe={crack_timeframe} candles for base identification"
-            )
+            fallback_key = f"{base_timeframe}:{crack_timeframe}"
+            if fallback_key not in _qfl_base_fallback_warned:
+                _qfl_base_fallback_warned.add(fallback_key)
+                logger.info(
+                    f"QFL: base_timeframe={base_timeframe} candles not available "
+                    f"in candles_by_timeframe; falling back to "
+                    f"crack_timeframe={crack_timeframe} for base identification "
+                    f"(subsequent fallbacks silenced)"
+                )
 
         # If base_timeframe is same as crack_timeframe, pass None so evaluate() uses single-TF logic
         effective_base_candles = base_candles if base_timeframe != crack_timeframe else None

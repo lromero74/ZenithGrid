@@ -164,6 +164,7 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 - **Frontend-only changes in prod mode**: use `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend serves static files from disk, so new bundles are live immediately.
 - **Never restart unnecessarily** — it disrupts the running trading bot
 - **Do NOT restart before `/shipit`** — `/shipit` always restarts as its final deploy step. Restarting mid-session to test changes and then running `/shipit` causes a double restart for no benefit.
+- **PROD (fedora.local) restart is NOT `bot.sh restart --prod`** — on the production host the actual backend service is `zenithgrid.service` (a user-systemd unit in distrobox `zenith-box`), and `bot.sh` only rebuilds the frontend there (it expects `trading-bot-backend.service`, which doesn't exist on fedora.local). Real prod flow: `cd ~/ZenithGrid && git fetch --tags && git pull origin main`, then from the HOST: `systemctl --user restart zenithgrid`. Verify with `curl -s http://127.0.0.1:8100/api/health`. See the distrobox-service-operations skill.
 
 ## Database & Migrations
 

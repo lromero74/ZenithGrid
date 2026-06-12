@@ -818,11 +818,38 @@ class RebalanceMonitor:
                     self._log_trade_result(r1, {**trade, "to_currency": "BTC"}, account)
                     if not r1.get("success_response"):
                         return
-                    result = await client.create_market_order(
-                        product_id="BTC-USDC",
-                        side="SELL",
-                        size=f"{btc_amount:.8f}",
-                    )
+                    try:
+                        result = await client.create_market_order(
+                            product_id="BTC-USDC",
+                            side="SELL",
+                            size=f"{btc_amount:.8f}",
+                        )
+                    except Exception:
+                        logger.error(
+                            "Rebalance: USD→USDC second leg (BTC→USDC sell) failed — "
+                            "portfolio left in intermediate state (BTC). "
+                            "Attempting rollback: selling BTC back to USD.",
+                            exc_info=True,
+                        )
+                        # Attempt rollback: sell the BTC back to USD
+                        try:
+                            rollback = await client.sell_for_usd(btc_amount, "BTC-USD")
+                            self._log_trade_result(
+                                rollback,
+                                {**trade, "from_currency": "BTC", "to_currency": "USD"},
+                                account,
+                            )
+                            logger.warning(
+                                "Rebalance: USD→USDC rollback completed — "
+                                "BTC sold back to USD, portfolio restored"
+                            )
+                        except Exception:
+                            logger.error(
+                                "Rebalance: USD→USDC rollback ALSO failed — "
+                                "portfolio stuck in BTC. Manual intervention required.",
+                                exc_info=True,
+                            )
+                        return
                 else:
                     # USDC → BTC → USD
                     r1 = await client.create_market_order(
@@ -833,7 +860,38 @@ class RebalanceMonitor:
                     self._log_trade_result(r1, {**trade, "from_currency": "USDC", "to_currency": "BTC"}, account)
                     if not r1.get("success_response"):
                         return
-                    result = await client.sell_for_usd(btc_amount, "BTC-USD")
+                    try:
+                        result = await client.sell_for_usd(btc_amount, "BTC-USD")
+                    except Exception:
+                        logger.error(
+                            "Rebalance: USDC→USD second leg (BTC→USD sell) failed — "
+                            "portfolio left in intermediate state (BTC). "
+                            "Attempting rollback: buying USDC back with BTC.",
+                            exc_info=True,
+                        )
+                        # Attempt rollback: buy USDC back with the BTC
+                        try:
+                            rollback = await client.create_market_order(
+                                product_id="BTC-USDC",
+                                side="BUY",
+                                funds=f"{usd_amount:.2f}",
+                            )
+                            self._log_trade_result(
+                                rollback,
+                                {**trade, "from_currency": "BTC", "to_currency": "USDC"},
+                                account,
+                            )
+                            logger.warning(
+                                "Rebalance: USDC→USD rollback completed — "
+                                "USDC bought back, portfolio restored"
+                            )
+                        except Exception:
+                            logger.error(
+                                "Rebalance: USDC→USD rollback ALSO failed — "
+                                "portfolio stuck in BTC. Manual intervention required.",
+                                exc_info=True,
+                            )
+                        return
                 self._log_trade_result(result, trade, account)
                 return
 
