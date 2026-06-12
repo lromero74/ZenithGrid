@@ -5,9 +5,7 @@ Creates a new table to store daily snapshots of account values (BTC and USD).
 Used for displaying account value chart over time.
 """
 
-import os
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
 
