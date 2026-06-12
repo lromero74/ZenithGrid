@@ -274,16 +274,28 @@ async def get_candles(
     granularity: str = "FIVE_MINUTE",
 ) -> List[Dict[str, Any]]:
     """Fetch historical candles from the public endpoint."""
-    params = {
-        "start": str(start),
-        "end": str(end),
-        "granularity": granularity,
-    }
-    result = await _public_request(
-        f"/api/v3/brokerage/market/products/{product_id}/candles",
-        params=params,
-    )
-    return result.get("candles", [])
+    cache_key = f"candles_{product_id}_{granularity}"
+
+    if await api_cache.is_not_found(cache_key):
+        return []
+
+    try:
+        params = {
+            "start": str(start),
+            "end": str(end),
+            "granularity": granularity,
+        }
+        result = await _public_request(
+            f"/api/v3/brokerage/market/products/{product_id}/candles",
+            params=params,
+        )
+        return result.get("candles", [])
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            await api_cache.mark_not_found(cache_key, NEGATIVE_CACHE_TTL)
+            logger.debug(f"Public candles 404 for {product_id}/{granularity} — negative cached")
+            return []
+        raise
 
 
 # ---------------------------------------------------------------------------

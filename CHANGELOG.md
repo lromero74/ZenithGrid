@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.1] - 2026-06-12
+
+### Fixed
+- **Candle API calls no longer hammer delisted products every cycle.** When Coinbase returns 404 for a product's candles (delisted pairs like WLUNA-USD, USDC-USD, etc.), the result is now negative-cached so subsequent requests skip the API call entirely for the cache TTL. Previously, every 10-second monitor cycle re-fetched candles for ~20 delisted products — wasting hundreds of API calls and slowing the loop.
+- **QFL base_timeframe now correctly extracted in all code paths.** The `base_timeframe` key (used by QFL's multi-timeframe mode to fetch the ONE_HOUR base candle) was missing from the `indicators` dict loop in `get_timeframes_for_phases` and `calculate_bot_check_interval`. Bots using the `indicators` config format could miss base candles the same way the conditions-format path did before v2.167.0.
+- **`aggregate_candles` no longer drops the most recent (forming) candle.** When aggregating smaller candles into larger timeframes (e.g., 3x ONE_MINUTE → ONE THREE_MINUTE), a trailing partial group was silently discarded. This meant the current forming candle — the most price-relevant one — was invisible to strategies. Partial groups are now included and marked with `_partial=True` so strategies can decide whether to use them.
+- **Refresh token expiry message now says "Refresh token expired" instead of generic "Invalid or expired token".** Previously, when a user's refresh token expired, the API returned the same vague error as an invalid access token, making users think their session was broken rather than just needing to re-login.
+- **Panic sell now clears rebalancer gate state when disabling rebalancing.** The panic sell flow sets `rebalance_enabled = False` but was missing the in-memory cache invalidation that the normal settings endpoint does (added in v2.167.0). Bots could remain stuck with a "Rebalancer paused" badge after a panic sell until the backend restarted.
+- **Concurrent pair tasks can no longer exceed max_concurrent_deals.** When a bot was below its max-deal capacity, multiple pair tasks running concurrently shared a stale `open_positions_count` snapshot, allowing them to collectively open more positions than the configured limit. A per-bot lock now serializes the position-count check so each task sees the updated count.
+- **Budget re-validated at order execution to prevent overspend.** The quote balance computed during budget calculation could be stale by the time the order hits the exchange (another concurrent pair task may have consumed part of it). Available balance is now re-checked just before order placement.
+- **Position re-fetched before sell decision to prevent double-sells.** A position fetched at the start of signal processing could be closed by a concurrent task or limit order fill before the sell decision runs. The position is now re-fetched from the DB immediately before executing a sell, and the AI failsafe path does the same.
+- **USD↔USDC two-leg rebalance now attempts rollback on partial failure.** The USD→USDC and USDC→USD conversions execute as two separate market orders (via BTC as intermediary). If the second leg fails, the first leg is now reversed to restore the original portfolio allocation instead of leaving the account in an intermediate state.
+- **Silent exception swallowing replaced with logged warnings.** Several error handlers that silently discarded exceptions (`except Exception: pass`, bare `return None`) now log warnings with stack traces so failures in AI review provider queries, BTC/USD price lookups, and OG meta fetching are visible in logs.
+- **Monitor loop errors now preserve stack traces.** Five background monitor loops (limit order, order reconciliation, missing order detector, startup reconciliation, PropGuard) were logging errors without `exc_info=True`, making root-cause diagnosis impossible. All now include full tracebacks.
+
 ## [v2.167.0] - 2026-06-11
 
 ### Fixed

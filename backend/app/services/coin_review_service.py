@@ -48,7 +48,7 @@ async def get_ai_review_provider_from_db() -> str:
         if row and row[0] and row[0].lower() in VALID_AI_PROVIDERS:
             return row[0].lower()
     except Exception:
-        pass  # Fall through to defaults
+        logger.warning("Failed to read AI review provider from DB, falling back to defaults", exc_info=True)
 
     # Fall back to config setting, then default
     config_provider = getattr(settings, 'system_ai_provider', '').lower()
@@ -409,6 +409,7 @@ async def _get_last_review_timestamp(session_maker=None):
             row = result.scalar_one_or_none()
             return row
     except Exception:
+        logger.warning("Failed to query last review timestamp, assuming no prior reviews", exc_info=True)
         return None
 
 

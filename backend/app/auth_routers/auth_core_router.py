@@ -261,7 +261,14 @@ async def refresh_token(
 
     Call this when the access token expires to get a new one without re-entering credentials.
     """
-    payload = decode_token(request.refresh_token)
+    try:
+        payload = decode_token(request.refresh_token)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expired — please log in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     if payload.get("type") != "refresh":
         raise HTTPException(

@@ -232,6 +232,7 @@ async def _create_sell_trade_record(
         else:  # quote is USD
             profit_usd = profit_quote
     except Exception:
+        logger.warning("Failed to get BTC/USD price for profit calculation", exc_info=True)
         btc_usd_price_at_close = None
         profit_usd = None
 

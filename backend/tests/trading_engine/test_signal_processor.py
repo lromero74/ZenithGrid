@@ -76,6 +76,15 @@ def _make_exchange(**overrides):
         "best_bid": "2999.0",
         "best_ask": "3001.0",
     })
+    exchange.get_balance = AsyncMock(return_value={
+        "available": "5000.00",
+        "currency": "USD",
+    })
+    exchange.get_product = AsyncMock(return_value={
+        "quote_min_size": "1.00",
+        "base_min_size": "0.00000001",
+        "quote_currency_id": "USD",
+    })
     exchange.calculate_aggregate_usd_value = AsyncMock(return_value=10000.0)
     exchange.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
     exchange.calculate_market_budget = AsyncMock(return_value=10000.0)
@@ -440,6 +449,16 @@ class TestProcessSignal:
                 "app.trading_engine.signal_processor.buy_decision.execute_buy",
                 new_callable=AsyncMock,
                 return_value=mock_trade,
+            ),
+            patch(
+                "app.order_validation.api_cache.get",
+                new_callable=AsyncMock,
+                return_value=None,  # cache miss → falls through to exchange.get_product
+            ),
+            patch(
+                "app.order_validation.api_cache.set",
+                new_callable=AsyncMock,
+                return_value=None,
             ),
         ):
             result = await process_signal(

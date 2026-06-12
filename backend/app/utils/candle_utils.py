@@ -67,7 +67,9 @@ def aggregate_candles(
         aggregation_factor: How many candles to combine (e.g., 3 to convert 1-min to 3-min)
 
     Returns:
-        List of aggregated candles
+        List of aggregated candles. Partial groups at the end (the current
+        forming candle) are included and marked with ``_partial=True`` so
+        strategies can decide whether to use them.
     """
     if not candles or aggregation_factor <= 1:
         return candles
@@ -75,10 +77,9 @@ def aggregate_candles(
     aggregated = []
 
     # Process candles in groups of aggregation_factor
-    for i in range(0, len(candles) - aggregation_factor + 1, aggregation_factor):
+    for i in range(0, len(candles), aggregation_factor):
         group = candles[i:i + aggregation_factor]
-        if len(group) < aggregation_factor:
-            break  # Not enough candles for a complete group
+        is_partial = len(group) < aggregation_factor
 
         # OHLCV aggregation logic:
         # Open: first candle's open
@@ -99,6 +100,8 @@ def aggregate_candles(
         if synthetic_count > 0:
             aggregated_candle["_synthetic_count"] = synthetic_count
             aggregated_candle["_synthetic_total"] = len(group)
+        if is_partial:
+            aggregated_candle["_partial"] = True
         aggregated.append(aggregated_candle)
 
     return aggregated
@@ -303,18 +306,30 @@ def calculate_bot_check_interval(bot_config: Dict[str, Any]) -> int:
 
         # Extract timeframes from conditions
         for condition in conditions_to_check:
-            if isinstance(condition, dict) and 'timeframe' in condition:
-                tf = condition['timeframe']
-                if tf and tf != 'required':  # Skip special "required" markers
-                    timeframes.append(tf)
+            if isinstance(condition, dict):
+                if 'timeframe' in condition:
+                    tf = condition['timeframe']
+                    if tf and tf != 'required':  # Skip special "required" markers
+                        timeframes.append(tf)
+                # QFL multi-timeframe: base_timeframe determines check interval too
+                if 'base_timeframe' in condition:
+                    btf = condition['base_timeframe']
+                    if btf and btf != 'required':
+                        timeframes.append(btf)
 
     # Also check standalone indicator config (for bots that use different format)
     if 'indicators' in bot_config and isinstance(bot_config['indicators'], dict):
         for indicator_config in bot_config['indicators'].values():
-            if isinstance(indicator_config, dict) and 'timeframe' in indicator_config:
-                tf = indicator_config['timeframe']
-                if tf and tf != 'required':
-                    timeframes.append(tf)
+            if isinstance(indicator_config, dict):
+                if 'timeframe' in indicator_config:
+                    tf = indicator_config['timeframe']
+                    if tf and tf != 'required':
+                        timeframes.append(tf)
+                # QFL multi-timeframe: base_timeframe determines check interval too
+                if 'base_timeframe' in indicator_config:
+                    btf = indicator_config['base_timeframe']
+                    if btf and btf != 'required':
+                        timeframes.append(btf)
 
     # Convert to seconds and find minimum
     if not timeframes:
@@ -410,18 +425,30 @@ def get_timeframes_for_phases(
 
         # Extract timeframes from conditions
         for condition in conditions_to_check:
-            if isinstance(condition, dict) and 'timeframe' in condition:
-                tf = condition['timeframe']
-                if tf and tf != 'required':  # Skip special "required" markers
-                    timeframes.add(tf)
+            if isinstance(condition, dict):
+                if 'timeframe' in condition:
+                    tf = condition['timeframe']
+                    if tf and tf != 'required':  # Skip special "required" markers
+                        timeframes.add(tf)
+                # QFL multi-timeframe: base_timeframe is separate from crack timeframe
+                if 'base_timeframe' in condition:
+                    btf = condition['base_timeframe']
+                    if btf and btf != 'required':
+                        timeframes.add(btf)
 
     # Also check standalone indicator config if provided (for different bot formats)
     if 'indicators' in bot_config and isinstance(bot_config['indicators'], dict):
         for indicator_config in bot_config['indicators'].values():
-            if isinstance(indicator_config, dict) and 'timeframe' in indicator_config:
-                tf = indicator_config['timeframe']
-                if tf and tf != 'required':
-                    timeframes.add(tf)
+            if isinstance(indicator_config, dict):
+                if 'timeframe' in indicator_config:
+                    tf = indicator_config['timeframe']
+                    if tf and tf != 'required':
+                        timeframes.add(tf)
+                # QFL multi-timeframe: base_timeframe is separate from crack timeframe
+                if 'base_timeframe' in indicator_config:
+                    btf = indicator_config['base_timeframe']
+                    if btf and btf != 'required':
+                        timeframes.add(btf)
 
     # Default to FIVE_MINUTE if no timeframes found
     if not timeframes:

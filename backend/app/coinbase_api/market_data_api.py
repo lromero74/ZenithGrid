@@ -37,8 +37,19 @@ async def get_product(request_func: Callable, product_id: str = "ETH-BTC") -> Di
 
 async def get_ticker(request_func: Callable, product_id: str = "ETH-BTC") -> Dict[str, Any]:
     """Get current ticker/price for a product"""
-    result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}/ticker")
-    return result
+    cache_key = f"ticker_{product_id}"
+
+    # Skip API call if we already know this product is delisted
+    if await api_cache.is_not_found(cache_key):
+        raise ValueError(f"{product_id} ticker not found (negative cached)")
+
+    try:
+        result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}/ticker")
+        return result
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            await api_cache.mark_not_found(cache_key, NEGATIVE_CACHE_TTL)
+        raise
 
 
 async def get_current_price(request_func: Callable, auth_type: str, product_id: str = "ETH-BTC") -> float:
@@ -129,9 +140,21 @@ async def get_candles(
     request_func: Callable, product_id: str, start: int, end: int, granularity: str = "FIVE_MINUTE"
 ) -> List[Dict[str, Any]]:
     """Get historical candles/OHLCV data"""
-    params = {"start": str(start), "end": str(end), "granularity": granularity}
-    result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}/candles", params=params)
-    return result.get("candles", [])
+    cache_key = f"candles_{product_id}_{granularity}"
+
+    if await api_cache.is_not_found(cache_key):
+        return []
+
+    try:
+        params = {"start": str(start), "end": str(end), "granularity": granularity}
+        result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}/candles", params=params)
+        return result.get("candles", [])
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            await api_cache.mark_not_found(cache_key, NEGATIVE_CACHE_TTL)
+            logger.debug(f"Candles 404 for {product_id}/{granularity} — negative cached")
+            return []
+        raise
 
 
 async def get_product_book(

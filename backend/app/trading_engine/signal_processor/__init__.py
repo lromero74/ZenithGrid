@@ -72,11 +72,12 @@ async def process_signal(
     Delegates to private helper functions for each phase:
     1. Get position + analyze signal
     2. AI failsafe (if no signal)
-    3. Calculate budget
-    4. Log AI thinking
-    5. Decide buy
-    6. Execute buy
-    7. Sell decision + execution
+    3. Calculate soft ceiling
+    4. Calculate budget
+    5. Log AI thinking
+    6. Decide buy
+    7. Execute buy
+    8. Sell decision + execution
 
     Args:
         db: Database session
@@ -104,8 +105,10 @@ async def process_signal(
 
     # 1. Get current state FIRST (needed for web search context)
     # If position_override is provided, use it (supports simultaneous same-pair deals)
+    _position_is_override = False
     if position_override is not _POSITION_NOT_SET:
         position = position_override
+        _position_is_override = True
     else:
         position = await get_active_position(db, bot, product_id)
 
@@ -132,13 +135,25 @@ async def process_signal(
             return failsafe_result
         return {"action": "none", "reason": "No signal detected", "signal": None}
 
-    # 3. Calculate budget
+    # 3. Calculate soft ceiling BEFORE budget so split_budget_across_pairs
+    #    divides by the clamped effective max, not the raw config value
+    aggregate_value_for_ceiling = None  # will be computed inside _calculate_budget
+    max_deals = await calculate_soft_ceiling(ctx, aggregate_value_for_ceiling or 0.0)
+    logger.info(f"  📊 Soft ceiling: max_deals={max_deals} (raw={bot.strategy_config.get('max_concurrent_deals', 1)})")
+
+    # Persist the computed value so the bot list can display it
+    if bot.strategy_config.get("enable_soft_ceiling", False):
+        bot.soft_ceiling_effective_max = max_deals
+        await db.commit()
+
+    # 4. Calculate budget (uses max_deals for split division)
     aggregate_value = None
     quote_balance, aggregate_value = await _calculate_budget(
         ctx, position, quote_currency, aggregate_value,
+        effective_max_deals=max_deals,
     )
 
-    # 4. Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
+    # 5. Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
     if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
         logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
         logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
@@ -156,13 +171,14 @@ async def process_signal(
             decision = "hold"
         await save_ai_log(db, bot, product_id, signal_data, decision, current_price, position)
 
-    # 5. Decide buy
+    # 6. Decide buy
     should_buy, quote_amount, buy_reason = await _decide_buy(
         ctx, signal_data, position, quote_balance, aggregate_value,
         open_positions_count=open_positions_count,
+        max_deals=max_deals,
     )
 
-    # 6. Execute buy
+    # 7. Execute buy
     if should_buy:
         buy_result = await _execute_buy_trade(
             ctx, position, quote_amount, quote_balance,
@@ -171,13 +187,28 @@ async def process_signal(
         if buy_result:
             return buy_result
 
-    # 7. Sell decision + execution
+    # 8. Sell decision + execution
     if position is not None:
-        sell_result = await _decide_and_execute_sell(
-            ctx, position, signal_data, candles, candles_by_timeframe,
-        )
-        if sell_result:
-            return sell_result
+        # Re-fetch position to guard against TOCTOU: a concurrent pair task
+        # or the limit order monitor could have closed the position between
+        # the initial fetch (line 111) and this sell decision.
+        # Skip re-fetch for position_override — the caller owns that object.
+        if not _position_is_override:
+            fresh_position = await get_active_position(db, bot, product_id)
+            if fresh_position is None or fresh_position.status != "open":
+                logger.info(
+                    f"  ⚠️ Position #{position.id} was closed by another process "
+                    f"before sell decision — skipping"
+                )
+                position = None
+            else:
+                position = fresh_position
+        if position is not None:
+            sell_result = await _decide_and_execute_sell(
+                ctx, position, signal_data, candles, candles_by_timeframe,
+            )
+            if sell_result:
+                return sell_result
 
     # Commit any pending changes (like AI logs)
     await db.commit()

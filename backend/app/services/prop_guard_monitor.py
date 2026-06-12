@@ -34,7 +34,7 @@ async def _monitor_loop():
         try:
             await _check_all_prop_accounts()
         except Exception as e:
-            logger.error(f"PropGuard monitor error: {e}")
+            logger.error(f"PropGuard monitor error: {e}", exc_info=True)
 
         await asyncio.sleep(30)
 

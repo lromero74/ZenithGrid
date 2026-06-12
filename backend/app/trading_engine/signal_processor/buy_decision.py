@@ -5,6 +5,7 @@ Split out of the original monolithic signal_processor.py as part of
 code-quality Phase 5.1.
 """
 
+import asyncio
 import logging
 from app.utils.timeutil import utcnow
 from datetime import timedelta
@@ -12,7 +13,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select
 
-from app.currency_utils import format_with_usd
+from app.currency_utils import format_with_usd, get_quote_currency
 from app.models import BlacklistedCoin, Position
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.trading_engine.book_depth_guard import check_buy_slippage
@@ -21,6 +22,7 @@ from app.trading_engine.order_logger import OrderLogEntry, log_order_to_history
 from app.trading_engine.perps_executor import execute_perps_open
 from app.trading_engine.position_manager import create_position, get_open_positions_count
 from app.trading_engine.sell_executor import execute_sell_short
+from app.order_validation import validate_order_size
 from app.trading_engine.signal_processor._shared import (
     _is_duplicate_failed_order,
     _record_signal,
@@ -29,6 +31,13 @@ from app.trading_engine.signal_processor._shared import (
 from app.trading_engine.trade_context import TradeContext
 
 logger = logging.getLogger(__name__)
+
+# Per-bot locks to prevent concurrent pair tasks from exceeding
+# max_concurrent_deals. When multiple pair tasks for the same bot run
+# concurrently, they share a stale open_positions_count snapshot.
+# This lock serializes the position-count check so each task sees
+# the updated count from the previous task's position creation.
+_bot_position_locks: Dict[int, asyncio.Lock] = {}
 
 
 async def _log_budget_blocker_if_applicable(
@@ -86,12 +95,17 @@ async def _log_budget_blocker_if_applicable(
 async def _run_new_position_preflight(
     ctx: TradeContext, aggregate_value: Optional[float],
     open_positions_count: Optional[int],
+    max_deals: Optional[int] = None,
 ) -> Tuple[bool, str, Optional[int]]:
     """Preflight checks for opening a NEW position.
 
     Runs stable-pair guard, soft-ceiling / max-concurrent-deals, and
     per-pair deal-cooldown. Returns (blocked, reason, open_positions_count).
     When blocked=True, reason is populated and the caller should skip the buy.
+
+    Args:
+        max_deals: Pre-computed soft-ceiling-clamped max deals. If None,
+            computes it via calculate_soft_ceiling (backward compat).
     """
     db, bot, strategy = ctx.db, ctx.bot, ctx.strategy
     product_id = ctx.product_id
@@ -106,23 +120,34 @@ async def _run_new_position_preflight(
     if open_positions_count is None:
         open_positions_count = await get_open_positions_count(db, bot)
 
-    max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
+    # Acquire per-bot lock to prevent concurrent pair tasks from exceeding
+    # max_concurrent_deals. Without this, two concurrent tasks both see
+    # open_positions_count=N and both open a position → N+2 > max_deals.
+    lock = _bot_position_locks.setdefault(bot.id, asyncio.Lock())
+    async with lock:
+        # Re-fetch under lock — another task may have opened a position
+        # since the initial fetch above.
+        open_positions_count = await get_open_positions_count(db, bot)
 
-    # Persist the computed value so the bot list can display it
-    if bot.strategy_config.get("enable_soft_ceiling", False):
-        bot.soft_ceiling_effective_max = max_deals
-        await db.commit()
+        if max_deals is None:
+            max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
 
-    logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
+        # Persist the computed value so the bot list can display it
+        if bot.strategy_config.get("enable_soft_ceiling", False):
+            bot.soft_ceiling_effective_max = max_deals
+            await db.commit()
 
-    if open_positions_count >= max_deals:
-        ceiling_type = (
-            "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
-            else "Max concurrent deals"
-        )
-        reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
-        logger.debug(f"Should buy: FALSE - {reason}")
-        return True, reason, open_positions_count
+        logger.debug(f"Open positions: {open_positions_count}/{max_deals}")
+
+        if open_positions_count >= max_deals:
+            ceiling_type = (
+                "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
+                else "Max concurrent deals"
+            )
+            reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"
+            logger.debug(f"Should buy: FALSE - {reason}")
+            logger.info(f"  🔒 {ctx.product_id} blocked: {reason}")
+            return True, reason, open_positions_count
 
     deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
     if deal_cooldown > 0:
@@ -241,10 +266,15 @@ async def _decide_buy(
     position: Optional[Position], quote_balance: float,
     aggregate_value: Optional[float],
     open_positions_count: Optional[int] = None,
+    max_deals: Optional[int] = None,
 ) -> tuple:
     """Decide whether to buy, including all checks (max deals, cooldown, blacklist).
 
     Returns (should_buy, quote_amount, buy_reason) tuple.
+
+    Args:
+        max_deals: Pre-computed soft-ceiling-clamped max deals. If None,
+            computed inside _run_new_position_preflight (backward compat).
     """
     bot, strategy = ctx.bot, ctx.strategy
 
@@ -265,6 +295,7 @@ async def _decide_buy(
     # Active bot, no position → new-position path with preflight + blacklist gates
     blocked, reason, _ = await _run_new_position_preflight(
         ctx, aggregate_value, open_positions_count,
+        max_deals=max_deals,
     )
     if blocked:
         return False, 0, reason
@@ -354,6 +385,63 @@ async def _execute_buy_trade(
 
     quote_formatted = format_with_usd(quote_amount, product_id, btc_usd_price)
     logger.info(f"  💰 BUY DECISION: will buy {quote_formatted} worth of {product_id}")
+
+    # Pre-validate order size against exchange minimums BEFORE creating position.
+    # This prevents a flood of failed positions when the budget is too thin
+    # (e.g., 15% of $12 split by 20 deals = $0.09, below Coinbase's $1 minimum).
+    is_valid, validation_error = await validate_order_size(
+        exchange, product_id, quote_amount=quote_amount,
+    )
+    if not is_valid:
+        logger.warning(f"  🚫 Order size pre-validation failed: {validation_error}")
+        # Log to indicator_logs so the user can see why buys are being skipped
+        await log_indicator_evaluation(
+            db=db,
+            bot_id=bot.id,
+            product_id=product_id,
+            phase="order_size_prevalidation",
+            conditions_met=False,
+            conditions_detail=[{
+                "type": "order_minimum",
+                "indicator": "quote_amount",
+                "operator": ">=",
+                "threshold": None,  # min is in validation_error string
+                "actual_value": quote_amount,
+                "result": False,
+                "reason": validation_error,
+            }],
+            indicators_snapshot=signal_data.get("indicators", {}),
+            current_price=current_price,
+        )
+        return {
+            "action": "hold",
+            "reason": f"Order size below exchange minimum: {validation_error}",
+            "signal": signal_data,
+        }
+
+    # Re-validate available balance just before order execution to guard
+    # against TOCTOU: a concurrent pair task for the same bot could have
+    # consumed part of the budget between _calculate_budget() and here.
+    quote_currency = get_quote_currency(product_id)
+    try:
+        balance_info = await exchange.get_balance(quote_currency)
+        fresh_available = float(balance_info.get("available", 0))
+        if fresh_available < quote_amount:
+            logger.warning(
+                f"  🚫 Budget TOCTOU guard: available {quote_currency} balance "
+                f"({fresh_available:.8f}) < quote_amount ({quote_amount:.8f}) — "
+                f"another pair task likely consumed the budget"
+            )
+            return {
+                "action": "hold",
+                "reason": f"Insufficient {quote_currency} balance at execution time "
+                          f"({fresh_available:.8f} < {quote_amount:.8f})",
+                "signal": signal_data,
+            }
+    except Exception:
+        # If balance check fails (network error, etc.), proceed anyway —
+        # the exchange will reject the order if funds are insufficient.
+        pass
 
     # Determine trade type
     is_new_position = position is None
