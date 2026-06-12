@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.2] - 2026-06-12
+
+### Fixed
+- **Bots with legacy JSON trading-pair lists scan their configured pairs again.** Some production bots had their pair list stored in `bots.product_ids` but no `bot_products` junction rows, causing the monitor helper to fall back to `ETH-BTC` and miss new deal opportunities even when the UI showed capacity remaining. The helper now supports both storage formats, with regression coverage.
+- **The version badge no longer reports an older tag as an available update.** The backend now checks git ancestry before setting `update_available`, so an untagged commit ahead of the latest tag does not show as "latest tag available." Release checks now verify `CHANGELOG.md`, `docs/architecture/index.json`, and git tags stay aligned.
+- **Production runbooks now point at `fedora.local`.** Stale `testbot` and EC2-era commands were replaced with the current `zenithgrid.service` / distrobox production flow.
+
 ## [v2.167.1] - 2026-06-12
 
 ### Fixed

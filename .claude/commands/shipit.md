@@ -11,6 +11,7 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
    - If the feature changes user-facing behavior significantly, update `README.md` (installation steps, feature list, screenshots)
    - Update `CHANGELOG.md` with the new version section (user-facing plain language, Keep a Changelog format: Added / Changed / Fixed / Removed / Security)
    - Update `docs/architecture/index.json` version field
+   - Run `python3 scripts/check_version_consistency.py --expected vX.Y.Z` with the release version you are about to tag
    - Wait for architecture-sync to complete before tagging — all docs must be in the same commit as the version bump
 6. Commit all changes (code + all documentation updates) in a single commit, then tag on main
 7. Delete dev branch locally and on remote (if applicable)
@@ -20,6 +21,6 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
    - **Frontend-only in PROD mode**: `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend reads git tags live and serves static files from disk, so new bundles and version are live immediately. Users get a "new version" toast prompting them to reload. No restart needed.
    - **Backend changes in PROD mode**: `./bot.sh restart --prod` (rebuilds dist/ + restarts backend)
    - **Both changed in PROD mode**: `./bot.sh restart --prod`
-9. Post-ship verification: confirm tag, no stale branches, services healthy
+9. Post-ship verification: run `python3 scripts/check_version_consistency.py`, confirm tag, no stale branches, services healthy
 
 Do NOT skip any steps. The end state must be: main is tagged, all docs updated, all versions match, dev branch is gone, production is running the new code.

@@ -8,7 +8,7 @@ changelog, AI providers, shutdown management, and trading pair monitor.
 import pytest
 from app.utils.timeutil import utcnow
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import MarketData, User
 
@@ -54,6 +54,35 @@ class TestGetSortedTags:
         from app.routers.system_router import get_sorted_tags
         tags = get_sorted_tags()
         assert isinstance(tags, list)
+
+
+class TestUpdateAvailability:
+    """Tests for version update availability detection."""
+
+    def test_same_version_has_no_update(self):
+        from app.routers.system_router import is_update_available
+
+        assert is_update_available("v2.167.2", "v2.167.2") is False
+
+    def test_commit_ahead_of_latest_tag_has_no_update(self):
+        from app.routers.system_router import is_update_available
+
+        with patch("app.routers.system_router._git_ref_is_ancestor") as is_ancestor:
+            is_ancestor.side_effect = lambda ancestor, descendant: (
+                ancestor == "v2.167.1" and descendant == "HEAD"
+            )
+
+            assert is_update_available("v2.167.1-1-ge473a6a0", "v2.167.1") is False
+
+    def test_head_behind_latest_tag_has_update(self):
+        from app.routers.system_router import is_update_available
+
+        with patch("app.routers.system_router._git_ref_is_ancestor") as is_ancestor:
+            is_ancestor.side_effect = lambda ancestor, descendant: (
+                ancestor == "HEAD" and descendant == "v2.167.2"
+            )
+
+            assert is_update_available("v2.167.1", "v2.167.2") is True
 
 
 # =============================================================================

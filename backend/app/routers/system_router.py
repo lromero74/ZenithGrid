@@ -122,6 +122,41 @@ def get_latest_git_tag() -> str:
     return get_git_version()  # Fallback to current version
 
 
+def _git_ref_is_ancestor(ancestor: str, descendant: str) -> Optional[bool]:
+    """Return whether one git ref is an ancestor of another, or None on error."""
+    try:
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+            capture_output=True,
+            cwd=str(get_repo_root()),
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return True
+        if result.returncode == 1:
+            return False
+    except Exception:
+        pass
+    return None
+
+
+def is_update_available(current_version: str, latest_version: str) -> bool:
+    """Return True only when the latest tag is actually ahead of this checkout."""
+    if not latest_version or current_version == "dev" or latest_version == current_version:
+        return False
+
+    head_behind_latest = _git_ref_is_ancestor("HEAD", latest_version)
+    if head_behind_latest is not None:
+        return head_behind_latest
+
+    latest_behind_head = _git_ref_is_ancestor(latest_version, "HEAD")
+    if latest_behind_head is True:
+        return False
+
+    # Fallback for non-git environments: preserve the old string comparison.
+    return latest_version != current_version
+
+
 @router.get("/api/health")
 async def health_check():
     """Health check endpoint — returns status, version, and process uptime."""
@@ -333,7 +368,7 @@ async def get_changelog(
     return {
         "current_version": current_version,
         "latest_version": latest_tag or current_version,
-        "update_available": latest_tag != current_version and current_version != "dev",
+        "update_available": is_update_available(current_version, latest_tag or current_version),
         "versions": paginated_versions,
         "total_versions": total_versions,
         "has_more": end_idx < total_versions
@@ -409,7 +444,7 @@ async def root():
         "status": "running",
         "version": current_version,
         "latest_version": latest_version,
-        "update_available": latest_version != current_version and current_version != "dev",
+        "update_available": is_update_available(current_version, latest_version),
         "startup_time": _STARTUP_TIME,
     }
 
