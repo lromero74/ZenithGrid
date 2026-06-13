@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.5] - 2026-06-12
+
+### Fixed
+- **Soft-ceiling enforcement now matches the GUI for percentage-budget bots.** The execution path now calculates soft ceiling from the real aggregate quote balance instead of `0`, and batch analysis splits budgets by the effective soft ceiling rather than the raw configured max deals. This fixes bots showing `1 / 2 (SC: Max 20)` while the backend still blocked second deals as if the ceiling were `1`.
+
 ## [v2.167.4] - 2026-06-12
 
 ### Fixed

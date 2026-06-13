@@ -136,8 +136,14 @@ async def process_signal(
         return {"action": "none", "reason": "No signal detected", "signal": None}
 
     # 3. Calculate soft ceiling BEFORE budget so split_budget_across_pairs
-    #    divides by the clamped effective max, not the raw config value
-    aggregate_value_for_ceiling = None  # will be computed inside _calculate_budget
+    #    divides by the clamped effective max, not the raw config value.
+    #    Percentage-budget bots need a real aggregate value here; passing 0
+    #    incorrectly clamps the soft ceiling to 1 while the UI can show 2+.
+    aggregate_value_for_ceiling = None
+    if bot.budget_percentage > 0 and bot.strategy_config.get("enable_soft_ceiling", False):
+        aggregate_value_for_ceiling = await exchange.calculate_market_budget(
+            quote_currency, bypass_cache=True
+        )
     max_deals = await calculate_soft_ceiling(ctx, aggregate_value_for_ceiling or 0.0)
     logger.info(f"  📊 Soft ceiling: max_deals={max_deals} (raw={bot.strategy_config.get('max_concurrent_deals', 1)})")
 
@@ -147,7 +153,7 @@ async def process_signal(
         await db.commit()
 
     # 4. Calculate budget (uses max_deals for split division)
-    aggregate_value = None
+    aggregate_value = aggregate_value_for_ceiling
     quote_balance, aggregate_value = await _calculate_budget(
         ctx, position, quote_currency, aggregate_value,
         effective_max_deals=max_deals,

@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import PAIR_PROCESSING_DELAY_SECONDS
 from app.models import Bot
+from app.trading_engine.signal_processor import calculate_soft_ceiling
+from app.trading_engine.trade_context import TradeContext
 from app.utils.candle_utils import prepare_market_context
 
 logger = logging.getLogger(__name__)
@@ -37,13 +39,13 @@ _BATCH_TIMEFRAMES = (
 _CANDLE_FETCH_CONCURRENCY = 3
 
 
-async def _calculate_batch_budget(monitor, bot: Bot, open_positions: list) -> dict:
+async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_positions: list, strategy: Any) -> dict:
     """Calculate budget availability for new positions.
 
     Returns dict with: quote_currency, reserved_balance, budget_pct, available_budget,
     min_per_position, has_budget_for_new, max_concurrent_deals.
     """
-    max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+    raw_max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
     quote_currency = bot.get_quote_currency()
 
     try:
@@ -71,6 +73,15 @@ async def _calculate_batch_budget(monitor, bot: Bot, open_positions: list) -> di
         logger.warning("  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
     reserved_balance = bot.get_reserved_balance(aggregate_value)
+    max_concurrent_deals = raw_max_concurrent_deals
+    if bot.strategy_config.get("enable_soft_ceiling", False):
+        ctx = TradeContext(
+            db=db, exchange=monitor.exchange, trading_client=None,
+            bot=bot, product_id=(bot.get_trading_pairs()[0] if bot.get_trading_pairs() else ""),
+            current_price=0.0, strategy=strategy,
+        )
+        max_concurrent_deals = await calculate_soft_ceiling(ctx, aggregate_value)
+        bot.soft_ceiling_effective_max = max_concurrent_deals
     budget_pct = bot.budget_percentage
     total_in_positions = sum(p.total_quote_spent for p in open_positions)
     available_budget = reserved_balance - total_in_positions
@@ -102,6 +113,8 @@ async def _calculate_batch_budget(monitor, bot: Bot, open_positions: list) -> di
         "min_per_position": min_per_position,
         "has_budget_for_new": has_budget_for_new,
         "max_concurrent_deals": max_concurrent_deals,
+        "raw_max_concurrent_deals": raw_max_concurrent_deals,
+        "aggregate_value": aggregate_value,
     }
 
 
@@ -338,16 +351,21 @@ def _build_candles_by_timeframe(
 
 async def _execute_batch_analysis(
     monitor, db: AsyncSession, bot: Bot, pairs_data: Dict[str, Any],
-    strategy: Any, open_positions: list, skip_ai_analysis: bool,
+    strategy: Any, open_positions: list, skip_ai_analysis: bool, budget_info: dict,
 ) -> Dict[str, Any]:
     """Run AI batch analysis and execute trading logic for each pair.
 
     Returns results dict keyed by product_id.
     """
     # Calculate per-position budget for AI analysis
-    max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+    max_concurrent_deals = budget_info.get(
+        "max_concurrent_deals",
+        max(bot.strategy_config.get("max_concurrent_deals", 1), 1),
+    )
     quote_currency = bot.get_quote_currency()
-    aggregate_value = await monitor.exchange.calculate_market_budget(quote_currency)
+    aggregate_value = budget_info.get("aggregate_value")
+    if aggregate_value is None:
+        aggregate_value = await monitor.exchange.calculate_market_budget(quote_currency)
     total_bot_budget = bot.get_reserved_balance(aggregate_value)
 
     if bot.split_budget_across_pairs and max_concurrent_deals > 0:
@@ -470,7 +488,7 @@ async def process_bot_batch(
         await db.refresh(bot)
 
         # Phase 2: Calculate budget availability
-        budget_info = await _calculate_batch_budget(monitor, bot, open_positions)
+        budget_info = await _calculate_batch_budget(monitor, db, bot, open_positions, strategy)
 
         # Phase 3: Determine which pairs to analyze
         pairs_to_analyze = await _determine_pairs_to_analyze(
@@ -494,7 +512,7 @@ async def process_bot_batch(
 
         # Phase 5: Run AI analysis + execute trades
         results = await _execute_batch_analysis(
-            monitor, db, bot, pairs_data, strategy, open_positions, skip_ai_analysis,
+            monitor, db, bot, pairs_data, strategy, open_positions, skip_ai_analysis, budget_info,
         )
 
         # Phase 6: Update position error tracking

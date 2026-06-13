@@ -476,6 +476,55 @@ class TestProcessSignal:
         assert result["trade"] == mock_trade
 
     @pytest.mark.asyncio
+    async def test_soft_ceiling_uses_real_aggregate_for_percentage_budget(self):
+        """Percentage-budget soft ceiling must not be calculated from 0 aggregate."""
+        db = _make_db()
+        exchange = _make_exchange()
+        trading_client = _make_trading_client()
+        bot = _make_bot(
+            budget_percentage=15.0,
+            split_budget_across_pairs=True,
+            strategy_config={
+                "max_concurrent_deals": 20,
+                "enable_soft_ceiling": True,
+            },
+        )
+        strategy = _make_strategy(config={"max_concurrent_deals": 20})
+        candles = _make_candles()
+
+        with patch(
+            "app.trading_engine.signal_processor.get_active_position",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "app.trading_engine.signal_processor.calculate_soft_ceiling",
+            new_callable=AsyncMock,
+            return_value=2,
+        ) as mock_ceiling, patch(
+            "app.trading_engine.signal_processor._calculate_budget",
+            new_callable=AsyncMock,
+            return_value=(750.0, 10000.0),
+        ), patch(
+            "app.trading_engine.signal_processor._decide_buy",
+            new_callable=AsyncMock,
+            return_value=(False, 0.0, "No buy"),
+        ):
+            await process_signal(
+                db=db,
+                exchange=exchange,
+                trading_client=trading_client,
+                bot=bot,
+                strategy=strategy,
+                product_id="FET-USD",
+                candles=candles,
+                current_price=0.2,
+                pre_analyzed_signal={"base_order_signal": True, "_already_logged": True},
+            )
+
+        mock_ceiling.assert_awaited_once()
+        assert mock_ceiling.await_args.args[1] == 10000.0
+
+    @pytest.mark.asyncio
     async def test_max_concurrent_deals_blocks_new_position(self):
         """Edge case: max concurrent deals reached blocks new buys."""
         db = _make_db()

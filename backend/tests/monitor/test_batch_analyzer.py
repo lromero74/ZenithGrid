@@ -184,6 +184,45 @@ class TestBatchAnalyzerHappyPath:
         assert per_position_budget == pytest.approx(0.025, abs=0.001)
 
     @pytest.mark.asyncio
+    async def test_budget_split_uses_soft_ceiling_in_batch_mode(self, db_session):
+        """Batch mode should split by effective soft ceiling, not raw max deals."""
+        monitor = _make_monitor()
+        bot = _make_bot(
+            product_ids=["FET-USD", "WLD-USD"],
+            split_budget_across_pairs=True,
+            budget_percentage=15.0,
+            strategy_config={
+                "max_concurrent_deals": 20,
+                "enable_soft_ceiling": True,
+            },
+        )
+        bot.get_quote_currency = MagicMock(return_value="USD")
+        bot.get_reserved_balance = MagicMock(return_value=4.0)
+
+        strategy = _make_strategy({
+            "FET-USD": {"signal_type": "buy", "confidence": 80, "reasoning": "ok"},
+        })
+        strategy.config = {"max_concurrent_deals": 20}
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db_session.execute = AsyncMock(return_value=mock_result)
+        db_session.refresh = AsyncMock()
+        db_session.commit = AsyncMock()
+
+        with patch("app.monitor.batch_analyzer.prepare_market_context", return_value={}), \
+             patch("app.monitor.batch_analyzer.calculate_soft_ceiling", new_callable=AsyncMock, return_value=2), \
+             patch("app.monitor.batch_analyzer.asyncio.sleep", new_callable=AsyncMock):
+            await process_bot_batch(
+                monitor, db_session, bot, ["FET-USD"], strategy
+            )
+
+        call_args = strategy.analyze_multiple_pairs_batch.call_args
+        per_position_budget = call_args[0][1]
+        assert per_position_budget == pytest.approx(2.0)
+        assert bot.soft_ceiling_effective_max == 2
+
+    @pytest.mark.asyncio
     async def test_full_budget_when_not_split(self, db_session):
         """When split_budget_across_pairs is False, each deal gets full budget."""
         monitor = _make_monitor()
