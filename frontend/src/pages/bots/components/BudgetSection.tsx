@@ -102,7 +102,7 @@ export function BudgetSection({
           <summary className="cursor-pointer hover:text-slate-300 mb-2">
             Legacy: Fixed Reserved Balances (deprecated)
           </summary>
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">
                 Reserved BTC

@@ -745,7 +745,7 @@ function RiskTolerancePresets({
       <p className="font-semibold text-blue-400 mb-2">
         Preset Confidence Thresholds:
       </p>
-      <div className="grid grid-cols-3 gap-2 text-slate-300">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-300">
         <div>
           Open:{' '}
           <span className="text-white font-semibold">
