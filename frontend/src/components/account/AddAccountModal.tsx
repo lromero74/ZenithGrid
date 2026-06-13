@@ -185,7 +185,7 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
             <label className="block text-sm font-medium text-slate-300 mb-3">
               Account Type
             </label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, type: 'cex' })}

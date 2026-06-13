@@ -675,7 +675,7 @@ function PerpsConfig({
 }) {
   return (
     <div className="mt-4 space-y-3 p-4 bg-purple-500/5 border border-purple-500/20 rounded">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-400 mb-1">
             Leverage (1-10x)
@@ -725,7 +725,7 @@ function PerpsConfig({
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-400 mb-1">
             Take Profit %

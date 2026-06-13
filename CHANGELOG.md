@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.1] - 2026-06-13
+
+### Fixed
+- **Modals no longer overflow sideways on phones.** Several modals (Add Account, Create/Edit Bot, Limit Close, News Source Subscriptions, Donation) laid out form fields and value pairs in fixed two-column grids at every screen size, which crammed content and forced horizontal scrolling on narrow mobile screens. Those grids now stack to a single column on small screens and expand to two columns from the `sm` breakpoint up, so everything fits without sideways scrolling. Desktop layout is unchanged.
+
 ## [v2.168.0] - 2026-06-12
 
 ### Added
