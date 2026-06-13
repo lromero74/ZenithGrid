@@ -1442,6 +1442,11 @@
       "type": "background"
     },
     {
+      "file": "services/safety_order_monitor.py",
+      "purpose": "Reconciles filled limit DCA safety orders into their parent positions as ADD fills (the counterpart to limit_order_monitor's CLOSE handling). SafetyOrderMonitor class exposes check_all_pending_safety_orders(db) as its per-cycle entry point (wired into the main.py monitor loop alongside check_all_pending_limit_orders). Queries pending/partially_filled PendingOrders whose order_type matches 'safety_order%' on OPEN positions, groups them per account so the exchange client is resolved once per account, then on fill applies the delta via _create_buy_trade_record (BUY side \u2192 long add) or _create_short_sell_trade_record (SELL side \u2192 short add). The position is updated but never closed. Post-fill ops mirror limit_order_monitor: order-history log entry + WebSocket notification. Handles partial fills (size delta against previously recorded fill), cancel/expire state transitions, and paper orders. Idempotent \u2014 delta-based so re-running on an already-processed fill is safe. v2.168.0.",
+      "type": "background"
+    },
+    {
       "file": "services/market_metrics_service.py",
       "purpose": "External API fetch functions for market sentiment and blockchain metrics (Fear & Greed, BTC dominance, altseason, mempool, hash rate, lightning, ATH, RSI, stablecoin mcap, US debt); includes metric snapshot recording and pruning",
       "type": "background"
@@ -1600,7 +1605,7 @@
       },
       {
         "file": "trading_engine/sell_executor.py",
-        "purpose": "Market and limit sell order execution; pipeline decomposed into discrete stages"
+        "purpose": "Market and limit sell order execution; pipeline decomposed into discrete stages. v2.168.0 adds execute_limit_sell_safety(...): places a limit SELL order tagged as a safety order and records a SELL PendingOrder without using the limit-close path (closing_via_limit is not set). execute_sell_short now routes dca_execution_type==\"limit\" safety orders to execute_limit_sell_safety instead of the former market fallback."
       },
       {
         "file": "trading_engine/perps_executor.py",
@@ -1761,7 +1766,7 @@
   "core_modules": [
     {
       "file": "main.py",
-      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration. v2.165.0 wires start_speculative_calibration_monitor / stop_speculative_calibration_monitor into the startup/shutdown hooks for the daily speculative-bucket calibration loop."
+      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration. v2.165.0 wires start_speculative_calibration_monitor / stop_speculative_calibration_monitor into the startup/shutdown hooks for the daily speculative-bucket calibration loop. v2.168.0 adds check_all_pending_safety_orders (from safety_order_monitor) to the monitor loop, called alongside check_all_pending_limit_orders each cycle."
     },
     {
       "file": "ai_service.py",

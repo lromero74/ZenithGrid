@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.0] - 2026-06-12
+
+### Added
+- **Limit orders for short safety orders.** Short bots set to limit DCA now place their safety orders as resting limit sells that *add* to the position when they fill, instead of silently falling back to a market order. This gives short DCA the same maker-style, price-controlled entries that long bots already had.
+
+### Fixed
+- **Filled limit DCA safety orders are now applied to the position.** Previously a limit safety order could be placed but its fill was never reconciled back into the position (it would show up only as a "stuck pending order"). A new reconciler now detects safety-order fills — for both long and short bots — and grows the position correctly (updating size and average entry), records the trade in your order history, and sends a fill notification. It never closes the position on a safety fill and is safe against partial fills and duplicates.
+
 ## [v2.167.12] - 2026-06-12
 
 ### Fixed
