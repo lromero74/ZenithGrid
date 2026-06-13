@@ -174,22 +174,34 @@ export function computeEffectiveAggregateValues(
   quoteCurrency: string,
   aggregateData: AggregateValue | undefined,
   rebalanceStatus: RebalanceStatus | undefined
-): { effectiveUsdValue: number; effectiveBtcValue: number; effectiveEthValue: number } {
-  const rawUsd = aggregateData?.aggregate_usd_value ?? 0
-  const rawBtc = aggregateData?.aggregate_btc_value ?? 0
-  const rawEth = aggregateData?.aggregate_eth_value ?? 0
+): {
+  effectiveQuoteValue: number;
+  effectiveUsdValue: number;
+  effectiveBtcValue: number;
+  effectiveEthValue: number;
+} {
+  const quote = quoteCurrency.toUpperCase()
+  const quoteMarketValue = aggregateData?.market_values?.[quote]
+  const rawUsd =
+    quoteMarketValue ??
+    (quote === 'USDC'
+      ? aggregateData?.market_usdc_value ?? aggregateData?.market_usd_value ?? aggregateData?.aggregate_usd_value ?? 0
+      : aggregateData?.market_usd_value ?? aggregateData?.aggregate_usd_value ?? 0)
+  const rawBtc = aggregateData?.market_btc_value ?? aggregateData?.aggregate_btc_value ?? 0
+  const rawEth = aggregateData?.market_eth_value ?? aggregateData?.aggregate_eth_value ?? 0
   const btcPrice = aggregateData?.btc_usd_price ?? 0
   const ethPrice = aggregateData?.eth_usd_price ?? 0
 
   if (!rebalanceStatus) {
+    const effectiveQuoteValue =
+      quote === 'BTC' ? rawBtc : quote === 'ETH' ? rawEth : rawUsd
     return {
+      effectiveQuoteValue,
       effectiveUsdValue: rawUsd,
       effectiveBtcValue: rawBtc,
       effectiveEthValue: rawEth,
     }
   }
-
-  const quote = quoteCurrency.toUpperCase()
 
   if (rebalanceStatus.rebalance_enabled) {
     // Deployable value already has ALL reserves deducted
@@ -227,20 +239,25 @@ export function computeEffectiveAggregateValues(
     const allocatedUsd = Math.min(targetUsd, currentUsd)
 
     if (quote === 'BTC') {
+      const effectiveBtcValue = btcPrice > 0 ? allocatedUsd / btcPrice : 0
       return {
+        effectiveQuoteValue: effectiveBtcValue,
         effectiveUsdValue: allocatedUsd,
-        effectiveBtcValue: btcPrice > 0 ? allocatedUsd / btcPrice : 0,
+        effectiveBtcValue,
         effectiveEthValue: rawEth,
       }
     }
     if (quote === 'ETH') {
+      const effectiveEthValue = ethPrice > 0 ? allocatedUsd / ethPrice : 0
       return {
+        effectiveQuoteValue: effectiveEthValue,
         effectiveUsdValue: allocatedUsd,
         effectiveBtcValue: rawBtc,
-        effectiveEthValue: ethPrice > 0 ? allocatedUsd / ethPrice : 0,
+        effectiveEthValue,
       }
     }
     return {
+      effectiveQuoteValue: allocatedUsd,
       effectiveUsdValue: allocatedUsd,
       effectiveBtcValue: rawBtc,
       effectiveEthValue: rawEth,
@@ -250,19 +267,23 @@ export function computeEffectiveAggregateValues(
   // Rebalancer disabled — subtract only the relevant reserve
   if (quote === 'BTC') {
     const reserve = rebalanceStatus.min_balance_btc ?? 0
+    const effectiveBtcValue = Math.max(0, rawBtc - reserve)
     return {
+      effectiveQuoteValue: effectiveBtcValue,
       effectiveUsdValue: rawUsd,
-      effectiveBtcValue: Math.max(0, rawBtc - reserve),
+      effectiveBtcValue,
       effectiveEthValue: rawEth,
     }
   }
 
   if (quote === 'ETH') {
     const reserve = rebalanceStatus.min_balance_eth ?? 0
+    const effectiveEthValue = Math.max(0, rawEth - reserve)
     return {
+      effectiveQuoteValue: effectiveEthValue,
       effectiveUsdValue: rawUsd,
       effectiveBtcValue: rawBtc,
-      effectiveEthValue: Math.max(0, rawEth - reserve),
+      effectiveEthValue,
     }
   }
 
@@ -276,8 +297,10 @@ export function computeEffectiveAggregateValues(
     reserveUsd = rebalanceStatus.min_balance_usd ?? 0
   }
 
+  const effectiveQuoteValue = Math.max(0, rawUsd - reserveUsd)
   return {
-    effectiveUsdValue: Math.max(0, rawUsd - reserveUsd),
+    effectiveQuoteValue,
+    effectiveUsdValue: effectiveQuoteValue,
     effectiveBtcValue: rawBtc,
     effectiveEthValue: rawEth,
   }

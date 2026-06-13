@@ -28,6 +28,7 @@ from app.trading_engine.signal_processor._shared import (
     _record_signal,
     calculate_soft_ceiling,
 )
+from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
 from app.trading_engine.trade_context import TradeContext
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,7 @@ async def _run_new_position_preflight(
             max_deals = await calculate_soft_ceiling(ctx, aggregate_value or 0.0)
 
         # Persist the computed value so the bot list can display it
-        if bot.strategy_config.get("enable_soft_ceiling", False):
+        if is_soft_ceiling_enabled(bot):
             bot.soft_ceiling_effective_max = max_deals
             await db.commit()
 
@@ -141,7 +142,7 @@ async def _run_new_position_preflight(
 
         if open_positions_count >= max_deals:
             ceiling_type = (
-                "Soft ceiling" if bot.strategy_config.get("enable_soft_ceiling")
+                "Soft ceiling" if is_soft_ceiling_enabled(bot)
                 else "Max concurrent deals"
             )
             reason = f"{ceiling_type} reached ({open_positions_count}/{max_deals})"

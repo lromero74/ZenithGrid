@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.6] - 2026-06-12
+
+### Fixed
+- **Bot soft-ceiling displays now use the same quote-currency bucket as trading execution.** The account aggregate API now exposes a dynamic `market_values` map for Coinbase quote buckets discovered from the product catalog, and the bot UI uses the selected quote's bucket for soft-ceiling fallback math. USD, BTC, ETH, USDC, USDT, EUR, and any other Coinbase-supported quote market are treated as distinct deployable buckets instead of folding stablecoin markets into whole-account USD.
+- **Soft-ceiling enablement now reads from a compatibility helper.** Runtime paths share one helper for the soft-ceiling flag so persisted effective caps are computed consistently across signal and batch flows.
+
 ## [v2.167.5] - 2026-06-12
 
 ### Fixed

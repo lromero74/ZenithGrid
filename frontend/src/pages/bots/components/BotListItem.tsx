@@ -246,21 +246,14 @@ export const BotListItem = memo(function BotListItem({
             if (scEnabled && scMax == null && aggregateData) {
               const quoteCurrency =
                 botPairs.length > 0 ? botPairs[0].split('-')[1] : 'BTC'
-              const { effectiveUsdValue, effectiveBtcValue, effectiveEthValue } =
+              const { effectiveQuoteValue } =
                 computeEffectiveAggregateValues(
                   quoteCurrency,
                   aggregateData,
                   rebalanceStatus
                 )
-              const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(
-                quoteCurrency
-              )
-              const aggregateValue =
-                quoteCurrency === 'ETH'
-                  ? effectiveEthValue
-                  : isFiatQuote
-                  ? effectiveUsdValue
-                  : effectiveBtcValue
+              const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency)
+              const aggregateValue = effectiveQuoteValue
               const worstCaseMin =
                 EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] ||
                 (isFiatQuote ? 1.0 : quoteCurrency === 'ETH' ? 0.001 : 0.0001)

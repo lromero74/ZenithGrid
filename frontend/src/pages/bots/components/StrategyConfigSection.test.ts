@@ -46,6 +46,36 @@ describe('computeEffectiveAggregateValues — no rebalanceStatus', () => {
     expect(result.effectiveUsdValue).toBe(10000)
     expect(result.effectiveBtcValue).toBe(0.2)
   })
+
+  it('prefers per-market aggregate values for bot budgets', () => {
+    const result = computeEffectiveAggregateValues('USD', {
+      ...AGGREGATE,
+      market_usd_value: 44,
+      market_btc_value: 0.05,
+    }, undefined)
+    expect(result.effectiveUsdValue).toBe(44)
+    expect(result.effectiveBtcValue).toBe(0.05)
+  })
+
+  it('uses the USDC market bucket for USDC-quoted bot budgets', () => {
+    const result = computeEffectiveAggregateValues('USDC', {
+      ...AGGREGATE,
+      market_usd_value: 44,
+      market_usdc_value: 300,
+    }, undefined)
+    expect(result.effectiveUsdValue).toBe(300)
+  })
+
+  it('uses market_values for any Coinbase-supported quote bucket', () => {
+    const result = computeEffectiveAggregateValues('USDT', {
+      ...AGGREGATE,
+      market_values: {
+        USD: 44,
+        USDT: 700,
+      },
+    }, undefined)
+    expect(result.effectiveUsdValue).toBe(700)
+  })
 })
 
 // ─── Rebalancer disabled, reserves still apply ────────────────────────────────
@@ -79,8 +109,11 @@ describe('computeEffectiveAggregateValues — rebalancer disabled, reserves set'
 
   it('deducts USDC reserve for USDC-quoted bots', () => {
     const rs = makeRebalanceStatus({ rebalance_enabled: false, min_balance_usdc: 200 })
-    const result = computeEffectiveAggregateValues('USDC', AGGREGATE, rs)
-    expect(result.effectiveUsdValue).toBe(9800)  // 10000 - 200
+    const result = computeEffectiveAggregateValues('USDC', {
+      ...AGGREGATE,
+      market_usdc_value: 1000,
+    }, rs)
+    expect(result.effectiveUsdValue).toBe(800)  // 1000 - 200
   })
 })
 

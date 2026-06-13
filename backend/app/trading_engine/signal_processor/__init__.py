@@ -34,6 +34,7 @@ from app.trading_engine.signal_processor.sell_decision import (
     _decide_and_execute_sell,
 )
 from app.trading_engine.trade_context import TradeContext
+from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ async def process_signal(
     #    Percentage-budget bots need a real aggregate value here; passing 0
     #    incorrectly clamps the soft ceiling to 1 while the UI can show 2+.
     aggregate_value_for_ceiling = None
-    if bot.budget_percentage > 0 and bot.strategy_config.get("enable_soft_ceiling", False):
+    if bot.budget_percentage > 0 and is_soft_ceiling_enabled(bot):
         aggregate_value_for_ceiling = await exchange.calculate_market_budget(
             quote_currency, bypass_cache=True
         )
@@ -148,7 +149,7 @@ async def process_signal(
     logger.info(f"  📊 Soft ceiling: max_deals={max_deals} (raw={bot.strategy_config.get('max_concurrent_deals', 1)})")
 
     # Persist the computed value so the bot list can display it
-    if bot.strategy_config.get("enable_soft_ceiling", False):
+    if is_soft_ceiling_enabled(bot):
         bot.soft_ceiling_effective_max = max_deals
         await db.commit()
 

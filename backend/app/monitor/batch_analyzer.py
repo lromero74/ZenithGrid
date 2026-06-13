@@ -17,6 +17,7 @@ from app.constants import PAIR_PROCESSING_DELAY_SECONDS
 from app.models import Bot
 from app.trading_engine.signal_processor import calculate_soft_ceiling
 from app.trading_engine.trade_context import TradeContext
+from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
 from app.utils.candle_utils import prepare_market_context
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_posi
 
     reserved_balance = bot.get_reserved_balance(aggregate_value)
     max_concurrent_deals = raw_max_concurrent_deals
-    if bot.strategy_config.get("enable_soft_ceiling", False):
+    if is_soft_ceiling_enabled(bot):
         ctx = TradeContext(
             db=db, exchange=monitor.exchange, trading_client=None,
             bot=bot, product_id=(bot.get_trading_pairs()[0] if bot.get_trading_pairs() else ""),

@@ -16,6 +16,7 @@ from app.indicator_calculator import IndicatorCalculator
 from app.models import OrderHistory, Position, Signal
 from app.trading_engine.sell_executor import execute_sell
 from app.trading_engine.trade_context import TradeContext
+from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -308,9 +309,9 @@ async def _calculate_budget(
     bot, product_id = ctx.bot, ctx.product_id
     logger.debug(f"Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
     if bot.budget_percentage > 0:
-        # Bot uses percentage-based budgeting - calculate aggregate value
+        # Bot uses percentage-based budgeting - calculate aggregate value.
         # CRITICAL: Only considers assets in this bot's quote currency market
-        # (e.g., USD bot gets 20% of USD only, not USDC or BTC)
+        # (e.g., USD bot gets a percentage of USD-market assets, not BTC).
         aggregate_value = await exchange.calculate_market_budget(
             quote_currency, bypass_cache=True
         )
@@ -385,7 +386,7 @@ async def calculate_soft_ceiling(
     for the 'most expensive' coin in the bot's selected pairs.
     """
     bot, strategy, exchange = ctx.bot, ctx.strategy, ctx.exchange
-    if not bot.strategy_config.get("enable_soft_ceiling", False):
+    if not is_soft_ceiling_enabled(bot):
         return strategy.config.get("max_concurrent_deals", 1)
 
     # 1. Total bot budget

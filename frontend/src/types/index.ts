@@ -238,6 +238,11 @@ export interface AggregateValue {
   aggregate_btc_value: number;
   aggregate_usd_value: number;
   aggregate_eth_value?: number;
+  market_btc_value?: number;
+  market_usd_value?: number;
+  market_usdc_value?: number;
+  market_eth_value?: number;
+  market_values?: Record<string, number>;
   btc_usd_price: number;
   eth_usd_price?: number;
 }

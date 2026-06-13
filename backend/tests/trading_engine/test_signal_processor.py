@@ -32,6 +32,7 @@ def _make_bot(**overrides):
     bot.strategy_config = overrides.get("strategy_config", {"max_concurrent_deals": 1})
     bot.budget_percentage = overrides.get("budget_percentage", 0.0)
     bot.split_budget_across_pairs = overrides.get("split_budget_across_pairs", False)
+    bot.enable_soft_ceiling = overrides.get("enable_soft_ceiling", False)
     bot.reserved_btc_balance = overrides.get("reserved_btc_balance", 0.0)
     bot.reserved_usd_balance = overrides.get("reserved_usd_balance", 0.0)
     bot.last_signal_check = overrides.get("last_signal_check", None)
@@ -483,10 +484,10 @@ class TestProcessSignal:
         trading_client = _make_trading_client()
         bot = _make_bot(
             budget_percentage=15.0,
+            enable_soft_ceiling=True,
             split_budget_across_pairs=True,
             strategy_config={
                 "max_concurrent_deals": 20,
-                "enable_soft_ceiling": True,
             },
         )
         strategy = _make_strategy(config={"max_concurrent_deals": 20})

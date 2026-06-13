@@ -310,12 +310,33 @@ class TestGetAggregateValue:
         mock_client = MagicMock()
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=1.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=90000.0)
+        mock_client.calculate_market_budget = AsyncMock(side_effect=lambda quote: {
+            "BTC": 0.25,
+            "USD": 1200.0,
+            "USDC": 300.0,
+            "ETH": 2.0,
+            "USDT": 50.0,
+            "EUR": 0.0,
+            "GBP": 25.0,
+        }[quote])
+        mock_client.list_products = AsyncMock(return_value=[
+            {"product_id": "BTC-USD", "quote_currency_id": "USD"},
+            {"product_id": "ETH-USDC", "quote_currency_id": "USDC"},
+            {"product_id": "BTC-GBP", "quote_currency": "GBP"},
+        ])
         mock_client.get_btc_usd_price = AsyncMock(return_value=60000.0)
+        mock_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
         mock_get_client.return_value = mock_client
 
         result = await get_aggregate_value(db=db_session, current_user=user)
         assert result["aggregate_btc_value"] == 1.5
         assert result["aggregate_usd_value"] == 90000.0
+        assert result["market_btc_value"] == 0.25
+        assert result["market_usd_value"] == 1200.0
+        assert result["market_usdc_value"] == 300.0
+        assert result["market_eth_value"] == 2.0
+        assert result["market_values"]["USDT"] == 50.0
+        assert result["market_values"]["GBP"] == 25.0
         assert result["btc_usd_price"] == 60000.0
 
     @pytest.mark.asyncio
@@ -332,6 +353,10 @@ class TestGetAggregateValue:
         result = await get_aggregate_value(db=db_session, current_user=user)
         assert result["aggregate_btc_value"] == 0.0
         assert result["aggregate_usd_value"] == 0.0
+        assert result["market_values"] == {}
+        assert result["market_btc_value"] == 0.0
+        assert result["market_usd_value"] == 0.0
+        assert result["market_usdc_value"] == 0.0
         assert result["btc_usd_price"] == 0.0
 
 

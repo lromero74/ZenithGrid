@@ -36,6 +36,7 @@ def _make_bot(
     bot.account_id = account_id
     bot.user_id = user_id
     bot.strategy_config = strategy_config or {"max_concurrent_deals": 3}
+    bot.enable_soft_ceiling = False
     bot.budget_percentage = budget_percentage
     bot.split_budget_across_pairs = split_budget_across_pairs
 
@@ -193,9 +194,9 @@ class TestBatchAnalyzerHappyPath:
             budget_percentage=15.0,
             strategy_config={
                 "max_concurrent_deals": 20,
-                "enable_soft_ceiling": True,
             },
         )
+        bot.enable_soft_ceiling = True
         bot.get_quote_currency = MagicMock(return_value="USD")
         bot.get_reserved_balance = MagicMock(return_value=4.0)
 

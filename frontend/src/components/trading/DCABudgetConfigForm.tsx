@@ -17,6 +17,7 @@ interface DCABudgetConfigFormProps {
   aggregateBtcValue?: number  // Total BTC value for min percentage calculation
   aggregateUsdValue?: number  // Total USD value for min percentage calculation
   aggregateEthValue?: number  // Total ETH value for min percentage calculation
+  aggregateQuoteValue?: number // Total selected quote-bucket value for min percentage calculation
   // Bot-level budget fields for DCA calculator
   budgetPercentage?: number  // Bot's budget as % of total portfolio
   productIds?: string[]  // Selected trading pair IDs — used to fetch worst-case exchange minimum
@@ -33,6 +34,7 @@ function DCABudgetConfigForm({
   aggregateBtcValue,
   aggregateUsdValue,
   aggregateEthValue,
+  aggregateQuoteValue,
   budgetPercentage,
   productIds,
   numPairs: _numPairs,
@@ -89,11 +91,12 @@ function DCABudgetConfigForm({
 
   // Get the aggregate value for the quote currency
   const aggregateValue =
-    quoteCurrency === 'ETH'
+    aggregateQuoteValue ??
+    (quoteCurrency === 'ETH'
       ? aggregateEthValue
       : isFiatQuote
       ? aggregateUsdValue
-      : aggregateBtcValue
+      : aggregateBtcValue)
 
   const multiplier = getDCAMultiplier(config)
   const totalBudget = (aggregateValue || 0) * (budgetPercentage || 0) / 100

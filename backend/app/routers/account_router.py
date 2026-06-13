@@ -53,7 +53,7 @@ async def get_balances(
 
 @router.get("/aggregate-value")
 async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
+    """Get portfolio aggregate values and quote-market budget buckets."""
     try:
         async def _safe_call(coro, fallback=0.0):
             try:
@@ -62,6 +62,27 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
                 logger.warning(f"Aggregate value sub-call failed: {e}")
                 return fallback
 
+        async def _market_values(client):
+            quotes = {"USD", "BTC", "ETH", "USDC", "USDT", "EUR"}
+            try:
+                products = await client.list_products()
+                for product in products or []:
+                    product_id = product.get("product_id", "")
+                    quote = (
+                        product.get("quote_currency_id")
+                        or product.get("quote_currency")
+                        or (product_id.rsplit("-", 1)[1] if "-" in product_id else "")
+                    )
+                    if quote:
+                        quotes.add(str(quote).upper())
+            except Exception as e:
+                logger.warning(f"Could not discover quote buckets from products: {e}")
+
+            return {
+                quote: await _safe_call(client.calculate_market_budget(quote))
+                for quote in sorted(quotes)
+            }
+
         # Check if user is paper-only
         paper_account = await get_user_paper_account(db, current_user.id)
         if paper_account:
@@ -69,13 +90,19 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             if client:
                 aggregate_btc = await _safe_call(client.calculate_aggregate_btc_value())
                 aggregate_usd = await _safe_call(client.calculate_aggregate_usd_value())
-                aggregate_eth = await _safe_call(client.calculate_market_budget("ETH"))
+                market_values = await _market_values(client)
+                aggregate_eth = market_values.get("ETH", 0.0)
                 btc_usd_price = await _safe_call(client.get_btc_usd_price())
                 eth_usd_price = await _safe_call(client.get_eth_usd_price())
                 return {
                     "aggregate_btc_value": aggregate_btc,
                     "aggregate_usd_value": aggregate_usd,
                     "aggregate_eth_value": aggregate_eth,
+                    "market_values": market_values,
+                    "market_btc_value": market_values.get("BTC", 0.0),
+                    "market_usd_value": market_values.get("USD", 0.0),
+                    "market_usdc_value": market_values.get("USDC", 0.0),
+                    "market_eth_value": market_values.get("ETH", 0.0),
                     "btc_usd_price": btc_usd_price,
                     "eth_usd_price": eth_usd_price,
                 }
@@ -84,6 +111,11 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
                 "aggregate_btc_value": 0.0,
                 "aggregate_usd_value": 0.0,
                 "aggregate_eth_value": 0.0,
+                "market_values": {},
+                "market_btc_value": 0.0,
+                "market_usd_value": 0.0,
+                "market_usdc_value": 0.0,
+                "market_eth_value": 0.0,
                 "btc_usd_price": 0.0,
                 "eth_usd_price": 0.0,
             }
@@ -91,7 +123,8 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
         coinbase = await get_coinbase_from_db(db, current_user.id)
         aggregate_btc = await _safe_call(coinbase.calculate_aggregate_btc_value())
         aggregate_usd = await _safe_call(coinbase.calculate_aggregate_usd_value())
-        aggregate_eth = await _safe_call(coinbase.calculate_market_budget("ETH"))
+        market_values = await _market_values(coinbase)
+        aggregate_eth = market_values.get("ETH", 0.0)
         btc_usd_price = await _safe_call(coinbase.get_btc_usd_price())
         eth_usd_price = await _safe_call(coinbase.get_eth_usd_price())
 
@@ -99,6 +132,11 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             "aggregate_btc_value": aggregate_btc,
             "aggregate_usd_value": aggregate_usd,
             "aggregate_eth_value": aggregate_eth,
+            "market_values": market_values,
+            "market_btc_value": market_values.get("BTC", 0.0),
+            "market_usd_value": market_values.get("USD", 0.0),
+            "market_usdc_value": market_values.get("USDC", 0.0),
+            "market_eth_value": market_values.get("ETH", 0.0),
             "btc_usd_price": btc_usd_price,
             "eth_usd_price": eth_usd_price,
         }
