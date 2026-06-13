@@ -54,16 +54,21 @@ async def check_all_pending_safety_orders(db: AsyncSession) -> None:
             by_account.setdefault(position.account_id, []).append((pending_order, position))
 
     for account_id, items in by_account.items():
-        exchange = await get_exchange_client_for_account(db, account_id)
-        if not exchange:
-            logger.warning(
-                f"No exchange client for account {account_id}; "
-                f"skipping {len(items)} pending safety order(s) this cycle"
-            )
-            continue
-        monitor = SafetyOrderMonitor(db, exchange)
-        for pending_order, position in items:
-            await monitor.process_pending_safety_order(pending_order, position)
+        # Isolate per-account failures so one account's client-resolution error
+        # can't abort the others (or skip the caller's later orphan sweep).
+        try:
+            exchange = await get_exchange_client_for_account(db, account_id)
+            if not exchange:
+                logger.warning(
+                    f"No exchange client for account {account_id}; "
+                    f"skipping {len(items)} pending safety order(s) this cycle"
+                )
+                continue
+            monitor = SafetyOrderMonitor(db, exchange)
+            for pending_order, position in items:
+                await monitor.process_pending_safety_order(pending_order, position)
+        except Exception as e:
+            logger.error(f"Error reconciling safety orders for account {account_id}: {e}")
 
 
 class SafetyOrderMonitor:
@@ -174,3 +179,47 @@ class SafetyOrderMonitor:
             pending_order.status = "partially_filled"
 
         await self.db.commit()
+
+        # Best-effort post-fill ops (order-history log + WS fill notification,
+        # plus balance-cache/event-bus for buys) — the same observability the
+        # market execution path runs. Without this, limit safety fills would be
+        # invisible in order history and push no notification.
+        await self._run_post_fill_ops(pending_order, position, new_base, new_quote, avg_price)
+
+    async def _run_post_fill_ops(
+        self, pending_order: PendingOrder, position: Position,
+        base_amount: float, quote_amount: float, avg_price: float,
+    ) -> None:
+        """Run the non-critical post-fill operations (history + notifications)
+        for a reconciled safety-order fill, mirroring the market path."""
+        from app.models import Bot
+        bot = (
+            await self.db.execute(select(Bot).where(Bot.id == position.bot_id))
+        ).scalar_one_or_none()
+        if bot is None:
+            logger.warning(
+                f"Safety order {pending_order.order_id}: bot {position.bot_id} not found; "
+                f"skipping post-fill notifications"
+            )
+            return
+
+        if pending_order.side == "SELL":
+            from app.trading_engine.sell_executor import _post_short_sell_operations
+            await _post_short_sell_operations(
+                db=self.db, exchange=self.exchange, bot=bot,
+                product_id=pending_order.product_id, position=position,
+                order_id=pending_order.order_id, actual_base_sold=base_amount,
+                quote_received=quote_amount, actual_price=avg_price,
+                trade_type=pending_order.trade_type,
+            )
+        else:  # BUY → long add
+            from app.trading_client import TradingClient
+            from app.trading_engine.buy_executor import _post_buy_operations
+            await _post_buy_operations(
+                db=self.db, exchange=self.exchange,
+                trading_client=TradingClient(self.exchange), bot=bot,
+                product_id=pending_order.product_id, position=position,
+                order_id=pending_order.order_id, actual_base_amount=base_amount,
+                actual_quote_amount=quote_amount, actual_price=avg_price,
+                trade_type=pending_order.trade_type,
+            )

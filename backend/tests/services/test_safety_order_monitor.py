@@ -15,6 +15,14 @@ def _make_db():
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    # db.execute(...) is awaited; a real AsyncSession Result has a SYNC
+    # scalar_one_or_none(). Model that so the Bot lookup returns a stub bot
+    # synchronously (avoids a leaked AsyncMock coroutine).
+    _result = MagicMock()
+    _result.scalar_one_or_none = MagicMock(
+        return_value=SimpleNamespace(id=1, name="Test Bot")
+    )
+    db.execute = AsyncMock(return_value=_result)
     return db
 
 
@@ -23,6 +31,7 @@ def _short_position(**ov):
     return SimpleNamespace(
         id=ov.get("id", 100),
         user_id=ov.get("user_id", 10),
+        bot_id=ov.get("bot_id", 1),
         product_id="BTC-USD",
         status="open",
         direction="short",
@@ -43,6 +52,7 @@ def _long_position(**ov):
         id=ov.get("id", 200),
         user_id=ov.get("user_id", 10),
         product_id="ETH-USD",
+        bot_id=ov.get("bot_id", 1),
         status="open",
         direction="long",
         closing_via_limit=False,
@@ -90,6 +100,20 @@ def _exchange(order_data):
 
 
 class TestSafetyOrderReconciler:
+    @pytest.fixture(autouse=True)
+    def _patch_post_ops(self):
+        """Patch the best-effort post-fill ops (history/WS broadcast) so unit
+        tests don't fire real notifications, and so we can assert they're
+        called. (The Bot lookup resolves to a truthy mock via the mock db.)"""
+        from unittest.mock import patch as _patch
+        sell_op = AsyncMock()
+        buy_op = AsyncMock()
+        with (
+            _patch("app.trading_engine.sell_executor._post_short_sell_operations", sell_op),
+            _patch("app.trading_engine.buy_executor._post_buy_operations", buy_op),
+        ):
+            yield SimpleNamespace(sell=sell_op, buy=buy_op)
+
     @pytest.mark.asyncio
     async def test_filled_sell_grows_short_and_never_closes(self):
         from app.services.safety_order_monitor import SafetyOrderMonitor
@@ -186,6 +210,35 @@ class TestSafetyOrderReconciler:
         assert pos.short_total_sold_base == pytest.approx(0.5)    # unchanged
         assert pos.status == "open"
         assert po.status in ("cancelled", "canceled")
+
+    @pytest.mark.asyncio
+    async def test_fill_runs_post_ops_for_history_and_notifications(self, _patch_post_ops):
+        """A reconciled fill must run the post-fill ops (order-history log + WS
+        notification) — the same observability the market path provides."""
+        from app.services.safety_order_monitor import SafetyOrderMonitor
+        db = _make_db()
+        ex = _exchange({"status": "FILLED", "filled_size": "0.3", "filled_value": "14400.0"})
+        pos = _short_position()
+        po = _pending("SELL", base_amount=0.3)
+
+        await SafetyOrderMonitor(db, ex).process_pending_safety_order(po, pos)
+
+        _patch_post_ops.sell.assert_awaited_once()
+        _patch_post_ops.buy.assert_not_awaited()
+        # The notification carries the applied fill (new delta) and the position
+        _, kwargs = _patch_post_ops.sell.await_args
+        assert kwargs["position"] is pos
+        assert kwargs["actual_base_sold"] == pytest.approx(0.3)
+
+    @pytest.mark.asyncio
+    async def test_cancelled_does_not_run_post_ops(self, _patch_post_ops):
+        """A cancelled order applies no fill → no post-ops notification."""
+        from app.services.safety_order_monitor import SafetyOrderMonitor
+        db = _make_db()
+        pos = _short_position()
+        po = _pending("SELL", base_amount=0.3)
+        await SafetyOrderMonitor(db, _exchange({"status": "CANCELLED"})).process_pending_safety_order(po, pos)
+        _patch_post_ops.sell.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_paper_order_auto_resolves_as_filled(self):
