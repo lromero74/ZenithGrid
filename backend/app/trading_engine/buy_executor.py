@@ -149,6 +149,7 @@ async def _create_buy_trade_record(
         price=actual_price,
         trade_type=trade_type,
         order_id=order_id,
+        dca_levels=(signal_data.get("dca_levels", 1) if signal_data else 1),
         macd_value=signal_data.get("macd_value") if signal_data else None,
         macd_signal=signal_data.get("macd_signal") if signal_data else None,
         macd_histogram=signal_data.get("macd_histogram") if signal_data else None,

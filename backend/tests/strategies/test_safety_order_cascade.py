@@ -65,6 +65,8 @@ def _make_position(avg_price=100.0, total_quote=1.0, max_quote=10.0,
         t.side = "buy"
         t.price = avg_price - i * 2  # Each buy 2 lower
         t.timestamp = 1000 + i
+        t.trade_type = "initial" if i == 0 else "dca"
+        t.dca_levels = 1  # one SO level per trade unless a test overrides (cascade)
         trades.append(t)
     pos.trades = trades
     return pos
@@ -238,3 +240,78 @@ class TestSafetyOrderCascade:
         # Sum should be more than SO#1 alone
         so1_size = strategy._calculate_safety_order_amount(position, 0, 1)
         assert amount > so1_size * 2  # Volume scaling should make it significantly more
+
+
+def _buy(trade_type="dca", dca_levels=1, price=100.0):
+    t = MagicMock()
+    t.side = "buy"
+    t.trade_type = trade_type
+    t.dca_levels = dca_levels
+    t.price = price
+    return t
+
+
+class TestSafetyOrderLevelCount:
+    """A cascade fills multiple SO levels in ONE trade. The deployed-SO count
+    must therefore SUM levels (dca_levels), not count trade rows — otherwise the
+    engine under-reports completed SOs and, on the next evaluation, tries to
+    re-place an already-deployed level (gated only by remaining budget)."""
+
+    def test_helper_counts_single_levels(self):
+        from app.strategies.safety_order_calculator import count_deployed_safety_orders
+        trades = [_buy("initial"), _buy("dca"), _buy("dca")]
+        assert count_deployed_safety_orders(trades) == 2
+
+    def test_helper_counts_cascade_levels(self):
+        from app.strategies.safety_order_calculator import count_deployed_safety_orders
+        # base + ONE dca trade that deployed TWO levels (a cascade)
+        assert count_deployed_safety_orders([_buy("initial"), _buy("dca", dca_levels=2)]) == 2
+
+    def test_helper_base_only_is_zero(self):
+        from app.strategies.safety_order_calculator import count_deployed_safety_orders
+        assert count_deployed_safety_orders([_buy("initial")]) == 0
+
+    def test_helper_legacy_missing_dca_levels_defaults_one(self):
+        from app.strategies.safety_order_calculator import count_deployed_safety_orders
+        base = MagicMock()
+        base.dca_levels = None
+        dca = MagicMock()
+        dca.dca_levels = None
+        assert count_deployed_safety_orders([base, dca]) == 1
+
+    @pytest.mark.asyncio
+    async def test_cascade_records_level_count_in_signal(self):
+        """A 3-level cascade must stamp signal_data['dca_levels'] = 3 so the
+        recorded trade knows how many SO levels it deployed."""
+        strategy = _make_strategy({"max_safety_orders": 3, "price_deviation": 2.0,
+                                   "safety_order_step_scale": 1.0})
+        position = _make_position()
+        signal = {"price": 90.0, "base_order_signal": False, "safety_order_signal": False}
+        should, amount, reason = strategy._check_dca_conditions(signal, position, 10.0)
+        assert should is True
+        assert "#1" in reason and "#3" in reason
+        assert signal["dca_levels"] == 3
+
+    @pytest.mark.asyncio
+    async def test_single_so_records_one_level(self):
+        strategy = _make_strategy()
+        position = _make_position()
+        signal = {"price": 97.0, "base_order_signal": False, "safety_order_signal": False}
+        should, amount, reason = strategy._check_dca_conditions(signal, position, 10.0)
+        assert should is True
+        assert signal["dca_levels"] == 1
+
+    @pytest.mark.asyncio
+    async def test_no_replacement_after_cascade(self):
+        """After a cascade recorded as one dca trade with dca_levels=2 (levels #1
+        and #2 deployed), the next safety order must be #3 — NOT a re-placement
+        of #2 — even with budget headroom."""
+        strategy = _make_strategy({"max_safety_orders": 5, "price_deviation": 2.0,
+                                   "safety_order_step_scale": 1.0})
+        position = _make_position(num_buys=2)
+        position.trades[1].dca_levels = 2  # the single dca trade covered TWO levels
+        signal = {"price": 80.0, "base_order_signal": False, "safety_order_signal": False}
+        should, amount, reason = strategy._check_dca_conditions(signal, position, 50.0)
+        assert should is True
+        assert "#3" in reason
+        assert "#2" not in reason  # level 2 already deployed; must not re-place it

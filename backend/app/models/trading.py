@@ -592,6 +592,10 @@ class Trade(Base):
     # Trade context
     trade_type = Column(String)  # initial, dca, sell
     order_id = Column(String, nullable=True)  # Coinbase order ID
+    # Number of safety-order levels this trade deployed. A cascade fills several
+    # SO levels in one order, so this is >1 there; normal trades are 1. Used to
+    # count completed safety orders accurately (see count_deployed_safety_orders).
+    dca_levels = Column(Integer, default=1, server_default="1", nullable=False)
 
     # MACD values at time of trade
     macd_value = Column(Float, nullable=True)
