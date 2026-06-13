@@ -122,7 +122,7 @@
       },
       {
         "file": "components/AddFundsModal.tsx",
-        "purpose": "Add funds to existing positions"
+        "purpose": "Add funds to existing positions. v2.167.9: the aggregate-value query is scoped to position.account_id so the budget calculation reflects only the owning account."
       },
       {
         "file": "components/LimitCloseModal.tsx",
@@ -721,7 +721,7 @@
         },
         {
           "file": "pages/bots/hooks/useBotsData.ts",
-          "purpose": "Fetch bots, strategies, trading pairs, portfolio"
+          "purpose": "Fetch bots, strategies, trading pairs, portfolio. v2.167.9: the aggregate-value query is keyed and scoped to selectedAccount.id so each account gets its own isolated cache entry."
         },
         {
           "file": "pages/bots/hooks/useValidation.ts",
@@ -823,7 +823,7 @@
       },
       {
         "name": "accountApi",
-        "purpose": "Balances, aggregate value, portfolio conversion"
+        "purpose": "Balances, aggregate value, portfolio conversion. v2.167.9: getAggregateValue(accountId?) accepts an optional account id and forwards it as the account_id query param so callers can scope the aggregate/market-budget response to a specific account."
       },
       {
         "name": "statusApi",

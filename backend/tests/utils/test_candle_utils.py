@@ -99,7 +99,8 @@ class TestAggregateCandles:
         assert result is None
 
     def test_aggregate_incomplete_last_group(self):
-        """Edge case: not enough candles for final group -> dropped."""
+        """Edge case: the final, still-forming group is kept and flagged
+        ``_partial=True`` rather than dropped (see aggregate_candles docstring)."""
         candles = [
             {"start": 0, "open": 100, "high": 110, "low": 90, "close": 105, "volume": 50},
             {"start": 60, "open": 105, "high": 115, "low": 95, "close": 108, "volume": 60},
@@ -107,7 +108,13 @@ class TestAggregateCandles:
             {"start": 180, "open": 112, "high": 118, "low": 92, "close": 115, "volume": 40},
         ]
         result = aggregate_candles(candles, 3)
-        assert len(result) == 1  # Only first 3, last candle dropped
+        # First 3 -> one complete aggregated candle; 4th -> one partial candle.
+        assert len(result) == 2
+        assert not result[0].get("_partial")
+        assert result[0]["open"] == 100 and result[0]["close"] == 112
+        assert result[0]["high"] == 120 and result[0]["low"] == 88
+        assert result[1]["_partial"] is True
+        assert result[1]["close"] == 115
 
     def test_aggregate_tracks_synthetic_candles(self):
         """Happy path: synthetic candles tracked in aggregated result."""

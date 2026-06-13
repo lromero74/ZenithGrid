@@ -3,7 +3,7 @@
     {
       "file": "routers/account_router.py",
       "prefix": "/api/account",
-      "purpose": "Account balances, aggregate value, portfolio operations; target_currency validation uses SUPPORTED_TARGET_CURRENCIES from portfolio_conversion_service (BTC, USD, USDC, USDT, ETH)"
+      "purpose": "Account balances, aggregate value, portfolio operations; target_currency validation uses SUPPORTED_TARGET_CURRENCIES from portfolio_conversion_service (BTC, USD, USDC, USDT, ETH). v2.167.9: GET /api/account/aggregate-value accepts an optional account_id query param; when supplied, ownership is verified via accessible_accounts_filter and the aggregate/market-budget buckets are scoped strictly to that account; without it, legacy default applies (paper-only → paper account, else first CEX). Response building is handled by two module-level helpers: _build_aggregate_response(client) and _empty_aggregate_response()."
     },
     {
       "file": "routers/account_value_router.py",
@@ -1488,7 +1488,7 @@
     },
     {
       "file": "services/portfolio_service.py",
-      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC). v2.164.6: get_cex_portfolio accepts include_details=False to return totals only (skips the open-position query, per-asset PnL/balance fan-out, and holdings list) so the fast summary path can reuse it without paying for full portfolio assembly.",
+      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC). v2.164.6: get_cex_portfolio accepts include_details=False to return totals only (skips the open-position query, per-asset PnL/balance fan-out, and holdings list) so the fast summary path can reuse it without paying for full portfolio assembly. v2.167.9: get_coinbase_from_db now passes account_id=account.id into CoinbaseCredentials so the resulting client is account-scoped, preventing cross-account/cross-user contamination in calculate_market_budget.",
       "type": "trading"
     },
     {
@@ -1690,7 +1690,7 @@
       },
       {
         "file": "coinbase_api/account_balance_api.py",
-        "purpose": "Account balance and portfolio queries"
+        "purpose": "Account balance and portfolio queries. v2.167.9: calculate_market_budget and calculate_aggregate_btc_value emit logger.warning when called with account_id=None, flagging the unscoped path that sums positions across all accounts/users."
       },
       {
         "file": "coinbase_api/market_data_api.py",

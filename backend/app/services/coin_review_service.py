@@ -127,6 +127,7 @@ async def get_coinbase_client_from_db(session_maker=None) -> CoinbaseClient:
             coinbase=CoinbaseCredentials(
                 key_name=account.api_key_name,
                 private_key=private_key,
+                account_id=account.id,  # scope cache/positions to this account
             ),
         ))
 

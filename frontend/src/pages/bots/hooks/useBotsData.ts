@@ -36,10 +36,13 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
   const { data: portfolio, isLoading: portfolioLoading } =
     useAccountPortfolio(selectedAccount?.id)
 
-  // Fetch aggregate BTC/USD values for minimum percentage validation
+  // Fetch aggregate BTC/USD values for minimum percentage validation.
+  // Scoped to the selected account so a multi-account user sees that account's
+  // budget buckets (not the default first-CEX account's) — keyed by account so
+  // it refetches on account switch.
   const { data: aggregateData } = useQuery({
-    queryKey: ['aggregate-value'],
-    queryFn: accountApi.getAggregateValue,
+    queryKey: ['aggregate-value', selectedAccount?.id],
+    queryFn: () => accountApi.getAggregateValue(selectedAccount?.id),
     refetchInterval: 60000, // Update every 60 seconds
   })
 

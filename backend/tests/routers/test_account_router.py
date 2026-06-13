@@ -328,7 +328,7 @@ class TestGetAggregateValue:
         mock_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
         mock_get_client.return_value = mock_client
 
-        result = await get_aggregate_value(db=db_session, current_user=user)
+        result = await get_aggregate_value(account_id=None, db=db_session, current_user=user)
         assert result["aggregate_btc_value"] == 1.5
         assert result["aggregate_usd_value"] == 90000.0
         assert result["market_btc_value"] == 0.25
@@ -350,7 +350,7 @@ class TestGetAggregateValue:
         user, _ = user_with_paper_account
         mock_get_client.return_value = None
 
-        result = await get_aggregate_value(db=db_session, current_user=user)
+        result = await get_aggregate_value(account_id=None, db=db_session, current_user=user)
         assert result["aggregate_btc_value"] == 0.0
         assert result["aggregate_usd_value"] == 0.0
         assert result["market_values"] == {}
@@ -358,6 +358,64 @@ class TestGetAggregateValue:
         assert result["market_usd_value"] == 0.0
         assert result["market_usdc_value"] == 0.0
         assert result["btc_usd_price"] == 0.0
+
+    @pytest.mark.asyncio
+    @patch("app.routers.account_router.get_exchange_client_for_account")
+    async def test_explicit_account_id_scopes_to_that_account(
+        self, mock_get_client, db_session, user_with_live_account
+    ):
+        """Happy path: an explicit account_id resolves the client for THAT
+        account (not the user's first/default CEX account) so a multi-account
+        user sees the correct per-account budget buckets."""
+        from app.routers.account_router import get_aggregate_value
+
+        user, live = user_with_live_account
+
+        mock_client = MagicMock()
+        mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=0.1)
+        mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=50.0)
+        mock_client.calculate_market_budget = AsyncMock(return_value=50.0)
+        mock_client.list_products = AsyncMock(return_value=[])
+        mock_client.get_btc_usd_price = AsyncMock(return_value=60000.0)
+        mock_client.get_eth_usd_price = AsyncMock(return_value=3000.0)
+        mock_get_client.return_value = mock_client
+
+        result = await get_aggregate_value(
+            account_id=live.id, db=db_session, current_user=user
+        )
+
+        # The client must be resolved for the requested account specifically.
+        mock_get_client.assert_awaited_once_with(db_session, live.id)
+        assert result["aggregate_usd_value"] == 50.0
+        assert result["market_usd_value"] == 50.0
+
+    @pytest.mark.asyncio
+    @patch("app.routers.account_router.get_exchange_client_for_account")
+    async def test_account_id_of_another_user_is_rejected(
+        self, mock_get_client, db_session, user_with_live_account
+    ):
+        """Failure case (tenant isolation): requesting another user's account_id
+        must NOT return that account's data — it raises NotFoundError and never
+        builds a client for the foreign account."""
+        from app.routers.account_router import get_aggregate_value
+        from app.exceptions import NotFoundError
+
+        _owner, foreign = user_with_live_account
+
+        attacker = User(
+            email="attacker@example.com",
+            hashed_password="hashed",
+            is_active=True,
+            created_at=utcnow(),
+        )
+        db_session.add(attacker)
+        await db_session.flush()
+
+        with pytest.raises(NotFoundError):
+            await get_aggregate_value(
+                account_id=foreign.id, db=db_session, current_user=attacker
+            )
+        mock_get_client.assert_not_called()
 
 
 # =============================================================================

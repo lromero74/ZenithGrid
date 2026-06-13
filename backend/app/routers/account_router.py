@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from app.exceptions import AppError
+from app.exceptions import AppError, NotFoundError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.models import Account, User
 from app.auth.dependencies import get_current_user
 from app.auth.mfa_verification import verify_mfa
 from app.services import portfolio_conversion_service as pcs
+from app.services.account_access import accessible_accounts_filter
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.portfolio_service import (
     get_account_balances,
@@ -51,95 +52,114 @@ async def get_balances(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
-@router.get("/aggregate-value")
-async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get portfolio aggregate values and quote-market budget buckets."""
+def _empty_aggregate_response() -> dict:
+    """Zeroed aggregate-value payload (client unavailable)."""
+    return {
+        "aggregate_btc_value": 0.0,
+        "aggregate_usd_value": 0.0,
+        "aggregate_eth_value": 0.0,
+        "market_values": {},
+        "market_btc_value": 0.0,
+        "market_usd_value": 0.0,
+        "market_usdc_value": 0.0,
+        "market_eth_value": 0.0,
+        "btc_usd_price": 0.0,
+        "eth_usd_price": 0.0,
+    }
+
+
+async def _build_aggregate_response(client) -> dict:
+    """Compute aggregate portfolio values + per-quote market budgets for one
+    already-resolved (account-scoped) exchange client."""
+    async def _safe_call(coro, fallback=0.0):
+        try:
+            return await coro
+        except Exception as e:
+            logger.warning(f"Aggregate value sub-call failed: {e}")
+            return fallback
+
+    quotes = {"USD", "BTC", "ETH", "USDC", "USDT", "EUR"}
     try:
-        async def _safe_call(coro, fallback=0.0):
-            try:
-                return await coro
-            except Exception as e:
-                logger.warning(f"Aggregate value sub-call failed: {e}")
-                return fallback
+        products = await client.list_products()
+        for product in products or []:
+            product_id = product.get("product_id", "")
+            quote = (
+                product.get("quote_currency_id")
+                or product.get("quote_currency")
+                or (product_id.rsplit("-", 1)[1] if "-" in product_id else "")
+            )
+            if quote:
+                quotes.add(str(quote).upper())
+    except Exception as e:
+        logger.warning(f"Could not discover quote buckets from products: {e}")
 
-        async def _market_values(client):
-            quotes = {"USD", "BTC", "ETH", "USDC", "USDT", "EUR"}
-            try:
-                products = await client.list_products()
-                for product in products or []:
-                    product_id = product.get("product_id", "")
-                    quote = (
-                        product.get("quote_currency_id")
-                        or product.get("quote_currency")
-                        or (product_id.rsplit("-", 1)[1] if "-" in product_id else "")
-                    )
-                    if quote:
-                        quotes.add(str(quote).upper())
-            except Exception as e:
-                logger.warning(f"Could not discover quote buckets from products: {e}")
+    market_values = {
+        quote: await _safe_call(client.calculate_market_budget(quote))
+        for quote in sorted(quotes)
+    }
 
-            return {
-                quote: await _safe_call(client.calculate_market_budget(quote))
-                for quote in sorted(quotes)
-            }
+    aggregate_btc = await _safe_call(client.calculate_aggregate_btc_value())
+    aggregate_usd = await _safe_call(client.calculate_aggregate_usd_value())
+    btc_usd_price = await _safe_call(client.get_btc_usd_price())
+    eth_usd_price = await _safe_call(client.get_eth_usd_price())
 
-        # Check if user is paper-only
+    return {
+        "aggregate_btc_value": aggregate_btc,
+        "aggregate_usd_value": aggregate_usd,
+        "aggregate_eth_value": market_values.get("ETH", 0.0),
+        "market_values": market_values,
+        "market_btc_value": market_values.get("BTC", 0.0),
+        "market_usd_value": market_values.get("USD", 0.0),
+        "market_usdc_value": market_values.get("USDC", 0.0),
+        "market_eth_value": market_values.get("ETH", 0.0),
+        "btc_usd_price": btc_usd_price,
+        "eth_usd_price": eth_usd_price,
+    }
+
+
+@router.get("/aggregate-value")
+async def get_aggregate_value(
+    account_id: Optional[int] = Query(
+        None, description="Account to value (defaults to the user's paper or first CEX account)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get portfolio aggregate values and quote-market budget buckets.
+
+    When ``account_id`` is supplied, values are scoped to THAT account (after
+    verifying the caller owns it). This prevents a multi-account user — or a bot
+    on a non-default/paper account — from seeing the wrong account's budget.
+    Without it, the legacy default applies: paper-only users get their paper
+    account, everyone else gets their first active CEX account.
+    """
+    try:
+        # Explicit account: authorize ownership, then scope strictly to it.
+        if account_id is not None:
+            result = await db.execute(
+                select(Account).where(
+                    Account.id == account_id,
+                    accessible_accounts_filter(current_user.id),
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                raise NotFoundError("Account not found")
+            client = await get_exchange_client_for_account(db, account_id)
+            if not client:
+                return _empty_aggregate_response()
+            return await _build_aggregate_response(client)
+
+        # Legacy default: paper-only user → paper account.
         paper_account = await get_user_paper_account(db, current_user.id)
         if paper_account:
             client = await get_exchange_client_for_account(db, paper_account.id)
-            if client:
-                aggregate_btc = await _safe_call(client.calculate_aggregate_btc_value())
-                aggregate_usd = await _safe_call(client.calculate_aggregate_usd_value())
-                market_values = await _market_values(client)
-                aggregate_eth = market_values.get("ETH", 0.0)
-                btc_usd_price = await _safe_call(client.get_btc_usd_price())
-                eth_usd_price = await _safe_call(client.get_eth_usd_price())
-                return {
-                    "aggregate_btc_value": aggregate_btc,
-                    "aggregate_usd_value": aggregate_usd,
-                    "aggregate_eth_value": aggregate_eth,
-                    "market_values": market_values,
-                    "market_btc_value": market_values.get("BTC", 0.0),
-                    "market_usd_value": market_values.get("USD", 0.0),
-                    "market_usdc_value": market_values.get("USDC", 0.0),
-                    "market_eth_value": market_values.get("ETH", 0.0),
-                    "btc_usd_price": btc_usd_price,
-                    "eth_usd_price": eth_usd_price,
-                }
-            # Paper account but client creation failed — return defaults
-            return {
-                "aggregate_btc_value": 0.0,
-                "aggregate_usd_value": 0.0,
-                "aggregate_eth_value": 0.0,
-                "market_values": {},
-                "market_btc_value": 0.0,
-                "market_usd_value": 0.0,
-                "market_usdc_value": 0.0,
-                "market_eth_value": 0.0,
-                "btc_usd_price": 0.0,
-                "eth_usd_price": 0.0,
-            }
+            if not client:
+                return _empty_aggregate_response()
+            return await _build_aggregate_response(client)
 
+        # Otherwise the user's first active CEX account.
         coinbase = await get_coinbase_from_db(db, current_user.id)
-        aggregate_btc = await _safe_call(coinbase.calculate_aggregate_btc_value())
-        aggregate_usd = await _safe_call(coinbase.calculate_aggregate_usd_value())
-        market_values = await _market_values(coinbase)
-        aggregate_eth = market_values.get("ETH", 0.0)
-        btc_usd_price = await _safe_call(coinbase.get_btc_usd_price())
-        eth_usd_price = await _safe_call(coinbase.get_eth_usd_price())
-
-        return {
-            "aggregate_btc_value": aggregate_btc,
-            "aggregate_usd_value": aggregate_usd,
-            "aggregate_eth_value": aggregate_eth,
-            "market_values": market_values,
-            "market_btc_value": market_values.get("BTC", 0.0),
-            "market_usd_value": market_values.get("USD", 0.0),
-            "market_usdc_value": market_values.get("USDC", 0.0),
-            "market_eth_value": market_values.get("ETH", 0.0),
-            "btc_usd_price": btc_usd_price,
-            "eth_usd_price": eth_usd_price,
-        }
+        return await _build_aggregate_response(coinbase)
     except (HTTPException, AppError):
         raise
     except Exception:

@@ -146,6 +146,7 @@ class TestGetExchangeClient:
             coinbase=CoinbaseCredentials(
                 key_name="key-name",
                 private_key="decrypted-key",
+                account_id=account.id,
             ),
         ))
 

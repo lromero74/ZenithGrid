@@ -341,6 +341,16 @@ async def calculate_aggregate_btc_value(
     else:
         logger.info("📊 Calculating aggregate BTC value for budget allocation...")
 
+    # With account_id=None the BTC-position query below runs UNSCOPED across all
+    # accounts/users. Production callers all pass account_id now — surface a stray
+    # unscoped call loudly rather than letting it silently leak cross-account.
+    if account_id is None:
+        logger.warning(
+            "calculate_aggregate_btc_value called with account_id=None — open "
+            "positions will be summed across ALL accounts/users. Caller must "
+            "pass account_id."
+        )
+
     # Get available BTC balance from Coinbase
     available_btc = await get_btc_balance(request_func, auth_type, account_id=account_id)
     total_btc_value = available_btc
@@ -610,6 +620,18 @@ async def calculate_market_budget(
                 f"✅ Using cached aggregate {quote_currency} value: {cached}"
             )
             return cached
+
+    # Guard against the cross-account/cross-user contamination this scoping
+    # exists to prevent: with account_id=None the position queries below run
+    # UNSCOPED (summing %-quote positions across ALL accounts and users). Every
+    # production caller now builds its client with account_id, so reaching here
+    # unscoped means a new caller dropped the scope — make it loud, not silent.
+    if account_id is None:
+        logger.warning(
+            "calculate_market_budget(%s) called with account_id=None — positions "
+            "will be summed across ALL accounts/users. Caller must pass account_id.",
+            quote_currency,
+        )
 
     # 1. Get raw balance for exactly this currency
     raw_balance = await get_currency_balance(

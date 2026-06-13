@@ -789,7 +789,14 @@ describe('accountApi', () => {
     vi.mocked(api.get).mockResolvedValue({ data: { total: 50000 } })
 
     await accountApi.getAggregateValue()
-    expect(api.get).toHaveBeenCalledWith('/account/aggregate-value')
+    expect(api.get).toHaveBeenCalledWith('/account/aggregate-value', { params: {} })
+  })
+
+  test('getAggregateValue scopes to account_id when provided', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: { total: 50000 } })
+
+    await accountApi.getAggregateValue(42)
+    expect(api.get).toHaveBeenCalledWith('/account/aggregate-value', { params: { account_id: 42 } })
   })
 
   test('sellPortfolioToBase sends correct params', async () => {

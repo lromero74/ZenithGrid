@@ -57,6 +57,7 @@ async def get_coinbase(
         coinbase=CoinbaseCredentials(
             key_name=account.api_key_name,
             private_key=private_key,
+            account_id=account.id,  # scope cache/positions to this account
         ),
     ))
 

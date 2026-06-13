@@ -41,10 +41,11 @@ export function AddFundsModal({ position, isOpen, onClose, onSuccess, readOnly =
   const exchangeMinimum = isUsdPair ? EXCHANGE_MINIMUMS.USD : EXCHANGE_MINIMUMS.BTC
   const decimals = isUsdPair ? 2 : 8
 
-  // Fetch aggregate balances
+  // Fetch aggregate balances, scoped to this position's account so the
+  // available-balance ceiling reflects the right account (not the default one).
   const { data: aggregateValue, isLoading } = useQuery({
-    queryKey: ['aggregateValue'],
-    queryFn: () => accountApi.getAggregateValue(),
+    queryKey: ['aggregateValue', position.account_id],
+    queryFn: () => accountApi.getAggregateValue(position.account_id ?? undefined),
     enabled: isOpen,
     staleTime: 10000, // 10 seconds
   })

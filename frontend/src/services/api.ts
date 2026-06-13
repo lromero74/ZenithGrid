@@ -383,7 +383,12 @@ export const accountApi = {
     const params = accountId ? { account_id: accountId } : {}
     return api.get<Balances>('/account/balances', { params }).then((res) => res.data)
   },
-  getAggregateValue: () => api.get<AggregateValue>('/account/aggregate-value').then((res) => res.data),
+  getAggregateValue: (accountId?: number) => {
+    // Scope to a specific account so multi-account users get that account's
+    // budget buckets rather than the default first-CEX account's.
+    const params = accountId ? { account_id: accountId } : {}
+    return api.get<AggregateValue>('/account/aggregate-value', { params }).then((res) => res.data)
+  },
   // Sell entire portfolio to BTC or USD (sells balances, not positions)
   sellPortfolioToBase: (targetCurrency: 'BTC' | 'USD', confirm = true, accountId?: number) =>
     api.post<{

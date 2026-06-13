@@ -817,3 +817,94 @@ class TestComputeBalanceBreakdown:
         assert result["usd"]["free"] == 5000.0
         assert result["usdc"]["free"] == 500.0
         assert result["btc"]["in_open_positions"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# get_coinbase_from_db — account scoping (cross-account contamination guard)
+# ---------------------------------------------------------------------------
+
+
+class TestGetCoinbaseFromDbAccountScoping:
+    """Regression: the Coinbase client built by get_coinbase_from_db MUST carry
+    its account_id, otherwise calculate_market_budget() runs unscoped — summing
+    open positions across ALL accounts/users and sharing a global cache key.
+
+    This was the root cause of a USD bot on a ~$50 account showing a ~$17,685
+    budget base (the value of every USD-quoted position system-wide)."""
+
+    @pytest.mark.asyncio
+    async def test_client_is_scoped_to_its_account_id(self, db_session):
+        """Happy path: the credentials passed to the factory include account_id."""
+        from app.services.portfolio_service import get_coinbase_from_db
+        from app.models import Account
+
+        account = Account(
+            id=4242,
+            user_id=77,
+            name="Coinbase Primary",
+            type="cex",
+            is_active=True,
+            is_default=True,
+            is_paper_trading=False,
+            api_key_name="key-name",
+            api_private_key="raw-private-key",
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        captured = {}
+
+        def _capture(config):
+            captured["account_id"] = config.coinbase.account_id
+            return MagicMock(name="exchange_client")
+
+        with patch("app.services.portfolio_service.is_encrypted", return_value=False), \
+             patch("app.services.portfolio_service.create_exchange_client",
+                   side_effect=_capture):
+            await get_coinbase_from_db(db_session, user_id=77)
+
+        assert captured["account_id"] == 4242, (
+            "client built without account_id → market-budget leaks across accounts"
+        )
+
+    @pytest.mark.asyncio
+    async def test_scopes_to_this_users_account_not_another(self, db_session):
+        """Edge case: with accounts owned by different users, the client is
+        scoped to the requesting user's own account, never a foreign one."""
+        from app.services.portfolio_service import get_coinbase_from_db
+        from app.models import Account
+
+        mine = Account(
+            id=5001, user_id=501, name="Mine", type="cex",
+            is_active=True, is_default=True, is_paper_trading=False,
+            api_key_name="k1", api_private_key="s1",
+        )
+        theirs = Account(
+            id=5002, user_id=502, name="Theirs", type="cex",
+            is_active=True, is_default=True, is_paper_trading=False,
+            api_key_name="k2", api_private_key="s2",
+        )
+        db_session.add_all([mine, theirs])
+        await db_session.flush()
+
+        captured = {}
+
+        def _capture(config):
+            captured["account_id"] = config.coinbase.account_id
+            return MagicMock(name="exchange_client")
+
+        with patch("app.services.portfolio_service.is_encrypted", return_value=False), \
+             patch("app.services.portfolio_service.create_exchange_client",
+                   side_effect=_capture):
+            await get_coinbase_from_db(db_session, user_id=501)
+
+        assert captured["account_id"] == 5001
+
+    @pytest.mark.asyncio
+    async def test_raises_when_user_has_no_cex_account(self, db_session):
+        """Failure case: no account → ExchangeUnavailableError (unchanged)."""
+        from app.services.portfolio_service import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
+
+        with pytest.raises(ExchangeUnavailableError):
+            await get_coinbase_from_db(db_session, user_id=999999)
