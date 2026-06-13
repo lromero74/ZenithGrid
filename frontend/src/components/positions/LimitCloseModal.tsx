@@ -732,7 +732,7 @@ export function LimitCloseModal({
                   <span className="text-xl">⚠️</span>
                   <span>This order will result in a LOSS</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-slate-400">Loss ({quoteCurrency}):</span>
                     <span className="ml-2 font-mono text-red-400">

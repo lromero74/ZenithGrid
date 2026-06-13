@@ -210,6 +210,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
           {/* Payment apps */}
           <div>
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment Apps</h3>
+            {/* mobile-cols-ok: small fixed-size payment-app chips fit 3-across even on the narrowest phones */}
             <div className="grid grid-cols-3 gap-2">
               {APP_METHODS.map(method => (
                 <a
@@ -238,7 +239,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
               </button>
               {showReport && (
                 <div className="mt-3 space-y-3 bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-slate-400 block mb-1">Amount (USD)</label>
                       <input
