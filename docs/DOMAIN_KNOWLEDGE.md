@@ -29,6 +29,23 @@ Bot budget = `(budget_percentage / 100) × total_aggregate_btc`
 
 If you see "INSUFFICIENT FUNDS" errors, verify that function sums both BTC balance and BTC-pair altcoin holdings (NOT USD pairs).
 
+### Per-quote bucket, per-bot budget — NOT pooled
+
+The aggregate is per **quote-currency market bucket** (`calculate_market_budget("USD")` = free USD + value of open USD-quoted positions for *that account only* — see Critical Rule #12). Each bot independently reserves `budget_percentage` of that bucket; budgets are **not** pooled across a quote's bots. So with a $44 USD bucket and four bots at 15% each, every bot sees `$44 × 15% = $6.60` — the four don't share `$44`, and 40% of the bucket stays unallocated.
+
+### Soft ceiling — why a bot "should" fit N deals but shows 1
+
+```
+reserved          = aggregate_bucket × budget_percentage/100      # per bot
+per_deal_cost     = worst_case_min × total_multiplier
+soft_ceiling      = max(1, min(floor(reserved / per_deal_cost), max_concurrent_deals))
+```
+- `total_multiplier` = base + all safety orders (`get_total_multiplier`); in *fixed* mode with scale `s` and 2 SOs it's `1 + 1 + s` (e.g. `s=1.62 → 3.62`), **not** the geometric `1 + s + s²`.
+- `worst_case_min` is the **largest** exchange minimum across **all** the bot's pairs (so one illiquid high-min pair drags the whole ceiling down). For all-USD Coinbase pairs it's `$1`.
+- The result **floors**: `$6.60 / $3.62 = 1.82 → 1`. To get 2 deals/bot you need `reserved ≥ 2 × per_deal_cost`, i.e. raise `budget_percentage` (e.g. 15% → ~17% on a $44 bucket), shrink the multiplier (fewer/smaller safety orders), or add funds.
+
+The per-position budget the engine actually trades with = `reserved / soft_ceiling` (the *effective* ceiling, **not** the configured max). Base order = `per_position_budget / total_multiplier`. This is computed in `_shared.calculate_soft_ceiling` / `batch_analyzer.py`; the frontend mirrors it in `botUtils.calculateSoftCeiling` (see Critical Rule #13 — backend is authoritative).
+
 ---
 
 ## AI Bot Allocation System (Signal-to-Execution Flow)

@@ -74,6 +74,23 @@ When you add or modify any of these paths, write a test proving a second account
 `multiuser-security` agent. Reference regression:
 `backend/tests/services/test_portfolio_service.py::TestGetCoinbaseFromDbAccountScoping`.
 
+## One source of truth for financial calculations (HARD RULE)
+
+Budget, soft-ceiling, DCA-multiplier, per-position sizing, fee, and P&L formulas
+must have ONE authoritative implementation. Don't inline a formula at a call site
+when a shared helper exists; don't let two backend paths (batch vs single-pair vs
+bidirectional) each re-derive the same split. When a calc must exist on both the
+Python engine and the TypeScript UI, **the backend is authoritative** — the UI
+prefers the backend's computed value (e.g. `Bot.soft_ceiling_effective_max`) and
+uses its local copy only as a live-edit preview / loading fallback, with a test
+asserting TS↔Py parity. Guard divide-by-zero / not-yet-loaded inputs by returning
+"not computable" and falling back to the authoritative value — never let
+`x/0 → Infinity` silently clamp to a default.
+
+Why: in one June-2026 session, three separate bugs (the editor showing a `20`
+ceiling and a `$1` base order while the engine used `1` and `$1.83`) all traced to
+divergent copies of the same soft-ceiling / multiplier / sizing math.
+
 ## Environment note
 
 - `fedora.local` is **production**. ZenithGrid runs as `zenithgrid.service` in the
