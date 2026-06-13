@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.11] - 2026-06-12
+
+### Fixed
+- **Bidirectional bots with auto-calc + soft ceiling now size their base orders correctly.** When the soft ceiling was active, bidirectional (long/short) bots split their budget across the *configured* max deals (e.g. 20) instead of the *effective* soft-ceiling count, under-sizing every base order (often flooring it to the exchange minimum) even though only a few deals could actually open. They now divide by the same effective ceiling the engine uses to gate new deals — matching the long-only path. Long-only bots were already correct.
+
 ## [v2.167.10] - 2026-06-12
 
 ### Fixed

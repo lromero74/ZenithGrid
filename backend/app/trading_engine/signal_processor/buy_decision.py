@@ -305,9 +305,18 @@ async def _decide_buy(
     if not allowed:
         return False, 0, block_reason
 
+    # Pass the effective soft-ceiling deal count so bidirectional base-order
+    # sizing splits the budget by the same number the preflight gated on (the
+    # preflight persisted it to bot.soft_ceiling_effective_max just above).
+    effective_max_deals = (
+        bot.soft_ceiling_effective_max
+        if bot.strategy_config.get("enable_soft_ceiling", False)
+        else None
+    )
     should_buy, quote_amount, buy_reason = await strategy.should_buy(
         signal_data, position, quote_balance,
         aggregate_value=aggregate_value,
+        effective_max_deals=effective_max_deals,
     )
     logger.debug(
         f"Should buy result: {should_buy},"

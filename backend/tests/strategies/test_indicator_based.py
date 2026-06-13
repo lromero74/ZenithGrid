@@ -1169,3 +1169,63 @@ class TestSpeculativeMaxHoldExit:
         assert "Speculative max hold" in reason
         # Confirm TP reason is NOT what triggered
         assert "Take profit" not in reason
+
+
+# =====================================================================
+# _calculate_bidirectional_order_amount — soft-ceiling-aware sizing
+# =====================================================================
+
+
+class TestBidirectionalSoftCeilingSizing:
+    """Bidirectional base-order sizing must split the budget by the SAME
+    effective deal count the engine uses to gate new deals (the soft ceiling),
+    not the raw configured max_concurrent_deals. Otherwise a soft-ceiling bot
+    under-sizes its base order (budget/20 instead of budget/effective)."""
+
+    def _bidir_strategy(self, soft_ceiling: bool):
+        # base_order_percentage=100 + no auto-calc → base order == per-position budget,
+        # so the test asserts the divisor directly.
+        return _make_strategy({
+            "budget_percentage": 20.0,
+            "long_budget_percentage": 50.0,
+            "short_budget_percentage": 50.0,
+            "max_concurrent_deals": 20,
+            "base_order_type": "percentage",
+            "base_order_percentage": 100.0,
+            "auto_calculate_order_sizes": False,
+            "enable_soft_ceiling": soft_ceiling,
+        })
+
+    def test_uses_effective_soft_ceiling_as_divisor(self):
+        """Happy path: with soft ceiling on, divide by the effective ceiling (2),
+        not the configured max (20). budget=1000×20%=200; long 50%=100; /2 = 50."""
+        strategy = self._bidir_strategy(soft_ceiling=True)
+        amount = strategy._calculate_bidirectional_order_amount(
+            "long", 0.0, aggregate_usd_value=1000.0, effective_max_deals=2
+        )
+        assert pytest.approx(amount) == 50.0
+
+    def test_effective_ceiling_of_one_uses_full_direction_budget(self):
+        """Edge: effective ceiling 1 → no division → full direction budget (100)."""
+        strategy = self._bidir_strategy(soft_ceiling=True)
+        amount = strategy._calculate_bidirectional_order_amount(
+            "long", 0.0, aggregate_usd_value=1000.0, effective_max_deals=1
+        )
+        assert pytest.approx(amount) == 100.0
+
+    def test_falls_back_to_configured_max_when_soft_ceiling_disabled(self):
+        """Failure/fallback: soft ceiling off → divide by configured max (20):
+        200 × 50% / 20 = 5. (effective_max_deals is ignored when SC is off.)"""
+        strategy = self._bidir_strategy(soft_ceiling=False)
+        amount = strategy._calculate_bidirectional_order_amount(
+            "long", 0.0, aggregate_usd_value=1000.0, effective_max_deals=2
+        )
+        assert pytest.approx(amount) == 5.0
+
+    def test_falls_back_to_configured_max_when_no_effective_provided(self):
+        """Fallback: SC on but no effective value passed → configured max (20) → 5."""
+        strategy = self._bidir_strategy(soft_ceiling=True)
+        amount = strategy._calculate_bidirectional_order_amount(
+            "long", 0.0, aggregate_usd_value=1000.0
+        )
+        assert pytest.approx(amount) == 5.0
