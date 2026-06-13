@@ -320,3 +320,91 @@ class TestAuthenticatedRequest:
 
         assert result == {"deleted": True}
         mock_client.delete.assert_called_once()
+
+
+class TestAuthenticatedRequest401Retry:
+    """Transient 401s (clock-skew JWT/HMAC-timestamp rejection) must retry
+    with FRESH credentials — reusing the original headers would just 401 again."""
+
+    @staticmethod
+    def _error_response(status_code):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.json.return_value = {"error": "unauthorized"}
+        resp.text = "unauthorized"
+        resp.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError(
+            str(status_code), request=MagicMock(), response=resp
+        ))
+        return resp
+
+    @staticmethod
+    def _success_response():
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"data": "ok"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.auth.asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.coinbase_api.auth.generate_jwt", return_value="jwt-token")
+    async def test_retries_on_401_with_fresh_jwt(self, mock_jwt, mock_sleep):
+        """Happy path: 401 then success — retried, and a NEW JWT is generated
+        for the retry (a reused JWT would carry the same skewed timestamp)."""
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = [self._error_response(401), self._success_response()]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.coinbase_api.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await authenticated_request(
+                "GET", "/api/v3/test", auth_type="cdp",
+                key_name="k", private_key="pk",
+            )
+
+        assert result == {"data": "ok"}
+        assert mock_client.get.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+        # Fresh credentials per attempt — not one JWT reused across retries
+        assert mock_jwt.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.auth.asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.coinbase_api.auth.generate_hmac_signature", return_value="sig")
+    @patch("app.coinbase_api.auth.time.time", return_value=1700000000)
+    async def test_hmac_retry_regenerates_signature(self, mock_time, mock_sig, mock_sleep):
+        """Edge case: HMAC retry also re-signs (Coinbase rejects stale timestamps)."""
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = [self._error_response(401), self._success_response()]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.coinbase_api.auth.httpx.AsyncClient", return_value=mock_client):
+            result = await authenticated_request(
+                "GET", "/api/v3/test", auth_type="hmac",
+                api_key="k", api_secret="s",
+            )
+
+        assert result == {"data": "ok"}
+        assert mock_sig.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.auth.asyncio.sleep", new_callable=AsyncMock)
+    @patch("app.coinbase_api.auth.generate_jwt", return_value="jwt-token")
+    async def test_persistent_401_raises_after_retries(self, mock_jwt, mock_sleep):
+        """Failure case: a genuinely bad key still fails after max retries."""
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = [
+            self._error_response(401), self._error_response(401), self._error_response(401),
+        ]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.coinbase_api.auth.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(httpx.HTTPStatusError):
+                await authenticated_request(
+                    "GET", "/api/v3/test", auth_type="cdp",
+                    key_name="k", private_key="pk",
+                )
+
+        assert mock_client.get.call_count == 3  # all attempts exhausted

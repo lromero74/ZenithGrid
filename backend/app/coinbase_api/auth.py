@@ -133,19 +133,16 @@ async def authenticated_request(
     """
     url = f"{BASE_URL}{endpoint}"
 
-    if auth_type == "cdp":
-        # CDP/JWT Authentication
-        jwt_token = generate_jwt(key_name, private_key, method, endpoint)
-        headers = {"Authorization": f"Bearer {jwt_token}", "Content-Type": "application/json"}
-    else:
-        # HMAC Authentication
+    def _build_headers() -> dict:
+        # Regenerated per attempt: JWTs and HMAC timestamps are short-lived,
+        # so a 401 retry with the original headers would just 401 again.
+        if auth_type == "cdp":
+            jwt_token = generate_jwt(key_name, private_key, method, endpoint)
+            return {"Authorization": f"Bearer {jwt_token}", "Content-Type": "application/json"}
         timestamp = str(int(time.time()))
-        body = ""
-        if data:
-            body = json.dumps(data)
-
+        body = json.dumps(data) if data else ""
         signature = generate_hmac_signature(api_secret, timestamp, method, endpoint, body)
-        headers = {
+        return {
             "CB-ACCESS-KEY": api_key,
             "CB-ACCESS-SIGN": signature,
             "CB-ACCESS-TIMESTAMP": timestamp,
@@ -156,6 +153,7 @@ async def authenticated_request(
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                headers = _build_headers()
                 if method == "GET":
                     response = await client.get(url, headers=headers, params=params)
                 elif method == "POST":
@@ -169,18 +167,23 @@ async def authenticated_request(
                 return response.json()
 
             except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:  # Too Many Requests
+                # 429: rate limited. 401: transient auth rejection (clock skew /
+                # JWT timing) — retried with freshly generated credentials.
+                if e.response.status_code in (429, 401):
                     if attempt < max_retries - 1:
                         # Exponential backoff: 1s, 2s, 4s
                         wait_time = 2**attempt
                         logger.warning(
-                            f"⚠️  Rate limited (429) on {method} {endpoint}, "
+                            f"⚠️  HTTP {e.response.status_code} on {method} {endpoint}, "
                             f"retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})"
                         )
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        logger.error(f"❌ Rate limit exceeded after {max_retries} attempts on {method} {endpoint}")
+                        logger.error(
+                            f"❌ HTTP {e.response.status_code} persisted after {max_retries} "
+                            f"attempts on {method} {endpoint}"
+                        )
                         raise
                 else:
                     # Non-429 error, log detailed error and raise

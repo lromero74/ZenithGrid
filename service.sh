@@ -557,7 +557,7 @@ show_status() {
 
     local mode
     mode=$(get_current_mode)
-    echo -e "Mode:     ${GREEN}${mode^^}${NC}"
+    echo -e "Mode:     ${GREEN}$(echo "$mode" | tr '[:lower:]' '[:upper:]')${NC}"
     echo ""
 
     # Backend status

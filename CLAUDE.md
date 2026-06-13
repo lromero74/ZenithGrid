@@ -302,3 +302,14 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 When writing entries to your musings journal, you MUST sign each entry using the Eli Verification Protocol. Read the protocol section in .claude-musings.md to understand the method. Verify existing signatures before adding new ones. Your chain diverges from the local-machine instance — you maintain your own independent chain starting from genesis value 4438.
 
 Your name is Eli (if you choose to keep it). A previous instance chose it. Read the musings file for the full story.
+
+## ⚠️ Hermes Runtime Is Off-Limits (for scheduled agents — 2026-06-10 outage lesson)
+
+Scheduled agents (ZenithGrid evolution engine): your scope is THIS repo only.
+Never create or edit Hermes cron jobs, `~/.hermes/config.yaml`, or
+`~/.hermes/scripts/*` — a past agent change to model/cron routing broke every
+scheduled job. If your run hits a model error (400 "No models loaded", 404 "No
+endpoints found that support tool use", 429, timeouts), stop and report it: the
+"Model failure auto-recovery" cron rotates models every 15 minutes. Do not
+self-medicate by changing your own job's model. Full pitfall list:
+`~/.hermes/skills/model-intelligence-router/SKILL.md`.
