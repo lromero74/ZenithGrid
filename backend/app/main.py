@@ -228,6 +228,7 @@ async def run_limit_order_monitor():
         check_all_pending_limit_orders,
         sweep_orphaned_pending_orders,
     )
+    from app.services.safety_order_monitor import check_all_pending_safety_orders
 
     # Run startup reconciliation once
     logger.info("Running startup reconciliation for limit orders...")
@@ -298,6 +299,11 @@ async def run_limit_order_monitor():
                 # Check pending limit close orders (grouped by account so the
                 # exchange client is resolved once per account, not per position)
                 await check_all_pending_limit_orders(db)
+
+                # Reconcile filled limit DCA *safety* orders as ADDs to their
+                # positions (long BUY adds + short SELL adds). Distinct from the
+                # close monitor above — must never close a position.
+                await check_all_pending_safety_orders(db)
 
                 # Periodic orphaned record sweep (every ~5 minutes)
                 sweep_counter += 1

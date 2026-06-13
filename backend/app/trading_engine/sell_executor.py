@@ -599,10 +599,22 @@ async def execute_sell_short(
 
     if is_safety_order and dca_execution_type == "limit":
         limit_price = current_price
-        logger.info(f"  Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
-        # TODO: Short safety orders use market orders only; limit logic not yet implemented
-        # For now, fall through to market order
-        logger.warning("  Limit short safety orders not yet implemented - using market order")
+        logger.info(f"  Placing limit short safety sell: {base_amount:.8f} @ {limit_price:.8f}")
+        await execute_limit_sell_safety(
+            db=db,
+            exchange=exchange,
+            trading_client=trading_client,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            base_amount=base_amount,
+            limit_price=limit_price,
+            trade_type=trade_type,
+            signal_data=signal_data,
+        )
+        # Position is mutated only when the fill is reconciled (safety-order
+        # reconciler) — never at placement, and never via the close path.
+        return None
 
     # Execute market sell order (immediate execution)
     logger.info(f"  Executing SHORT SELL: {base_amount:.8f} BTC @ {current_price:.8f}")
@@ -766,6 +778,108 @@ async def execute_limit_sell(
     base_currency = product_id.split("-")[0]
     logger.info(
         f"Placed limit sell order: {base_amount:.8f} {base_currency} @ {limit_price:.8f} (Order ID: {order_id})"
+    )
+
+    return pending_order
+
+
+async def execute_limit_sell_safety(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    base_amount: float,
+    limit_price: float,
+    trade_type: str,
+    signal_data: Optional[Dict[str, Any]] = None,
+) -> PendingOrder:
+    """
+    Place a limit SELL that ADDS to a SHORT position (DCA safety order).
+
+    This is the short-side analog of ``execute_limit_buy``. Critically, unlike
+    ``execute_limit_sell`` (the CLOSE path), it does NOT set
+    ``position.closing_via_limit`` / ``limit_close_order_id`` — those drive the
+    close monitor, which would mark the position closed and book P&L on fill.
+    Instead it records a ``safety_order_*`` PendingOrder and leaves the position
+    untouched; the safety-order reconciler applies the fill as an add later.
+
+    Args:
+        base_amount: Base currency to sell to grow the short
+        limit_price: Target price for the resting limit sell
+        trade_type: 'safety_order_1', 'safety_order_2', etc.
+
+    Returns:
+        PendingOrder record (status="pending")
+    """
+    from app.order_validation import validate_order_size
+
+    # Round base down to exchange precision (floor to avoid INSUFFICIENT_FUND)
+    await ensure_product_precision(product_id)
+    precision = get_base_precision(product_id)
+    base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
+
+    # Enforce exchange minimums, same as the market short-safety path
+    is_valid, error_msg = await validate_order_size(
+        exchange, product_id, base_amount=base_amount_rounded
+    )
+    if not is_valid:
+        error = f"Order validation failed: {error_msg}"
+        logger.error(f"  {error}")
+        position.last_error_message = error
+        position.last_error_timestamp = utcnow()
+        await db.commit()
+        raise ValueError(error)
+
+    expected_quote_amount = base_amount_rounded * limit_price
+
+    order_id = None
+    try:
+        order_response = await trading_client.sell_limit(
+            product_id=product_id, limit_price=limit_price, base_amount=base_amount_rounded
+        )
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
+        success_response = order_response.get("success_response", {})
+        order_id = success_response.get("order_id", "")
+
+        if not order_id:
+            raise ValueError("No order_id returned from exchange")
+
+    except Exception as e:
+        logger.error(f"Error placing limit short safety sell order: {e}")
+        raise
+
+    pending_order = PendingOrder(
+        position_id=position.id,
+        bot_id=bot.id,
+        order_id=order_id,
+        product_id=product_id,
+        side="SELL",
+        order_type="LIMIT",
+        limit_price=limit_price,
+        quote_amount=expected_quote_amount,
+        base_amount=base_amount_rounded,
+        trade_type=trade_type,
+        status="pending",
+        created_at=utcnow(),
+    )
+
+    db.add(pending_order)
+    # IMPORTANT: do NOT set closing_via_limit / limit_close_order_id — this ADDS
+    # to the short. The position is mutated only when this fill is reconciled.
+    await db.commit()
+    await db.refresh(pending_order)
+
+    logger.info(
+        f"Placed limit short safety sell: {base_amount_rounded:.8f} @ {limit_price:.8f} "
+        f"(Order ID: {order_id}, {trade_type})"
     )
 
     return pending_order

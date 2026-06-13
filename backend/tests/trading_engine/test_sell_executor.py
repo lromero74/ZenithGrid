@@ -942,3 +942,135 @@ class TestDustClose:
         assert trade is not None
         assert position.status == "closed"
         tc.sell.assert_awaited_once()
+
+
+# ===========================================================================
+# Short safety LIMIT orders (DCA adds via limit sell) — placement
+# ===========================================================================
+
+
+class TestShortSafetyLimitOrders:
+    """execute_sell_short must place a LIMIT SELL safety order as a PendingOrder
+    (an ADD), never via the close path, and never mutate the position at
+    placement time. The fill is applied later by the reconciler."""
+
+    @pytest.mark.asyncio
+    async def test_limit_safety_places_pending_order_not_market(self):
+        """Happy path: short safety order with dca_execution_type='limit' places a
+        SELL PendingOrder, returns None, and does NOT touch the close path."""
+        from app.models import PendingOrder
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            direction="short",
+            strategy_config_snapshot={"dca_execution_type": "limit"},
+            short_entry_price=50000.0,
+            short_average_sell_price=50000.0,
+            short_total_sold_base=0.5,
+            short_total_sold_quote=25000.0,
+        )
+
+        with patch(
+            "app.order_validation.validate_order_size",
+            new_callable=AsyncMock,
+            return_value=(True, None),
+        ):
+            result = await execute_sell_short(
+                db=db, exchange=exchange, trading_client=tc, bot=bot,
+                product_id="BTC-USD", position=position,
+                base_amount=0.3, current_price=48000.0,
+                trade_type="safety_order_1",
+            )
+
+        # Limit path: no immediate trade, limit order placed, market path untouched
+        assert result is None
+        tc.sell_limit.assert_awaited_once()
+        tc.sell.assert_not_awaited()
+
+        # Close path must NOT be engaged
+        assert position.closing_via_limit is False
+        assert position.limit_close_order_id is None
+
+        # A SELL safety PendingOrder must be recorded
+        added = [c.args[0] for c in db.add.call_args_list
+                 if isinstance(c.args[0], PendingOrder)]
+        assert len(added) == 1
+        po = added[0]
+        assert po.side == "SELL"
+        assert po.order_type == "LIMIT"
+        assert po.trade_type == "safety_order_1"
+        assert po.status == "pending"
+        assert po.order_id == "limit-sell-101"
+        assert po.position_id == position.id
+
+        # Position short totals are NOT mutated at placement (only on fill)
+        assert position.short_total_sold_base == 0.5
+        assert position.short_total_sold_quote == 25000.0
+
+    @pytest.mark.asyncio
+    async def test_market_safety_order_unaffected_by_limit_branch(self):
+        """Edge/regression: a safety order in market mode still executes a market
+        short sell (limit branch must not capture it)."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0.3", "filled_value": "14400.0",
+            "average_filled_price": "48000.0",
+        })
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            direction="short",
+            strategy_config_snapshot={"dca_execution_type": "market"},
+            short_entry_price=50000.0, short_average_sell_price=50000.0,
+            short_total_sold_base=0.5, short_total_sold_quote=25000.0,
+        )
+
+        with patch(
+            "app.order_validation.validate_order_size",
+            new_callable=AsyncMock, return_value=(True, None),
+        ):
+            result = await execute_sell_short(
+                db=db, exchange=exchange, trading_client=tc, bot=bot,
+                product_id="BTC-USD", position=position,
+                base_amount=0.3, current_price=48000.0,
+                trade_type="safety_order_1",
+            )
+
+        assert result is not None          # market path returns a Trade
+        tc.sell.assert_awaited()           # market sell used
+        tc.sell_limit.assert_not_awaited()  # limit path NOT used
+
+    @pytest.mark.asyncio
+    async def test_limit_safety_missing_order_id_raises(self):
+        """Failure: exchange returns no order_id → raise, no PendingOrder leaked."""
+        from app.models import PendingOrder
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        tc.sell_limit = AsyncMock(return_value={"success_response": {}})  # no order_id
+        bot = _make_bot()
+        position = _make_position(
+            direction="short",
+            strategy_config_snapshot={"dca_execution_type": "limit"},
+            short_entry_price=50000.0, short_average_sell_price=50000.0,
+            short_total_sold_base=0.5, short_total_sold_quote=25000.0,
+        )
+
+        with patch(
+            "app.order_validation.validate_order_size",
+            new_callable=AsyncMock, return_value=(True, None),
+        ):
+            with pytest.raises(ValueError):
+                await execute_sell_short(
+                    db=db, exchange=exchange, trading_client=tc, bot=bot,
+                    product_id="BTC-USD", position=position,
+                    base_amount=0.3, current_price=48000.0,
+                    trade_type="safety_order_1",
+                )
+
+        added = [c.args[0] for c in db.add.call_args_list
+                 if isinstance(c.args[0], PendingOrder)]
+        assert added == []
