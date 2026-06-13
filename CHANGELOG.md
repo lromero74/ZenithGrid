@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.2] - 2026-06-13
+
+### Fixed
+- **Bot edit modal no longer scrolls sideways on phones.** The remaining horizontal overflow came from the form *sections* the bot modal renders — strategy config (preset thresholds), budget, and DEX config — which still used fixed multi-column grids on the smallest screens. These now stack to a single column on mobile and expand at the `sm` breakpoint, like the rest of the modal. The responsiveness regression guard was widened to cover modal form sections (not just files named `*Modal*`), since that gap let this overflow ship; game boards and other intentional fixed-geometry grids are deliberately out of scope.
+
 ## [v2.168.1] - 2026-06-13
 
 ### Fixed
