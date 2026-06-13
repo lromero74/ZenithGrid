@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.10] - 2026-06-12
+
+### Fixed
+- **Bot editor's "Current effective ceiling" now matches the bots page and the trading engine.** The editor recomputed the soft ceiling with its own copy of the formula, which divided by the per-deal cost before the exchange minimum had loaded — yielding a divide-by-zero that silently defaulted the ceiling to your configured maximum (e.g. showing "20" when the real cap was 1). It now uses the same shared calculation as the bots-page badge, falls back to the backend's authoritative value when the live estimate isn't ready, and shows "calculating…" instead of a wrong number.
+- **Auto-calculated base order in the editor now matches actual deal sizes.** The same divide-by-zero made the editor split your budget across the configured max deals (e.g. 20) and floor the base order to the exchange minimum (showing "$1"), while the engine correctly split by the real soft ceiling (giving, e.g., "$1.83"). The editor now sizes orders against the same effective ceiling the engine uses.
+
+### Changed
+- The soft-ceiling helper now reports "not computable" (rather than a misleading number) when the exchange minimum is unavailable, so callers fall back to the authoritative backend value.
+
 ## [v2.167.9] - 2026-06-12
 
 ### Fixed

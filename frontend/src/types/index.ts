@@ -288,6 +288,7 @@ export interface Bot {
   last_signal_check: string | null;
   insufficient_funds?: boolean;
   budget_utilization_percentage?: number;
+  soft_ceiling_effective_max?: number | null;  // Backend-computed effective concurrent-deal cap
   account_id?: number | null;  // For multi-account support
   account_name?: string;  // Human-readable account label (joined by backend)
   exchange_type?: 'cex' | 'dex';  // Exchange type

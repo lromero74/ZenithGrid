@@ -440,6 +440,7 @@ export function BotFormModal({
               rebalanceStatus={rebalanceStatus}
               isPaperTrading={selectedAccount?.type === 'paper'}
               effectiveMaxDeals={effectiveMaxDeals}
+              backendEffectiveCeiling={editingBot?.soft_ceiling_effective_max ?? null}
             />
 
             {/* SECTION 8: RISK PRESET (speculative bucket + warning) */}

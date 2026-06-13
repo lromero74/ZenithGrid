@@ -12,6 +12,7 @@ import {
   isParameterVisible,
   POPULARITY_ORDER,
   DEFAULT_TRADING_PAIRS,
+  calculateSoftCeiling,
 } from './botUtils'
 
 describe('getDefaultFormData', () => {
@@ -153,5 +154,40 @@ describe('isParameterVisible', () => {
     } as any
     expect(isParameterVisible(param, { mode: 'advanced', enabled: true })).toBe(true)
     expect(isParameterVisible(param, { mode: 'advanced', enabled: false })).toBe(false)
+  })
+})
+
+describe('calculateSoftCeiling', () => {
+  // A fixed-mode config: multiplier = base(1) + SO1(1) = 2.0 with 1 safety order.
+  const config = {
+    safety_order_type: 'fixed',
+    max_safety_orders: 1,
+    safety_order_volume_scale: 1.0,
+  }
+
+  test('happy path: ceiling = floor(budget / (min × multiplier)), clamped to max', () => {
+    // budget = 1000 × 50% = 500; multiplier = 2.0; min = 50 → floor(500/100) = 5
+    const result = calculateSoftCeiling(config, 1000, 50, 50, 20)
+    expect(result).toBe(5)
+  })
+
+  test('clamps to maxConcurrentDeals when budget allows more', () => {
+    // budget = 100000 × 100% = 100000; min = 1; mult = 2 → 50000, clamped to 20
+    expect(calculateSoftCeiling(config, 100000, 100, 1, 20)).toBe(20)
+  })
+
+  test('edge: tiny budget floors to at least 1', () => {
+    // budget = 10 × 15% = 1.5; min = 1; mult = 2 → floor(0.75) = 0 → max(1, 0) = 1
+    expect(calculateSoftCeiling(config, 10, 15, 1, 20)).toBe(1)
+  })
+
+  test('failure/guard: worstCaseMin = 0 is not computable → null (never Infinity/max)', () => {
+    // Previously: budget/0 = Infinity → clamped to maxConcurrentDeals (e.g. 20).
+    // A zero/unknown minimum means we cannot compute a budget-based ceiling.
+    expect(calculateSoftCeiling(config, 1000, 50, 0, 20)).toBeNull()
+  })
+
+  test('guard: negative worstCaseMin is not computable → null', () => {
+    expect(calculateSoftCeiling(config, 1000, 50, -1, 20)).toBeNull()
   })
 })

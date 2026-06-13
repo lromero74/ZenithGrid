@@ -235,10 +235,7 @@ export const BotListItem = memo(function BotListItem({
 
             // 1. Try to use the backend-computed value if available
             let scMax = scEnabled
-              ? ((bot as any).soft_ceiling_effective_max as
-                  | number
-                  | null
-                  | undefined) ?? null
+              ? bot.soft_ceiling_effective_max ?? null
               : null
 
             // 2. If backend hasn't computed it yet, try to compute it on the frontend
