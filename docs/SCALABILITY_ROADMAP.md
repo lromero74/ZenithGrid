@@ -1,7 +1,7 @@
 # ZenithGrid — Scalability & Microservices Roadmap
 
 **Written:** 2026-03-21
-**Context:** App is a layered monolith running on `fedora.local` with the app in the `zenith-box` distrobox and PostgreSQL in `postgres-box`. Good internal structure, tight coupling at the data layer.
+**Context:** App is a layered monolith. (As of 2026-06-13 prod runs natively on an AWS Lightsail instance with local PostgreSQL; it previously ran on `fedora.local` with the app in the `zenith-box` distrobox and PostgreSQL in `postgres-box`.) Good internal structure, tight coupling at the data layer.
 
 This document is divided into three phases:
 - **Phase 1 — Immediate wins** (low risk, high bang-for-buck, no architecture change)

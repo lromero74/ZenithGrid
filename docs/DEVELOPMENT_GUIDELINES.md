@@ -29,7 +29,7 @@ cd frontend && npx tsc --noEmit
 
 ### Testing Before Commits
 1. Restart services: `./bot.sh restart --dev --both`
-2. Check backend logs locally with `./bot.sh logs`; for production use `ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'`
+2. Check backend logs locally with `./bot.sh logs`; for production use `ssh ubuntu@origin.bigtruckincrypto.com 'sudo journalctl -u zenithgrid -f'` (AWS Lightsail)
 3. Check frontend loads: http://localhost:5173
 4. Verify key features work:
    - Dashboard loads with stats
@@ -120,13 +120,13 @@ cd frontend && npx tsc --noEmit
 
 ### Backend Issues
 ```bash
-# View live production logs (fedora.local / user-systemd)
-ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'
+# View live production logs (AWS Lightsail / native systemd)
+ssh ubuntu@origin.bigtruckincrypto.com 'sudo journalctl -u zenithgrid -f'
 
 # View live logs (local / bot.sh)
 tail -f .pids/backend.log
 
-# Production database is PostgreSQL in postgres-box on fedora.local.
+# Production database is local PostgreSQL 16 on the Lightsail box (db zenithgrid).
 # Local/dev database details depend on your .env.
 
 # Check API docs

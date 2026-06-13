@@ -1,4 +1,9 @@
-# ZenithGrid backend — systemd *user* unit for the fedora.local production host.
+# ZenithGrid backend — systemd *user* unit for the fedora.local host.
+#
+# ⚠️ STANDBY ONLY (since 2026-06-13): production moved to AWS Lightsail. The live
+#    prod unit is now `deployment/zenithgrid-lightsail.service` (native, no distrobox).
+#    This fedora --user unit is kept for the stopped warm-standby / rollback path only.
+#    It is currently `disable`d on fedora — do NOT enable/start it while Lightsail runs.
 #
 # Install to: ~/.config/systemd/user/zenithgrid.service
 # Then:       systemctl --user daemon-reload && systemctl --user enable --now zenithgrid
