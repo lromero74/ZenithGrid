@@ -13,12 +13,12 @@
 | Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) + Email MFA (AWS SES) |
 | Encryption | MultiFernet (AES-128-CBC + HMAC-SHA256) with key rotation |
 | Email | AWS SES (IAM role auth, us-east-1) |
-| Deployment | `fedora.local` self-hosted Fedora + distrobox containers + Nginx + Cloudflared + user-systemd |
+| Deployment | AWS Lightsail (`zenithgrid`, us-east-1, native Ubuntu) + Nginx + systemd; Cloudflare-proxied. (Migrated off `fedora.local` 2026-06-13; fedora is warm standby.) |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
 
-The backend runs as the user-systemd service `zenithgrid.service` on `fedora.local`, entering the `zenith-box` distrobox and serving FastAPI on `127.0.0.1:8100`.
-Nginx reverse-proxies HTTPS traffic to the backend, and public ingress is handled through the Cloudflared tunnel for `tradebot.romerotechsolutions.com`.
+The backend runs as the native systemd system service `zenithgrid.service` on an **AWS Lightsail** instance (us-east-1, static IP 52.87.130.244), serving FastAPI on `127.0.0.1:8100`.
+Nginx terminates TLS on :443 (self-signed origin cert) and reverse-proxies to the backend; public ingress is Cloudflare-proxied A records (SSL mode Full) for `tradebot.romerotechsolutions.com`, `bigtruckincrypto.com`, and `bigtruckincryptobot.com`.
 Public URL: `https://tradebot.romerotechsolutions.com`
 In **PROD mode**, the frontend is a production build (`vite build`) served by the FastAPI backend.
 In **DEV mode**, a separate Vite dev server provides HMR for frontend development.
@@ -34,11 +34,11 @@ graph TB
         FE[React Frontend<br/>production build]
     end
 
-    subgraph "fedora.local"
-        CF[Cloudflared Tunnel]
-        NGX[Nginx<br/>HTTPS reverse proxy]
-        BE[zenithgrid.service<br/>zenith-box<br/>FastAPI :8100<br/>serves frontend + API]
-        DB[(PostgreSQL<br/>postgres-box<br/>zenithgrid)]
+    subgraph "AWS Lightsail (us-east-1)"
+        CF[Cloudflare edge<br/>proxied A -> origin]
+        NGX[Nginx<br/>TLS :443 reverse proxy]
+        BE[zenithgrid.service<br/>native systemd<br/>FastAPI :8100<br/>serves frontend + API]
+        DB[(PostgreSQL 16<br/>local<br/>zenithgrid)]
         BG[Background Tasks<br/>23 scheduled jobs]
         SES[AWS SES<br/>Email Service]
     end

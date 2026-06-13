@@ -1,0 +1,33 @@
+# ZenithGrid backend — systemd *system* unit for the AWS Lightsail production host.
+# (Live prod since 2026-06-13. Native install — NO distrobox, NO --user, NO bot.sh.)
+#
+# Host: Lightsail instance `zenithgrid`, us-east-1, static IP 52.87.130.244, Ubuntu 24.04.
+# Install to: /etc/systemd/system/zenithgrid.service
+# Then:       sudo systemctl daemon-reload && sudo systemctl enable --now zenithgrid
+#
+# The app loads its own .env (pydantic-settings); systemd injects .env.banmonitor
+# (BAN_SOURCE / CF_* only — split out because the main .env holds a multi-line PEM
+# that systemd's EnvironmentFile parser cannot handle).
+#
+# Because it runs natively (not via a podman-exec wrapper), the fedora orphan-on-stop
+# problem does not apply here — default KillMode cleanly stops the uvicorn process.
+
+[Unit]
+Description=ZenithGrid Trading Bot Backend (FastAPI)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/ZenithGrid/backend
+EnvironmentFile=/home/ubuntu/ZenithGrid/backend/.env.banmonitor
+ExecStart=/home/ubuntu/ZenithGrid/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8100
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

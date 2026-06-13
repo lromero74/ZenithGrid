@@ -28,16 +28,18 @@
       "routing": "react-router-dom"
     },
     "deployment": {
-      "platform": "fedora.local self-hosted Fedora with distrobox containers",
-      "process_manager": "user-systemd",
+      "platform": "AWS Lightsail (instance 'zenithgrid', us-east-1, 4GB/2vCPU, static IP 52.87.130.244, Ubuntu 24.04, native — no containers). Migrated off fedora.local 2026-06-13.",
+      "process_manager": "systemd (system unit)",
       "services": [
-        "zenithgrid.service (enters zenith-box)",
-        "PostgreSQL in postgres-box",
-        "nginx"
+        "zenithgrid.service (native uvicorn on 127.0.0.1:8100)",
+        "PostgreSQL 16 (local, db zenithgrid)",
+        "Redis (local)",
+        "nginx (TLS :443 self-signed origin cert -> proxy :8100)"
       ],
-      "reverse_proxy": "Cloudflared public ingress to Nginx reverse proxy",
-      "public_url": "https://tradebot.romerotechsolutions.com",
-      "frontend_serving": "PROD mode: built dist/ served by FastAPI backend behind Nginx. DEV mode: Vite dev server with HMR."
+      "reverse_proxy": "Cloudflare-proxied A records -> 52.87.130.244 (SSL mode Full) -> nginx -> FastAPI :8100",
+      "public_url": "https://tradebot.romerotechsolutions.com (+ bigtruckincrypto.com / bigtruckincryptobot.com, each +www)",
+      "frontend_serving": "PROD mode: built dist/ served by FastAPI backend behind Nginx. DEV mode: Vite dev server with HMR.",
+      "warm_standby": "fedora.local distrobox copy (zenith-box app + postgres-box DB) is stopped + disabled as rollback target; never run both (double-trade)."
     }
   },
   "data_flow": {

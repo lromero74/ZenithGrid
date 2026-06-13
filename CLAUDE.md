@@ -22,7 +22,7 @@ This file is the authoritative source of truth for how to work on ZenithGrid. Re
 8. **Bots created during development must NOT be started.** Create them in a stopped state.
 9. **Think "How do leading platforms do it?"** when building features — match best-in-class UX patterns.
 10. **Test first.** Write failing tests before writing implementation code. No feature ships without tests. See the TDD section below.
-11. **Always sync before you edit.** Run `git fetch origin && git pull --ff-only origin main` (or rebase your branch onto the latest `main`) at the start of every working session, before reading or editing code. Multiple agents (Claude, Codex) and the prod host all push to this repo, so a local checkout goes stale fast — editing against an out-of-date tree silently re-introduces fixed bugs and produces conflicting diffs. If a `--ff-only` pull is rejected, stop and reconcile before touching code. When diagnosing prod behavior, confirm the version your local matches the deployed tag (`git describe --tags` locally vs. on fedora.local) before reasoning about the code.
+11. **Always sync before you edit.** Run `git fetch origin && git pull --ff-only origin main` (or rebase your branch onto the latest `main`) at the start of every working session, before reading or editing code. Multiple agents (Claude, Codex) and the prod host all push to this repo, so a local checkout goes stale fast — editing against an out-of-date tree silently re-introduces fixed bugs and produces conflicting diffs. If a `--ff-only` pull is rejected, stop and reconcile before touching code. When diagnosing prod behavior, confirm the version your local matches the deployed tag (`git describe --tags` locally vs. on the Lightsail prod box `ubuntu@origin.bigtruckincrypto.com`) before reasoning about the code.
 12. **Always be wary of cross-account contamination.** Every balance, position, budget, soft-ceiling, P&L, cache, or aggregate calculation MUST be scoped to a single `account_id` — never just `user_id`, and never unscoped. A user owns *multiple* accounts (several exchanges + paper accounts), so "scoped to the user" is NOT enough: a real Coinbase account's budget must never include a paper account's positions, and vice-versa. Concretely: (a) any DB query touching `positions`, `bots`, `trades`, `orders`, or balances must filter by `account_id` (join `bots.account_id` when starting from positions); (b) any cache key for per-account data must include the `account_id` in the key — a `None`/`"none"` suffix is a leak across all accounts AND all users; (c) any exchange client built from an `Account` must pass `account_id=account.id` into `CoinbaseCredentials`/the client so downstream calls inherit the scope. When you add or modify any of these paths, write a test that proves a second account (same user, and a different user) does NOT bleed in, and run the `multiuser-security` agent. See the regression in `tests/services/test_portfolio_service.py::TestGetCoinbaseFromDbAccountScoping`.
 13. **One source of truth for every financial calculation — mirrored copies drift.** Budget, soft-ceiling, DCA multiplier, per-position sizing, fees, and P&L formulas must have ONE authoritative implementation. Do not paste the formula inline at a call site when a shared helper exists, and do not let two backend paths (e.g. batch vs single-pair vs bidirectional) each re-derive the same split. When a calc legitimately must exist on both sides of the language boundary (Python engine + TypeScript UI, which can't share code), the **backend is authoritative**: the UI prefers the backend's computed value (e.g. `Bot.soft_ceiling_effective_max`) and uses its local copy only as a live-edit preview / loading fallback, and the TS copy carries a test asserting parity with known backend outputs. Guard divide-by-zero/unloaded inputs by returning "not computable" (null) and falling back to the authoritative value — never let `x/0 → Infinity` silently clamp to a default. (June 2026: three bugs in one session — modal showed `20`/`$1` while the engine used `1`/`$1.83` — all traced to divergent copies of the soft-ceiling/multiplier/sizing math.)
 
@@ -167,11 +167,11 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 - **Frontend-only changes in prod mode**: use `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend serves static files from disk, so new bundles are live immediately.
 - **Never restart unnecessarily** — it disrupts the running trading bot
 - **Do NOT restart before `/shipit`** — `/shipit` always restarts as its final deploy step. Restarting mid-session to test changes and then running `/shipit` causes a double restart for no benefit.
-- **PROD (fedora.local) restart is NOT `bot.sh restart --prod`** — on the production host the actual backend service is `zenithgrid.service` (a user-systemd unit in distrobox `zenith-box`), and `bot.sh` only rebuilds the frontend there (it expects `trading-bot-backend.service`, which doesn't exist on fedora.local). Real prod flow: `cd ~/ZenithGrid && git fetch --tags && git pull origin main`, then from the HOST: `systemctl --user restart zenithgrid`. Verify with `curl -s http://127.0.0.1:8100/api/health`. See the distrobox-service-operations skill.
+- **PROD (AWS Lightsail) restart is NOT `bot.sh restart --prod`** — as of **2026-06-13** production migrated OFF fedora.local ONTO an **AWS Lightsail** instance (`zenithgrid`, us-east-1, 4 GB/2 vCPU/80 GB, static IP **52.87.130.244**). The backend runs as a **native** systemd *system* unit `zenithgrid.service` (`/etc/systemd/system/zenithgrid.service`, uvicorn on 127.0.0.1:8100) — **no distrobox, no `--user`, no `bot.sh`**. Real prod flow: `ssh ubuntu@origin.bigtruckincrypto.com` (alias `zenithgrid-ls`, key `~/.ssh/lightsail/zenithgrid_us-east-1.pem`), `cd ~/ZenithGrid && git pull origin main`, then `sudo systemctl restart zenithgrid`. Frontend-only change: `cd ~/ZenithGrid/frontend && npm run build` (backend serves `dist/` from disk — no restart). Verify with `curl -s http://127.0.0.1:8100/api/health`. **fedora.local is now a stopped warm-standby** (`zenithgrid.service --user` stopped + disabled) — do NOT start it while Lightsail runs, or both engines trade the same Coinbase accounts.
 
 ## Database & Migrations
 
-- **Production DB**: `backend/trading.db`
+- **Production DB**: local **PostgreSQL 16** on the Lightsail box — db `zenithgrid`, role `zenithgrid_app`, `127.0.0.1:5432`. Tables live in named schemas (`auth`, `trading`, `reporting`, `social`, `content`, `system`); the app sets `search_path` itself in `app/database.py` (no role/DB-level GUC). Back up with `pg_dump -Fc`. (`backend/trading.db` is the SQLite **dev** default only.)
 - **Two init paths** (both must stay in sync):
   - `database.py`: `Base.metadata.create_all()` (runtime init)
   - `setup.py`: raw SQL (fresh installs)
@@ -183,30 +183,37 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 
 ## Environment Detection
 
-**If hostname contains `fedora.local`**: You are ON the production instance.
-- Services run in distrobox containers
-- ZenithGrid runs as `zenithgrid.service` in `zenith-box` on 127.0.0.1:8100
-- Database: PostgreSQL in `postgres-box` on 127.0.0.1:5432
-- Redis/Valkey in `zenith-box` on 127.0.0.1:6379
-- Public ingress via Cloudflared tunnel
-- SSH access: louis@fedora.local (passwordless)
+**If on the AWS Lightsail prod instance** (`zenithgrid`, us-east-1, public IP `52.87.130.244`, internal hostname like `ip-172-26-x-x`): You are ON the production instance.
+- Backend runs **natively** as systemd *system* unit `zenithgrid.service` — uvicorn on 127.0.0.1:8100 (**no distrobox**)
+- Database: local PostgreSQL 16 on 127.0.0.1:5432 (db `zenithgrid`, role `zenithgrid_app`)
+- Redis on 127.0.0.1:6379
+- nginx terminates TLS on :443 (self-signed origin cert at `/etc/ssl/zenithgrid/`) → proxies to :8100
+- Public ingress: **Cloudflare-proxied A records → 52.87.130.244** (SSL mode Full) — NOT a Cloudflare Tunnel
+- SSH access: `ubuntu@origin.bigtruckincrypto.com` (key `~/.ssh/lightsail/zenithgrid_us-east-1.pem`, alias `zenithgrid-ls`)
+- Restart: `sudo systemctl restart zenithgrid`; logs: `sudo journalctl -u zenithgrid -f`
+
+**If hostname contains `fedora.local`**: This is the **stopped warm-standby** (post-2026-06-13 migration). ZenithGrid here (`zenithgrid.service --user` in `zenith-box`, Postgres in `postgres-box`) is stopped + disabled — a rollback target only. **Do NOT start it while Lightsail is live.** (Other apps — RTS, funder-finder, etc. — still run on fedora; only ZenithGrid moved.)
 
 **Otherwise** (e.g., MacBook): You are on the development machine.
-- Production SSH target is `louis@fedora.local`. Push locally, then pull/deploy on `fedora.local` as documented above.
+- Production SSH target is `ubuntu@origin.bigtruckincrypto.com` (alias `zenithgrid-ls`). Push locally, then pull/deploy on the Lightsail box as documented above.
 
 ## Infrastructure Quick Reference
 
 | Item | Value |
 |------|-------|
-| **fedora.local** | Fedora Linux in distrobox containers: zenith-box (app), postgres-box (DB) |
-| **URL** | https://tradebot.romerotechsolutions.com |
-| **Nginx** | `/etc/nginx/conf.d/tradebot.conf` → reverse proxy to :8100 |
-| **SSL** | Let's Encrypt via certbot (`sudo certbot renew --nginx`) |
-| **Email** | AWS SES, sender: noreply@romerotechsolutions.com, IAM role auth |
+| **Prod host** | AWS Lightsail `zenithgrid` — us-east-1, 4 GB/2 vCPU/80 GB, static IP **52.87.130.244**, Ubuntu 24.04, **native** (no containers). SSH `ubuntu@origin.bigtruckincrypto.com` (alias `zenithgrid-ls`) |
+| **Service** | systemd *system* unit `zenithgrid.service` → uvicorn :8100. `sudo systemctl restart zenithgrid` |
+| **URL** | https://tradebot.romerotechsolutions.com (+ https://bigtruckincrypto.com / https://bigtruckincryptobot.com, each +www) |
+| **Nginx** | `/etc/nginx/sites-available/zenithgrid` → TLS :443 (self-signed origin cert `/etc/ssl/zenithgrid/`) → proxy :8100 |
+| **SSL** | Cloudflare edge cert (SSL mode **Full**) → self-signed origin cert. No certbot on the origin. |
+| **Origin hostname** | `origin.bigtruckincrypto.com` — DNS-only (grey-cloud) A → the static IP. **Use this for SSH/origin everywhere; it's the single place the IP is pinned.** |
+| **DNS/ingress** | The 5 public hostnames are Cloudflare-proxied A records → the static IP (SSL mode Full). CF DNS token: `~/.config/cloudflared/api-token.env` on **fedora** (DNS:Edit; no Zone-Settings) |
+| **Email** | AWS SES, sender: noreply@romerotechsolutions.com, IAM key auth (key in `.env`) |
 | **Python** | Always use venv: `backend/venv/bin/python3` |
 | **pip** | `backend/venv/bin/python3 -m pip install <pkg>` (NEVER bare `pip`) |
-| **Frontend** | React + TypeScript + Vite + TailwindCSS |
-| **Backend** | FastAPI + SQLAlchemy (async) + SQLite |
+| **Frontend** | React + TypeScript + Vite + TailwindCSS (backend serves `frontend/dist/` from disk) |
+| **Backend** | FastAPI + SQLAlchemy (async) + PostgreSQL 16 (prod) / SQLite (dev) |
+| **Warm standby** | fedora.local (distrobox zenith-box/postgres-box) — ZenithGrid stopped + disabled, rollback target |
 
 ## Release Process (Ship It)
 

@@ -100,7 +100,7 @@ npm run dev
 View logs directly:
 ```bash
 ./bot.sh logs                               # Local service logs
-ssh louis@fedora.local 'journalctl --user -u zenithgrid -f'  # Production backend logs
+ssh ubuntu@origin.bigtruckincrypto.com 'sudo journalctl -u zenithgrid -f'  # Production backend logs (AWS Lightsail)
 ```
 
 ---

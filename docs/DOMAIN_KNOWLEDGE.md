@@ -112,7 +112,7 @@ Coinbase minimum: 0.0001 BTC → REJECTED (below minimum)
 - **Production access**: 50K emails/day, 14/sec
 - **Sender**: noreply@romerotechsolutions.com
 - **Domain**: romerotechsolutions.com verified with DKIM in us-east-1
-- **AWS credentials**: Production runs on `fedora.local`, not EC2; SES credentials should come from the host/container environment.
+- **AWS credentials**: Production runs on AWS Lightsail (a plain instance, not EC2 with an instance role); SES credentials come from an IAM access key in the backend `.env`.
 - **Usage**: boto3 SES client, region us-east-1
 
 ### AI Provider Libraries
