@@ -675,8 +675,9 @@ class TestCalculateAggregateUsdValue:
         mock_price_func.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_fetches_usd_price_for_altcoins(self):
-        """Happy path: fetches USD price for non-USD/BTC currencies."""
+    @patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock)
+    async def test_uses_product_list_price_for_altcoins(self, mock_products):
+        """Happy path: uses listed product price for non-USD/BTC currencies."""
         mock_request = AsyncMock(return_value={
             "accounts": [
                 {"currency": "SOL", "available_balance": {"value": "10.0"}},
@@ -684,7 +685,8 @@ class TestCalculateAggregateUsdValue:
             "cursor": "",
         })
         mock_btc_price = AsyncMock(return_value=50000.0)
-        mock_price_func = AsyncMock(return_value=150.0)  # SOL at $150
+        mock_price_func = AsyncMock(return_value=999.0)
+        mock_products.return_value = [{"product_id": "SOL-USD", "price": "150.0"}]
 
         result = await calculate_aggregate_usd_value(
             mock_request, mock_btc_price, mock_price_func, account_id=73
@@ -692,7 +694,29 @@ class TestCalculateAggregateUsdValue:
 
         # 10 SOL * $150 = $1500
         assert result == pytest.approx(1500.0)
-        mock_price_func.assert_called_with("SOL-USD")
+        mock_price_func.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock)
+    async def test_skips_delisted_altcoin_products_without_ticker_404(self, mock_products):
+        """Delisted nonzero balances should not trigger missing ticker lookups."""
+        mock_request = AsyncMock(return_value={
+            "accounts": [
+                {"currency": "USD", "available_balance": {"value": "100"}},
+                {"currency": "WLUNA", "available_balance": {"value": "5.0"}},
+            ],
+            "cursor": "",
+        })
+        mock_btc_price = AsyncMock(return_value=50000.0)
+        mock_price_func = AsyncMock(side_effect=AssertionError("ticker should not be called"))
+        mock_products.return_value = [{"product_id": "SOL-USD", "price": "150.0"}]
+
+        result = await calculate_aggregate_usd_value(
+            mock_request, mock_btc_price, mock_price_func, account_id=77
+        )
+
+        assert result == pytest.approx(100.0)
+        mock_price_func.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_raises_on_api_failure(self):

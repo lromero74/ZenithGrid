@@ -504,28 +504,55 @@ async def calculate_aggregate_usd_value(
 
         # Fetch all prices in PARALLEL instead of sequentially
         if currencies_to_price:
+            product_ids = [f"{currency}-USD" for currency in currencies_to_price]
+            listed_products = set()
+            price_map = {}
+            try:
+                from app.coinbase_api import public_market_data
+                products = await public_market_data.list_products()
+                wanted_products = set(product_ids)
+                for product in products or []:
+                    product_id = product.get("product_id")
+                    if product_id not in wanted_products:
+                        continue
+                    listed_products.add(product_id)
+                    raw_price = product.get("price")
+                    try:
+                        price = float(raw_price)
+                    except (TypeError, ValueError):
+                        continue
+                    if price > 0:
+                        price_map[product_id] = price
+            except Exception as e:
+                logger.warning(f"Could not load Coinbase product list for aggregate USD pricing: {e}")
+                listed_products = set(product_ids)
+
             async def fetch_usd_price(currency: str):
+                product_id = f"{currency}-USD"
+                if product_id not in listed_products:
+                    logger.debug(f"Skipping aggregate USD price for delisted product {product_id}")
+                    return (currency, None)
                 try:
-                    price = await get_current_price_func(f"{currency}-USD")
+                    price = price_map.get(product_id) or await get_current_price_func(product_id)
                     return (currency, price)
                 except Exception:
                     return (currency, None)
 
             # Batch fetch prices (15 at a time to avoid rate limits)
-            price_map = {}
+            currency_price_map = {}
             batch_size = 15
             for i in range(0, len(currencies_to_price), batch_size):
                 batch = currencies_to_price[i:i + batch_size]
                 batch_results = await asyncio.gather(*[fetch_usd_price(c) for c in batch])
                 for currency, price in batch_results:
                     if price is not None:
-                        price_map[currency] = price
+                        currency_price_map[currency] = price
                 if i + batch_size < len(currencies_to_price):
                     await asyncio.sleep(0.1)
 
             # Add values using fetched prices
             for currency, available in account_data:
-                price = price_map.get(currency)
+                price = currency_price_map.get(currency)
                 if price is not None:
                     total_usd_value += available * price
 

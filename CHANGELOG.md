@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.7] - 2026-06-12
+
+### Fixed
+- **Aggregate USD valuation no longer calls tickers for delisted products.** Whole-portfolio USD valuation now checks Coinbase's cached product catalog before pricing nonzero alt balances, uses catalog prices when available, and skips missing `{currency}-USD` products instead of generating ticker 404s for delisted assets.
+
 ## [v2.167.6] - 2026-06-12
 
 ### Fixed
