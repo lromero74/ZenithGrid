@@ -6,6 +6,31 @@ Centralized constants for trading pairs, timeframes, etc.
 
 from typing import Dict
 
+USD_EQUIVALENT_CURRENCIES = frozenset({
+    "USD",
+    "USDC",
+    "USDT",
+    "DAI",
+    "GUSD",
+    "PAX",
+    "BUSD",
+    "USDP",
+    "PYUSD",
+    "USDS",
+    "USD1",
+})
+
+
+def get_usd_equivalent_pair_price(product_id: str) -> float | None:
+    """Return 1.0 for USD-equivalent stable pairs that do not need a ticker."""
+    parts = product_id.upper().split("-", 1)
+    if len(parts) != 2:
+        return None
+    base, quote = parts
+    if base in USD_EQUIVALENT_CURRENCIES and quote in USD_EQUIVALENT_CURRENCIES:
+        return 1.0
+    return None
+
 # Popular Coinbase trading pairs
 # Focus on X/BTC pairs as requested
 POPULAR_BTC_PAIRS = [

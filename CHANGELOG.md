@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.8] - 2026-06-12
+
+### Fixed
+- **USD-equivalent stable valuation pairs no longer hit Coinbase tickers.** `USDC-USD`, `USDT-USD`, and other USD-pegged stable-to-stable valuation pairs now resolve locally to `1.0` in both authenticated and public Coinbase price helpers, preventing noisy ticker 404s while preserving USDC/USDT as separate quote-currency budget buckets.
+
 ## [v2.167.7] - 2026-06-12
 
 ### Fixed

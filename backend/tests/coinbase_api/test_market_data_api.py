@@ -196,6 +196,16 @@ class TestGetCurrentPrice:
         result = await get_current_price(mock_request, "hmac", "MISSING-USD")
         assert result == 0.0
 
+    @pytest.mark.asyncio
+    async def test_usd_equivalent_stable_pair_skips_ticker(self):
+        """USDC-USD is resolved locally so portfolio valuation does not 404."""
+        mock_request = AsyncMock()
+
+        result = await get_current_price(mock_request, "cdp", "USDC-USD")
+
+        assert result == pytest.approx(1.0)
+        mock_request.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # get_btc_usd_price / get_eth_usd_price

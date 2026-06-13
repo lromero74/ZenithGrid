@@ -9,7 +9,12 @@ from typing import Any, Callable, Dict, List
 import httpx
 
 from app.cache import api_cache
-from app.constants import NEGATIVE_CACHE_TTL, PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
+from app.constants import (
+    NEGATIVE_CACHE_TTL,
+    PRICE_CACHE_TTL,
+    PRODUCT_STATS_CACHE_TTL,
+    get_usd_equivalent_pair_price,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,10 @@ async def get_current_price(request_func: Callable, auth_type: str, product_id: 
     CDP auth returns mid-price from best bid/ask.
     HMAC auth returns direct price field.
     """
+    stable_price = get_usd_equivalent_pair_price(product_id)
+    if stable_price is not None:
+        return stable_price
+
     cache_key = f"price_{product_id}"
 
     if await api_cache.is_not_found(cache_key):

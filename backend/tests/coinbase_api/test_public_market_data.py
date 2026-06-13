@@ -353,6 +353,17 @@ class TestGetCurrentPrice:
             assert result == 0.0
 
     @pytest.mark.asyncio
+    async def test_usd_equivalent_stable_pair_skips_ticker(self):
+        """USDC-USD is a valuation pair, not a Coinbase ticker call."""
+        mock = AsyncMock()
+
+        with patch("app.coinbase_api.public_market_data._public_request", mock):
+            result = await get_current_price("USDC-USD")
+
+        assert result == pytest.approx(1.0)
+        mock.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_caches_positive_price(self):
         """Edge case: caches price > 0."""
         mock = AsyncMock(return_value={"best_bid": "50", "best_ask": "52"})
