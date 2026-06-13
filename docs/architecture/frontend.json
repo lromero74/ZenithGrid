@@ -60,7 +60,7 @@
     "bot_management": [
       {
         "file": "components/trading/DCABudgetConfigForm.tsx",
-        "purpose": "DCA budget configuration form"
+        "purpose": "DCA budget configuration form. v2.167.10: uses the shared calculateSoftCeiling helper from botUtils.ts instead of an inline copy (no more divergent client implementations). Accepts a new optional prop backendEffectiveCeiling?: number | null (the backend's authoritative Bot.soft_ceiling_effective_max). The 'Current effective ceiling' display and DCA budget breakdown prefer the live client estimate; fall back to backendEffectiveCeiling when the live estimate is null, then to the configured max. Shows 'calculating…' when neither is available."
       },
       {
         "file": "components/ConditionalStrategyForm.tsx",
@@ -84,7 +84,7 @@
       },
       {
         "file": "pages/bots/components/BotFormModal.tsx",
-        "purpose": "Modal form for creating/editing bots; v2.165.0 renders SpeculativePresetPanel when the selected risk preset is 'speculative' so users see the catalyst-trade target multiple, horizon, and max-hold-hours fields inline."
+        "purpose": "Modal form for creating/editing bots; v2.165.0 renders SpeculativePresetPanel when the selected risk preset is 'speculative' so users see the catalyst-trade target multiple, horizon, and max-hold-hours fields inline. v2.167.10: passes backendEffectiveCeiling={editingBot.soft_ceiling_effective_max} down through StrategyConfigSection to DCABudgetConfigForm."
       },
       {
         "file": "pages/bots/components/SpeculativePresetPanel.tsx",
@@ -96,11 +96,11 @@
       },
       {
         "file": "pages/bots/components/StrategyConfigSection.tsx",
-        "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params); generic dropdown renderer displays empty-string options as '(provider default)' (used by the ai_spot_opinion ai_model_override param)"
+        "purpose": "Strategy parameter configuration section within bot form (DCA budget, phase conditions, strategy params); generic dropdown renderer displays empty-string options as '(provider default)' (used by the ai_spot_opinion ai_model_override param). v2.167.10: threads backendEffectiveCeiling down to DCABudgetConfigForm."
       },
       {
         "file": "pages/bots/components/BotListItem.tsx",
-        "purpose": "Bot card component for bot list"
+        "purpose": "Bot card component for bot list. v2.167.10: reads the typed bot.soft_ceiling_effective_max field directly (dropped the previous as any cast)."
       },
       {
         "file": "pages/bots/components/SampleBotsSection.tsx",
@@ -539,7 +539,7 @@
       "bots": [
         {
           "file": "components/bots/botUtils.ts",
-          "purpose": "BotFormData type, defaults, parameter validation, pair conversion"
+          "purpose": "BotFormData type, defaults, parameter validation, pair conversion. calculateSoftCeiling(...) returns number | null: null when the soft ceiling is not computable (worstCaseMin × multiplier <= 0, e.g. the worst-case exchange minimum has not loaded yet) instead of dividing by zero; callers must treat null as 'unknown'."
         }
       ],
       "news": [
@@ -936,7 +936,7 @@
         "AIOpinionLog (extended in v2.165.0 with optional doubling_probability_score, speculative_score, speculative_components fields for the catalyst-trade reasoning UI)"
       ],
       "bot": [
-        "Bot",
+        "Bot (v2.167.10: gained soft_ceiling_effective_max?: number | null — the backend's authoritative effective soft ceiling, used as fallback when the live client estimate is not computable)",
         "BotCreate",
         "BotStats",
         "StrategyParameter",

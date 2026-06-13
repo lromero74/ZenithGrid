@@ -346,6 +346,14 @@ export function getDCAMultiplier(config: Record<string, any>): number {
 
 /**
  * Calculate the soft ceiling for concurrent deals based on budget and exchange minimums.
+ *
+ * Returns `null` when the ceiling is not computable — i.e. the per-deal cost
+ * (worstCaseMin × multiplier) is zero or negative. This happens when the
+ * worst-case exchange minimum hasn't loaded yet (initial render) or a price
+ * lookup failed. Callers must treat `null` as "unknown" and fall back to an
+ * authoritative value (e.g. the backend's `soft_ceiling_effective_max`) rather
+ * than dividing by zero — which would yield Infinity and silently clamp the
+ * ceiling to the configured max.
  */
 export function calculateSoftCeiling(
   config: Record<string, any>,
@@ -353,9 +361,13 @@ export function calculateSoftCeiling(
   budgetPercentage: number,
   worstCaseMin: number,
   maxConcurrentDeals: number
-): number {
+): number | null {
   const multiplier = getDCAMultiplier(config)
+  const perDealCost = worstCaseMin * multiplier
+  if (!(perDealCost > 0)) {
+    return null
+  }
   const totalBudget = ((aggregateValue || 0) * (budgetPercentage || 0)) / 100
-  const softCeiling = Math.floor(totalBudget / (worstCaseMin * multiplier))
+  const softCeiling = Math.floor(totalBudget / perDealCost)
   return Math.max(1, Math.min(softCeiling, maxConcurrentDeals || 1000))
 }

@@ -17,6 +17,7 @@ interface StrategyConfigSectionProps {
   rebalanceStatus?: RebalanceStatus
   isPaperTrading?: boolean
   effectiveMaxDeals: number
+  backendEffectiveCeiling?: number | null
 }
 
 /**
@@ -243,6 +244,7 @@ export function StrategyConfigSection({
   rebalanceStatus,
   isPaperTrading,
   effectiveMaxDeals,
+  backendEffectiveCeiling,
 }: StrategyConfigSectionProps) {
   if (
     !selectedStrategy ||
@@ -309,6 +311,7 @@ export function StrategyConfigSection({
             formData.strategy_config.max_concurrent_deals
           }
           effectiveMaxDeals={effectiveMaxDeals}
+          backendEffectiveCeiling={backendEffectiveCeiling}
         />
       ) : selectedStrategy.parameters.length > 0 ? (
         <StrategyParameterGroups

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { botValidationApi } from '../../services/api'
 import AdvancedConditionBuilder from './AdvancedConditionBuilder'
-import { getDCAMultiplier, EXCHANGE_MINIMUMS } from '../bots'
+import { EXCHANGE_MINIMUMS, calculateSoftCeiling } from '../bots'
 import {
   numericProps,
   safeParseFloat,
@@ -25,6 +25,10 @@ interface DCABudgetConfigFormProps {
   splitBudget?: boolean  // Whether to split budget across pairs
   maxConcurrentDeals?: number  // Max number of simultaneous positions
   effectiveMaxDeals?: number // Sensible maximum for deals
+  // Backend's authoritative soft-ceiling for the saved config (Bot.soft_ceiling_effective_max).
+  // Used as the display fallback when the live client estimate isn't computable yet,
+  // so the modal can't disagree with the bots-page badge / trading engine.
+  backendEffectiveCeiling?: number | null
 }
 
 function DCABudgetConfigForm({
@@ -40,7 +44,8 @@ function DCABudgetConfigForm({
   numPairs: _numPairs,
   splitBudget: _splitBudget,
   maxConcurrentDeals,
-  effectiveMaxDeals
+  effectiveMaxDeals,
+  backendEffectiveCeiling
 }: DCABudgetConfigFormProps) {
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
@@ -98,10 +103,16 @@ function DCABudgetConfigForm({
       ? aggregateUsdValue
       : aggregateBtcValue)
 
-  const multiplier = getDCAMultiplier(config)
-  const totalBudget = (aggregateValue || 0) * (budgetPercentage || 0) / 100
-  const softCeiling = Math.floor(totalBudget / (worstCaseMin * multiplier))
-  const displayCeiling = Math.max(1, Math.min(softCeiling, maxConcurrentDeals || 1000))
+  // Live client estimate using the SAME shared helper as the bots-page badge,
+  // so the two can't diverge. Returns null when not yet computable (e.g. the
+  // worst-case minimum hasn't loaded) — in that case fall back to the backend's
+  // authoritative ceiling rather than guessing, and only then to the raw max.
+  const localCeiling = calculateSoftCeiling(
+    config, aggregateValue || 0, budgetPercentage || 0, worstCaseMin, maxConcurrentDeals || 1000
+  )
+  const displayCeiling = localCeiling ?? backendEffectiveCeiling ?? null
+  // The budget breakdown math always needs a concrete deal count.
+  const effectiveDealsForMath = displayCeiling ?? (maxConcurrentDeals || config.max_concurrent_deals || 1)
 
   // Check if budget calculator is active
   // Only auto-calculate when user has enabled the toggle AND has a budget set
@@ -269,7 +280,10 @@ function DCABudgetConfigForm({
               Dynamically limit concurrent deals based on your current budget to ensure every deal can meet exchange minimums.
               {config.enable_soft_ceiling && (
                 <span className="block mt-1 text-blue-400 font-medium">
-                  Current effective ceiling: {displayCeiling} {displayCeiling < (config.max_concurrent_deals || 1) ? `(clamped from ${config.max_concurrent_deals})` : ''}
+                  Current effective ceiling: {displayCeiling ?? 'calculating…'}
+                  {displayCeiling != null && displayCeiling < (config.max_concurrent_deals || 1)
+                    ? ` (clamped from ${config.max_concurrent_deals})`
+                    : ''}
                 </span>
               )}
             </p>
@@ -988,7 +1002,7 @@ function DCABudgetConfigForm({
             {(() => {
               const scEnabled = !!config.enable_soft_ceiling
               const effectiveDeals = scEnabled
-                ? displayCeiling
+                ? effectiveDealsForMath
                 : maxConcurrentDeals || config.max_concurrent_deals || 1
 
               const breakdown = calculateDCABudget(
