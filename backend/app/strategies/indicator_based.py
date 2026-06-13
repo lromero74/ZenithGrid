@@ -734,10 +734,22 @@ class IndicatorBasedStrategy(TradingStrategy):
             else:  # short
                 per_position_budget = bot_total_budget * (short_budget_pct / 100.0)
 
-            # Divide by max concurrent deals if configured
-            max_concurrent = self.config.get("max_concurrent_deals", 1)
-            if max_concurrent > 1:
-                per_position_budget /= max_concurrent
+            # Divide by the effective deal count. When the soft ceiling is on,
+            # use the engine-computed effective ceiling (passed in as
+            # effective_max_deals) so the base order is sized for the number of
+            # deals that can actually open — not the raw configured maximum.
+            # Splitting by the configured max instead would under-size every
+            # base order (e.g. budget/20 when only 1 deal can fund). Mirrors the
+            # batch path in batch_analyzer.py.
+            effective_max_deals = kwargs.get("effective_max_deals")
+            if (self.config.get("enable_soft_ceiling", False)
+                    and effective_max_deals is not None
+                    and effective_max_deals > 0):
+                deal_divisor = effective_max_deals
+            else:
+                deal_divisor = self.config.get("max_concurrent_deals", 1)
+            if deal_divisor > 1:
+                per_position_budget /= deal_divisor
 
             return self.calculate_base_order_size(per_position_budget)
         else:
