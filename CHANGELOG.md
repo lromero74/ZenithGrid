@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.167.9] - 2026-06-12
+
+### Fixed
+- **Bot budgets and soft ceilings no longer count other accounts' positions.** A bot's budget base (and therefore its DCA order sizes and soft-ceiling deal cap) is now calculated strictly from its own account's balance and open positions. Previously the market-budget calculation ran unscoped — summing the value of every position in the matching quote currency across *all* of your accounts (including paper accounts) and even other users — which could inflate a small account's budget enormously and let the soft ceiling allow far more concurrent deals than the account could fund. Budgets and ceilings now reflect reality.
+- **Account budget views show the selected account.** The bots page and the "add funds" dialog now request budget figures for the specific account being viewed, instead of always showing the first connected exchange account. Multi-account users (and anyone viewing a paper-account bot) now see the correct per-account numbers.
+- **Incomplete-candle aggregation test corrected.** A stale test was updated to match the shipped behavior where the still-forming final candle is kept and flagged as partial rather than dropped.
+
+### Security
+- **Per-account isolation for budget and balance calculations.** Exchange clients are now always scoped to a single account, and the aggregate-value endpoint authorizes account ownership before returning data. This closes a path where one account's (or user's) position values could bleed into another's budget math, and adds a loud warning if any future code path requests an unscoped calculation.
+
 ## [v2.167.8] - 2026-06-12
 
 ### Fixed

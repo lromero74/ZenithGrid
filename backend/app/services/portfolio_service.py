@@ -92,6 +92,11 @@ async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> Coinbas
         coinbase=CoinbaseCredentials(
             key_name=account.api_key_name,
             private_key=private_key,
+            # Scope the client to this account so calculate_market_budget()
+            # filters open positions to this account's bots and uses an
+            # account-isolated cache key. Without it the budget/soft-ceiling
+            # math sums USD-quoted positions across ALL accounts and users.
+            account_id=account.id,
         ),
     ))
 

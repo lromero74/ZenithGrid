@@ -59,6 +59,7 @@ async def _get_exchange_client(db: AsyncSession, user_id: int):
             coinbase=CoinbaseCredentials(
                 key_name=account.api_key_name,
                 private_key=private_key,
+                account_id=account.id,  # scope cache/positions to this account
             ),
         ))
         return client, account

@@ -144,6 +144,7 @@ class TestGetCoinbase:
             coinbase=CoinbaseCredentials(
                 key_name="my-key-name",
                 private_key="my-private-key",
+                account_id=account.id,
             ),
         ))
 
@@ -187,6 +188,7 @@ class TestGetCoinbase:
             coinbase=CoinbaseCredentials(
                 key_name="key-name",
                 private_key="decrypted-key",
+                account_id=account.id,
             ),
         ))
 
