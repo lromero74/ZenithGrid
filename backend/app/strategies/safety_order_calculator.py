@@ -140,3 +140,18 @@ def calculate_safety_order_size(config: Dict, base_order_size: float, order_numb
 
     volume_scale = config.get("safety_order_volume_scale", 1.0)
     return base_safety_size * (volume_scale ** (order_number - 1))
+
+
+def count_deployed_safety_orders(entry_trades) -> int:
+    """Count safety-order LEVELS deployed across a position's entry trades.
+
+    A cascade fills several SO levels in a SINGLE trade (its ``dca_levels`` > 1),
+    so counting trade rows (``len(entry_trades) - 1``) under-reports completed
+    safety orders and lets the engine re-place an already-deployed level. This
+    sums ``dca_levels`` and subtracts the one base order, which is identical to
+    ``len - 1`` when every trade is a single level and correct for cascades.
+
+    Legacy/unset ``dca_levels`` counts as one level.
+    """
+    total_levels = sum(int(getattr(t, "dca_levels", 1) or 1) for t in entry_trades)
+    return max(0, total_levels - 1)

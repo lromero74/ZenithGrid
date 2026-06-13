@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.3] - 2026-06-13
+
+### Fixed
+- **Cascaded safety orders now count every level they deployed.** When price drops past several safety-order trigger levels between checks, the bot correctly combines them into a single "cascade" order (one real exchange order). But it counted completed safety orders by trade rows, so a 2-level cascade was counted as 1 — under-reporting progress (e.g. showing "1 of 2" when both were done) and, on bots with remaining budget, letting it re-place an already-deployed level instead of moving to the next one. Trades now record how many safety-order levels they cover, and the completed count sums those levels. (Adds migration 086. Past cascades aren't retroactively recounted; new ones are accurate.)
+
 ## [v2.168.2] - 2026-06-13
 
 ### Fixed

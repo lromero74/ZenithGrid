@@ -46,6 +46,7 @@ from app.strategies.indicator_params import INDICATOR_PARAMS
 from app.strategies.safety_order_calculator import (
     calculate_base_order_size as _calc_base_order_size,
     calculate_safety_order_size as _calc_safety_order_size,
+    count_deployed_safety_orders,
 )
 
 logger = logging.getLogger(__name__)
@@ -433,7 +434,7 @@ class IndicatorBasedStrategy(TradingStrategy):
             True if both indicator conditions AND price drop are met.
         """
         buy_trades = [t for t in position.trades if t.side == "buy"] if hasattr(position, "trades") else []
-        safety_orders_count = max(0, len(buy_trades) - 1)  # -1 for base order, min 0
+        safety_orders_count = count_deployed_safety_orders(buy_trades)  # sums cascade levels
         next_order_number = safety_orders_count + 1
 
         reference_price = self._get_dca_reference_price(position, buy_trades)
@@ -865,7 +866,7 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # Count buy trades to determine safety orders completed
         buy_trades = [t for t in position.trades if t.side == "buy"]
-        safety_orders_count = max(0, len(buy_trades) - 1)  # -1 for base order, min 0
+        safety_orders_count = count_deployed_safety_orders(buy_trades)  # sums cascade levels
         if safety_orders_count >= max_safety:
             return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
 
@@ -931,6 +932,10 @@ class IndicatorBasedStrategy(TradingStrategy):
             reason = f"Safety order #{first_so}"
         else:
             reason = f"Safety order #{first_so}-#{last_so} (cascade: {orders_to_execute} orders)"
+
+        # Record how many SO levels this (possibly combined) order deploys, so the
+        # recorded trade carries dca_levels and the deployed-SO count stays accurate.
+        signal_data["dca_levels"] = orders_to_execute
 
         return True, total_amount, reason
 
