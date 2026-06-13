@@ -31,6 +31,7 @@ export interface Position {
   profit_quote: number | null;    // BTC or USD
   profit_percentage: number | null;
   trade_count: number;
+  safety_orders_deployed?: number;  // SO levels filled (sums cascade levels, not trade rows)
   first_buy_price?: number | null;  // Price of first (base order) buy trade
   last_buy_price?: number | null;   // Price of most recent buy trade
   btc_usd_price_at_open?: number;
@@ -86,6 +87,7 @@ export interface Trade {
   price: number;
   trade_type: string;
   order_id: string | null;
+  dca_levels?: number;   // how many SO levels this trade covers (>1 for a cascade)
 }
 
 export interface Signal {

@@ -144,6 +144,22 @@ async def get_positions(
         for row in trade_count_result
     }
 
+    # Safety orders DEPLOYED = sum of dca_levels over DCA trades (a cascade fills
+    # several SO levels in one trade), not the number of DCA trade rows. Covers
+    # both long (buy) and short (sell) DCA trades.
+    so_deployed_result = await db.execute(
+        select(
+            Trade.position_id,
+            func.coalesce(func.sum(Trade.dca_levels), 0).label("deployed"),
+        )
+        .where(Trade.position_id.in_(position_ids), Trade.trade_type == "dca")
+        .group_by(Trade.position_id)
+    )
+    so_deployed_map = {
+        row.position_id: int(row.deployed or 0)
+        for row in so_deployed_result
+    }
+
     buy_bounds_subquery = (
         select(
             Trade.position_id.label("position_id"),
@@ -241,6 +257,7 @@ async def get_positions(
             )
             _trim_open_list_optional_fields(pos_response)
         pos_response.trade_count = trade_count_map.get(pos.id, 0)
+        pos_response.safety_orders_deployed = so_deployed_map.get(pos.id, 0)
         pos_response.pending_orders_count = pending_count_map.get(pos.id, 0)
 
         # Set first/last buy prices for DCA reference
@@ -758,8 +775,15 @@ async def get_position(
     first_buy_price = (await db.execute(first_buy_query)).scalar_one_or_none()
     last_buy_price = (await db.execute(last_buy_query)).scalar_one_or_none()
 
+    # SO levels deployed = sum of dca_levels over DCA trades (cascades fill >1).
+    so_deployed_query = select(func.coalesce(func.sum(Trade.dca_levels), 0)).where(
+        Trade.position_id == position.id, Trade.trade_type == "dca"
+    )
+    safety_orders_deployed = int((await db.execute(so_deployed_query)).scalar() or 0)
+
     pos_response = PositionResponse.model_validate(position)
     pos_response.trade_count = trade_count
+    pos_response.safety_orders_deployed = safety_orders_deployed
     pos_response.pending_orders_count = pending_count
 
     # Set first/last buy prices for DCA reference

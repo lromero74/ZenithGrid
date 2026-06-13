@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { formatDateTime } from '../../../../utils/dateFormat'
+import { formatSafetyOrderLabel } from '../../../../components/positions/positionUtils'
 import type { Position } from '../../../../types'
 
 interface Trade {
@@ -11,6 +12,7 @@ interface Trade {
   price: number
   base_amount: number
   quote_amount: number
+  dca_levels?: number
 }
 
 interface TradeHistoryModalProps {
@@ -33,6 +35,18 @@ export const TradeHistoryModal = ({
   const sortedTrades = trades
     ? [...trades].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     : []
+
+  // Number safety orders by absolute SO level, in chronological order. A cascade
+  // (one dca trade covering >1 level) gets a combined label like "#1 & #2".
+  const soLabelByTradeId = new Map<number, string>()
+  let soLevelCounter = 0
+  for (const t of sortedTrades) {
+    if (t.side.toUpperCase() === 'BUY' && t.trade_type === 'dca') {
+      const levels = t.dca_levels || 1
+      soLabelByTradeId.set(t.id, formatSafetyOrderLabel(soLevelCounter + 1, levels))
+      soLevelCounter += levels
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -70,7 +84,7 @@ export const TradeHistoryModal = ({
                     <div className={`text-sm font-semibold ${
                       trade.side.toUpperCase() === 'BUY' ? 'text-green-400' : 'text-blue-400'
                     }`}>
-                      {trade.trade_type_display || trade.trade_type}
+                      {soLabelByTradeId.get(trade.id) || trade.trade_type_display || trade.trade_type}
                     </div>
                   </div>
                   <div>

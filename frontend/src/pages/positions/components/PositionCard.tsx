@@ -352,26 +352,24 @@ export const PositionCard = memo(function PositionCard({
             <div className="text-[10px] space-y-0.5">
               <div className="text-slate-400">
                 Completed: {(() => {
-                  // Calculate DCA count from trade_count (total trades - 1 initial = DCA count)
-                  // If trades array is available AND has trades for THIS position, use it for more detail
-                  if (trades && trades.length > 0) {
-                    const positionTrades = trades.filter(t => t.position_id === position.id && t.side === 'buy') || []
-                    // Only use trades array if it actually has trades for this position
-                    // Otherwise the trades are for a different selected position
-                    if (positionTrades.length > 0) {
-                      const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
-                      const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
-
-                      if (manualSO > 0) {
-                        return `${autoSO} (+${manualSO})`
-                      }
-                      return autoSO
-                    }
-                  }
-
-                  // Fallback: use trade_count from position (trade_count - 1 = DCA count)
-                  const dcaCount = Math.max(0, (position.trade_count || 0) - 1)
-                  return dcaCount
+                  // Auto safety orders = SO LEVELS deployed. Prefer the backend's
+                  // authoritative count (sums cascade levels, where one trade fills
+                  // multiple levels); fall back to summing dca_levels from the loaded
+                  // trades, then to trade_count - 1 (which undercounts cascades).
+                  const positionTrades = (trades || []).filter(
+                    t => t.position_id === position.id && t.side === 'buy'
+                  )
+                  const hasTrades = positionTrades.length > 0
+                  const autoSO = position.safety_orders_deployed
+                    ?? (hasTrades
+                      ? positionTrades
+                          .filter(t => t.trade_type === 'dca')
+                          .reduce((n, t) => n + (t.dca_levels || 1), 0)
+                      : Math.max(0, (position.trade_count || 0) - 1))
+                  const manualSO = hasTrades
+                    ? positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
+                    : 0
+                  return manualSO > 0 ? `${autoSO} (+${manualSO})` : autoSO
                 })()}
               </div>
               <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>

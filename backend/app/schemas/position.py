@@ -30,6 +30,7 @@ class PositionResponse(BaseModel):
     btc_usd_price_at_close: Optional[float]
     profit_usd: Optional[float]
     trade_count: int = 0
+    safety_orders_deployed: int = 0  # SO LEVELS filled (sums cascade levels, not trade rows)
     pending_orders_count: int = 0  # Count of unfilled limit orders
     first_buy_price: Optional[float] = None  # Price of first (base order) buy trade
     last_buy_price: Optional[float] = None  # Price of most recent buy trade
@@ -74,6 +75,7 @@ class TradeResponse(BaseModel):
     price: float
     trade_type: str  # "initial", "dca", "safety_order_1", etc.
     order_id: Optional[str]
+    dca_levels: int = 1  # how many SO levels this trade covers (>1 for a cascade)
 
     model_config = ConfigDict(from_attributes=True)
 

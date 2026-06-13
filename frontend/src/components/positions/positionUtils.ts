@@ -124,8 +124,11 @@ export function calculateSOLevels(position: Position): SOLevel[] {
   }
   if (!referencePrice) return []
 
-  // trade_count includes base order; remaining are SO fills
-  const safetyOrdersFilled = Math.max(0, (position.trade_count ?? 1) - 1)
+  // SO levels already filled. Prefer the backend's authoritative count
+  // (safety_orders_deployed), which sums cascade levels; fall back to
+  // trade_count - 1 (one base order) which undercounts cascades.
+  const safetyOrdersFilled = position.safety_orders_deployed
+    ?? Math.max(0, (position.trade_count ?? 1) - 1)
 
   const levels: SOLevel[] = []
   for (let soNum = safetyOrdersFilled + 1; soNum <= maxSafetyOrders; soNum++) {
@@ -162,4 +165,19 @@ export function calculateDCAPrices(
     prices.push({ level: dcaNum, price: referencePrice * (1 - totalDeviation / 100) })
   }
   return prices
+}
+
+/**
+ * Human label for a safety-order trade, numbered by absolute SO level. When a
+ * cascade fills several levels in one order (`levels` > 1), the label lists all
+ * of them, e.g. "Safety Order #1 & #2" or "Safety Order #1, #2, & #3".
+ *
+ * @param start  the first SO level this trade covers (1-based)
+ * @param levels how many consecutive SO levels it covers (>= 1)
+ */
+export function formatSafetyOrderLabel(start: number, levels: number): string {
+  const nums = Array.from({ length: Math.max(1, levels) }, (_, i) => `#${start + i}`)
+  if (nums.length === 1) return `Safety Order ${nums[0]}`
+  if (nums.length === 2) return `Safety Order ${nums[0]} & ${nums[1]}`
+  return `Safety Order ${nums.slice(0, -1).join(', ')}, & ${nums[nums.length - 1]}`
 }
