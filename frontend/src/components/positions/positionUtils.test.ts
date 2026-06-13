@@ -18,6 +18,7 @@ import {
   formatQuoteAmount,
   calculateSOLevels,
   calculateDCAPrices,
+  formatSafetyOrderLabel,
 } from './positionUtils'
 
 describe('SELL_FEE_RATE', () => {
@@ -226,6 +227,20 @@ describe('calculateSOLevels', () => {
     expect(calculateSOLevels(pos)).toEqual([])
   })
 
+  test('uses safety_orders_deployed over trade_count for cascades', () => {
+    // A cascade: base + ONE dca trade that filled SO #1 AND #2.
+    // trade_count = 2 (would imply only 1 SO filled), but the backend reports
+    // safety_orders_deployed = 2 — so the next pending SO must be #3, not #2.
+    const pos = {
+      ...basePosition,
+      trade_count: 2,
+      safety_orders_deployed: 2,
+    }
+    const levels = calculateSOLevels(pos)
+    expect(levels).toHaveLength(1)
+    expect(levels[0].soNumber).toBe(3)
+  })
+
   test('base_order reference uses first_buy_price', () => {
     const pos = {
       ...basePosition,
@@ -377,5 +392,26 @@ describe('calculateDCAPrices', () => {
     const result = calculateDCAPrices(1, 3, 2.0, 1.0, 100)
     expect(result[0].level).toBe(2)
     expect(result[1].level).toBe(3)
+  })
+})
+
+describe('formatSafetyOrderLabel', () => {
+  test('single level', () => {
+    expect(formatSafetyOrderLabel(1, 1)).toBe('Safety Order #1')
+    expect(formatSafetyOrderLabel(3, 1)).toBe('Safety Order #3')
+  })
+
+  test('two combined levels (cascade)', () => {
+    expect(formatSafetyOrderLabel(1, 2)).toBe('Safety Order #1 & #2')
+    expect(formatSafetyOrderLabel(2, 2)).toBe('Safety Order #2 & #3')
+  })
+
+  test('three or more combined levels use a serial comma', () => {
+    expect(formatSafetyOrderLabel(1, 3)).toBe('Safety Order #1, #2, & #3')
+    expect(formatSafetyOrderLabel(2, 4)).toBe('Safety Order #2, #3, #4, & #5')
+  })
+
+  test('levels < 1 falls back to a single label', () => {
+    expect(formatSafetyOrderLabel(1, 0)).toBe('Safety Order #1')
   })
 })

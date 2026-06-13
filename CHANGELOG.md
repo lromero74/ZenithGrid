@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.4] - 2026-06-13
+
+### Added
+- **Safety orders are numbered in Trade History, with combined labels for cascades.** Each safety order now shows its level number (e.g. "Safety Order #1"). When several levels filled together in one cascade order, they're labelled as a group — "Safety Order #1 & #2" or "Safety Order #1, #2, & #3".
+
+### Fixed
+- **The position card and price bar now reflect cascaded safety orders correctly.** After the v2.168.3 engine fix, the UI still under-reported cascades — showing "Completed: 1" and a phantom pending safety-order marker on the price bar when both levels were already filled — because it counted DCA trade rows. The backend now reports an authoritative count of safety-order levels deployed, and the "Completed" count and price-bar markers use it.
+
 ## [v2.168.3] - 2026-06-13
 
 ### Fixed
