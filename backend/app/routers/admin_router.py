@@ -134,7 +134,7 @@ async def list_users(
             all_unique_ips.update(ips)
 
         if all_unique_ips:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             unique_ip_list = list(all_unique_ips)
             ip_geo_cache: dict[str, dict] = await loop.run_in_executor(
                 None, _lookup_ip_geo_batch, unique_ip_list
@@ -760,7 +760,7 @@ async def get_ban_details(
 
     async def _grep_log(log_path: str, source: str):
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
+            result = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
                     ["grep", "-F", ip, log_path],
@@ -779,7 +779,7 @@ async def get_ban_details(
     async def _zgrep_log(log_path: str, source: str):
         """Search gzipped rotated logs."""
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
+            result = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
                     ["zgrep", "-F", ip, log_path],

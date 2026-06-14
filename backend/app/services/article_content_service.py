@@ -322,7 +322,7 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
                 html_content = await response.text()
 
         # Extract article content using trafilatura (shared thread pool)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         extracted = await loop.run_in_executor(
             _trafilatura_executor,
             lambda: trafilatura.extract(

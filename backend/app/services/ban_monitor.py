@@ -89,7 +89,7 @@ def get_ban_snapshot() -> BanSnapshot:
 async def refresh_ban_snapshot() -> BanSnapshot:
     """Force an immediate refresh of the ban snapshot (admin-triggered)."""
     global _snapshot
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _snapshot = await loop.run_in_executor(None, _query_bans)
     return _snapshot
 
@@ -359,7 +359,7 @@ async def run_ban_monitor_once(session_maker=None):
     APScheduler every 24 hours."""
     global _snapshot
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         _snapshot = await loop.run_in_executor(None, _query_bans)
         logger.info(
             f"Ban monitor (source={_BAN_SOURCE}): "
