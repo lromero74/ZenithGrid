@@ -280,3 +280,93 @@ class TestSyncAllUserTransfers:
 
         total = await sync_all_user_transfers(db_session, user.id)
         assert total == 5  # Only from second account
+
+
+def _txn(ext_id, currency="USD"):
+    return {
+        "external_id": ext_id,
+        "status": "completed",
+        "transfer_type": "deposit",
+        "amount": 100.0,
+        "currency": currency,
+        "amount_usd": 100.0,
+        "occurred_at": "2024-02-01T00:00:00Z",
+    }
+
+
+class TestSyncTransfersMultiAccount:
+    """Parallel per-sub-account fetch + single bulk dedup."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.transfer_sync_service.get_coinbase_for_account")
+    async def test_inserts_across_all_subaccounts(self, mock_get_coinbase, db_session):
+        """Happy path: transfers from every Coinbase sub-account are inserted."""
+        user, account = await _create_user_and_account(db_session, "multi@test.com")
+
+        per_account = {
+            "cb-1": [_txn("a-1")],
+            "cb-2": [_txn("b-1"), _txn("b-2")],
+            "cb-3": [_txn("c-1")],
+        }
+        mock_client = AsyncMock()
+        mock_client.get_accounts = AsyncMock(
+            return_value=[{"uuid": u} for u in per_account]
+        )
+        mock_client.get_deposit_withdrawals = AsyncMock(
+            side_effect=lambda uuid, since=None: list(per_account[uuid])
+        )
+        mock_get_coinbase.return_value = mock_client
+
+        count = await sync_transfers(db_session, user.id, account)
+        assert count == 4
+
+    @pytest.mark.asyncio
+    @patch("app.services.transfer_sync_service.get_coinbase_for_account")
+    async def test_cross_subaccount_duplicate_inserted_once(self, mock_get_coinbase, db_session):
+        """Failure/edge: the same external_id surfacing under two sub-accounts is
+        inserted only once (the within-batch seen-guard)."""
+        user, account = await _create_user_and_account(db_session, "dup@test.com")
+
+        mock_client = AsyncMock()
+        mock_client.get_accounts = AsyncMock(
+            return_value=[{"uuid": "cb-1"}, {"uuid": "cb-2"}]
+        )
+        mock_client.get_deposit_withdrawals = AsyncMock(
+            side_effect=lambda uuid, since=None: [_txn("shared-id")]
+        )
+        mock_get_coinbase.return_value = mock_client
+
+        count = await sync_transfers(db_session, user.id, account)
+        assert count == 1
+
+    @pytest.mark.asyncio
+    @patch("app.services.transfer_sync_service.get_coinbase_for_account")
+    async def test_fetch_concurrency_is_bounded(self, mock_get_coinbase, db_session):
+        """Concurrency across sub-account fetches stays within the cap."""
+        import asyncio
+        from app.services import transfer_sync_service as svc
+
+        user, account = await _create_user_and_account(db_session, "conc@test.com")
+
+        active = 0
+        max_active = 0
+
+        async def _fetch(uuid, since=None):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.005)
+            active -= 1
+            return [_txn(f"{uuid}-x")]
+
+        n = svc.TRANSFER_FETCH_CONCURRENCY * 3
+        mock_client = AsyncMock()
+        mock_client.get_accounts = AsyncMock(
+            return_value=[{"uuid": f"cb-{i}"} for i in range(n)]
+        )
+        mock_client.get_deposit_withdrawals = AsyncMock(side_effect=_fetch)
+        mock_get_coinbase.return_value = mock_client
+
+        count = await sync_transfers(db_session, user.id, account)
+        assert count == n
+        assert max_active <= svc.TRANSFER_FETCH_CONCURRENCY
