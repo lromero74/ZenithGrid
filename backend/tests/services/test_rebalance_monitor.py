@@ -10,6 +10,19 @@ from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+def _pos(product_id, base=0.0, quote_spent=0.0):
+    """Build a minimal open-position mock for rebalancer tests.
+
+    Sets numeric total_base_acquired/total_quote_spent (a bare MagicMock attr
+    would break the per-base summing the rebalancer now performs).
+    """
+    pos = MagicMock()
+    pos.product_id = product_id
+    pos.total_base_acquired = base
+    pos.total_quote_spent = quote_spent
+    return pos
+
+
 # ---------------------------------------------------------------------------
 # calculate_current_allocations
 # ---------------------------------------------------------------------------
@@ -384,14 +397,17 @@ class TestPortfolioCompositionView:
         mock_pos1 = MagicMock()
         mock_pos1.product_id = "ETH-USDC"
         mock_pos1.total_quote_spent = 100.0
+        mock_pos1.total_base_acquired = 0.05  # ETH (free ETH is 0 → no effect)
 
         mock_pos2 = MagicMock()
         mock_pos2.product_id = "SOL-USDC"
         mock_pos2.total_quote_spent = 144.0
+        mock_pos2.total_base_acquired = 1.5  # SOL (not a target currency)
 
         mock_pos3 = MagicMock()
         mock_pos3.product_id = "MORPHO-USDC"
         mock_pos3.total_quote_spent = 0.0  # Edge: zero spend handled gracefully
+        mock_pos3.total_base_acquired = 0.0
 
         # DB mock: positions query returns our open positions
         mock_result = MagicMock()
@@ -1462,3 +1478,178 @@ class TestPaperConvert:
         # Balances unchanged
         assert client.balances["USD"] == pytest.approx(50.0)
         client._save_balances.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Position-held coins must not be sold by the rebalancer
+# ---------------------------------------------------------------------------
+
+
+class TestSumLockedBaseAmounts:
+    """sum_locked_base_amounts: per-base-coin totals held in open positions.
+
+    Coins acquired by an open position sit in the spot wallet as spendable
+    balance (the exchange holds nothing on filled coins), so they must be
+    excluded from rebalanceable funds. Every position counts toward its base
+    coin here (and toward its QUOTE currency via total_quote_spent elsewhere).
+    """
+
+    def test_sums_per_base_currency_across_positions(self):
+        """User's examples: BTC-USD, BTC-ETH, ETH-USDC.
+
+        BTC bought via BTC-USD and BTC-ETH both lock BTC; ETH-USDC locks ETH.
+        """
+        from app.services.rebalance_monitor import sum_locked_base_amounts
+
+        positions = [
+            _pos("BTC-USD", base=0.4),
+            _pos("BTC-ETH", base=0.1),
+            _pos("ETH-USDC", base=2.0),
+        ]
+        locked = sum_locked_base_amounts(positions)
+        assert locked == {"BTC": pytest.approx(0.5), "ETH": pytest.approx(2.0)}
+
+    def test_ignores_zero_and_none_base(self):
+        """Edge: zero / None / missing product_id contribute nothing."""
+        from app.services.rebalance_monitor import sum_locked_base_amounts
+
+        positions = [
+            _pos("BTC-USD", base=0.0),
+            _pos("ETH-USD", base=None),
+            _pos("", base=1.0),
+            _pos("SOL-USDC", base=3.0),
+        ]
+        locked = sum_locked_base_amounts(positions)
+        assert locked == {"SOL": pytest.approx(3.0)}
+
+    def test_empty_positions_returns_empty(self):
+        """Edge: no positions -> nothing locked."""
+        from app.services.rebalance_monitor import sum_locked_base_amounts
+
+        assert sum_locked_base_amounts([]) == {}
+
+    def test_adjustment_protects_each_quote_market_base(self):
+        """The free-balance adjustment (as _process_account applies it) subtracts
+        each position's base coin while leaving coins with no position untouched."""
+        from app.services.rebalance_monitor import sum_locked_base_amounts
+
+        free = {"USD": 100.0, "BTC": 1.0, "ETH": 5.0, "USDC": 0.0}
+        locked = sum_locked_base_amounts([
+            _pos("BTC-USD", base=0.4),
+            _pos("BTC-ETH", base=0.1),
+            _pos("ETH-USDC", base=2.0),
+        ])
+        adjusted = {
+            c: max(0.0, free[c] - locked.get(c, 0.0)) for c in free
+        }
+        assert adjusted["BTC"] == pytest.approx(0.5)   # 1.0 - 0.5 locked
+        assert adjusted["ETH"] == pytest.approx(3.0)   # 5.0 - 2.0 locked
+        assert adjusted["USD"] == pytest.approx(100.0)  # no BTC/ETH base here
+        assert adjusted["USDC"] == pytest.approx(0.0)
+
+
+class TestRebalancerProtectsPositionCoins:
+    """The rebalancer must never sell coins held inside open bot positions.
+
+    Scenario: a USD bot bought BTC on BTC-USD; that BTC is in the spot wallet so
+    get_btc_balance() returns it. With a ~100%-USD target, the pre-fix rebalancer
+    sold the bot's BTC. After the fix only genuinely-free BTC is sellable.
+    """
+
+    def _account(self):
+        account = MagicMock()
+        account.id = 77
+        account.name = "USD-target account"
+        account.rebalance_enabled = True
+        account.rebalance_target_usd_pct = 100.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+        account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 1.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+        return account
+
+    def _client(self, btc_wallet):
+        BTC_PRICE = 100_000.0
+        client = AsyncMock()
+        client.get_usd_balance = AsyncMock(return_value=10.0)
+        client.get_btc_balance = AsyncMock(return_value=btc_wallet)
+        client.get_eth_balance = AsyncMock(return_value=0.0)
+        client.get_usdc_balance = AsyncMock(return_value=0.0)
+        client.get_current_price = AsyncMock(
+            side_effect=lambda p: {
+                "BTC-USD": BTC_PRICE, "ETH-USD": 1800.0, "USDC-USD": 1.0
+            }.get(p, 0.0)
+        )
+        client.sell_for_usd = AsyncMock(
+            return_value={"success_response": {"order_id": "sell-1"}}
+        )
+        client.buy_with_usd = AsyncMock(
+            return_value={"success_response": {"order_id": "buy-1"}}
+        )
+        client.create_market_order = AsyncMock(
+            return_value={"success_response": {"order_id": "mkt-1"}}
+        )
+        return client
+
+    def _db(self, positions):
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = positions
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=mock_result)
+        return db
+
+    @pytest.mark.asyncio
+    async def test_position_held_btc_not_sold_toward_usd_target(self):
+        """Regression: 1.0 BTC in wallet but 0.9 locked in an open BTC-USD
+        position; target 100% USD. Only the 0.1 free BTC may be sold."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+        account = self._account()
+        client = self._client(btc_wallet=1.0)
+        # 0.9 BTC locked in an open BTC-USD position (cost $90k)
+        db = self._db([_pos("BTC-USD", base=0.9, quote_spent=90_000.0)])
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=client,
+        ):
+            await monitor._process_account(account, db)
+
+        # Sum BTC sold across every sell path. Must be <= the 0.1 free BTC,
+        # never the 0.9 in the open position.
+        btc_sold = 0.0
+        for call in client.sell_for_usd.call_args_list:
+            args, kwargs = call[0], call[1]
+            btc_sold += float(kwargs.get("base_amount", args[0] if args else 0.0))
+        assert btc_sold <= 0.1 + 1e-6, (
+            f"Rebalancer sold {btc_sold} BTC — must not exceed the 0.1 free BTC "
+            "(the 0.9 BTC in the open position must be protected)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fully_committed_btc_not_sold_and_no_error(self):
+        """Edge: all 0.9 wallet BTC is locked in a position -> nothing free to
+        sell; the cycle completes without error and sells no BTC."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        monitor = RebalanceMonitor()
+        account = self._account()
+        client = self._client(btc_wallet=0.9)
+        db = self._db([_pos("BTC-USD", base=0.9, quote_spent=90_000.0)])
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=client,
+        ):
+            await monitor._process_account(account, db)
+
+        client.sell_for_usd.assert_not_called()

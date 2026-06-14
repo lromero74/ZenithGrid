@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.12] - 2026-06-13
+
+### Fixed
+- **The portfolio rebalancer no longer sells coins held inside open bot positions.** Coins a bot buys (e.g. BTC bought by a USD bot on BTC-USD) sit in the spot wallet as ordinary spendable balance, so the rebalancer counted them as free and — with a target like 100% USD — would sell them out from under the open position (leaving the position with nothing to take profit on). The rebalancer now subtracts coins committed to open positions before deciding what to sell, so it only ever trades genuinely-free funds. Each position's deployed capital still counts toward its quote currency at cost (BTC-bought-with-USD counts as USD, BTC-bought-with-ETH as ETH, ETH-bought-with-USDC as USDC), which also removes a double-count in drift detection. (The bot soft-ceiling/budget calculation already accounted for positions correctly and is unchanged.)
+
 ## [v2.168.11] - 2026-06-13
 
 ### Changed

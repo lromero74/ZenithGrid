@@ -1508,7 +1508,7 @@
     },
     {
       "file": "services/rebalance_monitor.py",
-      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data.",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost).",
       "type": "background"
     },
     {
