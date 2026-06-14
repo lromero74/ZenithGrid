@@ -65,54 +65,33 @@ def calculate_base_order_size(config: Dict, balance: float) -> float:
     auto_calculate = config.get("auto_calculate_order_sizes", False)
 
     if order_type == "percentage":
-        if auto_calculate and max_safety_orders > 0:
-            total_multiplier = 1.0  # Base order
-
-            safety_order_type = config.get("safety_order_type", "percentage_of_base")
-            volume_scale = config.get("safety_order_volume_scale", 1.0)
-
-            if safety_order_type == "percentage_of_base":
-                so_percentage = config.get("safety_order_percentage", 50.0) / 100.0
-                # S12: Closed-form geometric series (O(1) instead of O(n))
-                n = max_safety_orders
-                if volume_scale == 1.0:
-                    total_multiplier += so_percentage * n
-                else:
-                    total_multiplier += so_percentage * (volume_scale ** n - 1) / (volume_scale - 1)
-
-                optimal_percentage = 100.0 / total_multiplier
-                return balance * (optimal_percentage / 100.0)
+        # Auto-calculated percentage base orders divide the budget by the full-cycle
+        # multiplier (base + all safety orders) so the base + every SO fits the budget.
+        # Only the percentage_of_base safety type takes this path; a fixed safety type
+        # falls through to the flat base_order_percentage below.
+        if (
+            auto_calculate
+            and max_safety_orders > 0
+            and config.get("safety_order_type", "percentage_of_base") == "percentage_of_base"
+        ):
+            total_multiplier = get_total_multiplier(config)
+            if total_multiplier > 0:
+                return balance / total_multiplier
+            # Degenerate config (non-positive multiplier): fall through to flat % below
+            # rather than divide by zero (CLAUDE.md rule 13 — never Infinity).
 
         percentage = config.get("base_order_percentage", 10.0)
         return balance * (percentage / 100.0)
 
     elif order_type in ["fixed", "fixed_btc"]:
-        if config.get("auto_calculate_order_sizes", False) and max_safety_orders > 0 and balance > 0:
-            safety_order_type = config.get("safety_order_type", "percentage_of_base")
-
-            if safety_order_type in ["fixed", "fixed_btc"]:
-                volume_scale = config.get("safety_order_volume_scale", 1.0)
-                # S12: Closed-form geometric series (O(1) instead of O(n))
-                # Base order (1.0) + SO1 (1.0) + SO2..SOn (geometric)
-                total_multiplier = 2.0  # Base + SO1
-                n = max_safety_orders
-                if n > 1:
-                    if volume_scale == 1.0:
-                        total_multiplier += (n - 1)
-                    else:
-                        # Sum v^1 + v^2 + ... + v^(n-1) = v*(v^(n-1) - 1)/(v - 1)
-                        total_multiplier += volume_scale * (volume_scale ** (n - 1) - 1) / (volume_scale - 1)
+        if auto_calculate and max_safety_orders > 0 and balance > 0:
+            # Both safety types divide the budget by the full-cycle multiplier; the
+            # series is defined once in get_total_multiplier.
+            total_multiplier = get_total_multiplier(config)
+            if total_multiplier > 0:
                 return balance / total_multiplier
-            else:
-                volume_scale = config.get("safety_order_volume_scale", 1.0)
-                so_multiplier = config.get("safety_order_percentage", 50.0) / 100.0
-                # S12: Closed-form geometric series (O(1) instead of O(n))
-                n = max_safety_orders
-                if volume_scale == 1.0:
-                    total_multiplier = 1.0 + so_multiplier * n
-                else:
-                    total_multiplier = 1.0 + so_multiplier * (volume_scale ** n - 1) / (volume_scale - 1)
-                return balance / total_multiplier
+            # Degenerate config: floor to the whole budget rather than divide by zero.
+            return balance
         else:
             base_order_btc = config.get("base_order_btc", 0.0001)
             base_order_fixed = config.get("base_order_fixed", 0.001)
