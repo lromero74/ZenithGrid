@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.9] - 2026-06-13
+
+### Fixed
+- **Shared-account managers can now market-sell on accounts shared with them.** The manual market-sell action was owner-only, so a manager who could already cancel orders, force-close positions, and add funds on a managed account couldn't market-sell on it. Managers can now market-sell when they specify the managed account; view-only members and non-members still cannot, and the no-account convenience default remains owner-only. The order always executes against the owning account's exchange credentials.
+
 ## [v2.168.8] - 2026-06-13
 
 ### Fixed
