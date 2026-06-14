@@ -493,6 +493,9 @@
         "total_base_acquired",
         "total_quote_spent",
         "average_buy_price"
+      ],
+      "indexes": [
+        "ix_positions_account_status_closed — compound on (account_id, status, closed_at); declared in __table_args__ and backfilled by migration 087; supports range-scan in _query_closed_pnl"
       ]
     },
     {
@@ -1483,7 +1486,7 @@
     },
     {
       "file": "services/portfolio_calculations.py",
-      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings (handles both owner-scoped and aggregated-cross-account paths via optional open_positions), _compute_position_pnl, _apply_asset_pnl_to_holdings, _compute_balance_breakdown (with BalanceBreakdownParams dataclass), _compute_closed_pnl. Four shadow helpers (_process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl) were removed in v2.164.3; both call paths in portfolio_service now use the single canonical set. No DB, cache, or API calls.",
+      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings (handles both owner-scoped and aggregated-cross-account paths via optional open_positions), _compute_position_pnl, _apply_asset_pnl_to_holdings, _compute_balance_breakdown (with BalanceBreakdownParams dataclass). Four shadow helpers (_process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl) were removed in v2.164.3; both call paths in portfolio_service now use the single canonical set. v2.168.17: _compute_closed_pnl (which looped over every closed position) was removed and replaced by aggregate_pnl_rows(rows) — a pure function that buckets pre-grouped SQL sums (rows come from portfolio_service._query_closed_pnl). No DB, cache, or API calls.",
       "type": "trading"
     },
     {
@@ -1493,7 +1496,7 @@
     },
     {
       "file": "services/portfolio_service.py",
-      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC). v2.164.6: get_cex_portfolio accepts include_details=False to return totals only (skips the open-position query, per-asset PnL/balance fan-out, and holdings list) so the fast summary path can reuse it without paying for full portfolio assembly. v2.167.9: get_coinbase_from_db now passes account_id=account.id into CoinbaseCredentials so the resulting client is account-scoped, preventing cross-account/cross-user contamination in calculate_market_budget.",
+      "purpose": "Portfolio aggregation and balance calculations; public async fetchers and the global cache/API symbols. Pure computation helpers moved to portfolio_calculations.py in Phase 5 (module shrunk from 1241 LOC to 786 LOC). v2.164.6: get_cex_portfolio accepts include_details=False to return totals only (skips the open-position query, per-asset PnL/balance fan-out, and holdings list) so the fast summary path can reuse it without paying for full portfolio assembly. v2.167.9: get_coinbase_from_db now passes account_id=account.id into CoinbaseCredentials so the resulting client is account-scoped, preventing cross-account/cross-user contamination in calculate_market_budget. v2.168.17: adds async helper _query_closed_pnl(db, account_ids) which aggregates realized PnL in SQL (GROUP BY product_id) instead of loading all closed position rows into Python; replaces two call sites that previously fetched full position records.",
       "type": "trading"
     },
     {
@@ -1508,7 +1511,7 @@
     },
     {
       "file": "services/rebalance_monitor.py",
-      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost).",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost). v2.168.17: adds _price_dust_coins() method that prices dust-candidate coins with bounded concurrency.",
       "type": "background"
     },
     {
@@ -2334,7 +2337,7 @@
     }
   ],
   "migrations": {
-    "count": 94,
+    "count": 96,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2434,7 +2437,9 @@
       "082_speculative_bucket.py",
       "083_ai_opinion_log_speculative.py",
       "084_speculative_weights_proposals.py",
-      "085_more_performance_indexes.py"
+      "085_more_performance_indexes.py",
+      "086_trade_dca_levels.py",
+      "087_positions_pnl_index.py"
     ]
   }
 }

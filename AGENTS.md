@@ -25,9 +25,11 @@ Why this is non-negotiable here:
 - **Editing a stale tree silently re-introduces already-fixed bugs** and produces
   diffs that conflict with work another agent already shipped.
 - **When diagnosing production behavior, match versions first.** Compare your local
-  `git describe --tags` against the deployed tag on `fedora.local`
-  (`ssh fedora.local "cd ~/ZenithGrid && git describe --tags"`) before reasoning
+  `git describe --tags` against the deployed tag on the Lightsail prod host
+  (`ssh zenithgrid-ls "cd ~/ZenithGrid && git describe --tags"`) before reasoning
   about code paths — otherwise you may be reading code that no longer runs in prod.
+  (`zenithgrid-ls` is the SSH alias defined in `~/.ssh/config`; use it rather than a
+  raw `user@host`.)
 
 If `git pull --ff-only` is rejected (diverged history), **stop and reconcile**
 before touching code. Do not force anything.
@@ -91,9 +93,42 @@ Why: in one June-2026 session, three separate bugs (the editor showing a `20`
 ceiling and a `$1` base order while the engine used `1` and `$1.83`) all traced to
 divergent copies of the same soft-ceiling / multiplier / sizing math.
 
+## Consult the symbol registry before adding a function (HARD RULE)
+
+Before writing a new function or method, check whether one already exists and
+reuse/extend it instead of re-implementing — duplicated logic drifts and rots.
+
+This repo ships a **live symbol registry** that scans `backend/app` with Python's
+`ast` on every run, so it can never go stale:
+
+```bash
+python scripts/symbol_registry.py --check <name>   # where is <name> already defined?
+python scripts/symbol_registry.py --duplicates     # module-level names defined in >1 file
+python scripts/symbol_registry.py --write          # regenerate snapshot after add/rename/remove
+python scripts/symbol_registry.py --verify         # exit non-zero if snapshot is stale
+```
+
+- Run `--check <name>` **before** adding a function. If a suitable one exists,
+  reuse it. (Note many same-named functions are legitimate — e.g. a router
+  endpoint delegating to a same-named service method — so `--duplicates` is
+  advisory, not a hard gate.)
+- The browsable snapshot is `docs/symbol_registry.json`;
+  `backend/tests/test_symbol_registry.py` fails if it drifts from a live scan, so
+  regenerate it (`--write`) whenever you intentionally add, rename, or remove a
+  function.
+- When duplication is genuinely unavoidable (e.g. a calc on both the Python and
+  TypeScript sides), make one side authoritative and add a parity test.
+
 ## Environment note
 
-- `fedora.local` is **production**. ZenithGrid runs as `zenithgrid.service` in the
-  `zenith-box` distrobox on `127.0.0.1:8100`; PostgreSQL is in `postgres-box`.
-  See the deploy/environment sections of `CLAUDE.md`.
-- Otherwise you are on a dev machine — push to git, deploy on the prod host.
+- **Production is AWS Lightsail** (`zenithgrid`, us-east-1, static IP
+  `52.87.130.244`), since 2026-06-13. ZenithGrid runs **natively** as the systemd
+  *system* unit `zenithgrid.service` (uvicorn on `127.0.0.1:8100`, **no distrobox**);
+  PostgreSQL 16 and Redis run on the same box. SSH via the alias `ssh zenithgrid-ls`
+  (defined in `~/.ssh/config` → `origin.bigtruckincrypto.com`; use the alias, not a
+  raw `user@host`). Deploy: `git pull origin main` + `git fetch origin --tags`, then
+  `sudo systemctl restart zenithgrid` (frontend-only: `cd frontend && npm run build`).
+- `fedora.local` is now a **stopped warm-standby / rollback target only** — do NOT
+  start ZenithGrid there while Lightsail is live (double-trade risk). See the
+  deploy/environment sections of `CLAUDE.md` for the authoritative details.
+- Otherwise you are on a dev machine — push to git, deploy on the Lightsail prod host.

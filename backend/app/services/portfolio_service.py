@@ -9,7 +9,7 @@ import logging
 from app.utils.timeutil import utcnow
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ExchangeUnavailableError, NotFoundError
@@ -27,11 +27,41 @@ from app.services.portfolio_calculations import (
     _apply_asset_pnl_to_holdings,
     _build_portfolio_holdings,
     _compute_balance_breakdown,
-    _compute_closed_pnl,
     _compute_position_pnl,
+    aggregate_pnl_rows,
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _query_closed_pnl(db: AsyncSession, account_ids) -> tuple:
+    """Aggregate realized PnL (all-time + today) for the given account id(s).
+
+    Sums ``profit_quote`` in SQL grouped by ``product_id``, so the result set is
+    one row per distinct trading pair — not one row per closed position. This
+    bounds the work by the (small) number of pairs an account trades instead of
+    its entire, ever-growing trade history, which previously had to be loaded
+    into memory and summed on every portfolio fetch.
+    """
+    zero = ({"usd": 0.0, "btc": 0.0, "usdc": 0.0}, {"usd": 0.0, "btc": 0.0, "usdc": 0.0})
+    if not account_ids:
+        return zero
+
+    start_of_today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_sum = func.sum(
+        case((Position.closed_at >= start_of_today, Position.profit_quote), else_=0.0)
+    )
+    query = (
+        select(Position.product_id, func.sum(Position.profit_quote), today_sum)
+        .where(
+            Position.status == "closed",
+            Position.account_id.in_(account_ids),
+            Position.profit_quote.isnot(None),
+        )
+        .group_by(Position.product_id)
+    )
+    rows = (await db.execute(query)).all()
+    return aggregate_pnl_rows(rows)
 
 
 async def get_user_paper_account(db: AsyncSession, user_id: int) -> Optional[Account]:
@@ -205,14 +235,7 @@ async def get_cex_portfolio(
     ))
 
     # Calculate realized PnL (strictly scoped to this account)
-    closed_positions_query = select(Position).where(
-        Position.status == "closed",
-        Position.account_id == account.id
-    )
-    closed_positions_result = await db.execute(closed_positions_query)
-    closed_positions = closed_positions_result.scalars().all()
-
-    pnl_all_time, pnl_today = _compute_closed_pnl(closed_positions)
+    pnl_all_time, pnl_today = await _query_closed_pnl(db, [account.id])
 
     result = {
         "total_usd_value": total_usd_value,
@@ -784,15 +807,8 @@ async def get_account_portfolio_data(
         breakdown_prices=breakdown_prices, btc_usd_price=btc_usd_price,
     ))
 
-    # Phase 5: Realized PnL
-    closed_positions_query = select(Position).where(
-        Position.status == "closed",
-        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
-    )
-    closed_positions_result = await db.execute(closed_positions_query)
-    closed_positions = closed_positions_result.scalars().all()
-
-    pnl_all_time, pnl_today = _compute_closed_pnl(closed_positions)
+    # Phase 5: Realized PnL (scoped to the user's accounts; aggregated in SQL)
+    pnl_all_time, pnl_today = await _query_closed_pnl(db, user_account_ids)
     pnl = {"all_time": pnl_all_time, "today": pnl_today}
 
     logger.info(

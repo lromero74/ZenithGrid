@@ -12,6 +12,7 @@ position's coins are never sold out from under the bot. A position's deployed
 capital still counts toward its quote currency at cost.
 """
 
+import asyncio
 import json
 from app.utils.timeutil import utcnow
 import logging
@@ -28,6 +29,10 @@ from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
 
 logger = logging.getLogger(__name__)
+
+# Max concurrent dust price lookups — parallelize the per-coin price fetches
+# while staying well under exchange rate limits.
+DUST_PRICE_CONCURRENCY = 8
 
 EXCHANGE_MIN_USD = 10.0  # Coinbase minimum order size
 DEFAULT_MIN_TRADE_PCT = 5.0  # Default: only trade if shift is >= 5% of portfolio
@@ -1004,6 +1009,29 @@ class RebalanceMonitor(SessionMakerMixin):
                 f"(Account: {account.name}): {error_msg}"
             )
 
+    async def _price_dust_coins(self, client, coins: list, prices: dict) -> None:
+        """Fetch USD prices for ``coins`` concurrently (bounded) into ``prices``.
+
+        Mutates ``prices`` in place, adding ``{coin}-USD`` keys. Coins that can't
+        be priced (no market / API error) are silently skipped, matching the prior
+        behavior — only the serial round-trips become bounded-concurrent.
+        """
+        if not coins:
+            return
+        sem = asyncio.Semaphore(DUST_PRICE_CONCURRENCY)
+
+        async def _price_one(coin):
+            async with sem:
+                try:
+                    p = await client.get_current_price(f"{coin}-USD")
+                    return coin, float(p)
+                except Exception:
+                    return coin, None  # Can't price it, will be skipped
+
+        for coin, price in await asyncio.gather(*(_price_one(c) for c in coins)):
+            if price is not None:
+                prices[f"{coin}-USD"] = price
+
     async def _sweep_dust(
         self, client, account, db: AsyncSession,
         prices: dict, free_balances: dict,
@@ -1044,14 +1072,10 @@ class RebalanceMonitor(SessionMakerMixin):
                 c for c in all_balances
                 if c not in TARGET_CURRENCIES and all_balances[c] > 0
             }
-            for coin in dust_coins:
-                pair = f"{coin}-USD"
-                if pair not in prices:
-                    try:
-                        p = await client.get_current_price(pair)
-                        prices[pair] = float(p)
-                    except Exception:
-                        pass  # Can't price it, will be skipped
+            # Price the unpriced dust coins concurrently (bounded) instead of one
+            # serial round-trip each — the wall-clock was O(coins) × API latency.
+            coins_to_price = [c for c in dust_coins if f"{c}-USD" not in prices]
+            await self._price_dust_coins(client, coins_to_price, prices)
 
             # Get available products
             available_products = set()
