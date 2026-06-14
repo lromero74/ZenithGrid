@@ -39,7 +39,7 @@ alembic>=1.17.0
 flake8>=7.0.0
 pytest>=9.0.0
 httpx2>=2.3.0  # starlette 1.x testclient prefers httpx2 (httpx use is deprecated there)
-pytest-asyncio>=1.3.0
+pytest-asyncio>=1.4.0  # 1.4.0 fixes an internal unclosed-event-loop leak (ResourceWarning under -W error)
 pytest-cov>=7.0.0
 
 # Text-to-speech

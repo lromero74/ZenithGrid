@@ -20,13 +20,9 @@ from sqlalchemy.ext.asyncio import (
 # pytest-asyncio (>=0.21) manages the event loop itself; overriding it is
 # deprecated and leaks an unclosed loop (surfacing as a ResourceWarning under
 # -W error). The loop scope is configured via `asyncio_default_fixture_loop_scope`
-# in pytest.ini instead.
-#
-# Known residual: under `-W error` the full suite may still report a single
-# "unclosed event loop" ResourceWarning attributed to a random test. tracemalloc
-# shows it is allocated entirely inside pytest_asyncio's own per-test loop setup
-# (no frames from app/ or tests/) — i.e. a pytest-asyncio 1.3.0 internal artifact,
-# not a leak in our code. The standard `pytest` run (no -W error) is clean.
+# in pytest.ini instead. (pytest-asyncio 1.3.0 also leaked one loop from its own
+# per-test setup; requirements.txt pins >=1.4.0, which fixes that — the full suite
+# is clean under -W error.)
 
 # ---------------------------------------------------------------------------
 # Database fixtures
