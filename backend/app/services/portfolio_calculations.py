@@ -6,7 +6,6 @@ Extracted from portfolio_service.py. No DB, cache, or API calls here.
 """
 
 from dataclasses import dataclass
-from app.utils.timeutil import utcnow
 
 
 def _build_portfolio_holdings(
@@ -251,27 +250,29 @@ def _compute_balance_breakdown(params: BalanceBreakdownParams) -> dict:
     }
 
 
-def _compute_closed_pnl(closed_positions: list) -> tuple:
+def aggregate_pnl_rows(rows) -> tuple:
     """
-    Calculate all-time and today's realized PnL from closed positions.
+    Bucket pre-aggregated closed-PnL sums into usd/btc/usdc.
+
+    ``rows`` come from a ``GROUP BY product_id`` SQL aggregate, so each row is
+    ``(product_id, all_time_sum, today_sum)`` — one row per distinct trading pair,
+    NOT one per closed position. This keeps the cost proportional to the number of
+    pairs an account trades rather than its entire (unbounded) trade history.
+
+    The quote-currency derivation mirrors ``Position.get_quote_currency()``
+    (quote = the part after '-', default 'BTC'); unknown quotes bucket into "usd".
 
     Returns:
         Tuple of (pnl_all_time, pnl_today) dicts, each with "usd", "btc", "usdc" keys.
     """
     pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
     pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-    now = utcnow()
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    for position in closed_positions:
-        if position.profit_quote is not None:
-            quote = position.get_quote_currency()
-            quote_key = quote.lower() if quote in ["USD", "BTC", "USDC"] else "usd"
-
-            pnl_all_time[quote_key] += position.profit_quote
-
-            if position.closed_at and position.closed_at >= start_of_today:
-                pnl_today[quote_key] += position.profit_quote
+    for product_id, all_time_sum, today_sum in rows:
+        quote = product_id.split("-")[1] if product_id and "-" in product_id else "BTC"
+        quote_key = quote.lower() if quote in ("USD", "BTC", "USDC") else "usd"
+        pnl_all_time[quote_key] += float(all_time_sum or 0.0)
+        pnl_today[quote_key] += float(today_sum or 0.0)
 
     return pnl_all_time, pnl_today
 

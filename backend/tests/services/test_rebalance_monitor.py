@@ -1653,3 +1653,73 @@ class TestRebalancerProtectsPositionCoins:
             await monitor._process_account(account, db)
 
         client.sell_for_usd.assert_not_called()
+
+
+class TestPriceDustCoins:
+    """RebalanceMonitor._price_dust_coins — bounded-concurrent dust pricing."""
+
+    async def test_happy_populates_prices(self):
+        """Each priceable coin gets a {coin}-USD entry from the client."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        client = MagicMock()
+        client.get_current_price = AsyncMock(side_effect=lambda pid: {
+            "ADA-USD": 0.5, "DOGE-USD": 0.1,
+        }[pid])
+
+        prices = {}
+        await RebalanceMonitor()._price_dust_coins(client, ["ADA", "DOGE"], prices)
+        assert prices == {"ADA-USD": 0.5, "DOGE-USD": 0.1}
+
+    async def test_failure_skips_unpriceable_coin(self):
+        """A coin whose price lookup raises is skipped; others still land."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        async def _price(pid):
+            if pid == "BADCOIN-USD":
+                raise ValueError("no market")
+            return 2.0
+
+        client = MagicMock()
+        client.get_current_price = AsyncMock(side_effect=_price)
+
+        prices = {}
+        await RebalanceMonitor()._price_dust_coins(client, ["GOOD", "BADCOIN"], prices)
+        assert prices == {"GOOD-USD": 2.0}
+
+    async def test_empty_makes_no_calls(self):
+        """Edge: no coins -> no API calls, prices untouched."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        client = MagicMock()
+        client.get_current_price = AsyncMock()
+
+        prices = {"BTC-USD": 1.0}
+        await RebalanceMonitor()._price_dust_coins(client, [], prices)
+        client.get_current_price.assert_not_called()
+        assert prices == {"BTC-USD": 1.0}
+
+    async def test_concurrency_is_bounded(self):
+        """Concurrency never exceeds DUST_PRICE_CONCURRENCY even with many coins."""
+        import asyncio
+        from app.services import rebalance_monitor as rm
+
+        active = 0
+        max_active = 0
+
+        async def _price(pid):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.005)
+            active -= 1
+            return 1.0
+
+        client = MagicMock()
+        client.get_current_price = AsyncMock(side_effect=_price)
+
+        coins = [f"C{i}" for i in range(rm.DUST_PRICE_CONCURRENCY * 3)]
+        prices = {}
+        await rm.RebalanceMonitor()._price_dust_coins(client, coins, prices)
+        assert len(prices) == len(coins)
+        assert max_active <= rm.DUST_PRICE_CONCURRENCY

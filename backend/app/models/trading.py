@@ -425,7 +425,13 @@ class BotTemplateProduct(Base):
 
 class Position(Base):
     __tablename__ = "positions"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # Realized-PnL aggregation scans an account's closed positions ordered by
+        # close time (see portfolio_service._query_closed_pnl). Compound index
+        # turns that from an account-index + heap filter into a range scan.
+        Index("ix_positions_account_status_closed", "account_id", "status", "closed_at"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     # Link to bot (nullable for backwards compatibility)
