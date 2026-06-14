@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Account, AccountTransfer, User
+from app.models.sharing import AccountMembership
 
 
 # ---------------------------------------------------------------------------
@@ -550,6 +551,246 @@ class TestGetRecentSummary:
         result = await get_recent_summary(db=db_session, current_user=user)
         assert result["last_30d_deposit_count"] == 0
         assert result["last_30d_withdrawal_count"] == 0
+
+
+# =============================================================================
+# Shared-account visibility (members see managed-account transfer history)
+# =============================================================================
+
+
+@pytest.fixture
+async def shared_account_transfers(db_session):
+    """Owner account with transfers, plus a member (shadow) and a stranger.
+
+    Also creates a SECOND owner-owned account (unrelated to the member) used to
+    prove the ?account_id query param can't be used to reach out-of-scope data.
+    """
+    owner = User(
+        email="shared_owner@example.com", hashed_password="x",
+        display_name="Owner", is_active=True,
+    )
+    member = User(
+        email="shared_member@example.com", hashed_password="x",
+        display_name="Member", is_active=True,
+    )
+    stranger = User(
+        email="shared_stranger@example.com", hashed_password="x",
+        display_name="Stranger", is_active=True,
+    )
+    db_session.add_all([owner, member, stranger])
+    await db_session.flush()
+
+    account = Account(
+        user_id=owner.id, name="Shared Account", type="cex",
+        exchange="coinbase", is_active=True,
+    )
+    # A second account the owner has, with NO membership for `member`.
+    private_account = Account(
+        user_id=owner.id, name="Private Account", type="cex",
+        exchange="coinbase", is_active=True,
+    )
+    db_session.add_all([account, private_account])
+    await db_session.flush()
+
+    db_session.add(AccountMembership(
+        account_id=account.id, user_id=member.id, role="shadow",
+        invited_by_user_id=owner.id, expires_at=None,
+    ))
+    await db_session.flush()
+
+    transfers = [
+        AccountTransfer(
+            user_id=owner.id, account_id=account.id, transfer_type="deposit",
+            amount=200.0, currency="USD", amount_usd=200.0,
+            occurred_at=datetime(2026, 1, 10), source="coinbase_api",
+        ),
+        AccountTransfer(
+            user_id=owner.id, account_id=account.id, transfer_type="withdrawal",
+            amount=50.0, currency="USD", amount_usd=50.0,
+            occurred_at=datetime(2026, 1, 12), source="manual",
+        ),
+        # Lives on the private account — member should never see this one.
+        AccountTransfer(
+            user_id=owner.id, account_id=private_account.id, transfer_type="deposit",
+            amount=999.0, currency="USD", amount_usd=999.0,
+            occurred_at=datetime(2026, 1, 11), source="coinbase_api",
+        ),
+    ]
+    db_session.add_all(transfers)
+    await db_session.flush()
+
+    return {
+        "owner": owner, "member": member, "stranger": stranger,
+        "account": account, "private_account": private_account,
+    }
+
+
+class TestSharedAccountListTransfers:
+    """GET /api/transfers honors shared-account membership."""
+
+    @pytest.mark.asyncio
+    async def test_member_sees_managed_account_transfers(self, db_session, shared_account_transfers):
+        """Happy path: a shadow member sees the shared account's transfers."""
+        from app.routers.transfers_router import list_transfers
+
+        ctx = shared_account_transfers
+        result = await list_transfers(
+            start=None, end=None, account_id=None,
+            limit=100, offset=0, db=db_session, current_user=ctx["member"],
+        )
+        # The 2 transfers on the shared account — NOT the private account's.
+        assert result["total"] == 2
+        acct_ids = {t["account_id"] for t in result["transfers"]}
+        assert acct_ids == {ctx["account"].id}
+
+    @pytest.mark.asyncio
+    async def test_non_member_sees_nothing(self, db_session, shared_account_transfers):
+        """Security: a stranger with no membership sees no transfers."""
+        from app.routers.transfers_router import list_transfers
+
+        result = await list_transfers(
+            start=None, end=None, account_id=None,
+            limit=100, offset=0, db=db_session,
+            current_user=shared_account_transfers["stranger"],
+        )
+        assert result["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_member_account_id_filter_blocks_idor(self, db_session, shared_account_transfers):
+        """Security: passing an out-of-scope account_id returns empty (no IDOR)."""
+        from app.routers.transfers_router import list_transfers
+
+        ctx = shared_account_transfers
+        result = await list_transfers(
+            start=None, end=None, account_id=ctx["private_account"].id,
+            limit=100, offset=0, db=db_session, current_user=ctx["member"],
+        )
+        assert result["total"] == 0
+        assert result["transfers"] == []
+
+    @pytest.mark.asyncio
+    async def test_member_account_id_filter_narrows_to_shared(self, db_session, shared_account_transfers):
+        """Happy path: an in-scope account_id narrows correctly for a member."""
+        from app.routers.transfers_router import list_transfers
+
+        ctx = shared_account_transfers
+        result = await list_transfers(
+            start=None, end=None, account_id=ctx["account"].id,
+            limit=100, offset=0, db=db_session, current_user=ctx["member"],
+        )
+        assert result["total"] == 2
+
+
+class TestSharedAccountRecentSummary:
+    """GET /api/transfers/recent-summary honors shared-account membership."""
+
+    @pytest.mark.asyncio
+    async def test_member_sees_recent_managed_account_transfers(self, db_session):
+        """Happy path: a member sees a shared account's recent transfers."""
+        from app.routers.transfers_router import get_recent_summary
+
+        owner = User(email="rs_owner@example.com", hashed_password="x", is_active=True)
+        member = User(email="rs_member@example.com", hashed_password="x", is_active=True)
+        db_session.add_all([owner, member])
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="RS Shared", type="cex",
+            exchange="coinbase", is_active=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        db_session.add(AccountMembership(
+            account_id=account.id, user_id=member.id, role="shadow",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        db_session.add(AccountTransfer(
+            user_id=owner.id, account_id=account.id, transfer_type="deposit",
+            amount=750.0, currency="USD", amount_usd=750.0,
+            occurred_at=utcnow() - timedelta(days=3), source="coinbase_api",
+        ))
+        await db_session.flush()
+
+        result = await get_recent_summary(db=db_session, current_user=member)
+        assert result["last_30d_deposit_count"] == 1
+        assert result["last_30d_net_deposits_usd"] == 750.0
+        assert len(result["transfers"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_non_member_sees_no_recent_transfers(self, db_session):
+        """Security: a stranger sees no recent transfers for a private account."""
+        from app.routers.transfers_router import get_recent_summary
+
+        owner = User(email="rs_owner2@example.com", hashed_password="x", is_active=True)
+        stranger = User(email="rs_stranger@example.com", hashed_password="x", is_active=True)
+        db_session.add_all([owner, stranger])
+        await db_session.flush()
+
+        account = Account(
+            user_id=owner.id, name="RS Private", type="cex",
+            exchange="coinbase", is_active=True,
+        )
+        db_session.add(account)
+        await db_session.flush()
+
+        db_session.add(AccountTransfer(
+            user_id=owner.id, account_id=account.id, transfer_type="deposit",
+            amount=500.0, currency="USD", amount_usd=500.0,
+            occurred_at=utcnow() - timedelta(days=2), source="coinbase_api",
+        ))
+        await db_session.flush()
+
+        result = await get_recent_summary(db=db_session, current_user=stranger)
+        assert result["last_30d_deposit_count"] == 0
+        assert result["transfers"] == []
+
+
+class TestSharedAccountTransferSummary:
+    """GET /api/transfers/summary honors shared-account membership."""
+
+    @pytest.mark.asyncio
+    async def test_member_summary_includes_managed_account(self, db_session, shared_account_transfers):
+        """Happy path: a member's summary aggregates the shared account."""
+        from app.routers.transfers_router import get_transfer_summary
+
+        ctx = shared_account_transfers
+        result = await get_transfer_summary(
+            start=None, end=None, account_id=None,
+            db=db_session, current_user=ctx["member"],
+        )
+        # Shared account only: deposit 200, withdrawal 50 — private 999 excluded.
+        assert result["total_deposits_usd"] == 200.0
+        assert result["total_withdrawals_usd"] == 50.0
+        assert result["net_deposits_usd"] == 150.0
+        assert result["deposit_count"] == 1
+        assert result["withdrawal_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_non_member_summary_is_zero(self, db_session, shared_account_transfers):
+        """Security: a stranger's summary is all zeros."""
+        from app.routers.transfers_router import get_transfer_summary
+
+        result = await get_transfer_summary(
+            start=None, end=None, account_id=None,
+            db=db_session, current_user=shared_account_transfers["stranger"],
+        )
+        assert result["total_deposits_usd"] == 0
+        assert result["total_withdrawals_usd"] == 0
+
+    @pytest.mark.asyncio
+    async def test_member_summary_account_id_blocks_idor(self, db_session, shared_account_transfers):
+        """Security: out-of-scope account_id yields a zeroed summary (no IDOR)."""
+        from app.routers.transfers_router import get_transfer_summary
+
+        ctx = shared_account_transfers
+        result = await get_transfer_summary(
+            start=None, end=None, account_id=ctx["private_account"].id,
+            db=db_session, current_user=ctx["member"],
+        )
+        assert result["total_deposits_usd"] == 0
+        assert result["total_withdrawals_usd"] == 0
+        assert result["deposit_count"] == 0
 
 
 # =============================================================================

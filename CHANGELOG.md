@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.10] - 2026-06-13
+
+### Fixed
+- **Shared-account members can now see transfer history on accounts shared with them.** Deposit/withdrawal history, the transfer summary totals, and the dashboard's recent-transfers widget were owner-only, so a manager or view-only member who could already see an account's positions, bots, and order history saw an empty transfer list for it. Members now see the transfer history, summary, and recent-transfers for any account shared with them, consistent with the rest of that account's data. No data crosses the account boundary — passing an account ID you don't have access to still returns nothing.
+
 ## [v2.168.9] - 2026-06-13
 
 ### Fixed

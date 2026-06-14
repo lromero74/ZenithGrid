@@ -148,7 +148,7 @@
     {
       "file": "routers/transfers_router.py",
       "prefix": "/api/transfers",
-      "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats"
+      "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats. v2.168.10: the GET read endpoints (GET /api/transfers, GET /api/transfers/summary, GET /api/transfers/recent-summary) use accessible_account_ids from app.services.account_access so shared-account members (manager and shadow roles) can view transfer history, summary, and the dashboard recent-transfers widget for accounts shared with them, not just the account owner."
     },
     {
       "file": "routers/display_name_router.py",

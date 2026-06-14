@@ -15,12 +15,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import Account, AccountTransfer, User
+from app.services.account_access import accessible_account_ids
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,11 @@ async def list_transfers(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """List transfers with optional date range and account filtering."""
-    filters = [AccountTransfer.user_id == current_user.id]
+    acc_ids = await accessible_account_ids(db, current_user.id)
+    filters = [or_(
+        AccountTransfer.user_id == current_user.id,
+        AccountTransfer.account_id.in_(acc_ids),
+    )]
 
     if account_id:
         filters.append(AccountTransfer.account_id == account_id)
@@ -203,7 +208,11 @@ async def get_transfer_summary(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get deposit/withdrawal summary for a date range."""
-    filters = [AccountTransfer.user_id == current_user.id]
+    acc_ids = await accessible_account_ids(db, current_user.id)
+    filters = [or_(
+        AccountTransfer.user_id == current_user.id,
+        AccountTransfer.account_id.in_(acc_ids),
+    )]
 
     if account_id:
         filters.append(AccountTransfer.account_id == account_id)
@@ -261,10 +270,14 @@ async def get_recent_summary(
     - Account value chart annotations
     """
     cutoff = utcnow() - timedelta(days=30)
+    acc_ids = await accessible_account_ids(db, current_user.id)
 
     result = await db.execute(
         select(AccountTransfer).where(
-            AccountTransfer.user_id == current_user.id,
+            or_(
+                AccountTransfer.user_id == current_user.id,
+                AccountTransfer.account_id.in_(acc_ids),
+            ),
             AccountTransfer.occurred_at >= cutoff,
         ).order_by(AccountTransfer.occurred_at.desc())
     )
