@@ -5,8 +5,11 @@ Periodically checks each account's free USD/BTC/ETH/USDC allocation against
 configured targets and executes market trades to rebalance when any
 currency drifts beyond the threshold.
 
-Settings are per-account (stored on the Account model). Only free balances
-are rebalanced — funds in open bot positions are untouched.
+Settings are per-account (stored on the Account model). Only genuinely-free
+balances are rebalanced: coins acquired by open bot positions are subtracted
+from the wallet balance first (the exchange does not hold filled coins), so a
+position's coins are never sold out from under the bot. A position's deployed
+capital still counts toward its quote currency at cost.
 """
 
 import json
@@ -14,7 +17,7 @@ from app.utils.timeutil import utcnow
 import logging
 import threading
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -337,24 +340,19 @@ def plan_trades(
     return trades
 
 
-async def get_position_locked_amounts(
-    db: AsyncSession, account_id: int,
-) -> Dict[str, float]:
-    """Get base currency amounts locked in open positions for an account.
+def sum_locked_base_amounts(positions: Iterable) -> Dict[str, float]:
+    """Sum base-currency amounts held across open positions, keyed by base coin.
 
-    Returns {coin: locked_amount} for every base currency with open positions.
-    E.g., if there's an open ADA-USD position with 50 ADA acquired,
-    returns {"ADA": 50.0}.
+    A position's acquired base coin (e.g. the BTC from a BTC-USD deal) settles
+    into the spot wallet as ordinary spendable balance — the exchange places no
+    hold on filled coins — so the exchange "free" balance includes it. These
+    amounts must be excluded from rebalanceable funds so the rebalancer never
+    sells coins a bot is actively holding. Each position counts toward its base
+    coin here and toward its QUOTE currency separately (via total_quote_spent).
+
+    Returns {base_coin: total_base_acquired}, e.g. an open ADA-USD position with
+    50 ADA acquired contributes {"ADA": 50.0}.
     """
-    from app.models import Position
-
-    query = select(Position).where(
-        Position.account_id == account_id,
-        Position.status == "open",
-    )
-    result = await db.execute(query)
-    positions = result.scalars().all()
-
     locked: Dict[str, float] = {}
     for pos in positions:
         if not pos.product_id or not pos.total_base_acquired:
@@ -364,6 +362,25 @@ async def get_position_locked_amounts(
             pos.total_base_acquired or 0.0
         )
     return locked
+
+
+async def get_position_locked_amounts(
+    db: AsyncSession, account_id: int,
+) -> Dict[str, float]:
+    """Query open positions for an account and sum base coins locked in them.
+
+    Thin DB wrapper around sum_locked_base_amounts (the single source of truth
+    for the per-base-coin tally). Used by the dust sweeper; the main rebalance
+    path reuses sum_locked_base_amounts directly on its already-fetched list.
+    """
+    from app.models import Position
+
+    query = select(Position).where(
+        Position.account_id == account_id,
+        Position.status == "open",
+    )
+    result = await db.execute(query)
+    return sum_locked_base_amounts(result.scalars().all())
 
 
 def subtract_locked_amounts(
@@ -676,6 +693,21 @@ class RebalanceMonitor:
                 )
             )
             open_positions_list = pos_result.scalars().all()
+
+            # Coins acquired by open positions sit in the spot wallet as
+            # spendable balance (the exchange holds nothing on filled coins), so
+            # the exchange "free" balance includes them. Subtract them here,
+            # before BOTH the drift view and the sell caps are built, so the
+            # rebalancer can never liquidate coins a bot is actively holding.
+            # Their deployed cost is still counted toward the position's QUOTE
+            # currency below (total_quote_spent), so e.g. a USD bot's BTC counts
+            # as USD-at-cost, not as sellable BTC. (Top-up/dust phases above run
+            # on the raw wallet balance and return early, so they're unaffected.)
+            locked_base = sum_locked_base_amounts(open_positions_list)
+            free_balances = {
+                c: max(0.0, free_balances[c] - locked_base.get(c, 0.0))
+                for c in free_balances
+            }
 
             portfolio_balances: Dict[str, float] = dict(free_balances)
             for pos in open_positions_list:
