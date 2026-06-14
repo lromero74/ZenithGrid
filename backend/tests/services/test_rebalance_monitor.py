@@ -817,26 +817,23 @@ class TestPlanTopupTrades:
         total = sum(t["usd_amount"] for t in trades)
         assert total == pytest.approx(200.0, rel=0.01)
 
-    def test_proportional_sourcing(self):
-        """Happy path: verify funds sourced proportionally from all donors."""
+    def test_sources_largest_donor_first(self):
+        """Funds are sourced largest-donor-first so each order clears the exchange
+        minimum (rather than split proportionally into sub-minimum pieces)."""
         from app.services.rebalance_monitor import plan_topup_trades
 
-        # USDC deficit = $200
-        # USD=$500 (50%), BTC=$300 (30%), ETH=$200 (20%) → total $1000
+        # USDC deficit = $200; donors USD=$500 (largest), BTC=$300, ETH=$200.
         free_balances = {"USD": 500.0, "BTC": 0.003, "ETH": 0.08, "USDC": 300.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
         trades = plan_topup_trades(free_balances, min_balances, prices)
 
-        by_source = {t["from_currency"]: t["usd_amount"] for t in trades}
-
-        # USD contributes 50% of $200 = $100
-        assert by_source.get("USD", 0) == pytest.approx(100.0, rel=0.01)
-        # BTC contributes 30% of $200 = $60
-        assert by_source.get("BTC", 0) == pytest.approx(60.0, rel=0.01)
-        # ETH contributes 20% of $200 = $40
-        assert by_source.get("ETH", 0) == pytest.approx(40.0, rel=0.01)
+        # The largest donor (USD) covers the whole $200 in one order.
+        assert len(trades) == 1
+        assert trades[0]["from_currency"] == "USD"
+        assert trades[0]["to_currency"] == "USDC"
+        assert trades[0]["usd_amount"] == pytest.approx(200.0, rel=0.01)
 
     def test_deficit_larger_than_available(self):
         """Edge case: deficit exceeds total available — trades capped to what's available."""
@@ -871,17 +868,50 @@ class TestPlanTopupTrades:
         assert "USD" in buy_targets
         assert "USDC" in buy_targets
 
-    def test_small_deficit_below_exchange_min(self):
-        """Edge case: deficit < the $1 exchange minimum — no trades."""
+    def test_sub_minimum_shortfall_rounds_up_to_exchange_min(self):
+        """A 'minimum reserve' is honored even when the exact shortfall is below
+        the exchange minimum: the top-up rounds UP to $1 and slightly overshoots."""
         from app.services.rebalance_monitor import plan_topup_trades
 
-        # USDC deficit = $0.50 (need 500.50, have 500) — below the $1 minimum
+        # USDC reserve 500.50, hold 500 → $0.50 short (below the $1 minimum).
         free_balances = {"USD": 1000.0, "BTC": 0.1, "ETH": 2.0, "USDC": 500.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.50}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
         trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        assert len(trades) == 1
+        assert trades[0]["to_currency"] == "USDC"
+        assert trades[0]["usd_amount"] == pytest.approx(1.0)  # bought $1, → ~501 USDC
+
+    def test_no_topup_when_cannot_afford_exchange_min(self):
+        """Safety: if donor funds can't cover even one minimum order, do nothing —
+        never drain the account chasing a reserve it can't reach."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        # USDC short by $0.70, but only $0.40 of spendable USD exists.
+        free_balances = {"USD": 0.40, "BTC": 0.0, "ETH": 0.0, "USDC": 4.30}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 5.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
         assert trades == []
+
+    def test_card_reserve_topup_after_spending(self):
+        """Use case: a USDC card-spend reserve ($20) drawn down to $15 is topped
+        back up to the reserve from USD within the rebalance window."""
+        from app.services.rebalance_monitor import plan_topup_trades
+
+        free_balances = {"USD": 200.0, "BTC": 0.0, "ETH": 0.0, "USDC": 15.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 20.0}
+        prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+
+        trades = plan_topup_trades(free_balances, min_balances, prices)
+
+        assert len(trades) == 1
+        assert trades[0]["from_currency"] == "USD"
+        assert trades[0]["to_currency"] == "USDC"
+        assert trades[0]["usd_amount"] == pytest.approx(5.0)  # refills 15 → 20
 
     def test_all_zeros_no_trades(self):
         """Edge case: all minimums at zero — no top-up needed."""
