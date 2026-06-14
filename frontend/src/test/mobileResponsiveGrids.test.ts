@@ -94,30 +94,24 @@ describe('mobile responsive grids', () => {
   });
 });
 
-describe('bot edit modal horizontal overflow containment', () => {
+describe('bot edit condition builder mobile containment', () => {
   // The bot edit modal scrolled sideways on phones because the condition builder
-  // (fixed-width selects in flex rows) stretched the whole scroll container, so
-  // every w-full field was clipped to the right. Two guards keep it contained.
-  const read = (rel: string) => readFileSync(join(srcDir, rel), 'utf8');
+  // (fixed-width selects in one flex row) was wider than the screen and stretched
+  // the shared scroll area. The rows must wrap on small screens so they fit, and
+  // the builder scrolls horizontally as a backstop for any still-wide nested row.
+  const src = readFileSync(join(srcDir, 'components/trading/AdvancedConditionBuilder.tsx'), 'utf8');
 
-  it('bot modal scroll panel contains horizontal overflow', () => {
-    const src = read('pages/bots/components/BotFormModal.tsx');
-    // The panel that scrolls vertically (overflow-y-auto) must also clip/scroll
-    // horizontally so a wide descendant cannot push the modal past the viewport.
-    const panelLine = src
-      .split('\n')
-      .find((l) => l.includes('overflow-y-auto') && /overflow-x-(hidden|auto|clip)/.test(l));
+  it('condition rows wrap on small screens', () => {
     expect(
-      panelLine,
-      'bot modal scroll panel must contain horizontal overflow (overflow-x-hidden/auto/clip alongside overflow-y-auto)',
-    ).toBeTruthy();
+      /flex flex-wrap items-center gap-2 p-2/.test(src),
+      'the condition row must use flex-wrap so its controls stack instead of overflowing',
+    ).toBe(true);
   });
 
-  it('condition builder scrolls its wide rows internally', () => {
-    const src = read('components/trading/AdvancedConditionBuilder.tsx');
+  it('builder scrolls horizontally as a backstop', () => {
     expect(
       src.includes('overflow-x-auto'),
-      'AdvancedConditionBuilder must scroll its fixed-width condition rows internally',
+      'AdvancedConditionBuilder should scroll horizontally so nested wide rows stay reachable',
     ).toBe(true);
   });
 });

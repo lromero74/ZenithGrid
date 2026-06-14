@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.7] - 2026-06-13
+
+### Fixed
+- **Bot edit modal: condition rows now wrap on mobile instead of being clipped.** The previous attempt stopped the sideways scroll by clipping horizontal overflow, which hid the right side of the condition builder's dropdowns so they couldn't be reached. This removes the clipping and instead wraps each condition's controls onto multiple lines on small screens (with the builder scrolling horizontally as a fallback), so the controls fit *and* stay reachable.
+
 ## [v2.168.6] - 2026-06-13
 
 ### Fixed

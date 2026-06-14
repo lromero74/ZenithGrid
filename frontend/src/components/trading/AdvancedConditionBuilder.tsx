@@ -426,7 +426,7 @@ function AdvancedConditionBuilder({
           </div>
         )}
 
-        <div className={`flex items-center gap-2 p-2 rounded border ${
+        <div className={`flex flex-wrap items-center gap-2 p-2 rounded border ${
           condition.negate
             ? 'bg-red-900/20 border-red-600/50'
             : 'bg-slate-700/50 border-slate-600'
