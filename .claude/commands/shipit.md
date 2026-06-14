@@ -15,12 +15,20 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
    - Wait for architecture-sync to complete before tagging — all docs must be in the same commit as the version bump
 6. Commit all changes (code + all documentation updates) in a single commit, then tag on main
 7. Delete dev branch locally and on remote (if applicable)
-8. Push main with tags, deploy:
-   - **Backend changes**: `./bot.sh restart --dev --back-end` (or `--prod`)
+8. Push main with tags (`git push origin main --follow-tags`), deploy:
+
+   **PRODUCTION = AWS Lightsail (`zenithgrid-ls`), native systemd — NOT `bot.sh`.** (`bot.sh` is the local dev / fedora warm-standby path only.) Real prod deploy:
+   - `ssh zenithgrid-ls 'cd ~/ZenithGrid && git pull origin main'`
+   - **`ssh zenithgrid-ls 'cd ~/ZenithGrid && git fetch origin --tags'`** — REQUIRED, do not skip. `git pull origin main` fetches the branch but NOT tags, and the backend reads its version live from git tags. Without this the new commit deploys but `/api/health` keeps reporting the *old* version. Confirm with `git describe --tags` → must show the exact `vX.Y.Z` (no `-N-gHASH` suffix).
+   - **Backend changes**: `ssh zenithgrid-ls 'sudo systemctl restart zenithgrid'`
+   - **Frontend-only changes**: `ssh zenithgrid-ls 'cd ~/ZenithGrid/frontend && npm run build'` — no restart (backend serves `dist/` from disk; version still comes from the fetched tag, so the tag fetch above is still required).
+   - Verify: `ssh zenithgrid-ls 'curl -s http://127.0.0.1:8100/api/health'` → `{"status":"ok","version":"vX.Y.Z"}` matching the tag.
+
+   **LOCAL DEV / fedora warm-standby only** (`bot.sh`):
+   - **Backend changes**: `./bot.sh restart --dev --back-end`
    - **Frontend in DEV mode** (Vite HMR): Do NOT run `npm run build`. HMR picks up changes automatically. Only restart frontend service if Vite config or dependencies changed (`./bot.sh restart --dev --front-end`).
-   - **Frontend-only in PROD mode**: `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend reads git tags live and serves static files from disk, so new bundles and version are live immediately. Users get a "new version" toast prompting them to reload. No restart needed.
-   - **Backend changes in PROD mode**: `./bot.sh restart --prod` (rebuilds dist/ + restarts backend)
-   - **Both changed in PROD mode**: `./bot.sh restart --prod`
+   - **Frontend-only in PROD mode**: `./bot.sh build` — rebuilds dist/ without restarting the backend.
+   - **Backend changes in PROD mode**: `./bot.sh restart --prod`
 9. Post-ship verification: run `python3 scripts/check_version_consistency.py`, confirm tag, no stale branches, services healthy
 
 Do NOT skip any steps. The end state must be: main is tagged, all docs updated, all versions match, dev branch is gone, production is running the new code.
