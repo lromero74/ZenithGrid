@@ -85,6 +85,17 @@ export const formatQuoteAmount = (amount: number, productId: string) => {
   return `${amount.toFixed(decimals)} ${symbol}`
 }
 
+// Quote currencies pegged 1:1 to USD display with 2 decimals; crypto quotes (BTC, etc.) use 8.
+export const STABLE_QUOTE_CURRENCIES = ['USD', 'USDT', 'USDC']
+
+// Single source of truth for price display precision, keyed on the quote-currency symbol.
+export const getQuotePrecision = (quoteCurrency: string): number =>
+  STABLE_QUOTE_CURRENCIES.includes(quoteCurrency) ? 2 : 8
+
+// Format a bare price (no currency symbol) at its quote currency's display precision.
+export const formatPriceForQuote = (price: number, quoteCurrency: string): string =>
+  price.toFixed(getQuotePrecision(quoteCurrency))
+
 // ─── Safety Order Level Calculation ──────────────────────────────────────────
 // Mirrors backend: indicator_based.py _get_dca_reference_price() +
 // calculate_safety_order_price(). Used by chart to draw accurate SO lines.

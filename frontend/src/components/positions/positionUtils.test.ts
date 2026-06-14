@@ -14,6 +14,8 @@ import {
   getQuoteCurrency,
   getBaseCurrency,
   formatPrice,
+  getQuotePrecision,
+  formatPriceForQuote,
   formatBaseAmount,
   formatQuoteAmount,
   calculateSOLevels,
@@ -131,6 +133,32 @@ describe('formatPrice', () => {
 
   test('formats BTC price', () => {
     expect(formatPrice(0.05, 'ETH-BTC')).toBe('0.05000000 BTC')
+  })
+})
+
+describe('getQuotePrecision', () => {
+  test('stablecoin quotes use 2 decimals', () => {
+    expect(getQuotePrecision('USD')).toBe(2)
+    expect(getQuotePrecision('USDT')).toBe(2)
+    expect(getQuotePrecision('USDC')).toBe(2)
+  })
+
+  test('crypto quotes use 8 decimals', () => {
+    expect(getQuotePrecision('BTC')).toBe(8)
+  })
+
+  test('unknown quote defaults to 8 decimals', () => {
+    expect(getQuotePrecision('XYZ')).toBe(8)
+  })
+})
+
+describe('formatPriceForQuote', () => {
+  test('formats stablecoin price at 2 decimals, no symbol', () => {
+    expect(formatPriceForQuote(50000, 'USDT')).toBe('50000.00')
+  })
+
+  test('formats BTC price at 8 decimals, no symbol', () => {
+    expect(formatPriceForQuote(0.05, 'BTC')).toBe('0.05000000')
   })
 })
 

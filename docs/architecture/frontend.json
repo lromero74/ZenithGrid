@@ -567,7 +567,7 @@
         },
         {
           "file": "components/positions/positionUtils.ts",
-          "purpose": "Position calculation and formatting utilities; exports calculateDCAPrices(completedDCAs, maxDCAOrders, priceDeviation, stepScale, referencePrice) using an O(d) closed-form formula"
+          "purpose": "Position calculation and formatting utilities; exports calculateDCAPrices(completedDCAs, maxDCAOrders, priceDeviation, stepScale, referencePrice) using an O(d) closed-form formula. v2.168.13 adds three exports that are the single source of truth for quote-currency price precision: STABLE_QUOTE_CURRENCIES (string array: USD, USDT, USDC), getQuotePrecision(quoteCurrency) (2 for stables, 8 for crypto), and formatPriceForQuote(price, quoteCurrency) (bare decimal string at the correct precision). Consumed by SlippageWarningModal, LimitCloseModal, and DepthChart."
         }
       ],
       "chart_internals": [
@@ -981,6 +981,10 @@
     }
   },
   "utilities": [
+    {
+      "file": "utils/numberFormat.ts",
+      "purpose": "Single source of truth for USD currency display. Exports formatUsd(value) which produces '$1,234.56' (grouped thousands, always 2 decimal places, standard locale-aware negatives) via a module-level Intl.NumberFormat instance. Consumed by Dashboard, Portfolio, and PropGuardStatus. Added in v2.168.13."
+    },
     {
       "file": "utils/dateFormat.ts",
       "purpose": "Date/time formatting helpers"

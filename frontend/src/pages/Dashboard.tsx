@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, memo, lazy, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { botsApi, positionsApi, authFetch, transfersApi } from '../services/api'
+import { formatUsd } from '../utils/numberFormat'
 import {
   TrendingUp,
   TrendingDown,
@@ -203,14 +204,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   }, [bots, showStoppedBots, accountValueSummary])
 
   const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value)
-  }
+  const formatCurrency = formatUsd
 
   return (
     <div className="space-y-6">

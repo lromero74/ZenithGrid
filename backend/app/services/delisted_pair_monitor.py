@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Bot, BotProduct, Account
 from app.services.exchange_service import get_exchange_client_for_account
+from app.services.session_maker_mixin import SessionMakerMixin
 from app.multi_bot_monitor import filter_pairs_by_allowed_categories
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def is_stable_pair(product_id: str) -> bool:
     return False
 
 
-class TradingPairMonitor:
+class TradingPairMonitor(SessionMakerMixin):
     """
     Monitors trading pairs and keeps bot configurations up to date.
 
@@ -89,16 +90,6 @@ class TradingPairMonitor:
         self._usd_pairs: Set[str] = set()
         self._exchange_client = None
         self._raw_products: List[Dict] = []
-        self._session_maker = None  # injected by secondary_loop startup
-
-    def set_session_maker(self, sm):
-        """Inject a session maker (used when running on the secondary event loop)."""
-        self._session_maker = sm
-
-    def _get_sm(self):
-        """Return the injected session maker, falling back to the default."""
-        from app.database import async_session_maker as _default
-        return self._session_maker or _default
 
     async def get_available_products(self, db: AsyncSession) -> Set[str]:
         """

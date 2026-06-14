@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../../services/api'
 import { DepthChart } from '../trading/DepthChart'
+import { formatPriceForQuote, getQuotePrecision } from './positionUtils'
 
 interface LimitCloseModalProps {
   positionId: number
@@ -87,9 +88,10 @@ export function LimitCloseModal({
       } catch (err: any) {
         console.error('Failed to fetch product precision:', err)
         // Use defaults if fetch fails
+        const prec = getQuotePrecision(quoteCurrency)
         setProductPrecision({
-          quote_increment: ['USD', 'USDT', 'USDC'].includes(quoteCurrency) ? '0.01' : '0.00000001',
-          quote_decimals: ['USD', 'USDT', 'USDC'].includes(quoteCurrency) ? 2 : 8,
+          quote_increment: Math.pow(10, -prec).toFixed(prec),
+          quote_decimals: prec,
           base_increment: '0.00000001'
         })
       }
@@ -346,28 +348,16 @@ export function LimitCloseModal({
     // Slider step will be recalculated in the useEffect based on new price
   }
 
-  // Get precision for the quote currency
-  const getPrecision = () => {
-    if (['USD', 'USDT', 'USDC'].includes(quoteCurrency)) return 2
-    if (quoteCurrency === 'BTC') return 8
-    return 8
-  }
-
   // Get step size for price input (use product precision quote_increment)
   const getStepSize = () => {
     if (productPrecision) {
       return parseFloat(productPrecision.quote_increment)
     }
-    // Fallback defaults
-    if (['USD', 'USDT', 'USDC'].includes(quoteCurrency)) return 0.01
-    if (quoteCurrency === 'BTC') return 0.00000001
-    return 0.00000001
+    // Fallback default derived from the quote currency's display precision
+    return Math.pow(10, -getQuotePrecision(quoteCurrency))
   }
 
-  const formatPrice = (price: number) => {
-    const precision = getPrecision()
-    return price.toFixed(precision)
-  }
+  const formatPrice = (price: number) => formatPriceForQuote(price, quoteCurrency)
 
   const estimatedProceeds = limitPrice * totalAmount
 

@@ -22,6 +22,7 @@ import {
   Activity,
 } from 'lucide-react'
 import { authFetch } from '../../services/api'
+import { formatUsd } from '../../utils/numberFormat'
 import { Account } from '../../contexts/AccountContext'
 import { useConfirm } from '../../contexts/ConfirmContext'
 
@@ -207,13 +208,13 @@ export function PropGuardStatus({ account }: PropGuardStatusProps) {
 
   const formatCurrency = (value: number | undefined) => {
     if (value == null) return '--'
-    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return formatUsd(value)
   }
 
   const formatPnl = (value: number | undefined) => {
     if (value == null) return '--'
-    const prefix = value >= 0 ? '+' : ''
-    return `${prefix}$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const prefix = value >= 0 ? '+' : '-'
+    return `${prefix}${formatUsd(Math.abs(value))}`
   }
 
   const formatTimestamp = (ts: string | undefined) => {

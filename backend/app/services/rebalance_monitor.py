@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Account, Position
 from app.precision import format_base_amount
 from app.services.exchange_service import get_exchange_client_for_account
+from app.services.session_maker_mixin import SessionMakerMixin
 
 logger = logging.getLogger(__name__)
 
@@ -527,7 +528,7 @@ def _get_trade_params(from_currency: str, to_currency: str) -> Tuple[str, str]:
     return pair_map[(from_currency, to_currency)]
 
 
-class RebalanceMonitor:
+class RebalanceMonitor(SessionMakerMixin):
     """Background service that rebalances account allocations."""
 
     def __init__(self):
@@ -535,16 +536,6 @@ class RebalanceMonitor:
         self._processing: set = set()  # Account IDs currently being processed
         # Protects _account_timers against concurrent access from cleanup_in_memory_caches().
         self._account_timers_lock = threading.Lock()
-        self._session_maker = None  # optional injected session maker
-
-    def set_session_maker(self, sm):
-        """Inject a session maker (used when running on the secondary event loop)."""
-        self._session_maker = sm
-
-    def _get_sm(self):
-        """Return the injected session maker, falling back to the default."""
-        from app.database import async_session_maker as _default
-        return self._session_maker or _default
 
     async def run_once(self):
         """Check all accounts once. Called by APScheduler every 30 seconds."""

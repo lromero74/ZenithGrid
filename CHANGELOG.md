@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.13] - 2026-06-14
+
+### Changed
+- Internal code cleanup: consolidated several copy-pasted pieces of logic into single shared helpers, with no change to behavior in most places. The session-maker plumbing shared by five background services (rebalancer, auto-buy, perps, delisted-pair, content-refresh) now lives in one place, as does USD currency formatting (Dashboard, Portfolio, prop-firm status) and quote-currency price precision (slippage, limit-close, and depth-chart views).
+
+### Fixed
+- Prices quoted in USDT or USDC now display with 2 decimals (matching USD) instead of 8 in the slippage-warning dialog and the order-book depth chart — previously only plain "USD" pairs got the 2-decimal treatment.
+- Negative dollar amounts in the prop-firm drawdown panel now render in the standard `-$1,234.56` form instead of `$-1,234.56`.
+
 ## [v2.168.12] - 2026-06-13
 
 ### Fixed
