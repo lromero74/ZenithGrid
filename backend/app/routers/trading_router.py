@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Account, User
 from app.auth.dependencies import require_permission, Perm
+from app.services.account_access import manager_account_ids
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -43,17 +44,25 @@ async def market_sell(
     Guaranteed to fill (market order).
     """
     try:
-        # Get user's active trading account
+        # Resolve the target trading account. Real-money sell, so scope tightly:
+        #  - explicit account_id widens to accounts the caller owns OR manages
+        #    (matches cancel/force-close/add-funds on shared accounts);
+        #  - the no-account_id convenience default stays owner-only — a manager
+        #    has no "default" among accounts they don't own and must name one.
+        manager_ids = await manager_account_ids(db, current_user.id)
         query = select(Account).where(
-            Account.user_id == current_user.id,
+            Account.id.in_(manager_ids),
             Account.is_active.is_(True),
             Account.type == 'cex'
         )
 
-        if request.account_id:
+        if request.account_id is not None:
             query = query.where(Account.id == request.account_id)
         else:
-            query = query.where(Account.is_default.is_(True))
+            query = query.where(
+                Account.user_id == current_user.id,
+                Account.is_default.is_(True),
+            )
 
         result = await db.execute(query)
         account = result.scalar_one_or_none()
