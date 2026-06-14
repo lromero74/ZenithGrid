@@ -2937,6 +2937,7 @@
       "clear_account_gate_data",
       "execute_dust_sweep",
       "get_account_gate_data",
+      "get_min_usd_by_currency",
       "get_position_locked_amounts",
       "needs_rebalance",
       "plan_dust_sweeps",
