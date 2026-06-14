@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.19] - 2026-06-14
+
+### Fixed
+- The portfolio rebalancer now sells small non-USD holdings it previously left stuck. It was using a flat $10 minimum order size (actually Coinbase's *perpetual-futures* minimum) for spot trades, so a few dollars of BTC/USDC/ETH could never be converted toward a 100%-USD target. It now uses each market's real minimum (with a $1 safety floor) and validates each order against it before sending.
+
+### Changed
+- The rebalancer's default "minimum trade size" guard dropped from 5% to 2% of the portfolio, so smaller allocations rebalance too. (Existing accounts keep their saved setting; adjust it under Rebalance settings.)
+
 ## [v2.168.18] - 2026-06-14
 
 ### Changed
