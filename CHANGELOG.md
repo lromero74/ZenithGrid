@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.20] - 2026-06-14
+
+### Fixed
+- Minimum balance reserves are now always honored, even when the shortfall is tiny. If a reserve (e.g. "keep 5 USDC") is just under target, the rebalancer buys the exchange's smallest allowed order to reach it — slightly overshooting rather than leaving you below the reserve — and that small surplus isn't sold back off. Top-ups are sourced from your largest free balance first so each order clears the exchange minimum, and nothing is bought if you can't afford even one minimum order.
+
 ## [v2.168.19] - 2026-06-14
 
 ### Fixed
