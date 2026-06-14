@@ -1,0 +1,3706 @@
+{
+  "backend/app/ai_service.py": {
+    "classes": {
+      "GeminiClientWrapper": [
+        "GenerativeModel",
+        "__init__"
+      ]
+    },
+    "functions": [
+      "get_ai_analysis",
+      "get_ai_client"
+    ]
+  },
+  "backend/app/auth/dependencies.py": {
+    "classes": {},
+    "functions": [
+      "_get_user_permissions",
+      "check_token_revocation",
+      "decode_token",
+      "get_account_role",
+      "get_current_user",
+      "get_user_by_id",
+      "require_account_access",
+      "require_permission",
+      "require_role",
+      "require_superuser"
+    ]
+  },
+  "backend/app/auth/mfa_verification.py": {
+    "classes": {},
+    "functions": [
+      "verify_mfa"
+    ]
+  },
+  "backend/app/auth_routers/auth_core_router.py": {
+    "classes": {},
+    "functions": [
+      "change_password",
+      "get_current_user_info",
+      "get_disposable_domains",
+      "login",
+      "logout",
+      "refresh_token",
+      "register",
+      "signup"
+    ]
+  },
+  "backend/app/auth_routers/device_trust_router.py": {
+    "classes": {},
+    "functions": [
+      "list_trusted_devices",
+      "revoke_all_trusted_devices",
+      "revoke_trusted_device"
+    ]
+  },
+  "backend/app/auth_routers/email_verify_router.py": {
+    "classes": {},
+    "functions": [
+      "resend_verification",
+      "verify_email",
+      "verify_email_code"
+    ]
+  },
+  "backend/app/auth_routers/helpers.py": {
+    "classes": {},
+    "functions": [
+      "_build_user_response",
+      "_complete_mfa_login",
+      "_create_device_trust",
+      "_decode_mfa_token",
+      "_geolocate_ip",
+      "_parse_device_name",
+      "create_access_token",
+      "create_device_trust_token",
+      "create_mfa_token",
+      "create_refresh_token",
+      "decode_device_trust_token",
+      "get_client_ip",
+      "get_user_by_email",
+      "hash_password",
+      "verify_password"
+    ]
+  },
+  "backend/app/auth_routers/mfa_email_router.py": {
+    "classes": {},
+    "functions": [
+      "mfa_email_disable",
+      "mfa_email_enable",
+      "mfa_resend_email",
+      "mfa_verify_email_code",
+      "mfa_verify_email_link"
+    ]
+  },
+  "backend/app/auth_routers/mfa_totp_router.py": {
+    "classes": {},
+    "functions": [
+      "mfa_disable",
+      "mfa_setup",
+      "mfa_verify",
+      "mfa_verify_setup"
+    ]
+  },
+  "backend/app/auth_routers/password_router.py": {
+    "classes": {},
+    "functions": [
+      "forgot_password",
+      "reset_password"
+    ]
+  },
+  "backend/app/auth_routers/preferences_router.py": {
+    "classes": {},
+    "functions": [
+      "accept_terms",
+      "get_last_seen_history",
+      "update_last_seen_history"
+    ]
+  },
+  "backend/app/auth_routers/rate_limit_backend.py": {
+    "classes": {
+      "PostgresRateLimitBackend": [
+        "cleanup",
+        "count_recent",
+        "record_attempt"
+      ],
+      "RateLimitBackend": [
+        "cleanup",
+        "count_recent",
+        "record_attempt"
+      ],
+      "RedisRateLimitBackend": [
+        "cleanup",
+        "count_recent",
+        "record_attempt"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/auth_routers/rate_limiters.py": {
+    "classes": {},
+    "functions": [
+      "_check",
+      "_check_disposable_email_jail",
+      "_check_forgot_pw_rate_limit",
+      "_check_mfa_rate_limit",
+      "_check_rate_limit",
+      "_check_resend_rate_limit",
+      "_check_signup_rate_limit",
+      "_db_cleanup",
+      "_db_count",
+      "_db_record",
+      "_fire_and_forget",
+      "_get_rate_limit_backend",
+      "_is_forgot_pw_email_rate_limited",
+      "_mem_count",
+      "_prune_memory",
+      "_record",
+      "_record_attempt",
+      "_record_disposable_email_attempt",
+      "_record_forgot_pw_attempt",
+      "_record_forgot_pw_email_attempt",
+      "_record_mfa_attempt",
+      "_record_resend_attempt",
+      "_record_signup_attempt"
+    ]
+  },
+  "backend/app/auth_routers/schemas.py": {
+    "classes": {
+      "ChangePasswordRequest": [
+        "validate_new_password"
+      ],
+      "RegisterRequest": [
+        "validate_password"
+      ],
+      "ResetPasswordRequest": [
+        "validate_new_password"
+      ]
+    },
+    "functions": [
+      "_validate_password_strength"
+    ]
+  },
+  "backend/app/bot_routers/bot_ai_logs_router.py": {
+    "classes": {},
+    "functions": [
+      "create_ai_bot_log",
+      "get_ai_bot_logs",
+      "get_unified_decision_logs"
+    ]
+  },
+  "backend/app/bot_routers/bot_control_router.py": {
+    "classes": {},
+    "functions": [
+      "_bot_write_filter",
+      "cancel_all_positions",
+      "check_seasonality_allows_bot",
+      "force_run_bot",
+      "sell_all_positions",
+      "start_bot",
+      "stop_bot"
+    ]
+  },
+  "backend/app/bot_routers/bot_crud_router.py": {
+    "classes": {},
+    "functions": [
+      "_accessible_bot_filter",
+      "_apply_risk_preset_defaults",
+      "_bot_write_filter",
+      "_get_paper_account",
+      "clone_bot",
+      "copy_bot_to_account",
+      "create_bot",
+      "delete_bot",
+      "get_bot",
+      "get_bot_stats",
+      "get_strategy_definition",
+      "list_bots",
+      "list_strategies",
+      "update_bot"
+    ]
+  },
+  "backend/app/bot_routers/bot_indicator_logs_router.py": {
+    "classes": {},
+    "functions": [
+      "get_indicator_logs",
+      "get_indicator_logs_summary"
+    ]
+  },
+  "backend/app/bot_routers/bot_rebalancer_router.py": {
+    "classes": {},
+    "functions": [
+      "get_rebalancer_state",
+      "save_rebalancer"
+    ]
+  },
+  "backend/app/bot_routers/bot_scanner_logs_router.py": {
+    "classes": {},
+    "functions": [
+      "clear_scanner_logs",
+      "create_scanner_log",
+      "get_scanner_logs"
+    ]
+  },
+  "backend/app/bot_routers/bot_validation_router.py": {
+    "classes": {},
+    "functions": [
+      "_get_exchange_client",
+      "get_worst_case_minimum",
+      "validate_bot_config"
+    ]
+  },
+  "backend/app/cache.py": {
+    "classes": {
+      "CacheEntry": [
+        "__init__",
+        "is_expired"
+      ],
+      "PersistentPortfolioCache": [
+        "__init__",
+        "_path",
+        "get",
+        "invalidate",
+        "save"
+      ],
+      "SimpleCache": [
+        "__init__",
+        "cleanup_expired",
+        "clear",
+        "delete",
+        "delete_prefix",
+        "get",
+        "get_or_fetch",
+        "is_not_found",
+        "mark_not_found",
+        "set"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/cleanup_jobs.py": {
+    "classes": {},
+    "functions": [
+      "cleanup_expired_revoked_tokens",
+      "cleanup_expired_sessions",
+      "cleanup_failed_condition_logs",
+      "cleanup_in_memory_caches",
+      "cleanup_invalid_minimum_size_failed_orders",
+      "cleanup_old_ai_opinion_logs",
+      "cleanup_old_decision_logs",
+      "cleanup_old_failed_orders",
+      "cleanup_old_rate_limit_attempts",
+      "cleanup_old_reports",
+      "get_log_retention_days"
+    ]
+  },
+  "backend/app/coinbase_api/account_balance_api.py": {
+    "classes": {},
+    "functions": [
+      "calculate_aggregate_btc_value",
+      "calculate_aggregate_usd_value",
+      "calculate_market_budget",
+      "get_account",
+      "get_accounts",
+      "get_btc_balance",
+      "get_currency_balance",
+      "get_eth_balance",
+      "get_portfolio_breakdown",
+      "get_portfolios",
+      "get_usd_balance",
+      "get_usdc_balance",
+      "get_usdt_balance",
+      "invalidate_balance_cache"
+    ]
+  },
+  "backend/app/coinbase_api/auth.py": {
+    "classes": {},
+    "functions": [
+      "authenticated_request",
+      "generate_hmac_signature",
+      "generate_jwt",
+      "load_cdp_credentials_from_file"
+    ]
+  },
+  "backend/app/coinbase_api/convert_api.py": {
+    "classes": {},
+    "functions": [
+      "commit_convert_trade",
+      "create_convert_quote"
+    ]
+  },
+  "backend/app/coinbase_api/market_data_api.py": {
+    "classes": {},
+    "functions": [
+      "get_btc_usd_price",
+      "get_candles",
+      "get_current_price",
+      "get_eth_usd_price",
+      "get_product",
+      "get_product_book",
+      "get_product_stats",
+      "get_ticker",
+      "list_products",
+      "test_connection"
+    ]
+  },
+  "backend/app/coinbase_api/order_api.py": {
+    "classes": {},
+    "functions": [
+      "buy_eth_with_btc",
+      "buy_with_usd",
+      "cancel_order",
+      "create_bracket_order",
+      "create_limit_order",
+      "create_market_order",
+      "create_stop_limit_order",
+      "edit_order",
+      "edit_order_preview",
+      "get_order",
+      "list_orders",
+      "sell_eth_for_btc",
+      "sell_for_usd"
+    ]
+  },
+  "backend/app/coinbase_api/perpetuals_api.py": {
+    "classes": {},
+    "functions": [
+      "allocate_portfolio",
+      "get_perps_portfolio_balances",
+      "get_perps_portfolio_summary",
+      "get_perps_position",
+      "list_perpetual_products",
+      "list_perps_positions"
+    ]
+  },
+  "backend/app/coinbase_api/public_market_data.py": {
+    "classes": {
+      "PublicMarketDataClient": [
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_eth_usd_price",
+        "get_product_book",
+        "list_products"
+      ]
+    },
+    "functions": [
+      "_public_request",
+      "bulk_prices_for_products",
+      "get_btc_usd_price",
+      "get_candles",
+      "get_current_price",
+      "get_eth_usd_price",
+      "get_product",
+      "get_product_stats",
+      "get_ticker",
+      "list_products"
+    ]
+  },
+  "backend/app/coinbase_api/transaction_api.py": {
+    "classes": {},
+    "functions": [
+      "_normalize_transaction",
+      "get_all_transfers",
+      "get_transactions"
+    ]
+  },
+  "backend/app/coinbase_unified_client.py": {
+    "classes": {
+      "CircuitBreaker": [
+        "__init__",
+        "can_execute",
+        "record_failure",
+        "record_success"
+      ],
+      "CoinbaseClient": [
+        "__init__",
+        "_request",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "cancel_orders",
+        "close_perps_position",
+        "convert_currency",
+        "create_limit_order",
+        "create_market_order",
+        "create_perps_order",
+        "edit_order",
+        "edit_order_preview",
+        "get_account",
+        "get_accounts",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_deposit_withdrawals",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_order",
+        "get_perps_balances",
+        "get_perps_portfolio_summary",
+        "get_perps_position",
+        "get_portfolio_breakdown",
+        "get_portfolios",
+        "get_product",
+        "get_product_book",
+        "get_product_stats",
+        "get_ticker",
+        "get_usd_balance",
+        "get_usdc_balance",
+        "get_usdt_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_perps_positions",
+        "list_perps_products",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/conditions.py": {
+    "classes": {
+      "ConditionEvaluator": [
+        "__init__",
+        "_get_indicator_value",
+        "evaluate_condition",
+        "evaluate_group"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/config.py": {
+    "classes": {
+      "Settings": [
+        "convert_newlines",
+        "get_cors_origins_list",
+        "is_postgres",
+        "parse_cors_origins",
+        "require_non_default_secret_in_production"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/constants.py": {
+    "classes": {},
+    "functions": [
+      "compute_dynamic_concurrency",
+      "get_usd_equivalent_pair_price"
+    ]
+  },
+  "backend/app/currency_utils.py": {
+    "classes": {},
+    "functions": [
+      "format_base_amount",
+      "format_price",
+      "format_quote_amount",
+      "format_with_usd",
+      "get_base_currency",
+      "get_base_decimals",
+      "get_currencies_from_pair",
+      "get_quote_currency",
+      "get_quote_decimals"
+    ]
+  },
+  "backend/app/database.py": {
+    "classes": {},
+    "functions": [
+      "get_db",
+      "get_read_db",
+      "get_sync_engine",
+      "init_db"
+    ]
+  },
+  "backend/app/encryption.py": {
+    "classes": {},
+    "functions": [
+      "_get_fernet",
+      "decrypt_value",
+      "encrypt_value",
+      "is_encrypted",
+      "mask_api_key"
+    ]
+  },
+  "backend/app/event_bus.py": {
+    "classes": {
+      "InProcessEventBus": [
+        "__init__",
+        "_safe_call",
+        "publish",
+        "subscribe"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exceptions.py": {
+    "classes": {
+      "AppError": [
+        "__init__"
+      ],
+      "ExchangeUnavailableError": [
+        "__init__"
+      ],
+      "NotFoundError": [
+        "__init__"
+      ],
+      "RateLimitError": [
+        "__init__"
+      ],
+      "SessionLimitError": [
+        "__init__"
+      ],
+      "ValidationError": [
+        "__init__"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exchange_clients/base.py": {
+    "classes": {
+      "ExchangeClient": [
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "cancel_orders",
+        "create_limit_order",
+        "create_market_order",
+        "edit_order",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_product",
+        "get_product_stats",
+        "get_recent_trades",
+        "get_ticker",
+        "get_usd_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exchange_clients/bybit_adapter.py": {
+    "classes": {
+      "ByBitAdapter": [
+        "__init__",
+        "_get_coin_available",
+        "_get_order_fill_info",
+        "_normalize_order_status",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "close_all_positions",
+        "create_limit_order",
+        "create_market_order",
+        "edit_order",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_equity",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_positions_info",
+        "get_product",
+        "get_product_stats",
+        "get_ticker",
+        "get_usd_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exchange_clients/bybit_client.py": {
+    "classes": {
+      "ByBitClient": [
+        "__init__",
+        "_rate_limited_call",
+        "amend_order",
+        "cancel_all_orders",
+        "cancel_order",
+        "get_coin_balance",
+        "get_instruments_info",
+        "get_kline",
+        "get_open_orders",
+        "get_order_history",
+        "get_positions",
+        "get_tickers",
+        "get_wallet_balance",
+        "map_granularity",
+        "normalize_candles",
+        "place_order",
+        "set_leverage",
+        "set_trading_stop",
+        "switch_margin_mode",
+        "switch_position_mode"
+      ],
+      "ByBitError": [
+        "__init__"
+      ]
+    },
+    "functions": [
+      "_check_response",
+      "from_bybit_symbol",
+      "to_bybit_symbol"
+    ]
+  },
+  "backend/app/exchange_clients/bybit_ws.py": {
+    "classes": {
+      "ByBitWSManager": [
+        "__init__",
+        "_on_order",
+        "_on_position",
+        "_on_ticker",
+        "_on_wallet",
+        "_run_ws",
+        "start",
+        "stop"
+      ],
+      "ByBitWSState": [
+        "__init__",
+        "connected",
+        "connected",
+        "equity",
+        "equity",
+        "equity_timestamp",
+        "get_positions",
+        "get_price",
+        "get_snapshot",
+        "get_wallet",
+        "update_position",
+        "update_price",
+        "update_wallet"
+      ]
+    },
+    "functions": [
+      "get_ws_manager",
+      "register_ws_manager",
+      "stop_all_ws_managers",
+      "unregister_ws_manager"
+    ]
+  },
+  "backend/app/exchange_clients/coinbase_adapter.py": {
+    "classes": {
+      "CoinbaseAdapter": [
+        "__init__",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "cancel_orders",
+        "convert_currency",
+        "create_limit_order",
+        "create_market_order",
+        "edit_order",
+        "edit_order_preview",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_deposit_withdrawals",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_portfolio_breakdown",
+        "get_portfolios",
+        "get_product",
+        "get_product_book",
+        "get_product_stats",
+        "get_ticker",
+        "get_usd_balance",
+        "get_usdc_balance",
+        "get_usdt_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exchange_clients/dex_client.py": {
+    "classes": {
+      "DEXClient": [
+        "__init__",
+        "_approve_token",
+        "_get_erc20_balance",
+        "_get_token_addresses",
+        "_quote_exact_input_single",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "create_limit_order",
+        "create_market_order",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_product",
+        "get_product_stats",
+        "get_ticker",
+        "get_usd_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/exchange_clients/factory.py": {
+    "classes": {},
+    "functions": [
+      "create_exchange_client",
+      "create_exchange_client_from_bot_config"
+    ]
+  },
+  "backend/app/exchange_clients/mt5_bridge_client.py": {
+    "classes": {
+      "MT5BridgeClient": [
+        "__init__",
+        "_get_status",
+        "_heartbeat",
+        "_request",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "close",
+        "close_all_positions",
+        "create_limit_order",
+        "create_market_order",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_equity",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_product",
+        "get_product_stats",
+        "get_ticker",
+        "get_usd_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": [
+      "from_mt5_symbol",
+      "to_mt5_symbol"
+    ]
+  },
+  "backend/app/exchange_clients/paper_trading_client.py": {
+    "classes": {
+      "PaperTradingClient": [
+        "__init__",
+        "_calculate_vwap_fill_price",
+        "_is_known_unresolvable",
+        "_price_in_btc",
+        "_price_in_usd",
+        "_reload_balances",
+        "_save_balances",
+        "adjust_balance",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "convert_currency",
+        "create_limit_order",
+        "create_market_order",
+        "get_account",
+        "get_accounts",
+        "get_all_balances",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_order_book",
+        "get_price",
+        "get_product",
+        "get_product_book",
+        "get_product_stats",
+        "get_products",
+        "get_recent_trades",
+        "get_ticker",
+        "get_usd_balance",
+        "get_usdc_balance",
+        "get_usdt_balance",
+        "invalidate_balance_cache",
+        "is_paper_trading",
+        "list_orders",
+        "list_products",
+        "place_order",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": [
+      "_get_account_lock"
+    ]
+  },
+  "backend/app/exchange_clients/prop_guard.py": {
+    "classes": {
+      "PropGuardClient": [
+        "__init__",
+        "_apply_volatility_adjustment",
+        "_get_current_equity",
+        "_load_state",
+        "_preflight_check",
+        "_save_kill_state",
+        "_snapshot_daily_start",
+        "_trigger_kill",
+        "_update_equity",
+        "buy_eth_with_btc",
+        "buy_with_usd",
+        "calculate_aggregate_btc_value",
+        "calculate_aggregate_usd_value",
+        "calculate_market_budget",
+        "cancel_order",
+        "cancel_orders",
+        "create_limit_order",
+        "create_market_order",
+        "edit_order",
+        "get_account",
+        "get_accounts",
+        "get_balance",
+        "get_btc_balance",
+        "get_btc_usd_price",
+        "get_candles",
+        "get_current_price",
+        "get_eth_balance",
+        "get_eth_usd_price",
+        "get_exchange_type",
+        "get_order",
+        "get_product",
+        "get_product_stats",
+        "get_propguard_status",
+        "get_ticker",
+        "get_usd_balance",
+        "invalidate_balance_cache",
+        "list_orders",
+        "list_products",
+        "sell_eth_for_btc",
+        "sell_for_usd",
+        "test_connection"
+      ]
+    },
+    "functions": [
+      "_get_account_lock"
+    ]
+  },
+  "backend/app/exchange_clients/prop_guard_state.py": {
+    "classes": {},
+    "functions": [
+      "adjust_size_for_volatility",
+      "calculate_btc_volatility",
+      "calculate_daily_drawdown_pct",
+      "calculate_spread_pct",
+      "calculate_total_drawdown_pct",
+      "should_reset_daily"
+    ]
+  },
+  "backend/app/indicator_calculator.py": {
+    "classes": {
+      "IndicatorCalculator": [
+        "__init__",
+        "_get_indicator_key",
+        "calculate_all_indicators",
+        "calculate_bollinger_bands",
+        "calculate_ema",
+        "calculate_macd",
+        "calculate_rsi",
+        "calculate_sma",
+        "calculate_stochastic",
+        "calculate_vwap",
+        "extract_required_indicators"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/indicators.py": {
+    "classes": {
+      "MACDCalculator": [
+        "__init__",
+        "add_market_data",
+        "calculate_ema",
+        "calculate_from_prices",
+        "calculate_macd",
+        "check_for_signal",
+        "detect_crossover",
+        "get_recent_market_data"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/indicators/ai_opinion_logger.py": {
+    "classes": {},
+    "functions": [
+      "backfill_outcome",
+      "classify_outcome",
+      "log_opinion",
+      "on_position_closed"
+    ]
+  },
+  "backend/app/indicators/ai_pricing.py": {
+    "classes": {},
+    "functions": [
+      "_match_pricing",
+      "estimate_cost_usd",
+      "provider_for_model"
+    ]
+  },
+  "backend/app/indicators/ai_providers/anthropic_provider.py": {
+    "classes": {
+      "AnthropicProvider": [
+        "__init__",
+        "_execute_tool",
+        "call_with_tools"
+      ]
+    },
+    "functions": [
+      "_accumulate_anthropic_usage",
+      "translate_schema"
+    ]
+  },
+  "backend/app/indicators/ai_providers/base.py": {
+    "classes": {
+      "LLMProvider": [
+        "call_with_tools"
+      ],
+      "TokenUsage": [
+        "add"
+      ]
+    },
+    "functions": [
+      "get_provider",
+      "summarize_output"
+    ]
+  },
+  "backend/app/indicators/ai_providers/gemini_provider.py": {
+    "classes": {
+      "GeminiProvider": [
+        "__init__",
+        "_execute_tool",
+        "call_with_tools"
+      ]
+    },
+    "functions": [
+      "_accumulate_gemini_usage",
+      "_extract_function_calls",
+      "_extract_text",
+      "translate_schema"
+    ]
+  },
+  "backend/app/indicators/ai_providers/openai_provider.py": {
+    "classes": {
+      "OpenAIProvider": [
+        "__init__",
+        "_execute_tool",
+        "call_with_tools"
+      ]
+    },
+    "functions": [
+      "_accumulate_openai_usage",
+      "translate_schema"
+    ]
+  },
+  "backend/app/indicators/ai_spot_opinion.py": {
+    "classes": {
+      "AISpotOpinionEvaluator": [
+        "__init__",
+        "_build_prompt",
+        "_calculate_metrics",
+        "_call_llm",
+        "_check_buy_prefilter",
+        "_collect_auto_context",
+        "_parse_llm_response",
+        "_should_check_now",
+        "_timeframe_to_seconds",
+        "_update_last_check",
+        "_write_opinion_log",
+        "evaluate"
+      ],
+      "AISpotOpinionParams": [
+        "from_config"
+      ]
+    },
+    "functions": [
+      "_arg_tool_schemas",
+      "_credential_name_for",
+      "_tools_module",
+      "execute_tool",
+      "log_opinion"
+    ]
+  },
+  "backend/app/indicators/ai_tools/base.py": {
+    "classes": {},
+    "functions": [
+      "execute",
+      "get_schemas_for",
+      "register"
+    ]
+  },
+  "backend/app/indicators/ai_tools/candle_window.py": {
+    "classes": {},
+    "functions": [
+      "_compact",
+      "_run"
+    ]
+  },
+  "backend/app/indicators/ai_tools/portfolio_context.py": {
+    "classes": {},
+    "functions": [
+      "_base_asset",
+      "_run"
+    ]
+  },
+  "backend/app/indicators/ai_tools/position_context.py": {
+    "classes": {},
+    "functions": [
+      "_run"
+    ]
+  },
+  "backend/app/indicators/ai_tools/prior_ai_signals.py": {
+    "classes": {},
+    "functions": [
+      "_run"
+    ]
+  },
+  "backend/app/indicators/ai_tools/recent_news.py": {
+    "classes": {},
+    "functions": [
+      "_aliases_for",
+      "_run"
+    ]
+  },
+  "backend/app/indicators/ai_tools/trade_history.py": {
+    "classes": {},
+    "functions": [
+      "_hold_minutes",
+      "_run",
+      "_zero_summary"
+    ]
+  },
+  "backend/app/indicators/bull_flag_indicator.py": {
+    "classes": {
+      "BullFlagIndicatorEvaluator": [
+        "evaluate",
+        "get_required_timeframe"
+      ],
+      "BullFlagParams": [
+        "from_config",
+        "to_scanner_config"
+      ]
+    },
+    "functions": [
+      "evaluate_bull_flag_indicator",
+      "evaluate_bull_flag_indicator_with_details"
+    ]
+  },
+  "backend/app/indicators/qfl_indicator.py": {
+    "classes": {
+      "QFLIndicatorEvaluator": [
+        "evaluate"
+      ],
+      "QFLParams": [
+        "from_config"
+      ]
+    },
+    "functions": [
+      "_find_bases"
+    ]
+  },
+  "backend/app/indicators/risk_presets.py": {
+    "classes": {},
+    "functions": [
+      "get_risk_preset_defaults"
+    ]
+  },
+  "backend/app/indicators/speculative_signals.py": {
+    "classes": {},
+    "functions": [
+      "_fires_compression_breakout",
+      "_fires_correlation_break",
+      "_fires_micro_mid_cap",
+      "_fires_momentum_accelerating",
+      "_fires_volume_surge",
+      "_fires_volume_vs_mcap",
+      "components_for_log",
+      "score_speculative_setup",
+      "summarize_components_for_prompt"
+    ]
+  },
+  "backend/app/indicators/vwap_bounce_indicator.py": {
+    "classes": {
+      "VWAPBounceIndicatorEvaluator": [
+        "evaluate_bounce_down",
+        "evaluate_bounce_up"
+      ],
+      "VWAPBounceParams": [
+        "from_config"
+      ]
+    },
+    "functions": [
+      "_calculate_vwap"
+    ]
+  },
+  "backend/app/main.py": {
+    "classes": {
+      "SecurityHeadersMiddleware": [
+        "dispatch"
+      ]
+    },
+    "functions": [
+      "_cancel_task",
+      "_lifespan",
+      "_wire_event_bus_subscribers",
+      "app_error_handler",
+      "override_get_price_monitor",
+      "run_limit_order_monitor",
+      "run_missing_order_detector",
+      "run_order_reconciliation_monitor",
+      "shutdown_event",
+      "startup_event",
+      "websocket_endpoint"
+    ]
+  },
+  "backend/app/middleware/datetime_timezone.py": {
+    "classes": {
+      "DatetimeTimezoneMiddleware": [
+        "dispatch"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/middleware/intrusion_detect.py": {
+    "classes": {
+      "IntrusionDetector": [
+        "__call__",
+        "__init__",
+        "_log_and_track",
+        "prune_stale"
+      ]
+    },
+    "functions": [
+      "_check_body",
+      "_get_client_ip",
+      "_write_log"
+    ]
+  },
+  "backend/app/middleware/public_rate_limit.py": {
+    "classes": {
+      "PublicEndpointRateLimiter": [
+        "__call__",
+        "__init__",
+        "prune_stale"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/migrations/migrate_to_indicator_based.py": {
+    "classes": {},
+    "functions": [
+      "convert_advanced_dca",
+      "convert_ai_autonomous",
+      "convert_bollinger",
+      "convert_bull_flag",
+      "convert_conditional_dca",
+      "convert_macd_dca",
+      "convert_rsi",
+      "convert_simple_dca",
+      "main",
+      "migrate_all_bots",
+      "migrate_bot_config",
+      "migrate_position_snapshots"
+    ]
+  },
+  "backend/app/models/sharing.py": {
+    "classes": {
+      "AccountInvitation": [
+        "is_pending"
+      ],
+      "AccountMembership": [
+        "is_expired"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/models/trading.py": {
+    "classes": {
+      "Account": [
+        "get_display_name",
+        "get_short_address"
+      ],
+      "Bot": [
+        "get_quote_currency",
+        "get_reserved_balance",
+        "get_total_reserved_btc",
+        "get_total_reserved_usd",
+        "get_trading_pairs"
+      ],
+      "BotTemplate": [
+        "get_trading_pairs"
+      ],
+      "Position": [
+        "get_base_currency",
+        "get_quote_currency",
+        "update_averages"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/monitor/batch_analyzer.py": {
+    "classes": {},
+    "functions": [
+      "_build_candles_by_timeframe",
+      "_calculate_batch_budget",
+      "_determine_pairs_to_analyze",
+      "_execute_batch_analysis",
+      "_fetch_batch_market_data",
+      "_filter_by_volume",
+      "_update_position_errors",
+      "process_bot_batch"
+    ]
+  },
+  "backend/app/monitor/bull_flag_processor.py": {
+    "classes": {},
+    "functions": [
+      "process_bull_flag_bot"
+    ]
+  },
+  "backend/app/monitor/pair_processor.py": {
+    "classes": {},
+    "functions": [
+      "_analyze_signal",
+      "_build_indicator_ai_log",
+      "_check_synthetic_candle_threshold",
+      "_execute_trades",
+      "_fetch_indicator_candles",
+      "_fetch_legacy_candles",
+      "_fetch_market_data",
+      "_log_ai_decision",
+      "_log_indicator_evaluations",
+      "_log_signal_decisions",
+      "_resolve_strategy",
+      "process_bot_pair"
+    ]
+  },
+  "backend/app/multi_bot_monitor.py": {
+    "classes": {
+      "MultiBotMonitor": [
+        "__init__",
+        "_cached_candles_if_fresh",
+        "_fetch_candles",
+        "_process_single_bot",
+        "cleanup_caches",
+        "exchange",
+        "execute_trading_logic",
+        "get_active_bots",
+        "get_candles_cached",
+        "get_exchange_for_bot",
+        "get_status",
+        "log_ai_decision",
+        "monitor_loop",
+        "process_bot",
+        "start",
+        "start_async",
+        "stop"
+      ]
+    },
+    "functions": [
+      "_get_bot_rebalancer_group",
+      "clear_monitor_exchange_cache",
+      "clear_rebalancer_gates_for_account",
+      "filter_pairs_by_allowed_categories",
+      "get_available_trading_products",
+      "is_rebalancer_bot_overweight",
+      "is_rebalancer_gated"
+    ]
+  },
+  "backend/app/news_data/news_cache.py": {
+    "classes": {},
+    "functions": [
+      "_load_market_metrics_cache",
+      "_parse_naive_utc",
+      "_save_market_metrics_cache",
+      "load_altseason_cache",
+      "load_ath_cache",
+      "load_block_height_cache",
+      "load_btc_dominance_cache",
+      "load_btc_rsi_cache",
+      "load_cache",
+      "load_fear_greed_cache",
+      "load_hash_rate_cache",
+      "load_lightning_cache",
+      "load_mempool_cache",
+      "load_stablecoin_mcap_cache",
+      "load_us_debt_cache",
+      "load_video_cache",
+      "merge_news_items",
+      "prune_old_items",
+      "save_altseason_cache",
+      "save_ath_cache",
+      "save_block_height_cache",
+      "save_btc_dominance_cache",
+      "save_btc_rsi_cache",
+      "save_cache",
+      "save_fear_greed_cache",
+      "save_hash_rate_cache",
+      "save_lightning_cache",
+      "save_mempool_cache",
+      "save_stablecoin_mcap_cache",
+      "save_us_debt_cache",
+      "save_video_cache"
+    ]
+  },
+  "backend/app/order_validation.py": {
+    "classes": {},
+    "functions": [
+      "_load_product_precision",
+      "calculate_minimum_budget_percentage",
+      "get_product_minimums",
+      "validate_order_size"
+    ]
+  },
+  "backend/app/phase_conditions.py": {
+    "classes": {
+      "PhaseConditionEvaluator": [
+        "__init__",
+        "_evaluate_crossing",
+        "_evaluate_direction_change",
+        "_evaluate_group",
+        "_evaluate_grouped_expression",
+        "_evaluate_single_condition",
+        "_get_indicator_value",
+        "_get_previous_indicator_value",
+        "evaluate_expression",
+        "evaluate_phase_conditions",
+        "get_required_indicators",
+        "get_required_indicators_from_expression"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/position_routers/dependencies.py": {
+    "classes": {},
+    "functions": [
+      "get_coinbase"
+    ]
+  },
+  "backend/app/position_routers/helpers.py": {
+    "classes": {},
+    "functions": [
+      "compute_resize_budget"
+    ]
+  },
+  "backend/app/position_routers/panic_sell_router.py": {
+    "classes": {},
+    "functions": [
+      "_execute_panic_sell",
+      "_init_task",
+      "_run_panic_sell",
+      "_update_task",
+      "get_panic_sell_status",
+      "panic_sell",
+      "panic_sell_send_mfa"
+    ]
+  },
+  "backend/app/position_routers/perps_router.py": {
+    "classes": {},
+    "functions": [
+      "_get_coinbase_client",
+      "_get_portfolio_uuid",
+      "close_perps_position",
+      "get_perps_portfolio",
+      "list_perps_positions",
+      "list_perps_products",
+      "modify_tp_sl"
+    ]
+  },
+  "backend/app/position_routers/position_actions_router.py": {
+    "classes": {},
+    "functions": [
+      "_writable_account_ids",
+      "cancel_position",
+      "force_close_position",
+      "resize_all_budgets",
+      "resize_position_budget",
+      "update_position_settings"
+    ]
+  },
+  "backend/app/position_routers/position_limit_orders_router.py": {
+    "classes": {},
+    "functions": [
+      "_exchange_for_position",
+      "_get_user_position",
+      "cancel_limit_close",
+      "check_market_close_slippage",
+      "get_position_ticker",
+      "limit_close_position",
+      "update_limit_close"
+    ]
+  },
+  "backend/app/position_routers/position_manual_ops_router.py": {
+    "classes": {},
+    "functions": [
+      "add_funds_to_position",
+      "update_position_notes"
+    ]
+  },
+  "backend/app/position_routers/position_query_router.py": {
+    "classes": {},
+    "functions": [
+      "_trim_open_list_optional_fields",
+      "_trim_strategy_snapshot_for_list",
+      "get_completed_trades_stats",
+      "get_pnl_timeseries",
+      "get_position",
+      "get_position_ai_logs",
+      "get_position_ai_opinion",
+      "get_position_trades",
+      "get_positions",
+      "get_realized_pnl"
+    ]
+  },
+  "backend/app/precision.py": {
+    "classes": {},
+    "functions": [
+      "format_base_amount",
+      "format_quote_amount"
+    ]
+  },
+  "backend/app/price_feeds/aggregator.py": {
+    "classes": {
+      "AggregatedPrice": [
+        "calculate_profit",
+        "product_id",
+        "spread",
+        "spread_pct"
+      ],
+      "PriceAggregator": [
+        "__init__",
+        "add_feed",
+        "check_feed_health",
+        "find_opportunities",
+        "get_best_prices",
+        "monitor_spread",
+        "remove_feed"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/price_feeds/base.py": {
+    "classes": {
+      "OrderBook": [
+        "best_ask",
+        "best_bid",
+        "get_execution_price",
+        "product_id",
+        "spread",
+        "spread_pct"
+      ],
+      "OrderBookLevel": [
+        "value"
+      ],
+      "PriceFeed": [
+        "__init__",
+        "get_fee_estimate",
+        "get_orderbook",
+        "get_price",
+        "get_supported_pairs",
+        "is_available"
+      ],
+      "PriceQuote": [
+        "mid",
+        "net_buy_price",
+        "net_sell_price",
+        "product_id",
+        "spread",
+        "spread_pct"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/price_feeds/coinbase_feed.py": {
+    "classes": {
+      "CoinbasePriceFeed": [
+        "__init__",
+        "get_fee_estimate",
+        "get_orderbook",
+        "get_price",
+        "get_supported_pairs",
+        "is_available"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/price_feeds/dex_feed.py": {
+    "classes": {
+      "DEXPriceFeed": [
+        "__init__",
+        "get_fee_estimate",
+        "get_gas_estimate_usd",
+        "get_orderbook",
+        "get_price",
+        "get_supported_pairs",
+        "is_available"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/product_precision.py": {
+    "classes": {},
+    "functions": [
+      "ensure_product_precision",
+      "format_base_amount_for_product",
+      "format_quote_amount_for_product",
+      "get_base_precision",
+      "get_precision_data",
+      "get_quote_precision"
+    ]
+  },
+  "backend/app/redis_client.py": {
+    "classes": {},
+    "functions": [
+      "close_redis",
+      "get_redis",
+      "get_redis_sync",
+      "init_redis"
+    ]
+  },
+  "backend/app/registry.py": {
+    "classes": {},
+    "functions": [
+      "get_registry"
+    ]
+  },
+  "backend/app/routers/account_router.py": {
+    "classes": {},
+    "functions": [
+      "_build_aggregate_response",
+      "_empty_aggregate_response",
+      "get_aggregate_value",
+      "get_balances",
+      "get_conversion_status",
+      "get_portfolio",
+      "sell_portfolio_to_base_currency"
+    ]
+  },
+  "backend/app/routers/account_sharing_router.py": {
+    "classes": {},
+    "functions": [
+      "accept_invitation",
+      "decline_invitation",
+      "invite_member",
+      "list_members",
+      "list_outbound_invitations",
+      "list_pending_invitations",
+      "preview_invitation",
+      "remove_member",
+      "revoke_invitation",
+      "update_member_role"
+    ]
+  },
+  "backend/app/routers/account_value_router.py": {
+    "classes": {},
+    "functions": [
+      "_resolve_snapshot_user_id",
+      "capture_snapshots",
+      "get_account_value_history",
+      "get_bidirectional_reservations",
+      "get_daily_activity",
+      "get_latest_snapshot"
+    ]
+  },
+  "backend/app/routers/accounts_mutation_router.py": {
+    "classes": {},
+    "functions": [
+      "apply_speculative_weights_proposal",
+      "create_account",
+      "delete_account",
+      "dismiss_speculative_calibration_alert",
+      "link_perps_portfolio",
+      "set_default_account",
+      "sweep_dust",
+      "update_account",
+      "update_auto_buy_settings",
+      "update_dust_sweep_settings",
+      "update_rebalance_settings"
+    ]
+  },
+  "backend/app/routers/accounts_query_router.py": {
+    "classes": {},
+    "functions": [
+      "_compute_allocation",
+      "get_account",
+      "get_account_bots",
+      "get_account_portfolio",
+      "get_account_value_summary_route",
+      "get_auto_buy_settings",
+      "get_default_account",
+      "get_dust_sweep_settings",
+      "get_perps_portfolio_status",
+      "get_public_prices",
+      "get_rebalance_settings",
+      "get_rebalance_status",
+      "get_speculative_bucket_route",
+      "list_accounts",
+      "list_speculative_weights_proposals"
+    ]
+  },
+  "backend/app/routers/admin_router.py": {
+    "classes": {},
+    "functions": [
+      "_format_ban_snapshot",
+      "create_group",
+      "create_role",
+      "delete_group",
+      "delete_role",
+      "force_end_session",
+      "get_ban_details",
+      "get_banned_ips",
+      "get_effective_session_policy",
+      "list_groups",
+      "list_permissions",
+      "list_roles",
+      "list_user_sessions",
+      "list_users",
+      "refresh_bans",
+      "unban_ip",
+      "update_group",
+      "update_group_session_policy",
+      "update_role",
+      "update_user_groups",
+      "update_user_session_policy",
+      "update_user_status"
+    ]
+  },
+  "backend/app/routers/ai_cost_router.py": {
+    "classes": {
+      "_Accumulator": [
+        "merge"
+      ]
+    },
+    "functions": [
+      "_provider_slug",
+      "cost_summary"
+    ]
+  },
+  "backend/app/routers/ai_credentials_router.py": {
+    "classes": {},
+    "functions": [
+      "_api_key_preview",
+      "create_or_update_ai_credential",
+      "delete_ai_credential",
+      "get_ai_credential",
+      "get_ai_providers_status",
+      "list_ai_credentials",
+      "update_ai_credential"
+    ]
+  },
+  "backend/app/routers/blacklist_router.py": {
+    "classes": {},
+    "functions": [
+      "_extract_category",
+      "add_single_to_blacklist",
+      "add_to_blacklist",
+      "check_if_blacklisted",
+      "get_ai_provider_setting",
+      "get_category_settings",
+      "list_blacklisted_coins",
+      "list_user_overrides",
+      "remove_from_blacklist",
+      "remove_user_override",
+      "set_user_override",
+      "trigger_ai_review",
+      "update_ai_provider_setting",
+      "update_blacklist_reason",
+      "update_category_settings"
+    ]
+  },
+  "backend/app/routers/chat_router.py": {
+    "classes": {},
+    "functions": [
+      "add_member",
+      "create_channel",
+      "delete_channel",
+      "delete_message",
+      "edit_message",
+      "get_members",
+      "get_messages",
+      "get_pinned_messages",
+      "get_unread_counts",
+      "giphy_search",
+      "giphy_trending",
+      "list_channels",
+      "mark_read",
+      "remove_member",
+      "rename_channel",
+      "search_messages",
+      "send_message",
+      "toggle_pin",
+      "toggle_reaction",
+      "update_member_role"
+    ]
+  },
+  "backend/app/routers/coin_icons_router.py": {
+    "classes": {},
+    "functions": [
+      "get_coin_icon"
+    ]
+  },
+  "backend/app/routers/display_name_router.py": {
+    "classes": {},
+    "functions": [
+      "check_display_name",
+      "set_admin_display_name",
+      "set_display_name"
+    ]
+  },
+  "backend/app/routers/donations_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_report_rate",
+      "add_donation",
+      "confirm_donation",
+      "get_donation_goal",
+      "list_donations",
+      "reject_donation",
+      "report_donation",
+      "update_goal"
+    ]
+  },
+  "backend/app/routers/friends_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_friend_request_rate",
+      "accept_friend_request",
+      "block_user",
+      "cancel_sent_friend_request",
+      "get_online_friends",
+      "list_blocked_users",
+      "list_friend_requests",
+      "list_friends",
+      "list_sent_friend_requests",
+      "prune_friend_request_attempts",
+      "reject_friend_request",
+      "remove_friend",
+      "search_users",
+      "send_friend_request",
+      "unblock_user"
+    ]
+  },
+  "backend/app/routers/game_history_router.py": {
+    "classes": {},
+    "functions": [
+      "_build_game_history_response",
+      "_check_visibility_access",
+      "get_game_result_detail",
+      "get_game_scores",
+      "list_own_game_history",
+      "update_game_score",
+      "update_visibility",
+      "view_user_game_history"
+    ]
+  },
+  "backend/app/routers/market_data_router.py": {
+    "classes": {},
+    "functions": [
+      "get_btc_usd_price",
+      "get_candles",
+      "get_coinbase",
+      "get_eth_usd_price",
+      "get_orderbook",
+      "get_prices_batch",
+      "get_product_precision",
+      "get_products",
+      "get_ticker",
+      "get_unique_coins"
+    ]
+  },
+  "backend/app/routers/news_metrics_router.py": {
+    "classes": {},
+    "functions": [
+      "get_altseason_index",
+      "get_ath",
+      "get_btc_block_height",
+      "get_btc_dominance",
+      "get_btc_rsi",
+      "get_btc_supply",
+      "get_debt_ceiling_history",
+      "get_fear_greed",
+      "get_hash_rate",
+      "get_lightning_stats",
+      "get_mempool_stats",
+      "get_metric_history",
+      "get_stablecoin_mcap",
+      "get_total_market_cap",
+      "get_us_debt"
+    ]
+  },
+  "backend/app/routers/news_router.py": {
+    "classes": {},
+    "functions": [
+      "bulk_mark_content_seen",
+      "cleanup_cache",
+      "get_article_content",
+      "get_article_image",
+      "get_cache_stats",
+      "get_categories",
+      "get_news",
+      "get_sources",
+      "get_video_sources",
+      "get_videos",
+      "get_videos_for_user",
+      "get_videos_from_db",
+      "get_videos_from_db_list",
+      "mark_article_issue",
+      "mark_content_seen",
+      "video_to_item"
+    ]
+  },
+  "backend/app/routers/news_tts_router.py": {
+    "classes": {},
+    "functions": [
+      "_generate_tts",
+      "_get_generation_lock",
+      "_get_or_create_tts",
+      "_get_tts_executor",
+      "_get_user_tts_semaphore",
+      "_update_tts_history",
+      "_write_tts_file",
+      "cleanup_tts_for_articles",
+      "get_cached_voices_for_article",
+      "get_tts_history_for_article",
+      "get_tts_voices",
+      "get_voice_subscriptions",
+      "prepare_tts",
+      "serve_tts_audio",
+      "text_to_speech_with_sync",
+      "update_voice_subscriptions"
+    ]
+  },
+  "backend/app/routers/order_history.py": {
+    "classes": {},
+    "functions": [
+      "get_failed_orders",
+      "get_failed_orders_paginated",
+      "get_order_history",
+      "get_order_stats"
+    ]
+  },
+  "backend/app/routers/paper_trading_router.py": {
+    "classes": {},
+    "functions": [
+      "deposit_to_paper_account",
+      "get_paper_balance",
+      "reset_paper_account",
+      "withdraw_from_paper_account"
+    ]
+  },
+  "backend/app/routers/prop_guard_router.py": {
+    "classes": {},
+    "functions": [
+      "_get_prop_account",
+      "get_propguard_history",
+      "get_propguard_status",
+      "manual_kill",
+      "reset_kill_switch"
+    ]
+  },
+  "backend/app/routers/reports_crud_router.py": {
+    "classes": {
+      "GoalCreate": [
+        "validate_goal_fields"
+      ],
+      "ScheduleCreate": [
+        "validate_schedule_fields"
+      ]
+    },
+    "functions": [
+      "_get_accessible_report",
+      "_get_user_goal",
+      "_goal_to_dict",
+      "_normalize_recipient_for_api",
+      "_parse_json_list",
+      "_resolve_report_user_id",
+      "_resolve_write_user_id",
+      "_schedule_to_dict",
+      "bulk_delete_reports",
+      "create_goal",
+      "create_schedule",
+      "delete_goal",
+      "delete_report",
+      "delete_schedule",
+      "download_report_pdf",
+      "get_report",
+      "list_goals",
+      "list_reports",
+      "list_schedules",
+      "update_goal",
+      "update_schedule"
+    ]
+  },
+  "backend/app/routers/reports_generation_router.py": {
+    "classes": {
+      "ExpenseItemCreate": [
+        "validate_fields"
+      ]
+    },
+    "functions": [
+      "_expense_item_to_dict",
+      "_get_user_annual_return_pct",
+      "_get_user_trading_metrics",
+      "create_expense_item",
+      "delete_expense_item",
+      "generate_report",
+      "get_expense_categories",
+      "get_goal_trend",
+      "list_expense_items",
+      "preview_report",
+      "reorder_expense_items",
+      "update_expense_item"
+    ]
+  },
+  "backend/app/routers/seasonality_router.py": {
+    "classes": {},
+    "functions": [
+      "auto_manage_bots",
+      "check_bot_allowed",
+      "get_seasonality",
+      "get_setting",
+      "get_settings_batch",
+      "set_setting",
+      "toggle_seasonality"
+    ]
+  },
+  "backend/app/routers/sessions_router.py": {
+    "classes": {},
+    "functions": [
+      "get_current_session_id",
+      "list_other_active_sessions",
+      "terminate_other_sessions",
+      "terminate_sessions"
+    ]
+  },
+  "backend/app/routers/settings_router.py": {
+    "classes": {},
+    "functions": [
+      "get_coinbase",
+      "get_setting_by_key",
+      "get_settings",
+      "test_connection",
+      "update_env_file",
+      "update_setting_by_key",
+      "update_settings"
+    ]
+  },
+  "backend/app/routers/sources_router.py": {
+    "classes": {},
+    "functions": [
+      "_cleanup_orphan_source",
+      "add_custom_source",
+      "check_robots",
+      "count_user_custom_sources",
+      "delete_custom_source",
+      "get_user_subscription",
+      "get_user_subscription_status",
+      "list_sources",
+      "list_subscribed_sources",
+      "set_user_subscription",
+      "subscribe_to_source",
+      "unsubscribe_from_source",
+      "update_source_settings"
+    ]
+  },
+  "backend/app/routers/strategies_router.py": {
+    "classes": {},
+    "functions": [
+      "get_strategy",
+      "list_strategies"
+    ]
+  },
+  "backend/app/routers/system_router.py": {
+    "classes": {},
+    "functions": [
+      "_git_ref_is_ancestor",
+      "build_changelog_cache",
+      "cancel_shutdown",
+      "get_ai_provider_info",
+      "get_brand_config",
+      "get_brand_image",
+      "get_changelog",
+      "get_coinbase",
+      "get_dashboard",
+      "get_git_version",
+      "get_git_version_cached",
+      "get_latest_git_tag",
+      "get_market_data",
+      "get_pair_monitor_status",
+      "get_price_monitor",
+      "get_repo_root",
+      "get_shutdown_status",
+      "get_signals",
+      "get_sorted_tags",
+      "get_status",
+      "get_trades",
+      "get_version",
+      "health_check",
+      "is_update_available",
+      "prepare_shutdown",
+      "root",
+      "set_trading_pair_monitor",
+      "start_monitor",
+      "stop_monitor",
+      "trigger_pair_sync"
+    ]
+  },
+  "backend/app/routers/templates.py": {
+    "classes": {},
+    "functions": [
+      "create_template",
+      "delete_template",
+      "get_template",
+      "list_templates",
+      "seed_default_templates",
+      "update_template"
+    ]
+  },
+  "backend/app/routers/tournament_router.py": {
+    "classes": {},
+    "functions": [
+      "archive_tournament",
+      "create_tournament",
+      "get_tournament_detail",
+      "get_tournament_standings",
+      "join_tournament",
+      "leave_tournament",
+      "list_tournaments",
+      "start_tournament",
+      "vote_delete_tournament"
+    ]
+  },
+  "backend/app/routers/trading_router.py": {
+    "classes": {},
+    "functions": [
+      "market_sell"
+    ]
+  },
+  "backend/app/routers/transfers_router.py": {
+    "classes": {},
+    "functions": [
+      "_transfer_to_dict",
+      "create_manual_transfer",
+      "delete_transfer",
+      "get_recent_summary",
+      "get_transfer_summary",
+      "list_transfers",
+      "sync_transfers"
+    ]
+  },
+  "backend/app/scheduler.py": {
+    "classes": {},
+    "functions": [
+      "_job_error_handler",
+      "register_jobs"
+    ]
+  },
+  "backend/app/schemas/position.py": {
+    "classes": {
+      "TradeResponse": [
+        "trade_type_display"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/secondary_loop.py": {
+    "classes": {},
+    "functions": [
+      "_init_secondary_engine",
+      "_run_loop",
+      "get_secondary_loop",
+      "get_secondary_session_maker",
+      "schedule",
+      "start_secondary_loop",
+      "stop_secondary_loop"
+    ]
+  },
+  "backend/app/seeds/coin_categories.py": {
+    "classes": {},
+    "functions": [
+      "seed_default_coins"
+    ]
+  },
+  "backend/app/seeds/content_sources.py": {
+    "classes": {},
+    "functions": [
+      "seed_default_sources"
+    ]
+  },
+  "backend/app/server_resources.py": {
+    "classes": {
+      "ResourcePlan": [
+        "__init__"
+      ]
+    },
+    "functions": [
+      "_get_pg_max_connections",
+      "get_resource_plan"
+    ]
+  },
+  "backend/app/services/account_access.py": {
+    "classes": {},
+    "functions": [
+      "_active_membership_clauses",
+      "accessible_account_ids",
+      "accessible_accounts_filter",
+      "manager_account_ids",
+      "manager_accounts_filter"
+    ]
+  },
+  "backend/app/services/account_responses.py": {
+    "classes": {},
+    "functions": [
+      "build_rebalance_response"
+    ]
+  },
+  "backend/app/services/account_service.py": {
+    "classes": {},
+    "functions": [
+      "_build_paper_portfolio",
+      "create_exchange_account",
+      "get_portfolio_for_account",
+      "validate_prop_firm_config"
+    ]
+  },
+  "backend/app/services/account_sharing_service.py": {
+    "classes": {},
+    "functions": [
+      "_assert_email_match",
+      "_get_pending_invitation",
+      "_get_user_by_email",
+      "_log_event",
+      "accept_invitation",
+      "create_invitation",
+      "decline_invitation",
+      "list_members",
+      "list_pending_invitations_for_account",
+      "list_pending_invitations_for_user",
+      "preview_invitation",
+      "remove_member",
+      "revoke_invitation",
+      "update_member_role"
+    ]
+  },
+  "backend/app/services/account_snapshot_service.py": {
+    "classes": {},
+    "functions": [
+      "_fetch_position_prices",
+      "capture_account_snapshot",
+      "capture_all_account_snapshots",
+      "get_account_value_history",
+      "get_daily_activity",
+      "get_latest_snapshot",
+      "run_account_snapshot_once"
+    ]
+  },
+  "backend/app/services/account_value_summary_service.py": {
+    "classes": {},
+    "functions": [
+      "_build_live_paper_account_value_summary",
+      "_refresh_paper_summary_cache",
+      "_schedule_paper_summary_refresh",
+      "_summary_cache_key",
+      "get_account_value_summary"
+    ]
+  },
+  "backend/app/services/ai_credential_service.py": {
+    "classes": {},
+    "functions": [
+      "get_user_api_key"
+    ]
+  },
+  "backend/app/services/ai_grid_optimizer.py": {
+    "classes": {},
+    "functions": [
+      "analyze_grid_performance",
+      "apply_ai_recommendations",
+      "calculate_market_metrics",
+      "get_ai_grid_recommendations",
+      "run_ai_grid_optimization"
+    ]
+  },
+  "backend/app/services/article_content_service.py": {
+    "classes": {},
+    "functions": [
+      "_mark_content_fetch_failed",
+      "fetch_article_content",
+      "get_allowed_article_domains",
+      "get_source_scrape_policy"
+    ]
+  },
+  "backend/app/services/auto_buy_monitor.py": {
+    "classes": {
+      "AutoBuyMonitor": [
+        "__init__",
+        "_calculate_reserved_usd",
+        "_check_accounts",
+        "_check_and_buy",
+        "_check_pending_orders",
+        "_process_account",
+        "_reprice_order",
+        "_should_check_account",
+        "cleanup_stale_entries",
+        "run_once"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/ban_monitor.py": {
+    "classes": {},
+    "functions": [
+      "_lookup_ip_geo_batch",
+      "_merge_snapshots",
+      "_query_bans",
+      "_query_cloudflare",
+      "_query_fail2ban",
+      "get_ban_snapshot",
+      "refresh_ban_snapshot",
+      "run_ban_monitor_once"
+    ]
+  },
+  "backend/app/services/bot_stats_service.py": {
+    "classes": {},
+    "functions": [
+      "calculate_bot_pnl",
+      "calculate_budget_utilization",
+      "fetch_aggregate_values",
+      "fetch_position_prices",
+      "get_open_position_products"
+    ]
+  },
+  "backend/app/services/bot_validation_service.py": {
+    "classes": {},
+    "functions": [
+      "auto_correct_market_focus",
+      "validate_bidirectional_budget_config",
+      "validate_quote_currency"
+    ]
+  },
+  "backend/app/services/brand_service.py": {
+    "classes": {},
+    "functions": [
+      "_load_brand_json",
+      "get_brand",
+      "get_brand_images_dir",
+      "reload_brand"
+    ]
+  },
+  "backend/app/services/broadcast_backend.py": {
+    "classes": {
+      "BroadcastBackend": [
+        "broadcast",
+        "broadcast_order_fill",
+        "send_to_room",
+        "send_to_user"
+      ],
+      "InProcessBroadcast": [
+        "__init__",
+        "broadcast",
+        "broadcast_order_fill",
+        "send_to_room",
+        "send_to_user"
+      ],
+      "RedisBroadcast": [
+        "broadcast",
+        "broadcast_order_fill",
+        "send_to_room",
+        "send_to_user"
+      ]
+    },
+    "functions": [
+      "route_redis_message"
+    ]
+  },
+  "backend/app/services/budget_calculator.py": {
+    "classes": {},
+    "functions": [
+      "calculate_available_btc",
+      "calculate_available_usd",
+      "validate_bidirectional_budget"
+    ]
+  },
+  "backend/app/services/chat_service.py": {
+    "classes": {},
+    "functions": [
+      "_aggregate_reactions",
+      "_batch_aggregate_reactions",
+      "_batch_build_message_dicts",
+      "_build_message_dict",
+      "_validate_membership",
+      "add_member",
+      "create_channel",
+      "create_group",
+      "delete_channel",
+      "delete_message",
+      "edit_message",
+      "get_channel_member_ids",
+      "get_channel_member_ids_excluding_blockers",
+      "get_channel_members",
+      "get_messages",
+      "get_or_create_admin_dm",
+      "get_or_create_dm",
+      "get_pinned_messages",
+      "get_unread_counts",
+      "get_user_channels",
+      "mark_read",
+      "remove_member",
+      "rename_channel",
+      "search_messages",
+      "send_message",
+      "toggle_pin",
+      "toggle_reaction",
+      "update_member_role"
+    ]
+  },
+  "backend/app/services/chat_ws_handler.py": {
+    "classes": {},
+    "functions": [
+      "_broadcast_to_members",
+      "_check_send_rate",
+      "_handle_delete",
+      "_handle_edit",
+      "_handle_pin",
+      "_handle_react",
+      "_handle_read",
+      "_handle_send",
+      "_handle_typing",
+      "_parse_int_field",
+      "_prune_send_timestamps",
+      "_prune_typing_cooldowns",
+      "handle_chat_message",
+      "prune_all_stale"
+    ]
+  },
+  "backend/app/services/coin_review_service.py": {
+    "classes": {},
+    "functions": [
+      "_call_claude",
+      "_call_gemini",
+      "_call_grok",
+      "_call_openai",
+      "_get_last_review_timestamp",
+      "_parse_ai_response",
+      "call_ai_for_review",
+      "get_ai_review_provider_from_db",
+      "get_coinbase_client_from_db",
+      "get_tracked_coins",
+      "run_coin_review_once",
+      "run_weekly_review",
+      "update_coin_statuses"
+    ]
+  },
+  "backend/app/services/content_refresh_service.py": {
+    "classes": {
+      "ContentRefreshService": [
+        "__init__",
+        "_refresh_news",
+        "_refresh_videos",
+        "refresh_news",
+        "refresh_videos",
+        "status"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/credentials_provider.py": {
+    "classes": {
+      "CredentialsProvider": [
+        "get_exchange_client"
+      ],
+      "LocalCredentialsProvider": [
+        "get_exchange_client"
+      ],
+      "RemoteCredentialsProvider": [
+        "get_exchange_client"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/debt_ceiling_monitor.py": {
+    "classes": {
+      "DebtCeilingMonitor": [
+        "__init__",
+        "_ai_check_debt_ceiling",
+        "_check_for_updates",
+        "_load_cache",
+        "_save_cache",
+        "run_once",
+        "status"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/delisted_pair_monitor.py": {
+    "classes": {
+      "TradingPairMonitor": [
+        "__init__",
+        "_get_quote_currency",
+        "_get_unresolvable_coins",
+        "_is_stable_candidate_by_price",
+        "_verify_stable_with_candles",
+        "check_and_sync_pairs",
+        "detect_stable_pairs",
+        "get_available_products",
+        "get_status",
+        "run_once"
+      ]
+    },
+    "functions": [
+      "is_stable_pair"
+    ]
+  },
+  "backend/app/services/dex_wallet_service.py": {
+    "classes": {
+      "DexWalletService": [
+        "__init__",
+        "_get_native_symbol",
+        "_get_web3",
+        "fetch_token_prices",
+        "format_portfolio_for_api",
+        "get_native_balance",
+        "get_token_balance",
+        "get_wallet_portfolio"
+      ]
+    },
+    "functions": [
+      "prune_price_cache"
+    ]
+  },
+  "backend/app/services/disposable_email_service.py": {
+    "classes": {},
+    "functions": [
+      "get_disposable_domains",
+      "is_disposable_domain",
+      "is_disposable_email",
+      "is_suspicious_email",
+      "looks_machine_generated"
+    ]
+  },
+  "backend/app/services/domain_blacklist_service.py": {
+    "classes": {
+      "DomainBlacklistService": [
+        "__init__",
+        "_domain_variants",
+        "_download_all",
+        "_download_category",
+        "_extract_domain",
+        "_load_from_disk",
+        "_load_metadata",
+        "_save_category",
+        "_save_metadata",
+        "domain_count",
+        "is_domain_blocked",
+        "run_once"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/email_service.py": {
+    "classes": {},
+    "functions": [
+      "_brand",
+      "_build_speculative_calibration_html_body",
+      "_email_footer",
+      "_email_header",
+      "_get_ses_client",
+      "_render_proposal_block",
+      "_send_email",
+      "build_speculative_calibration_text_body",
+      "send_invitation_email",
+      "send_mfa_verification_email",
+      "send_password_reset_email",
+      "send_report_email",
+      "send_speculative_calibration_email",
+      "send_verification_email"
+    ]
+  },
+  "backend/app/services/exchange_service.py": {
+    "classes": {},
+    "functions": [
+      "clear_exchange_client_cache",
+      "create_or_update_cex_account",
+      "get_coinbase_for_account",
+      "get_default_cex_account",
+      "get_exchange_client_for_account",
+      "get_exchange_client_for_user"
+    ]
+  },
+  "backend/app/services/expense_service.py": {
+    "classes": {},
+    "functions": [
+      "_build_savings_target_entry",
+      "_compute_gross_target",
+      "_compute_self_sustaining_hold",
+      "compute_expense_coverage",
+      "compute_monthly_savings_contribution",
+      "compute_savings_capital_required",
+      "get_user_expense_categories",
+      "normalize_item_to_period",
+      "normalize_monthly_to_period",
+      "normalize_to_monthly",
+      "recalculate_goal_target"
+    ]
+  },
+  "backend/app/services/friend_notifications.py": {
+    "classes": {},
+    "functions": [
+      "_get_friend_ids",
+      "broadcast_friend_online",
+      "broadcast_user_presence",
+      "notify_friend_request_accepted"
+    ]
+  },
+  "backend/app/services/game_room_manager.py": {
+    "classes": {
+      "GameRoom": [
+        "all_ready",
+        "max_players"
+      ],
+      "GameRoomManager": [
+        "__init__",
+        "cleanup_stale_rooms",
+        "close_room",
+        "create_room",
+        "expire_disconnected_players",
+        "finish_game",
+        "get_pending_rejoin",
+        "get_room",
+        "get_rooms_for_player",
+        "get_user_room",
+        "join_room",
+        "leave_room",
+        "list_rooms",
+        "mark_disconnected",
+        "mid_join_room",
+        "reconnect_player",
+        "record_action",
+        "reset_to_lobby",
+        "set_ready",
+        "start_game",
+        "update_state"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/game_ws_handler.py": {
+    "classes": {},
+    "functions": [
+      "_build_player_names",
+      "_check_game_rate",
+      "_clean_stale_user_room",
+      "_handle_action",
+      "_handle_back_to_lobby",
+      "_handle_chat",
+      "_handle_check_room",
+      "_handle_create",
+      "_handle_forfeit",
+      "_handle_invite",
+      "_handle_join",
+      "_handle_join_friend",
+      "_handle_leave",
+      "_handle_mid_join",
+      "_handle_ready",
+      "_handle_rejoin",
+      "_handle_start",
+      "_handle_state_update",
+      "_handle_update_config",
+      "_send_existing_room",
+      "handle_game_message",
+      "handle_player_disconnect",
+      "prune_game_rate_timestamps"
+    ]
+  },
+  "backend/app/services/goal_snapshot_service.py": {
+    "classes": {},
+    "functions": [
+      "_backfill_expense_goal_snapshots",
+      "_get_current_value_for_goal",
+      "_get_expense_snapshot_values",
+      "_get_target_for_goal",
+      "_interpolate_ideal",
+      "backfill_goal_snapshots",
+      "capture_goal_snapshots",
+      "clip_trend_data",
+      "compute_horizon_date",
+      "get_goal_trend_data"
+    ]
+  },
+  "backend/app/services/grid_rotation_service.py": {
+    "classes": {},
+    "functions": [
+      "check_and_run_rotation",
+      "evaluate_grid_rotation",
+      "execute_grid_rotation"
+    ]
+  },
+  "backend/app/services/grid_trading_service.py": {
+    "classes": {},
+    "functions": [
+      "_compute_grid_order_size",
+      "_place_grid_buy_orders",
+      "_place_grid_limit_order",
+      "_place_grid_sell_orders",
+      "calculate_new_range_after_breakout",
+      "cancel_grid_orders",
+      "check_and_run_ai_optimization",
+      "check_and_run_rotation",
+      "detect_and_handle_breakout",
+      "handle_grid_order_fill",
+      "initialize_grid",
+      "rebalance_grid_on_breakout"
+    ]
+  },
+  "backend/app/services/indicator_log_service.py": {
+    "classes": {},
+    "functions": [
+      "cleanup_old_indicator_logs",
+      "get_indicator_logs",
+      "log_indicator_evaluation"
+    ]
+  },
+  "backend/app/services/limit_order_monitor.py": {
+    "classes": {
+      "LimitOrderMonitor": [
+        "__init__",
+        "_cancel_and_replace_order",
+        "_check_bid_fallback",
+        "_get_bot_name",
+        "_process_order_completion",
+        "_process_partial_fills",
+        "check_single_position_limit_order"
+      ]
+    },
+    "functions": [
+      "check_all_pending_limit_orders",
+      "sweep_orphaned_pending_orders"
+    ]
+  },
+  "backend/app/services/market_metrics_service.py": {
+    "classes": {},
+    "functions": [
+      "_fire_and_forget_metric",
+      "calculate_btc_supply",
+      "fetch_altseason_index",
+      "fetch_ath_data",
+      "fetch_btc_block_height",
+      "fetch_btc_dominance",
+      "fetch_btc_rsi",
+      "fetch_fear_greed_index",
+      "fetch_hash_rate",
+      "fetch_lightning_stats",
+      "fetch_mempool_stats",
+      "fetch_stablecoin_mcap",
+      "fetch_us_debt",
+      "get_metric_history_data",
+      "get_shared_session",
+      "prune_old_snapshots",
+      "record_metric_snapshot"
+    ]
+  },
+  "backend/app/services/news_fetch_service.py": {
+    "classes": {},
+    "functions": [
+      "_get_source_key_to_id_map",
+      "cleanup_articles_with_images",
+      "cleanup_old_videos",
+      "fetch_all_news",
+      "fetch_all_videos",
+      "fetch_og_image",
+      "fetch_og_meta",
+      "fetch_reddit_news",
+      "fetch_rss_news",
+      "fetch_youtube_videos",
+      "get_last_news_refresh",
+      "get_last_video_refresh",
+      "get_news_sources_from_db",
+      "get_video_sources_from_db",
+      "store_article_in_db",
+      "store_video_in_db"
+    ]
+  },
+  "backend/app/services/news_image_cache.py": {
+    "classes": {},
+    "functions": [
+      "compress_image",
+      "download_and_save_image",
+      "download_image",
+      "download_image_as_base64",
+      "download_images_batch",
+      "get_mime_type_from_content_type",
+      "get_mime_type_from_url"
+    ]
+  },
+  "backend/app/services/news_service.py": {
+    "classes": {},
+    "functions": [
+      "article_to_news_item",
+      "build_news_response",
+      "get_all_sources_from_db",
+      "get_articles_for_user",
+      "get_articles_from_db",
+      "get_news_from_db",
+      "get_seen_content_ids"
+    ]
+  },
+  "backend/app/services/order_reconciliation_monitor.py": {
+    "classes": {
+      "MissingOrderDetector": [
+        "__init__",
+        "check_for_missing_orders"
+      ],
+      "OrderReconciliationMonitor": [
+        "__init__",
+        "_reconcile_position",
+        "check_and_fix_orphaned_positions"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/paper_valuation_service.py": {
+    "classes": {},
+    "functions": [
+      "_get_asset_valuation",
+      "build_paper_holdings_and_totals",
+      "load_paper_balances"
+    ]
+  },
+  "backend/app/services/perps_monitor.py": {
+    "classes": {
+      "PerpsMonitor": [
+        "__init__",
+        "_check_bracket_fill",
+        "_monitor_loop",
+        "_sync_account_positions",
+        "_sync_positions",
+        "_sync_single_position",
+        "start",
+        "stop"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/pnl_service.py": {
+    "classes": {},
+    "functions": [
+      "calculate_profit"
+    ]
+  },
+  "backend/app/services/portfolio_calculations.py": {
+    "classes": {},
+    "functions": [
+      "_apply_asset_pnl_to_holdings",
+      "_build_portfolio_holdings",
+      "_compute_balance_breakdown",
+      "_compute_position_pnl",
+      "aggregate_pnl_rows"
+    ]
+  },
+  "backend/app/services/portfolio_conversion_service.py": {
+    "classes": {},
+    "functions": [
+      "_convert_intermediate_currency",
+      "_sell_currency_with_fallback",
+      "cleanup_old_tasks",
+      "get_task_progress",
+      "init_task",
+      "run_portfolio_conversion",
+      "update_task_progress"
+    ]
+  },
+  "backend/app/services/portfolio_service.py": {
+    "classes": {},
+    "functions": [
+      "_get_paper_portfolio",
+      "_query_closed_pnl",
+      "get_account_balances",
+      "get_account_portfolio_data",
+      "get_cex_portfolio",
+      "get_coinbase_from_db",
+      "get_dex_portfolio",
+      "get_generic_cex_portfolio",
+      "get_user_paper_account"
+    ]
+  },
+  "backend/app/services/prop_guard_monitor.py": {
+    "classes": {},
+    "functions": [
+      "_check_account",
+      "_check_all_prop_accounts",
+      "_ensure_ws_manager",
+      "_get_account_equity",
+      "_kill_account",
+      "_monitor_loop",
+      "start_prop_guard_monitor",
+      "stop_prop_guard_monitor"
+    ]
+  },
+  "backend/app/services/rebalance_monitor.py": {
+    "classes": {
+      "RebalanceMonitor": [
+        "__init__",
+        "_check_accounts",
+        "_execute_trade",
+        "_log_trade_result",
+        "_price_dust_coins",
+        "_process_account",
+        "_should_check_account",
+        "_sweep_dust",
+        "cleanup_stale_entries",
+        "run_once"
+      ]
+    },
+    "functions": [
+      "_get_trade_params",
+      "calculate_current_allocations",
+      "clear_account_gate_data",
+      "execute_dust_sweep",
+      "get_account_gate_data",
+      "get_position_locked_amounts",
+      "needs_rebalance",
+      "plan_dust_sweeps",
+      "plan_topup_trades",
+      "plan_trades",
+      "quote_is_overweight",
+      "set_account_gate_data",
+      "should_dust_sweep",
+      "subtract_locked_amounts",
+      "sum_locked_base_amounts"
+    ]
+  },
+  "backend/app/services/rebalance_service.py": {
+    "classes": {},
+    "functions": [
+      "_compute_live_balances",
+      "_compute_paper_balances",
+      "_get_open_positions",
+      "build_rebalance_response",
+      "compute_allocation",
+      "compute_rebalance_status",
+      "get_public_prices"
+    ]
+  },
+  "backend/app/services/report_access.py": {
+    "classes": {},
+    "functions": [
+      "get_accessible_goal",
+      "get_writable_goal",
+      "get_writable_schedule",
+      "report_to_dict"
+    ]
+  },
+  "backend/app/services/report_ai_service.py": {
+    "classes": {},
+    "functions": [
+      "_ai_transfer_label",
+      "_build_capital_prompt_section",
+      "_build_goals_prompt_section",
+      "_build_strategy_prompt_section",
+      "_build_summary_prompt",
+      "_call_ai",
+      "_fmt_ai_coverage_pct",
+      "_parse_tiered_summary",
+      "_summarize_conditions",
+      "generate_report_summary"
+    ]
+  },
+  "backend/app/services/report_data_service.py": {
+    "classes": {},
+    "functions": [
+      "_compute_expenses_goal_progress",
+      "_compute_income_goal_progress",
+      "_compute_native_accounting",
+      "_enrich_snapshot_data",
+      "_gather_bot_strategies",
+      "_gather_trade_stats",
+      "_gather_transfer_data",
+      "_get_account_value_at",
+      "compute_goal_progress",
+      "compute_monthly_growth_rate",
+      "gather_report_data",
+      "get_annual_return_pct",
+      "get_prior_period_data",
+      "get_user_trading_metrics"
+    ]
+  },
+  "backend/app/services/report_generator_service/chart_pdf_renderer.py": {
+    "classes": {},
+    "functions": [
+      "_hex_to_rgb",
+      "_render_pdf_minimap",
+      "_render_pdf_trend_chart"
+    ]
+  },
+  "backend/app/services/report_generator_service/chart_renderer.py": {
+    "classes": {},
+    "functions": [
+      "_load_chart_font",
+      "_render_trend_chart_png"
+    ]
+  },
+  "backend/app/services/report_generator_service/expense_card.py": {
+    "classes": {},
+    "functions": [
+      "_build_expense_card_css_tabs",
+      "_build_expense_card_header",
+      "_build_expenses_goal_card"
+    ]
+  },
+  "backend/app/services/report_generator_service/expense_schedule.py": {
+    "classes": {},
+    "functions": [
+      "_fmt_coverage_pct",
+      "_format_due_label",
+      "_get_lookahead_items",
+      "_get_upcoming_items",
+      "_next_biweekly_date",
+      "_next_every_n_days_date",
+      "_ordinal_day"
+    ]
+  },
+  "backend/app/services/report_generator_service/expense_sections.py": {
+    "classes": {},
+    "functions": [
+      "_build_deposit_hints_html",
+      "_build_expense_changes_html",
+      "_build_expense_coverage_html",
+      "_build_expense_lookahead_html",
+      "_build_expense_projection_html",
+      "_build_expense_status_badge",
+      "_build_expense_upcoming_html",
+      "_build_savings_status_badge",
+      "_build_savings_targets_html",
+      "_expense_name_html",
+      "_spend_line"
+    ]
+  },
+  "backend/app/services/report_generator_service/html_builder.py": {
+    "classes": {},
+    "functions": [
+      "_apply_clean_theme",
+      "_build_comparison_section",
+      "_build_email_ai_section",
+      "_build_goals_section",
+      "_build_income_goal_card",
+      "_build_metrics_section",
+      "_build_standard_goal_card",
+      "_build_tabbed_ai_section",
+      "_build_transfers_section",
+      "_md_to_styled_html",
+      "_migrate_legacy_tiers",
+      "_normalize_ai_summary",
+      "_render_single_ai_section",
+      "_report_footer",
+      "_report_header",
+      "_transfer_label",
+      "build_report_html"
+    ]
+  },
+  "backend/app/services/report_generator_service/html_charts.py": {
+    "classes": {},
+    "functions": [
+      "_build_minimap_svg",
+      "_build_trend_chart_svg",
+      "_format_chart_value"
+    ]
+  },
+  "backend/app/services/report_generator_service/pdf_generator.py": {
+    "classes": {},
+    "functions": [
+      "_build_pdf_ai_section",
+      "_build_pdf_capital_movement",
+      "_build_pdf_comparison",
+      "_build_pdf_coverage_table",
+      "_build_pdf_deposit_hints",
+      "_build_pdf_expense_goal",
+      "_build_pdf_expense_projections",
+      "_build_pdf_footer",
+      "_build_pdf_goals_section",
+      "_build_pdf_header",
+      "_build_pdf_metadata",
+      "_build_pdf_metrics_table",
+      "_build_pdf_savings_targets",
+      "_build_pdf_schedule_tables",
+      "_render_expense_changes_pdf",
+      "_render_pdf_markdown",
+      "_render_pdf_tiers",
+      "_sanitize_for_pdf",
+      "_truncate_to_width",
+      "generate_pdf"
+    ]
+  },
+  "backend/app/services/report_schedule_service.py": {
+    "classes": {},
+    "functions": [
+      "apply_retention",
+      "compute_next_run_for_new_schedule",
+      "create_schedule_record",
+      "update_schedule_record"
+    ]
+  },
+  "backend/app/services/report_scheduler.py": {
+    "classes": {},
+    "functions": [
+      "_advance_schedule_timing",
+      "_at_run_time",
+      "_attach_goal_trend_data",
+      "_compute_expense_changes",
+      "_compute_full_prior_bounds",
+      "_compute_next_run_legacy",
+      "_compute_period_bounds_legacy",
+      "_deliver_report",
+      "_fetch_account_name",
+      "_fetch_schedule_goals",
+      "_format_period_label",
+      "_last_day_of_month",
+      "_normalize_recipient",
+      "_ordinal",
+      "_parse_schedule_days",
+      "_resolve_day_of_month",
+      "_should_auto_prior",
+      "build_periodicity_label",
+      "compute_next_run_at",
+      "compute_next_run_flexible",
+      "compute_period_bounds",
+      "compute_period_bounds_flexible",
+      "generate_report_for_schedule",
+      "run_report_scheduler_once"
+    ]
+  },
+  "backend/app/services/safety_order_monitor.py": {
+    "classes": {
+      "SafetyOrderMonitor": [
+        "__init__",
+        "_apply_new_fill",
+        "_run_post_fill_ops",
+        "process_pending_safety_order"
+      ]
+    },
+    "functions": [
+      "check_all_pending_safety_orders"
+    ]
+  },
+  "backend/app/services/season_detector.py": {
+    "classes": {},
+    "functions": [
+      "calculate_confidence",
+      "determine_season",
+      "fetch_ath_data",
+      "fetch_btc_dominance",
+      "fetch_fear_greed",
+      "get_current_season",
+      "get_cycle_season_from_halving",
+      "get_halving_info",
+      "get_seasonality_mode",
+      "get_seasonality_status"
+    ]
+  },
+  "backend/app/services/seasonality_service.py": {
+    "classes": {},
+    "functions": [
+      "auto_manage_bots",
+      "build_seasonality_response"
+    ]
+  },
+  "backend/app/services/session_maker_mixin.py": {
+    "classes": {
+      "SessionMakerMixin": [
+        "_get_sm",
+        "set_session_maker"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/session_policy_service.py": {
+    "classes": {},
+    "functions": [
+      "has_any_limits",
+      "resolve_session_policy"
+    ]
+  },
+  "backend/app/services/session_service.py": {
+    "classes": {},
+    "functions": [
+      "_earliest_expiry_hint",
+      "check_session_limits",
+      "check_session_valid",
+      "create_session",
+      "end_session",
+      "expire_all_stale_sessions",
+      "expire_stale_sessions_for_user",
+      "get_user_sessions"
+    ]
+  },
+  "backend/app/services/settings_service.py": {
+    "classes": {},
+    "functions": [
+      "get_ai_review_provider",
+      "get_allowed_categories",
+      "get_configured_ai_providers"
+    ]
+  },
+  "backend/app/services/shutdown_manager.py": {
+    "classes": {
+      "ShutdownManager": [
+        "__init__",
+        "cancel_shutdown",
+        "decrement_in_flight",
+        "get_status",
+        "in_flight_count",
+        "increment_in_flight",
+        "is_shutting_down",
+        "order_in_flight",
+        "prepare_shutdown"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/services/speculative_bucket_service.py": {
+    "classes": {},
+    "functions": [
+      "_build_bucket_warnings",
+      "_open_positions_for_bots",
+      "_parse_components",
+      "_position_cost_basis_usd",
+      "_speculative_bot_filter",
+      "_speculative_bots_for_account",
+      "analyze_speculative_calibration",
+      "get_speculative_bucket_info",
+      "validate_speculative_entry"
+    ]
+  },
+  "backend/app/services/speculative_calibration_apply_token.py": {
+    "classes": {},
+    "functions": [
+      "build_apply_proposal_url",
+      "create_apply_proposal_token",
+      "decode_apply_proposal_token"
+    ]
+  },
+  "backend/app/services/speculative_calibration_monitor.py": {
+    "classes": {},
+    "functions": [
+      "_account_for_speculative_user",
+      "_check_user",
+      "_create_proposal",
+      "_monitor_loop",
+      "_run_one_pass",
+      "_session_factory",
+      "_users_with_speculative_bots",
+      "start_speculative_calibration_monitor",
+      "stop_speculative_calibration_monitor"
+    ]
+  },
+  "backend/app/services/speculative_calibration_token.py": {
+    "classes": {},
+    "functions": [
+      "build_dismiss_url",
+      "create_dismiss_token",
+      "decode_dismiss_token"
+    ]
+  },
+  "backend/app/services/speculative_weights_cache.py": {
+    "classes": {},
+    "functions": [
+      "_parse_weights",
+      "get_effective_weights",
+      "invalidate_weights_cache"
+    ]
+  },
+  "backend/app/services/speculative_weights_tuner.py": {
+    "classes": {},
+    "functions": [
+      "_integer_round_preserving_sum",
+      "_normalize_to_sum",
+      "propose_weights"
+    ]
+  },
+  "backend/app/services/transfer_sync_service.py": {
+    "classes": {},
+    "functions": [
+      "run_transfer_sync_once",
+      "sync_all_user_transfers",
+      "sync_transfers"
+    ]
+  },
+  "backend/app/services/user_rate_limit.py": {
+    "classes": {},
+    "functions": [
+      "check_user_rate_limit",
+      "clear_user_failures",
+      "prune_stale",
+      "record_user_failure"
+    ]
+  },
+  "backend/app/services/websocket_manager.py": {
+    "classes": {
+      "WebSocketManager": [
+        "__init__",
+        "_count_user_connections",
+        "active_connections",
+        "broadcast",
+        "broadcast_order_fill",
+        "connect",
+        "disconnect",
+        "get_connected_user_ids",
+        "send_to_room",
+        "send_to_user",
+        "sweep_stale_connections"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/static_cache.py": {
+    "classes": {
+      "CachedStaticFiles": [
+        "file_response"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/__init__.py": {
+    "classes": {
+      "StrategyRegistry": [
+        "get_definition",
+        "get_strategy",
+        "list_strategies",
+        "register"
+      ],
+      "TradingStrategy": [
+        "__init__",
+        "analyze_signal",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/bull_flag_scanner.py": {
+    "classes": {},
+    "functions": [
+      "_get_candle_timestamp",
+      "calculate_volume_sma_50",
+      "clear_volume_cache",
+      "detect_bull_flag_pattern",
+      "detect_volume_spike",
+      "get_tradeable_usd_coins",
+      "log_scanner_decision",
+      "scan_for_bull_flag_opportunities"
+    ]
+  },
+  "backend/app/strategies/condition_mirror.py": {
+    "classes": {
+      "ConditionMirror": [
+        "get_bidirectional_conditions",
+        "mirror_condition",
+        "mirror_condition_group"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/grid_trading.py": {
+    "classes": {
+      "GridTradingStrategy": [
+        "_get_ai_range_suggestions",
+        "analyze_signal",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": [
+      "calculate_arithmetic_levels",
+      "calculate_auto_range_from_volatility",
+      "calculate_geometric_levels",
+      "calculate_volume_weighted_levels"
+    ]
+  },
+  "backend/app/strategies/indicator_based.py": {
+    "classes": {
+      "IndicatorBasedStrategy": [
+        "_build_signal_response",
+        "_calculate_ai_indicators",
+        "_calculate_bidirectional_order_amount",
+        "_calculate_bull_flag_indicators",
+        "_calculate_qfl_indicators",
+        "_calculate_safety_order_amount",
+        "_calculate_traditional_indicators",
+        "_calculate_vwap_bounce_indicators",
+        "_check_base_order_conditions",
+        "_check_dca_conditions",
+        "_check_entry_conditions",
+        "_evaluate_dca_price_condition",
+        "_evaluate_phase_conditions",
+        "_get_dca_reference_price",
+        "_load_previous_indicators",
+        "analyze_signal",
+        "calculate_base_order_size",
+        "calculate_safety_order_price",
+        "calculate_safety_order_size",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/indicator_based_helpers.py": {
+    "classes": {},
+    "functions": [
+      "build_ai_params",
+      "build_bull_flag_params",
+      "flatten_conditions",
+      "needs_aggregate_indicators"
+    ]
+  },
+  "backend/app/strategies/safety_order_calculator.py": {
+    "classes": {},
+    "functions": [
+      "calculate_base_order_size",
+      "calculate_safety_order_size",
+      "count_deployed_safety_orders",
+      "entry_trades_for_position",
+      "get_total_multiplier"
+    ]
+  },
+  "backend/app/strategies/spatial_arbitrage.py": {
+    "classes": {
+      "SpatialArbitrageStrategy": [
+        "analyze_signal",
+        "calculate_optimal_size",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/statistical_arbitrage.py": {
+    "classes": {
+      "StatisticalArbitrageStrategy": [
+        "analyze_signal",
+        "get_definition",
+        "get_position_sizes",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/strategies/triangular_arbitrage.py": {
+    "classes": {
+      "TriangularArbitrageStrategy": [
+        "analyze_signal",
+        "get_definition",
+        "get_execution_plan",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/trading_client.py": {
+    "classes": {
+      "TradingClient": [
+        "__init__",
+        "buy",
+        "buy_limit",
+        "cancel_order",
+        "get_balance",
+        "get_btc_usd_price",
+        "get_order",
+        "get_quote_balance",
+        "invalidate_balance_cache",
+        "sell",
+        "sell_limit"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/trading_engine/book_depth_guard.py": {
+    "classes": {},
+    "functions": [
+      "_fmt_price",
+      "calculate_vwap_from_asks",
+      "calculate_vwap_from_bids",
+      "check_buy_slippage",
+      "check_sell_slippage"
+    ]
+  },
+  "backend/app/trading_engine/buy_executor.py": {
+    "classes": {},
+    "functions": [
+      "_create_buy_trade_record",
+      "_create_close_short_trade_record",
+      "_post_buy_operations",
+      "_post_close_short_operations",
+      "_reconcile_buy_fill",
+      "_reconcile_close_short_fill",
+      "_submit_buy_market_order",
+      "_validate_and_reject",
+      "execute_buy",
+      "execute_buy_close_short",
+      "execute_limit_buy"
+    ]
+  },
+  "backend/app/trading_engine/fill_reconciler.py": {
+    "classes": {},
+    "functions": [
+      "reconcile_order_fill"
+    ]
+  },
+  "backend/app/trading_engine/order_logger.py": {
+    "classes": {},
+    "functions": [
+      "_bot_uses_ai_indicators",
+      "log_order_to_history",
+      "save_ai_log"
+    ]
+  },
+  "backend/app/trading_engine/perps_executor.py": {
+    "classes": {},
+    "functions": [
+      "execute_perps_close",
+      "execute_perps_open"
+    ]
+  },
+  "backend/app/trading_engine/position_manager.py": {
+    "classes": {},
+    "functions": [
+      "all_positions_exhausted_safety_orders",
+      "calculate_expected_position_budget",
+      "calculate_max_deal_cost",
+      "create_position",
+      "get_active_position",
+      "get_active_positions_for_pair",
+      "get_next_user_attempt_number",
+      "get_next_user_deal_number",
+      "get_open_positions_count"
+    ]
+  },
+  "backend/app/trading_engine/sell_executor.py": {
+    "classes": {},
+    "functions": [
+      "_close_sell_position_as_dust",
+      "_create_sell_trade_record",
+      "_create_short_sell_trade_record",
+      "_post_sell_operations",
+      "_post_short_sell_operations",
+      "_reconcile_sell_fill",
+      "_reconcile_short_sell_fill",
+      "_submit_sell_market_order",
+      "_submit_short_sell_market_order",
+      "_try_limit_sell",
+      "_validate_market_fallback",
+      "execute_limit_sell",
+      "execute_limit_sell_safety",
+      "execute_sell",
+      "execute_sell_short"
+    ]
+  },
+  "backend/app/trading_engine/signal_processor/__init__.py": {
+    "classes": {},
+    "functions": [
+      "process_signal"
+    ]
+  },
+  "backend/app/trading_engine/signal_processor/_shared.py": {
+    "classes": {},
+    "functions": [
+      "_calculate_budget",
+      "_calculate_market_context_with_indicators",
+      "_handle_ai_failsafe",
+      "_is_duplicate_failed_order",
+      "_record_signal",
+      "calculate_soft_ceiling"
+    ]
+  },
+  "backend/app/trading_engine/signal_processor/buy_decision.py": {
+    "classes": {},
+    "functions": [
+      "_decide_buy",
+      "_decide_buy_bot_stopped",
+      "_decide_buy_dca",
+      "_evaluate_blacklist_category",
+      "_execute_buy_trade",
+      "_log_budget_blocker_if_applicable",
+      "_run_new_position_preflight"
+    ]
+  },
+  "backend/app/trading_engine/signal_processor/sell_decision.py": {
+    "classes": {},
+    "functions": [
+      "_build_market_context",
+      "_decide_and_execute_sell",
+      "_execute_position_close",
+      "_resolve_take_profit_mode",
+      "_verify_mark_profit_allows_sell"
+    ]
+  },
+  "backend/app/trading_engine/soft_ceiling_config.py": {
+    "classes": {},
+    "functions": [
+      "is_soft_ceiling_enabled"
+    ]
+  },
+  "backend/app/trading_engine/trailing_stops.py": {
+    "classes": {},
+    "functions": [
+      "check_bull_flag_exit_conditions",
+      "setup_bull_flag_position_stops",
+      "update_trailing_stop_loss",
+      "update_trailing_take_profit"
+    ]
+  },
+  "backend/app/trading_engine_v2.py": {
+    "classes": {
+      "StrategyTradingEngine": [
+        "__init__",
+        "create_position",
+        "execute_buy",
+        "execute_limit_buy",
+        "execute_limit_sell",
+        "execute_sell",
+        "get_active_position",
+        "get_open_positions_count",
+        "log_order_to_history",
+        "process_signal",
+        "save_ai_log"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/utils/candle_utils.py": {
+    "classes": {},
+    "functions": [
+      "aggregate_candles",
+      "calculate_bot_check_interval",
+      "fill_candle_gaps",
+      "get_timeframes_for_phases",
+      "next_check_time_aligned",
+      "prepare_market_context",
+      "timeframe_to_seconds"
+    ]
+  },
+  "backend/app/utils/db_corruption.py": {
+    "classes": {},
+    "functions": [
+      "is_db_corruption_error"
+    ]
+  },
+  "backend/app/utils/robots_checker.py": {
+    "classes": {},
+    "functions": [
+      "_build_summary",
+      "_check_paths",
+      "_extract_domain",
+      "_extract_robots_url",
+      "_friendly_error",
+      "_parse_crawl_delay",
+      "check_robots_txt"
+    ]
+  },
+  "backend/app/utils/timeutil.py": {
+    "classes": {},
+    "functions": [
+      "utcfromtimestamp",
+      "utcnow"
+    ]
+  },
+  "backend/app/utils/url_utils.py": {
+    "classes": {},
+    "functions": [
+      "ensure_url_scheme",
+      "normalize_feed_url",
+      "validate_url_not_internal"
+    ]
+  }
+}
