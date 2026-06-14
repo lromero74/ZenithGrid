@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.14] - 2026-06-14
+
+### Fixed
+- The backend now shuts down cleanly. A restart previously logged "Application shutdown failed" because the Redis notification listener, when stopped, raised a timeout that aborted the orderly shutdown sequence; the shutdown path now handles that case and closes the listener's connection gracefully.
+- Fixed an internal resource leak where the secondary background task loop did not fully release its database connections and event loop when stopped, accumulating across restarts.
+
 ## [v2.168.13] - 2026-06-14
 
 ### Changed
