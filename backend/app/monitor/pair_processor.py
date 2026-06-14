@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Bot, Position
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import StrategyRegistry
-from app.strategies.safety_order_calculator import count_deployed_safety_orders
+from app.strategies.safety_order_calculator import count_deployed_safety_orders, entry_trades_for_position
 from app.trading_engine_v2 import StrategyTradingEngine
 from app.utils.candle_utils import get_timeframes_for_phases
 
@@ -407,11 +407,8 @@ async def _log_indicator_evaluations(
     if has_position and existing_position:
         config = existing_position.strategy_config_snapshot or bot.strategy_config or {}
         max_safety_orders = config.get("max_safety_orders", 5)
-        buy_trades = (
-            [t for t in existing_position.trades if t.side == "buy"]
-            if existing_position.trades else []
-        )
-        safety_orders_completed = count_deployed_safety_orders(buy_trades)  # sums cascade levels
+        entry_trades = entry_trades_for_position(existing_position)  # buys for long, sells for short
+        safety_orders_completed = count_deployed_safety_orders(entry_trades)  # sums cascade levels
         dca_slots_available = safety_orders_completed < max_safety_orders
 
     logged_any = False

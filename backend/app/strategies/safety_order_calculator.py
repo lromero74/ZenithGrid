@@ -155,3 +155,14 @@ def count_deployed_safety_orders(entry_trades) -> int:
     """
     total_levels = sum(int(getattr(t, "dca_levels", 1) or 1) for t in entry_trades)
     return max(0, total_levels - 1)
+
+
+def entry_trades_for_position(position) -> list:
+    """Trades that ADD to a position, for its direction: buys for a long, sells
+    for a short. Excludes the opposite side (a short's closing buys, a long's
+    take-profit sells) so the safety-order count is correct in both directions —
+    counting only buys leaves a short stuck at 0 safety orders.
+    """
+    trades = getattr(position, "trades", None) or []
+    entry_side = "sell" if getattr(position, "direction", "long") == "short" else "buy"
+    return [t for t in trades if t.side == entry_side]

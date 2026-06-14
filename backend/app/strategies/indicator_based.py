@@ -47,6 +47,7 @@ from app.strategies.safety_order_calculator import (
     calculate_base_order_size as _calc_base_order_size,
     calculate_safety_order_size as _calc_safety_order_size,
     count_deployed_safety_orders,
+    entry_trades_for_position,
 )
 
 logger = logging.getLogger(__name__)
@@ -396,25 +397,33 @@ class IndicatorBasedStrategy(TradingStrategy):
         result = self.qfl_evaluator.evaluate(crack_candles, params, base_candles=effective_base_candles)
         current_indicators["qfl_crack"] = result.signal
 
-    def _get_dca_reference_price(self, position: Any, buy_trades: List) -> float:
+    def _get_dca_reference_price(self, position: Any, entry_trades: List) -> float:
         """
         Determine the reference price for DCA target calculation.
 
         Based on dca_target_reference config: "base_order", "last_buy", or "average_price".
+        Direction-aware: a short's average entry is short_average_sell_price, not
+        average_buy_price (which is unset for shorts).
         """
         dca_reference = self.config.get("dca_target_reference", "average_price")
-        sorted_buys = sorted(
-            buy_trades, key=lambda t: t.timestamp if t.timestamp else 0
-        ) if buy_trades else []
+        sorted_entries = sorted(
+            entry_trades, key=lambda t: t.timestamp if t.timestamp else 0
+        ) if entry_trades else []
 
-        if dca_reference == "base_order" and sorted_buys:
-            first_buy = sorted_buys[0]
-            return first_buy.price if first_buy.price else position.average_buy_price
-        elif dca_reference == "last_buy" and sorted_buys:
-            last_buy = sorted_buys[-1]
-            return last_buy.price if last_buy.price else position.average_buy_price
+        is_short = getattr(position, "direction", "long") == "short"
+        avg_entry = (
+            getattr(position, "short_average_sell_price", None) if is_short
+            else position.average_buy_price
+        ) or position.average_buy_price
+
+        if dca_reference == "base_order" and sorted_entries:
+            first = sorted_entries[0]
+            return first.price if first.price else avg_entry
+        elif dca_reference == "last_buy" and sorted_entries:
+            last = sorted_entries[-1]
+            return last.price if last.price else avg_entry
         else:
-            return position.average_buy_price
+            return avg_entry
 
     def _evaluate_dca_price_condition(
         self,
@@ -433,11 +442,11 @@ class IndicatorBasedStrategy(TradingStrategy):
         Returns:
             True if both indicator conditions AND price drop are met.
         """
-        buy_trades = [t for t in position.trades if t.side == "buy"] if hasattr(position, "trades") else []
-        safety_orders_count = count_deployed_safety_orders(buy_trades)  # sums cascade levels
+        entry_trades = entry_trades_for_position(position)  # buys for long, sells for short
+        safety_orders_count = count_deployed_safety_orders(entry_trades)  # sums cascade levels
         next_order_number = safety_orders_count + 1
 
-        reference_price = self._get_dca_reference_price(position, buy_trades)
+        reference_price = self._get_dca_reference_price(position, entry_trades)
 
         # Calculate trigger price using the existing method (direction-aware)
         direction = getattr(position, "direction", "long")
@@ -864,14 +873,14 @@ class IndicatorBasedStrategy(TradingStrategy):
         if max_safety == 0:
             return False, 0.0, "Safety orders disabled"
 
-        # Count buy trades to determine safety orders completed
-        buy_trades = [t for t in position.trades if t.side == "buy"]
-        safety_orders_count = count_deployed_safety_orders(buy_trades)  # sums cascade levels
+        # Count entry trades (buys for long, sells for short) = safety orders completed
+        entry_trades = entry_trades_for_position(position)
+        safety_orders_count = count_deployed_safety_orders(entry_trades)  # sums cascade levels
         if safety_orders_count >= max_safety:
             return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
 
         # Determine reference price for DCA target calculation
-        reference_price = self._get_dca_reference_price(position, buy_trades)
+        reference_price = self._get_dca_reference_price(position, entry_trades)
         direction = getattr(position, "direction", "long")
 
         # Check if at least the next SO trigger is met

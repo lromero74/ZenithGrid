@@ -10,12 +10,13 @@ from typing import Generic, List, Optional, TypeVar
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, OrderHistory, User
 from app.auth.dependencies import get_current_user
+from app.services.account_access import accessible_account_ids
 
 T = TypeVar("T")
 
@@ -72,11 +73,12 @@ async def get_order_history(
     Provides a complete audit trail of all trading activity.
     """
     # Build query - include account_id from Bot for filtering
-    # CRITICAL: Always filter by current user's bots for multi-user isolation
+    # CRITICAL: scope to bots the user owns OR can access via shared accounts
+    acc_ids = await accessible_account_ids(db, current_user.id)
     query = (
         select(OrderHistory, Bot.name.label("bot_name"), Bot.account_id.label("account_id"))
         .join(Bot, OrderHistory.bot_id == Bot.id)
-        .where(Bot.user_id == current_user.id)
+        .where(or_(Bot.user_id == current_user.id, Bot.account_id.in_(acc_ids)))
         .order_by(desc(OrderHistory.timestamp))
     )
 
@@ -157,13 +159,14 @@ async def get_failed_orders_paginated(
 
     Returns items plus pagination metadata for UI controls.
     """
-    # Build base query for counting - always filter by current user's bots
+    # Build base query for counting - scope to owned + shared-account bots
+    acc_ids = await accessible_account_ids(db, current_user.id)
     count_query = (
         select(func.count())
         .select_from(OrderHistory)
         .join(Bot, OrderHistory.bot_id == Bot.id)
         .where(OrderHistory.status == "failed")
-        .where(Bot.user_id == current_user.id)
+        .where(or_(Bot.user_id == current_user.id, Bot.account_id.in_(acc_ids)))
     )
 
     if account_id is not None:
@@ -207,12 +210,15 @@ async def get_order_stats(
     """
     # Build aggregate query — push counting to the database instead of materializing all rows
     from sqlalchemy import case
+    acc_ids = await accessible_account_ids(db, current_user.id)
     agg_query = select(
         func.count(OrderHistory.id).label("total"),
         func.count(case((OrderHistory.status == "success", OrderHistory.id))).label("successful"),
         func.count(case((OrderHistory.status == "failed", OrderHistory.id))).label("failed"),
         func.count(case((OrderHistory.status == "canceled", OrderHistory.id))).label("canceled"),
-    ).join(Bot, OrderHistory.bot_id == Bot.id).where(Bot.user_id == current_user.id)
+    ).join(Bot, OrderHistory.bot_id == Bot.id).where(
+        or_(Bot.user_id == current_user.id, Bot.account_id.in_(acc_ids))
+    )
 
     if account_id is not None:
         agg_query = agg_query.where(Bot.account_id == account_id)

@@ -131,6 +131,32 @@ class TestGetCexPortfolio:
         mock_api_cache.set.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_persistent_cache_keyed_by_account_not_user(self, db_session):
+        """A user owns multiple accounts; the persistent portfolio cache MUST be
+        keyed by account.id, not user_id, or the second account overwrites the
+        first and serves the wrong account's balances (cross-account leak)."""
+        from app.services.portfolio_service import get_cex_portfolio
+
+        account = MagicMock()
+        account.id = 7
+        account.user_id = 99  # deliberately different from account.id
+
+        get_coinbase_func = AsyncMock()
+        with patch("app.services.portfolio_service.api_cache") as mock_api_cache, \
+             patch("app.services.portfolio_service.portfolio_cache") as mock_portfolio_cache:
+            mock_api_cache.get = AsyncMock(return_value=None)
+            mock_api_cache.set = AsyncMock()
+            mock_portfolio_cache.get = AsyncMock(return_value={"persistent": True})
+
+            await get_cex_portfolio(
+                account=account, db=db_session,
+                get_coinbase_for_account_func=get_coinbase_func, force_fresh=False,
+            )
+
+        # The persistent lookup must use the ACCOUNT id (7), never the user id (99)
+        mock_portfolio_cache.get.assert_awaited_with(account.id)
+
+    @pytest.mark.asyncio
     async def test_skips_dust_below_one_cent(self, db_session):
         """Edge case: holdings with < $0.01 usd_value are filtered out."""
         from app.services.portfolio_service import get_cex_portfolio
