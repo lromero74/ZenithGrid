@@ -8,16 +8,10 @@ import { usePermission } from '../hooks/usePermission'
 import { useAccountPortfolio } from '../hooks/useAccountPortfolio'
 import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
+import { formatUsd } from '../utils/numberFormat'
 
 // Loaded lazily so lightweight-charts is only fetched when a chart is opened
 const PortfolioChartModal = lazy(() => import('./portfolio/PortfolioChartModal'))
-
-const CURRENCY_FMT = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
 
 interface Holding {
   asset: string
@@ -166,7 +160,7 @@ function Portfolio() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [chartModalAsset, setChartModalAsset] = useState<string | null>(null)
 
-  const formatCurrency = (value: number) => CURRENCY_FMT.format(value)
+  const formatCurrency = formatUsd
 
   const formatCrypto = (value: number, decimals: number = 8) => {
     return value.toFixed(decimals)

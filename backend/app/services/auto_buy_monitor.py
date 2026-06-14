@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, Bot, Position
 from app.services.exchange_service import get_exchange_client_for_account
+from app.services.session_maker_mixin import SessionMakerMixin
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class AutoBuyPendingOrder:
     placed_at: datetime
 
 
-class AutoBuyMonitor:
+class AutoBuyMonitor(SessionMakerMixin):
     """
     Background service that monitors accounts and auto-buys BTC with stablecoins.
 
@@ -52,16 +53,6 @@ class AutoBuyMonitor:
         self._pending_orders: Dict[str, AutoBuyPendingOrder] = {}  # order_id -> order info
         # Protects _account_timers against concurrent access from cleanup_in_memory_caches().
         self._account_timers_lock = threading.Lock()
-        self._session_maker = None  # optional injected session maker
-
-    def set_session_maker(self, sm):
-        """Inject a session maker (for testing or non-default pools)."""
-        self._session_maker = sm
-
-    def _get_sm(self):
-        """Return the injected session maker, falling back to the default."""
-        from app.database import async_session_maker as _default
-        return self._session_maker or _default
 
     async def run_once(self):
         """Check all accounts once. Called by APScheduler every 10 seconds."""

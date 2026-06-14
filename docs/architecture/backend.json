@@ -1562,6 +1562,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/session_maker_mixin.py",
+      "purpose": "SessionMakerMixin — shared base class providing set_session_maker() / _get_sm() async-session-maker injection for monitor-style classes. Inherited by RebalanceMonitor, AutoBuyMonitor, PerpsMonitor, TradingPairMonitor (delisted_pair_monitor), and ContentRefreshService, replacing per-class duplicates of these two methods. Defaults _session_maker to None at the class level; _get_sm() falls back to app.database.async_session_maker when no maker has been injected.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/session_service.py",
       "purpose": "Session lifecycle management: create, validate, end, enforce limits (max simultaneous, per-IP), expire stale sessions",
       "type": "infrastructure"

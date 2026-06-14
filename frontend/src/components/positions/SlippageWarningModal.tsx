@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { formatPriceForQuote } from './positionUtils'
 
 interface SlippageWarningModalProps {
   // Note: positionId and productId available for future use (e.g., analytics, logging)
@@ -27,16 +28,7 @@ export function SlippageWarningModal({
   onProceedWithMarket,
   onSwitchToLimit
 }: SlippageWarningModalProps) {
-  const getPrecision = () => {
-    if (quoteCurrency === 'USD') return 2
-    if (quoteCurrency === 'BTC') return 8
-    return 8
-  }
-
-  const formatPrice = (price: number) => {
-    const precision = getPrecision()
-    return price.toFixed(precision)
-  }
+  const formatPrice = (price: number) => formatPriceForQuote(price, quoteCurrency)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../services/api'
+import { formatPriceForQuote } from '../positions/positionUtils'
 
 interface DepthChartProps {
   productId: string
@@ -86,10 +87,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
   const maxCumulative = Math.max(maxBidCumulative, maxAskCumulative)
 
   // Format price based on quote currency
-  const formatPrice = (price: number) => {
-    if (quoteCurrency === 'USD') return price.toFixed(2)
-    return price.toFixed(8)
-  }
+  const formatPrice = (price: number) => formatPriceForQuote(price, quoteCurrency)
 
   // Check if a price level is near the limit price
   const isNearLimitPrice = (price: number) => {

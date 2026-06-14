@@ -17,29 +17,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database import async_session_maker
 from app.models import Account, Position
+from app.services.session_maker_mixin import SessionMakerMixin
 from app.utils.db_corruption import is_db_corruption_error
 
 logger = logging.getLogger(__name__)
 
 
-class PerpsMonitor:
+class PerpsMonitor(SessionMakerMixin):
     """Monitor open perpetual futures positions and sync with exchange state."""
 
     def __init__(self, interval_seconds: int = 60):
         self.interval_seconds = interval_seconds
         self.running = False
         self.task: Optional[asyncio.Task] = None
-        self._session_maker = None  # optional injected session maker
-
-    def set_session_maker(self, sm):
-        """Inject a session maker (used when running on the secondary event loop)."""
-        self._session_maker = sm
-
-    def _get_sm(self):
-        """Return the injected session maker, falling back to the default."""
-        return self._session_maker or async_session_maker
 
     async def start(self):
         """Start the perps monitoring loop"""

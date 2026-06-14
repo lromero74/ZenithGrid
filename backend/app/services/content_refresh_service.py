@@ -10,6 +10,7 @@ responses from the database.
 import logging
 from datetime import datetime
 
+from app.services.session_maker_mixin import SessionMakerMixin
 from app.utils.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
@@ -19,22 +20,12 @@ NEWS_REFRESH_INTERVAL = 30 * 60     # 30 minutes
 VIDEO_REFRESH_INTERVAL = 60 * 60    # 60 minutes
 
 
-class ContentRefreshService:
+class ContentRefreshService(SessionMakerMixin):
     """Background service that periodically refreshes news and video caches."""
 
     def __init__(self):
         self._last_news_refresh: datetime | None = None
         self._last_video_refresh: datetime | None = None
-        self._session_maker = None  # optional injected session maker
-
-    def set_session_maker(self, sm):
-        """Inject a session maker (for testing or non-default pools)."""
-        self._session_maker = sm
-
-    def _get_sm(self):
-        """Return the injected session maker, falling back to the default."""
-        from app.database import async_session_maker as _default
-        return self._session_maker or _default
 
     async def refresh_news(self):
         """Fetch and cache news articles. Called by APScheduler every 30 minutes."""
