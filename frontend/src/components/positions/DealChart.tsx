@@ -640,8 +640,10 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         const maxSafetyOrders = Number(cfgSnapshot.max_safety_orders || 0)
         const dcaReference = (cfgSnapshot.dca_target_reference as string) || 'average_price'
 
-        // trade_count = 1 (base order) + safety orders already triggered
-        const soTriggered = Math.max(0, (position.trade_count || 1) - 1)
+        // Prefer the backend's authoritative count (sums cascade levels); fall
+        // back to trade_count - 1, which undercounts cascades.
+        const soTriggered = position.safety_orders_deployed
+          ?? Math.max(0, (position.trade_count || 1) - 1)
         const soRemaining = maxSafetyOrders - soTriggered
 
         if (priceDeviation > 0 && soRemaining > 0) {

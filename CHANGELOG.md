@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.5] - 2026-06-13
+
+### Fixed
+- **The price bar and deal chart no longer show a phantom safety-order marker after a cascade.** v2.168.4 corrected the "Completed" count, but the price-bar pip and the deal chart still derived their "safety orders triggered" count from trade rows — so a fully-deployed two-level cascade still drew a pending "SO2" marker. They now use the same authoritative deployed count.
+
 ## [v2.168.4] - 2026-06-13
 
 ### Added

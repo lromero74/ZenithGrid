@@ -42,7 +42,10 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
     const priceDeviation = strategyConfig.price_deviation || 2.0
     const stepScale = strategyConfig.safety_order_step_scale || 1.0
     const maxDCAOrders = strategyConfig.max_safety_orders || 3
-    const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
+    // Prefer the backend's authoritative count (sums cascade levels); fall back
+    // to trade_count - 1 (one base order), which undercounts cascades.
+    const completedDCAs = position.safety_orders_deployed
+      ?? Math.max(0, (position.trade_count || 0) - 1)
 
     // Use the correct reference price based on config
     // base_order: first buy price, average_price: average entry, last_buy: last buy price
