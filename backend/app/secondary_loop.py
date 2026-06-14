@@ -9,7 +9,12 @@ import logging
 import threading
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import settings
 
@@ -18,6 +23,7 @@ logger = logging.getLogger(__name__)
 _loop: Optional[asyncio.AbstractEventLoop] = None
 _thread: Optional[threading.Thread] = None
 _session_maker: Optional[async_sessionmaker] = None
+_engine: Optional[AsyncEngine] = None
 
 
 def get_secondary_session_maker() -> async_sessionmaker:
@@ -49,7 +55,7 @@ def _run_loop(loop: asyncio.AbstractEventLoop):
 
 async def _init_secondary_engine():
     """Initialize the DB engine on the secondary loop. Runs inside the secondary loop."""
-    global _session_maker
+    global _session_maker, _engine
 
     kwargs = {
         "echo": False,
@@ -65,9 +71,9 @@ async def _init_secondary_engine():
     else:
         kwargs["connect_args"] = {"check_same_thread": False}
 
-    engine = create_async_engine(settings.database_url, **kwargs)
+    _engine = create_async_engine(settings.database_url, **kwargs)
     _session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+        _engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
     )
 
 
@@ -91,11 +97,26 @@ def start_secondary_loop():
 
 
 def stop_secondary_loop():
-    """Stop the secondary event loop. Called during FastAPI shutdown."""
-    global _session_maker
+    """Stop the secondary event loop and release its resources. Called during FastAPI shutdown.
+
+    Disposes the loop-bound DB engine (on its own loop) before stopping, then
+    closes the loop so its self-pipe sockets are released rather than left for
+    the GC — otherwise each start/stop cycle leaks an unclosed event loop.
+    """
+    global _loop, _thread, _session_maker, _engine
     if _loop and _loop.is_running():
+        if _engine is not None:
+            try:
+                asyncio.run_coroutine_threadsafe(_engine.dispose(), _loop).result(timeout=10)
+            except Exception as exc:
+                logger.warning("Secondary engine dispose failed during shutdown: %s", exc)
         _loop.call_soon_threadsafe(_loop.stop)
     if _thread:
         _thread.join(timeout=10)
+    if _loop is not None:
+        _loop.close()
+    _loop = None
+    _thread = None
     _session_maker = None
+    _engine = None
     logger.info("Secondary event loop stopped")
