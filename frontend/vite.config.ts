@@ -15,8 +15,14 @@ export default defineConfig({
           if (id.includes('react') || id.includes('@tanstack/react-query') || id.includes('react-router-dom')) {
             return 'framework'
           }
-          if (id.includes('recharts') || id.includes('lightweight-charts')) {
-            return 'charts'
+          // Split the two charting libraries into separate chunks — no page uses
+          // both (Positions uses lightweight-charts; Reports/Dashboard use recharts),
+          // so this trims each page's load and keeps both chunks under the 500 kB warning.
+          if (id.includes('lightweight-charts')) {
+            return 'lightweight-charts'
+          }
+          if (id.includes('recharts')) {
+            return 'recharts'
           }
           if (id.includes('lucide-react')) {
             return 'icons'

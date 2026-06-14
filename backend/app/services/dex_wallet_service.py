@@ -294,7 +294,7 @@ class DexWalletService:
             w3 = self._get_web3(chain_id, rpc_url)
 
             # Run in executor to avoid blocking
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             balance_wei = await loop.run_in_executor(
                 None,
                 lambda: w3.eth.get_balance(Web3.to_checksum_address(wallet_address))
@@ -320,7 +320,7 @@ class DexWalletService:
 
             contract = w3.eth.contract(address=token, abi=ERC20_ABI)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # Fetch balance, decimals, and symbol concurrently
             balance_task = loop.run_in_executor(

@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.16] - 2026-06-14
+
+### Changed
+- Pages that show charts now load a little leaner: the two charting libraries are bundled separately, so a page only downloads the one it actually uses instead of both.
+- Internal cleanup: replaced a deprecated asyncio call across several backend services with its supported equivalent. No change to behavior.
+
 ## [v2.168.15] - 2026-06-14
 
 ### Changed
