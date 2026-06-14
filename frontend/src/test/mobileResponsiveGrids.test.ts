@@ -93,3 +93,31 @@ describe('mobile responsive grids', () => {
     ).toEqual([]);
   });
 });
+
+describe('bot edit modal horizontal overflow containment', () => {
+  // The bot edit modal scrolled sideways on phones because the condition builder
+  // (fixed-width selects in flex rows) stretched the whole scroll container, so
+  // every w-full field was clipped to the right. Two guards keep it contained.
+  const read = (rel: string) => readFileSync(join(srcDir, rel), 'utf8');
+
+  it('bot modal scroll panel contains horizontal overflow', () => {
+    const src = read('pages/bots/components/BotFormModal.tsx');
+    // The panel that scrolls vertically (overflow-y-auto) must also clip/scroll
+    // horizontally so a wide descendant cannot push the modal past the viewport.
+    const panelLine = src
+      .split('\n')
+      .find((l) => l.includes('overflow-y-auto') && /overflow-x-(hidden|auto|clip)/.test(l));
+    expect(
+      panelLine,
+      'bot modal scroll panel must contain horizontal overflow (overflow-x-hidden/auto/clip alongside overflow-y-auto)',
+    ).toBeTruthy();
+  });
+
+  it('condition builder scrolls its wide rows internally', () => {
+    const src = read('components/trading/AdvancedConditionBuilder.tsx');
+    expect(
+      src.includes('overflow-x-auto'),
+      'AdvancedConditionBuilder must scroll its fixed-width condition rows internally',
+    ).toBe(true);
+  });
+});

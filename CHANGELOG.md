@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.6] - 2026-06-13
+
+### Fixed
+- **The bot create/edit modal no longer scrolls sideways on phones.** The advanced condition builder lays out its conditions with fixed-width dropdowns that are wider than a phone screen; because the whole modal shared one scroll area, that width stretched every section, clipping all the form fields off the right edge. The condition builder now scrolls horizontally on its own, and the modal panel contains horizontal overflow — so every other section (basic info, market type, budget, etc.) fits the screen, and only the condition rows scroll sideways when needed.
+
 ## [v2.168.5] - 2026-06-13
 
 ### Fixed

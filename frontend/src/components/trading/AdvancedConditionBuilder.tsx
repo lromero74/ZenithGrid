@@ -755,7 +755,10 @@ function AdvancedConditionBuilder({
   }
 
   return (
-    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+    // overflow-x-auto: the condition rows use fixed-width selects/inputs that are
+    // wider than a phone; scroll them WITHIN this box instead of letting them
+    // stretch the whole modal (which clipped every field to the right on mobile).
+    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 overflow-x-auto">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h4 className="text-md font-semibold text-white">{title}</h4>
