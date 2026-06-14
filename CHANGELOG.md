@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.17] - 2026-06-14
+
+### Changed
+- Portfolio loads stay fast as trading history grows: realized profit/loss is now totaled by the database directly instead of loading every closed position into memory on each refresh. A new index keeps that lookup quick.
+- The portfolio rebalancer's "dust" cleanup prices leftover coins in parallel (bounded) instead of one slow lookup at a time, so a rebalance check with many tiny balances finishes much faster.
+
+### Added
+- Developer tooling: a live symbol registry (`scripts/symbol_registry.py`) that scans the backend and flags duplicate function definitions, to keep the codebase DRY.
+
 ## [v2.168.16] - 2026-06-14
 
 ### Changed
