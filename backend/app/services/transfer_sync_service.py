@@ -8,6 +8,7 @@ double-counting.
 Can be called on-demand via API or scheduled as a daily background task.
 """
 
+import asyncio
 import logging
 from app.utils.timeutil import utcnow
 from datetime import datetime, timedelta
@@ -20,6 +21,10 @@ from app.models import Account, AccountTransfer
 from app.services.exchange_service import get_coinbase_for_account
 
 logger = logging.getLogger(__name__)
+
+# Max concurrent Coinbase sub-account transfer fetches — these are independent
+# network round-trips; bounded concurrency keeps us under exchange rate limits.
+TRANSFER_FETCH_CONCURRENCY = 8
 
 
 async def sync_transfers(
@@ -58,74 +63,77 @@ async def sync_transfers(
         logger.error(f"Failed to fetch Coinbase accounts: {e}")
         return 0
 
-    new_count = 0
+    # Fetch each Coinbase sub-account's transfers concurrently (bounded) — the
+    # fetches are independent network round-trips, so serial scanning was
+    # O(sub-accounts) x API latency and grew with the number of coins held.
+    account_uuids = [a.get("uuid") for a in cb_accounts if a.get("uuid")]
+    sem = asyncio.Semaphore(TRANSFER_FETCH_CONCURRENCY)
 
-    for cb_acct in cb_accounts:
-        acct_uuid = cb_acct.get("uuid")
-        if not acct_uuid:
-            continue
-
-        try:
-            transfers = await client.get_deposit_withdrawals(
-                acct_uuid, since=since
-            )
-        except Exception as e:
-            logger.warning(
-                f"Failed to fetch transfers for CB account {acct_uuid}: {e}"
-            )
-            continue
-
-        # Pre-filter to completed transfers with external_ids
-        valid_transfers = [
-            t for t in transfers
-            if t.get("status") in ("completed", "") and t.get("external_id")
-        ]
-
-        # Bulk duplicate check: single WHERE IN query instead of per-transfer SELECT
-        if valid_transfers:
-            candidate_ids = [t["external_id"] for t in valid_transfers]
-            existing_result = await db.execute(
-                select(AccountTransfer.external_id).where(
-                    AccountTransfer.external_id.in_(candidate_ids)
-                )
-            )
-            existing_ids = {row[0] for row in existing_result.fetchall()}
-        else:
-            existing_ids = set()
-
-        for t in valid_transfers:
-            external_id = t["external_id"]
-
-            if external_id in existing_ids:
-                continue
-
-            # Parse occurred_at
-            occurred_at_str = t.get("occurred_at", "")
+    async def _fetch(uuid):
+        async with sem:
             try:
-                occurred_at = datetime.fromisoformat(
-                    occurred_at_str.replace("Z", "+00:00")
-                ).replace(tzinfo=None)
-            except (ValueError, AttributeError):
+                return await client.get_deposit_withdrawals(uuid, since=since)
+            except Exception as e:
                 logger.warning(
-                    f"Invalid date for transaction {external_id}: "
-                    f"{occurred_at_str}"
+                    f"Failed to fetch transfers for CB account {uuid}: {e}"
                 )
-                continue
+                return []
 
-            transfer = AccountTransfer(
-                user_id=user_id,
-                account_id=account.id,
-                external_id=external_id,
-                transfer_type=t["transfer_type"],
-                amount=t["amount"],
-                currency=t["currency"],
-                amount_usd=t.get("amount_usd"),
-                occurred_at=occurred_at,
-                source="coinbase_api",
-                original_type=t.get("coinbase_type"),
+    fetched = await asyncio.gather(*(_fetch(u) for u in account_uuids))
+
+    # Pre-filter to completed transfers with external_ids (flattened across accounts)
+    valid_transfers = [
+        t for transfers in fetched for t in transfers
+        if t.get("status") in ("completed", "") and t.get("external_id")
+    ]
+
+    new_count = 0
+    if not valid_transfers:
+        return new_count
+
+    # One bulk duplicate check for ALL candidates across all sub-accounts
+    # (was a separate WHERE IN query per sub-account).
+    candidate_ids = [t["external_id"] for t in valid_transfers]
+    existing_result = await db.execute(
+        select(AccountTransfer.external_id).where(
+            AccountTransfer.external_id.in_(candidate_ids)
+        )
+    )
+    existing_ids = {row[0] for row in existing_result.fetchall()}
+
+    seen: set = set()  # guard against the same external_id appearing twice this batch
+    for t in valid_transfers:
+        external_id = t["external_id"]
+        if external_id in existing_ids or external_id in seen:
+            continue
+        seen.add(external_id)
+
+        # Parse occurred_at
+        occurred_at_str = t.get("occurred_at", "")
+        try:
+            occurred_at = datetime.fromisoformat(
+                occurred_at_str.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
+        except (ValueError, AttributeError):
+            logger.warning(
+                f"Invalid date for transaction {external_id}: "
+                f"{occurred_at_str}"
             )
-            db.add(transfer)
-            new_count += 1
+            continue
+
+        db.add(AccountTransfer(
+            user_id=user_id,
+            account_id=account.id,
+            external_id=external_id,
+            transfer_type=t["transfer_type"],
+            amount=t["amount"],
+            currency=t["currency"],
+            amount_usd=t.get("amount_usd"),
+            occurred_at=occurred_at,
+            source="coinbase_api",
+            original_type=t.get("coinbase_type"),
+        ))
+        new_count += 1
 
     if new_count > 0:
         await db.flush()

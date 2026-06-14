@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.18] - 2026-06-14
+
+### Changed
+- Syncing deposits/withdrawals from Coinbase is now much faster for accounts that hold many coins: the per-currency lookups run in parallel (bounded) and duplicates are checked in a single query instead of one per currency.
+- Internal cleanup: income- and expense-goal progress now share one realized-income calculation instead of two copies of the same logic. No change to reported numbers.
+
 ## [v2.168.17] - 2026-06-14
 
 ### Changed

@@ -21,6 +21,7 @@ from app.services.report_data_service import (
     get_prior_period_data,
     compute_goal_progress,
     _get_account_value_at,
+    _lookback_realized_income,
 )
 
 
@@ -1050,3 +1051,55 @@ class TestNativeCurrencyAccounting:
         assert data["deposits_source"] == "transfers"
         # No BTC price change → market value effect = 0
         assert data["market_value_effect_usd"] == pytest.approx(0.0)
+
+
+class TestLookbackRealizedIncome:
+    """The shared income/expense-goal lookback aggregator."""
+
+    WIN_START = datetime(2025, 1, 1)
+    WIN_END = datetime(2025, 1, 31)
+
+    @pytest.mark.asyncio
+    async def test_usd_mode_sums_all_and_counts_all(self, db_session):
+        """USD goal: sums profit_usd over every closed position; counts all."""
+        _make_position(db_session, profit_usd=50.0, closed_at=datetime(2025, 1, 10))
+        _make_position(db_session, profit_usd=-20.0, closed_at=datetime(2025, 1, 20))
+        await db_session.flush()
+
+        profit, trades = await _lookback_realized_income(
+            db_session, 1, self.WIN_START, self.WIN_END, account_id=1, is_btc=False
+        )
+        assert profit == pytest.approx(30.0)
+        assert trades == 2
+
+    @pytest.mark.asyncio
+    async def test_btc_mode_sums_only_btc_pairs_but_counts_all(self, db_session):
+        """BTC goal: profit sums profit_quote only for BTC-quoted pairs, yet the
+        trade count still includes non-BTC closed positions (prior behavior)."""
+        _make_position(db_session, product_id="ETH-BTC", profit_quote=0.4,
+                       closed_at=datetime(2025, 1, 10))
+        _make_position(db_session, product_id="SOL-USD", profit_usd=99.0,
+                       profit_quote=0.0, closed_at=datetime(2025, 1, 12))
+        await db_session.flush()
+
+        profit, trades = await _lookback_realized_income(
+            db_session, 1, self.WIN_START, self.WIN_END, account_id=1, is_btc=True
+        )
+        assert profit == pytest.approx(0.4)   # only the ETH-BTC position
+        assert trades == 2                      # both counted
+
+    @pytest.mark.asyncio
+    async def test_window_and_account_scoping(self, db_session):
+        """Positions outside the window or in another account are excluded."""
+        _make_position(db_session, profit_usd=10.0, closed_at=datetime(2025, 1, 15))
+        _make_position(db_session, profit_usd=999.0, closed_at=datetime(2024, 12, 1))  # before window
+        _make_account(db_session, account_id=2, user_id=1)
+        _make_position(db_session, account_id=2, profit_usd=777.0,
+                       closed_at=datetime(2025, 1, 15))  # other account
+        await db_session.flush()
+
+        profit, trades = await _lookback_realized_income(
+            db_session, 1, self.WIN_START, self.WIN_END, account_id=1, is_btc=False
+        )
+        assert profit == pytest.approx(10.0)
+        assert trades == 1

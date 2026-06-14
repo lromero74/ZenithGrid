@@ -429,6 +429,44 @@ async def compute_goal_progress(
     }
 
 
+async def _lookback_realized_income(
+    db: AsyncSession,
+    user_id: int,
+    lookback_start: datetime,
+    lookback_end: datetime,
+    account_id: Optional[int],
+    is_btc: bool,
+) -> tuple:
+    """Realized profit and closed-trade count for a user's closed positions in a
+    lookback window — the single source shared by income and expense goal progress.
+
+    For BTC-denominated goals, profit sums ``profit_quote`` over BTC-quoted pairs;
+    otherwise ``profit_usd`` over all closed positions. ``sample_trades`` counts
+    every closed position in the window in both modes. The window is caller-bounded
+    (a goal's period), so this is O(closed positions in window).
+    """
+    pos_filters = [
+        Position.user_id == user_id,
+        Position.status == "closed",
+        Position.closed_at >= lookback_start,
+        Position.closed_at <= lookback_end,
+    ]
+    if account_id:
+        pos_filters.append(Position.account_id == account_id)
+    result = await db.execute(select(Position).where(and_(*pos_filters)))
+    closed_positions = result.scalars().all()
+
+    if is_btc:
+        total_profit = sum(
+            p.profit_quote or 0 for p in closed_positions
+            if p.get_quote_currency() == "BTC"
+        )
+    else:
+        total_profit = sum(p.profit_usd or 0 for p in closed_positions)
+
+    return float(total_profit), len(closed_positions)
+
+
 async def _compute_income_goal_progress(
     db: AsyncSession,
     goal: ReportGoal,
@@ -464,28 +502,10 @@ async def _compute_income_goal_progress(
 
     lookback_days_actual = max((lookback_end - lookback_start).days, 1)
 
-    # Query closed positions within the lookback window
-    pos_filters = [
-        Position.user_id == goal.user_id,
-        Position.status == "closed",
-        Position.closed_at >= lookback_start,
-        Position.closed_at <= lookback_end,
-    ]
-    if account_id:
-        pos_filters.append(Position.account_id == account_id)
-    result = await db.execute(select(Position).where(and_(*pos_filters)))
-    closed_positions = result.scalars().all()
-
-    # Sum profits in the appropriate currency
-    if is_btc:
-        total_profit = sum(
-            p.profit_quote or 0 for p in closed_positions
-            if p.get_quote_currency() == "BTC"
-        )
-    else:
-        total_profit = sum(p.profit_usd or 0 for p in closed_positions)
-
-    sample_trades = len(closed_positions)
+    # Realized income over the lookback window (shared with expense goals)
+    total_profit, sample_trades = await _lookback_realized_income(
+        db, goal.user_id, lookback_start, lookback_end, account_id, is_btc
+    )
 
     # Calculate daily income rate
     daily_income = total_profit / lookback_days_actual if lookback_days_actual > 0 else 0
@@ -589,26 +609,10 @@ async def _compute_expenses_goal_progress(
     lookback_end = period_end or now
     lookback_days_actual = max((lookback_end - lookback_start).days, 1)
 
-    pos_filters = [
-        Position.user_id == goal.user_id,
-        Position.status == "closed",
-        Position.closed_at >= lookback_start,
-        Position.closed_at <= lookback_end,
-    ]
-    if account_id:
-        pos_filters.append(Position.account_id == account_id)
-    result = await db.execute(select(Position).where(and_(*pos_filters)))
-    closed_positions = result.scalars().all()
-
-    if is_btc:
-        total_profit = sum(
-            p.profit_quote or 0 for p in closed_positions
-            if p.get_quote_currency() == "BTC"
-        )
-    else:
-        total_profit = sum(p.profit_usd or 0 for p in closed_positions)
-
-    sample_trades = len(closed_positions)
+    # Realized income over the lookback window (shared with income goals)
+    total_profit, sample_trades = await _lookback_realized_income(
+        db, goal.user_id, lookback_start, lookback_end, account_id, is_btc
+    )
     daily_income = total_profit / lookback_days_actual if lookback_days_actual > 0 else 0
     projected_income = daily_income * period_days
 

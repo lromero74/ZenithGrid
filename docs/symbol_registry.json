@@ -2996,6 +2996,7 @@
       "_gather_trade_stats",
       "_gather_transfer_data",
       "_get_account_value_at",
+      "_lookback_realized_income",
       "compute_goal_progress",
       "compute_monthly_growth_rate",
       "gather_report_data",
