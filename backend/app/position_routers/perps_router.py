@@ -23,6 +23,7 @@ from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.services.account_access import accessible_account_ids, manager_account_ids
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +127,8 @@ async def list_perps_positions(
     current_user: User = Depends(get_current_user),
 ):
     """List open perps positions (DB records synced with exchange)"""
-    # Get user's account IDs for ownership filtering
-    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_r = await db.execute(accounts_q)
-    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+    # Accounts the user can view (owned + shared-account membership)
+    user_account_ids = await accessible_account_ids(db, current_user.id)
 
     # Get DB positions filtered by user's accounts
     query = (
@@ -183,10 +182,8 @@ async def modify_tp_sl(
     """Update TP/SL prices on an existing perps position"""
     client = _get_coinbase_client(exchange)
 
-    # Verify position exists AND belongs to current user (via account ownership)
-    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_r = await db.execute(accounts_q)
-    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+    # Accounts the user can act on (owned + manager-role shared accounts)
+    user_account_ids = await manager_account_ids(db, current_user.id)
 
     position_q = select(Position).where(
         Position.id == position_id,
@@ -284,10 +281,8 @@ async def close_perps_position(
     """Manually close a perps position"""
     client = _get_coinbase_client(exchange)
 
-    # Verify position exists AND belongs to current user (via account ownership)
-    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    accounts_r = await db.execute(accounts_q)
-    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+    # Accounts the user can act on (owned + manager-role shared accounts)
+    user_account_ids = await manager_account_ids(db, current_user.id)
 
     position_q = select(Position).where(
         Position.id == position_id,

@@ -13,6 +13,7 @@ import {
   POPULARITY_ORDER,
   DEFAULT_TRADING_PAIRS,
   calculateSoftCeiling,
+  getDCAMultiplier,
 } from './botUtils'
 
 describe('getDefaultFormData', () => {
@@ -189,5 +190,55 @@ describe('calculateSoftCeiling', () => {
 
   test('guard: negative worstCaseMin is not computable → null', () => {
     expect(calculateSoftCeiling(config, 1000, 50, -1, 20)).toBeNull()
+  })
+})
+
+describe('getDCAMultiplier (parity with backend get_total_multiplier)', () => {
+  // Expected values are computed by hand from the backend formula in
+  // backend/app/strategies/safety_order_calculator.py::get_total_multiplier.
+  // This is the one authoritative DCA-multiplier formula; the TS copy must match
+  // it (soft-ceiling sizing drift between the two has caused real bugs).
+
+  test('no safety orders → 1.0', () => {
+    expect(getDCAMultiplier({ max_safety_orders: 0 })).toBe(1.0)
+  })
+
+  test('percentage_of_base, scale 1, 50% of base, 2 SOs → 1 + 0.5*2 = 2.0', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 2, safety_order_volume_scale: 1.0,
+      safety_order_type: 'percentage_of_base', safety_order_percentage: 50,
+    })).toBeCloseTo(2.0, 6)
+  })
+
+  test('percentage_of_base, scale 1, 100% of base, 5 SOs → 1 + 1*5 = 6.0', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 5, safety_order_volume_scale: 1.0,
+      safety_order_type: 'percentage_of_base', safety_order_percentage: 100,
+    })).toBeCloseTo(6.0, 6)
+  })
+
+  test('percentage_of_base, scale 1.62, 100%, 2 SOs → 1 + (1.62^2-1)/0.62 = 3.62', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 2, safety_order_volume_scale: 1.62,
+      safety_order_type: 'percentage_of_base', safety_order_percentage: 100,
+    })).toBeCloseTo(3.62, 2)
+  })
+
+  test('fixed, scale 1, 1 SO → 2.0', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 1, safety_order_volume_scale: 1.0, safety_order_type: 'fixed',
+    })).toBeCloseTo(2.0, 6)
+  })
+
+  test('fixed, scale 1, 5 SOs → 2 + 4 = 6.0', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 5, safety_order_volume_scale: 1.0, safety_order_type: 'fixed',
+    })).toBeCloseTo(6.0, 6)
+  })
+
+  test('fixed, scale 2, 5 SOs → 2 + 2*(2^4-1)/1 = 32.0', () => {
+    expect(getDCAMultiplier({
+      max_safety_orders: 5, safety_order_volume_scale: 2.0, safety_order_type: 'fixed',
+    })).toBeCloseTo(32.0, 6)
   })
 })

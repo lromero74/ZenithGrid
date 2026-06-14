@@ -57,7 +57,7 @@ async def get_user_paper_account(db: AsyncSession, user_id: int) -> Optional[Acc
     return paper_result.scalar_one_or_none()
 
 
-async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
+async def get_coinbase_from_db(db: AsyncSession, user_id: int) -> CoinbaseClient:
     """
     Get Coinbase client from the first active CEX account in the database.
     Excludes paper trading accounts. Filters by user_id if provided.
@@ -130,8 +130,10 @@ async def get_cex_portfolio(
             logger.debug(f"Using cached portfolio response for account {account.id}")
             return cached
 
-        # Check persistent cache (survives restarts)
-        persistent = await portfolio_cache.get(account.user_id)
+        # Check persistent cache (survives restarts). Keyed by account.id — a
+        # user owns multiple accounts, so keying by user_id would let one
+        # account's portfolio overwrite/serve another's.
+        persistent = await portfolio_cache.get(account.id)
         if persistent is not None:
             await api_cache.set(cache_key, persistent, 25)
             logger.info(f"Serving persistent portfolio cache for account {account.id}")
@@ -231,7 +233,7 @@ async def get_cex_portfolio(
 
     # Cache in-memory (25s — expires before 30s frontend poll) and persist to disk
     await api_cache.set(cache_key, result, 25)
-    await portfolio_cache.save(account.user_id, result)
+    await portfolio_cache.save(account.id, result)  # account-scoped, not user-scoped
     return result
 
 

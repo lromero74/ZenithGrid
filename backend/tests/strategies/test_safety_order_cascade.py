@@ -251,6 +251,51 @@ def _buy(trade_type="dca", dca_levels=1, price=100.0):
     return t
 
 
+def _sell(trade_type="dca", dca_levels=1, price=100.0):
+    t = MagicMock()
+    t.side = "sell"
+    t.trade_type = trade_type
+    t.dca_levels = dca_levels
+    t.price = price
+    return t
+
+
+class TestEntryTradesDirectionAware:
+    """Long positions ADD via buys; short positions ADD via sells. The safety-order
+    count must look at the ENTRY side for the position's direction — counting only
+    buys leaves a short's safety-order count stuck at 0, corrupting SO numbering,
+    volume-scale exponent, and trigger spacing."""
+
+    def test_long_entry_trades_are_buys(self):
+        from app.strategies.safety_order_calculator import entry_trades_for_position
+        pos = MagicMock(direction="long")
+        # base buy + 1 dca buy + a close (sell) — the close must be excluded
+        pos.trades = [_buy("initial"), _buy("dca"), _sell("sell")]
+        assert len(entry_trades_for_position(pos)) == 2
+
+    def test_short_entry_trades_are_sells(self):
+        from app.strategies.safety_order_calculator import entry_trades_for_position
+        pos = MagicMock(direction="short")
+        # base sell + 1 dca sell + a close (buy) — the close must be excluded
+        pos.trades = [_sell("initial"), _sell("dca"), _buy("close_short")]
+        assert len(entry_trades_for_position(pos)) == 2
+
+    def test_short_safety_order_count_uses_sells(self):
+        from app.strategies.safety_order_calculator import (
+            entry_trades_for_position, count_deployed_safety_orders,
+        )
+        pos = MagicMock(direction="short")
+        pos.trades = [_sell("initial"), _sell("dca"), _sell("dca")]
+        # base + 2 short safety orders → 2 (was 0 before the direction-aware fix)
+        assert count_deployed_safety_orders(entry_trades_for_position(pos)) == 2
+
+    def test_missing_direction_defaults_to_long(self):
+        from app.strategies.safety_order_calculator import entry_trades_for_position
+        pos = MagicMock(spec=["trades"])  # no .direction attribute
+        pos.trades = [_buy("initial"), _buy("dca")]
+        assert len(entry_trades_for_position(pos)) == 2
+
+
 class TestSafetyOrderLevelCount:
     """A cascade fills multiple SO levels in ONE trade. The deployed-SO count
     must therefore SUM levels (dca_levels), not count trade rows — otherwise the

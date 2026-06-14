@@ -32,10 +32,13 @@ async def create_ai_bot_log(
     current_user: User = Depends(get_current_user)
 ):
     """Save AI bot reasoning/thinking log"""
-    # Verify bot exists and belongs to user
-    bot_query = select(Bot).where(Bot.id == bot_id)
-    # Filter by user if authenticated
-    bot_query = bot_query.where(Bot.user_id == current_user.id)
+    # Verify the user owns this bot OR can access it via a shared account
+    from app.services.account_access import accessible_account_ids
+    _acc_ids = await accessible_account_ids(db, current_user.id)
+    bot_query = select(Bot).where(
+        Bot.id == bot_id,
+        or_(Bot.user_id == current_user.id, Bot.account_id.in_(_acc_ids)),
+    )
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 

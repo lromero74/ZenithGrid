@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.8] - 2026-06-13
+
+### Fixed
+- **Portfolio data could leak between a user's own accounts.** The persistent (restart-surviving) portfolio cache was keyed by user instead of by account, so a user with multiple accounts (e.g. a live exchange + a paper account) could be served one account's balances/positions for another after a restart. It's now keyed per account.
+- **Short bots now count their safety orders correctly.** The DCA engine counted only buy trades, so a short position — which adds via sells — reported zero safety orders, corrupting safety-order numbering, size scaling, and trigger spacing. It now counts the direction-correct entry side and uses the short average entry price as the DCA reference. (Long bots were unaffected.)
+- **The bot editor's auto-calculated order sizes now respect the soft ceiling.** When a soft ceiling reduced the effective deal count (e.g. 20 → 5), the budget calculator still sized base/safety orders for the raw configured max, under-sizing them. It now uses the same effective deal count the engine and the on-screen breakdown use.
+- **Shared-account access gaps closed.** Shared-account managers can now see and act on perpetual-futures positions, and view order history, on accounts shared with them (these previously returned empty or errored for non-owners); bot AI/scanner log writes now match their read permissions.
+
+### Added
+- Parity tests pinning the frontend DCA-multiplier math to the authoritative backend formula, to catch soft-ceiling sizing drift between the two.
+
 ## [v2.168.7] - 2026-06-13
 
 ### Fixed

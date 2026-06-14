@@ -125,10 +125,15 @@ function DCABudgetConfigForm({
   // Auto-calculate order sizes when budget calculator is active
   useEffect(() => {
     if (useBudgetCalculator && (config.max_safety_orders ?? 5) > 0) {
+      // Size against the soft-ceiling-EFFECTIVE deal count (what the engine
+      // actually runs), not the raw configured max. Otherwise, when the ceiling
+      // cuts e.g. 20 deals to 5, the auto-written base order is sized for 20
+      // (≈4x too small). effectiveDealsForMath already falls back to the raw max
+      // when no ceiling is active.
       const breakdown = calculateDCABudget(
         aggregateValue!,
         budgetPercentage!,
-        maxConcurrentDeals || config.max_concurrent_deals || 1,
+        effectiveDealsForMath,
         config.max_safety_orders ?? 5,
         config.safety_order_volume_scale ?? 1.0,
         exchangeMinimum
@@ -148,7 +153,7 @@ function DCABudgetConfigForm({
         })
       }
     }
-  }, [useBudgetCalculator, budgetPercentage, maxConcurrentDeals,
+  }, [useBudgetCalculator, budgetPercentage, maxConcurrentDeals, effectiveDealsForMath,
       config.max_concurrent_deals, config.max_safety_orders, config.safety_order_volume_scale,
       aggregateValue, exchangeMinimum])
 
