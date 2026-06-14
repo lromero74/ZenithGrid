@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
@@ -536,11 +537,16 @@ async def startup_event():
         pubsub = redis.pubsub()
         await pubsub.psubscribe("ws:*")
         logger.info("Redis pub/sub subscriber started — listening on ws:*")
-        async for msg in pubsub.listen():
-            if msg["type"] not in ("pmessage", "message"):
-                continue
-            channel = msg.get("channel") or msg.get("pattern", "")
-            await route_redis_message(channel, msg["data"], _ws_manager)
+        try:
+            async for msg in pubsub.listen():
+                if msg["type"] not in ("pmessage", "message"):
+                    continue
+                channel = msg.get("channel") or msg.get("pattern", "")
+                await route_redis_message(channel, msg["data"], _ws_manager)
+        finally:
+            # Release the dedicated pub/sub connection on shutdown so it isn't
+            # left dangling when the task is cancelled.
+            await pubsub.aclose()
 
     _sub_task = _asyncio.create_task(_redis_subscriber())
     app.state.redis_subscriber_task = _sub_task
@@ -603,7 +609,16 @@ async def startup_event():
 
 
 async def _cancel_task(task: Optional[asyncio.Task]) -> None:
-    """Cancel a background task and await its completion."""
+    """Cancel a background task and await its completion.
+
+    Cancelling a task that is blocked inside a Redis read — notably the pub/sub
+    subscriber parked in ``pubsub.listen()`` — does not surface as a plain
+    CancelledError: redis-py wraps the cancellation and re-raises it as a
+    ``RedisError`` (usually TimeoutError/ConnectionError). Without tolerating
+    that here, the exception escaped ``shutdown_event`` and the lifespan logged
+    "Application shutdown failed. Exiting." Treat it as a clean stop — we are
+    tearing the task down on purpose.
+    """
     if task is None:
         return
     task.cancel()
@@ -611,6 +626,11 @@ async def _cancel_task(task: Optional[asyncio.Task]) -> None:
         await task
     except asyncio.CancelledError:
         pass
+    except RedisError as exc:
+        logger.debug(
+            "Task raised %s during cancellation (expected for Redis-blocked tasks)",
+            type(exc).__name__,
+        )
 
 
 async def shutdown_event():

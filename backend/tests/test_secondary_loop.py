@@ -24,6 +24,23 @@ class TestSecondaryLoopLifecycle:
         assert loop.is_running()
         stop_secondary_loop()
 
+    def test_secondary_loop_is_closed_after_stop(self):
+        """Resource hygiene: stop_secondary_loop() must close the loop (releasing
+        its self-pipe sockets) and reset module state — not leave an unclosed
+        loop for the GC to reap, which surfaces as a ResourceWarning."""
+        import app.secondary_loop as sl
+        from app.secondary_loop import get_secondary_loop, start_secondary_loop, stop_secondary_loop
+
+        start_secondary_loop()
+        loop = get_secondary_loop()
+        stop_secondary_loop()
+
+        assert loop.is_closed()
+        assert sl._loop is None
+        assert sl._thread is None
+        assert sl._engine is None
+        assert sl._session_maker is None
+
     def test_secondary_loop_session_maker_is_distinct(self):
         """Secondary session maker must differ from the primary session maker."""
         from app.database import async_session_maker as primary

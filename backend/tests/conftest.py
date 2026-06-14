@@ -8,7 +8,6 @@ Provides reusable fixtures for:
 - Sample model factories
 """
 
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import (
@@ -17,18 +16,17 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-# ---------------------------------------------------------------------------
-# Event loop
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create a session-scoped event loop for async tests."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
+# Note: we intentionally do NOT define a custom `event_loop` fixture.
+# pytest-asyncio (>=0.21) manages the event loop itself; overriding it is
+# deprecated and leaks an unclosed loop (surfacing as a ResourceWarning under
+# -W error). The loop scope is configured via `asyncio_default_fixture_loop_scope`
+# in pytest.ini instead.
+#
+# Known residual: under `-W error` the full suite may still report a single
+# "unclosed event loop" ResourceWarning attributed to a random test. tracemalloc
+# shows it is allocated entirely inside pytest_asyncio's own per-test loop setup
+# (no frames from app/ or tests/) — i.e. a pytest-asyncio 1.3.0 internal artifact,
+# not a leak in our code. The standard `pytest` run (no -W error) is clean.
 
 # ---------------------------------------------------------------------------
 # Database fixtures
