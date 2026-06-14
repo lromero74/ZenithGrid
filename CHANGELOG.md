@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.11] - 2026-06-13
+
+### Changed
+- The auto-calculated base-order sizing now derives its DCA multiplier from the single authoritative full-cycle formula instead of re-deriving the same geometric series inline. No change to the sizes any bot produces — it removes a second copy of the math that could have drifted from the soft-ceiling calculation over time.
+
+### Fixed
+- A degenerate bot configuration (e.g. a negative volume scale that collapses the DCA multiplier to zero) no longer crashes auto-calculated order sizing; it now returns a finite fallback size instead.
+
 ## [v2.168.10] - 2026-06-13
 
 ### Fixed
