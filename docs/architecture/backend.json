@@ -451,7 +451,7 @@
         "speculative_allocation_pct",
         "speculative_calibration_last_alerted_at"
       ],
-      "purpose": "Trading account (CEX/DEX/paper/prop). v2.165.0 adds speculative_allocation_pct (0-50% cap, default 0; caps the 'speculative' bucket used by the high-risk doubling preset) and speculative_calibration_last_alerted_at (timestamp stamped when a calibration alert is acknowledged \u2014 drives the 30-day per-user cooldown in speculative_calibration_monitor)."
+      "purpose": "Trading account (CEX/DEX/paper/prop). v2.165.0 adds speculative_allocation_pct (0-50% cap, default 0; caps the 'speculative' bucket used by the high-risk doubling preset) and speculative_calibration_last_alerted_at (timestamp stamped when a calibration alert is acknowledged \u2014 drives the 30-day per-user cooldown in speculative_calibration_monitor). v2.168.19: rebalance_min_trade_pct default changed from 5.0 to 2.0 to match the updated DEFAULT_MIN_TRADE_PCT constant in rebalance_monitor."
     },
     {
       "name": "Bot",
@@ -1511,7 +1511,7 @@
     },
     {
       "file": "services/rebalance_monitor.py",
-      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost). v2.168.17: adds _price_dust_coins() method that prices dust-candidate coins with bounded concurrency.",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost). v2.168.17: adds _price_dust_coins() method that prices dust-candidate coins with bounded concurrency. v2.168.19: EXCHANGE_MIN_USD lowered from 10.0 to 1.0 (the old value was the Coinbase perps notional, wrong for spot); DEFAULT_MIN_TRADE_PCT lowered from 5.0 to 2.0. Adds module-level get_min_usd_by_currency(client, currencies) which fetches each X-USD product's real minimum order size via order_validation.get_product_minimums and floors at EXCHANGE_MIN_USD; plan_trades() now accepts a min_usd_by_currency parameter and applies max(churn-guard, real per-product min) as the per-trade floor; _execute_trade calls order_validation.validate_order_size as an execution-time backstop.",
       "type": "background"
     },
     {

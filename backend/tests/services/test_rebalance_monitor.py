@@ -10,6 +10,23 @@ from app.utils.timeutil import utcnow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+@pytest.fixture(autouse=True)
+def _stub_product_minimums():
+    """The rebalancer now consults real per-product minimums (get_min_usd_by_currency)
+    and validates orders against them. Stub the live product lookup with a realistic
+    $1 minimum so unit tests using bare mock clients don't hit it."""
+    fake = {
+        "quote_min_size": "1.00",
+        "base_min_size": "0.00000001",
+        "quote_currency": "USD",
+        "base_currency": "BTC",
+        "quote_increment": "0.01",
+        "base_increment": "0.00000001",
+    }
+    with patch("app.order_validation.get_product_minimums", AsyncMock(return_value=fake)):
+        yield
+
+
 def _pos(product_id, base=0.0, quote_spent=0.0):
     """Build a minimal open-position mock for rebalancer tests.
 
@@ -855,12 +872,12 @@ class TestPlanTopupTrades:
         assert "USDC" in buy_targets
 
     def test_small_deficit_below_exchange_min(self):
-        """Edge case: deficit < $10 exchange minimum — no trades."""
+        """Edge case: deficit < the $1 exchange minimum — no trades."""
         from app.services.rebalance_monitor import plan_topup_trades
 
-        # USDC deficit = $5 (need 505, have 500) — below $10 minimum
+        # USDC deficit = $0.50 (need 500.50, have 500) — below the $1 minimum
         free_balances = {"USD": 1000.0, "BTC": 0.1, "ETH": 2.0, "USDC": 500.0}
-        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 505.0}
+        min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.50}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
         trades = plan_topup_trades(free_balances, min_balances, prices)
@@ -878,13 +895,13 @@ class TestPlanTopupTrades:
         assert trades == []
 
     def test_individual_contribution_below_exchange_min_skipped(self):
-        """Edge case: proportional contribution from a currency is below $10 — skip that source."""
+        """Edge case: proportional contribution from a currency is below $1 — skip that source."""
         from app.services.rebalance_monitor import plan_topup_trades
 
         # USDC deficit = $200
-        # USD=$5000 (98%), BTC=$0, ETH=$100 (2%)
-        # ETH's contribution: 2% of $200 = $4 → below $10, should be skipped
-        free_balances = {"USD": 5000.0, "BTC": 0.0, "ETH": 0.04, "USDC": 300.0}
+        # USD=$5000 (~99.8%), BTC=$0, ETH=$10 (~0.2%)
+        # ETH's contribution: ~0.2% of $200 ≈ $0.40 → below $1, should be skipped
+        free_balances = {"USD": 5000.0, "BTC": 0.0, "ETH": 0.004, "USDC": 300.0}
         min_balances = {"USD": 0.0, "BTC": 0.0, "ETH": 0.0, "USDC": 500.0}
         prices = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
 
@@ -1723,3 +1740,76 @@ class TestPriceDustCoins:
         await rm.RebalanceMonitor()._price_dust_coins(client, coins, prices)
         assert len(prices) == len(coins)
         assert max_active <= rm.DUST_PRICE_CONCURRENCY
+
+
+class TestGetMinUsdByCurrency:
+    """get_min_usd_by_currency() — real per-product minimums, floored."""
+
+    @pytest.mark.asyncio
+    async def test_floors_at_exchange_min(self):
+        """A sub-floor exchange quote_min_size is raised to EXCHANGE_MIN_USD."""
+        from app.services.rebalance_monitor import get_min_usd_by_currency, EXCHANGE_MIN_USD
+
+        tiny = {"quote_min_size": "0.00000001", "base_min_size": "0.00000001",
+                "quote_currency": "USD", "base_currency": "BTC"}
+        with patch("app.order_validation.get_product_minimums", AsyncMock(return_value=tiny)):
+            mins = await get_min_usd_by_currency(AsyncMock())
+        assert mins["BTC"] == EXCHANGE_MIN_USD
+        assert mins["USD"] == EXCHANGE_MIN_USD
+
+    @pytest.mark.asyncio
+    async def test_uses_higher_real_min_when_present(self):
+        """A genuinely higher per-product minimum is respected over the floor."""
+        from app.services.rebalance_monitor import get_min_usd_by_currency
+
+        big = {"quote_min_size": "3.00", "base_min_size": "0.001",
+               "quote_currency": "USD", "base_currency": "BTC"}
+        with patch("app.order_validation.get_product_minimums", AsyncMock(return_value=big)):
+            mins = await get_min_usd_by_currency(AsyncMock())
+        assert mins["BTC"] == 3.0
+
+    @pytest.mark.asyncio
+    async def test_client_error_falls_back_to_floor(self):
+        """A lookup failure leaves that currency at the safety floor, not crashing."""
+        from app.services.rebalance_monitor import get_min_usd_by_currency, EXCHANGE_MIN_USD
+
+        with patch("app.order_validation.get_product_minimums",
+                   AsyncMock(side_effect=RuntimeError("boom"))):
+            mins = await get_min_usd_by_currency(AsyncMock())
+        assert mins["BTC"] == EXCHANGE_MIN_USD
+
+
+class TestPlanTradesRealMinimums:
+    """plan_trades honors per-currency real minimums (the small-holding fix)."""
+
+    # The reported scenario: ~$51 portfolio, target 100% USD, small BTC/USDC.
+    PRICES = {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}
+    TARGETS = {"usd_pct": 100.0, "btc_pct": 0.0, "eth_pct": 0.0, "usdc_pct": 0.0}
+    # $40.35 USD + $6.35 BTC + $4.30 USDC = $51.00
+    BALANCES = {"USD": 40.35, "BTC": 6.35 / 100000.0, "ETH": 0.0, "USDC": 4.30}
+
+    def test_sells_small_holding_above_real_min(self):
+        """$6.35 BTC and $4.30 USDC sell when the real min is ~$1 (2% churn ≈ $1.02)."""
+        from app.services.rebalance_monitor import plan_trades
+
+        trades = plan_trades(
+            self.BALANCES, self.TARGETS, self.PRICES,
+            min_trade_pct=2.0,
+            min_usd_by_currency={"USD": 1.0, "BTC": 1.0, "ETH": 1.0, "USDC": 1.0},
+        )
+        sold = {t["from_currency"] for t in trades}
+        assert "BTC" in sold
+        assert "USDC" in sold
+
+    def test_skips_holding_below_real_min(self):
+        """If the exchange genuinely required $10 for BTC, the $6.35 would be skipped."""
+        from app.services.rebalance_monitor import plan_trades
+
+        trades = plan_trades(
+            self.BALANCES, self.TARGETS, self.PRICES,
+            min_trade_pct=2.0,
+            min_usd_by_currency={"USD": 1.0, "BTC": 10.0, "ETH": 1.0, "USDC": 1.0},
+        )
+        sold = {t["from_currency"] for t in trades}
+        assert "BTC" not in sold   # $6.35 < $10 real min
+        assert "USDC" in sold      # $4.30 > $1 real min still sells

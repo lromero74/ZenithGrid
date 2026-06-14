@@ -34,8 +34,14 @@ logger = logging.getLogger(__name__)
 # while staying well under exchange rate limits.
 DUST_PRICE_CONCURRENCY = 8
 
-EXCHANGE_MIN_USD = 10.0  # Coinbase minimum order size
-DEFAULT_MIN_TRADE_PCT = 5.0  # Default: only trade if shift is >= 5% of portfolio
+# Absolute safety floor for a single rebalance order. The real per-product
+# minimum is fetched live from the exchange (order_validation.get_product_minimums)
+# and takes precedence when higher; this floor only guards against the API
+# reporting a sub-cent granularity value (Coinbase spot exposes ~$0.00000001 as
+# quote_min_size, which is not a usable notional). Previously a flat $10 — that is
+# the Coinbase *perps* notional, not spot, and wrongly blocked small spot sells.
+EXCHANGE_MIN_USD = 1.0
+DEFAULT_MIN_TRADE_PCT = 2.0  # Default: only trade if shift is >= 2% of portfolio
 TARGET_CURRENCIES = {"USD", "BTC", "ETH", "USDC"}
 DUST_SWEEP_INTERVAL_DAYS = 30
 
@@ -231,12 +237,37 @@ def plan_topup_trades(
     return trades
 
 
+async def get_min_usd_by_currency(
+    client, currencies: Iterable[str] = ("BTC", "ETH", "USDC")
+) -> Dict[str, float]:
+    """Real per-product minimum order size (USD) for each rebalanceable currency.
+
+    Each currency's ``X-USD`` product minimum is read live from the exchange via
+    order_validation.get_product_minimums (cached) and floored at EXCHANGE_MIN_USD.
+    For an ``X-USD`` product the quote currency IS USD, so ``quote_min_size`` is
+    already a USD notional. USD itself is held as cash (no market) → the floor.
+    """
+    from app.order_validation import get_product_minimums
+
+    mins = {"USD": EXCHANGE_MIN_USD}
+    for currency in currencies:
+        quote_min = 0.0
+        try:
+            m = await get_product_minimums(client, f"{currency}-USD")
+            quote_min = float(m.get("quote_min_size", 0) or 0)
+        except Exception as e:
+            logger.debug("Rebalance: min lookup failed for %s-USD: %s", currency, e)
+        mins[currency] = max(quote_min, EXCHANGE_MIN_USD)
+    return mins
+
+
 def plan_trades(
     free_balances: Dict[str, float],
     targets: Dict[str, float],
     prices: Dict[str, float],
     min_trade_pct: float = DEFAULT_MIN_TRADE_PCT,
     aggregate: Optional[Dict[str, float]] = None,
+    min_usd_by_currency: Optional[Dict[str, float]] = None,
 ) -> List[dict]:
     """Plan trades to rebalance from current to target allocations.
 
@@ -248,8 +279,10 @@ def plan_trades(
     plan_trades would (incorrectly) see free BTC as overweight and sell it.
 
     All trade amounts are in USD-equivalent terms, even for BTC↔ETH trades.
-    Trades below min_trade_pct (% of total free portfolio) are skipped to avoid
-    micro-trading. A hard floor of EXCHANGE_MIN_USD ($10) also applies.
+    A trade is skipped unless it clears, for its currency, the larger of the
+    churn guard (min_trade_pct % of the free portfolio) and that currency's real
+    exchange minimum (``min_usd_by_currency``, fetched live; EXCHANGE_MIN_USD
+    safety floor when absent).
 
     Args:
         free_balances: Tradeable balances by currency (native units).
@@ -259,6 +292,9 @@ def plan_trades(
         aggregate: Optional full portfolio balances (free + locked in positions).
             When provided, deltas are computed from aggregate so direction and
             magnitude are correct. When None, falls back to free-balance-only mode.
+        min_usd_by_currency: Real per-currency minimum order size in USD (from
+            get_min_usd_by_currency). When None, every currency uses the
+            EXCHANGE_MIN_USD safety floor.
 
     Returns a list of trade dicts:
         {"from_currency": str, "to_currency": str, "usd_amount": float,
@@ -275,8 +311,15 @@ def plan_trades(
     if total_ref <= 0 or total_free <= 0:
         return []
 
-    # Minimum trade size based on what's actually tradeable (free portfolio)
-    min_trade_usd = max(total_free * min_trade_pct / 100.0, EXCHANGE_MIN_USD)
+    # Per-currency minimum trade size: the larger of the portfolio churn guard
+    # (min_trade_pct of the free portfolio) and the currency's real exchange
+    # minimum in USD (min_usd_by_currency, fetched live), falling back to the
+    # absolute safety floor when a currency has no entry.
+    churn_floor = total_free * min_trade_pct / 100.0
+    _mins = min_usd_by_currency or {}
+
+    def _min_for(currency: str) -> float:
+        return max(churn_floor, _mins.get(currency, EXCHANGE_MIN_USD))
 
     # Calculate USD-denominated delta for each currency relative to reference
     # (aggregate when provided, else free).
@@ -306,11 +349,11 @@ def plan_trades(
     # Cap sells to available free balance — can't sell more than you have
     sells = []
     for c, d in deltas.items():
-        if d < -min_trade_usd:
+        if d < -_min_for(c):
             sell_amount = min(-d, free_values.get(c, 0.0))
-            if sell_amount >= min_trade_usd:
+            if sell_amount >= _min_for(c):
                 sells.append((c, sell_amount))
-    buys = [(c, d) for c, d in deltas.items() if d > min_trade_usd]
+    buys = [(c, d) for c, d in deltas.items() if d > _min_for(c)]
 
     # Sort: largest sell first, largest buy first
     sells.sort(key=lambda x: x[1], reverse=True)
@@ -327,7 +370,7 @@ def plan_trades(
                 continue
 
             trade_usd = min(remaining_sell, buy_amount)
-            if trade_usd < min_trade_usd:
+            if trade_usd < max(_min_for(sell_currency), _min_for(buy_currency)):
                 continue
 
             product_id, side = _get_trade_params(sell_currency, buy_currency)
@@ -777,10 +820,12 @@ class RebalanceMonitor(SessionMakerMixin):
 
             min_trade = account.rebalance_min_trade_pct
             min_pct = min_trade if min_trade is not None else DEFAULT_MIN_TRADE_PCT
+            min_usd_by_currency = await get_min_usd_by_currency(client)
             trades = plan_trades(
                 rebalanceable, targets, prices,
                 min_trade_pct=min_pct,
                 aggregate=rebalanceable_agg,
+                min_usd_by_currency=min_usd_by_currency,
             )
 
             if not trades:
@@ -822,7 +867,24 @@ class RebalanceMonitor(SessionMakerMixin):
             # Reserve 1% for fees (same as auto-buy)
             usd_amount = round(usd_amount * 0.99, 2)
 
+            # Hard safety floor — the exchange API often reports a sub-cent
+            # quote_min_size (granularity, not a usable notional), so a flat floor
+            # is still needed below the real per-product minimum.
             if usd_amount < EXCHANGE_MIN_USD:
+                return
+
+            # Execution backstop: also honor the product's real exchange minimum.
+            # The rebalancer places market orders directly, bypassing the
+            # trading-engine validators, so validate the notional here.
+            from app.order_validation import validate_order_size
+            is_valid, err = await validate_order_size(
+                client, product_id, quote_amount=usd_amount
+            )
+            if not is_valid:
+                logger.info(
+                    "Rebalance: skipping below-minimum %s ~$%.2f: %s",
+                    product_id, usd_amount, err,
+                )
                 return
 
             from_curr = trade["from_currency"]
