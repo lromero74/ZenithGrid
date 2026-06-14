@@ -160,16 +160,30 @@ def plan_topup_trades(
     free_balances: Dict[str, float],
     min_balances: Dict[str, float],
     prices: Dict[str, float],
+    min_usd_by_currency: Optional[Dict[str, float]] = None,
 ) -> List[dict]:
     """Plan trades to top up currencies that are below their minimum reserve.
 
-    For each currency below its minimum, calculates the deficit in USD terms
-    and sources funds proportionally from all other currencies based on their
-    free USD-equivalent values. Individual contributions below EXCHANGE_MIN_USD
-    are skipped.
+    A *minimum* reserve is honored even when the exact shortfall is smaller than
+    the exchange's minimum order size: the top-up is rounded UP to that minimum,
+    buying the smallest valid order and overshooting the reserve slightly (e.g.
+    a $0.70 shortfall on a 5-USDC reserve buys $1 → 5.30 USDC). The small surplus
+    is not later sold off, because it too falls below the sell minimum and selling
+    more would breach the reserve.
+
+    Funds are sourced largest-donor-first (never from a currency that is itself
+    at/below its own reserve) so that every resulting order clears the exchange
+    minimum — proportional splitting could otherwise produce sub-minimum,
+    un-placeable pieces. If available funds can't cover even one minimum order, no
+    top-up is attempted.
 
     Returns a list of trade dicts (same format as plan_trades).
     """
+    _mins = min_usd_by_currency or {}
+
+    def _min_for(currency: str) -> float:
+        return max(_mins.get(currency, EXCHANGE_MIN_USD), EXCHANGE_MIN_USD)
+
     # Price lookup helper: convert currency amount to USD
     def to_usd(currency: str, amount: float) -> float:
         if currency == "USD":
@@ -177,24 +191,24 @@ def plan_topup_trades(
         pair = f"{currency}-USD" if currency != "USDC" else "USDC-USD"
         return amount * prices.get(pair, 1.0 if currency == "USDC" else 0.0)
 
-    # Find currencies with deficits
-    deficits = {}  # currency -> deficit in USD
+    # Find currencies with deficits, rounding each UP to the currency's real
+    # exchange minimum so a sub-minimum shortfall is still honored.
+    deficits = {}  # currency -> top-up target in USD
     for currency, min_bal in min_balances.items():
         if min_bal <= 0:
             continue
         free = free_balances.get(currency, 0.0)
         if free < min_bal:
-            deficit_native = min_bal - free
-            deficit_usd = to_usd(currency, deficit_native)
-            if deficit_usd >= EXCHANGE_MIN_USD:
-                deficits[currency] = deficit_usd
+            deficit_usd = to_usd(currency, min_bal - free)
+            if deficit_usd > 0:
+                deficits[currency] = max(deficit_usd, _min_for(currency))
 
     if not deficits:
         return []
 
     trades = []
 
-    for deficit_currency, deficit_usd in deficits.items():
+    for deficit_currency, topup_usd in deficits.items():
         # Calculate available USD-equivalent from all non-deficit currencies
         donors = {}
         for currency, free in free_balances.items():
@@ -207,32 +221,33 @@ def plan_topup_trades(
             if available_usd > 0:
                 donors[currency] = available_usd
 
-        total_donor_usd = sum(donors.values())
-        if total_donor_usd <= 0:
+        if not donors:
             continue
 
-        # Cap deficit to what's actually available
-        actual_deficit = min(deficit_usd, total_donor_usd)
+        # Cap the top-up to what's actually available.
+        actual = min(topup_usd, sum(donors.values()))
+        floor = _min_for(deficit_currency)
 
-        # Source proportionally from each donor
-        for donor_currency, donor_usd in donors.items():
-            proportion = donor_usd / total_donor_usd
-            contribution_usd = actual_deficit * proportion
-
-            if contribution_usd < EXCHANGE_MIN_USD:
+        # Source largest-donor-first so each order clears the exchange minimum.
+        remaining = actual
+        for donor_currency, donor_usd in sorted(
+            donors.items(), key=lambda kv: kv[1], reverse=True
+        ):
+            if remaining < floor:
+                break
+            chunk = min(donor_usd, remaining)
+            if chunk < floor:
                 continue
 
-            product_id, side = _get_trade_params(
-                donor_currency, deficit_currency
-            )
-
+            product_id, side = _get_trade_params(donor_currency, deficit_currency)
             trades.append({
                 "from_currency": donor_currency,
                 "to_currency": deficit_currency,
-                "usd_amount": round(contribution_usd, 2),
+                "usd_amount": round(chunk, 2),
                 "product_id": product_id,
                 "side": side,
             })
+            remaining -= chunk
 
     return trades
 
@@ -698,11 +713,16 @@ class RebalanceMonitor(SessionMakerMixin):
                 "USDC": account.min_balance_usdc or 0.0,
             }
 
+            # Real per-product minimums, used by both the reserve top-up and the
+            # drift rebalance so every order respects the exchange's actual limits.
+            min_usd_by_currency = await get_min_usd_by_currency(client)
+
             # Phase 1: Top-up currencies below their minimum reserve.
             # This runs BEFORE drift detection — reserves must be
             # maintained even when the portfolio is within threshold.
             topup_trades = plan_topup_trades(
-                free_balances, min_balances, prices
+                free_balances, min_balances, prices,
+                min_usd_by_currency=min_usd_by_currency,
             )
             if topup_trades:
                 logger.info(
@@ -820,7 +840,6 @@ class RebalanceMonitor(SessionMakerMixin):
 
             min_trade = account.rebalance_min_trade_pct
             min_pct = min_trade if min_trade is not None else DEFAULT_MIN_TRADE_PCT
-            min_usd_by_currency = await get_min_usd_by_currency(client)
             trades = plan_trades(
                 rebalanceable, targets, prices,
                 min_trade_pct=min_pct,
