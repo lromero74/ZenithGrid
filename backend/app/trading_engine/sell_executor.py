@@ -93,6 +93,20 @@ async def _resolve_real_close_amount(
             f"Clamping close to {base_amount:.8f} (booking the real, smaller "
             f"proceeds)."
         )
+        # Audit the drift so this class of issue is greppable after the fact.
+        try:
+            from app.services.realmoney_audit import record_event
+            record_event(
+                "sell_clamped",
+                account_id=getattr(position, "account_id", None),
+                position_id=getattr(position, "id", None),
+                product_id=product_id,
+                recorded=raw_amount,
+                available=available,
+                clamped_to=base_amount,
+            )
+        except Exception:
+            logger.debug("clamp audit failed", exc_info=True)
     return base_amount, clamped
 
 

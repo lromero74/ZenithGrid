@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.170.0] - 2026-06-15
+
+### Added
+- A dedicated real-money trade audit trail. Every buy or sell placed against a real exchange account is now recorded as one structured line — what was traded, the amount, the resulting order id, success/failure (including the exchange error on failure), and crucially **which subsystem initiated it** (a specific bot, the dust sweep, the portfolio rebalancer, a panic sell, or a manual operation). It also records when a position close has to be clamped because the wallet holds less than the position recorded — the exact signal behind the "stuck, can't sell" problem — so that class of issue is greppable after the fact. The trail lives in `backend/logs/real_money_trades.log` and also appears in the normal application log. Paper accounts are never recorded.
+
 ## [v2.169.4] - 2026-06-15
 
 ### Fixed

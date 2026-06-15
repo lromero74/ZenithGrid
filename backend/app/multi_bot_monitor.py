@@ -35,6 +35,7 @@ from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.paper_trading_client import simulate_slippage_ctx
 from app.models import Bot
+from app.services.realmoney_audit import set_subsystem
 from app.monitor.batch_analyzer import process_bot_batch as _process_bot_batch
 from app.monitor.bull_flag_processor import process_bull_flag_bot as _process_bull_flag_bot
 from app.monitor.pair_processor import process_bot_pair as _process_bot_pair
@@ -945,6 +946,10 @@ class MultiBotMonitor:
                     simulate_slippage_ctx.set(
                         (local_bot.strategy_config or {}).get('simulate_slippage', False)
                     )
+
+                    # Tag any real-money order placed during this bot's run with
+                    # the initiating subsystem (consumed by realmoney_audit).
+                    set_subsystem(f"bot:{local_bot.strategy_type}:{local_bot.id}")
 
                     # Update timestamp BEFORE processing to prevent race condition
                     local_bot.last_signal_check = utcnow()

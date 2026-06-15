@@ -413,6 +413,7 @@
       ],
       "CoinbaseClient": [
         "__init__",
+        "_audit_order",
         "_request",
         "buy_eth_with_btc",
         "buy_with_usd",
@@ -2914,6 +2915,19 @@
       "_monitor_loop",
       "start_prop_guard_monitor",
       "stop_prop_guard_monitor"
+    ]
+  },
+  "backend/app/services/realmoney_audit.py": {
+    "classes": {},
+    "functions": [
+      "_ensure_handler",
+      "_extract_order_id",
+      "_extract_status",
+      "current_subsystem",
+      "record_event",
+      "record_order",
+      "set_subsystem",
+      "subsystem"
     ]
   },
   "backend/app/services/rebalance_monitor.py": {

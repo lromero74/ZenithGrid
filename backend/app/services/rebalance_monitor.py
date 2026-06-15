@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, Position
 from app.precision import format_base_amount
+from app.services.realmoney_audit import set_subsystem
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
 
@@ -879,6 +880,7 @@ class RebalanceMonitor(SessionMakerMixin):
     async def _execute_trade(self, client, account, trade: dict, prices: dict):
         """Execute a single rebalance trade."""
         try:
+            set_subsystem("rebalancer")
             product_id = trade["product_id"]
             side = trade["side"]
             usd_amount = trade["usd_amount"]
@@ -1122,6 +1124,7 @@ class RebalanceMonitor(SessionMakerMixin):
         Returns list of executed sweep results.
         """
         try:
+            set_subsystem("dust_sweep")
             # Get all balances (paper or live)
             if account.is_paper_trading:
                 all_balances = (
