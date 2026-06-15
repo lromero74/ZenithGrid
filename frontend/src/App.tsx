@@ -156,8 +156,9 @@ function AppContent() {
       <header className="sticky top-0 z-50 bg-slate-800">
         <div className={`border-b border-slate-700 bg-gradient-to-r ${headerGradient} transition-colors duration-1000`}>
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
-            {/* Desktop layout */}
-            <div className="hidden sm:flex flex-row items-center justify-between">
+            {/* Desktop layout (full multi-column header only once it fits — below
+                lg the dense desktop header overflows landscape phones/tablets) */}
+            <div className="hidden lg:flex flex-row items-center justify-between">
               <div className="flex items-center space-x-3">
                 <Truck className="w-8 h-8 text-theme-primary" />
                 <div>
@@ -281,8 +282,8 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Mobile layout */}
-            <div className="flex sm:hidden flex-col gap-2">
+            {/* Compact layout — phones and landscape phones / small tablets (< lg) */}
+            <div className="flex lg:hidden flex-col gap-2">
               {/* Row 1: Brand left, Account Value right */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -394,60 +395,60 @@ function AppContent() {
         {/* Navigation */}
         <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex justify-around sm:justify-start sm:space-x-1 sm:min-w-0">
+          <div className="flex justify-around lg:justify-start lg:space-x-1 lg:min-w-0">
             {/* Account-Specific Pages */}
             <Link
               to="/"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Activity className="w-4 h-4" />
-                <span className="hidden sm:inline">Dashboard</span>
+                <span className="hidden lg:inline">Dashboard</span>
               </div>
             </Link>
             <Link
               to="/bots"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/bots'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Bot className="w-4 h-4" />
-                <span className="hidden sm:inline">Bots</span>
+                <span className="hidden lg:inline">Bots</span>
               </div>
             </Link>
             <Link
               to="/positions"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/positions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <TrendingUp className="w-4 h-4" />
-                <span className="hidden sm:inline">Positions</span>
+                <span className="hidden lg:inline">Positions</span>
               </div>
             </Link>
             <Link
               to="/history"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base relative ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base relative ${
                 location.pathname === '/history'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <History className="w-4 h-4" />
-                <span className="hidden sm:inline">History</span>
+                <span className="hidden lg:inline">History</span>
                 {newHistoryItemsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 sm:relative sm:top-0 sm:right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 lg:relative lg:top-0 lg:right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                     {newHistoryItemsCount > 9 ? '9+' : newHistoryItemsCount}
                   </span>
                 )}
@@ -455,93 +456,93 @@ function AppContent() {
             </Link>
             <Link
               to="/portfolio"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/portfolio'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Wallet className="w-4 h-4" />
-                <span className="hidden sm:inline">Portfolio</span>
+                <span className="hidden lg:inline">Portfolio</span>
               </div>
             </Link>
 
             {/* Separator */}
-            <div className="hidden sm:flex items-center px-1">
+            <div className="hidden lg:flex items-center px-1">
               <div className="h-6 w-px bg-slate-600" />
             </div>
 
             {/* General Pages */}
             <Link
               to="/news"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/news'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Newspaper className="w-4 h-4" />
-                <span className="hidden sm:inline">News</span>
+                <span className="hidden lg:inline">News</span>
               </div>
             </Link>
             <Link
               to="/charts"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/charts'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <BarChart3 className="w-4 h-4" />
-                <span className="hidden sm:inline">Charts</span>
+                <span className="hidden lg:inline">Charts</span>
               </div>
             </Link>
             <Link
               to="/reports"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/reports'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Reports</span>
+                <span className="hidden lg:inline">Reports</span>
               </div>
             </Link>
 
             {/* Separator */}
-            <div className="hidden sm:flex items-center px-1">
+            <div className="hidden lg:flex items-center px-1">
               <div className="h-6 w-px bg-slate-600" />
             </div>
 
             <Link
               to="/games"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname.startsWith('/games')
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Gamepad2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Games</span>
+                <span className="hidden lg:inline">Games</span>
               </div>
             </Link>
             <Link
               to="/chat"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/chat'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2 relative">
+              <div className="flex items-center space-x-1 lg:space-x-2 relative">
                 <MessageSquare className="w-4 h-4" />
-                <span className="hidden sm:inline">Chat</span>
+                <span className="hidden lg:inline">Chat</span>
                 {totalChatUnread > 0 && (
                   <span className="absolute -top-1.5 -right-2 bg-blue-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
                     {totalChatUnread > 99 ? '99+' : totalChatUnread}
@@ -551,48 +552,48 @@ function AppContent() {
             </Link>
             <Link
               to="/social"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/social'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <Users className="w-4 h-4" />
-                <span className="hidden sm:inline">Social</span>
+                <span className="hidden lg:inline">Social</span>
               </div>
             </Link>
 
             {/* Separator */}
-            <div className="hidden sm:flex items-center px-1">
+            <div className="hidden lg:flex items-center px-1">
               <div className="h-6 w-px bg-slate-600" />
             </div>
 
             <Link
               to="/settings"
-              className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                 location.pathname === '/settings'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 <SettingsIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
+                <span className="hidden lg:inline">Settings</span>
               </div>
             </Link>
             {isAdmin && (
               <Link
                 to="/admin"
-                className={`px-0 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                className={`px-0 lg:px-4 py-3 font-medium transition-colors text-sm lg:text-base ${
                   location.pathname === '/admin'
                     ? 'text-yellow-400 border-b-2 border-yellow-400'
                     : 'text-slate-400 hover:text-yellow-300'
                 }`}
               >
-                <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="flex items-center space-x-1 lg:space-x-2">
                   <Shield className="w-4 h-4" />
-                  <span className="hidden sm:inline">Admin</span>
+                  <span className="hidden lg:inline">Admin</span>
                 </div>
               </Link>
             )}

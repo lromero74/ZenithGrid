@@ -293,11 +293,12 @@ export default function Positions() {
     })
   }, [openPositions, groupBy, getGroupKey])
 
-  // Tiling column count for the grid view: 1 below lg, 2 up to 2xl, 3 beyond.
-  // Table and card-list modes are always a single column.
-  const isLg = useMediaQuery('(min-width: 1024px)')
-  const is2xl = useMediaQuery('(min-width: 1536px)')
-  const columns = viewMode === 'grid' ? (is2xl ? 3 : isLg ? 2 : 1) : 1
+  // Tiling column count for the grid view: 1 on portrait phones, 2 from md
+  // (landscape phones / small tablets), 3 from xl. Table and card-list modes
+  // are always a single column.
+  const isMd = useMediaQuery('(min-width: 768px)')
+  const isXl = useMediaQuery('(min-width: 1280px)')
+  const columns = viewMode === 'grid' ? (isXl ? 3 : isMd ? 2 : 1) : 1
 
   // Pack the position rows into virtualized visual rows (group headers occupy
   // their own row; cards tile `columns`-wide). One vertical column of
