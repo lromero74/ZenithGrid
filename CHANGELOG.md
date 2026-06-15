@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.2.0] - 2026-06-15
+
+### Changed
+- Made every trading-record foreign key declare its delete behavior explicitly and consistently, so deleting a parent row can never silently erase financial history. Trades, positions, pending orders, and order-history links now refuse the delete (RESTRICT); analysis records (signals, AI-opinion logs) keep their row and simply unlink when the thing they referenced is removed (SET NULL); derived value snapshots still clean themselves up (CASCADE). A guard test now fails if any future foreign key is added without the correct policy.
+
+### Fixed
+- Corrected the fresh-install database script, which had defined the trades→position link to cascade-delete — meaning a position delete would have wiped its trade ledger. It now uses the same protective RESTRICT policy as every other install path.
+
 ## [v3.1.0] - 2026-06-15
 
 ### Added

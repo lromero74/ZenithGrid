@@ -437,9 +437,11 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # Link to bot (nullable for backwards compatibility)
-    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=True, index=True)
+    # RESTRICT: a bot with positions can't be deleted out from under its financial history.
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="RESTRICT"), nullable=True, index=True)
     # Link to account (for filtering)
-    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True, index=True)
+    # RESTRICT: same — an account's positions are financial records, not disposable.
+    account_id = Column(Integer, ForeignKey("trading.accounts.id", ondelete="RESTRICT"), nullable=True, index=True)
     # Owner (for user-specific deal numbers)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=True, index=True)
     # Sequential attempt number (ALL positions: success + failed)
@@ -589,7 +591,8 @@ class Trade(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("trading.positions.id"), index=True)
+    # RESTRICT: trades are the ledger — deleting a position can't drop them silently.
+    position_id = Column(Integer, ForeignKey("trading.positions.id", ondelete="RESTRICT"), index=True)
     timestamp = Column(DateTime, default=utcnow)
 
     side = Column(String)  # buy, sell
@@ -618,7 +621,9 @@ class Signal(Base):
     __table_args__ = {'schema': 'trading'}
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True)
+    # SET NULL: a signal is analysis history — keep the row, just unlink it if the
+    # position it referenced is deleted.
+    position_id = Column(Integer, ForeignKey("trading.positions.id", ondelete="SET NULL"), nullable=True)
     timestamp = Column(DateTime, default=utcnow)
 
     signal_type = Column(String)  # macd_cross_up, macd_cross_down
@@ -647,8 +652,10 @@ class PendingOrder(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=False)
-    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=False)
+    # RESTRICT on both: a pending order is an open financial commitment — never let a
+    # parent delete cascade it away unnoticed.
+    position_id = Column(Integer, ForeignKey("trading.positions.id", ondelete="RESTRICT"), nullable=False)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="RESTRICT"), nullable=False)
 
     # Order details
     order_id = Column(String, nullable=False, unique=True, index=True)  # Coinbase order ID
@@ -711,8 +718,12 @@ class OrderHistory(Base):
     timestamp = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     # Bot and position references
-    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=False)
-    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True)  # NULL for failed base orders
+    # RESTRICT on bot_id (order history is an audit ledger); SET NULL on position_id —
+    # the audit row outlives the position, just unlinked.
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="RESTRICT"), nullable=False)
+    position_id = Column(
+        Integer, ForeignKey("trading.positions.id", ondelete="SET NULL"), nullable=True
+    )  # NULL for failed base orders
 
     # Order details
     product_id = Column(String, nullable=False)  # e.g., "ETH-BTC"
@@ -754,9 +765,14 @@ class AIOpinionLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
-    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=True)
-    bot_id = Column(Integer, ForeignKey("trading.bots.id"), nullable=True)
-    position_id = Column(Integer, ForeignKey("trading.positions.id"), nullable=True, index=True)
+    # SET NULL on all three: an AI-opinion row is analysis history. When the
+    # account/bot/position it referenced is deleted, keep the row (for win-rate
+    # backtesting) but unlink it rather than cascading it away.
+    account_id = Column(Integer, ForeignKey("trading.accounts.id", ondelete="SET NULL"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="SET NULL"), nullable=True)
+    position_id = Column(
+        Integer, ForeignKey("trading.positions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     product_id = Column(String, nullable=False, index=True)
     is_sell_check = Column(Boolean, nullable=False, default=False)
