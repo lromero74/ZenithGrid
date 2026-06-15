@@ -209,9 +209,18 @@ def _build_bucket_warnings(
         return warnings
 
     if getattr(account, "rebalance_enabled", False):
+        # The rebalancer can only starve the speculative bucket if it moves USD
+        # OUT into non-USD targets. With a ~100% USD target it only converts INTO
+        # USD and can never drain cash, so the floor warning doesn't apply.
+        non_usd_target = sum(
+            float(getattr(account, f"rebalance_target_{c}_pct", 0.0) or 0.0)
+            for c in ("btc", "eth", "usdc", "usdt")
+        )
+        rebalancer_can_drain_usd = non_usd_target > 0
+
         min_floor = float(getattr(account, "min_balance_usd", 0.0) or 0.0)
         required = per_slot_budget_usd * REBALANCE_FLOOR_SAFETY_MULTIPLE
-        if min_floor < required:
+        if rebalancer_can_drain_usd and min_floor < required:
             warnings.append({
                 "code": "rebalance_floor_too_low",
                 "message": (
