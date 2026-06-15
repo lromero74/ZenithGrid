@@ -259,7 +259,7 @@ function AppContent() {
                         {totalBtcValue.toFixed(6)} BTC
                       </p>
                       <p className="text-sm text-green-400">
-                        ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       {accountValueSummary.is_stale && (
                         <p className="text-[11px] text-slate-500">
@@ -321,7 +321,7 @@ function AppContent() {
                         {totalBtcValue.toFixed(6)} BTC
                       </p>
                       <p className="text-xs text-green-400 leading-tight">
-                        ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       {accountValueSummary.is_stale && (
                         <p className="text-[9px] text-slate-500 leading-tight">
