@@ -250,6 +250,8 @@ async def _execute_panic_sell(
     user_id: int,
 ) -> None:
     """Execute all phases of the panic sell on the provided DB session."""
+    from app.services.realmoney_audit import set_subsystem
+    set_subsystem("panic_sell")
     errors: List[str] = []
 
     # ── Phase 1: Stop all active bots ──────────────────────────────────────

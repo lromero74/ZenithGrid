@@ -319,11 +319,28 @@ class CoinbaseClient:
 
     # ===== Order Methods =====
 
+    def _audit_order(self, result, *, side, product_id, order_type,
+                     size=None, funds=None, limit_price=None):
+        """Record a real-money order to the audit trail (never raises)."""
+        try:
+            from app.services.realmoney_audit import record_order
+            record_order(
+                account_id=self.account_id, side=side, product_id=product_id,
+                order_type=order_type, size=size, funds=funds,
+                limit_price=limit_price, result=result,
+            )
+        except Exception:
+            logger.debug("real-money audit failed for %s %s", side, product_id,
+                         exc_info=True)
+        return result
+
     async def create_market_order(
         self, product_id: str, side: str, size: Optional[str] = None, funds: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a market order"""
-        return await order_api.create_market_order(self._request, product_id, side, size, funds)
+        result = await order_api.create_market_order(self._request, product_id, side, size, funds)
+        return self._audit_order(result, side=side, product_id=product_id,
+                                 order_type="market", size=size, funds=funds)
 
     async def create_limit_order(
         self,
@@ -336,9 +353,12 @@ class CoinbaseClient:
         end_time: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Create a limit order with configurable time-in-force (GTC or GTD)"""
-        return await order_api.create_limit_order(
+        result = await order_api.create_limit_order(
             self._request, product_id, side, limit_price, size, funds, time_in_force, end_time
         )
+        return self._audit_order(result, side=side, product_id=product_id,
+                                 order_type="limit", size=size, funds=funds,
+                                 limit_price=limit_price)
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
         """Get order details"""
@@ -403,19 +423,27 @@ class CoinbaseClient:
 
     async def buy_eth_with_btc(self, btc_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Buy crypto with specified amount of BTC"""
-        return await order_api.buy_eth_with_btc(self._request, btc_amount, product_id)
+        result = await order_api.buy_eth_with_btc(self._request, btc_amount, product_id)
+        return self._audit_order(result, side="BUY", product_id=product_id,
+                                 order_type="market", funds=btc_amount)
 
     async def sell_eth_for_btc(self, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Sell crypto for BTC"""
-        return await order_api.sell_eth_for_btc(self._request, eth_amount, product_id)
+        result = await order_api.sell_eth_for_btc(self._request, eth_amount, product_id)
+        return self._audit_order(result, side="SELL", product_id=product_id,
+                                 order_type="market", size=eth_amount)
 
     async def buy_with_usd(self, usd_amount: float, product_id: str) -> Dict[str, Any]:
         """Buy crypto with specified amount of USD"""
-        return await order_api.buy_with_usd(self._request, usd_amount, product_id)
+        result = await order_api.buy_with_usd(self._request, usd_amount, product_id)
+        return self._audit_order(result, side="BUY", product_id=product_id,
+                                 order_type="market", funds=usd_amount)
 
     async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
         """Sell crypto for USD"""
-        return await order_api.sell_for_usd(self._request, base_amount, product_id)
+        result = await order_api.sell_for_usd(self._request, base_amount, product_id)
+        return self._audit_order(result, side="SELL", product_id=product_id,
+                                 order_type="market", size=base_amount)
 
     async def convert_currency(
         self, from_currency: str, to_currency: str, amount: float
