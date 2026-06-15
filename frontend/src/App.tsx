@@ -13,11 +13,11 @@ import { ShadowModeBanner } from './components/sharing/ShadowModeBanner'
 import { PaperTradingToggle } from './components/account/PaperTradingToggle'
 import { AddAccountModal } from './components/account/AddAccountModal'
 import { LoadingSpinner } from './components/shared/LoadingSpinner'
-import { NotificationProvider, useNotifications } from './contexts/NotificationContext'
+import { NotificationProvider, useNotificationsOptional } from './contexts/NotificationContext'
 import { ConfirmProvider } from './contexts/ConfirmContext'
 import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
-import { AccountProvider, useAccount } from './contexts/AccountContext'
+import { AccountProvider, useAccount, useAccountOptional } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BrandProvider, useBrand } from './contexts/BrandContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -895,12 +895,18 @@ function App() {
   )
 }
 
-// Bridges the active account's paper status from AccountContext (a descendant
-// provider) up into NotificationContext, which can't consume it directly.
-function PaperNotificationBridge() {
-  const { selectedAccount } = useAccount()
-  const { setActiveAccountIsPaper } = useNotifications()
+// Bridges the active account's paper status into NotificationContext so it can
+// suppress paper notifications while a real account is selected. Uses optional
+// (non-throwing) context accessors so that if this is ever mounted in the wrong
+// place in the provider tree, the feature degrades silently instead of crashing
+// the whole app to a blank screen (regression guard for the v3.0.0 white-screen).
+export function PaperNotificationBridge() {
+  const account = useAccountOptional()
+  const notifications = useNotificationsOptional()
+  const selectedAccount = account?.selectedAccount ?? null
+  const setActiveAccountIsPaper = notifications?.setActiveAccountIsPaper
   useEffect(() => {
+    if (!setActiveAccountIsPaper) return
     setActiveAccountIsPaper(
       selectedAccount ? !!selectedAccount.is_paper_trading : null
     )
