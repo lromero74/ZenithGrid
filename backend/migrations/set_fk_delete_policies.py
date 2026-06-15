@@ -184,10 +184,12 @@ def run():
                 print(f"  {table}.{column}: already {target_rule}, skipping")
                 continue
 
-            note = _clean_orphans(conn, cur, table, column, parent, strategy)
-
+            # Drop NOT NULL *before* cleaning orphans — a "null" strategy can't set the
+            # column to NULL while the constraint is still in force.
             if (table, column) in DROP_NOT_NULL:
                 cur.execute(f"ALTER TABLE {SCHEMA}.{table} ALTER COLUMN {column} DROP NOT NULL")
+
+            note = _clean_orphans(conn, cur, table, column, parent, strategy)
 
             if name is not None:
                 cur.execute(f'ALTER TABLE {SCHEMA}.{table} DROP CONSTRAINT "{name}"')

@@ -13,12 +13,45 @@ live PostgreSQL schema with what these models declare.
 
 See CLAUDE.md → "Foreign-key delete policy & account purge".
 """
+import importlib.util
+import os
+import sys
+
 import pytest
 
 from app.models import (
     Trade, Position, PendingOrder, OrderHistory, Signal, AIOpinionLog,
 )
 from app.models.reporting import AccountValueSnapshot
+
+_MIGRATIONS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
+
+
+def _load_fk_migration():
+    """Load backend/migrations/set_fk_delete_policies.py.
+
+    pytest treats ``tests/migrations/`` as the ``migrations`` package (it has an
+    __init__.py), so ``from migrations.db_utils import …`` inside the migration would
+    look there. Register the REAL db_utils under that name first, then load the
+    migration by file path under a unique module name. (Same idiom as test_077.)
+    """
+    if "migrations.db_utils" not in sys.modules:
+        db_spec = importlib.util.spec_from_file_location(
+            "migrations.db_utils", os.path.join(_MIGRATIONS_DIR, "db_utils.py")
+        )
+        db_mod = importlib.util.module_from_spec(db_spec)
+        sys.modules["migrations.db_utils"] = db_mod
+        db_spec.loader.exec_module(db_mod)
+
+    spec = importlib.util.spec_from_file_location(
+        "fk_policy_migration", os.path.join(_MIGRATIONS_DIR, "set_fk_delete_policies.py")
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_FK_MIGRATION = _load_fk_migration()
 
 
 # (model, column_name, expected_ondelete, expected_referenced_table.column)
@@ -70,4 +103,39 @@ def test_set_null_fk_columns_are_nullable():
     for model, column, _, _ in SET_NULL_FKS:
         assert model.__table__.c[column].nullable, (
             f"{model.__name__}.{column} is SET NULL but not nullable"
+        )
+
+
+# --- migration / model parity -------------------------------------------------
+# The Postgres-aligning migration carries its own copy of the policy table; the
+# SQLite test env can't exercise its DDL, so these guards at least keep that copy
+# from drifting away from the models it's meant to mirror.
+
+_MODELS_BY_TABLE = {
+    m.__tablename__: m
+    for m in (Trade, Position, PendingOrder, OrderHistory, Signal, AIOpinionLog)
+}
+
+
+def test_migration_policy_table_matches_models():
+    for table, column, parent, target_rule, _strategy in _FK_MIGRATION.FK_POLICIES:
+        model = _MODELS_BY_TABLE[table]
+        fk = _foreign_key(model, column)
+        assert fk.ondelete == target_rule, (
+            f"migration declares {table}.{column} -> {target_rule}, "
+            f"but the model declares {fk.ondelete}"
+        )
+        assert fk.target_fullname == f"trading.{parent}.id", (
+            f"migration declares {table}.{column} -> trading.{parent}.id, "
+            f"but the model targets {fk.target_fullname}"
+        )
+
+
+def test_migration_drop_not_null_columns_are_nullable_in_model():
+    """A column the migration drops NOT NULL from must be nullable in the model,
+    or the two init paths would disagree on the column's nullability."""
+    for table, column in _FK_MIGRATION.DROP_NOT_NULL:
+        model = _MODELS_BY_TABLE[table]
+        assert model.__table__.c[column].nullable, (
+            f"migration drops NOT NULL on {table}.{column} but the model keeps it NOT NULL"
         )
