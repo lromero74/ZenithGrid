@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.169.2] - 2026-06-14
+
+### Fixed
+- The page can no longer be dragged sideways in portrait, exposing a blank strip on the right. A deal's price-bar edge labels could overhang past the screen edge and make the whole page scroll horizontally; that overflow is now clipped at the app level (without affecting the sticky header).
+
 ## [v2.169.1] - 2026-06-14
 
 ### Fixed

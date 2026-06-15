@@ -151,7 +151,11 @@ function AppContent() {
     <ConfirmProvider>
     <VideoPlayerProvider>
     <ArticleReaderProvider>
-    <div className="min-h-screen bg-slate-900 text-white">
+    {/* overflow-x-clip prevents sideways page scroll when an element bleeds past
+        the viewport (e.g. PriceBar edge labels overhang via translateX(-50%)).
+        `clip` (not `hidden`) keeps the sticky header working — it doesn't create
+        a scroll container the way overflow-x:hidden would. */}
+    <div className="min-h-screen bg-slate-900 text-white overflow-x-clip">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800">
         <div className={`border-b border-slate-700 bg-gradient-to-r ${headerGradient} transition-colors duration-1000`}>
