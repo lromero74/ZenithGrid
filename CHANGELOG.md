@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.169.1] - 2026-06-14
+
+### Fixed
+- Landscape phones now use the compact header and icon-only navigation instead of the dense desktop versions, which overflowed the screen — the header no longer spills past the edge, and the navigation bar no longer has to be side-scrolled to reach every tab. The full multi-column header and labeled tabs now appear once the screen is genuinely wide enough (≈1024px).
+- The Active Deals **Grid** view now tiles two cards across on a landscape phone or small tablet (previously it only tiled on a laptop-width screen and showed a single column on a phone), so the toggle's grid layout is honored on the screen sizes where it matters.
+
 ## [v2.169.0] - 2026-06-14
 
 ### Added
