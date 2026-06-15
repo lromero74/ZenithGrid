@@ -148,6 +148,7 @@ function AppContent() {
 
   return (
     <NotificationProvider>
+    <PaperNotificationBridge />
     <ConfirmProvider>
     <VideoPlayerProvider>
     <ArticleReaderProvider>
@@ -884,7 +885,6 @@ function App() {
   // Show main app content (AccountProvider here ensures accounts fetch only after auth)
   return (
     <AccountProvider>
-      <PaperNotificationBridge />
       {sessionExpiryCountdown !== null && sessionExpiryCountdown > 0 && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-red-600/95 text-white text-center py-2 px-4 text-sm font-medium backdrop-blur-sm">
           Session expires in {sessionExpiryCountdown}s — you will be logged out automatically
