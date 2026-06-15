@@ -13,7 +13,7 @@
     {
       "file": "pages/Positions.tsx",
       "route": "/positions",
-      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true \u2014 state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag. v2.164.10: secondary summary widgets now refresh every 2 minutes instead of every minute, while the main open-deals feed remains adaptive. v2.166.16: open-positions list is virtualized via VirtualizedPositionList (@tanstack/react-virtual, window scrolling, dynamic row measurement) so only visible PositionCards render at the 100-per-page setting; LightweightChartModal and DealChart (inside PositionCard) are code-split via React.lazy so the chart library loads only when a chart is opened."
+      "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds; supports grouping by category (renders group headers), client-side pagination (page size 10 or 100, prev/next controls, total filtered count), and category filter; Panic Sell button visible in top-right header when canWritePositions && openPositions > 0 && selectedAccount, opens PanicSellModal; inline slippage override confirm dialog shown when manual force-close returns slippageBlocked:true \u2014 state: showSlippageOverride, slippageOverrideWarning, slippageOverridePositionId; handler handleSlippageOverrideConfirm re-invokes force-close with override flag. v2.164.10: secondary summary widgets now refresh every 2 minutes instead of every minute, while the main open-deals feed remains adaptive. v2.166.16: open-positions list is virtualized via VirtualizedPositionList (@tanstack/react-virtual, window scrolling, dynamic row measurement) so only visible PositionCards render at the 100-per-page setting; LightweightChartModal and DealChart (inside PositionCard) are code-split via React.lazy so the chart library loads only when a chart is opened. Adds a 3-way view-mode toggle (Table / Cards / Grid) driven by usePositionFilters viewMode; Grid mode tiles PositionCards responsively at 1/2/3 columns (breakpoints resolved via useMediaQuery) using buildVisualRows from pages/positions/utils/visualRows.ts."
     },
     {
       "file": "pages/ClosedPositions.tsx",
@@ -154,7 +154,7 @@
       },
       {
         "file": "pages/positions/components/PositionCard.tsx",
-        "purpose": "Individual position display with P&L and actions; renders AIReasoningExpander for the position"
+        "purpose": "Individual position display with P&L and actions; renders AIReasoningExpander for the position. Accepts optional prop forceCardLayout?: boolean to force the rich card layout at all viewport widths (used when the card is tiled inside the deals grid view)."
       },
       {
         "file": "pages/positions/components/AIReasoningExpander.tsx",
@@ -685,6 +685,10 @@
         "purpose": "Detects CapsLock state via window keydown/keyup events using e.getModifierState('CapsLock'); returns boolean"
       },
       {
+        "file": "hooks/useMediaQuery.ts",
+        "purpose": "SSR/test-safe responsive media-query subscription: useMediaQuery(query: string) -> boolean; attaches a MediaQueryList change listener and returns a live boolean that matches the current viewport against the CSS media-query string. Used by Positions.tsx to determine the deals-grid column count."
+      },
+      {
         "file": "hooks/useAudio.ts",
         "purpose": "Web Audio API for order fill notification sounds"
       },
@@ -745,7 +749,7 @@
       "positions": [
         {
           "file": "pages/positions/hooks/usePositionFilters.ts",
-          "purpose": "Filter and search positions; manages category filter, groupBy state, client-side pagination (pageSize 10/100, currentPage), and uniqueCategories computed dynamically from position data"
+          "purpose": "Filter and search positions; manages category filter, groupBy state, client-side pagination (pageSize 10/100, currentPage), and uniqueCategories computed dynamically from position data. Also manages viewMode ('table' | 'list' | 'grid') + setViewMode, persisted to localStorage key zenith-positions-view-mode; exports the DealsViewMode type."
         },
         {
           "file": "pages/positions/hooks/usePositionMutations.ts",
@@ -1020,6 +1024,10 @@
     {
       "file": "utils/chartLib.ts",
       "purpose": "v2.166.16: loadChartLib() \u2014 shared single-flight dynamic import of lightweight-charts; all chart hooks/components that defer the library go through this so it is fetched at most once"
+    },
+    {
+      "file": "pages/positions/utils/visualRows.ts",
+      "purpose": "buildVisualRows(rows, columns): packs position rows into virtualized 'visual rows' for the deals grid view \u2014 group-header rows span the full width (columns=1), card rows are bundled columns-wide; consumed by Positions.tsx grid mode and VirtualizedPositionList."
     }
   ]
 }
