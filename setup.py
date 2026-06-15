@@ -1272,8 +1272,8 @@ def initialize_database(project_root, db_config=None):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS positions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                bot_id INTEGER REFERENCES bots(id),
-                account_id INTEGER REFERENCES accounts(id),
+                bot_id INTEGER REFERENCES bots(id) ON DELETE RESTRICT,
+                account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
                 user_id INTEGER REFERENCES users(id),
                 user_deal_number INTEGER,
                 product_id TEXT DEFAULT 'ETH-BTC',
@@ -1340,7 +1340,7 @@ def initialize_database(project_root, db_config=None):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id INTEGER REFERENCES positions(id) ON DELETE CASCADE,
+                position_id INTEGER REFERENCES positions(id) ON DELETE RESTRICT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 side TEXT,
                 quote_amount REAL,
@@ -1358,7 +1358,7 @@ def initialize_database(project_root, db_config=None):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS signals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id INTEGER REFERENCES positions(id),
+                position_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 signal_type TEXT,
                 macd_value REAL,
@@ -1421,9 +1421,9 @@ def initialize_database(project_root, db_config=None):
             CREATE TABLE IF NOT EXISTS ai_opinion_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                account_id INTEGER,
-                bot_id INTEGER,
-                position_id INTEGER,
+                account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+                bot_id INTEGER REFERENCES bots(id) ON DELETE SET NULL,
+                position_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
                 product_id VARCHAR(40) NOT NULL,
                 is_sell_check BOOLEAN NOT NULL DEFAULT 0,
                 signal VARCHAR(10) NOT NULL,
@@ -1501,8 +1501,8 @@ def initialize_database(project_root, db_config=None):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS pending_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id INTEGER NOT NULL REFERENCES positions(id),
-                bot_id INTEGER NOT NULL REFERENCES bots(id),
+                position_id INTEGER NOT NULL REFERENCES positions(id) ON DELETE RESTRICT,
+                bot_id INTEGER NOT NULL REFERENCES bots(id) ON DELETE RESTRICT,
                 order_id TEXT NOT NULL UNIQUE,
                 product_id TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -1534,8 +1534,8 @@ def initialize_database(project_root, db_config=None):
             CREATE TABLE IF NOT EXISTS order_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                bot_id INTEGER NOT NULL REFERENCES bots(id),
-                position_id INTEGER REFERENCES positions(id),
+                bot_id INTEGER NOT NULL REFERENCES bots(id) ON DELETE RESTRICT,
+                position_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
                 product_id TEXT NOT NULL,
                 side TEXT NOT NULL,
                 order_type TEXT NOT NULL,

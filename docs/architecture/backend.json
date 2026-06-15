@@ -2337,7 +2337,7 @@
     }
   ],
   "migrations": {
-    "count": 96,
+    "count": 97,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2439,7 +2439,8 @@
       "084_speculative_weights_proposals.py",
       "085_more_performance_indexes.py",
       "086_trade_dca_levels.py",
-      "087_positions_pnl_index.py"
+      "087_positions_pnl_index.py",
+      "set_fk_delete_policies.py"
     ]
   }
 }
