@@ -717,10 +717,9 @@ class OrderHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=utcnow, nullable=False, index=True)
 
-    # Bot and position references
-    # RESTRICT on bot_id (order history is an audit ledger); SET NULL on position_id —
-    # the audit row outlives the position, just unlinked.
-    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="RESTRICT"), nullable=False)
+    # Bot and position references — both SET NULL: an audit row outlives the bot and
+    # position it referenced, just unlinked (order history is a permanent audit ledger).
+    bot_id = Column(Integer, ForeignKey("trading.bots.id", ondelete="SET NULL"), nullable=True)
     position_id = Column(
         Integer, ForeignKey("trading.positions.id", ondelete="SET NULL"), nullable=True
     )  # NULL for failed base orders

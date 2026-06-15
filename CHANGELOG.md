@@ -5,10 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.2.1] - 2026-06-15
+
+### Changed
+- Order-history rows are now preserved when the bot that created them is deleted (the link is unlinked rather than the row blocking the delete) — an order audit trail should outlive the bot it belonged to. This makes both order-history links behave the same way.
+
+### Fixed
+- Applying the new foreign-key policy to the live database also cleans up years of accumulated orphaned rows left over from before these rules were enforced: dead (already-cancelled) order references are removed, stranded audit/analysis rows are unlinked from the records they could no longer reach, and millions of context-less leftover signal rows (whose position was long gone) are cleared out. The cleanup refuses to run and stops safely if it ever finds an orphaned order that isn't already finished, so a live exchange order can never be dropped.
+
 ## [v3.2.0] - 2026-06-15
 
 ### Changed
-- Made every trading-record foreign key declare its delete behavior explicitly and consistently, so deleting a parent row can never silently erase financial history. Trades, positions, pending orders, and order-history links now refuse the delete (RESTRICT); analysis records (signals, AI-opinion logs) keep their row and simply unlink when the thing they referenced is removed (SET NULL); derived value snapshots still clean themselves up (CASCADE). A guard test now fails if any future foreign key is added without the correct policy.
+- Made every trading-record foreign key declare its delete behavior explicitly and consistently, so deleting a parent row can never silently erase financial history. Trades, positions, and pending orders now refuse the delete (RESTRICT); analysis and audit records (signals, order history, AI-opinion logs) keep their row and simply unlink when the thing they referenced is removed (SET NULL); derived value snapshots still clean themselves up (CASCADE). A guard test now fails if any future foreign key is added without the correct policy.
 
 ### Fixed
 - Corrected the fresh-install database script, which had defined the trades→position link to cascade-delete — meaning a position delete would have wiped its trade ledger. It now uses the same protective RESTRICT policy as every other install path.

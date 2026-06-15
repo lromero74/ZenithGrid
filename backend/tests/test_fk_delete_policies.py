@@ -28,12 +28,12 @@ RESTRICT_FKS = [
     (Position, "bot_id", "RESTRICT", "trading.bots.id"),
     (PendingOrder, "position_id", "RESTRICT", "trading.positions.id"),
     (PendingOrder, "bot_id", "RESTRICT", "trading.bots.id"),
-    (OrderHistory, "bot_id", "RESTRICT", "trading.bots.id"),
 ]
 
 SET_NULL_FKS = [
     (Signal, "position_id", "SET NULL", "trading.positions.id"),
     (OrderHistory, "position_id", "SET NULL", "trading.positions.id"),
+    (OrderHistory, "bot_id", "SET NULL", "trading.bots.id"),
     (AIOpinionLog, "account_id", "SET NULL", "trading.accounts.id"),
     (AIOpinionLog, "bot_id", "SET NULL", "trading.bots.id"),
     (AIOpinionLog, "position_id", "SET NULL", "trading.positions.id"),

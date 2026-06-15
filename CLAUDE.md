@@ -191,16 +191,19 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 
 ### Foreign-key delete policy & account purge
 
-Trading-record tables (`trades`, `positions`, `pending_orders`, `order_history`)
-use **RESTRICT** foreign keys: a parent (`account`/`position`/`bot`) delete must
-never silently cascade away financial history. Nullable analysis-link FKs
-(`signals.position_id`, `order_history.position_id`, `ai_opinion_log.*`) are
-intended to be **SET NULL** (keep the analysis row, unlinked, when a position is
-deleted). Derived data (`account_value_snapshots.account_id`) is **CASCADE**.
-*(Status: the policy is intentional and documented here; making every FK
-`ondelete` explicit in the models + a one-time Postgres migration to align the
-live DB is a planned follow-up — until then several FKs are still at the
-implicit default, which is RESTRICT-equivalent.)*
+Hard financial-record FKs use **RESTRICT**: `trades.position_id`,
+`positions.account_id`, `positions.bot_id`, `pending_orders.position_id`,
+`pending_orders.bot_id`. A parent (`account`/`position`/`bot`) delete must never
+silently cascade away financial history. Analysis-/audit-link FKs are **SET NULL**
+(keep the row, just unlinked): `signals.position_id`, **both** `order_history`
+links (`bot_id` and `position_id` — an audit row outlives the bot/position it
+referenced), and `ai_opinion_log.{account_id,bot_id,position_id}`. Derived data
+(`account_value_snapshots.account_id`) is **CASCADE**. *(Status: enforced as of
+v3.2.x — every FK declares its `ondelete` explicitly in the models, `setup.py`
+matches, and the introspection guard `backend/tests/test_fk_delete_policies.py`
+fails if a new FK omits/misdeclares its policy. The live PostgreSQL schema is
+aligned by the idempotent migration `backend/migrations/set_fk_delete_policies.py`,
+which also one-time-cleans the pre-enforcement orphan rows.)*
 
 Because of RESTRICT, you can't just `DELETE FROM accounts`/`positions` to wipe an
 account — children must go first, in FK-safe order. That order lives in ONE place:
