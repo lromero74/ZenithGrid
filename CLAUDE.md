@@ -135,8 +135,15 @@ git checkout -b feature/my-feature    # Branch from main
 # Version bumps
 # Patch (X.Y.Z+1): bug fixes, code quality
 # Minor (X.Y+1.0): new features, new endpoints, new UI
-# Major (X+1.0.0): breaking changes (rare, user specifies)
+# Major (X+1.0.0): breaking changes, OR the minor would exceed 99 (see below)
 ```
+
+**Minor rolls to major at 100 (policy set 2026-06-15).** The minor number caps at
+99: when a new feature would push the minor past 99, bump the major and reset minor
+to 0 instead. So after `v2.170.0` the next release is **`v3.0.0`** (we don't keep
+climbing v2.171, v2.172, …), and thereafter every 100 minors rolls the major
+(`v3.99.x` → `v4.0.0`). Patch increments are unaffected. Major bumps therefore no
+longer imply a breaking change on this project — they're just the odometer rolling.
 
 **Repo hygiene**: Keep tidy — local AND remote. Delete merged branches. Don't leave loose files in the tree or commit `.bak`/`.fixed` copies (git history is the backup). Script locations:
 - `scripts/` (root, **tracked**) — permanent, shared tooling worth committing.

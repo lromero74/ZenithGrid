@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.0] - 2026-06-15
+
+### Added
+- A notification preference (Settings → Notifications) to **hide paper-trading trade pop-ups while a real account is selected**. When you're focused on a real account, paper-account trade notifications (and their sounds) are muted; switch back to a paper account and they reappear. Off by default.
+
+### Changed
+- Version numbering: the minor number now caps at 99 and rolls the major instead (so this release is v3.0.0, not v2.171.0). A major bump on this project no longer implies a breaking change.
+
 ## [v2.170.0] - 2026-06-15
 
 ### Added

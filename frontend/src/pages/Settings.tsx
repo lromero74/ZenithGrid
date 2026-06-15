@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect, useCallback } from 'react'
-import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail, Smartphone, Palette } from 'lucide-react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail, Smartphone, Palette, Bell } from 'lucide-react'
 import { AccountsManagement } from '../components/account/AccountsManagement'
 import { PaperTradingManager } from '../components/account/PaperTradingManager'
 import { AddAccountModal } from '../components/account/AddAccountModal'
@@ -24,9 +24,9 @@ import { useCapsLock } from '../hooks/useCapsLock'
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
-  const { accounts } = useAccount()
+  const { accounts, selectedAccount } = useAccount()
   const { theme, toggleTheme } = useTheme()
-  const { addToast } = useNotifications()
+  const { addToast, suppressPaperWhenReal, setSuppressPaperWhenReal } = useNotifications()
   const isAdmin = useIsAdmin()
 
   // Speculative calibration link handlers — runs once on mount.
@@ -472,6 +472,41 @@ export default function Settings() {
             >
               Classic Blue
             </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Notifications Section */}
+      <div className="card p-6">
+        <div className="flex items-center space-x-3 mb-6">
+          <Bell className="w-6 h-6 text-cyan-400" />
+          <h3 className="text-xl font-semibold">Notifications</h3>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="pr-4">
+            <p className="text-sm font-medium text-white">Hide paper-trading notifications on real accounts</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              When a real (non-paper) account is selected, suppress trade pop-ups from paper accounts.
+              {selectedAccount?.is_paper_trading
+                ? ' You’re on a paper account now, so paper notifications still show.'
+                : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={suppressPaperWhenReal}
+            onClick={() => setSuppressPaperWhenReal(!suppressPaperWhenReal)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              suppressPaperWhenReal ? 'bg-cyan-600' : 'bg-slate-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                suppressPaperWhenReal ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
           </button>
         </div>
       </div>
