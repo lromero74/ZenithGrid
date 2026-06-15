@@ -189,6 +189,28 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 - Use `os.path.dirname(__file__)` for DB paths (not hardcoded) — portability for other users
 - **Always back up before migrating**, always stop services first
 
+### Foreign-key delete policy & account purge
+
+Trading-record tables (`trades`, `positions`, `pending_orders`, `order_history`)
+use **RESTRICT** foreign keys: a parent (`account`/`position`/`bot`) delete must
+never silently cascade away financial history. Nullable analysis-link FKs
+(`signals.position_id`, `order_history.position_id`, `ai_opinion_log.*`) are
+intended to be **SET NULL** (keep the analysis row, unlinked, when a position is
+deleted). Derived data (`account_value_snapshots.account_id`) is **CASCADE**.
+*(Status: the policy is intentional and documented here; making every FK
+`ondelete` explicit in the models + a one-time Postgres migration to align the
+live DB is a planned follow-up — until then several FKs are still at the
+implicit default, which is RESTRICT-equivalent.)*
+
+Because of RESTRICT, you can't just `DELETE FROM accounts`/`positions` to wipe an
+account — children must go first, in FK-safe order. That order lives in ONE place:
+`app.services.account_purge.purge_account_history(db, account_id)` (single source
+of truth; deletes trades → signals → pending_orders → order_history →
+ai_opinion_log → snapshots → positions, in one transaction; preserves the account
++ bots). Run it via `scripts/purge_account.py <id>` (dry-run) / `--yes` (delete).
+It does NOT sell holdings — liquidate first if you want the wallet flat. Always
+`pg_dump -Fc` before purging prod.
+
 ## Environment Detection
 
 **If on the AWS Lightsail prod instance** (`zenithgrid`, us-east-1, public IP `52.87.130.244`, internal hostname like `ip-172-26-x-x`): You are ON the production instance.

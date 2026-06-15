@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.1.0] - 2026-06-15
+
+### Added
+- A single, tested account-purge path (`app.services.account_purge.purge_account_history` + `scripts/purge_account.py`) that wipes one account's trade/order/position/value history in the correct foreign-key order, in one transaction, while preserving the account and its bots. Replaces ad-hoc reset scripts. Documented the trading-record foreign-key delete policy (RESTRICT on financial tables, SET NULL on analysis links, CASCADE on derived snapshots).
+
 ## [v3.0.2] - 2026-06-15
 
 ### Changed
