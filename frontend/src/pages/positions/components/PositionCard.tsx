@@ -44,6 +44,12 @@ interface PositionCardProps {
   onRefetch: () => void
   onEditBot?: (bot: Bot) => void
   canWrite?: boolean
+  /**
+   * Force the rich "card" layout at all widths instead of the responsive
+   * table row. Used by the deals list's card-list and tiled-grid view modes,
+   * where the sortable 12-column table layout would not fit a tiled cell.
+   */
+  forceCardLayout?: boolean
 }
 
 export const PositionCard = memo(function PositionCard({
@@ -67,7 +73,12 @@ export const PositionCard = memo(function PositionCard({
   onRefetch,
   onEditBot,
   canWrite = true,
+  forceCardLayout = false,
 }: PositionCardProps) {
+  // Collapsed-row layout classes. In card mode the `sm:` table upgrades are
+  // dropped so the rich two-column card renders at every width; in table mode
+  // the existing responsive (mobile card → wide 12-col table) behavior stays.
+  const cl = (cardLayout: string, tableLayout: string) => (forceCardLayout ? cardLayout : tableLayout)
   const confirm = useConfirm()
   const { addToast } = useNotifications()
   const queryClient = useQueryClient()
@@ -131,9 +142,9 @@ export const PositionCard = memo(function PositionCard({
         className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
         onClick={() => onTogglePosition(position.id)}
       >
-        <div className="grid grid-cols-2 sm:grid-cols-12 gap-4 items-start text-sm">
+        <div className={`grid ${cl('grid-cols-2', 'grid-cols-2 sm:grid-cols-12')} gap-4 items-start text-sm`}>
           {/* Column 1: Bot Info + Strategy (2 cols) */}
-          <div className="col-span-1 sm:col-span-2">
+          <div className={cl('col-span-1', 'col-span-1 sm:col-span-2')}>
             <div className="flex items-center gap-2 mb-1">
               {/* Bot name with dropdown menu */}
               <div className="relative" ref={botMenuRef}>
@@ -215,7 +226,7 @@ export const PositionCard = memo(function PositionCard({
           </div>
 
           {/* Column 2: Pair + Exchange (1.5 cols) */}
-          <div className="col-span-1 sm:col-span-2 flex items-start gap-2">
+          <div className={`${cl('col-span-1', 'col-span-1 sm:col-span-2')} flex items-start gap-2`}>
             <CoinIcon
               symbol={position.product_id?.split('-')[0] || 'BTC'}
               size="sm"
@@ -317,7 +328,7 @@ export const PositionCard = memo(function PositionCard({
           </div>
 
           {/* Column 3: uPnL + Price Bar (4 cols) */}
-          <div className="col-span-2 sm:col-span-4">
+          <div className={cl('col-span-2', 'col-span-2 sm:col-span-4')}>
             <PriceBar
               position={position}
               currentPrice={currentPrice || position.average_buy_price}
@@ -327,8 +338,8 @@ export const PositionCard = memo(function PositionCard({
             />
           </div>
 
-          {/* Column 4: Volume (2 cols) - hidden on mobile */}
-          <div className="hidden sm:block col-span-2">
+          {/* Column 4: Volume (2 cols) - hidden on mobile / in card layout */}
+          <div className={cl('hidden', 'hidden sm:block col-span-2')}>
             <div className="text-[10px] space-y-0.5">
               <div className="text-white">
                 {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}
@@ -347,8 +358,8 @@ export const PositionCard = memo(function PositionCard({
             </div>
           </div>
 
-          {/* Column 5: Avg. O (Averaging Orders) (1 col) - hidden on mobile */}
-          <div className="hidden sm:block col-span-1">
+          {/* Column 5: Avg. O (Averaging Orders) (1 col) - hidden on mobile / in card layout */}
+          <div className={cl('hidden', 'hidden sm:block col-span-1')}>
             <div className="text-[10px] space-y-0.5">
               <div className="text-slate-400">
                 Completed: {(() => {
@@ -379,8 +390,8 @@ export const PositionCard = memo(function PositionCard({
             </div>
           </div>
 
-          {/* Column 6: Created (1 col) - hidden on mobile */}
-          <div className="hidden sm:block col-span-1">
+          {/* Column 6: Created (1 col) - hidden on mobile / in card layout */}
+          <div className={cl('hidden', 'hidden sm:block col-span-1')}>
             <div className="text-[10px] space-y-0.5">
               <div
                 className="text-blue-400 hover:text-blue-300 cursor-pointer underline"

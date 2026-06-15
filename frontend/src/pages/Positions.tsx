@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, lazy, Suspense } from 'react'
 import type { Bot } from '../types'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, Building2, Wallet, Scale } from 'lucide-react'
+import { BarChart3, Building2, Wallet, Scale, Table2, Rows3, LayoutGrid } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
@@ -22,6 +22,8 @@ import { usePositionsData } from './positions/hooks/usePositionsData'
 import { usePositionMutations } from './positions/hooks/usePositionMutations'
 import { usePositionFilters } from './positions/hooks/usePositionFilters'
 import { usePositionTrades } from './positions/hooks/usePositionTrades'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { buildVisualRows } from './positions/utils/visualRows'
 import { calculateOverallStats, checkSlippageBeforeMarketClose } from './positions/helpers'
 import {
   OverallStatsPanel,
@@ -109,6 +111,7 @@ export default function Positions() {
     groupBy, setGroupBy,
     sortBy, setSortBy,
     sortOrder, setSortOrder,
+    viewMode, setViewMode,
     pageSize, setPageSize,
     currentPage, setCurrentPage,
     totalCount, totalPages,
@@ -290,6 +293,17 @@ export default function Positions() {
     })
   }, [openPositions, groupBy, getGroupKey])
 
+  // Tiling column count for the grid view: 1 below lg, 2 up to 2xl, 3 beyond.
+  // Table and card-list modes are always a single column.
+  const isLg = useMediaQuery('(min-width: 1024px)')
+  const is2xl = useMediaQuery('(min-width: 1536px)')
+  const columns = viewMode === 'grid' ? (is2xl ? 3 : isLg ? 2 : 1) : 1
+
+  // Pack the position rows into virtualized visual rows (group headers occupy
+  // their own row; cards tile `columns`-wide). One vertical column of
+  // variable-height blocks keeps the window virtualizer in play for all modes.
+  const visualRows = useMemo(() => buildVisualRows(positionRows, columns), [positionRows, columns])
+
   // Pre-compute bot lookup map for O(1) access in PositionCard
   const botsById = useMemo(
     () => new Map((bots || []).map((b: Bot) => [b.id, b])),
@@ -323,6 +337,28 @@ export default function Positions() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* View mode: compact table / single-column cards / tiled grid */}
+            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+              {([
+                { mode: 'table', Icon: Table2, label: 'Table' },
+                { mode: 'list', Icon: Rows3, label: 'Cards' },
+                { mode: 'grid', Icon: LayoutGrid, label: 'Grid' },
+              ] as const).map(({ mode, Icon, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  title={`${label} view`}
+                  aria-label={`${label} view`}
+                  aria-pressed={viewMode === mode}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === mode ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span className="hidden md:inline">{label}</span>
+                </button>
+              ))}
+            </div>
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {totalCount} Active
             </div>
@@ -395,8 +431,9 @@ export default function Positions() {
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Mobile Sort Controls */}
-            <div className="sm:hidden flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+            {/* Sort Controls — shown on mobile in table mode (no column headers
+                there), and at all widths in card/grid modes (no headers at all). */}
+            <div className={`${viewMode === 'table' ? 'sm:hidden ' : ''}flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50`}>
               <span className="text-xs text-slate-400 whitespace-nowrap">Sort:</span>
               <select
                 value={sortBy}
@@ -417,7 +454,8 @@ export default function Positions() {
               </button>
             </div>
 
-            {/* Column Headers (hidden on mobile) */}
+            {/* Column Headers — table mode only (hidden on mobile) */}
+            {viewMode === 'table' && (
             <div className="hidden sm:block bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
               <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">
                 <div
@@ -503,42 +541,52 @@ export default function Positions() {
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Position Cards — virtualized so only visible cards render */}
+            {/* Position Cards — virtualized so only visible cards render.
+                Each visual row is a group header or up to `columns` tiled cards. */}
             <VirtualizedPositionList
-              items={positionRows}
-              getItemKey={(index) => positionRows[index].position.id}
-              renderItem={({ position, groupKey, showHeader }) => (
-                <div>
-                  {showHeader && (
-                    <div className="px-3 py-1.5 mb-1 mt-3 bg-slate-700/50 rounded text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      {groupKey}
-                    </div>
-                  )}
-                  <PositionCard
-                    position={position}
-                    currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
-                    bots={bots}
-                    bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
-                    btcUsdPrice={btcUsdPrice}
-                    trades={trades}
-                    selectedPosition={selectedPosition}
-                    onTogglePosition={togglePosition}
-                    onOpenChart={handleOpenChart}
-                    onOpenLightweightChart={handleOpenLightweightChart}
-                    onOpenLimitClose={handleOpenLimitClose}
-                    onOpenLogs={handleOpenLogs}
-                    onOpenAddFunds={openAddFundsModal}
-                    onOpenEditSettings={handleOpenEditSettings}
-                    onOpenNotes={openNotesModal}
-                    onOpenTradeHistory={handleOpenTradeHistory}
-                    onCheckSlippage={handleCheckSlippage}
-                    onRefetch={refetchPositions}
-                    onEditBot={handleEditBot}
-                    canWrite={canWritePositions}
-                  />
-                </div>
-              )}
+              items={visualRows}
+              getItemKey={(index) => visualRows[index].key}
+              renderItem={(vrow) =>
+                vrow.kind === 'header' ? (
+                  <div className="px-3 py-1.5 mb-1 mt-3 bg-slate-700/50 rounded text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    {vrow.label}
+                  </div>
+                ) : (
+                  <div
+                    className="grid gap-2 pb-2 items-start"
+                    style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                  >
+                    {vrow.items.map(({ position }) => (
+                      <PositionCard
+                        key={position.id}
+                        position={position}
+                        currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
+                        bots={bots}
+                        bot={position.bot_id != null ? botsById.get(position.bot_id) : undefined}
+                        btcUsdPrice={btcUsdPrice}
+                        trades={trades}
+                        selectedPosition={selectedPosition}
+                        onTogglePosition={togglePosition}
+                        onOpenChart={handleOpenChart}
+                        onOpenLightweightChart={handleOpenLightweightChart}
+                        onOpenLimitClose={handleOpenLimitClose}
+                        onOpenLogs={handleOpenLogs}
+                        onOpenAddFunds={openAddFundsModal}
+                        onOpenEditSettings={handleOpenEditSettings}
+                        onOpenNotes={openNotesModal}
+                        onOpenTradeHistory={handleOpenTradeHistory}
+                        onCheckSlippage={handleCheckSlippage}
+                        onRefetch={refetchPositions}
+                        onEditBot={handleEditBot}
+                        canWrite={canWritePositions}
+                        forceCardLayout={viewMode !== 'table'}
+                      />
+                    ))}
+                  </div>
+                )
+              }
             />
 
             {/* Pagination controls */}

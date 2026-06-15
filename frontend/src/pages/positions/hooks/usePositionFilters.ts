@@ -3,6 +3,10 @@ import type { PositionWithPnL } from '../helpers'
 
 export type GroupByMode = 'none' | 'category' | 'market' | 'bot' | 'pair'
 
+/** Active-deals layout: compact table, single-column cards, or tiled card grid. */
+export type DealsViewMode = 'table' | 'list' | 'grid'
+const DEALS_VIEW_MODES: DealsViewMode[] = ['table', 'list', 'grid']
+
 interface UsePositionFiltersProps {
   positionsWithPnL: PositionWithPnL[]
   bots?: { id: number; name: string }[]
@@ -45,6 +49,14 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
     try { return (localStorage.getItem('zenith-positions-sort-order') as 'asc' | 'desc') || 'desc' } catch { return 'desc' }
   })
 
+  // Active-deals view mode (table / card list / tiled grid)
+  const [viewMode, setViewMode] = useState<DealsViewMode>(() => {
+    try {
+      const v = localStorage.getItem('zenith-positions-view-mode') as DealsViewMode
+      return DEALS_VIEW_MODES.includes(v) ? v : 'table'
+    } catch { return 'table' }
+  })
+
   // Pagination
   const [pageSize, setPageSize] = useState<10 | 100>(() => {
     try { const v = localStorage.getItem('zenith-positions-page-size'); return v === '100' ? 100 : 10 } catch { return 10 }
@@ -60,6 +72,7 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-by', sortBy) } catch { /* ignored */ } }, [sortBy])
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-order', sortOrder) } catch { /* ignored */ } }, [sortOrder])
   useEffect(() => { try { localStorage.setItem('zenith-positions-page-size', String(pageSize)) } catch { /* ignored */ } }, [pageSize])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-view-mode', viewMode) } catch { /* ignored */ } }, [viewMode])
 
   // Reset to page 1 when filters or page size change
   useEffect(() => { setCurrentPage(1) }, [filterBot, filterMarket, filterPair, filterCategory, groupBy, sortBy, sortOrder, pageSize])
@@ -259,6 +272,9 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
     groupBy, setGroupBy,
     sortBy, setSortBy,
     sortOrder, setSortOrder,
+
+    // View mode
+    viewMode, setViewMode,
 
     // Pagination state
     pageSize, setPageSize,

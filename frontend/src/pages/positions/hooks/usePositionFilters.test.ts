@@ -52,6 +52,7 @@ describe('usePositionFilters default values', () => {
     expect(result.current.filterPair).toBe('all')
     expect(result.current.sortBy).toBe('created')
     expect(result.current.sortOrder).toBe('desc')
+    expect(result.current.viewMode).toBe('table')
   })
 
   test('returns empty openPositions for empty input', () => {
@@ -103,6 +104,36 @@ describe('usePositionFilters localStorage persistence', () => {
     )
 
     expect(result.current.sortBy).toBe('pnl')
+  })
+
+  test('restores viewMode from localStorage', () => {
+    localStorage.setItem('zenith-positions-view-mode', 'grid')
+
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: [] })
+    )
+
+    expect(result.current.viewMode).toBe('grid')
+  })
+
+  test('falls back to table for an invalid stored viewMode', () => {
+    localStorage.setItem('zenith-positions-view-mode', 'bogus')
+
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: [] })
+    )
+
+    expect(result.current.viewMode).toBe('table')
+  })
+
+  test('persists viewMode to localStorage when changed', () => {
+    const { result } = renderHook(() =>
+      usePositionFilters({ positionsWithPnL: [] })
+    )
+
+    act(() => { result.current.setViewMode('list') })
+
+    expect(localStorage.getItem('zenith-positions-view-mode')).toBe('list')
   })
 
   test('restores sortOrder from localStorage', () => {

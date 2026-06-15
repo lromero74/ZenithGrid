@@ -5,6 +5,18 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    // Make `container` fluid (full-width) below the 2xl breakpoint instead of
+    // jumping in discrete steps. Tailwind's default container caps width at the
+    // matched breakpoint min (e.g. 768px for the whole 768–1023px range), so a
+    // phone in landscape (~844–932px) gets pinned to 768px and centered, wasting
+    // the extra width. Capping only at 2xl lets the layout fill landscape-phone /
+    // tablet widths while still keeping a sane max on large desktop monitors.
+    container: {
+      center: true,
+      screens: {
+        '2xl': '1536px',
+      },
+    },
     extend: {
       colors: {
         primary: '#3b82f6',

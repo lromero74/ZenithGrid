@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.169.0] - 2026-06-14
+
+### Added
+- Active Deals now has a view-mode switch (Table / Cards / Grid) in the top-right of the page. **Table** keeps the compact sortable rows; **Cards** shows the full rich deal card one-per-row at every width; **Grid** tiles the rich cards side by side — two across on a laptop, three on a wide monitor. Your choice is remembered.
+
+### Fixed
+- Rotating your phone to landscape (or using a small tablet) now actually uses the extra width. The whole app was previously pinned to a fixed narrow width on those screen sizes, leaving large empty margins; it now fills the available width up to large-desktop size. This also un-cramps the Active Deals page.
+
 ## [v2.168.21] - 2026-06-14
 
 ### Changed
