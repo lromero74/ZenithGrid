@@ -34,6 +34,13 @@ interface NotificationContextType {
   isConnected: boolean
   audioEnabled: boolean
   setAudioEnabled: (enabled: boolean) => void
+  // When true, paper-trading order notifications are hidden while the active
+  // account is a real (non-paper) account. See setActiveAccountIsPaper.
+  suppressPaperWhenReal: boolean
+  setSuppressPaperWhenReal: (enabled: boolean) => void
+  // Bridge from AccountContext (which is a descendant provider): the active
+  // account's paper status. null = unknown/none selected.
+  setActiveAccountIsPaper: (isPaper: boolean | null) => void
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null)
@@ -59,6 +66,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     const saved = localStorage.getItem('audio-notifications-enabled')
     return saved !== 'false' // Default to true
   })
+  const [suppressPaperWhenReal, setSuppressPaperWhenRealState] = useState(() => {
+    // Default OFF — paper notifications show unless the user opts to mute them.
+    return localStorage.getItem('suppress-paper-notifications-when-real') === 'true'
+  })
+  // Read inside handleOrderFill (which the socket captures once), so use refs to
+  // dodge stale closures rather than relying on callback identity.
+  const suppressPaperWhenRealRef = useRef(suppressPaperWhenReal)
+  const activeAccountIsPaperRef = useRef<boolean | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const loadedVersionRef = useRef<string | null>(null)
@@ -96,6 +111,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     setAudioHookEnabled(enabled)
     localStorage.setItem('audio-notifications-enabled', enabled ? 'true' : 'false')
   }, [setAudioHookEnabled])
+
+  // Toggle "hide paper notifications while on a real account"
+  const setSuppressPaperWhenReal = useCallback((enabled: boolean) => {
+    setSuppressPaperWhenRealState(enabled)
+    suppressPaperWhenRealRef.current = enabled
+    localStorage.setItem('suppress-paper-notifications-when-real', enabled ? 'true' : 'false')
+  }, [])
+
+  // Bridge setter — pushed by a component inside AccountProvider.
+  const setActiveAccountIsPaper = useCallback((isPaper: boolean | null) => {
+    activeAccountIsPaperRef.current = isPaper
+  }, [])
 
   // Check for new version and show update toast.
   // After detecting a new version, waits and re-verifies the server is stable
@@ -162,6 +189,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Handle incoming order fill events
   const handleOrderFill = useCallback((event: OrderFillEvent) => {
+    // Suppress paper-trading notifications while the active account is a real
+    // (non-paper) account, if the user enabled that. Refs avoid stale closures.
+    if (
+      suppressPaperWhenRealRef.current &&
+      activeAccountIsPaperRef.current === false &&
+      event.is_paper_trading
+    ) {
+      return
+    }
+
     // Map fill type to toast type
     const toastType: ToastType = event.fill_type
 
@@ -390,7 +427,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     isConnected,
     audioEnabled,
     setAudioEnabled,
-  }), [addToast, dismissToast, isConnected, audioEnabled, setAudioEnabled])
+    suppressPaperWhenReal,
+    setSuppressPaperWhenReal,
+    setActiveAccountIsPaper,
+  }), [addToast, dismissToast, isConnected, audioEnabled, setAudioEnabled,
+       suppressPaperWhenReal, setSuppressPaperWhenReal, setActiveAccountIsPaper])
 
   return (
     <NotificationContext.Provider value={value}>

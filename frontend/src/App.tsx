@@ -13,7 +13,7 @@ import { ShadowModeBanner } from './components/sharing/ShadowModeBanner'
 import { PaperTradingToggle } from './components/account/PaperTradingToggle'
 import { AddAccountModal } from './components/account/AddAccountModal'
 import { LoadingSpinner } from './components/shared/LoadingSpinner'
-import { NotificationProvider } from './contexts/NotificationContext'
+import { NotificationProvider, useNotifications } from './contexts/NotificationContext'
 import { ConfirmProvider } from './contexts/ConfirmContext'
 import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
@@ -884,6 +884,7 @@ function App() {
   // Show main app content (AccountProvider here ensures accounts fetch only after auth)
   return (
     <AccountProvider>
+      <PaperNotificationBridge />
       {sessionExpiryCountdown !== null && sessionExpiryCountdown > 0 && (
         <div className="fixed top-0 left-0 right-0 z-[200] bg-red-600/95 text-white text-center py-2 px-4 text-sm font-medium backdrop-blur-sm">
           Session expires in {sessionExpiryCountdown}s — you will be logged out automatically
@@ -892,6 +893,19 @@ function App() {
       <AppContent />
     </AccountProvider>
   )
+}
+
+// Bridges the active account's paper status from AccountContext (a descendant
+// provider) up into NotificationContext, which can't consume it directly.
+function PaperNotificationBridge() {
+  const { selectedAccount } = useAccount()
+  const { setActiveAccountIsPaper } = useNotifications()
+  useEffect(() => {
+    setActiveAccountIsPaper(
+      selectedAccount ? !!selectedAccount.is_paper_trading : null
+    )
+  }, [selectedAccount, setActiveAccountIsPaper])
+  return null
 }
 
 // Export with AuthProvider wrapper

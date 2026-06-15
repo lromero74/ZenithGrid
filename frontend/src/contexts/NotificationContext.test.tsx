@@ -84,9 +84,21 @@ function TestConsumer() {
       </button>
       <button data-testid="enable-audio" onClick={() => ctx.setAudioEnabled(true)}>Enable Audio</button>
       <button data-testid="disable-audio" onClick={() => ctx.setAudioEnabled(false)}>Disable Audio</button>
+      <span data-testid="suppress-paper">{String(ctx.suppressPaperWhenReal)}</span>
+      <button data-testid="suppress-on" onClick={() => ctx.setSuppressPaperWhenReal(true)}>Suppress On</button>
+      <button data-testid="suppress-off" onClick={() => ctx.setSuppressPaperWhenReal(false)}>Suppress Off</button>
+      <button data-testid="acct-real" onClick={() => ctx.setActiveAccountIsPaper(false)}>Real Account</button>
+      <button data-testid="acct-paper" onClick={() => ctx.setActiveAccountIsPaper(true)}>Paper Account</button>
     </div>
   )
 }
+
+const PAPER_FILL = {
+  type: 'order_fill', fill_type: 'base_order', product_id: 'BTC-USD',
+  bot_name: 'Paper Bot', base_amount: 0.001, quote_amount: 50.0, price: 50000.0,
+  position_id: 1, timestamp: '2026-01-01T00:00:00Z', is_paper_trading: true,
+}
+const REAL_FILL = { ...PAPER_FILL, bot_name: 'Real Bot', is_paper_trading: false }
 
 describe('NotificationContext', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>
@@ -565,6 +577,85 @@ describe('NotificationContext', () => {
     // Body includes the divergence number.
     const body = screen.getByText(/15\.2pp/)
     expect(body).toBeTruthy()
+  })
+
+  // ── Paper-notification suppression while on a real account ───────────────
+
+  async function renderConnected() {
+    render(
+      <NotificationProvider>
+        <TestConsumer />
+      </NotificationProvider>
+    )
+    act(() => { vi.advanceTimersByTime(0) })
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.simulateOpen() })
+    return ws
+  }
+
+  test('suppresses paper order fill when toggle on and active account is real', async () => {
+    const ws = await renderConnected()
+    await act(async () => { screen.getByTestId('suppress-on').click() })
+    await act(async () => { screen.getByTestId('acct-real').click() })
+
+    await act(async () => { ws.simulateMessage(PAPER_FILL) })
+
+    // No toast, and no sound, for the paper fill.
+    expect(screen.queryAllByTestId('toast-base_order').length).toBe(0)
+    expect(mockPlayOrderSound).not.toHaveBeenCalled()
+  })
+
+  test('still shows REAL order fill when toggle on and active account is real', async () => {
+    const ws = await renderConnected()
+    await act(async () => { screen.getByTestId('suppress-on').click() })
+    await act(async () => { screen.getByTestId('acct-real').click() })
+
+    await act(async () => { ws.simulateMessage(REAL_FILL) })
+
+    expect(screen.getAllByTestId('toast-base_order').length).toBe(1)
+  })
+
+  test('does NOT suppress paper fill when active account is also paper', async () => {
+    const ws = await renderConnected()
+    await act(async () => { screen.getByTestId('suppress-on').click() })
+    await act(async () => { screen.getByTestId('acct-paper').click() })
+
+    await act(async () => { ws.simulateMessage(PAPER_FILL) })
+
+    expect(screen.getAllByTestId('toast-base_order').length).toBe(1)
+  })
+
+  test('does NOT suppress paper fill when toggle is off', async () => {
+    const ws = await renderConnected()
+    await act(async () => { screen.getByTestId('suppress-off').click() })
+    await act(async () => { screen.getByTestId('acct-real').click() })
+
+    await act(async () => { ws.simulateMessage(PAPER_FILL) })
+
+    expect(screen.getAllByTestId('toast-base_order').length).toBe(1)
+  })
+
+  test('suppress toggle persists to and reads from localStorage', async () => {
+    render(
+      <NotificationProvider>
+        <TestConsumer />
+      </NotificationProvider>
+    )
+    // Default off
+    expect(screen.getByTestId('suppress-paper').textContent).toBe('false')
+    await act(async () => { screen.getByTestId('suppress-on').click() })
+    expect(screen.getByTestId('suppress-paper').textContent).toBe('true')
+    expect(localStorage.getItem('suppress-paper-notifications-when-real')).toBe('true')
+  })
+
+  test('suppress toggle initializes true from localStorage', () => {
+    localStorage.setItem('suppress-paper-notifications-when-real', 'true')
+    render(
+      <NotificationProvider>
+        <TestConsumer />
+      </NotificationProvider>
+    )
+    expect(screen.getByTestId('suppress-paper').textContent).toBe('true')
   })
 
   test('cleans up WebSocket and timers on unmount', async () => {
