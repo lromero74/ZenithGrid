@@ -2230,6 +2230,13 @@
       "manager_accounts_filter"
     ]
   },
+  "backend/app/services/account_purge.py": {
+    "classes": {},
+    "functions": [
+      "count_account_history",
+      "purge_account_history"
+    ]
+  },
   "backend/app/services/account_responses.py": {
     "classes": {},
     "functions": [
