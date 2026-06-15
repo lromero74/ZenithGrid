@@ -53,6 +53,13 @@ export function useNotifications() {
   return context
 }
 
+// Non-throwing variant for components that may render outside the provider
+// (e.g. a bridge whose placement must never crash the whole app to a blank
+// screen). Returns null when no provider is present.
+export function useNotificationsOptional() {
+  return useContext(NotificationContext)
+}
+
 interface NotificationProviderProps {
   children: ReactNode
 }

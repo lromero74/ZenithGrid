@@ -515,6 +515,12 @@ export function useAccount(): AccountContextType {
   return context
 }
 
+// Non-throwing variant — returns null outside an AccountProvider. For components
+// (e.g. cross-context bridges) whose misplacement must not crash the app.
+export function useAccountOptional(): AccountContextType | null {
+  return useContext(AccountContext) ?? null
+}
+
 // =============================================================================
 // Chain Configurations (for DEX accounts)
 // =============================================================================
