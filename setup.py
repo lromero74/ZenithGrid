@@ -1534,7 +1534,7 @@ def initialize_database(project_root, db_config=None):
             CREATE TABLE IF NOT EXISTS order_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                bot_id INTEGER NOT NULL REFERENCES bots(id) ON DELETE RESTRICT,
+                bot_id INTEGER REFERENCES bots(id) ON DELETE SET NULL,
                 position_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
                 product_id TEXT NOT NULL,
                 side TEXT NOT NULL,
