@@ -64,6 +64,10 @@ from app.services.rebalance_monitor import rebalance_monitor  # noqa: F401
 from app.services.delisted_pair_monitor import trading_pair_monitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.perps_monitor import PerpsMonitor
+from app.services.position_coin_audit import (
+    start_position_coin_audit_monitor,
+    stop_position_coin_audit_monitor,
+)
 from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor
 from app.services.speculative_calibration_monitor import (
     start_speculative_calibration_monitor,
@@ -586,6 +590,10 @@ async def startup_event():
     await start_speculative_calibration_monitor()
     logger.info("Speculative calibration monitor started - daily per-user check with 30-day cooldown")
 
+    logger.info("Starting position coin coverage audit monitor...")
+    await start_position_coin_audit_monitor()
+    logger.info("Position coin audit monitor started - hourly real-account sellability check")
+
     logger.info("Building changelog cache...")
     build_changelog_cache()
     logger.info("Changelog cache built")
@@ -661,6 +669,9 @@ async def shutdown_event():
 
     logger.info("🛑 Stopping speculative calibration monitor...")
     await stop_speculative_calibration_monitor()
+
+    logger.info("🛑 Stopping position coin audit monitor...")
+    await stop_position_coin_audit_monitor()
 
     # Cancel main loop asyncio tasks
     for task in [

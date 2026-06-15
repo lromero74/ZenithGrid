@@ -1505,6 +1505,11 @@
       "type": "analysis"
     },
     {
+      "file": "services/position_coin_audit.py",
+      "purpose": "Periodic background safety monitor (hourly, AUDIT_INTERVAL_SECONDS=3600, 180s startup delay) that guards against the wallet-drift that causes INSUFFICIENT_FUND sell failures. For each real (non-paper, active) CEX account it sums every open LONG SPOT position's recorded total_base_acquired per base currency (expected_base_by_currency) and compares to the account-scoped live Coinbase available balance (get_coinbase_for_account -> client.get_accounts(force_fresh=True)). Any coin whose wallet balance is below recorded*0.999 (COVERAGE_HAIRCUT, mirrors sell_executor's SELL_BALANCE_HAIRCUT) is flagged via find_coin_shortfalls, logged as a WARNING, and recorded to the real-money audit trail via realmoney_audit.record_event('coin_coverage_shortfall', ...). Pure, unit-tested helpers: expected_base_by_currency(positions) and find_coin_shortfalls(expected, wallet, haircut). Public monitor API: start_position_coin_audit_monitor / stop_position_coin_audit_monitor (same start/stop pattern as prop_guard_monitor / speculative_calibration_monitor). Read-only — never trades. v3.3.0.",
+      "type": "background"
+    },
+    {
       "file": "services/prop_guard_monitor.py",
       "purpose": "Background equity monitoring for prop firm accounts every 30s",
       "type": "background"
@@ -1774,7 +1779,7 @@
   "core_modules": [
     {
       "file": "main.py",
-      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration. v2.165.0 wires start_speculative_calibration_monitor / stop_speculative_calibration_monitor into the startup/shutdown hooks for the daily speculative-bucket calibration loop. v2.168.0 adds check_all_pending_safety_orders (from safety_order_monitor) to the monitor loop, called alongside check_all_pending_limit_orders each cycle."
+      "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration. v2.165.0 wires start_speculative_calibration_monitor / stop_speculative_calibration_monitor into the startup/shutdown hooks for the daily speculative-bucket calibration loop. v2.168.0 adds check_all_pending_safety_orders (from safety_order_monitor) to the monitor loop, called alongside check_all_pending_limit_orders each cycle. v3.3.0 wires start_position_coin_audit_monitor / stop_position_coin_audit_monitor into startup/shutdown (called after the speculative calibration monitor) for the hourly coin-coverage safety audit."
     },
     {
       "file": "ai_service.py",

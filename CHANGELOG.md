@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.0] - 2026-06-15
+
+### Added
+- A background safety audit that hourly checks every real trading account's open positions against the live exchange wallet and warns (in the real-money audit log) if a position no longer holds enough of its coin to sell the full size. This catches the kind of balance drift that previously surfaced only as a failed sell (`INSUFFICIENT_FUND`) — now it's flagged proactively, before you try to exit.
+
 ## [v3.2.2] - 2026-06-15
 
 ### Fixed
