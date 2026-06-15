@@ -24,6 +24,77 @@ from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
 logger = logging.getLogger(__name__)
 
+# Tiny haircut applied when clamping a sell to the wallet's available balance.
+# Mirrors the dust sweeper's 0.999 — leaves rounding/hold-timing slack so the
+# exchange never rejects the order for being a hair over the true free balance.
+SELL_BALANCE_HAIRCUT = 0.999
+
+
+def clamp_sell_base_amount(
+    recorded: float, available: float, precision: int,
+) -> Tuple[float, bool]:
+    """Resolve how much base to sell without exceeding the wallet balance.
+
+    A position's recorded ``total_base_acquired`` can drift ABOVE the coins
+    actually held on the exchange — fees, prior rebalance/dust sweeps, or
+    partial fills shave the wallet while the position record stays whole.
+    Selling the full recorded amount then fails with INSUFFICIENT_FUND and the
+    position is stuck forever, retried every cycle. When the wallet is short,
+    sell the available balance minus a tiny haircut; otherwise sell the full
+    recorded amount. Both are floored to the exchange's base precision so we
+    never submit more than we can cover.
+
+    Returns ``(base_amount, clamped)`` where ``clamped`` is True when the wallet
+    balance forced a reduction below the recorded size.
+    """
+    clamped = available < recorded
+    target = (available * SELL_BALANCE_HAIRCUT) if clamped else recorded
+    if target < 0:
+        target = 0.0
+    factor = 10 ** precision
+    base_amount = math.floor(target * factor) / factor
+    return base_amount, clamped
+
+
+async def _resolve_real_close_amount(
+    exchange: ExchangeClient,
+    product_id: str,
+    position: Position,
+    raw_amount: float,
+    precision: int,
+) -> Tuple[float, bool]:
+    """Clamp a real (non-paper) close to the wallet's live available balance.
+
+    Fetches the current available base balance and defers to
+    ``clamp_sell_base_amount``. If the balance lookup fails, falls back to the
+    recorded amount (floored) so a transient API hiccup never blocks a close.
+    """
+    base_currency = product_id.split("-")[0]
+    try:
+        try:
+            bal_info = await exchange.get_balance(base_currency, force_fresh=True)
+        except TypeError:
+            # Exchange clients whose get_balance has no force_fresh kwarg.
+            bal_info = await exchange.get_balance(base_currency)
+        available = float(bal_info.get("available", bal_info.get("balance", 0)) or 0)
+    except Exception as e:
+        logger.warning(
+            f"  Could not fetch {base_currency} balance to clamp sell "
+            f"({e}); proceeding with recorded amount."
+        )
+        factor = 10 ** precision
+        return math.floor(raw_amount * factor) / factor, False
+
+    base_amount, clamped = clamp_sell_base_amount(raw_amount, available, precision)
+    if clamped:
+        logger.warning(
+            f"  Wallet short for {product_id}: position holds {raw_amount:.8f} "
+            f"{base_currency} on record but only {available:.8f} is available. "
+            f"Clamping close to {base_amount:.8f} (booking the real, smaller "
+            f"proceeds)."
+        )
+    return base_amount, clamped
+
 
 async def _try_limit_sell(
     db: AsyncSession,
@@ -1217,6 +1288,7 @@ async def execute_sell(
     # Multiple positions can share the same base currency on one account,
     # so the wallet may temporarily be short. Top up if needed to avoid
     # selling less than the position holds (which causes artificial losses).
+    clamped = False
     if is_paper:
         base_currency = product_id.split("-")[0]
         try:
@@ -1232,8 +1304,15 @@ async def execute_sell(
                 await exchange.adjust_balance(base_currency, shortfall)
         except Exception as e:
             logger.warning(f"Could not check/adjust paper balance: {e}")
-
-    base_amount = math.floor(raw_amount * (10 ** precision)) / (10 ** precision)
+        base_amount = math.floor(raw_amount * (10 ** precision)) / (10 ** precision)
+    else:
+        # Real account: never try to sell more base than the wallet actually
+        # holds. The recorded size can drift above the on-exchange balance, and
+        # selling the full amount then fails with INSUFFICIENT_FUND, stranding
+        # the position. Clamp to the live available balance.
+        base_amount, clamped = await _resolve_real_close_amount(
+            exchange, product_id, position, raw_amount, precision
+        )
 
     logger.info(
         f"  Selling {base_amount:.8f} {product_id.split('-')[0]} "
@@ -1249,6 +1328,22 @@ async def execute_sell(
         return await _close_sell_position_as_dust(
             db, bot, product_id, position, current_price,
         )
+
+    # If the wallet balance forced a clamp, the remaining base may now sit below
+    # the exchange minimum — close as dust rather than submit a doomed order.
+    if clamped:
+        from app.order_validation import validate_order_size
+        is_valid, _vmsg = await validate_order_size(
+            exchange, product_id, base_amount=base_amount
+        )
+        if not is_valid:
+            logger.warning(
+                f"  Clamped sell {base_amount:.8f} {product_id} is below the "
+                f"exchange minimum ({_vmsg}). Closing as dust."
+            )
+            return await _close_sell_position_as_dust(
+                db, bot, product_id, position, current_price,
+            )
 
     order_id, actual_base_sold, quote_received, actual_price = await _submit_sell_market_order(
         db=db,
