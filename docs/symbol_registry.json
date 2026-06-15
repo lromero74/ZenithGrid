@@ -2911,6 +2911,19 @@
       "get_user_paper_account"
     ]
   },
+  "backend/app/services/position_coin_audit.py": {
+    "classes": {},
+    "functions": [
+      "_monitor_loop",
+      "_wallet_from_accounts",
+      "audit_account",
+      "expected_base_by_currency",
+      "find_coin_shortfalls",
+      "run_position_coin_audit",
+      "start_position_coin_audit_monitor",
+      "stop_position_coin_audit_monitor"
+    ]
+  },
   "backend/app/services/prop_guard_monitor.py": {
     "classes": {},
     "functions": [
