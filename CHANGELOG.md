@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.169.4] - 2026-06-15
+
+### Fixed
+- Positions could get permanently stuck, unable to sell, with a repeating `INSUFFICIENT_FUND` error when the coins actually held on the exchange had drifted below what the position recorded (from fees, earlier rebalances/dust sweeps, or partial fills). Closing a position now sells what the wallet actually holds (with a tiny safety haircut) instead of blindly trying the full recorded size — so a drifted position closes for its real proceeds and stops retrying forever. If the remaining amount is below the exchange minimum, the position is closed as dust.
+
+### Changed
+- Added protective regression tests proving neither the dust sweep nor the portfolio rebalancer will ever sell coins that are held in an open bot position.
+
 ## [v2.169.3] - 2026-06-15
 
 ### Changed

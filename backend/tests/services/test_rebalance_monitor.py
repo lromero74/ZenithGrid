@@ -1961,3 +1961,189 @@ class TestDustSweepRespectsReserves:
         swept = {r["coin"] for r in results}
         assert "USDT" not in swept   # fully reserved → protected
         assert "GRT" in swept        # free dust → swept
+
+
+class TestDustSweepRespectsOpenPositions:
+    """Regression guard: the dust sweep must NEVER liquidate coins a bot is
+    actively holding in an open position. This is the exact failure that left
+    positions unable to sell (INSUFFICIENT_FUND): the wallet 'free' balance
+    includes a position's filled coins, and an unguarded sweep would sell them
+    out from under the bot. Non-masking — it asserts the specific coin is NOT in
+    the executed sweep set, and that a genuine surplus IS still swept.
+    """
+
+    @pytest.mark.asyncio
+    async def test_fully_held_position_coin_not_swept(self):
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 0.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 100.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        client = AsyncMock()
+        # Wallet shows 865 FOX free — but it's all held by an open FOX position.
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "FOX", "available_balance": {"value": "865.8"}},
+        ]
+        client.get_current_price.return_value = "0.05"
+        client.list_products.return_value = [{"product_id": "FOX-USD"}]
+        client.create_market_order.return_value = {"success_response": {"order_id": "x"}}
+
+        db = AsyncMock()
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={"FOX": 865.8},   # the open position holds all of it
+        ):
+            results = await RebalanceMonitor()._sweep_dust(
+                client, account, db,
+                prices={"FOX-USD": 0.05, "BTC-USD": 100000.0,
+                        "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        assert "FOX" not in {r["coin"] for r in results}
+        # And prove it non-maskingly: no FOX sell order was ever placed.
+        for call in client.create_market_order.call_args_list:
+            assert "FOX" not in str(call)
+
+    @pytest.mark.asyncio
+    async def test_only_surplus_above_position_is_swept(self):
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 0.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 100.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        client = AsyncMock()
+        # Wallet has 1000 GRT; position holds 900; 100 GRT (~$15) is genuine surplus.
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "GRT", "available_balance": {"value": "1000"}},
+        ]
+        client.get_current_price.return_value = "0.15"
+        client.list_products.return_value = [{"product_id": "GRT-USD"}]
+        client.create_market_order.return_value = {"success_response": {"order_id": "x"}}
+
+        db = AsyncMock()
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={"GRT": 900.0},
+        ):
+            results = await RebalanceMonitor()._sweep_dust(
+                client, account, db,
+                prices={"GRT-USD": 0.15, "BTC-USD": 100000.0,
+                        "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        grt = [r for r in results if r["coin"] == "GRT"]
+        assert grt, "the 100-GRT surplus above the position should still sweep"
+        # Never sweeps more than the unlocked surplus (100 GRT, minus haircut).
+        assert grt[0]["amount"] <= 100.0
+
+
+class TestRebalancerRespectsOpenPositions:
+    """Regression guard (v2.168.12): the MAIN rebalancer — not just the dust
+    sweep — must leave coins held in open positions alone. A position's filled
+    coins settle into the spot wallet as spendable balance, so an unguarded
+    rebalancer with an off-target allocation would sell them out from under the
+    bot. Non-masking: it drives a heavy drift that WOULD sell the BTC if it were
+    treated as free, and asserts no BTC-selling order is ever placed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_position_held_btc_not_sold_under_drift(self):
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.rebalance_enabled = True
+        # Target 100% USDC while the wallet's only non-USD asset (BTC) is fully
+        # locked in an open position — maximal pressure to liquidate it.
+        account.rebalance_target_usd_pct = 0.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 100.0
+        account.rebalance_drift_threshold_pct = 5.0
+        account.rebalance_min_trade_pct = 1.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
+        account.dust_sweep_enabled = False
+        account.dust_sweep_threshold_usd = 5.0
+        account.dust_last_sweep_at = None
+
+        position = MagicMock()
+        position.product_id = "BTC-USD"
+        position.total_base_acquired = 0.1        # all 0.1 BTC in the wallet
+        position.total_quote_spent = 10000.0
+        position.status = "open"
+        position.account_id = 1
+
+        pos_result = MagicMock()
+        pos_result.scalars.return_value.all.return_value = [position]
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=pos_result)
+
+        client = AsyncMock()
+        client.get_usd_balance = AsyncMock(return_value=0.0)
+        client.get_btc_balance = AsyncMock(return_value=0.1)   # held by the position
+        client.get_eth_balance = AsyncMock(return_value=0.0)
+        client.get_usdc_balance = AsyncMock(return_value=0.0)
+        client.get_current_price = AsyncMock(
+            side_effect=lambda p: {"BTC-USD": 100000.0, "ETH-USD": 2500.0, "USDC-USD": 1.0}.get(p, 0.0)
+        )
+        client.sell_for_usd = AsyncMock(return_value={"success_response": {"order_id": "x"}})
+        client.create_market_order = AsyncMock(return_value={"success_response": {"order_id": "x"}})
+        client.buy_with_usd = AsyncMock(return_value={"success_response": {"order_id": "x"}})
+
+        # Spy on the PLANNED trades, not the downstream exchange calls — a doomed
+        # order can fail at validation before reaching sell_for_usd, which would
+        # mask the bug. We assert the rebalancer never even PLANS to sell BTC.
+        planned = []
+
+        async def _spy_execute_trade(self_, _client, _account, trade, _prices):
+            planned.append(trade)
+
+        with patch(
+            "app.services.rebalance_monitor.get_exchange_client_for_account",
+            return_value=client,
+        ), patch.object(
+            RebalanceMonitor, "_execute_trade", _spy_execute_trade,
+        ):
+            await RebalanceMonitor()._process_account(account, db)
+
+        btc_sells = [t for t in planned if t.get("from_currency") == "BTC"]
+        assert not btc_sells, (
+            f"rebalancer planned to sell position-held BTC: {btc_sells}"
+        )

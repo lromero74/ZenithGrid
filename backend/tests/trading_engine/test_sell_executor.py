@@ -7,6 +7,7 @@ Covers:
 - execute_limit_sell: limit sell order placement
 """
 
+import math
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,6 +17,9 @@ from app.trading_engine.sell_executor import (
     execute_sell,
     execute_sell_short,
     execute_limit_sell,
+    clamp_sell_base_amount,
+    _resolve_real_close_amount,
+    SELL_BALANCE_HAIRCUT,
 )
 
 
@@ -77,6 +81,9 @@ def _make_exchange(**overrides):
     # is_paper_trading is a sync method (not async) — must be a regular MagicMock
     # to avoid returning a truthy coroutine object in the boolean check
     exchange.is_paper_trading = MagicMock(return_value=False)
+    # Default wallet is flush so the real-close clamp leaves the full size
+    # alone; tests that need a shortfall override get_balance explicitly.
+    exchange.get_balance = AsyncMock(return_value={"available": "1000000000", "hold": "0"})
     for k, v in overrides.items():
         setattr(exchange, k, v)
     return exchange
@@ -1074,3 +1081,117 @@ class TestShortSafetyLimitOrders:
         added = [c.args[0] for c in db.add.call_args_list
                  if isinstance(c.args[0], PendingOrder)]
         assert added == []
+
+
+# ---------------------------------------------------------------------------
+# Clamp-to-available balance on close (INSUFFICIENT_FUND protection)
+# ---------------------------------------------------------------------------
+
+
+class TestClampSellBaseAmount:
+    """Pure helper: never sell more base than the wallet actually holds."""
+
+    def test_wallet_covers_recorded_sells_full_amount(self):
+        # Happy path: available >= recorded -> sell the full recorded amount,
+        # floored to precision, no clamp.
+        amount, clamped = clamp_sell_base_amount(
+            recorded=10.0, available=12.0, precision=2,
+        )
+        assert clamped is False
+        assert amount == 10.0
+
+    def test_exact_match_is_not_clamped(self):
+        # Edge: available == recorded -> full amount, no haircut.
+        amount, clamped = clamp_sell_base_amount(
+            recorded=5.5, available=5.5, precision=1,
+        )
+        assert clamped is False
+        assert amount == 5.5
+
+    def test_wallet_short_clamps_with_haircut_and_floor(self):
+        # Failure/drift: wallet holds less than recorded -> sell available
+        # minus the haircut, floored to precision. FOX-style 65% shortfall.
+        amount, clamped = clamp_sell_base_amount(
+            recorded=865.8, available=296.7, precision=2,
+        )
+        assert clamped is True
+        expected = math.floor(296.7 * SELL_BALANCE_HAIRCUT * 100) / 100
+        assert amount == expected
+        assert amount <= 296.7  # never exceeds the real balance
+
+    def test_available_below_precision_floor_rounds_to_zero(self):
+        # A shortfall so deep the survivable amount is below one precision step
+        # floors to 0 -> caller closes it as dust (no doomed exchange order).
+        amount, clamped = clamp_sell_base_amount(
+            recorded=3.3, available=0.000001, precision=2,
+        )
+        assert clamped is True
+        assert amount == 0.0
+
+    def test_partial_survivor_above_precision_floor_is_sold(self):
+        # JTO-style 95% shortfall but precision high enough to keep the residue:
+        # sell what's actually there rather than failing outright.
+        amount, clamped = clamp_sell_base_amount(
+            recorded=3.3, available=0.15573171, precision=8,
+        )
+        assert clamped is True
+        assert 0 < amount <= 0.15573171
+
+    def test_negative_available_clamps_to_zero(self):
+        amount, clamped = clamp_sell_base_amount(
+            recorded=1.0, available=-0.5, precision=8,
+        )
+        assert clamped is True
+        assert amount == 0.0
+
+
+@pytest.mark.asyncio
+class TestResolveRealCloseAmount:
+    """Integration of the clamp with a (mocked) exchange balance lookup."""
+
+    async def _exchange_with_balance(self, available):
+        ex = AsyncMock()
+        ex.get_balance = AsyncMock(return_value={"available": str(available), "hold": "0"})
+        return ex
+
+    async def test_clamps_when_wallet_short(self):
+        ex = await self._exchange_with_balance(296.7)
+        pos = _make_position(product_id="FOX-USD", total_base_acquired=865.8)
+        amount, clamped = await _resolve_real_close_amount(
+            ex, "FOX-USD", pos, raw_amount=865.8, precision=2,
+        )
+        assert clamped is True
+        assert 0 < amount <= 296.7
+
+    async def test_full_amount_when_wallet_covers(self):
+        ex = await self._exchange_with_balance(1000.0)
+        pos = _make_position(product_id="FOX-USD", total_base_acquired=865.8)
+        amount, clamped = await _resolve_real_close_amount(
+            ex, "FOX-USD", pos, raw_amount=865.8, precision=2,
+        )
+        assert clamped is False
+        assert amount == 865.8
+
+    async def test_balance_lookup_failure_falls_back_to_recorded(self):
+        # A transient balance-API error must NOT block the close.
+        ex = AsyncMock()
+        ex.get_balance = AsyncMock(side_effect=RuntimeError("api down"))
+        pos = _make_position(product_id="FOX-USD", total_base_acquired=865.8)
+        amount, clamped = await _resolve_real_close_amount(
+            ex, "FOX-USD", pos, raw_amount=865.8, precision=2,
+        )
+        assert clamped is False
+        assert amount == 865.8
+
+    async def test_get_balance_without_force_fresh_kwarg(self):
+        # Clients whose get_balance has no force_fresh kwarg still work.
+        async def _no_kwarg_get_balance(currency):
+            return {"available": "296.7", "hold": "0"}
+        ex = AsyncMock()
+        ex.get_balance = _no_kwarg_get_balance
+        pos = _make_position(product_id="FOX-USD", total_base_acquired=865.8)
+        amount, clamped = await _resolve_real_close_amount(
+            ex, "FOX-USD", pos, raw_amount=865.8, precision=2,
+        )
+        assert clamped is True
+        assert 0 < amount <= 296.7
