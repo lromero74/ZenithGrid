@@ -1148,6 +1148,17 @@ class RebalanceMonitor(SessionMakerMixin):
             locked = await get_position_locked_amounts(db, account.id)
             all_balances = subtract_locked_amounts(all_balances, locked)
 
+            # Subtract minimum-balance reserves — a coin held back as a reserve is
+            # not "free" and must never be swept (e.g. a USDT spending reserve).
+            reserves = {
+                "USD": account.min_balance_usd or 0.0,
+                "BTC": account.min_balance_btc or 0.0,
+                "ETH": account.min_balance_eth or 0.0,
+                "USDC": account.min_balance_usdc or 0.0,
+                "USDT": account.min_balance_usdt or 0.0,
+            }
+            all_balances = subtract_locked_amounts(all_balances, reserves)
+
             # Fetch prices for dust coins
             dust_coins = {
                 c for c in all_balances
@@ -1176,7 +1187,12 @@ class RebalanceMonitor(SessionMakerMixin):
                 "usdc_pct": account.rebalance_target_usdc_pct if account.rebalance_target_usdc_pct is not None else 0.0,
             }
 
-            threshold = account.dust_sweep_threshold_usd if account.dust_sweep_threshold_usd is not None else 5.0
+            # Sweep everything that is actually sellable: floor at the exchange
+            # minimum so free, non-reserved, non-target coins down to ~$1 are
+            # swept. dust_sweep_threshold_usd acts only as an optional HIGHER floor
+            # (set it above the minimum to deliberately KEEP some dust unswept).
+            user_floor = account.dust_sweep_threshold_usd or 0.0
+            threshold = max(EXCHANGE_MIN_USD, user_floor)
             sweeps = plan_dust_sweeps(
                 all_balances, targets, prices, available_products, threshold
             )

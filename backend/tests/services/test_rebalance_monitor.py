@@ -388,6 +388,7 @@ class TestPortfolioCompositionView:
         account.min_balance_btc = 0.0
         account.min_balance_eth = 0.0
         account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
         account.dust_last_sweep_at = None
@@ -489,6 +490,11 @@ class TestPortfolioCompositionView:
         account.min_balance_usdc = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
 
         # Balanced account — should not trigger rebalance
@@ -640,6 +646,11 @@ class TestRebalanceMonitorProcess:
         account.min_balance_usdc = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
 
         _empty = MagicMock()
@@ -691,6 +702,11 @@ class TestRebalanceMonitorProcess:
         account.min_balance_usdc = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
 
         _empty = MagicMock()
@@ -740,6 +756,7 @@ class TestRebalanceMonitorProcess:
         account.min_balance_btc = 0.0
         account.min_balance_eth = 0.0
         account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
         account.dust_last_sweep_at = None
@@ -1204,6 +1221,11 @@ class TestSweepDustFailureReporting:
         account.is_paper_trading = False
         account.dust_sweep_enabled = True
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
         account.rebalance_target_usd_pct = 34.0
         account.rebalance_target_btc_pct = 33.0
@@ -1253,6 +1275,11 @@ class TestSweepDustFailureReporting:
         account.is_paper_trading = False
         account.dust_sweep_enabled = True
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
         account.rebalance_target_usd_pct = 34.0
         account.rebalance_target_btc_pct = 33.0
@@ -1300,6 +1327,11 @@ class TestSweepDustFailureReporting:
         account.is_paper_trading = False
         account.dust_sweep_enabled = True
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
         account.rebalance_target_usd_pct = 34.0
         account.rebalance_target_btc_pct = 33.0
@@ -1620,6 +1652,11 @@ class TestRebalancerProtectsPositionCoins:
         account.min_balance_usdc = 0.0
         account.dust_sweep_enabled = False
         account.dust_sweep_threshold_usd = 5.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 0.0
         account.dust_last_sweep_at = None
         return account
 
@@ -1843,3 +1880,84 @@ class TestPlanTradesRealMinimums:
         sold = {t["from_currency"] for t in trades}
         assert "BTC" not in sold   # $6.35 < $10 real min
         assert "USDC" in sold      # $4.30 > $1 real min still sells
+
+
+class TestDustSweepFloor:
+    """Dust sweep floors at the exchange minimum (sweeps everything sellable)."""
+
+    TARGETS = {"usd_pct": 100.0, "btc_pct": 0.0, "eth_pct": 0.0, "usdc_pct": 0.0}
+
+    def test_sweeps_coin_above_exchange_minimum(self):
+        """A $2 free coin — left behind by the old $5 threshold — now sweeps."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        sweeps = plan_dust_sweeps(
+            {"USD": 100.0, "ADA": 4.0}, self.TARGETS,   # ADA $2 at $0.50
+            {"ADA-USD": 0.50}, {"ADA-USD"}, threshold_usd=1.0,
+        )
+        assert any(s["coin"] == "ADA" for s in sweeps)
+
+    def test_skips_coin_below_exchange_minimum(self):
+        """A coin worth under the floor isn't swept (can't place the order)."""
+        from app.services.rebalance_monitor import plan_dust_sweeps
+
+        sweeps = plan_dust_sweeps(
+            {"USD": 100.0, "ADA": 1.0}, self.TARGETS,   # ADA $0.50
+            {"ADA-USD": 0.50}, {"ADA-USD"}, threshold_usd=1.0,
+        )
+        assert not any(s["coin"] == "ADA" for s in sweeps)
+
+
+class TestDustSweepRespectsReserves:
+    """The dust sweep must not liquidate minimum-balance reserves."""
+
+    @pytest.mark.asyncio
+    async def test_reserved_usdt_not_swept_but_free_dust_is(self):
+        """A fully-reserved USDT balance is left untouched; an unreserved altcoin
+        still gets swept."""
+        from app.services.rebalance_monitor import RebalanceMonitor
+
+        account = MagicMock()
+        account.id = 1
+        account.name = "Test"
+        account.is_paper_trading = False
+        account.dust_sweep_enabled = True
+        account.dust_sweep_threshold_usd = 0.0
+        account.min_balance_usd = 0.0
+        account.min_balance_btc = 0.0
+        account.min_balance_eth = 0.0
+        account.min_balance_usdc = 0.0
+        account.min_balance_usdt = 20.0      # reserve all 20 USDT
+        account.dust_last_sweep_at = None
+        account.rebalance_target_usd_pct = 100.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+
+        client = AsyncMock()
+        client.get_accounts.return_value = [
+            {"currency": "USD", "available_balance": {"value": "5000"}},
+            {"currency": "USDT", "available_balance": {"value": "20"}},   # all reserved
+            {"currency": "GRT", "available_balance": {"value": "100"}},   # $15 free dust
+        ]
+        client.get_current_price.return_value = "0.15"
+        client.list_products.return_value = [
+            {"product_id": "GRT-USD"}, {"product_id": "USDT-USD"},
+        ]
+        client.create_market_order.return_value = {"success_response": {"order_id": "x"}}
+
+        db = AsyncMock()
+        with patch(
+            "app.services.rebalance_monitor.get_position_locked_amounts",
+            return_value={},
+        ):
+            results = await RebalanceMonitor()._sweep_dust(
+                client, account, db,
+                prices={"USDT-USD": 1.0, "BTC-USD": 100000.0,
+                        "ETH-USD": 2500.0, "USDC-USD": 1.0},
+                free_balances={"USD": 5000.0},
+            )
+
+        swept = {r["coin"] for r in results}
+        assert "USDT" not in swept   # fully reserved → protected
+        assert "GRT" in swept        # free dust → swept

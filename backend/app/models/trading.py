@@ -94,7 +94,9 @@ class Account(Base):
 
     # Dust sweeping (sell non-target-currency dust into portfolio allocation)
     dust_sweep_enabled = Column(Boolean, default=False)
-    dust_sweep_threshold_usd = Column(Float, default=5.0)
+    # Optional HIGHER floor for the dust sweep; 0 = sweep everything sellable down
+    # to the exchange minimum. Set above the minimum to deliberately keep some dust.
+    dust_sweep_threshold_usd = Column(Float, default=0.0)
     dust_last_sweep_at = Column(DateTime, nullable=True)
 
     # Speculative preset bucket — hard cap on total cost basis deployed across

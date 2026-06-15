@@ -416,6 +416,28 @@ class TestRebalanceFloorWarning:
         assert "rebalance_floor_too_low" not in codes
 
     @pytest.mark.asyncio
+    async def test_no_warning_when_target_is_100pct_usd(self, db_session):
+        """A ~100% USD rebalance target only converts INTO USD, never drains it,
+        so the floor warning must not fire even with a $0 USD floor."""
+        user, account = await _make_user_account(
+            db_session, allocation_pct=5.0,
+            rebalance_enabled=True, min_balance_usd=0.0,
+        )
+        account.rebalance_target_usd_pct = 100.0
+        account.rebalance_target_btc_pct = 0.0
+        account.rebalance_target_eth_pct = 0.0
+        account.rebalance_target_usdc_pct = 0.0
+        account.rebalance_target_usdt_pct = 0.0
+        await db_session.flush()
+        await _make_bot(db_session, user=user, account=account)
+
+        info = await get_speculative_bucket_info(
+            db_session, account.id, aggregate_usd_value=10_000.0,
+        )
+        codes = {w["code"] for w in info["warnings"]}
+        assert "rebalance_floor_too_low" not in codes
+
+    @pytest.mark.asyncio
     async def test_warnings_field_is_always_a_list(self, db_session):
         """Shape contract: warnings is always a list, never missing or null."""
         user, account = await _make_user_account(db_session, allocation_pct=5.0)

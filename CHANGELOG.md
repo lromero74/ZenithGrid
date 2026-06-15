@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.168.21] - 2026-06-14
+
+### Changed
+- The dust sweep now clears everything that's actually sellable: it sweeps free, non-reserved, non-target coins down to the exchange minimum (~$1) instead of a flat $5 floor. The per-coin "dust threshold" setting now acts only as an optional *higher* floor — set it above the minimum to deliberately keep some small holdings. New accounts default to sweeping everything sellable.
+
+### Fixed
+- The dust sweep now respects minimum-balance reserves — a coin held back as a reserve (e.g. a USDT spending float) is never swept.
+- The "raise min_balance_usd so the rebalancer doesn't drain cash" warning no longer fires on accounts targeting ~100% USD, where the rebalancer can only move money *into* USD and can't drain it.
+
 ## [v2.168.20] - 2026-06-14
 
 ### Fixed
