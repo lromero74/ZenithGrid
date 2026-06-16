@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
-from app.models import Account, User
+from app.models import Account, Bot, PendingOrder, Position, User
 
 
 # =============================================================================
@@ -251,6 +251,54 @@ class TestGetBalances:
         assert result["usd"] == 50000.0
         assert "reserved_in_positions" in result
         assert "available_btc" in result
+
+    @pytest.mark.asyncio
+    @patch("app.services.portfolio_service.get_coinbase_from_db", new_callable=AsyncMock)
+    async def test_available_usd_excludes_open_position_spend(
+        self, mock_get_cb, db_session, user_with_live_account
+    ):
+        """Available USD = wallet - pending only; a position's already-spent quote is
+        NOT subtracted again (the $12.85-vs-$29.43 bug). Pending buys ARE subtracted."""
+        user, account = user_with_live_account
+
+        bot = Bot(account_id=account.id, user_id=user.id, name="B", strategy_type="rsi")
+        db_session.add(bot)
+        await db_session.flush()
+        # Open USD position that already spent $30 buying its coin.
+        position = Position(
+            account_id=account.id, bot_id=bot.id, user_id=user.id, product_id="FOX-USD",
+            status="open", direction="long", total_base_acquired=60.0,
+            total_quote_spent=30.0, average_buy_price=0.5,
+        )
+        db_session.add(position)
+        await db_session.flush()
+        # $10 committed to an unfilled limit BUY.
+        db_session.add(PendingOrder(
+            position_id=position.id, bot_id=bot.id, order_id="o-1", product_id="FOX-USD",
+            side="BUY", order_type="LIMIT", limit_price=0.4, quote_amount=10.0,
+            base_amount=25.0, trade_type="safety_order_1", status="pending",
+            reserved_amount_quote=10.0, created_at=utcnow(),
+        ))
+        await db_session.flush()
+
+        fake = MagicMock()
+        fake.get_btc_balance = AsyncMock(return_value=0.0)
+        fake.get_eth_balance = AsyncMock(return_value=0.0)
+        fake.get_usd_balance = AsyncMock(return_value=100.0)
+        fake.get_usdc_balance = AsyncMock(return_value=0.0)
+        fake.get_usdt_balance = AsyncMock(return_value=0.0)
+        fake.get_current_price = AsyncMock(return_value=0.035)
+        fake.get_btc_usd_price = AsyncMock(return_value=60000.0)
+        mock_get_cb.return_value = fake
+
+        from app.routers.account_router import get_balances
+        result = await get_balances(account_id=account.id, db=db_session, current_user=user)
+
+        # The position's $30 spend is still reported for the "In Pos." column...
+        assert result["reserved_in_positions"]["USD"] == pytest.approx(30.0)
+        assert result["reserved_in_pending_orders"]["USD"] == pytest.approx(10.0)
+        # ...but available = wallet 100 - pending 10 = 90 (NOT 100 - 30 - 10 = 60).
+        assert result["available_usd"] == pytest.approx(90.0)
 
     @pytest.mark.asyncio
     async def test_no_account_returns_404(self, db_session):

@@ -2902,6 +2902,7 @@
     "functions": [
       "_get_paper_portfolio",
       "_query_closed_pnl",
+      "available_from_wallet",
       "get_account_balances",
       "get_account_portfolio_data",
       "get_cex_portfolio",
