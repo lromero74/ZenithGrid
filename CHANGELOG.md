@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.1] - 2026-06-16
+
+### Fixed
+- The Overall-stats balances panel understated available funds. It subtracted the cash an open position had already spent buying its coin a second time — but that money already left the wallet, so the available figure was double-reduced (e.g. it showed $12.85 available when the real wallet balance was $29.43, matching the Portfolio view). Available now equals the live wallet balance minus only what's committed to unfilled limit buy orders, and matches the Portfolio breakdown. The same fix applies to every currency row (BTC/ETH/USD/USDC/USDT).
+
 ## [v3.3.0] - 2026-06-15
 
 ### Added

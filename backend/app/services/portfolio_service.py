@@ -532,6 +532,20 @@ async def get_generic_cex_portfolio(
     }
 
 
+def available_from_wallet(balance: float, reserved_in_pending_orders: float) -> float:
+    """Authoritative 'available to deploy' for a quote currency held in the wallet.
+
+    Available = live wallet balance minus only what's earmarked for UNFILLED orders.
+    Open positions are deliberately NOT subtracted: when a position buys its coin the
+    quote is spent OUT of the wallet immediately, so the live ``balance`` already
+    reflects that — subtracting the position's spend again would double-count it (the
+    bug behind the Overall-stats panel showing less available USD than the wallet
+    actually holds). Pending limit BUYs, by contrast, still sit in the wallet but are
+    committed, so they ARE subtracted. Floored at zero.
+    """
+    return max(0.0, balance - reserved_in_pending_orders)
+
+
 async def get_account_balances(
     db: AsyncSession, current_user: User, account_id: int = None,
 ) -> dict:
@@ -637,11 +651,15 @@ async def get_account_balances(
             if base_currency in reserved_in_pending_orders and order.reserved_amount_base:
                 reserved_in_pending_orders[base_currency] += order.reserved_amount_base
 
-    available_btc = max(0, btc_balance - reserved_in_positions["BTC"] - reserved_in_pending_orders["BTC"])
-    available_eth = max(0, eth_balance - reserved_in_positions["ETH"] - reserved_in_pending_orders["ETH"])
-    available_usd = max(0, usd_balance - reserved_in_positions["USD"] - reserved_in_pending_orders["USD"])
-    available_usdc = max(0, usdc_balance - reserved_in_positions["USDC"] - reserved_in_pending_orders["USDC"])
-    available_usdt = max(0, usdt_balance - reserved_in_positions["USDT"] - reserved_in_pending_orders["USDT"])
+    # Available = wallet minus pending-order earmarks only. Open positions already
+    # spent their quote out of the wallet, so they must NOT be subtracted again
+    # (see available_from_wallet). reserved_in_positions is still returned below for
+    # the informational "In Pos." column.
+    available_btc = available_from_wallet(btc_balance, reserved_in_pending_orders["BTC"])
+    available_eth = available_from_wallet(eth_balance, reserved_in_pending_orders["ETH"])
+    available_usd = available_from_wallet(usd_balance, reserved_in_pending_orders["USD"])
+    available_usdc = available_from_wallet(usdc_balance, reserved_in_pending_orders["USDC"])
+    available_usdt = available_from_wallet(usdt_balance, reserved_in_pending_orders["USDT"])
 
     total_btc_value = btc_balance + (eth_balance * current_price)
     total_usd_value = (total_btc_value * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
