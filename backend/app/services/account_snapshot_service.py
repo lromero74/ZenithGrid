@@ -418,6 +418,30 @@ async def get_daily_activity(
     """
     cutoff = utcnow() - timedelta(days=days)
 
+    # Bound activity to when tracking started — the earliest account-value snapshot
+    # in scope. After an account reset the snapshot history restarts, so without this
+    # the chart would surface pre-reset deposits/withdrawals/trades that predate the
+    # fresh tracking window (e.g. months-old fiat deposits and card spends crammed
+    # onto a 2-day post-reset chart). If no snapshots exist yet (tracking hasn't
+    # started), fall back to the rolling `days` window unchanged.
+    snap_filters = [AccountValueSnapshot.user_id == user_id]
+    if account_id is not None:
+        snap_filters.append(AccountValueSnapshot.account_id == account_id)
+    if not include_paper_trading:
+        snap_filters.append(
+            AccountValueSnapshot.account_id.in_(
+                select(Account.id).where(
+                    Account.user_id == user_id,
+                    Account.is_paper_trading.is_(False),
+                )
+            )
+        )
+    tracking_start = await db.scalar(
+        select(func.min(AccountValueSnapshot.snapshot_date)).where(and_(*snap_filters))
+    )
+    if tracking_start and tracking_start > cutoff:
+        cutoff = tracking_start
+
     # --- Closed positions ---
     pos_filters = [
         Position.user_id == user_id,

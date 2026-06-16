@@ -16,7 +16,7 @@ from app.utils.timeutil import utcnow
 
 import pytest
 
-from app.models import Account, AccountTransfer, Position, User
+from app.models import Account, AccountTransfer, AccountValueSnapshot, Position, User
 from app.services.account_snapshot_service import get_daily_activity
 
 
@@ -318,6 +318,63 @@ class TestGetDailyActivity:
 
         result = await get_daily_activity(db_session, user.id, days=30)
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_activity_bound_to_tracking_start_snapshot(self, db_session):
+        """Activity before the first snapshot (tracking start) is excluded even when
+        within the `days` window; on/after is included. This is the post-reset chart
+        fix — old deposits/withdrawals predating tracking must not appear."""
+        user, account = await _seed_user_and_account(db_session)
+        now = utcnow()
+        tracking_start = now - timedelta(days=3)
+
+        # Tracking starts here (first snapshot, e.g. just after a reset).
+        db_session.add(AccountValueSnapshot(
+            user_id=user.id, account_id=account.id, snapshot_date=tracking_start,
+            total_value_btc=1.0, total_value_usd=100.0,
+        ))
+        # A deposit BEFORE tracking start — within 365 days but pre-reset → excluded.
+        db_session.add(AccountTransfer(
+            user_id=user.id, account_id=account.id, transfer_type="deposit",
+            amount=1000.0, currency="USD", amount_usd=1000.0,
+            occurred_at=now - timedelta(days=30),
+        ))
+        # A withdrawal AFTER tracking start → included.
+        db_session.add(AccountTransfer(
+            user_id=user.id, account_id=account.id, transfer_type="withdrawal",
+            amount=20.0, currency="USD", amount_usd=20.0,
+            occurred_at=now - timedelta(days=1),
+        ))
+        # A trade closed BEFORE tracking start → excluded too.
+        db_session.add(Position(
+            user_id=user.id, account_id=account.id, product_id="ETH-USD",
+            status="closed", opened_at=now - timedelta(days=40),
+            closed_at=now - timedelta(days=31), profit_usd=500.0, profit_quote=500.0,
+        ))
+        await db_session.flush()
+
+        result = await get_daily_activity(db_session, user.id, days=365)
+
+        assert len(result) == 1
+        assert result[0]["category"] == "withdrawal"
+        assert result[0]["amount"] == 20.0
+
+    @pytest.mark.asyncio
+    async def test_no_snapshots_falls_back_to_days_window(self, db_session):
+        """With no snapshots (tracking never started), the rolling `days` window is
+        used unchanged — so existing/new accounts without a reset still show activity."""
+        user, account = await _seed_user_and_account(db_session)
+        now = utcnow()
+        db_session.add(AccountTransfer(
+            user_id=user.id, account_id=account.id, transfer_type="deposit",
+            amount=100.0, currency="USD", amount_usd=100.0,
+            occurred_at=now - timedelta(days=5),
+        ))
+        await db_session.flush()
+
+        result = await get_daily_activity(db_session, user.id, days=30)
+        assert len(result) == 1
+        assert result[0]["category"] == "deposit"
 
     @pytest.mark.asyncio
     async def test_account_id_filter(self, db_session):

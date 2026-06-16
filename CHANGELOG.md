@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.2] - 2026-06-16
+
+### Fixed
+- The account-value chart no longer shows deposits, withdrawals, and trades from before you started tracking. Activity markers are now bounded to your tracking start (the first snapshot — e.g. right after an account reset), so months-old fiat transfers and card spends no longer get crammed onto a freshly-reset chart. Accounts that haven't started tracking yet are unaffected (still use the normal rolling window).
+
 ## [v3.3.1] - 2026-06-16
 
 ### Fixed
