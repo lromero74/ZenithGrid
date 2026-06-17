@@ -264,7 +264,7 @@ describe('usePositionsData', () => {
       },
     ] as any
 
-    let visibilityState: DocumentVisibilityState = 'hidden'
+    const visibilityState: DocumentVisibilityState = 'hidden'
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       get: () => visibilityState,

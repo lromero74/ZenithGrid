@@ -18,6 +18,7 @@ import {
   type RebalancerBot,
 } from '../../services/botRebalancerApi'
 import { useNotifications } from '../../contexts/NotificationContext'
+import { redistributeSlots } from './rebalancerMath'
 
 interface BotBudgetRebalancerProps {
   accountId: number
@@ -113,7 +114,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
       prev.map((g, i) => {
         if (i !== idx) return g
         if (field === 'maxTotalDraft') {
-          const v = Math.min(150, Math.max(1, parseFloat(g.maxTotalDraft) || 100))
+          const v = Math.min(200, Math.max(1, parseFloat(g.maxTotalDraft) || 100))
           return { ...g, max_total_pct: v, maxTotalDraft: String(v) }
         } else {
           const v = Math.min(50, Math.max(0, parseFloat(g.toleranceDraft) || 5))
@@ -169,89 +170,8 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
     setGroups((prev) =>
       prev.map((g, i) => {
         if (i !== groupIdx) return g
-        const maxPct = g.max_total_pct
-        const slots = g.slots
-
-        const currentSlot = slots.find((s) => s.bot_id === botId)
-        const isBound = currentSlot?.bound || false
-
-        // 1. Calculate the change for the dragged bot (and its bound partners)
-        const clamped = Math.min(Math.max(0, newValue), maxPct)
-
-        // Count how many bound bots we have (including this one)
-        const boundSlots = isBound ? slots.filter((s) => s.enabled && s.bound) : []
-        const numBound = boundSlots.length > 0 ? boundSlots.length : 1
-
-        // 2. Identify fixed (locked) and adjustable (unbound + unlocked) bots
-        // Bound bots are handled separately from "unlocked" redistribution logic
-        const fixedTotal = slots
-          .filter((s) => s.enabled && s.locked)
-          .reduce((sum, s) => sum + s.target_pct, 0)
-
-        const adjustableSlots = slots.filter(
-          (s) => s.enabled && !s.locked && (!isBound || !s.bound) && s.bot_id !== botId
-        )
-        const adjustableTotal = adjustableSlots.reduce((sum, s) => sum + s.target_pct, 0)
-
-        // 3. How much room is left after the dragged bot(s) and locked bots?
-        const totalForDraggedGroup = clamped * numBound
-        const remainingForAdjustable = Math.max(0, maxPct - totalForDraggedGroup - fixedTotal)
-
-        let newSlots: BotSlotState[]
-        const snap = (v: number) => Math.round(v * 2) / 2
-
-        if (adjustableSlots.length === 0) {
-          // No free bots to absorb — must clamp the dragged group to what's left
-          const maxAllowedForGroup = Math.max(0, maxPct - fixedTotal)
-          const maxAllowedPerBot = snap(maxAllowedForGroup / numBound)
-          const finalValue = Math.min(clamped, maxAllowedPerBot)
-
-          newSlots = slots.map((s) => {
-            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
-              return { ...s, target_pct: finalValue }
-            }
-            return s
-          })
-        } else if (adjustableTotal > 0) {
-          const scaleFactor = remainingForAdjustable / adjustableTotal
-          const rawValues = adjustableSlots.map((s) => Math.max(0, snap(s.target_pct * scaleFactor)))
-          const assignedSum = rawValues.reduce((a, b) => a + b, 0)
-          const remainder = snap(remainingForAdjustable - assignedSum)
-
-          if (remainder !== 0) {
-            rawValues[rawValues.length - 1] = Math.max(0, rawValues[rawValues.length - 1] + remainder)
-          }
-
-          let adjIdx = 0
-          newSlots = slots.map((s) => {
-            // Dragged bot or its bound partners
-            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
-              return { ...s, target_pct: clamped }
-            }
-            // Locked bots stay fixed
-            if (!s.enabled || s.locked) return s
-            // Adjustable bots absorb the rest
-            return { ...s, target_pct: rawValues[adjIdx++] }
-          })
-        } else {
-          // Adjustable bots were all 0 — distribute remaining equally
-          const eachShare = snap(remainingForAdjustable / adjustableSlots.length)
-          const assignedSum = eachShare * adjustableSlots.length
-          const remainder = snap(remainingForAdjustable - assignedSum)
-
-          let adjIdx = 0
-          newSlots = slots.map((s) => {
-            if (s.enabled && ((isBound && s.bound) || s.bot_id === botId)) {
-              return { ...s, target_pct: clamped }
-            }
-            if (!s.enabled || s.locked) return s
-            const extra = adjIdx === adjustableSlots.length - 1 ? remainder : 0
-            adjIdx++
-            return { ...s, target_pct: Math.max(0, eachShare + extra) }
-          })
-        }
-
-        return { ...g, slots: newSlots }
+        const nextSlots = redistributeSlots(g.slots, g.max_total_pct, botId, newValue)
+        return { ...g, slots: nextSlots }
       })
     )
   }
@@ -467,7 +387,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                       <input
                         type="number"
                         min={1}
-                        max={150}
+                        max={200}
                         step={1}
                         value={group.maxTotalDraft}
                         onChange={(e) => updateDraft(groupIdx, 'maxTotalDraft', e.target.value)}
@@ -475,7 +395,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                         className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-white text-sm font-mono"
                       />
                       <p className="text-xs text-slate-500 mt-0.5">
-                        1–150%. Default 100%.
+                        1–200%. Default 100%.
                       </p>
                     </div>
                     <div>
