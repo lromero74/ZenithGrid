@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.3] - 2026-06-16
+
+### Changed
+- Bot Budget Rebalancer sliders now behave more intuitively: dragging one slider down leaves the others alone, and dragging one up only redistributes when it would exceed the group's max total allocation. When redistribution is needed, it takes from the unlocked bot with the most allocation first.
+- Bot Budget Rebalancer max total allocation raised from 150% to 200%.
+
+### Added
+- Backend validation test for the 200% rebalancer cap and account ownership checks.
+- Pure frontend unit tests covering the rebalancer slider redistribution rules (lock, bound, max-cap, and 200% mode).
+
 ## [v3.3.2] - 2026-06-16
 
 ### Fixed

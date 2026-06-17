@@ -60,7 +60,7 @@
     "bot_management": [
       {
         "file": "components/trading/DCABudgetConfigForm.tsx",
-        "purpose": "DCA budget configuration form. v2.167.10: uses the shared calculateSoftCeiling helper from botUtils.ts instead of an inline copy (no more divergent client implementations). Accepts a new optional prop backendEffectiveCeiling?: number | null (the backend's authoritative Bot.soft_ceiling_effective_max). The 'Current effective ceiling' display and DCA budget breakdown prefer the live client estimate; fall back to backendEffectiveCeiling when the live estimate is null, then to the configured max. Shows 'calculating…' when neither is available."
+        "purpose": "DCA budget configuration form. v2.167.10: uses the shared calculateSoftCeiling helper from botUtils.ts instead of an inline copy (no more divergent client implementations). Accepts a new optional prop backendEffectiveCeiling?: number | null (the backend's authoritative Bot.soft_ceiling_effective_max). The 'Current effective ceiling' display and DCA budget breakdown prefer the live client estimate; fall back to backendEffectiveCeiling when the live estimate is null, then to the configured max. Shows 'calculating\u2026' when neither is available."
       },
       {
         "file": "components/ConditionalStrategyForm.tsx",
@@ -539,7 +539,7 @@
       "bots": [
         {
           "file": "components/bots/botUtils.ts",
-          "purpose": "BotFormData type, defaults, parameter validation, pair conversion. calculateSoftCeiling(...) returns number | null: null when the soft ceiling is not computable (worstCaseMin × multiplier <= 0, e.g. the worst-case exchange minimum has not loaded yet) instead of dividing by zero; callers must treat null as 'unknown'."
+          "purpose": "BotFormData type, defaults, parameter validation, pair conversion. calculateSoftCeiling(...) returns number | null: null when the soft ceiling is not computable (worstCaseMin \u00d7 multiplier <= 0, e.g. the worst-case exchange minimum has not loaded yet) instead of dividing by zero; callers must treat null as 'unknown'."
         }
       ],
       "news": [
@@ -600,6 +600,11 @@
           "purpose": "Position entry/exit lines on chart"
         }
       ]
+    },
+    "frontend/src/components/account/rebalancerMath.ts": {
+      "name": "rebalancerMath",
+      "description": "Pure allocation logic for Bot Budget Rebalancer slider redistribution",
+      "dependencies": []
     }
   },
   "contexts": [
@@ -940,7 +945,7 @@
         "AIOpinionLog (extended in v2.165.0 with optional doubling_probability_score, speculative_score, speculative_components fields for the catalyst-trade reasoning UI)"
       ],
       "bot": [
-        "Bot (v2.167.10: gained soft_ceiling_effective_max?: number | null — the backend's authoritative effective soft ceiling, used as fallback when the live client estimate is not computable)",
+        "Bot (v2.167.10: gained soft_ceiling_effective_max?: number | null \u2014 the backend's authoritative effective soft ceiling, used as fallback when the live client estimate is not computable)",
         "BotCreate",
         "BotStats",
         "StrategyParameter",

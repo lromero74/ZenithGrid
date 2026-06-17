@@ -3,7 +3,7 @@
     {
       "file": "routers/account_router.py",
       "prefix": "/api/account",
-      "purpose": "Account balances, aggregate value, portfolio operations; target_currency validation uses SUPPORTED_TARGET_CURRENCIES from portfolio_conversion_service (BTC, USD, USDC, USDT, ETH). v2.167.9: GET /api/account/aggregate-value accepts an optional account_id query param; when supplied, ownership is verified via accessible_accounts_filter and the aggregate/market-budget buckets are scoped strictly to that account; without it, legacy default applies (paper-only → paper account, else first CEX). Response building is handled by two module-level helpers: _build_aggregate_response(client) and _empty_aggregate_response()."
+      "purpose": "Account balances, aggregate value, portfolio operations; target_currency validation uses SUPPORTED_TARGET_CURRENCIES from portfolio_conversion_service (BTC, USD, USDC, USDT, ETH). v2.167.9: GET /api/account/aggregate-value accepts an optional account_id query param; when supplied, ownership is verified via accessible_accounts_filter and the aggregate/market-budget buckets are scoped strictly to that account; without it, legacy default applies (paper-only \u2192 paper account, else first CEX). Response building is handled by two module-level helpers: _build_aggregate_response(client) and _empty_aggregate_response()."
     },
     {
       "file": "routers/account_value_router.py",
@@ -184,6 +184,19 @@
       "file": "routers/account_sharing_router.py",
       "prefix": "/api/accounts, /api/invitations",
       "purpose": "Account sharing / co-management: invite members (manager or shadow role), list members, update member role, remove member, leave account, resend invite, cancel invite; user-scoped inbound invitation endpoints (list/accept/decline). Invitations are gated by InviteRequest(email, role) where role is 'manager' or 'shadow'. Hardened in v2.164.0: rate-limited via user_rate_limit (invite: 10/hr per account + 30/hr per inviter; token actions: 30/hr per user) and invitation-token error responses collapsed to a single generic 'Invalid or expired invitation.' to prevent token-state enumeration. Delegates to services.account_sharing_service for business logic."
+    },
+    {
+      "path": "/api/bots/rebalancer",
+      "file": "backend/app/bot_routers/bot_rebalancer_router.py",
+      "description": "Bot Budget Rebalancer: GET state and PUT save per quote-currency group",
+      "dependencies": [
+        "app.bot_routers.schemas",
+        "app.models.trading",
+        "app.multi_bot_monitor"
+      ],
+      "tags": [
+        "bot-rebalancer"
+      ]
     }
   ],
   "sub_routers": {
@@ -495,7 +508,7 @@
         "average_buy_price"
       ],
       "indexes": [
-        "ix_positions_account_status_closed — compound on (account_id, status, closed_at); declared in __table_args__ and backfilled by migration 087; supports range-scan in _query_closed_pnl"
+        "ix_positions_account_status_closed \u2014 compound on (account_id, status, closed_at); declared in __table_args__ and backfilled by migration 087; supports range-scan in _query_closed_pnl"
       ]
     },
     {
@@ -1366,7 +1379,7 @@
     },
     {
       "file": "services/speculative_bucket_service.py",
-      "purpose": "Speculative bucket math and calibration analysis for the high-risk doubling preset. get_speculative_bucket_info(account) returns bucket_usd (account_value * speculative_allocation_pct), used_usd (sum of open speculative-bucket position cost basis), remaining_usd, utilization_pct, and open_speculative_positions. validate_speculative_entry(account, proposed_notional_usd) is the preflight bucket check wired into trading_engine.signal_processor.buy_decision so a new speculative position cannot exceed the configured cap. analyze_speculative_calibration(account) aggregates closed speculative trades to produce the win-rate vs target-multiple-hit stats and recommended allocation used by the daily calibration monitor. _build_bucket_warnings() emits the 'rebalance_floor_too_low' warning only when the rebalancer can actually drain USD — suppressed when non-USD rebalance targets sum to 0 (i.e. ~100% USD target), because in that configuration the rebalancer only converts INTO USD and cannot starve the speculative bucket.",
+      "purpose": "Speculative bucket math and calibration analysis for the high-risk doubling preset. get_speculative_bucket_info(account) returns bucket_usd (account_value * speculative_allocation_pct), used_usd (sum of open speculative-bucket position cost basis), remaining_usd, utilization_pct, and open_speculative_positions. validate_speculative_entry(account, proposed_notional_usd) is the preflight bucket check wired into trading_engine.signal_processor.buy_decision so a new speculative position cannot exceed the configured cap. analyze_speculative_calibration(account) aggregates closed speculative trades to produce the win-rate vs target-multiple-hit stats and recommended allocation used by the daily calibration monitor. _build_bucket_warnings() emits the 'rebalance_floor_too_low' warning only when the rebalancer can actually drain USD \u2014 suppressed when non-USD rebalance targets sum to 0 (i.e. ~100% USD target), because in that configuration the rebalancer only converts INTO USD and cannot starve the speculative bucket.",
       "type": "trading"
     },
     {
@@ -1486,7 +1499,7 @@
     },
     {
       "file": "services/portfolio_calculations.py",
-      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings (handles both owner-scoped and aggregated-cross-account paths via optional open_positions), _compute_position_pnl, _apply_asset_pnl_to_holdings, _compute_balance_breakdown (with BalanceBreakdownParams dataclass). Four shadow helpers (_process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl) were removed in v2.164.3; both call paths in portfolio_service now use the single canonical set. v2.168.17: _compute_closed_pnl (which looped over every closed position) was removed and replaced by aggregate_pnl_rows(rows) — a pure function that buckets pre-grouped SQL sums (rows come from portfolio_service._query_closed_pnl). No DB, cache, or API calls.",
+      "purpose": "Pure, side-effect-free portfolio computation helpers extracted from portfolio_service (Phase 5): _build_portfolio_holdings (handles both owner-scoped and aggregated-cross-account paths via optional open_positions), _compute_position_pnl, _apply_asset_pnl_to_holdings, _compute_balance_breakdown (with BalanceBreakdownParams dataclass). Four shadow helpers (_process_cex_holdings, _apply_unrealized_pnl, _calculate_balance_breakdown, _calculate_realized_pnl) were removed in v2.164.3; both call paths in portfolio_service now use the single canonical set. v2.168.17: _compute_closed_pnl (which looped over every closed position) was removed and replaced by aggregate_pnl_rows(rows) \u2014 a pure function that buckets pre-grouped SQL sums (rows come from portfolio_service._query_closed_pnl). No DB, cache, or API calls.",
       "type": "trading"
     },
     {
@@ -1506,7 +1519,7 @@
     },
     {
       "file": "services/position_coin_audit.py",
-      "purpose": "Periodic background safety monitor (hourly, AUDIT_INTERVAL_SECONDS=3600, 180s startup delay) that guards against the wallet-drift that causes INSUFFICIENT_FUND sell failures. For each real (non-paper, active) CEX account it sums every open LONG SPOT position's recorded total_base_acquired per base currency (expected_base_by_currency) and compares to the account-scoped live Coinbase available balance (get_coinbase_for_account -> client.get_accounts(force_fresh=True)). Any coin whose wallet balance is below recorded*0.999 (COVERAGE_HAIRCUT, mirrors sell_executor's SELL_BALANCE_HAIRCUT) is flagged via find_coin_shortfalls, logged as a WARNING, and recorded to the real-money audit trail via realmoney_audit.record_event('coin_coverage_shortfall', ...). Pure, unit-tested helpers: expected_base_by_currency(positions) and find_coin_shortfalls(expected, wallet, haircut). Public monitor API: start_position_coin_audit_monitor / stop_position_coin_audit_monitor (same start/stop pattern as prop_guard_monitor / speculative_calibration_monitor). Read-only — never trades. v3.3.0.",
+      "purpose": "Periodic background safety monitor (hourly, AUDIT_INTERVAL_SECONDS=3600, 180s startup delay) that guards against the wallet-drift that causes INSUFFICIENT_FUND sell failures. For each real (non-paper, active) CEX account it sums every open LONG SPOT position's recorded total_base_acquired per base currency (expected_base_by_currency) and compares to the account-scoped live Coinbase available balance (get_coinbase_for_account -> client.get_accounts(force_fresh=True)). Any coin whose wallet balance is below recorded*0.999 (COVERAGE_HAIRCUT, mirrors sell_executor's SELL_BALANCE_HAIRCUT) is flagged via find_coin_shortfalls, logged as a WARNING, and recorded to the real-money audit trail via realmoney_audit.record_event('coin_coverage_shortfall', ...). Pure, unit-tested helpers: expected_base_by_currency(positions) and find_coin_shortfalls(expected, wallet, haircut). Public monitor API: start_position_coin_audit_monitor / stop_position_coin_audit_monitor (same start/stop pattern as prop_guard_monitor / speculative_calibration_monitor). Read-only \u2014 never trades. v3.3.0.",
       "type": "background"
     },
     {
@@ -1516,7 +1529,7 @@
     },
     {
       "file": "services/rebalance_monitor.py",
-      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost). v2.168.17: adds _price_dust_coins() method that prices dust-candidate coins with bounded concurrency. v2.168.19: EXCHANGE_MIN_USD lowered from 10.0 to 1.0 (the old value was the Coinbase perps notional, wrong for spot); DEFAULT_MIN_TRADE_PCT lowered from 5.0 to 2.0. Adds module-level get_min_usd_by_currency(client, currencies) which fetches each X-USD product's real minimum order size via order_validation.get_product_minimums and floors at EXCHANGE_MIN_USD; plan_trades() now accepts a min_usd_by_currency parameter and applies max(churn-guard, real per-product min) as the per-trade floor; _execute_trade calls order_validation.validate_order_size as an execution-time backstop. v2.168.20: plan_topup_trades() now accepts min_usd_by_currency (fetched once in _process_account and shared with plan_trades); shortfalls below the exchange minimum are rounded UP to that minimum so the reserve is honored even for tiny deficits; funds are sourced largest-donor-first (not proportionally) so every resulting order clears the exchange minimum; if available funds can't cover even one minimum order, no top-up is attempted. v2.168.21: _sweep_dust() now subtracts min_balance_* reserves (USD/BTC/ETH/USDC/USDT) before evaluating sweep candidates so a reserved coin (e.g. a USDT spending reserve) is never swept; the sweep threshold is floored at EXCHANGE_MIN_USD so all sellable free non-target coins down to ~$1 are swept — Account.dust_sweep_threshold_usd now acts only as an optional HIGHER floor (set above the minimum to deliberately keep some dust unswept).",
+      "purpose": "Portfolio rebalance trigger monitoring; 30s APScheduler interval. Maintains an in-memory _allocation_cache (6h TTL) keyed by account_id that stores the latest allocation snapshot; the multi_bot_monitor reads it to decide whether to gate each bot. v2.167.0 adds clear_account_gate_data(account_id) which the accounts mutation router calls when rebalancing is disabled, so the monitor stops blocking bots on stale data. v2.168.12: sum_locked_base_amounts(positions) is the single source of truth for per-base-coin totals held in open positions; _process_account subtracts these from free wallet balances before drift detection and sell caps so the rebalancer never sells coins a bot is holding (a position's capital still counts toward its quote currency at cost). v2.168.17: adds _price_dust_coins() method that prices dust-candidate coins with bounded concurrency. v2.168.19: EXCHANGE_MIN_USD lowered from 10.0 to 1.0 (the old value was the Coinbase perps notional, wrong for spot); DEFAULT_MIN_TRADE_PCT lowered from 5.0 to 2.0. Adds module-level get_min_usd_by_currency(client, currencies) which fetches each X-USD product's real minimum order size via order_validation.get_product_minimums and floors at EXCHANGE_MIN_USD; plan_trades() now accepts a min_usd_by_currency parameter and applies max(churn-guard, real per-product min) as the per-trade floor; _execute_trade calls order_validation.validate_order_size as an execution-time backstop. v2.168.20: plan_topup_trades() now accepts min_usd_by_currency (fetched once in _process_account and shared with plan_trades); shortfalls below the exchange minimum are rounded UP to that minimum so the reserve is honored even for tiny deficits; funds are sourced largest-donor-first (not proportionally) so every resulting order clears the exchange minimum; if available funds can't cover even one minimum order, no top-up is attempted. v2.168.21: _sweep_dust() now subtracts min_balance_* reserves (USD/BTC/ETH/USDC/USDT) before evaluating sweep candidates so a reserved coin (e.g. a USDT spending reserve) is never swept; the sweep threshold is floored at EXCHANGE_MIN_USD so all sellable free non-target coins down to ~$1 are swept \u2014 Account.dust_sweep_threshold_usd now acts only as an optional HIGHER floor (set above the minimum to deliberately keep some dust unswept).",
       "type": "background"
     },
     {
@@ -1571,7 +1584,7 @@
     },
     {
       "file": "services/session_maker_mixin.py",
-      "purpose": "SessionMakerMixin — shared base class providing set_session_maker() / _get_sm() async-session-maker injection for monitor-style classes. Inherited by RebalanceMonitor, AutoBuyMonitor, PerpsMonitor, TradingPairMonitor (delisted_pair_monitor), and ContentRefreshService, replacing per-class duplicates of these two methods. Defaults _session_maker to None at the class level; _get_sm() falls back to app.database.async_session_maker when no maker has been injected.",
+      "purpose": "SessionMakerMixin \u2014 shared base class providing set_session_maker() / _get_sm() async-session-maker injection for monitor-style classes. Inherited by RebalanceMonitor, AutoBuyMonitor, PerpsMonitor, TradingPairMonitor (delisted_pair_monitor), and ContentRefreshService, replacing per-class duplicates of these two methods. Defaults _session_maker to None at the class level; _get_sm() falls back to app.database.async_session_maker when no maker has been injected.",
       "type": "infrastructure"
     },
     {
