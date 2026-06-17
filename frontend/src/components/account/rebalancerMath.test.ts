@@ -83,12 +83,12 @@ describe('redistributeSlots', () => {
     expect(pctById(result)).toEqual({ 1: 50, 2: 50 })
   })
 
-  it('handles 200% max_total_pct correctly', () => {
-    const slots = makeSlots([80, 60, 40])
-    const result = redistributeSlots(slots, 200, 1, 130)
+  it('handles 300% max_total_pct correctly', () => {
+    const slots = makeSlots([120, 90, 60])
+    const result = redistributeSlots(slots, 300, 1, 200)
 
-    // Dragged bot 1 to 130. Total others = 100. New total = 230, overage = 30.
-    // Bot 2 (60) gives 30, bot 3 untouched.
-    expect(pctById(result)).toEqual({ 1: 130, 2: 30, 3: 40 })
+    // Dragged bot 1 to 200. Total others = 150. New total = 350, overage = 50.
+    // Bot 2 (90) gives 50, bot 3 untouched.
+    expect(pctById(result)).toEqual({ 1: 200, 2: 40, 3: 60 })
   })
 })
