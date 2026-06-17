@@ -114,7 +114,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
       prev.map((g, i) => {
         if (i !== idx) return g
         if (field === 'maxTotalDraft') {
-          const v = Math.min(200, Math.max(1, parseFloat(g.maxTotalDraft) || 100))
+          const v = Math.min(300, Math.max(1, parseFloat(g.maxTotalDraft) || 100))
           return { ...g, max_total_pct: v, maxTotalDraft: String(v) }
         } else {
           const v = Math.min(50, Math.max(0, parseFloat(g.toleranceDraft) || 5))
@@ -387,7 +387,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                       <input
                         type="number"
                         min={1}
-                        max={200}
+                        max={300}
                         step={1}
                         value={group.maxTotalDraft}
                         onChange={(e) => updateDraft(groupIdx, 'maxTotalDraft', e.target.value)}
@@ -395,7 +395,7 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                         className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-white text-sm font-mono"
                       />
                       <p className="text-xs text-slate-500 mt-0.5">
-                        1–200%. Default 100%.
+                        1–300%. Default 100%.
                       </p>
                     </div>
                     <div>

@@ -207,6 +207,6 @@ class BotRebalancerBotSlot(BaseModel):
 class BotRebalancerSaveRequest(BaseModel):
     account_id: int
     base_currency: str
-    max_total_pct: float                    # group-level max (1..200)
+    max_total_pct: float                    # group-level max (1..300)
     overweight_tolerance_pct: float = 5.0   # % above target before gating kicks in
     bots: List[BotRebalancerBotSlot]

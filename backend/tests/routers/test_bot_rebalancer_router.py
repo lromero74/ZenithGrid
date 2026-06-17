@@ -65,8 +65,8 @@ class TestSaveRebalancerValidation:
     """Tests for PUT /api/bots/rebalancer validation rules."""
 
     @pytest.mark.asyncio
-    async def test_save_accepts_200_percent_max_total(self, db_session):
-        """Happy path: max_total_pct up to 200 is accepted."""
+    async def test_save_accepts_300_percent_max_total(self, db_session):
+        """Happy path: max_total_pct up to 300 is accepted."""
         user = _make_user(db_session)
         await db_session.flush()
         account = await _make_account(db_session, user)
@@ -76,11 +76,11 @@ class TestSaveRebalancerValidation:
         payload = BotRebalancerSaveRequest(
             account_id=account.id,
             base_currency="USD",
-            max_total_pct=200.0,
+            max_total_pct=300.0,
             overweight_tolerance_pct=5.0,
             bots=[
-                {"bot_id": bot1.id, "enabled": True, "target_pct": 120.0},
-                {"bot_id": bot2.id, "enabled": True, "target_pct": 80.0},
+                {"bot_id": bot1.id, "enabled": True, "target_pct": 180.0},
+                {"bot_id": bot2.id, "enabled": True, "target_pct": 120.0},
             ],
         )
 
@@ -88,8 +88,8 @@ class TestSaveRebalancerValidation:
         assert result["ok"] is True
 
     @pytest.mark.asyncio
-    async def test_save_rejects_201_percent_max_total(self, db_session):
-        """Failure: max_total_pct above 200 is rejected."""
+    async def test_save_rejects_301_percent_max_total(self, db_session):
+        """Failure: max_total_pct above 300 is rejected."""
         user = _make_user(db_session)
         await db_session.flush()
         account = await _make_account(db_session, user)
@@ -98,7 +98,7 @@ class TestSaveRebalancerValidation:
         payload = BotRebalancerSaveRequest(
             account_id=account.id,
             base_currency="USD",
-            max_total_pct=201.0,
+            max_total_pct=301.0,
             overweight_tolerance_pct=5.0,
             bots=[
                 {"bot_id": bot1.id, "enabled": True, "target_pct": 100.0},
@@ -108,7 +108,7 @@ class TestSaveRebalancerValidation:
         with pytest.raises(HTTPException) as exc_info:
             await save_rebalancer(payload=payload, db=db_session, current_user=user)
         assert exc_info.value.status_code == 400
-        assert "between 1 and 200" in exc_info.value.detail
+        assert "between 1 and 300" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_save_rejects_total_exceeding_max(self, db_session):

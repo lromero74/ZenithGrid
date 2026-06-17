@@ -111,10 +111,10 @@ async def save_rebalancer(
     if not acc_q.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Not your account")
 
-    if not (0 < payload.max_total_pct <= 200):
+    if not (0 < payload.max_total_pct <= 300):
         raise HTTPException(
             status_code=400,
-            detail="max_total_pct must be between 1 and 200",
+            detail="max_total_pct must be between 1 and 300",
         )
 
     # Validate sum of enabled-bot target_pcts <= max_total_pct
