@@ -417,7 +417,6 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                   </div>
                   
                   {group.expanded ? (
-                  {group.expanded ? (
                     <ChevronUp className="w-4 h-4 text-slate-400" />
                   ) : (
                     <ChevronDown className="w-4 h-4 text-slate-400" />
