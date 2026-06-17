@@ -166,6 +166,65 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
     )
   }
 
+  function linkAllSliders(groupIdx: number) {
+    setGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== groupIdx) return g
+        
+        // Get all enabled bots in this group
+        const enabledBots = g.slots.filter(s => s.enabled && !s.locked)
+        
+        if (enabledBots.length === 0) {
+          addToast({
+            type: 'error',
+            title: 'No Enabled Bots',
+            message: 'Please enable at least one bot before linking all sliders.',
+          })
+          return g
+        }
+        
+        // Bind all enabled bots together
+        const nextSlots = g.slots.map(s => {
+          if (s.enabled && !s.locked) {
+            return { ...s, bound: true }
+          }
+          return s
+        })
+        
+        addToast({
+          type: 'success',
+          title: 'All Sliders Linked',
+          message: `Linked ${enabledBots.length} slider${enabledBots.length > 1 ? 's' : ''} together.`,
+        })
+        
+        return { ...g, slots: nextSlots }
+      })
+    )
+  }
+
+  function unlinkAllSliders(groupIdx: number) {
+    setGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== groupIdx) return g
+        
+        // Unbind all enabled bots in this group
+        const nextSlots = g.slots.map(s => ({
+          ...s,
+          bound: false,
+          locked: false
+        }))
+        
+        addToast({
+          type: 'success',
+          title: 'All Links Removed',
+          message: `Unlinked all sliders in ${g.base_currency} group.`,
+        })
+        
+        return { ...g, slots: nextSlots }
+      })
+    )
+  }
+
   function handleSliderChange(groupIdx: number, botId: number, newValue: number) {
     setGroups((prev) =>
       prev.map((g, i) => {
@@ -324,10 +383,40 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                         : nearLimit
                         ? 'text-amber-400'
                         : 'text-emerald-400'
-                    }`}
-                  >
+                    }`}>
                     {total.toFixed(1)}% / {group.max_total_pct.toFixed(0)}%
                   </span>
+                  
+                  {/* Link all/unlink all buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => linkAllSliders(groupIdx)}
+                      title={anyBound ? 'Click to unbind all sliders' : 'Link all enabled sliders together'}
+                      className={`p-1 rounded transition-colors ${
+                        anyBound
+                          ? 'text-indigo-400 hover:text-indigo-300'
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {anyBound ? (
+                        <Link className="w-3.5 h-3.5" />
+                      ) : (
+                        <Link2 className="w-3.5 h-3.5 opacity-60" />
+                      )}
+                    </button>
+                    
+                    <span className="text-slate-500 text-xs">|</span>
+                    
+                    <button
+                      onClick={() => unlinkAllSliders(groupIdx)}
+                      title="Unlink all sliders in this group"
+                      className="p-1 rounded transition-colors text-slate-500 hover:text-slate-300"
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  
+                  {group.expanded ? (
                   {group.expanded ? (
                     <ChevronUp className="w-4 h-4 text-slate-400" />
                   ) : (
