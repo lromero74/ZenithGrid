@@ -50,7 +50,11 @@ function DCABudgetConfigForm({
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
   const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const [worstCaseMin, setWorstCaseMin] = useState<number>(0)
+  // Start from the known exchange floor for this quote currency so the soft-ceiling
+  // preview is immediately computable; the async fetch below refines it with the
+  // real worst-case minimum for the selected pairs.
+  const fallbackWorstCaseMin = quoteCurrency === 'BTC' ? 0.0001 : quoteCurrency === 'ETH' ? 0.001 : 1.0
+  const [worstCaseMin, setWorstCaseMin] = useState<number>(fallbackWorstCaseMin)
 
   // Stable key for the selected product list — avoids re-fetching on every render
   // when the parent creates a new array reference with the same contents.
@@ -60,7 +64,7 @@ function DCABudgetConfigForm({
   )
 
   // Fetch worst-case minimum order size from the exchange for selected pairs.
-  // This powers the accurate soft-ceiling preview below.
+  // This refines the immediate fallback estimate used above.
   useEffect(() => {
     if (!productIdsKey) return
 
@@ -72,13 +76,12 @@ function DCABudgetConfigForm({
         setWorstCaseMin(result.max_min_quote)
       } catch (err) {
         console.error('Failed to fetch worst case min:', err)
-        // Fall back to known exchange floor values on error
-        const fallback = quoteCurrency === 'BTC' ? 0.0001 : quoteCurrency === 'ETH' ? 0.001 : 1.0
-        setWorstCaseMin(fallback)
+        // Keep/restore the known exchange floor value on error
+        setWorstCaseMin(fallbackWorstCaseMin)
       }
     }
     fetchMin()
-  }, [productIdsKey, quoteCurrency])
+  }, [productIdsKey, quoteCurrency, fallbackWorstCaseMin])
 
   // Clean up timeouts on unmount
   useEffect(() => {

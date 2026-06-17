@@ -5,10 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.4] - 2026-06-17
+
+### Fixed
+- The bot editor's "Current effective ceiling" no longer shows `calculating…`; it starts from the known exchange floor for the quote currency and refines when the live worst-case minimum loads.
+
 ## [v3.3.3] - 2026-06-16
 
 ### Changed
-- Bot Budget Rebalancer sliders now behave more intuitively: dragging one slider down leaves the others alone, and dragging one up only redistributes when it would exceed the group's max total allocation. When redistribution is needed, it takes from the unlocked bot with the most allocation first.
+- Bot Budget Rebalancer sliders now behave more intuitively: dragging one slider down leaves the others alone, and dragging one slider up only redistributes when it would exceed the group's max total allocation. When redistribution is needed, it takes from the unlocked bot with the most allocation first.
 - Bot Budget Rebalancer max total allocation raised from 150% to 200%.
 
 ### Added
