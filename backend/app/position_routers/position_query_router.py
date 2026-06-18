@@ -593,43 +593,30 @@ async def get_realized_pnl(
     - YTD (year to date - since January 1st of current year)
     """
     now = utcnow()
-    # Start of today (midnight UTC)
+    # Pre-compute all period boundaries
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Yesterday (previous day, full 24 hours)
     start_of_yesterday = start_of_today - timedelta(days=1)
     end_of_yesterday = start_of_today - timedelta(microseconds=1)
-    # Last week (previous calendar week: Monday to Sunday)
-    # Find start of this week (Monday)
-    days_since_monday = now.weekday()  # Monday=0, Sunday=6
+    days_since_monday = now.weekday()
     start_of_this_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-    # Last week starts 7 days before this week starts
     start_of_last_week = start_of_this_week - timedelta(days=7)
-    # Last week ends just before this week starts
     end_of_last_week = start_of_this_week - timedelta(microseconds=1)
-    # Last month (previous month's first and last day)
     first_of_current_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_day_of_prev_month = first_of_current_month - timedelta(days=1)
     start_of_last_month = last_day_of_prev_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     end_of_last_month = last_day_of_prev_month.replace(hour=23, minute=59, second=59, microsecond=999999)
-    # Start of month (1st of current month)
     start_of_month = first_of_current_month
-    # Week to date (since Monday of current week - same as Last Week definition)
     start_of_wtd = start_of_this_week
-    # Start of quarter (1st of current quarter)
     current_quarter = (now.month - 1) // 3 + 1
     start_month_of_quarter = (current_quarter - 1) * 3 + 1
     start_of_quarter = now.replace(month=start_month_of_quarter, day=1, hour=0, minute=0, second=0, microsecond=0)
-    # Last quarter (previous calendar quarter)
     previous_quarter = current_quarter - 1 if current_quarter > 1 else 4
     previous_quarter_year = now.year if current_quarter > 1 else now.year - 1
     start_month_of_prev_quarter = (previous_quarter - 1) * 3 + 1
     start_of_last_quarter = datetime(previous_quarter_year, start_month_of_prev_quarter, 1, 0, 0, 0)
-    # Last day of previous quarter is day before current quarter starts
     end_of_last_quarter = start_of_quarter - timedelta(microseconds=1)
-    # Last year (previous calendar year)
     start_of_last_year = datetime(now.year - 1, 1, 1, 0, 0, 0)
     end_of_last_year = datetime(now.year - 1, 12, 31, 23, 59, 59, 999999)
-    # Start of year (January 1st of current year)
     start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     periods = [
@@ -645,79 +632,133 @@ async def get_realized_pnl(
             empty[f"{p}_profit_by_quote"] = {}
         return empty
 
-    # Fetch only the columns we need instead of full ORM objects
-    query = select(
+    # Use SQL conditional aggregation to compute all USD-profit sums in one
+    # query instead of materialising every closed position row in Python.
+    # Each CASE WHEN maps to one open-ended or bounded time period.
+    PROFIT_USD = Position.profit_usd  # shorthand for column references
+
+    base_where = [
+        Position.status == "closed",
+        Position.closed_at.isnot(None),
+        Position.account_id.in_(user_account_ids),
+    ]
+    if account_id is not None:
+        base_where.append(Position.account_id == account_id)
+
+    agg_query = select(
+        # --- USD profit per period ---
+        func.coalesce(func.sum(case(
+            (Position.closed_at >= start_of_today, PROFIT_USD),
+            else_=0.0,
+        )), 0.0).label("daily_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at.between(start_of_yesterday, end_of_yesterday),
+             PROFIT_USD), else_=0.0),
+        ), 0.0).label("yesterday_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at.between(start_of_last_week, end_of_last_week),
+             PROFIT_USD), else_=0.0),
+        ), 0.0).label("last_week_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at.between(start_of_last_month, end_of_last_month),
+             PROFIT_USD), else_=0.0),
+        ), 0.0).label("last_month_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at.between(start_of_last_quarter, end_of_last_quarter),
+             PROFIT_USD), else_=0.0),
+        ), 0.0).label("last_quarter_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at.between(start_of_last_year, end_of_last_year),
+             PROFIT_USD), else_=0.0),
+        ), 0.0).label("last_year_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at >= start_of_wtd, PROFIT_USD), else_=0.0),
+        ), 0.0).label("wtd_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at >= start_of_month, PROFIT_USD), else_=0.0),
+        ), 0.0).label("mtd_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at >= start_of_quarter, PROFIT_USD), else_=0.0),
+        ), 0.0).label("qtd_usd"),
+        func.coalesce(func.sum(case(
+            (Position.closed_at >= start_of_year, PROFIT_USD), else_=0.0),
+        ), 0.0).label("ytd_usd"),
+        func.coalesce(func.sum(PROFIT_USD), 0.0).label("alltime_usd"),
+    ).where(*base_where)
+
+    agg_result = await db.execute(agg_query)
+    row = agg_result.one()
+
+    # Map query columns to period names
+    usd_map = {
+        "daily": row.daily_usd,
+        "yesterday": row.yesterday_usd,
+        "last_week": row.last_week_usd,
+        "last_month": row.last_month_usd,
+        "last_quarter": row.last_quarter_usd,
+        "last_year": row.last_year_usd,
+        "wtd": row.wtd_usd,
+        "mtd": row.mtd_usd,
+        "qtd": row.qtd_usd,
+        "ytd": row.ytd_usd,
+        "alltime": row.alltime_usd,
+    }
+
+    # Per-quote breakdown still requires row-level grouping (SQL can't dynamically
+    # pivot quote currencies).  Fetch only closed_at + product_id + profit_quote
+    # and bucket in Python — but only the small set of rows needed for the
+    # breakdown, not full ORM objects.
+    quote_query = select(
         Position.closed_at,
         Position.product_id,
         Position.profit_usd,
         Position.profit_quote,
-    ).where(
-        Position.status == "closed",
-        Position.closed_at.isnot(None),
-        Position.account_id.in_(user_account_ids),
-    )
+    ).where(*base_where)
 
-    if account_id is not None:
-        query = query.where(Position.account_id == account_id)
+    quote_result = await db.execute(quote_query)
+    closed_rows = quote_result.all()
 
-    result = await db.execute(query)
-    positions = result.all()
-
-    # Calculate PnL for all time periods, broken down by quote currency
     by_quote = {p: {} for p in periods}
-    profit_usd = {p: 0.0 for p in periods}
+    PROFIT_QUOTE_MAP = {
+        "daily": (start_of_today, None),
+        "yesterday": (start_of_yesterday, end_of_yesterday),
+        "last_week": (start_of_last_week, end_of_last_week),
+        "last_month": (start_of_last_month, end_of_last_month),
+        "last_quarter": (start_of_last_quarter, end_of_last_quarter),
+        "last_year": (start_of_last_year, end_of_last_year),
+        "wtd": (start_of_wtd, None),
+        "mtd": (start_of_month, None),
+        "qtd": (start_of_quarter, None),
+        "ytd": (start_of_year, None),
+    }
 
-    # Map periods to their time range checks: (period_name, start, end_or_None)
-    # end_or_None=None means "closed_at >= start" (open-ended)
-    period_checks = [
-        ('daily', start_of_today, None),
-        ('yesterday', start_of_yesterday, end_of_yesterday),
-        ('last_week', start_of_last_week, end_of_last_week),
-        ('last_month', start_of_last_month, end_of_last_month),
-        ('last_quarter', start_of_last_quarter, end_of_last_quarter),
-        ('last_year', start_of_last_year, end_of_last_year),
-        ('wtd', start_of_wtd, None),
-        ('mtd', start_of_month, None),
-        ('qtd', start_of_quarter, None),
-        ('ytd', start_of_year, None),
-    ]
-
-    for closed_at, product_id, pos_profit_usd, pos_profit_quote in positions:
+    for closed_at, product_id, pos_profit_usd, pos_profit_quote in closed_rows:
         if not closed_at:
             continue
 
         quote_currency = product_id.split('-')[1] if product_id and '-' in product_id else 'BTC'
-        pu = pos_profit_usd if pos_profit_usd is not None else 0.0
-        # Fall back to profit_usd for USD-like pairs when profit_quote is NULL
-        # (e.g. force-closed write-off positions that were never sold)
-        if pos_profit_quote is not None:
-            pq = pos_profit_quote
-        elif quote_currency in ('USD', 'USDC', 'USDT'):
-            pq = pu
-        else:
-            pq = 0.0
+        pq = pos_profit_quote if pos_profit_quote is not None else (
+            (pos_profit_usd if pos_profit_usd is not None else 0.0)
+            if quote_currency in ('USD', 'USDC', 'USDT')
+            else 0.0
+        )
 
-        def add_to(period):
-            by_quote[period][quote_currency] = by_quote[period].get(quote_currency, 0.0) + pq
-            profit_usd[period] += pu
+        # All-time buckets every row
+        by_quote["alltime"][quote_currency] = by_quote["alltime"].get(quote_currency, 0.0) + pq
 
-        # All-time (every closed position)
-        add_to('alltime')
+        for period_name, (start, end) in PROFIT_QUOTE_MAP.items():
+            in_period = (
+                (closed_at >= start) if end is None
+                else (start <= closed_at <= end)
+            )
+            if in_period:
+                by_quote[period_name][quote_currency] = by_quote[period_name].get(quote_currency, 0.0) + pq
 
-        # Check each time period
-        for period_name, start, end in period_checks:
-            if end is None:
-                if closed_at >= start:
-                    add_to(period_name)
-            else:
-                if start <= closed_at <= end:
-                    add_to(period_name)
-
-    # Build response with per-quote breakdown + backward-compatible _btc (native BTC only)
-    resp = {}
+    # Build response
+    resp: dict = {}
     for p in periods:
+        resp[f"{p}_profit_usd"] = round(float(usd_map[p] or 0.0), 2)
         resp[f"{p}_profit_btc"] = round(by_quote[p].get('BTC', 0.0), 8)
-        resp[f"{p}_profit_usd"] = round(profit_usd[p], 2)
         resp[f"{p}_profit_by_quote"] = {k: round(v, 8) for k, v in by_quote[p].items()}
     return resp
 

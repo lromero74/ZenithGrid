@@ -163,96 +163,99 @@ export const usePositionFilters = ({ positionsWithPnL, bots }: UsePositionFilter
   const pageStart = (safePage - 1) * pageSize
   const openPositions = filteredPositions.slice(pageStart, pageStart + pageSize)
 
-  // Helper for market matching
-  const matchesMarket = (productId: string | undefined, market: string) => {
-    if (market === 'all') return true
-    const quoteCurrency = (productId || 'ETH-BTC').split('-')[1]
-    return quoteCurrency === market
-  }
-
-  // Dynamic filter options — derived from actual open positions, not a hardcoded list
-  const uniqueMarkets = useMemo(() => {
-    // Single-pass O(n): collect all markets and accumulate filtered counts in one loop.
-    // counts apply bot/pair/category filters but NOT the market filter (that's the "own" dimension).
+  // Dynamic filter options — all four dimensions computed in a single O(n) pass
+  // instead of four independent loops. Each dimension collects its own Set/Map
+  // while applying the other three dimensions' filters (own-dimension excluded).
+  const filterOptions = useMemo(() => {
     const allMarkets = new Set<string>()
-    const counts = new Map<string, number>()
-    for (const p of positionsWithPnL) {
-      if (p.status !== 'open') continue
-      const quote = (p.product_id || 'ETH-BTC').split('-')[1]
-      if (!quote) continue
-      allMarkets.add(quote)
-      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
-      if (filterPair !== 'all' && p.product_id !== filterPair) continue
-      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
-      counts.set(quote, (counts.get(quote) ?? 0) + 1)
-    }
-    return Array.from(allMarkets).sort().map(m => ({ value: m, count: counts.get(m) ?? 0 }))
-  }, [positionsWithPnL, filterBot, filterPair, filterCategory])
-
-  const uniqueBots = useMemo(() => {
-    // Single-pass O(n): collect all bot IDs and accumulate filtered counts in one loop.
-    // counts apply market/pair/category filters but NOT the bot filter (own dimension).
+    const marketCounts = new Map<string, number>()
     const allBotIds = new Set<number>()
-    const counts = new Map<number, number>()
-    for (const p of positionsWithPnL) {
-      if (p.status !== 'open' || !p.bot_id) continue
-      allBotIds.add(p.bot_id)
-      if (!matchesMarket(p.product_id, filterMarket)) continue
-      if (filterPair !== 'all' && p.product_id !== filterPair) continue
-      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
-      counts.set(p.bot_id, (counts.get(p.bot_id) ?? 0) + 1)
-    }
-    return Array.from(allBotIds)
-      .map(id => {
-        const bot = bots?.find(b => b.id === id)
-        return { id, name: bot?.name || `Bot #${id}`, count: counts.get(id) ?? 0 }
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [positionsWithPnL, filterMarket, filterPair, filterCategory, bots])
-
-  const uniquePairs = useMemo(() => {
-    // Single-pass O(n): collect all pairs and accumulate filtered counts in one loop.
-    // counts apply bot/market/category filters but NOT the pair filter (own dimension).
+    const botCounts = new Map<number, number>()
     const allPairs = new Set<string>()
-    const counts = new Map<string, number>()
+    const pairCounts = new Map<string, number>()
+    const allCats = new Set<string>()
+    const catCounts = new Map<string, number>()
+
     for (const p of positionsWithPnL) {
       if (p.status !== 'open') continue
+
+      const quote = (p.product_id || 'ETH-BTC').split('-')[1]
       const pair = p.product_id || 'ETH-BTC'
+      const cat = p.coin_category || 'Uncategorized'
+      const botId = p.bot_id
+
+      // Always collect the "universe" for each dimension
+      if (quote) allMarkets.add(quote)
       allPairs.add(pair)
-      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
-      if (!matchesMarket(p.product_id, filterMarket)) continue
-      if (filterCategory !== 'all' && (p.coin_category || 'Uncategorized') !== filterCategory) continue
-      counts.set(pair, (counts.get(pair) ?? 0) + 1)
+      allCats.add(cat)
+      if (botId) allBotIds.add(botId)
+
+      // Market counts: apply bot/pair/category filters (skip own=market)
+      if (filterBot === 'all' || botId === filterBot) {
+        if (filterPair === 'all' || pair === filterPair) {
+          if (filterCategory === 'all' || cat === filterCategory) {
+            if (quote) marketCounts.set(quote, (marketCounts.get(quote) ?? 0) + 1)
+          }
+        }
+      }
+
+      // Bot counts: apply market/pair/category filters (skip own=bot)
+      if (botId) {
+        const marketOk = filterMarket === 'all' || (quote && quote === filterMarket)
+        if (marketOk && (filterPair === 'all' || pair === filterPair) &&
+            (filterCategory === 'all' || cat === filterCategory)) {
+          botCounts.set(botId, (botCounts.get(botId) ?? 0) + 1)
+        }
+      }
+
+      // Pair counts: apply bot/market/category filters (skip own=pair)
+      if ((filterBot === 'all' || botId === filterBot) &&
+          (filterMarket === 'all' || (quote && quote === filterMarket)) &&
+          (filterCategory === 'all' || cat === filterCategory)) {
+        pairCounts.set(pair, (pairCounts.get(pair) ?? 0) + 1)
+      }
+
+      // Category counts: apply bot/market/pair filters (skip own=category)
+      if ((filterBot === 'all' || botId === filterBot) &&
+          (filterMarket === 'all' || (quote && quote === filterMarket)) &&
+          (filterPair === 'all' || pair === filterPair)) {
+        catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1)
+      }
     }
-    return Array.from(allPairs)
-      .map(pair => ({ value: pair, count: counts.get(pair) ?? 0 }))
+
+    const botNameMap = new Map((bots || []).map(b => [b.id, b.name]))
+
+    const marketsArr = Array.from(allMarkets).sort()
+      .map(m => ({ value: m, count: marketCounts.get(m) ?? 0 }))
+
+    const botsArr = Array.from(allBotIds)
+      .map(id => ({
+        id,
+        name: botNameMap.get(id) || `Bot #${id}`,
+        count: botCounts.get(id) ?? 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    const pairsArr = Array.from(allPairs)
+      .map(p => ({ value: p, count: pairCounts.get(p) ?? 0 }))
       .sort((a, b) => {
         const [baseA, quoteA] = a.value.split('-')
         const [baseB, quoteB] = b.value.split('-')
-        // Sort by quote (market) first, then base (coin)
         if (quoteA !== quoteB) return quoteA.localeCompare(quoteB)
         return baseA.localeCompare(baseB)
       })
-  }, [positionsWithPnL, filterBot, filterMarket, filterCategory])
 
-  const uniqueCategories = useMemo(() => {
-    // Single-pass O(n): collect all categories and accumulate filtered counts in one loop.
-    // counts apply bot/market/pair filters but NOT the category filter (own dimension).
-    const allCats = new Set<string>()
-    const counts = new Map<string, number>()
-    for (const p of positionsWithPnL) {
-      if (p.status !== 'open') continue
-      const cat = p.coin_category || 'Uncategorized'
-      allCats.add(cat)
-      if (filterBot !== 'all' && p.bot_id !== filterBot) continue
-      if (!matchesMarket(p.product_id, filterMarket)) continue
-      if (filterPair !== 'all' && p.product_id !== filterPair) continue
-      counts.set(cat, (counts.get(cat) ?? 0) + 1)
-    }
-    return Array.from(allCats)
-      .map(cat => ({ value: cat, label: getCategoryLabel(cat), count: counts.get(cat) ?? 0 }))
+    const catsArr = Array.from(allCats)
+      .map(c => ({ value: c, label: getCategoryLabel(c), count: catCounts.get(c) ?? 0 }))
       .sort((a, b) => a.label.localeCompare(b.label))
-  }, [positionsWithPnL, filterBot, filterMarket, filterPair])
+
+    return { marketsArr, botsArr, pairsArr, catsArr }
+  }, [positionsWithPnL, bots, filterBot, filterMarket, filterPair, filterCategory])
+
+  const uniqueMarkets = filterOptions.marketsArr
+  const uniqueBots = filterOptions.botsArr
+  const uniquePairs = filterOptions.pairsArr
+  const uniqueCategories = filterOptions.catsArr
 
   const clearFilters = () => {
     setFilterBot('all')
