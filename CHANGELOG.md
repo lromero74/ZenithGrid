@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.0] - 2026-06-18
+
+### Changed
+- Optimized Positions and Pages page load times:
+  - **Backend**: `/positions/realized-pnl` now uses SQL conditional aggregation (`CASE WHEN` inside `SUM`) instead of fetching all closed positions and bucketing them in Python, reducing response time from O(n) Python iteration to a single indexed SQL query for USD profit sums.
+  - **Frontend**: Position polling interval reduced from 5s to 10s, batch price polling from 5s to 15s, reducing API call frequency by ~60%.
+  - **Frontend**: Combined four independent `usePosLfilter` loops (markets, bots, pairs, categories) into a single O(n) pass, reducing client-side recalculation work.
+  - **Frontend**: Prior stats, realized-PnL, and balances queries retain their 120s interval; bots list retains 30s interval.
+
 ## [v3.3.9] - 2026-06-18
 
 ### Fixed
