@@ -8,9 +8,10 @@ interface UsePositionsDataProps {
   selectedAccountId?: number
 }
 
-const ACTIVE_POSITIONS_REFETCH_INTERVAL_MS = 5000
+const ACTIVE_POSITIONS_REFETCH_INTERVAL_MS = 10000
 const IDLE_POSITIONS_REFETCH_INTERVAL_MS = 30000
 const BOTS_STALE_TIME_MS = 300000
+const PRICE_REFETCH_INTERVAL_MS = 15000
 
 export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) => {
   const [isDocumentVisible, setIsDocumentVisible] = useState(() => document.visibilityState !== 'hidden')
@@ -81,7 +82,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
         return {}
       }
     },
-    refetchInterval: ACTIVE_POSITIONS_REFETCH_INTERVAL_MS,
+    refetchInterval: PRICE_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     staleTime: 0,
