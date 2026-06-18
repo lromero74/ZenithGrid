@@ -5,6 +5,24 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.9] - 2026-06-18
+
+### Fixed
+- Trading safety guards now fail CLOSED instead of fail-open: when the exchange API is unreachable, the bot HOLDS rather than executing market orders with zero slippage protection, unverified balance, or unverified profit thresholds.
+- Limit order fill processing errors now re-raise instead of silently rolling back, preventing positions from staying "open" after the exchange has already sold the coins.
+- Cancel-and-replace limit orders abort the replacement if the cancelled order's fill state can't be verified, preventing potential double-sells.
+- Safety order (DCA) reconciliation errors now re-raise and isolate per-order, preventing stale average entry prices and infinite retry loops.
+- Rebalance monitor no longer sets failed balance fetches to 0.0 (which caused unnecessary buy trades); the currency is skipped entirely instead.
+- Perps bracket order cancel failures now abort the close instead of continuing, preventing double-close scenarios.
+- Position budget bar no longer shows "Infinity%" when max_quote_allowed is zero.
+- Loss amounts in the Position card now show a minus sign instead of relying on color alone.
+- WebSocket no longer disconnects/reconnects when toggling audio notifications.
+- Toast messages for friend online/offline and account invitations no longer show "undefined" when backend payload fields are missing.
+- Add Funds modal no longer propagates NaN when aggregate value fields are missing from the API response.
+- Limit Close modal now cancels in-flight API requests on unmount via AbortController.
+- Bot toggle in Position card reads fresh state from the query cache to prevent double-toggle on stale memoized renders.
+- Bots list is now filtered server-side by account instead of fetching all accounts' bots and filtering client-side.
+
 ## [v3.3.8] - 2026-06-18
 
 ### Fixed

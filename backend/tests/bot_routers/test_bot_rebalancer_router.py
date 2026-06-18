@@ -262,7 +262,7 @@ class TestSaveRebalancer:
 
     @pytest.mark.asyncio
     async def test_save_rebalancer_invalid_max_pct_returns_400(self, db_session):
-        """PUT returns 400 when max_total_pct > 150."""
+        """PUT returns 400 when max_total_pct > 300 (the schema max)."""
         user = await _create_user(db_session)
         account = await _create_account(db_session, user)
         bot = await _create_bot(
@@ -272,7 +272,7 @@ class TestSaveRebalancer:
         payload = {
             "account_id": account.id,
             "base_currency": "USDC",
-            "max_total_pct": 200.0,  # Invalid: > 150
+            "max_total_pct": 400.0,  # Invalid: > 300
             "overweight_tolerance_pct": 5.0,
             "bots": [{"bot_id": bot.id, "enabled": True, "target_pct": 100.0}],
         }

@@ -231,7 +231,17 @@ async def execute_perps_close(
                     await client.cancel_order(order_id)
                     logger.info(f"  Cancelled bracket order {order_id}")
                 except Exception as e:
-                    logger.warning(f"  Failed to cancel bracket order {order_id}: {e}")
+                    # Fail CLOSED: if we can't cancel a bracket order, abort
+                    # the close.  Otherwise both the bracket TP/SL and the
+                    # market close are active simultaneously — the bracket
+                    # may execute and re-open or modify the just-closed
+                    # position, creating a phantom position or double P&L.
+                    logger.error(
+                        f"  Failed to cancel bracket order {order_id} for "
+                        f"position #{position.id}: {e} — aborting close to "
+                        f"prevent double-close"
+                    )
+                    raise
 
         # Place closing market order
         result = await client.close_perps_position(

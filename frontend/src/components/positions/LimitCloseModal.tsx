@@ -81,11 +81,15 @@ export function LimitCloseModal({
 
   // Fetch product precision data
   useEffect(() => {
+    const controller = new AbortController()
     const fetchPrecision = async () => {
       try {
-        const response = await api.get(`/product-precision/${productId}`)
+        const response = await api.get(`/product-precision/${productId}`, {
+          signal: controller.signal,
+        })
         setProductPrecision(response.data)
       } catch (err: any) {
+        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
         console.error('Failed to fetch product precision:', err)
         // Use defaults if fetch fails
         const prec = getQuotePrecision(quoteCurrency)
@@ -97,32 +101,42 @@ export function LimitCloseModal({
       }
     }
     fetchPrecision()
+    return () => controller.abort()
   }, [productId, quoteCurrency])
 
   // Fetch BTC/USD price for USD conversion (only for BTC pairs)
   useEffect(() => {
     if (quoteCurrency !== 'BTC') return
 
+    const controller = new AbortController()
     const fetchBtcPrice = async () => {
       try {
-        const response = await api.get('/market/btc-usd-price')
+        const response = await api.get('/market/btc-usd-price', {
+          signal: controller.signal,
+        })
         setBtcUsdPrice(response.data.price || 0)
       } catch (err: any) {
+        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
         console.error('Failed to fetch BTC/USD price:', err)
       }
     }
     fetchBtcPrice()
+    return () => controller.abort()
   }, [quoteCurrency])
 
   // Fetch ticker data
   useEffect(() => {
+    const controller = new AbortController()
     const fetchTicker = async () => {
       try {
-        const response = await api.get(`/positions/${positionId}/ticker`)
+        const response = await api.get(`/positions/${positionId}/ticker`, {
+          signal: controller.signal,
+        })
         const data = response.data
         setTicker(data)
         // Price initialization is handled by separate useEffect with hasInitializedSlider
       } catch (err: any) {
+        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
         setError(err.response?.data?.detail || 'Failed to fetch ticker data')
       }
     }
@@ -130,7 +144,10 @@ export function LimitCloseModal({
     fetchTicker()
     // Refresh ticker every 5 seconds
     const interval = setInterval(fetchTicker, 5000)
-    return () => clearInterval(interval)
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
   }, [positionId])
 
   // Helper function to round price to correct increment (nearest)

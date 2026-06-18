@@ -122,10 +122,12 @@ async def _verify_mark_profit_allows_sell(
             f" >= take_profit ({tp_pct}%)"
             " - proceeding"
         )
+        return True, ""
     except Exception as e:
-        logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
-
-    return True, ""
+        # Fail CLOSED: if we can't verify mark-price profit, hold the position
+        # rather than risk selling below the profit threshold.
+        logger.warning(f"Could not verify mark price profit, HOLDING sell: {e}")
+        return False, f"Mark price profit verification failed: {e}"
 
 
 async def _execute_position_close(

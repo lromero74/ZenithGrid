@@ -243,8 +243,13 @@ class LimitOrderMonitor:
                 await self.db.commit()
 
         except Exception as e:
-            logger.error(f"Error processing partial fills for position {position.id}: {e}")
+            logger.error(f"Error processing partial fills for position {position.id}: {e}", exc_info=True)
             await self.db.rollback()
+            # Re-raise so the caller knows the partial fill wasn't recorded.
+            # Without this, the same partial fill is detected again next cycle
+            # (pending_order.filled_base_amount wasn't updated), potentially
+            # creating a duplicate trade record.
+            raise
 
     async def _check_bid_fallback(self, position: Position, pending_order: PendingOrder, order_data: dict):
         """
@@ -465,10 +470,16 @@ class LimitOrderMonitor:
                         f"partial fill: {filled_size} @ {avg_price:.8f}"
                     )
         except Exception as e:
+            # Fail CLOSED: if we can't check whether the cancelled order filled,
+            # abort the replacement rather than risk a double-sell.
+            # The position's closing_via_limit flag stays set, so the next
+            # monitoring cycle will re-check and reconcile.
             logger.warning(
                 f"Position {position.id}: Could not check "
-                f"cancelled order fill state: {e}"
+                f"cancelled order fill state — aborting replacement to "
+                f"prevent potential double-sell: {e}"
             )
+            return
 
         # Use remaining amount (handles partial fills correctly)
         remaining = pending_order.remaining_base_amount
@@ -691,8 +702,14 @@ class LimitOrderMonitor:
                 await self.db.commit()
 
         except Exception as e:
-            logger.error(f"Error processing order completion for position {position.id}: {e}")
+            logger.error(f"Error processing order completion for position {position.id}: {e}", exc_info=True)
             await self.db.rollback()
+            # Re-raise so the caller knows the fill wasn't processed.
+            # The position stays open, but the exchange already sold the coins —
+            # startup_reconciliation will catch this on restart.  Without
+            # re-raising, the caller silently moves on and the discrepancy
+            # goes undetected.
+            raise
 
 
 async def sweep_orphaned_pending_orders(db: AsyncSession) -> int:

@@ -79,6 +79,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   })
   // Read inside handleOrderFill (which the socket captures once), so use refs to
   // dodge stale closures rather than relying on callback identity.
+  const audioEnabledRef = useRef(audioEnabled)
   const suppressPaperWhenRealRef = useRef(suppressPaperWhenReal)
   const activeAccountIsPaperRef = useRef<boolean | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -115,6 +116,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   // Toggle audio
   const setAudioEnabled = useCallback((enabled: boolean) => {
     setAudioEnabledState(enabled)
+    audioEnabledRef.current = enabled
     setAudioHookEnabled(enabled)
     localStorage.setItem('audio-notifications-enabled', enabled ? 'true' : 'false')
   }, [setAudioHookEnabled])
@@ -257,13 +259,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     })
 
     // Play audio if enabled
-    if (audioEnabled) {
+    if (audioEnabledRef.current) {
       playOrderSound(event.fill_type as OrderFillType)
     }
 
     // Signal portfolio to refresh after any completed trade
     window.dispatchEvent(new CustomEvent('portfolio:trade-completed'))
-  }, [addToast, audioEnabled, playOrderSound])
+  }, [addToast, playOrderSound])
 
   // Connect to WebSocket
   const connect = useCallback(async () => {
@@ -315,22 +317,29 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             addToast({
               type: 'social',
               title: 'Friend Online',
-              message: `${data.display_name} is now online`,
+              message: `${data.display_name ?? 'Someone'} is now online`,
             })
           } else if (data.type === 'friend:request_accepted') {
             addToast({
               type: 'social',
               title: 'Friend Request Accepted',
-              message: `${data.display_name} accepted your friend request!`,
+              message: `${data.display_name ?? 'Someone'} accepted your friend request!`,
             })
           } else if (data.type === 'account:invitation') {
             // Real-time notification when an invitation is sent to a logged-in user
+            const inviterName = (data.invited_by as string) ?? 'Someone'
+            const accountName = (data.account_name as string) ?? 'an account'
+            const inviteToken = data.token as string | undefined
             addToast({
               type: 'info',
               title: 'Account Invitation',
-              message: `${data.invited_by} invited you to ${data.role === 'manager' ? 'manage' : 'observe'} "${data.account_name}"`,
-              actionLabel: 'Review',
-              onAction: () => { window.location.href = `/accept-invite?token=${data.token}` },
+              message: `${inviterName} invited you to ${data.role === 'manager' ? 'manage' : 'observe'} "${accountName}"`,
+              actionLabel: inviteToken ? 'Review' : undefined,
+              onAction: () => {
+                if (inviteToken) {
+                  window.location.href = `/accept-invite?token=${inviteToken}`
+                }
+              },
             })
             // Trigger a refresh of pending invitations in AccountContext
             window.dispatchEvent(new CustomEvent('account:invitation_received'))

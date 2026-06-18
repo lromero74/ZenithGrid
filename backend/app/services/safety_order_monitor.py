@@ -66,7 +66,13 @@ async def check_all_pending_safety_orders(db: AsyncSession) -> None:
                 continue
             monitor = SafetyOrderMonitor(db, exchange)
             for pending_order, position in items:
-                await monitor.process_pending_safety_order(pending_order, position)
+                try:
+                    await monitor.process_pending_safety_order(pending_order, position)
+                except Exception as e:
+                    logger.error(
+                        f"Error reconciling safety order {pending_order.order_id} "
+                        f"for account {account_id}: {e}"
+                    )
         except Exception as e:
             logger.error(f"Error reconciling safety orders for account {account_id}: {e}")
 
@@ -115,7 +121,12 @@ class SafetyOrderMonitor:
                     f"Safety order {pending_order.order_id}: unrecognized status '{status}'"
                 )
         except Exception as e:
-            logger.error(f"Error reconciling safety order {pending_order.order_id}: {e}")
+            logger.error(f"Error reconciling safety order {pending_order.order_id}: {e}", exc_info=True)
+            await self.db.rollback()
+            # Re-raise so the caller knows the fill wasn't applied.
+            # Without this, DCA levels aren't counted, average entry price
+            # stays stale, and PendingOrder status never updates to "filled".
+            raise
 
     async def _apply_new_fill(
         self, pending_order: PendingOrder, position: Position, order_data: dict, status: str

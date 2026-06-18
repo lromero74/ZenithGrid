@@ -143,8 +143,11 @@ async def check_sell_slippage(
     try:
         book_data = await exchange.get_product_book(product_id)
     except Exception as e:
+        # Fail CLOSED: if we can't fetch the order book, block the trade.
+        # During exchange API instability (when slippage is most dangerous),
+        # executing a market order with zero slippage protection is unsafe.
         logger.warning(f"Slippage guard: could not fetch book for {product_id}: {e}")
-        return True, None
+        return False, f"Slippage guard: order book fetch failed for {product_id}: {e}"
 
     pricebook = book_data.get("pricebook", book_data)
     bids = pricebook.get("bids", [])
@@ -229,8 +232,11 @@ async def check_buy_slippage(
     try:
         book_data = await exchange.get_product_book(product_id)
     except Exception as e:
+        # Fail CLOSED: if we can't fetch the order book, block the trade.
+        # During exchange API instability (when slippage is most dangerous),
+        # executing a market order with zero slippage protection is unsafe.
         logger.warning(f"Slippage guard: could not fetch book for {product_id}: {e}")
-        return True, None
+        return False, f"Slippage guard: order book fetch failed for {product_id}: {e}"
 
     pricebook = book_data.get("pricebook", book_data)
     asks = pricebook.get("asks", [])
