@@ -912,7 +912,10 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
           </div>
 
           {/* Chart Container — explicit height needed for ResponsiveContainer */}
-          <div data-testid="pnl-chart-region" className="h-[300px] min-h-[300px] w-full flex-none">
+          <div
+            data-testid="pnl-chart-region"
+            className="h-[300px] min-h-[300px] w-full flex-none lg:h-auto lg:min-h-0 lg:flex-1"
+          >
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart - uses filled data to show all dates including days with no trades
           chartMounted ? <ResponsiveContainer width="100%" height="100%">

@@ -71,14 +71,14 @@ describe('PnLChart layout', () => {
     } as Response)
   })
 
-  test('keeps the chart region at a non-collapsible fixed height', async () => {
+  test('keeps a fixed mobile height while restoring flexible desktop height', async () => {
     renderChart()
 
     await screen.findByRole('button', { name: 'Summary PnL' })
     const region = screen.getByTestId('pnl-chart-region')
 
     expect(region).toHaveClass('h-[300px]', 'min-h-[300px]', 'flex-none')
-    expect(region).not.toHaveClass('flex-1')
+    expect(region).toHaveClass('lg:h-auto', 'lg:min-h-0', 'lg:flex-1')
     await waitFor(() => expect(setData).toHaveBeenCalled())
   })
 })
