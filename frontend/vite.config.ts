@@ -12,7 +12,11 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return
-          if (id.includes('react') || id.includes('@tanstack/react-query') || id.includes('react-router-dom')) {
+          // The old broad `includes('react')` also captured lucide-react,
+          // forcing every route's icons into the blocking framework chunk.
+          if (id.includes('/node_modules/lucide-react/')) return
+          if (/\/node_modules\/(react|react-dom|react-router|react-router-dom)\//.test(id) ||
+              id.includes('/node_modules/@tanstack/react-query/')) {
             return 'framework'
           }
           // Split the two charting libraries into separate chunks — no page uses
@@ -23,9 +27,6 @@ export default defineConfig({
           }
           if (id.includes('recharts')) {
             return 'recharts'
-          }
-          if (id.includes('lucide-react')) {
-            return 'icons'
           }
         },
       },
