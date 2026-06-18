@@ -478,7 +478,8 @@ class TestCheckSellSlippage:
 
     @pytest.mark.asyncio
     async def test_skips_on_api_error(self):
-        """Graceful degradation: API call raises exception."""
+        """Fail CLOSED: API call raises exception — block the trade to
+        prevent market orders with zero slippage protection."""
         exchange = AsyncMock()
         exchange.get_product_book = AsyncMock(side_effect=Exception("API timeout"))
 
@@ -487,8 +488,9 @@ class TestCheckSellSlippage:
 
         config = {"take_profit_mode": "fixed", "max_sell_slippage_pct": 0.5}
         proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
-        assert proceed is True
-        assert reason is None
+        assert proceed is False
+        assert reason is not None
+        assert "order book fetch failed" in reason
 
     @pytest.mark.asyncio
     async def test_skips_on_empty_bids(self):
@@ -600,14 +602,16 @@ class TestCheckBuySlippage:
 
     @pytest.mark.asyncio
     async def test_skips_on_api_error(self):
-        """Graceful degradation: API call raises exception."""
+        """Fail CLOSED: API call raises exception — block the trade to
+        prevent market orders with zero slippage protection."""
         exchange = AsyncMock()
         exchange.get_product_book = AsyncMock(side_effect=RuntimeError("network error"))
 
         config = {"max_buy_slippage_pct": 0.5}
         proceed, reason = await check_buy_slippage(exchange, "BTC-USD", 1000.0, config)
-        assert proceed is True
-        assert reason is None
+        assert proceed is False
+        assert reason is not None
+        assert "order book fetch failed" in reason
 
     @pytest.mark.asyncio
     async def test_skips_on_empty_asks(self):

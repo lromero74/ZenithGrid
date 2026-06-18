@@ -53,7 +53,9 @@ export function AddFundsModal({ position, isOpen, onClose, onSuccess, readOnly =
   // Calculate available free balance for this quote currency
   const availableBalance = useMemo(() => {
     if (!aggregateValue) return 0
-    return isUsdPair ? aggregateValue.aggregate_usd_value : aggregateValue.aggregate_btc_value
+    return isUsdPair
+      ? (aggregateValue.aggregate_usd_value ?? 0)
+      : (aggregateValue.aggregate_btc_value ?? 0)
   }, [aggregateValue, isUsdPair])
 
   // Calculate percentage from amount

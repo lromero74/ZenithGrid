@@ -762,6 +762,10 @@ async def get_account_portfolio_data(
             "btc_usd_price": 0, "is_paper_trading": True,
         }
 
+    # Cache keyed by user_id — this endpoint aggregates across ALL accessible
+    # accounts (owned + shared), so user-level scoping is correct here.
+    # (Per-account portfolio caching is handled by get_cex_portfolio() which
+    # keys by account.id.)
     cache_key = f"portfolio_response_{current_user.id}"
 
     if not force_fresh:

@@ -448,10 +448,18 @@ async def _execute_buy_trade(
                           f"({fresh_available:.8f} < {quote_amount:.8f})",
                 "signal": signal_data,
             }
-    except Exception:
-        # If balance check fails (network error, etc.), proceed anyway —
-        # the exchange will reject the order if funds are insufficient.
-        pass
+    except Exception as e:
+        # Fail CLOSED: if we can't verify the balance, hold rather than risk
+        # overdrawing the account.  Multiple concurrent pair tasks could all
+        # proceed with stale balance assumptions, collectively over-spending.
+        logger.warning(
+            f"  🚫 Budget TOCTOU guard: could not verify {quote_currency} balance ({e}) — holding"
+        )
+        return {
+            "action": "hold",
+            "reason": f"Balance verification failed for {quote_currency}: {e}",
+            "signal": signal_data,
+        }
 
     # Determine trade type
     is_new_position = position is None

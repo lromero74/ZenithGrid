@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useAccountPortfolio } from '../../../hooks/useAccountPortfolio'
 import { botsApi, templatesApi, accountApi, rebalanceApi, api } from '../../../services/api'
-import type { Bot } from '../../../types'
 import { convertProductsToTradingPairs, DEFAULT_TRADING_PAIRS, type TradingPair } from '../../../components/bots'
 import { TimeRange } from '../../../components/trading/PnLChart'
 
@@ -12,17 +11,14 @@ interface UseBotsDataProps {
 }
 
 export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDataProps) {
-  // Fetch all bots (filtered by selected account)
+  // Fetch bots scoped to the selected account (server-side filtering).
+  // Falls back to fetching all if no account is selected.
+  const accountId = selectedAccount?.id
   const { data: bots = [], isLoading: botsLoading, isFetching: botsFetching } = useQuery({
-    queryKey: ['bots', selectedAccount?.id, projectionTimeframe],
-    queryFn: () => botsApi.getAll(projectionTimeframe),
+    queryKey: ['bots', accountId, projectionTimeframe],
+    queryFn: () => botsApi.getAll(projectionTimeframe, accountId),
     refetchInterval: 30000, // Refetch every 30 seconds (reduced from 5 seconds)
     placeholderData: keepPreviousData, // Keep showing previous data while fetching new timeframe
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
-    },
   })
 
   // Fetch available strategies

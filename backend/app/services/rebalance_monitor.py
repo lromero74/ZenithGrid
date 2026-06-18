@@ -688,11 +688,14 @@ class RebalanceMonitor(SessionMakerMixin):
                 try:
                     free_balances[currency] = float(await method())
                 except Exception as e:
+                    # Skip this currency entirely rather than setting 0.0.
+                    # Setting 0.0 would make the rebalancer see it as
+                    # severely underweight and buy it — causing unnecessary
+                    # trades and fees when the real balance is substantial.
                     logger.warning(
                         f"Rebalance: could not get free {currency} "
-                        f"for account {account.id}: {e}"
+                        f"for account {account.id}: {e} — skipping currency"
                     )
-                    free_balances[currency] = 0.0
 
             # Phase 0: Dust sweep (monthly or on-demand)
             if (account.dust_sweep_enabled
@@ -1292,8 +1295,12 @@ async def execute_dust_sweep(account, client, db: AsyncSession) -> List[dict]:
     for currency, method in balance_methods.items():
         try:
             free_balances[currency] = float(await method())
-        except Exception:
-            free_balances[currency] = 0.0
+        except Exception as e:
+            # Skip this currency rather than defaulting to 0.0 (which would
+            # cause unnecessary rebalancing trades).
+            logger.warning(
+                f"Rebalance preview: could not get {currency} balance: {e} — skipping"
+            )
 
     return await monitor._sweep_dust(client, account, db, prices, free_balances)
 

@@ -2,7 +2,7 @@
  * Tests for useBotsData hook.
  *
  * Verifies multi-query fetching (bots, strategies, portfolio, aggregate,
- * templates, products), `select` filtering by account, and trading pairs
+ * templates, products), server-side account filtering, and trading pairs
  * derivation from product data.
  */
 
@@ -78,7 +78,11 @@ describe('useBotsData', () => {
     vi.restoreAllMocks()
 
     // Set up default mock implementations
-    vi.mocked(botsApi.getAll).mockResolvedValue(mockBots)
+    // botsApi.getAll now filters server-side by accountId
+    vi.mocked(botsApi.getAll).mockImplementation(async (_projection?: string, accountId?: number) => {
+      if (accountId === undefined) return mockBots
+      return mockBots.filter(b => b.account_id === accountId)
+    })
     vi.mocked(botsApi.getStrategies).mockResolvedValue(mockStrategies as any)
     vi.mocked(templatesApi.getAll).mockResolvedValue(mockTemplates)
     vi.mocked(accountApi.getAggregateValue).mockResolvedValue({ total_btc: 2.5, total_usd: 150000 } as any)
@@ -106,7 +110,7 @@ describe('useBotsData', () => {
 
     // With no selectedAccount, all bots are returned
     expect(result.current.bots).toHaveLength(3)
-    expect(botsApi.getAll).toHaveBeenCalledWith('30d')
+    expect(botsApi.getAll).toHaveBeenCalledWith('30d', undefined)
   })
 
   test('filters bots by selected account', async () => {
@@ -299,6 +303,6 @@ describe('useBotsData', () => {
       expect(result.current.botsLoading).toBe(false)
     })
 
-    expect(botsApi.getAll).toHaveBeenCalledWith('7d')
+    expect(botsApi.getAll).toHaveBeenCalledWith('7d', 1)
   })
 })

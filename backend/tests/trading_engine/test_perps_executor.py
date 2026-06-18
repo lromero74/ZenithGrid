@@ -478,8 +478,9 @@ class TestExecutePerpsClose:
         assert profit == pytest.approx(50.0)
 
     @pytest.mark.asyncio
-    async def test_close_bracket_cancel_failure_continues(self):
-        """Edge case: failing to cancel bracket orders does not block close."""
+    async def test_close_bracket_cancel_failure_aborts(self):
+        """Fail CLOSED: failing to cancel bracket orders aborts the close to
+        prevent double-close (bracket TP/SL + market close both active)."""
         db = _make_db()
         client = _make_client()
         client.cancel_order = AsyncMock(side_effect=Exception("Already cancelled"))
@@ -499,5 +500,5 @@ class TestExecutePerpsClose:
             current_price=105000.0,
         )
 
-        # Close should still succeed even if bracket cancel fails
-        assert success is True
+        # Close should be aborted when bracket cancel fails
+        assert success is False

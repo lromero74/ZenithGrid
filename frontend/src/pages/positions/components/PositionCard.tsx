@@ -85,7 +85,9 @@ export const PositionCard = memo(function PositionCard({
   const [showBotMenu, setShowBotMenu] = useState(false)
   const botMenuRef = useRef<HTMLDivElement>(null)
   const pnl = position._cachedPnL
-  const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
+  const fundsUsedPercent = position.max_quote_allowed > 0
+    ? (position.total_quote_spent / position.max_quote_allowed) * 100
+    : 0
 
   const bot = propBot || bots?.find(b => b.id === position.bot_id)
   const strategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
@@ -105,8 +107,13 @@ export const PositionCard = memo(function PositionCard({
   const handleToggleBot = async () => {
     if (!bot) return
     setShowBotMenu(false)
+    // Read fresh bot state from the query cache to avoid acting on a stale
+    // closure value (the card is memo'd and may not have re-rendered).
+    const cachedBots = queryClient.getQueryData<Bot[]>(['bots'])
+    const freshBot = cachedBots?.find(b => b.id === bot.id)
+    const isActive = freshBot ? freshBot.is_active : bot.is_active
     try {
-      if (bot.is_active) {
+      if (isActive) {
         await botsApi.stop(bot.id)
         addToast({ type: 'info', title: 'Bot Stopped', message: `${bot.name} stopped` })
       } else {
@@ -352,7 +359,7 @@ export const PositionCard = memo(function PositionCard({
               <div className="text-slate-400">{formatBaseAmount(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
               {pnl && pnl.usd !== undefined && (
                 <div className={pnl.quote >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {pnl.quote >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
+                  {pnl.usd >= 0 ? '+' : '-'}${Math.abs(pnl.usd).toFixed(2)}
                 </div>
               )}
             </div>

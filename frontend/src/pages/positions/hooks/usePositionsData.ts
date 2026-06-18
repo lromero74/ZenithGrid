@@ -72,7 +72,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
           params: { products: batchPriceProducts.join(',') },
           signal,
         })
-        return response.data.prices || {}
+        return response.data?.prices || {}
       } catch (err) {
         if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.code === 'ECONNABORTED') {
           return {}
