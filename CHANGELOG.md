@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.8] - 2026-06-18
+
+### Fixed
+- The Bots-page P&L chart now keeps a guaranteed mobile height without shrinking the full-height desktop chart.
+
 ## [v3.3.7] - 2026-06-18
 
 ### Fixed
