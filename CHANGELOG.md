@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.3.7] - 2026-06-18
+
+### Fixed
+- The Bots-page P&L chart keeps its intended height instead of collapsing out of view in responsive layouts.
+
+## [v3.3.6] - 2026-06-17
+
+### Fixed
+- Clicking Link or Unlink in the Bot Budget Rebalancer no longer also toggles the bot details drawer.
+
 ## [v3.3.5] - 2026-06-17
 
 ### Changed
