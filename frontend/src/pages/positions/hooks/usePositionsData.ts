@@ -5,7 +5,7 @@ import { calculateUnrealizedPnL } from '../helpers'
 import { useMarketPrice } from '../../../hooks/useMarketPrice'
 
 interface UsePositionsDataProps {
-  selectedAccountId?: number
+  selectedAccountId?: number | null
 }
 
 const ACTIVE_POSITIONS_REFETCH_INTERVAL_MS = 10000
@@ -31,7 +31,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   // positions across multiple accounts.
   const { data: allPositions, refetch: refetchPositions } = useQuery({
     queryKey: ['positions', 'open', selectedAccountId],
-    queryFn: () => positionsApi.getAll('open', 1000, selectedAccountId),
+    queryFn: () => positionsApi.getAll('open', 1000, selectedAccountId ?? undefined),
+    enabled: selectedAccountId !== null,
     refetchInterval: (query) => ((query.state.data?.length || 0) > 0
       ? ACTIVE_POSITIONS_REFETCH_INTERVAL_MS
       : IDLE_POSITIONS_REFETCH_INTERVAL_MS),
@@ -43,7 +44,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   // Fetch all bots to display bot names (filtered by account)
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccountId],
-    queryFn: () => botsApi.getAll(undefined, selectedAccountId),
+    queryFn: () => botsApi.getAll(undefined, selectedAccountId ?? undefined),
+    enabled: selectedAccountId !== null,
     staleTime: BOTS_STALE_TIME_MS,
     refetchOnWindowFocus: false,
   })

@@ -7,16 +7,18 @@ import { TimeRange } from '../../../components/trading/PnLChart'
 
 interface UseBotsDataProps {
   selectedAccount: { id: number } | null
+  selectedAccountId?: number | null
   projectionTimeframe: TimeRange
 }
 
-export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDataProps) {
+export function useBotsData({ selectedAccount, selectedAccountId, projectionTimeframe }: UseBotsDataProps) {
   // Fetch bots scoped to the selected account (server-side filtering).
   // Falls back to fetching all if no account is selected.
-  const accountId = selectedAccount?.id
+  const accountId = selectedAccountId === undefined ? selectedAccount?.id : selectedAccountId
   const { data: bots = [], isLoading: botsLoading, isFetching: botsFetching } = useQuery({
     queryKey: ['bots', accountId, projectionTimeframe],
-    queryFn: () => botsApi.getAll(projectionTimeframe, accountId),
+    queryFn: () => botsApi.getAll(projectionTimeframe, accountId ?? undefined),
+    enabled: accountId != null,
     refetchInterval: 30000, // Refetch every 30 seconds (reduced from 5 seconds)
     placeholderData: keepPreviousData, // Keep showing previous data while fetching new timeframe
   })
@@ -30,23 +32,24 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
   // Portfolio data for percentage calculations — shared cache entry with the
   // other pages (one 60s poll app-wide instead of one per page)
   const { data: portfolio, isLoading: portfolioLoading } =
-    useAccountPortfolio(selectedAccount?.id)
+    useAccountPortfolio(accountId)
 
   // Fetch aggregate BTC/USD values for minimum percentage validation.
   // Scoped to the selected account so a multi-account user sees that account's
   // budget buckets (not the default first-CEX account's) — keyed by account so
   // it refetches on account switch.
   const { data: aggregateData } = useQuery({
-    queryKey: ['aggregate-value', selectedAccount?.id],
-    queryFn: () => accountApi.getAggregateValue(selectedAccount?.id),
+    queryKey: ['aggregate-value', accountId],
+    queryFn: () => accountApi.getAggregateValue(accountId!),
+    enabled: accountId != null,
     refetchInterval: 60000, // Update every 60 seconds
   })
 
   // Fetch rebalance status for reserve-aware budget calculations
   const { data: rebalanceStatus } = useQuery({
-    queryKey: ['rebalance-status', selectedAccount?.id],
-    queryFn: () => selectedAccount ? rebalanceApi.getStatus(selectedAccount.id) : null,
-    enabled: !!selectedAccount,
+    queryKey: ['rebalance-status', accountId],
+    queryFn: () => rebalanceApi.getStatus(accountId!),
+    enabled: accountId != null,
     refetchInterval: 60000,
   })
 
@@ -58,12 +61,13 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
 
   // Fetch available trading pairs for the selected account's exchange
   const { data: productsData } = useQuery({
-    queryKey: ['available-products', selectedAccount?.id],
+    queryKey: ['available-products', accountId],
     queryFn: async () => {
-      const params = selectedAccount?.id ? { account_id: selectedAccount.id } : {}
+      const params = accountId != null ? { account_id: accountId } : {}
       const response = await api.get('/products', { params })
       return response.data
     },
+    enabled: accountId != null,
     staleTime: 3600000, // Cache for 1 hour (product list rarely changes)
   })
 

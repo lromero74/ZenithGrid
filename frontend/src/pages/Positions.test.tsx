@@ -8,6 +8,7 @@ import Positions from './Positions'
 
 vi.mock('../contexts/AccountContext', () => ({
   useAccount: vi.fn(() => ({
+    selectedAccountId: 7,
     selectedAccount: {
       id: 7,
       name: 'Paper',

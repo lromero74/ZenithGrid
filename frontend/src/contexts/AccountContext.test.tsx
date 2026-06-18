@@ -49,6 +49,7 @@ function TestConsumer() {
       <span data-testid="error">{ctx.error || 'null'}</span>
       <span data-testid="accounts-count">{ctx.accounts.length}</span>
       <span data-testid="selected-id">{ctx.selectedAccount?.id ?? 'none'}</span>
+      <span data-testid="provisional-selected-id">{ctx.selectedAccountId ?? 'none'}</span>
       <span data-testid="selected-name">{ctx.selectedAccount?.name ?? 'none'}</span>
       <span data-testid="cex-count">{ctx.getCexAccounts().length}</span>
       <span data-testid="dex-count">{ctx.getDexAccounts().length}</span>
@@ -214,6 +215,8 @@ describe('AccountProvider', () => {
     } as Response)
 
     render(<TestConsumer />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('provisional-selected-id').textContent).toBe('2')
 
     await waitFor(() => {
       expect(screen.getByTestId('loading').textContent).toBe('false')

@@ -29,7 +29,7 @@ import { BotBudgetRebalancer } from '../components/account/BotBudgetRebalancer'
 
 function Bots() {
   const location = useLocation()
-  const { selectedAccount, accounts } = useAccount()
+  const { selectedAccount, selectedAccountId, accounts } = useAccount()
   const canWriteBots = usePermission('bots', 'write')
   const { user } = useAuth()
   const isSuperuser = user?.is_superuser ?? false
@@ -77,7 +77,7 @@ function Bots() {
     rebalanceStatus,
     templates,
     TRADING_PAIRS
-  } = useBotsData({ selectedAccount, projectionTimeframe: projectionBasis })
+  } = useBotsData({ selectedAccount, selectedAccountId, projectionTimeframe: projectionBasis })
 
   // Use validation hook
   const { validateBotConfig, validateManualOrderSizing } = useValidation({

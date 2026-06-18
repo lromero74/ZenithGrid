@@ -31,6 +31,9 @@ export function useAccountPortfolio<T = unknown>(
       ? ['account-portfolio', accountId ?? null, 'live']
       : ['account-portfolio', accountId ?? null],
     queryFn: () => fetchPortfolio(accountId, live) as Promise<T>,
+    // `null` means account metadata is still loading. `undefined` remains a
+    // legacy/default-account mode for non-account-aware callers and tests.
+    enabled: accountId !== null,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
     ...(live

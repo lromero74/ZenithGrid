@@ -153,6 +153,19 @@ describe('usePositionsData', () => {
     })
   })
 
+  test('does not issue unscoped account queries while account selection is loading', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+
+    renderHook(
+      () => usePositionsData({ selectedAccountId: null }),
+      { wrapper: makeWrapper(qc) }
+    )
+
+    await Promise.resolve()
+    expect(positionsApi.getAll).not.toHaveBeenCalled()
+    expect(botsApi.getAll).not.toHaveBeenCalled()
+  })
+
   test('backs off open-position polling when there are no active deals', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
@@ -187,7 +200,7 @@ describe('usePositionsData', () => {
     const positionsQuery = qc.getQueryCache().find({ queryKey: ['positions', 'open', undefined] })
     const observerOptions = positionsQuery?.observers[0]?.options as any
 
-    expect(observerOptions.refetchInterval(positionsQuery)).toBe(5000)
+    expect(observerOptions.refetchInterval(positionsQuery)).toBe(10000)
   })
 
   test('does not keep bot metadata on a hot polling loop', () => {

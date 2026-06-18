@@ -122,6 +122,7 @@ interface AccountContextType {
   // State
   accounts: Account[]
   selectedAccount: Account | null
+  selectedAccountId: number | null
   isLoading: boolean
   error: string | null
 
@@ -471,6 +472,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
   const value: AccountContextType = useMemo(() => ({
     accounts,
     selectedAccount,
+    selectedAccountId,
     isLoading,
     error: fetchError ? (fetchError as Error).message : null,
     pendingInvitations,
@@ -492,7 +494,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
     getOwnedAccounts,
     getSharedAccounts,
   }), [
-    accounts, selectedAccount, isLoading, fetchError,
+    accounts, selectedAccount, selectedAccountId, isLoading, fetchError,
     pendingInvitations, refreshInvitations, acceptInvitation, declineInvitation,
     selectAccount, addAccount, updateAccount, deleteAccount,
     setDefaultAccount, refreshAccounts, leaveSharedAccount,

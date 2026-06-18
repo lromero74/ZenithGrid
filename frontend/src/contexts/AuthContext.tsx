@@ -151,12 +151,33 @@ function isTokenExpired(expiryTime: number | null): boolean {
   return Date.now() >= expiryTime - 30000
 }
 
+function getInitialAuthSnapshot(): { user: User | null; tokenExpiry: number | null; isLoading: boolean } {
+  try {
+    const storedUser = localStorage.getItem(STORAGE_KEYS.USER)
+    const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    const expiry = parseInt(localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRY) || '0')
+
+    if (storedUser && accessToken && !isTokenExpired(expiry)) {
+      return { user: JSON.parse(storedUser), tokenExpiry: expiry, isLoading: false }
+    }
+
+    // Expired sessions must keep the loader while the refresh-token request runs.
+    if (storedUser && accessToken) {
+      return { user: null, tokenExpiry: null, isLoading: true }
+    }
+  } catch {
+    // Corrupt browser state falls through to the signed-out state.
+  }
+  return { user: null, tokenExpiry: null, isLoading: false }
+}
+
 // Provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [tokenExpiry, setTokenExpiry] = useState<number | null>(null)
+  const [initialAuth] = useState(getInitialAuthSnapshot)
+  const [user, setUser] = useState<User | null>(initialAuth.user)
+  const [isLoading, setIsLoading] = useState(initialAuth.isLoading)
+  const [tokenExpiry, setTokenExpiry] = useState<number | null>(initialAuth.tokenExpiry)
   const [mfaPending, setMfaPending] = useState(false)
   const [mfaToken, setMfaToken] = useState<string | null>(null)
   const [mfaMethods, setMfaMethods] = useState<string[]>([])

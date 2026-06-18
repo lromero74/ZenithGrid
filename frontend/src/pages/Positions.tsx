@@ -38,7 +38,7 @@ import {
 const POSITIONS_SUMMARY_REFETCH_INTERVAL_MS = 120000
 
 export default function Positions() {
-  const { selectedAccount } = useAccount()
+  const { selectedAccount, selectedAccountId } = useAccount()
   const isObserver = selectedAccount?.membership_role === 'shadow'
   const canWritePositions = usePermission('positions', 'write') && !isObserver
   const confirm = useConfirm()
@@ -92,7 +92,7 @@ export default function Positions() {
     btcUsdPrice,
     currentPrices,
     refetchPositions,
-  } = usePositionsData({ selectedAccountId: selectedAccount?.id })
+  } = usePositionsData({ selectedAccountId })
 
   // Use custom hooks for mutations
   const {
@@ -134,8 +134,9 @@ export default function Positions() {
 
   // Fetch completed trades statistics
   const { data: completedStats } = useQuery({
-    queryKey: ['completed-trades-stats', selectedAccount?.id],
-    queryFn: () => positionsApi.getCompletedStats(selectedAccount?.id),
+    queryKey: ['completed-trades-stats', selectedAccountId],
+    queryFn: () => positionsApi.getCompletedStats(selectedAccountId ?? undefined),
+    enabled: selectedAccountId !== null,
     refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
@@ -145,8 +146,9 @@ export default function Positions() {
 
   // Fetch realized PnL (daily and weekly)
   const { data: realizedPnL } = useQuery({
-    queryKey: ['realized-pnl', selectedAccount?.id],
-    queryFn: () => positionsApi.getRealizedPnL(selectedAccount?.id),
+    queryKey: ['realized-pnl', selectedAccountId],
+    queryFn: () => positionsApi.getRealizedPnL(selectedAccountId ?? undefined),
+    enabled: selectedAccountId !== null,
     refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
@@ -156,11 +158,12 @@ export default function Positions() {
 
   // Fetch account balances
   const { data: balances, refetch: refetchBalances } = useQuery({
-    queryKey: ['account-balances', selectedAccount?.id],
+    queryKey: ['account-balances', selectedAccountId],
     queryFn: async () => {
       const { accountApi } = await import('../services/api')
-      return accountApi.getBalances(selectedAccount?.id)
+      return accountApi.getBalances(selectedAccountId ?? undefined)
     },
+    enabled: selectedAccountId !== null,
     refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
