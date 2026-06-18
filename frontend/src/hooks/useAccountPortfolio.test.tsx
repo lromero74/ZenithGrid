@@ -76,9 +76,9 @@ describe('useAccountPortfolio', () => {
     expect(urls).toHaveLength(2)
   })
 
-  test('falls back to the default-account endpoint without an account id', async () => {
+  test('falls back to the default-account endpoint in legacy undefined mode', async () => {
     const wrapper = createWrapper()
-    const { result } = renderHook(() => useAccountPortfolio(null), { wrapper })
+    const { result } = renderHook(() => useAccountPortfolio(undefined), { wrapper })
 
     await waitFor(() => expect(result.current.data).toEqual(mockPortfolio))
     expect(authFetch).toHaveBeenCalledWith('/api/account/portfolio')

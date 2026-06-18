@@ -76,6 +76,7 @@ const mockTemplates = [
 describe('useBotsData', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.clearAllMocks()
 
     // Set up default mock implementations
     // botsApi.getAll now filters server-side by accountId
@@ -98,9 +99,9 @@ describe('useBotsData', () => {
     vi.restoreAllMocks()
   })
 
-  test('fetches bots and returns them', async () => {
+  test('fetches account-scoped bots and returns them', async () => {
     const { result } = renderHook(
-      () => useBotsData({ selectedAccount: null, projectionTimeframe: '30d' }),
+      () => useBotsData({ selectedAccount: { id: 1 }, projectionTimeframe: '30d' }),
       { wrapper: createWrapper() },
     )
 
@@ -108,9 +109,21 @@ describe('useBotsData', () => {
       expect(result.current.botsLoading).toBe(false)
     })
 
-    // With no selectedAccount, all bots are returned
-    expect(result.current.bots).toHaveLength(3)
-    expect(botsApi.getAll).toHaveBeenCalledWith('30d', undefined)
+    expect(result.current.bots).toHaveLength(2)
+    expect(botsApi.getAll).toHaveBeenCalledWith('30d', 1)
+  })
+
+  test('does not issue account queries while account selection is loading', async () => {
+    renderHook(
+      () => useBotsData({ selectedAccount: null, selectedAccountId: null, projectionTimeframe: '30d' }),
+      { wrapper: createWrapper() },
+    )
+
+    await Promise.resolve()
+    expect(botsApi.getAll).not.toHaveBeenCalled()
+    expect(accountApi.getAggregateValue).not.toHaveBeenCalled()
+    expect(authFetch).not.toHaveBeenCalled()
+    expect(api.get).not.toHaveBeenCalled()
   })
 
   test('filters bots by selected account', async () => {
@@ -168,17 +181,15 @@ describe('useBotsData', () => {
     expect(result.current.portfolio).toEqual(mockPortfolio)
   })
 
-  test('fetches default portfolio when no account is selected', async () => {
+  test('does not fetch a default portfolio when no account is selected', async () => {
     const { result } = renderHook(
-      () => useBotsData({ selectedAccount: null, projectionTimeframe: '30d' }),
+      () => useBotsData({ selectedAccount: null, selectedAccountId: null, projectionTimeframe: '30d' }),
       { wrapper: createWrapper() },
     )
 
-    await waitFor(() => {
-      expect(result.current.portfolioLoading).toBe(false)
-    })
-
-    expect(authFetch).toHaveBeenCalledWith('/api/account/portfolio')
+    await Promise.resolve()
+    expect(result.current.portfolio).toBeUndefined()
+    expect(result.current.portfolioLoading).toBe(false)
   })
 
   test('fetches templates', async () => {
@@ -247,7 +258,7 @@ describe('useBotsData', () => {
     })
   })
 
-  test('passes empty params to products endpoint when no account selected', async () => {
+  test('does not fetch products when no account is selected', async () => {
     vi.mocked(api.get).mockResolvedValue({ data: { products: [] } })
 
     renderHook(
@@ -255,9 +266,8 @@ describe('useBotsData', () => {
       { wrapper: createWrapper() },
     )
 
-    await waitFor(() => {
-      expect(api.get).toHaveBeenCalledWith('/products', { params: {} })
-    })
+    await Promise.resolve()
+    expect(api.get).not.toHaveBeenCalled()
   })
 
   test('fetches aggregate data', async () => {

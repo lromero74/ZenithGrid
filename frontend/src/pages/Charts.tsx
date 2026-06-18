@@ -14,7 +14,7 @@ import { transformPriceData, transformVolumeData, filterIndicators, groupIndicat
 import { PairSelector } from './charts/PairSelector'
 
 function Charts() {
-  const { selectedAccount } = useAccount()
+  const { selectedAccount, selectedAccountId } = useAccount()
   const [selectedPair, setSelectedPair] = useState(() => {
     const saved = localStorage.getItem('chart-selected-pair')
     return saved || 'BTC-USD'
@@ -91,7 +91,7 @@ function Charts() {
     dataVersion,
     candleDataRef,
     lastUpdateRef,
-  } = useChartsData(selectedPair, selectedInterval)
+  } = useChartsData(selectedPair, selectedInterval, selectedAccountId)
 
   // Update chart data when candles are fetched or display settings change.
   // chartReady gates this: the chart is created asynchronously (lazy library

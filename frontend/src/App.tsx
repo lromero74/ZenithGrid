@@ -53,18 +53,42 @@ function lazyWithReload(factory: () => Promise<{ default: React.ComponentType }>
   )
 }
 
-const Settings = lazyWithReload(() => import('./pages/Settings'))
-const Positions = lazyWithReload(() => import('./pages/Positions'))
-const ClosedPositions = lazyWithReload(() => import('./pages/ClosedPositions'))
-const Bots = lazyWithReload(() => import('./pages/Bots'))
-const Charts = lazyWithReload(() => import('./pages/Charts'))
-const Portfolio = lazyWithReload(() => import('./pages/Portfolio'))
-const News = lazyWithReload(() => import('./pages/News'))
-const Reports = lazyWithReload(() => import('./pages/Reports'))
-const Games = lazyWithReload(() => import('./pages/Games'))
-const Social = lazyWithReload(() => import('./pages/Social'))
-const Chat = lazyWithReload(() => import('./pages/Chat'))
-const Admin = lazyWithReload(() => import('./pages/Admin'))
+const routeImporters: Record<string, () => Promise<{ default: React.ComponentType }>> = {
+  '/settings': () => import('./pages/Settings'),
+  '/positions': () => import('./pages/Positions'),
+  '/history': () => import('./pages/ClosedPositions'),
+  '/bots': () => import('./pages/Bots'),
+  '/charts': () => import('./pages/Charts'),
+  '/portfolio': () => import('./pages/Portfolio'),
+  '/news': () => import('./pages/News'),
+  '/reports': () => import('./pages/Reports'),
+  '/games': () => import('./pages/Games'),
+  '/social': () => import('./pages/Social'),
+  '/chat': () => import('./pages/Chat'),
+  '/admin': () => import('./pages/Admin'),
+}
+
+// Start the direct route download while auth/account state hydrates. This
+// removes a serial chunk-request waterfall on production hard refreshes.
+const initialRouteImporter = Object.entries(routeImporters).find(([path]) =>
+  window.location.pathname === path || window.location.pathname.startsWith(`${path}/`)
+)?.[1]
+if (import.meta.env.PROD && initialRouteImporter) {
+  void initialRouteImporter().catch(() => undefined)
+}
+
+const Settings = lazyWithReload(routeImporters['/settings'])
+const Positions = lazyWithReload(routeImporters['/positions'])
+const ClosedPositions = lazyWithReload(routeImporters['/history'])
+const Bots = lazyWithReload(routeImporters['/bots'])
+const Charts = lazyWithReload(routeImporters['/charts'])
+const Portfolio = lazyWithReload(routeImporters['/portfolio'])
+const News = lazyWithReload(routeImporters['/news'])
+const Reports = lazyWithReload(routeImporters['/reports'])
+const Games = lazyWithReload(routeImporters['/games'])
+const Social = lazyWithReload(routeImporters['/social'])
+const Chat = lazyWithReload(routeImporters['/chat'])
+const Admin = lazyWithReload(routeImporters['/admin'])
 
 // Main App content (shown when authenticated)
 function AppContent() {

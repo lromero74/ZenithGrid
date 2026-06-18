@@ -133,6 +133,11 @@ describe('AuthContext', () => {
       </Providers>
     )
 
+    // Browser storage is synchronous, so a valid session should never flash
+    // the full-screen auth loader during a hard refresh.
+    expect(screen.getByTestId('loading').textContent).toBe('false')
+    expect(screen.getByTestId('authenticated').textContent).toBe('true')
+
     await waitFor(() => {
       expect(screen.getByTestId('loading').textContent).toBe('false')
     })

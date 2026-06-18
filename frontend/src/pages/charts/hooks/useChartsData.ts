@@ -30,6 +30,7 @@ export function useChartsData(
       if (!response.ok) throw new Error('Failed to fetch products')
       return response.json()
     },
+    enabled: accountId !== null,
     staleTime: 3600000, // Cache for 1 hour (product list rarely changes)
     refetchOnMount: false,
     refetchOnWindowFocus: false,
