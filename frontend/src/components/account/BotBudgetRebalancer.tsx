@@ -390,7 +390,10 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                   {/* Link all/unlink all buttons */}
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => linkAllSliders(groupIdx)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        linkAllSliders(groupIdx)
+                      }}
                       title={anyBound ? 'Click to unbind all sliders' : 'Link all enabled sliders together'}
                       className={`p-1 rounded transition-colors ${
                         anyBound
@@ -408,7 +411,10 @@ export function BotBudgetRebalancer({ accountId }: BotBudgetRebalancerProps) {
                     <span className="text-slate-500 text-xs">|</span>
                     
                     <button
-                      onClick={() => unlinkAllSliders(groupIdx)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        unlinkAllSliders(groupIdx)
+                      }}
                       title="Unlink all sliders in this group"
                       className="p-1 rounded transition-colors text-slate-500 hover:text-slate-300"
                     >
