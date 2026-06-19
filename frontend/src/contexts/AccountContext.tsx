@@ -9,6 +9,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '../services/api'
+import { markStartupMilestone } from '../utils/startupPerformance'
 
 // =============================================================================
 // Types
@@ -295,6 +296,10 @@ export function AccountProvider({ children }: AccountProviderProps) {
     () => accounts.find((a) => a.id === selectedAccountId) || null,
     [accounts, selectedAccountId]
   )
+
+  useEffect(() => {
+    if (selectedAccount) markStartupMilestone('account-ready')
+  }, [selectedAccount])
 
   // Auto-select default account if none selected or stale ID from another user
   useEffect(() => {

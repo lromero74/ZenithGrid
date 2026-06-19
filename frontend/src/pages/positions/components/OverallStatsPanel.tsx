@@ -1,7 +1,7 @@
 import { Balances } from '../../../types'
 import { useState, useEffect, useMemo } from 'react'
 
-interface CompletedStats {
+export interface CompletedStats {
   total_profit_btc: number
   total_profit_usd: number
   win_rate: number
@@ -11,7 +11,7 @@ interface CompletedStats {
   average_profit_usd: number
 }
 
-interface RealizedPnL {
+export interface RealizedPnL {
   daily_profit_btc: number
   daily_profit_usd: number
   daily_profit_by_quote: Record<string, number>

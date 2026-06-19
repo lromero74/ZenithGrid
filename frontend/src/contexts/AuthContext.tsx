@@ -8,6 +8,8 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { clearSessionQueryCache, installSessionQueryPersistence } from '../utils/sessionQueryPersistence'
+import { markStartupMilestone } from '../utils/startupPerformance'
 
 // Types
 export interface User {
@@ -191,6 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem('auth_session_expires_at') || null
   )
   const [showSessionLimitsPopup, setShowSessionLimitsPopup] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    markStartupMilestone('auth-ready')
+    return installSessionQueryPersistence(queryClient, user.id)
+  }, [queryClient, user])
 
   const acknowledgeSessionLimits = useCallback(() => {
     setShowSessionLimitsPopup(false)
@@ -567,6 +575,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     // Grab token BEFORE clearing storage — needed for server-side session cleanup
     const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    const userId = user?.id
 
     // Clear localStorage
     localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
@@ -587,6 +596,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Clear React Query cache to prevent stale data when switching users
     queryClient.clear()
+    if (userId !== undefined) clearSessionQueryCache(userId)
 
     // Clear state
     setUser(null)
@@ -603,7 +613,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Authorization': `Bearer ${token}` },
       }).catch(() => {})
     }
-  }, [queryClient])
+  }, [queryClient, user?.id])
 
   // Listen for auth-logout events from API interceptor (avoids full page reload)
   useEffect(() => {

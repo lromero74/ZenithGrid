@@ -19,6 +19,7 @@ from app.database import get_db
 from app.models import AIBotLog, AIOpinionLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
 from app.auth.dependencies import get_current_user
 from app.services.account_access import accessible_account_ids
+from app.services.portfolio_service import get_account_balances
 from app.schemas import AIBotLogResponse, AIOpinionLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails
 from app.constants import VALID_CATEGORIES
@@ -632,11 +633,6 @@ async def get_realized_pnl(
             empty[f"{p}_profit_by_quote"] = {}
         return empty
 
-    # Use SQL conditional aggregation to compute all USD-profit sums in one
-    # query instead of materialising every closed position row in Python.
-    # Each CASE WHEN maps to one open-ended or bounded time period.
-    PROFIT_USD = Position.profit_usd  # shorthand for column references
-
     base_where = [
         Position.status == "closed",
         Position.closed_at.isnot(None),
@@ -645,81 +641,7 @@ async def get_realized_pnl(
     if account_id is not None:
         base_where.append(Position.account_id == account_id)
 
-    agg_query = select(
-        # --- USD profit per period ---
-        func.coalesce(func.sum(case(
-            (Position.closed_at >= start_of_today, PROFIT_USD),
-            else_=0.0,
-        )), 0.0).label("daily_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at.between(start_of_yesterday, end_of_yesterday),
-             PROFIT_USD), else_=0.0),
-        ), 0.0).label("yesterday_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at.between(start_of_last_week, end_of_last_week),
-             PROFIT_USD), else_=0.0),
-        ), 0.0).label("last_week_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at.between(start_of_last_month, end_of_last_month),
-             PROFIT_USD), else_=0.0),
-        ), 0.0).label("last_month_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at.between(start_of_last_quarter, end_of_last_quarter),
-             PROFIT_USD), else_=0.0),
-        ), 0.0).label("last_quarter_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at.between(start_of_last_year, end_of_last_year),
-             PROFIT_USD), else_=0.0),
-        ), 0.0).label("last_year_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at >= start_of_wtd, PROFIT_USD), else_=0.0),
-        ), 0.0).label("wtd_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at >= start_of_month, PROFIT_USD), else_=0.0),
-        ), 0.0).label("mtd_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at >= start_of_quarter, PROFIT_USD), else_=0.0),
-        ), 0.0).label("qtd_usd"),
-        func.coalesce(func.sum(case(
-            (Position.closed_at >= start_of_year, PROFIT_USD), else_=0.0),
-        ), 0.0).label("ytd_usd"),
-        func.coalesce(func.sum(PROFIT_USD), 0.0).label("alltime_usd"),
-    ).where(*base_where)
-
-    agg_result = await db.execute(agg_query)
-    row = agg_result.one()
-
-    # Map query columns to period names
-    usd_map = {
-        "daily": row.daily_usd,
-        "yesterday": row.yesterday_usd,
-        "last_week": row.last_week_usd,
-        "last_month": row.last_month_usd,
-        "last_quarter": row.last_quarter_usd,
-        "last_year": row.last_year_usd,
-        "wtd": row.wtd_usd,
-        "mtd": row.mtd_usd,
-        "qtd": row.qtd_usd,
-        "ytd": row.ytd_usd,
-        "alltime": row.alltime_usd,
-    }
-
-    # Per-quote breakdown still requires row-level grouping (SQL can't dynamically
-    # pivot quote currencies).  Fetch only closed_at + product_id + profit_quote
-    # and bucket in Python — but only the small set of rows needed for the
-    # breakdown, not full ORM objects.
-    quote_query = select(
-        Position.closed_at,
-        Position.product_id,
-        Position.profit_usd,
-        Position.profit_quote,
-    ).where(*base_where)
-
-    quote_result = await db.execute(quote_query)
-    closed_rows = quote_result.all()
-
-    by_quote = {p: {} for p in periods}
-    PROFIT_QUOTE_MAP = {
+    period_bounds = {
         "daily": (start_of_today, None),
         "yesterday": (start_of_yesterday, end_of_yesterday),
         "last_week": (start_of_last_week, end_of_last_week),
@@ -730,29 +652,54 @@ async def get_realized_pnl(
         "mtd": (start_of_month, None),
         "qtd": (start_of_quarter, None),
         "ytd": (start_of_year, None),
+        "alltime": (None, None),
     }
 
-    for closed_at, product_id, pos_profit_usd, pos_profit_quote in closed_rows:
-        if not closed_at:
+    # One grouped SQL query returns one row per product rather than one row per
+    # closed position. Both USD totals and native quote totals are aggregated in
+    # the database; Python only maps the small product result set into currencies.
+    usd_value = func.coalesce(Position.profit_usd, 0.0)
+    stable_quote = or_(
+        Position.product_id.like('%-USD'),
+        Position.product_id.like('%-USDC'),
+        Position.product_id.like('%-USDT'),
+    )
+    quote_value = func.coalesce(
+        Position.profit_quote,
+        case((stable_quote, usd_value), else_=0.0),
+        0.0,
+    )
+    aggregate_columns = [Position.product_id.label("product_id")]
+    for period_name, (start, end) in period_bounds.items():
+        if start is None:
+            aggregate_columns.extend([
+                func.coalesce(func.sum(usd_value), 0.0).label(f"{period_name}_usd"),
+                func.coalesce(func.sum(quote_value), 0.0).label(f"{period_name}_quote"),
+            ])
             continue
+        condition = Position.closed_at >= start if end is None else Position.closed_at.between(start, end)
+        aggregate_columns.extend([
+            func.coalesce(func.sum(case((condition, usd_value), else_=0.0)), 0.0).label(f"{period_name}_usd"),
+            func.coalesce(func.sum(case((condition, quote_value), else_=0.0)), 0.0).label(f"{period_name}_quote"),
+        ])
 
+    grouped_result = await db.execute(
+        select(*aggregate_columns).where(*base_where).group_by(Position.product_id)
+    )
+    grouped_rows = grouped_result.mappings().all()
+
+    usd_map = {p: 0.0 for p in periods}
+    by_quote = {p: {} for p in periods}
+    for row in grouped_rows:
+        product_id = row["product_id"]
         quote_currency = product_id.split('-')[1] if product_id and '-' in product_id else 'BTC'
-        pq = pos_profit_quote if pos_profit_quote is not None else (
-            (pos_profit_usd if pos_profit_usd is not None else 0.0)
-            if quote_currency in ('USD', 'USDC', 'USDT')
-            else 0.0
-        )
-
-        # All-time buckets every row
-        by_quote["alltime"][quote_currency] = by_quote["alltime"].get(quote_currency, 0.0) + pq
-
-        for period_name, (start, end) in PROFIT_QUOTE_MAP.items():
-            in_period = (
-                (closed_at >= start) if end is None
-                else (start <= closed_at <= end)
-            )
-            if in_period:
-                by_quote[period_name][quote_currency] = by_quote[period_name].get(quote_currency, 0.0) + pq
+        for period_name in periods:
+            usd_map[period_name] += float(row[f"{period_name}_usd"] or 0.0)
+            quote_total = float(row[f"{period_name}_quote"] or 0.0)
+            if quote_total:
+                by_quote[period_name][quote_currency] = (
+                    by_quote[period_name].get(quote_currency, 0.0) + quote_total
+                )
 
     # Build response
     resp: dict = {}
@@ -761,6 +708,23 @@ async def get_realized_pnl(
         resp[f"{p}_profit_btc"] = round(by_quote[p].get('BTC', 0.0), 8)
         resp[f"{p}_profit_by_quote"] = {k: round(v, 8) for k, v in by_quote[p].items()}
     return resp
+
+
+@router.get("/page-summary")
+async def get_positions_summary(
+    account_id: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the three account-scoped summary panels in one HTTP response."""
+    completed_stats = await get_completed_trades_stats(account_id, db, current_user)
+    realized_pnl = await get_realized_pnl(account_id, db, current_user)
+    balances = await get_account_balances(db, current_user, account_id)
+    return {
+        "completed_stats": completed_stats,
+        "realized_pnl": realized_pnl,
+        "balances": balances,
+    }
 
 
 @router.get("/{position_id}", response_model=PositionResponse)

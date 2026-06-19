@@ -7,7 +7,7 @@ Python-loop logic for all time period buckets.
 
 import pytest
 from datetime import timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import Position, Account, User, Bot
 from app.utils.timeutil import utcnow
@@ -147,6 +147,63 @@ class TestRealizedPnlAggregation:
         assert result["alltime_profit_usd"] == pytest.approx(
             10.0 + 5.0 - 3.0 + 7.0 + 0.0 - 20.0  # = -1.0
         )
+
+    async def test_requested_account_excludes_same_and_different_user_accounts(
+        self, db_session, setup_closed_positions
+    ):
+        """Financial aggregates never bleed across account boundaries."""
+        from app.position_routers.position_query_router import get_realized_pnl
+
+        owner = setup_closed_positions["user"]
+        requested_account = setup_closed_positions["account"]
+        other_user = User(email="other-pnl@example.com", hashed_password="x")
+        db_session.add(other_user)
+        await db_session.flush()
+
+        for account_owner, suffix in ((owner, "same-user"), (other_user, "other-user")):
+            account = Account(
+                user_id=account_owner.id,
+                name=f"Excluded {suffix}",
+                type="cex",
+                is_active=True,
+            )
+            db_session.add(account)
+            await db_session.flush()
+            bot = Bot(
+                name=f"Excluded {suffix}",
+                user_id=account_owner.id,
+                account_id=account.id,
+                strategy_type="dca",
+                strategy_config={},
+                product_id="BTC-USD",
+                is_active=False,
+            )
+            db_session.add(bot)
+            await db_session.flush()
+            db_session.add(Position(
+                bot_id=bot.id,
+                account_id=account.id,
+                user_id=account_owner.id,
+                product_id="BTC-USD",
+                status="closed",
+                opened_at=utcnow() - timedelta(hours=2),
+                closed_at=utcnow() - timedelta(hours=1),
+                profit_usd=9999.0,
+                initial_quote_balance=100.0,
+                max_quote_allowed=50.0,
+                total_quote_spent=100.0,
+                total_base_acquired=0.001,
+            ))
+        await db_session.commit()
+
+        current_user = MagicMock(id=owner.id)
+        result = await get_realized_pnl(
+            account_id=requested_account.id,
+            db=db_session,
+            current_user=current_user,
+        )
+
+        assert result["alltime_profit_usd"] == pytest.approx(-1.0)
 
     async def test_daily_excludes_yesterday_positions(
         self, db_session, setup_closed_positions
@@ -292,3 +349,35 @@ class TestRealizedPnlAggregation:
         # YTD should include everything closed this year
         assert result["ytd_profit_usd"] >= result["daily_profit_usd"]
         assert result["ytd_profit_usd"] >= result["mtd_profit_usd"]
+
+
+@pytest.mark.asyncio
+async def test_page_summary_passes_required_account_to_every_source():
+    from app.position_routers.position_query_router import get_positions_summary
+
+    db = MagicMock()
+    user = MagicMock(id=3)
+    with (
+        patch(
+            "app.position_routers.position_query_router.get_completed_trades_stats",
+            new=AsyncMock(return_value={"total_trades": 2}),
+        ) as completed,
+        patch(
+            "app.position_routers.position_query_router.get_realized_pnl",
+            new=AsyncMock(return_value={"alltime_profit_usd": 4.0}),
+        ) as realized,
+        patch(
+            "app.position_routers.position_query_router.get_account_balances",
+            new=AsyncMock(return_value={"USD": 20.0}),
+        ) as balances,
+    ):
+        result = await get_positions_summary(account_id=7, db=db, current_user=user)
+
+    completed.assert_awaited_once_with(7, db, user)
+    realized.assert_awaited_once_with(7, db, user)
+    balances.assert_awaited_once_with(db, user, 7)
+    assert result == {
+        "completed_stats": {"total_trades": 2},
+        "realized_pnl": {"alltime_profit_usd": 4.0},
+        "balances": {"USD": 20.0},
+    }

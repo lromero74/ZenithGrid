@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.3] - 2026-06-18
+
+### Added
+- Hard refreshes can paint a two-minute, user- and account-scoped tab cache immediately while revalidating every restored value against production.
+- Browser startup milestones and API `Server-Timing` headers make authentication, account, route, and page-data latency visible in performance tooling.
+
+### Changed
+- The Positions page now loads completed-trade statistics, realized P&L, and balances through one account-scoped startup request instead of three HTTP round trips.
+- Realized P&L native-currency totals are fully aggregated by product in SQL, eliminating row-by-row closed-position materialization.
+
 ## [v3.4.2] - 2026-06-18
 
 ### Changed

@@ -572,6 +572,15 @@ describe('positionsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/positions/completed/stats', { params: {} })
   })
 
+  test('getPageSummary always scopes the consolidated request to an account', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: { completed_stats: {}, realized_pnl: {}, balances: {} } })
+
+    await positionsApi.getPageSummary(5)
+    expect(api.get).toHaveBeenCalledWith('/positions/page-summary', {
+      params: { account_id: 5 },
+    })
+  })
+
   test('resizeBudget calls correct endpoint', async () => {
     vi.mocked(api.post).mockResolvedValue({
       data: { message: 'resized', position_id: 1, old_max: 100, new_max: 150, quote_currency: 'USD' },

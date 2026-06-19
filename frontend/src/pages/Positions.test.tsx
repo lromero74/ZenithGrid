@@ -150,11 +150,9 @@ vi.mock('../components/positions/PanicSellModal', () => ({
 
 vi.mock('../services/api', () => ({
   positionsApi: {
-    getCompletedStats: vi.fn().mockResolvedValue({}),
-    getRealizedPnL: vi.fn().mockResolvedValue({}),
-  },
-  accountApi: {
-    getBalances: vi.fn().mockResolvedValue([]),
+    getPageSummary: vi.fn().mockResolvedValue({
+      completed_stats: {}, realized_pnl: {}, balances: {},
+    }),
   },
 }))
 
@@ -183,17 +181,13 @@ describe('Positions polling policy', () => {
     const queryClient = renderPage()
     const queries = queryClient.getQueryCache().getAll()
 
-    const targetKeys = [
-      JSON.stringify(['completed-trades-stats', 7]),
-      JSON.stringify(['realized-pnl', 7]),
-      JSON.stringify(['account-balances', 7]),
-    ]
+    const targetKeys = [JSON.stringify(['positions-page-summary', 7])]
 
     const observerOptions = queries
       .filter((query) => targetKeys.includes(JSON.stringify(query.queryKey)))
       .flatMap((query) => query.observers.map((observer: any) => observer.options))
 
-    expect(observerOptions).toHaveLength(3)
+    expect(observerOptions).toHaveLength(1)
     observerOptions.forEach((options: any) => {
       expect(options.refetchInterval).toBe(120000)
       expect(options.refetchIntervalInBackground).toBe(false)
