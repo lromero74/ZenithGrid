@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.8] - 2026-06-19
+
+### Added
+- Web and trader process roles can now be staged independently, while the default combined role preserves the current deployment.
+- Trading startup is protected by a renewable Redis leader lease; a second trader is rejected, and lease loss terminates the trader fail-closed before another process can take over.
+
 ## [v3.4.7] - 2026-06-19
 
 ### Changed
