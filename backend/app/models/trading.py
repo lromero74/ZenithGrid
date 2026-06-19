@@ -201,6 +201,9 @@ class Bot(Base):
     reserved_usd_for_longs = Column(Float, default=0.0)  # USD reserved for long positions
     reserved_btc_for_shorts = Column(Float, default=0.0)  # BTC reserved for short positions
 
+    # TradingView webhook integration
+    webhook_token = Column(String, nullable=True, index=True)  # Per-bot secret for webhook auth
+
     # Timestamps
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

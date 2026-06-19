@@ -215,6 +215,8 @@
       "get_strategy_definition",
       "list_bots",
       "list_strategies",
+      "regenerate_webhook_token",
+      "revoke_webhook_token",
       "update_bot"
     ]
   },
@@ -2187,6 +2189,13 @@
       "get_transfer_summary",
       "list_transfers",
       "sync_transfers"
+    ]
+  },
+  "backend/app/routers/webhook_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_rate_limit",
+      "tradingview_webhook"
     ]
   },
   "backend/app/scheduler.py": {

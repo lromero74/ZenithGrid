@@ -59,6 +59,7 @@ from app.routers import display_name_router  # Display name management
 from app.routers import donations_router  # Donation tracking and goals
 from app.routers import sessions_router  # Session management for multiplayer
 from app.routers import chat_router  # Chat (DMs, groups, channels)
+from app.routers import webhook_router  # TradingView webhook integration
 from app.routers.bots import router as bots_router
 from app.routers.system_router import (
     build_changelog_cache,
@@ -235,6 +236,7 @@ app.include_router(display_name_router.router)  # Display name management
 app.include_router(donations_router.router)  # Donation tracking and goals
 app.include_router(sessions_router.router)  # Session management for multiplayer
 app.include_router(chat_router.router)  # Chat (DMs, groups, channels)
+app.include_router(webhook_router.router)  # TradingView webhooks (no JWT auth)
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
