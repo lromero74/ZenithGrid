@@ -14,6 +14,7 @@ the executor-lifecycle assertions (AttributeError: app.state has no tts_executor
 """
 
 import asyncio
+import hashlib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -170,7 +171,7 @@ class TestGetOrCreateTTSUsesExecutor:
     async def test_cache_hit_read_uses_run_in_executor(self):
         """Happy path: cache hit reads file via run_in_executor, not blocking read_bytes()."""
         mock_cached = MagicMock()
-        mock_cached.content_hash = "abc12345"
+        mock_cached.content_hash = hashlib.md5(b"hello world").hexdigest()[:8]
         mock_cached.audio_path = "1/aria.mp3"
         mock_cached.word_timings = json.dumps([{"text": "hi", "startTime": 0.0, "endTime": 0.3}])
 

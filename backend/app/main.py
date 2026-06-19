@@ -59,7 +59,12 @@ from app.routers import donations_router  # Donation tracking and goals
 from app.routers import sessions_router  # Session management for multiplayer
 from app.routers import chat_router  # Chat (DMs, groups, channels)
 from app.routers.bots import router as bots_router
-from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
+from app.routers.system_router import (
+    build_changelog_cache,
+    get_git_version_cached,
+    get_latest_git_tag_cached,
+    set_trading_pair_monitor,
+)
 from app.services.auto_buy_monitor import auto_buy_monitor  # noqa: F401
 from app.services.rebalance_monitor import rebalance_monitor  # noqa: F401
 from app.services.delisted_pair_monitor import trading_pair_monitor
@@ -609,6 +614,10 @@ async def startup_event():
 
     logger.info("Building changelog cache...")
     build_changelog_cache()
+    # Absorb local git subprocesses during startup so the first browser request
+    # receives the same fast path as every subsequent hard refresh.
+    get_git_version_cached()
+    get_latest_git_tag_cached()
     logger.info("Changelog cache built")
 
     logger.info("Tier 1 monitors started")

@@ -111,6 +111,22 @@ class TestRootEndpoint:
         assert "latest_version" in result
         assert "update_available" in result
 
+    @pytest.mark.asyncio
+    async def test_root_never_fetches_git_tags_on_the_request_path(self):
+        """Hard refresh metadata must not wait on a remote git network call."""
+        from app.routers.system_router import root
+
+        with (
+            patch("app.routers.system_router.get_git_version_cached", return_value="v3.4.4"),
+            patch("app.routers.system_router.get_latest_git_tag_cached", return_value="v3.4.4"),
+            patch("app.routers.system_router.get_latest_git_tag") as remote_fetch,
+        ):
+            result = await root()
+
+        remote_fetch.assert_not_called()
+        assert result["version"] == "v3.4.4"
+        assert result["latest_version"] == "v3.4.4"
+
 
 class TestVersionEndpoint:
     """Tests for GET /api/version"""

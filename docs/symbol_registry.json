@@ -2111,6 +2111,7 @@
       "get_git_version",
       "get_git_version_cached",
       "get_latest_git_tag",
+      "get_latest_git_tag_cached",
       "get_market_data",
       "get_pair_monitor_status",
       "get_price_monitor",
