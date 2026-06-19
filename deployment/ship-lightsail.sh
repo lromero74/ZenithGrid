@@ -43,19 +43,44 @@ git fetch origin --tags && git pull --ff-only origin main && \
 bash deployment/activate-frontend-release.sh '$VERSION'"
 
 if [ "$MODE" = "--backend" ]; then
-    ssh "$SSH_TARGET" "sudo systemctl restart zenithgrid"
+    ssh "$SSH_TARGET" 'if systemctl is-enabled --quiet zenithgrid-web.service && \
+        systemctl is-enabled --quiet zenithgrid-trader.service; then
+        sudo systemctl restart zenithgrid-trader.service
+        sudo systemctl restart zenithgrid-web.service
+    else
+        sudo systemctl restart zenithgrid.service
+    fi'
 fi
 
 echo "Verifying production..."
-ssh "$SSH_TARGET" 'systemctl is-active zenithgrid >/dev/null || exit 1
+ssh "$SSH_TARGET" 'if systemctl is-enabled --quiet zenithgrid-web.service && \
+    systemctl is-enabled --quiet zenithgrid-trader.service; then
+    expected_services="zenithgrid-web.service zenithgrid-trader.service"
+    health_urls="http://127.0.0.1:8100/api/health|web http://127.0.0.1:8101/api/health|trader"
+else
+    expected_services="zenithgrid.service"
+    health_urls="http://127.0.0.1:8100/api/health|combined"
+fi
 for attempt in {1..12}; do
-    if curl -fsS http://127.0.0.1:8100/api/health; then
+    healthy=true
+    output=""
+    for health_target in $health_urls; do
+        url=${health_target%|*}
+        role=${health_target#*|}
+        response=$(curl -fsS "$url") || { healthy=false; break; }
+        echo "$response" | grep -q "\"process_role\":\"$role\"" || { healthy=false; break; }
+        output="$output$response\n"
+    done
+    if [ "$healthy" = true ]; then
+        printf "%b" "$output"
         exit 0
     fi
     sleep 5
 done
 echo "ZenithGrid did not become healthy within 60 seconds" >&2
-journalctl -u zenithgrid --no-pager -n 40 >&2
+for service in $expected_services; do
+    journalctl -u "$service" --no-pager -n 40 >&2
+done
 exit 1'
 echo
 echo "Deployed $VERSION ($MODE)"

@@ -139,4 +139,9 @@ python scripts/symbol_registry.py --verify         # exit non-zero if snapshot i
   loops; a `trader`/`combined` process must own the Redis
   `zenith:trading-leader` lease. Never run a second trading role by bypassing
   that lease or changing its key.
+- Lightsail split-process cutover is performed only with
+  `sudo deployment/enable-split-processes.sh`; it validates both roles and
+  automatically restores `zenithgrid.service` on failure. Explicit rollback:
+  `sudo deployment/enable-split-processes.sh --rollback`. After cutover, the
+  canonical ship script restarts and verifies both units automatically.
 - Otherwise you are on a dev machine — push to git, deploy on the Lightsail prod host.

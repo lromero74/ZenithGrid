@@ -1,0 +1,20 @@
+[Unit]
+Description=ZenithGrid Web API
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/ZenithGrid/backend
+EnvironmentFile=/home/ubuntu/ZenithGrid/backend/.env.banmonitor
+Environment=PROCESS_ROLE=web
+ExecStart=/home/ubuntu/ZenithGrid/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8100
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
