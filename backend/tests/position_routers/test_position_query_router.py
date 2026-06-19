@@ -403,6 +403,112 @@ class TestGetPositions:
 
     @pytest.mark.asyncio
     @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_list_fetches_position_aggregates_in_one_database_round_trip(
+        self, mock_resize, db_session, async_engine,
+    ):
+        """Performance regression: trade/order aggregates ride on the position SELECT."""
+        from sqlalchemy import event
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "roundtrips@example.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(
+            db_session,
+            account,
+            bot=bot,
+            status="open",
+            strategy_config_snapshot={"max_safety_orders": 1},
+        )
+        db_session.add(Trade(
+            position_id=pos.id,
+            side="buy",
+            quote_amount=0.01,
+            base_amount=0.5,
+            price=0.02,
+            trade_type="initial",
+            timestamp=utcnow(),
+        ))
+        await db_session.flush()
+
+        statements = []
+
+        def _record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement.lower())
+
+        sync_engine = async_engine.sync_engine
+        event.listen(sync_engine, "before_cursor_execute", _record)
+        try:
+            response_mock = MagicMock(headers={})
+            await get_positions(
+                response=response_mock,
+                status="open",
+                limit=50,
+                offset=0,
+                db=db_session,
+                account_id=account.id,
+                current_user=user,
+            )
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", _record)
+
+        aggregate_statements = [
+            statement for statement in statements
+            if statement.lstrip().startswith("select")
+            and ("trades" in statement or "pending_orders" in statement)
+        ]
+        assert len(aggregate_statements) == 1, "\n---\n".join(aggregate_statements)
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
+    async def test_position_aggregates_do_not_bleed_across_accounts_or_users(self, mock_resize, db_session):
+        """Security regression: aggregate values remain bound to the requested account's position."""
+        from app.position_routers.position_query_router import get_positions
+
+        user, account = await _create_user_with_account(db_session, "scopedmetrics@example.com")
+        second_account = Account(
+            user_id=user.id,
+            name="Second Account",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+        )
+        db_session.add(second_account)
+        await db_session.flush()
+        other_user, other_account = await _create_user_with_account(db_session, "othermetrics@example.com")
+
+        requested = await _create_position(db_session, account, status="open")
+        same_user_other = await _create_position(db_session, second_account, status="open")
+        other_user_position = await _create_position(db_session, other_account, status="open")
+        for position, count in ((requested, 1), (same_user_other, 3), (other_user_position, 5)):
+            for index in range(count):
+                db_session.add(Trade(
+                    position_id=position.id,
+                    side="buy",
+                    quote_amount=0.01,
+                    base_amount=0.5,
+                    price=0.02 + index,
+                    trade_type="initial",
+                    timestamp=utcnow() + timedelta(minutes=index),
+                ))
+        await db_session.flush()
+
+        result = await get_positions(
+            response=MagicMock(headers={}),
+            status="open",
+            limit=50,
+            offset=0,
+            db=db_session,
+            account_id=account.id,
+            current_user=user,
+        )
+
+        assert [position.id for position in result] == [requested.id]
+        assert result[0].trade_count == 1
+        assert result[0].first_buy_price == pytest.approx(0.02)
+        assert other_user.id != user.id
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.helpers.compute_resize_budget", return_value=0.0)
     async def test_includes_limit_order_details_without_loading_all_pending_orders(self, mock_resize, db_session):
         """Happy path: list endpoint still returns limit-close details for active limit closes."""
         from app.position_routers.position_query_router import get_positions

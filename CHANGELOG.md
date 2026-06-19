@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.7] - 2026-06-19
+
+### Changed
+- Open-position loading now returns trade counts, safety-order totals, first/last buy data, and pending-order counts in the account-scoped position query, eliminating four database round-trips per refresh.
+
 ## [v3.4.6] - 2026-06-18
 
 ### Added

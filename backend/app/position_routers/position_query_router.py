@@ -11,9 +11,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, case, desc, func, or_, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.models import AIBotLog, AIOpinionLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
@@ -87,7 +86,57 @@ async def get_positions(
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    query = select(Position)
+    trade_count = (
+        select(func.count(Trade.id))
+        .where(Trade.position_id == Position.id)
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    safety_orders_deployed = (
+        select(func.coalesce(func.sum(Trade.dca_levels), 0))
+        .where(Trade.position_id == Position.id, Trade.trade_type == "dca")
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    first_buy_price = (
+        select(Trade.price)
+        .where(Trade.position_id == Position.id, Trade.side == "buy")
+        .order_by(Trade.timestamp.asc(), Trade.id.asc())
+        .limit(1)
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    last_buy_price = (
+        select(Trade.price)
+        .where(Trade.position_id == Position.id, Trade.side == "buy")
+        .order_by(Trade.timestamp.desc(), Trade.id.desc())
+        .limit(1)
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    first_buy_quote_amount = (
+        select(Trade.quote_amount)
+        .where(Trade.position_id == Position.id, Trade.side == "buy")
+        .order_by(Trade.timestamp.asc(), Trade.id.asc())
+        .limit(1)
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    pending_order_count = (
+        select(func.count(PendingOrder.id))
+        .where(PendingOrder.position_id == Position.id, PendingOrder.status == "pending")
+        .correlate(Position)
+        .scalar_subquery()
+    )
+    query = select(
+        Position,
+        trade_count.label("trade_count"),
+        safety_orders_deployed.label("safety_orders_deployed"),
+        first_buy_price.label("first_buy_price"),
+        last_buy_price.label("last_buy_price"),
+        first_buy_quote_amount.label("first_buy_quote_amount"),
+        pending_order_count.label("pending_order_count"),
+    )
 
     # Get user's account IDs (owned + shared)
     user_account_ids = await accessible_account_ids(db, current_user.id)
@@ -112,11 +161,11 @@ async def get_positions(
         query = query.order_by(desc(Position.opened_at)).offset(offset).limit(limit)
 
     result = await db.execute(query)
-    positions = result.scalars().all()
+    position_rows = result.all()
+    positions = [row[0] for row in position_rows]
     if not positions:
         return []
 
-    position_ids = [pos.id for pos in positions]
     base_symbols = {pos.product_id.split("-")[0] for pos in positions if pos.product_id}
 
     # Fetch blacklisted coins: global entries + current user's overrides
@@ -132,94 +181,25 @@ async def get_positions(
     blacklisted_coins = blacklist_result.scalars().all()
     blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
 
-    trade_count_result = await db.execute(
-        select(
-            Trade.position_id,
-            func.count(Trade.id).label("trade_count"),
-        )
-        .where(Trade.position_id.in_(position_ids))
-        .group_by(Trade.position_id)
-    )
     trade_count_map = {
-        row.position_id: row.trade_count
-        for row in trade_count_result
+        row[0].id: row.trade_count
+        for row in position_rows
     }
 
     # Safety orders DEPLOYED = sum of dca_levels over DCA trades (a cascade fills
     # several SO levels in one trade), not the number of DCA trade rows. Covers
     # both long (buy) and short (sell) DCA trades.
-    so_deployed_result = await db.execute(
-        select(
-            Trade.position_id,
-            func.coalesce(func.sum(Trade.dca_levels), 0).label("deployed"),
-        )
-        .where(Trade.position_id.in_(position_ids), Trade.trade_type == "dca")
-        .group_by(Trade.position_id)
-    )
     so_deployed_map = {
-        row.position_id: int(row.deployed or 0)
-        for row in so_deployed_result
+        row[0].id: int(row.safety_orders_deployed or 0)
+        for row in position_rows
     }
-
-    buy_bounds_subquery = (
-        select(
-            Trade.position_id.label("position_id"),
-            func.min(Trade.timestamp).label("first_buy_at"),
-            func.max(Trade.timestamp).label("last_buy_at"),
-        )
-        .where(
-            Trade.position_id.in_(position_ids),
-            Trade.side == "buy",
-        )
-        .group_by(Trade.position_id)
-        .subquery()
-    )
-
-    first_buy_trade = aliased(Trade)
-    last_buy_trade = aliased(Trade)
-    buy_price_result = await db.execute(
-        select(
-            buy_bounds_subquery.c.position_id,
-            first_buy_trade.price.label("first_buy_price"),
-            last_buy_trade.price.label("last_buy_price"),
-            first_buy_trade.quote_amount.label("first_buy_quote_amount"),
-        )
-        .outerjoin(
-            first_buy_trade,
-            and_(
-                first_buy_trade.position_id == buy_bounds_subquery.c.position_id,
-                first_buy_trade.side == "buy",
-                first_buy_trade.timestamp == buy_bounds_subquery.c.first_buy_at,
-            ),
-        )
-        .outerjoin(
-            last_buy_trade,
-            and_(
-                last_buy_trade.position_id == buy_bounds_subquery.c.position_id,
-                last_buy_trade.side == "buy",
-                last_buy_trade.timestamp == buy_bounds_subquery.c.last_buy_at,
-            ),
-        )
-    )
     buy_price_map = {
-        row.position_id: (row.first_buy_price, row.last_buy_price, row.first_buy_quote_amount)
-        for row in buy_price_result
+        row[0].id: (row.first_buy_price, row.last_buy_price, row.first_buy_quote_amount)
+        for row in position_rows
     }
-
-    pending_count_result = await db.execute(
-        select(
-            PendingOrder.position_id,
-            func.count(PendingOrder.id).label("pending_count"),
-        )
-        .where(
-            PendingOrder.position_id.in_(position_ids),
-            PendingOrder.status == "pending",
-        )
-        .group_by(PendingOrder.position_id)
-    )
     pending_count_map = {
-        row.position_id: row.pending_count
-        for row in pending_count_result
+        row[0].id: row.pending_order_count
+        for row in position_rows
     }
 
     limit_order_ids = [
