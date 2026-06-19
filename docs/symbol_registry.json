@@ -2148,6 +2148,16 @@
       "trigger_pair_sync"
     ]
   },
+  "backend/app/routers/telegram_router.py": {
+    "classes": {},
+    "functions": [
+      "get_settings",
+      "remove_settings",
+      "send_test_notification",
+      "telegram_webhook",
+      "update_settings"
+    ]
+  },
   "backend/app/routers/templates.py": {
     "classes": {},
     "functions": [
@@ -3360,6 +3370,27 @@
       "_integer_round_preserving_sum",
       "_normalize_to_sum",
       "propose_weights"
+    ]
+  },
+  "backend/app/services/telegram_service.py": {
+    "classes": {},
+    "functions": [
+      "_cmd_pnl",
+      "_cmd_positions",
+      "_cmd_start_bot",
+      "_cmd_status",
+      "_cmd_stop_bot",
+      "_notify_user",
+      "delete_telegram_settings",
+      "get_telegram_settings",
+      "handle_telegram_command",
+      "notify_bot_started",
+      "notify_bot_stopped",
+      "notify_order_filled",
+      "notify_position_closed",
+      "notify_position_opened",
+      "save_telegram_settings",
+      "send_telegram_message"
     ]
   },
   "backend/app/services/trading_leader.py": {

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - TradingView webhook integration: bots can now receive alert webhooks from TradingView to trigger buy/sell actions. Each bot gets a unique webhook token (generated on creation with `webhook_enabled=True` or via the `POST /api/bots/{bot_id}/webhook-token` endpoint). Webhooks are rate-limited to 10 requests/minute per token and rejected for stopped bots.
+- Telegram notification integration: users can configure a Telegram bot token and chat ID in settings to receive trade fill, position opened/closed, and bot started/stopped notifications. Supports commands via Telegram webhook: `/status`, `/positions`, `/pnl`, `/start <bot>`, `/stop <bot>`, `/help`. Notification types are individually toggleable.
 
 ## [v3.4.12] - 2026-06-19
 

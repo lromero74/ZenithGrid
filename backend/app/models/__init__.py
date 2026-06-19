@@ -35,7 +35,7 @@ from app.models.social import (
     ChatChannel, ChatChannelMember, ChatMessage, ChatMessageReaction,
 )
 from app.models.system import (
-    Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog,
+    Settings, MarketData, AIBotLog, ScannerLog, IndicatorLog, TelegramSettings,
 )
 from app.models.donations import Donation
 from app.models.sharing import (
@@ -68,7 +68,7 @@ __all__ = [
     "Tournament", "TournamentPlayer", "TournamentDeleteVote",
     "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatMessageReaction",
     # System
-    "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog",
+    "Settings", "MarketData", "AIBotLog", "ScannerLog", "IndicatorLog", "TelegramSettings",
     # Donations
     "Donation",
     # Sharing
