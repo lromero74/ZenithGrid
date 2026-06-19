@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.12] - 2026-06-19
+
+### Fixed
+- The account-scoped spot-fee backfill now runs correctly from its documented repository location.
+
 ## [v3.4.11] - 2026-06-19
 
 ### Changed

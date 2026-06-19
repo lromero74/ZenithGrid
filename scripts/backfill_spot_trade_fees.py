@@ -3,16 +3,20 @@
 
 import argparse
 import asyncio
+import sys
+from pathlib import Path
 
 from sqlalchemy import select
 
-from app.database import async_session_maker
-from app.models import Position, Trade
-from app.services.exchange_service import get_exchange_client_for_account
-from app.services.pnl_service import calculate_realized_spot_profit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 
 async def main(account_id: int, commit: bool) -> None:
+    from app.database import async_session_maker
+    from app.models import Position, Trade
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.services.pnl_service import calculate_realized_spot_profit
+
     async with async_session_maker() as db:
         client = await get_exchange_client_for_account(db, account_id, use_cache=False)
         positions = (await db.execute(select(Position).where(
