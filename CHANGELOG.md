@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - TradingView webhook integration: bots can now receive alert webhooks from TradingView to trigger buy/sell actions. Each bot gets a unique webhook token (generated on creation with `webhook_enabled=True` or via the `POST /api/bots/{bot_id}/webhook-token` endpoint). Webhooks are rate-limited to 10 requests/minute per token and rejected for stopped bots.
 - Telegram notification integration: users can configure a Telegram bot token and chat ID in settings to receive trade fill, position opened/closed, and bot started/stopped notifications. Supports commands via Telegram webhook: `/status`, `/positions`, `/pnl`, `/start <bot>`, `/stop <bot>`, `/help`. Notification types are individually toggleable.
+- Fear & Greed Index indicator: adds FEAR_GREED as a tradeable aggregate indicator in the condition builder (e.g., `FEAR_GREED <= 25` to buy in extreme fear). Fetches from the alternative.me API with a 1-hour process-level cache and graceful fallback to the last known value on API failure.
 
 ## [v3.4.12] - 2026-06-19
 

@@ -55,6 +55,7 @@ def needs_aggregate_indicators(
         "vwap_bounce_up": False,
         "vwap_bounce_down": False,
         "qfl_crack": False,
+        "fear_greed": False,
         "ai_params": None,
     }
 
@@ -86,6 +87,8 @@ def needs_aggregate_indicators(
             needs["vwap_bounce_down"] = True
         elif indicator == "qfl_crack":
             needs["qfl_crack"] = True
+        elif indicator == "fear_greed":
+            needs["fear_greed"] = True
 
     return needs
 

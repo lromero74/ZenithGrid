@@ -1172,6 +1172,21 @@
       "evaluate_bull_flag_indicator_with_details"
     ]
   },
+  "backend/app/indicators/fear_greed_indicator.py": {
+    "classes": {
+      "FearGreedIndicatorEvaluator": [
+        "_fallback",
+        "evaluate"
+      ],
+      "FearGreedParams": [
+        "from_config"
+      ]
+    },
+    "functions": [
+      "_classify",
+      "clear_fear_greed_cache"
+    ]
+  },
   "backend/app/indicators/qfl_indicator.py": {
     "classes": {
       "QFLIndicatorEvaluator": [
@@ -3517,6 +3532,7 @@
         "_calculate_ai_indicators",
         "_calculate_bidirectional_order_amount",
         "_calculate_bull_flag_indicators",
+        "_calculate_fear_greed_indicators",
         "_calculate_qfl_indicators",
         "_calculate_safety_order_amount",
         "_calculate_traditional_indicators",

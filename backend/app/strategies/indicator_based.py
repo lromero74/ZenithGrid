@@ -29,6 +29,7 @@ from app.indicators import (
     BullFlagIndicatorEvaluator,
     VWAPBounceIndicatorEvaluator, VWAPBounceParams,
     QFLIndicatorEvaluator, QFLParams,
+    FearGreedIndicatorEvaluator, FearGreedParams,
 )
 from app.phase_conditions import PhaseConditionEvaluator
 from app.strategies import (
@@ -94,6 +95,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         self.bull_flag_evaluator = BullFlagIndicatorEvaluator()
         self.vwap_bounce_evaluator = VWAPBounceIndicatorEvaluator()
         self.qfl_evaluator = QFLIndicatorEvaluator()
+        self.fear_greed_evaluator = FearGreedIndicatorEvaluator()
 
         # Get phase conditions from config
         self.base_order_conditions = self.config.get("base_order_conditions", [])
@@ -398,6 +400,21 @@ class IndicatorBasedStrategy(TradingStrategy):
         result = self.qfl_evaluator.evaluate(crack_candles, params, base_candles=effective_base_candles)
         current_indicators["qfl_crack"] = result.signal
 
+    async def _calculate_fear_greed_indicators(
+        self,
+        current_indicators: Dict[str, Any],
+    ) -> None:
+        """
+        Calculate Fear & Greed Index indicator.
+
+        Fetches the current Fear & Greed value from the alternative.me API
+        (cached for 1 hour). Mutates current_indicators in place.
+        """
+        params = FearGreedParams.from_config(self.config)
+        result = await self.fear_greed_evaluator.evaluate(params)
+        current_indicators["fear_greed"] = result.value
+        current_indicators["fear_greed_classification"] = result.classification
+
     def _get_dca_reference_price(self, position: Any, entry_trades: List) -> float:
         """
         Determine the reference price for DCA target calculation.
@@ -622,6 +639,9 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         if needs["qfl_crack"]:
             self._calculate_qfl_indicators(candles_by_timeframe, candles, current_indicators)
+
+        if needs["fear_greed"]:
+            await self._calculate_fear_greed_indicators(current_indicators)
 
         # Add current price
         current_indicators["price"] = current_price
