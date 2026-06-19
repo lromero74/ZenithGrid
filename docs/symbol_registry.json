@@ -179,6 +179,23 @@
       "_validate_password_strength"
     ]
   },
+  "backend/app/automation/__init__.py": {
+    "classes": {},
+    "functions": [
+      "evaluate_all_rules",
+      "evaluate_holding_threshold",
+      "evaluate_period_check",
+      "evaluate_price_threshold",
+      "evaluate_profitability_threshold",
+      "evaluate_rule",
+      "execute_cancel_open_orders",
+      "execute_sell_all_positions",
+      "execute_send_notification",
+      "execute_start_bot",
+      "execute_stop_strategies",
+      "execute_stop_trading"
+    ]
+  },
   "backend/app/backtesting/__init__.py": {
     "classes": {
       "BacktestResult": [
@@ -1822,6 +1839,17 @@
       "get_ai_providers_status",
       "list_ai_credentials",
       "update_ai_credential"
+    ]
+  },
+  "backend/app/routers/automation_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_account_access",
+      "create_rule",
+      "delete_rule",
+      "list_rules",
+      "test_rule",
+      "update_rule"
     ]
   },
   "backend/app/routers/backtesting_router.py": {

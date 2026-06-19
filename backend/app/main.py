@@ -62,6 +62,7 @@ from app.routers import chat_router  # Chat (DMs, groups, channels)
 from app.routers import webhook_router  # TradingView webhook integration
 from app.routers import telegram_router  # Telegram notifications & commands
 from app.routers import backtesting_router  # Strategy backtesting
+from app.routers import automation_router  # Automation rules
 from app.routers.bots import router as bots_router
 from app.routers.system_router import (
     build_changelog_cache,
@@ -241,6 +242,7 @@ app.include_router(chat_router.router)  # Chat (DMs, groups, channels)
 app.include_router(webhook_router.router)  # TradingView webhooks (no JWT auth)
 app.include_router(telegram_router.router)  # Telegram notifications & commands
 app.include_router(backtesting_router.router)  # Strategy backtesting
+app.include_router(automation_router.router)  # Automation rules
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/

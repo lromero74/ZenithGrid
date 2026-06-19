@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Telegram notification integration: users can configure a Telegram bot token and chat ID in settings to receive trade fill, position opened/closed, and bot started/stopped notifications. Supports commands via Telegram webhook: `/status`, `/positions`, `/pnl`, `/start <bot>`, `/stop <bot>`, `/help`. Notification types are individually toggleable.
 - Fear & Greed Index indicator: adds FEAR_GREED as a tradeable aggregate indicator in the condition builder (e.g., `FEAR_GREED <= 25` to buy in extreme fear). Fetches from the alternative.me API with a 1-hour process-level cache and graceful fallback to the last known value on API failure.
 - Backtesting engine: replay historical candle data through any strategy and get a performance report (total return, win rate, max drawdown, Sharpe ratio, profit factor, equity curve, trade list). Available via `POST /api/backtesting/run`. Uses a SimulatedBroker that handles buys, DCA, sells, and fee deduction.
+- Automation rules: user-configurable if-then rules with trigger types (price threshold, holding threshold, profitability threshold, period check) and action types (cancel open orders, sell all positions, stop all bots, stop specific bots, start bot, send Telegram notification). Rules are account-scoped. CRUD via `/api/automation/rules`, manual trigger test via `/api/automation/rules/{id}/test`.
 
 ## [v3.4.12] - 2026-06-19
 

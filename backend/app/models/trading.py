@@ -887,3 +887,46 @@ class SpeculativeWeightsProposal(Base):
         ForeignKey("trading.speculative_weights_proposals.id"),
         nullable=True,
     )
+
+
+class AutomationRule(Base):
+    """User-configurable if-then automation rule.
+
+    Trigger types: price_threshold, profitability_threshold, volatility_threshold,
+    holding_threshold, period_check.
+
+    Action types: cancel_open_orders, sell_all_positions, stop_trading,
+    stop_strategies, send_notification, start_bot.
+
+    Rules are scoped to an account (HARD RULE from AGENTS.md).
+    """
+    __tablename__ = "automation_rules"
+    __table_args__ = {'schema': 'trading'}
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=False, index=True)
+
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Trigger configuration
+    trigger_type = Column(String, nullable=False)  # e.g. "price_threshold"
+    trigger_config = Column(JSON, nullable=False)
+    # e.g. {"symbol": "BTC-USD", "target_price": 100000, "direction": "above"}
+
+    # Action configuration
+    action_type = Column(String, nullable=False)  # e.g. "sell_all_positions"
+    action_config = Column(JSON, nullable=True)  # e.g. {"bot_id": 3}
+
+    # Status
+    enabled = Column(Boolean, default=True)
+    last_fired_at = Column(DateTime, nullable=True)
+    fire_count = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    # Relationships
+    user = relationship("User")
+    account = relationship("Account")
