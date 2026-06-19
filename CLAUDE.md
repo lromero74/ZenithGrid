@@ -175,7 +175,7 @@ These ignored dirs ignore their contents wholesale, so put throwaway scripts the
 - **Frontend-only changes in prod mode**: use `./bot.sh build` — rebuilds dist/ without restarting the backend. The backend serves static files from disk, so new bundles are live immediately.
 - **Never restart unnecessarily** — it disrupts the running trading bot
 - **Do NOT restart before `/shipit`** — `/shipit` always restarts as its final deploy step. Restarting mid-session to test changes and then running `/shipit` causes a double restart for no benefit.
-- **PROD (AWS Lightsail) restart is NOT `bot.sh restart --prod`** — as of **2026-06-13** production migrated OFF fedora.local ONTO an **AWS Lightsail** instance (`zenithgrid`, us-east-1, 4 GB/2 vCPU/80 GB, static IP **52.87.130.244**). The backend runs as a **native** systemd *system* unit `zenithgrid.service` (`/etc/systemd/system/zenithgrid.service`, uvicorn on 127.0.0.1:8100) — **no distrobox, no `--user`, no `bot.sh`**. Real prod flow: `ssh ubuntu@origin.bigtruckincrypto.com` (alias `zenithgrid-ls`, key `~/.ssh/lightsail/zenithgrid_us-east-1.pem`), `cd ~/ZenithGrid && git pull origin main`, then `sudo systemctl restart zenithgrid`. Frontend-only change: `cd ~/ZenithGrid/frontend && npm run build` (backend serves `dist/` from disk — no restart). Verify with `curl -s http://127.0.0.1:8100/api/health`. **fedora.local is now a stopped warm-standby** (`zenithgrid.service --user` stopped + disabled) — do NOT start it while Lightsail runs, or both engines trade the same Coinbase accounts.
+- **PROD (AWS Lightsail) is deployed only through the atomic artifact script** — as of **2026-06-13** production migrated OFF fedora.local ONTO an **AWS Lightsail** instance (`zenithgrid`, us-east-1, 4 GB/2 vCPU/80 GB, static IP **52.87.130.244**). The backend runs as a native systemd *system* unit `zenithgrid.service` (uvicorn on 127.0.0.1:8100). From a clean checkout whose HEAD is already tagged, run `deployment/ship-lightsail.sh vX.Y.Z --backend`; use `--frontend-only` when no backend restart is needed. The script builds the frontend on the development machine, uploads an immutable artifact, switches `frontend/dist` atomically, pulls `main`, and verifies health. **Never run `npm run build` on Lightsail or rebuild the live `frontend/dist` in place.** Roll back the frontend with `ssh zenithgrid-ls 'cd ~/ZenithGrid && bash deployment/activate-frontend-release.sh --rollback'`. **fedora.local is a stopped warm-standby** (`zenithgrid.service --user` stopped + disabled); never start it while Lightsail runs.
 
 ## Database & Migrations
 
@@ -262,9 +262,11 @@ Use `/shipit` command for the full process. Key ordering:
 4. Merge to main (--no-ff)
 5. **Tag BEFORE deploy** — version is read live from git tags
 6. Push main + tags
-7. Deploy:
-   - **Frontend-only (prod mode)**: `./bot.sh build` — no restart needed. Backend reads git tags live and serves new dist/ from disk. Users get a toast prompting reload.
-   - **Backend changes**: `./bot.sh restart --prod` (or `--dev --back-end`)
+7. Deploy to Lightsail from the clean tagged development checkout:
+   - **Frontend-only:** `deployment/ship-lightsail.sh vX.Y.Z --frontend-only`
+   - **Backend changes:** `deployment/ship-lightsail.sh vX.Y.Z --backend`
+   - Never build in the live production tree. The ship script uploads an immutable frontend artifact and atomically switches `frontend/dist`.
+   - Frontend rollback: `ssh zenithgrid-ls 'cd ~/ZenithGrid && bash deployment/activate-frontend-release.sh --rollback'`
 8. Delete dev branch (local + remote)
 9. Verify: tag, services, no stale branches
 

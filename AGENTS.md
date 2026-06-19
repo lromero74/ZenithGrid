@@ -126,8 +126,12 @@ python scripts/symbol_registry.py --verify         # exit non-zero if snapshot i
   *system* unit `zenithgrid.service` (uvicorn on `127.0.0.1:8100`, **no distrobox**);
   PostgreSQL 16 and Redis run on the same box. SSH via the alias `ssh zenithgrid-ls`
   (defined in `~/.ssh/config` → `origin.bigtruckincrypto.com`; use the alias, not a
-  raw `user@host`). Deploy: `git pull origin main` + `git fetch origin --tags`, then
-  `sudo systemctl restart zenithgrid` (frontend-only: `cd frontend && npm run build`).
+  raw `user@host`). **Canonical deploy:** from a clean, tagged development checkout run
+  `deployment/ship-lightsail.sh vX.Y.Z --backend` (or `--frontend-only`). This builds
+  the frontend off-host, uploads an immutable artifact, and atomically switches
+  `frontend/dist`; never run `npm run build` against the live production `dist`.
+  Frontend rollback is `ssh zenithgrid-ls 'cd ~/ZenithGrid &&
+  bash deployment/activate-frontend-release.sh --rollback'`.
 - `fedora.local` is now a **stopped warm-standby / rollback target only** — do NOT
   start ZenithGrid there while Lightsail is live (double-trade risk). See the
   deploy/environment sections of `CLAUDE.md` for the authoritative details.

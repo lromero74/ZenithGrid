@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.4.5] - 2026-06-18
+
+### Changed
+- Production frontend releases are now built off-host, uploaded as immutable versioned artifacts, and activated with an atomic symlink switch instead of rebuilding the live `dist` directory on the trading server.
+- The canonical Lightsail deploy command now validates a clean tagged checkout, verifies production health, and supports immediate frontend rollback to the previous artifact.
+
 ## [v3.4.4] - 2026-06-18
 
 ### Changed
