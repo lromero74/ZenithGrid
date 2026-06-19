@@ -179,6 +179,27 @@
       "_validate_password_strength"
     ]
   },
+  "backend/app/backtesting/__init__.py": {
+    "classes": {
+      "BacktestResult": [
+        "to_dict"
+      ],
+      "SimulatedBroker": [
+        "__init__",
+        "buy",
+        "get_equity",
+        "sell"
+      ],
+      "_MockPosition": [
+        "__init__"
+      ]
+    },
+    "functions": [
+      "_compute_metrics",
+      "_update_drawdown_and_returns",
+      "run_backtest"
+    ]
+  },
   "backend/app/bot_routers/bot_ai_logs_router.py": {
     "classes": {},
     "functions": [
@@ -1801,6 +1822,12 @@
       "get_ai_providers_status",
       "list_ai_credentials",
       "update_ai_credential"
+    ]
+  },
+  "backend/app/routers/backtesting_router.py": {
+    "classes": {},
+    "functions": [
+      "run_backtest"
     ]
   },
   "backend/app/routers/blacklist_router.py": {
