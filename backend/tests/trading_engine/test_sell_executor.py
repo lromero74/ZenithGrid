@@ -59,6 +59,8 @@ def _make_position(**overrides):
     pos.profit_percentage = overrides.get("profit_percentage", None)
     pos.profit_usd = overrides.get("profit_usd", None)
     pos.btc_usd_price_at_close = overrides.get("btc_usd_price_at_close", None)
+    pos.entry_fees_quote = overrides.get("entry_fees_quote", 0.0)
+    pos.exit_fees_quote = overrides.get("exit_fees_quote", 0.0)
     pos.short_entry_price = overrides.get("short_entry_price", None)
     pos.short_average_sell_price = overrides.get("short_average_sell_price", None)
     pos.short_total_sold_base = overrides.get("short_total_sold_base", None)
@@ -177,6 +179,33 @@ class TestExecuteSell:
         assert position.status == "closed"
         assert position.closed_at is not None
         db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_market_sell_reports_profit_net_of_all_exchange_fees(self):
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0.5",
+            "filled_value": "1500.0",
+            "average_filled_price": "3000.0",
+            "total_fees": "7.5",
+        })
+        position = _make_position(
+            total_quote_spent=1000.0,
+            total_base_acquired=0.5,
+            entry_fees_quote=10.0,
+            strategy_config_snapshot={"take_profit_order_type": "market"},
+        )
+
+        trade, profit_quote, profit_pct = await execute_sell(
+            db=db, exchange=exchange, trading_client=_make_trading_client(),
+            bot=_make_bot(), product_id="ETH-USD", position=position, current_price=3000.0,
+        )
+
+        assert trade.fee_quote == pytest.approx(7.5)
+        assert position.exit_fees_quote == pytest.approx(7.5)
+        assert profit_quote == pytest.approx(482.5)
+        assert profit_pct == pytest.approx(47.7722772277)
 
     @pytest.mark.asyncio
     async def test_sell_during_shutdown_raises(self, _patch_externals):

@@ -1,6 +1,20 @@
 """PnL calculation service — extracted from Position model."""
 
 
+def calculate_realized_spot_profit(
+    total_quote_spent: float,
+    total_quote_received: float,
+    entry_fees_quote: float = 0.0,
+    exit_fees_quote: float = 0.0,
+) -> tuple[float, float]:
+    """Return fee-net realized spot profit and percentage in quote currency."""
+    cost_basis = total_quote_spent + entry_fees_quote
+    net_proceeds = total_quote_received - exit_fees_quote
+    profit_quote = net_proceeds - cost_basis
+    profit_pct = (profit_quote / cost_basis) * 100 if cost_basis > 0 else 0.0
+    return profit_quote, profit_pct
+
+
 def calculate_profit(position, current_price: float) -> dict:
     """
     Calculate P&L for long/short positions.

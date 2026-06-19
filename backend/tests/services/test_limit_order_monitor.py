@@ -33,6 +33,8 @@ def _make_position(**overrides):
     pos.initial_quote_balance = overrides.get("initial_quote_balance", 0.01)
     pos.profit_quote = overrides.get("profit_quote", None)
     pos.profit_percentage = overrides.get("profit_percentage", None)
+    pos.entry_fees_quote = overrides.get("entry_fees_quote", 0.0)
+    pos.exit_fees_quote = overrides.get("exit_fees_quote", 0.0)
     pos.direction = overrides.get("direction", "long")
     pos.account_id = overrides.get("account_id", 5)
     pos.get_quote_currency = MagicMock(return_value=overrides.get("quote_currency", "BTC"))

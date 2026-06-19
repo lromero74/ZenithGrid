@@ -20,6 +20,7 @@ from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
+from app.services.pnl_service import calculate_realized_spot_profit
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
 logger = logging.getLogger(__name__)
@@ -268,7 +269,7 @@ async def _reconcile_sell_fill(
     )
 
     actual_price = fill_data.average_price if fill_data.average_price > 0 else fallback_price
-    return fill_data.filled_size, fill_data.filled_value, actual_price
+    return fill_data.filled_size, fill_data.filled_value, actual_price, fill_data.total_fees
 
 
 async def _create_sell_trade_record(
@@ -280,6 +281,7 @@ async def _create_sell_trade_record(
     actual_base_sold: float,
     quote_received: float,
     actual_price: float,
+    fee_quote: float,
     signal_data: Optional[Dict[str, Any]],
 ) -> Tuple[Trade, float, float]:
     """
@@ -305,8 +307,13 @@ async def _create_sell_trade_record(
     quote_currency = get_quote_currency(product_id)
 
     # Calculate profit using actual fill data
-    profit_quote = quote_received - position.total_quote_spent
-    profit_percentage = (profit_quote / position.total_quote_spent) * 100
+    exit_fees_quote = (position.exit_fees_quote or 0.0) + fee_quote
+    profit_quote, profit_percentage = calculate_realized_spot_profit(
+        position.total_quote_spent,
+        quote_received,
+        position.entry_fees_quote or 0.0,
+        exit_fees_quote,
+    )
 
     # Get BTC/USD price for USD profit tracking
     try:
@@ -331,6 +338,7 @@ async def _create_sell_trade_record(
         price=actual_price,
         trade_type="sell",
         order_id=order_id,
+        fee_quote=fee_quote,
         macd_value=signal_data.get("macd_value") if signal_data else None,
         macd_signal=signal_data.get("macd_signal") if signal_data else None,
         macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
@@ -343,6 +351,7 @@ async def _create_sell_trade_record(
     position.closed_at = utcnow()
     position.sell_price = actual_price
     position.total_quote_received = quote_received
+    position.exit_fees_quote = exit_fees_quote
     position.profit_quote = profit_quote
     position.profit_percentage = profit_percentage
     position.btc_usd_price_at_close = btc_usd_price_at_close
@@ -1171,14 +1180,14 @@ async def _submit_sell_market_order(
                 f"Response keys: {list(order_response.keys())}"
             )
 
-        actual_base_sold, quote_received, actual_price = await _reconcile_sell_fill(
+        actual_base_sold, quote_received, actual_price, fee_quote = await _reconcile_sell_fill(
             exchange=exchange,
             order_id=order_id,
             product_id=product_id,
             fallback_base=base_amount,
             fallback_price=current_price,
         )
-        return order_id, actual_base_sold, quote_received, actual_price
+        return order_id, actual_base_sold, quote_received, actual_price, fee_quote
 
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
@@ -1359,7 +1368,7 @@ async def execute_sell(
                 db, bot, product_id, position, current_price,
             )
 
-    order_id, actual_base_sold, quote_received, actual_price = await _submit_sell_market_order(
+    order_id, actual_base_sold, quote_received, actual_price, fee_quote = await _submit_sell_market_order(
         db=db,
         exchange=exchange,
         trading_client=trading_client,
@@ -1380,6 +1389,7 @@ async def execute_sell(
         actual_base_sold=actual_base_sold,
         quote_received=quote_received,
         actual_price=actual_price,
+        fee_quote=fee_quote,
         signal_data=signal_data,
     )
 

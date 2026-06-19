@@ -60,6 +60,8 @@ def _long_position(**ov):
         total_quote_spent=ov.get("total_quote_spent", 1000.0),
         total_base_acquired=ov.get("total_base_acquired", 0.5),
         average_buy_price=ov.get("average_buy_price", 2000.0),
+        entry_fees_quote=ov.get("entry_fees_quote", 0.0),
+        exit_fees_quote=ov.get("exit_fees_quote", 0.0),
         user_deal_number=ov.get("user_deal_number", 7),  # set → skips deal-number DB call
         last_error_message=None,
         last_error_timestamp=None,

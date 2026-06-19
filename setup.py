@@ -1300,6 +1300,8 @@ def initialize_database(project_root, db_config=None):
                 total_quote_received REAL,
                 profit_quote REAL,
                 profit_percentage REAL,
+                entry_fees_quote REAL NOT NULL DEFAULT 0.0,
+                exit_fees_quote REAL NOT NULL DEFAULT 0.0,
                 btc_usd_price_at_open REAL,
                 btc_usd_price_at_close REAL,
                 profit_usd REAL,
@@ -1348,6 +1350,7 @@ def initialize_database(project_root, db_config=None):
                 price REAL,
                 trade_type TEXT,
                 order_id TEXT,
+                fee_quote REAL NOT NULL DEFAULT 0.0,
                 macd_value REAL,
                 macd_signal REAL,
                 macd_histogram REAL

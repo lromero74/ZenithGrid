@@ -489,6 +489,8 @@ class Position(Base):
     total_quote_received = Column(Float, nullable=True)  # Amount of quote currency received from selling
     profit_quote = Column(Float, nullable=True)  # Profit in quote currency
     profit_percentage = Column(Float, nullable=True)
+    entry_fees_quote = Column(Float, default=0.0, server_default="0", nullable=False)
+    exit_fees_quote = Column(Float, default=0.0, server_default="0", nullable=False)
 
     # USD tracking
     btc_usd_price_at_open = Column(Float, nullable=True)  # BTC/USD price when position opened
@@ -607,6 +609,7 @@ class Trade(Base):
     # SO levels in one order, so this is >1 there; normal trades are 1. Used to
     # count completed safety orders accurately (see count_deployed_safety_orders).
     dca_levels = Column(Integer, default=1, server_default="1", nullable=False)
+    fee_quote = Column(Float, default=0.0, server_default="0", nullable=False)
 
     # MACD values at time of trade
     macd_value = Column(Float, nullable=True)

@@ -133,6 +133,7 @@ class SafetyOrderMonitor:
     ) -> None:
         filled_size = float(order_data.get("filled_size", 0) or 0)
         filled_value = float(order_data.get("filled_value", 0) or 0)
+        total_fees = float(order_data.get("total_fees", 0) or 0)
 
         if filled_size <= 0:
             return  # nothing has filled yet
@@ -151,6 +152,9 @@ class SafetyOrderMonitor:
 
         avg_price = (filled_value / filled_size) if filled_size > 0 else (pending_order.limit_price or 0.0)
         new_quote = new_base * avg_price
+        previous_quote = pending_order.filled_quote_amount or 0.0
+        previous_fee = total_fees * (previous_quote / filled_value) if filled_value > 0 else 0.0
+        new_fee = max(0.0, total_fees - previous_fee)
 
         # Apply the ADD via the canonical accounting helpers. These grow the
         # position's running totals and recompute the average entry. They NEVER
@@ -177,6 +181,7 @@ class SafetyOrderMonitor:
                 actual_price=avg_price,
                 trade_type=pending_order.trade_type,
                 signal_data=None,
+                fee_quote=new_fee,
             )
 
         # Update PendingOrder fill tracking (cumulative).

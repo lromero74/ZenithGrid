@@ -26,6 +26,8 @@ class PositionResponse(BaseModel):
     total_quote_received: Optional[float]  # BTC or USD
     profit_quote: Optional[float]  # BTC or USD
     profit_percentage: Optional[float]
+    entry_fees_quote: float = 0.0
+    exit_fees_quote: float = 0.0
     btc_usd_price_at_open: Optional[float]
     btc_usd_price_at_close: Optional[float]
     profit_usd: Optional[float]

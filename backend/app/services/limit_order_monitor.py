@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import PendingOrder, Position, Trade
+from app.services.pnl_service import calculate_realized_spot_profit
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
@@ -158,6 +159,8 @@ class LimitOrderMonitor:
                     # Calculate new fill value (proportional to new fill size)
                     avg_fill_price = filled_value / filled_size if filled_size > 0 else 0
                     new_fill_value = new_fill_size * avg_fill_price
+                    total_fees = float(order_data.get("total_fees", 0) or 0)
+                    new_fill_fee = total_fees * (new_fill_value / filled_value) if filled_value > 0 else 0.0
 
                     logger.info(
                         f"Position {position.id} NEW partial fill detected: "
@@ -175,6 +178,7 @@ class LimitOrderMonitor:
                         price=avg_fill_price,
                         trade_type="limit_close_partial",
                         order_id=position.limit_close_order_id,
+                        fee_quote=new_fill_fee,
                     )
                     self.db.add(trade)
 
@@ -217,12 +221,12 @@ class LimitOrderMonitor:
                     if not position.total_quote_received:
                         position.total_quote_received = 0
                     position.total_quote_received += new_fill_value
+                    position.exit_fees_quote = (position.exit_fees_quote or 0.0) + new_fill_fee
 
                     # Recalculate profit based on what's been sold so far
-                    position.profit_quote = position.total_quote_received - position.total_quote_spent
-                    position.profit_percentage = (
-                        (position.profit_quote / position.total_quote_spent * 100)
-                        if position.total_quote_spent > 0 else 0
+                    position.profit_quote, position.profit_percentage = calculate_realized_spot_profit(
+                        position.total_quote_spent, position.total_quote_received,
+                        position.entry_fees_quote or 0.0, position.exit_fees_quote or 0.0,
                     )
 
                 # Update pending order with current fill information
@@ -552,6 +556,7 @@ class LimitOrderMonitor:
                 # Order fully filled - close the position
                 filled_size = float(order_data.get("filled_size", 0))
                 filled_value = float(order_data.get("filled_value", 0))
+                total_fees = float(order_data.get("total_fees", 0) or 0)
                 avg_fill_price = filled_value / filled_size if filled_size > 0 else 0
 
                 logger.info(f"Position {position.id} limit order FILLED at avg price {avg_fill_price}")
@@ -563,6 +568,8 @@ class LimitOrderMonitor:
                 if new_fill_size > 0:
                     # There's a final partial fill that hasn't been recorded yet
                     new_fill_value = new_fill_size * avg_fill_price
+                    recorded_exit_fees = position.exit_fees_quote or 0.0
+                    new_fill_fee = max(0.0, total_fees - recorded_exit_fees)
 
                     logger.info(
                         f"Position {position.id} FINAL fill: {new_fill_size} @ {avg_fill_price} BTC "
@@ -579,6 +586,7 @@ class LimitOrderMonitor:
                         price=avg_fill_price,
                         trade_type="limit_close_final",
                         order_id=position.limit_close_order_id,
+                        fee_quote=new_fill_fee,
                     )
                     self.db.add(trade)
 
@@ -586,6 +594,7 @@ class LimitOrderMonitor:
                     if not position.total_quote_received:
                         position.total_quote_received = 0
                     position.total_quote_received += new_fill_value
+                    position.exit_fees_quote = recorded_exit_fees + new_fill_fee
 
                 # Close the position
                 position.status = "closed"
@@ -597,9 +606,9 @@ class LimitOrderMonitor:
                 if not position.total_quote_received:
                     position.total_quote_received = filled_value
 
-                position.profit_quote = position.total_quote_received - position.total_quote_spent
-                position.profit_percentage = (
-                    (position.profit_quote / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0
+                position.profit_quote, position.profit_percentage = calculate_realized_spot_profit(
+                    position.total_quote_spent, position.total_quote_received,
+                    position.entry_fees_quote or 0.0, position.exit_fees_quote or 0.0,
                 )
 
                 # Calculate USD profit if BTC pair

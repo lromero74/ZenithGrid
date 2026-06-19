@@ -56,6 +56,8 @@ def _make_position(**overrides):
     pos.profit_quote = overrides.get("profit_quote", None)
     pos.profit_percentage = overrides.get("profit_percentage", None)
     pos.profit_usd = overrides.get("profit_usd", None)
+    pos.entry_fees_quote = overrides.get("entry_fees_quote", 0.0)
+    pos.exit_fees_quote = overrides.get("exit_fees_quote", 0.0)
     return pos
 
 
@@ -165,6 +167,8 @@ class TestExecuteBuy:
         # Position totals should be updated
         assert position.total_quote_spent == 3000.0
         assert position.total_base_acquired == 1.0
+        assert trade.fee_quote == pytest.approx(4.5)
+        assert position.entry_fees_quote == pytest.approx(4.5)
         # DB should be committed
         db.commit.assert_awaited()
 

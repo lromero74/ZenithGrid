@@ -108,7 +108,7 @@ async def _reconcile_buy_fill(
         round_base_to_precision=True,
     )
 
-    return fill_data.filled_size, fill_data.filled_value, fill_data.average_price
+    return fill_data.filled_size, fill_data.filled_value, fill_data.average_price, fill_data.total_fees
 
 
 async def _create_buy_trade_record(
@@ -120,6 +120,7 @@ async def _create_buy_trade_record(
     actual_price: float,
     trade_type: str,
     signal_data: Optional[Dict[str, Any]],
+    fee_quote: float = 0.0,
 ) -> Trade:
     """
     Create Trade record and update Position with actual filled amounts.
@@ -150,6 +151,7 @@ async def _create_buy_trade_record(
         trade_type=trade_type,
         order_id=order_id,
         dca_levels=(signal_data.get("dca_levels", 1) if signal_data else 1),
+        fee_quote=fee_quote,
         macd_value=signal_data.get("macd_value") if signal_data else None,
         macd_signal=signal_data.get("macd_signal") if signal_data else None,
         macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
@@ -163,6 +165,7 @@ async def _create_buy_trade_record(
 
     # Update position totals with ACTUAL filled amounts
     position.total_quote_spent += actual_quote_amount
+    position.entry_fees_quote = (position.entry_fees_quote or 0.0) + fee_quote
     position.total_base_acquired += actual_base_amount
     # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
     if position.total_base_acquired > 0:
@@ -285,7 +288,7 @@ async def _submit_buy_market_order(
     current_price: float,
     trade_type: str,
     commit_on_error: bool,
-) -> Tuple[str, float, float, float]:
+) -> Tuple[str, float, float, float, float]:
     """Submit a market buy order and reconcile the fill.
 
     Handles shutdown-manager tracking, PropGuard gate, exchange error
@@ -365,7 +368,7 @@ async def _submit_buy_market_order(
             raise ValueError(f"Exchange order failed: {full_error}")
 
         # Reconcile actual fill from exchange (with retries)
-        actual_base_amount, actual_quote_amount, actual_price = await _reconcile_buy_fill(
+        actual_base_amount, actual_quote_amount, actual_price, fee_quote = await _reconcile_buy_fill(
             exchange=exchange,
             order_id=order_id,
             product_id=product_id,
@@ -378,7 +381,7 @@ async def _submit_buy_market_order(
                 f"Manual fix required using scripts/fix_position.py"
             )
 
-        return order_id, actual_base_amount, actual_quote_amount, actual_price
+        return order_id, actual_base_amount, actual_quote_amount, actual_price, fee_quote
 
     except Exception as e:
         logger.error(f"Error executing buy order: {e}")
@@ -507,7 +510,7 @@ async def execute_buy(
         exchange=exchange,
     )
 
-    order_id, actual_base_amount, actual_quote_amount, actual_price = await _submit_buy_market_order(
+    order_id, actual_base_amount, actual_quote_amount, actual_price, fee_quote = await _submit_buy_market_order(
         db=db,
         exchange=exchange,
         trading_client=trading_client,
@@ -528,6 +531,7 @@ async def execute_buy(
         actual_base_amount=actual_base_amount,
         actual_quote_amount=actual_quote_amount,
         actual_price=actual_price,
+        fee_quote=fee_quote,
         trade_type=trade_type,
         signal_data=signal_data,
     )

@@ -2891,7 +2891,8 @@
   "backend/app/services/pnl_service.py": {
     "classes": {},
     "functions": [
-      "calculate_profit"
+      "calculate_profit",
+      "calculate_realized_spot_profit"
     ]
   },
   "backend/app/services/portfolio_calculations.py": {
