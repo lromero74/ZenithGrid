@@ -481,7 +481,8 @@
         "get_cors_origins_list",
         "is_postgres",
         "parse_cors_origins",
-        "require_non_default_secret_in_production"
+        "require_non_default_secret_in_production",
+        "validate_process_role"
       ]
     },
     "functions": []
@@ -3349,6 +3350,20 @@
       "_integer_round_preserving_sum",
       "_normalize_to_sum",
       "propose_weights"
+    ]
+  },
+  "backend/app/services/trading_leader.py": {
+    "classes": {
+      "TradingLeaderLease": [
+        "__init__",
+        "_renew_loop",
+        "acquire",
+        "release",
+        "wait_until_stopped"
+      ]
+    },
+    "functions": [
+      "_terminate_process"
     ]
   },
   "backend/app/services/transfer_sync_service.py": {

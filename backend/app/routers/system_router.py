@@ -203,6 +203,7 @@ async def health_check():
     return {
         "status": "ok",
         "version": get_git_version_cached(),
+        "process_role": settings.process_role,
         "started_at": _STARTUP_TIME,
     }
 

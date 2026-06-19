@@ -135,4 +135,8 @@ python scripts/symbol_registry.py --verify         # exit non-zero if snapshot i
 - `fedora.local` is now a **stopped warm-standby / rollback target only** — do NOT
   start ZenithGrid there while Lightsail is live (double-trade risk). See the
   deploy/environment sections of `CLAUDE.md` for the authoritative details.
+- `PROCESS_ROLE` defaults to `combined`. A `web` process cannot start trading
+  loops; a `trader`/`combined` process must own the Redis
+  `zenith:trading-leader` lease. Never run a second trading role by bypassing
+  that lease or changing its key.
 - Otherwise you are on a dev machine — push to git, deploy on the Lightsail prod host.

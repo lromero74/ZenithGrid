@@ -82,6 +82,7 @@ from app.services.speculative_calibration_monitor import (
 )
 from app.static_cache import CachedStaticFiles, HTML_CACHE_CONTROL
 from app.services.shutdown_manager import shutdown_manager
+from app.services.trading_leader import TradingLeaderLease
 from app.services.brand_service import get_brand
 from app.services.websocket_manager import ws_manager
 
@@ -581,6 +582,25 @@ async def startup_event():
     await init_db()
     logger.info("Database initialized successfully")
 
+    app.state.trading_started = False
+    app.state.trading_leader_lease = None
+
+    if settings.process_role == "web":
+        logger.info("PROCESS_ROLE=web — trading monitors and scheduler are disabled")
+        logger.info("Building changelog cache...")
+        build_changelog_cache()
+        get_git_version_cached()
+        get_latest_git_tag_cached()
+        _wire_event_bus_subscribers()
+        logger.info("Web-only startup complete")
+        return
+
+    trading_leader_lease = TradingLeaderLease(await _get_redis())
+    await trading_leader_lease.acquire()
+    app.state.trading_leader_lease = trading_leader_lease
+    app.state.trading_started = True
+    logger.info("PROCESS_ROLE=%s — exclusive trading leadership active", settings.process_role)
+
     # ── TIER 1: Start on main event loop (real-time trading) ─────────────────
     logger.info("Starting Tier 1 monitors (main event loop)...")
 
@@ -670,45 +690,56 @@ async def _cancel_task(task: Optional[asyncio.Task]) -> None:
 async def shutdown_event():
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
+    trading_started = getattr(app.state, "trading_started", False)
+
     # Wait for any in-flight orders to complete (up to 60 seconds)
-    shutdown_result = await shutdown_manager.prepare_shutdown(timeout=60.0)
-    if shutdown_result["ready"]:
-        logger.info(f"✅ {shutdown_result['message']}")
-    else:
-        logger.warning(f"⚠️ {shutdown_result['message']}")
+    if trading_started:
+        shutdown_result = await shutdown_manager.prepare_shutdown(timeout=60.0)
+        if shutdown_result["ready"]:
+            logger.info(f"✅ {shutdown_result['message']}")
+        else:
+            logger.warning(f"⚠️ {shutdown_result['message']}")
 
     # ── Stop APScheduler (Tier 2/3 jobs) ─────────────────────────────────────
-    logger.info("🛑 Stopping APScheduler...")
-    from app.scheduler import scheduler
-    scheduler.shutdown(wait=False)
-    logger.info("🛑 APScheduler stopped")
+    if trading_started:
+        logger.info("🛑 Stopping APScheduler...")
+        from app.scheduler import scheduler
+        scheduler.shutdown(wait=False)
+        logger.info("🛑 APScheduler stopped")
 
     # ── Stop main loop monitors ───────────────────────────────────────────────
     logger.info("🛑 Stopping main loop monitors...")
 
-    for monitor in [price_monitor, perps_monitor]:
-        if monitor:
-            await monitor.stop()
+    if trading_started:
+        for monitor in [price_monitor, perps_monitor]:
+            if monitor:
+                await monitor.stop()
 
-    logger.info("🛑 Stopping PropGuard monitor...")
-    await stop_prop_guard_monitor()
+        logger.info("🛑 Stopping PropGuard monitor...")
+        await stop_prop_guard_monitor()
 
-    logger.info("🛑 Stopping speculative calibration monitor...")
-    await stop_speculative_calibration_monitor()
+        logger.info("🛑 Stopping speculative calibration monitor...")
+        await stop_speculative_calibration_monitor()
 
-    logger.info("🛑 Stopping position coin audit monitor...")
-    await stop_position_coin_audit_monitor()
+        logger.info("🛑 Stopping position coin audit monitor...")
+        await stop_position_coin_audit_monitor()
 
-    # Cancel main loop asyncio tasks
-    for task in [
-        limit_order_monitor_task, order_reconciliation_monitor_task,
-        missing_order_detector_task,
-    ]:
-        await _cancel_task(task)
+        # Cancel main loop asyncio tasks
+        for task in [
+            limit_order_monitor_task, order_reconciliation_monitor_task,
+            missing_order_detector_task,
+        ]:
+            await _cancel_task(task)
 
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache
     clear_exchange_client_cache()
+
+    trading_leader_lease = getattr(app.state, "trading_leader_lease", None)
+    if trading_leader_lease is not None:
+        await trading_leader_lease.release()
+        app.state.trading_leader_lease = None
+        app.state.trading_started = False
 
     # Shut down TTS thread pool — wait for any in-flight file I/O to complete
     if hasattr(app.state, "tts_executor"):

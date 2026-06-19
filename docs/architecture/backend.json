@@ -1603,6 +1603,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/trading_leader.py",
+      "purpose": "Token-checked Redis leadership lease that permits exactly one combined/trader process and terminates fail-closed if renewal is lost",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/transfer_sync_service.py",
       "purpose": "Syncs deposit/withdrawal transactions from Coinbase into account_transfers table with deduplication by external_id",
       "type": "background"
@@ -1812,7 +1817,7 @@
     },
     {
       "file": "config.py",
-      "purpose": "Pydantic settings loaded from .env (database URL, JWT secret, CORS, etc.)"
+      "purpose": "Pydantic settings loaded from .env (database URL, JWT secret, CORS, and validated combined/web/trader process role)"
     },
     {
       "file": "constants.py",

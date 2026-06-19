@@ -70,6 +70,17 @@ class Settings(BaseSettings):
 
     # Environment: "development" | "production" | "test"
     environment: str = "development"
+    # "combined" preserves the single-process deployment; "web" skips all
+    # trading loops; "trader" runs them behind the Redis leader lease.
+    process_role: str = "combined"
+
+    @field_validator("process_role")
+    @classmethod
+    def validate_process_role(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"combined", "web", "trader"}:
+            raise ValueError("process_role must be combined, web, or trader")
+        return normalized
 
     # JWT Authentication
     jwt_secret_key: str = DEFAULT_JWT_SECRET
