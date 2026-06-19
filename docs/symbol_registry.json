@@ -1437,6 +1437,17 @@
       "validate_order_size"
     ]
   },
+  "backend/app/performance_metrics.py": {
+    "classes": {},
+    "functions": [
+      "_percentile",
+      "_summarize",
+      "clear_performance_samples",
+      "get_performance_snapshot",
+      "record_client_timings",
+      "record_server_timing"
+    ]
+  },
   "backend/app/phase_conditions.py": {
     "classes": {
       "PhaseConditionEvaluator": [
@@ -2114,6 +2125,7 @@
       "get_latest_git_tag_cached",
       "get_market_data",
       "get_pair_monitor_status",
+      "get_performance_summary",
       "get_price_monitor",
       "get_repo_root",
       "get_shutdown_status",
@@ -2129,6 +2141,7 @@
       "set_trading_pair_monitor",
       "start_monitor",
       "stop_monitor",
+      "submit_client_performance",
       "trigger_pair_sync"
     ]
   },

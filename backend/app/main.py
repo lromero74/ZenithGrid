@@ -20,6 +20,7 @@ from app.middleware.intrusion_detect import IntrusionDetector
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
+from app.performance_metrics import record_server_timing
 from app.utils.db_corruption import is_db_corruption_error
 from app.position_routers import perps_router
 from app.routers import account_value_router  # Account value history tracking
@@ -145,6 +146,9 @@ class ServerTimingMiddleware(BaseHTTPMiddleware):
         response: Response = await call_next(request)
         duration_ms = (time.perf_counter() - started) * 1000
         response.headers["Server-Timing"] = f"app;dur={duration_ms:.1f}"
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "/unmatched")
+        record_server_timing(request.method, route_path, duration_ms)
         return response
 
 

@@ -47,7 +47,15 @@ if [ "$MODE" = "--backend" ]; then
 fi
 
 echo "Verifying production..."
-ssh "$SSH_TARGET" "systemctl is-active zenithgrid && \
-curl -fsS http://127.0.0.1:8100/api/health"
+ssh "$SSH_TARGET" 'systemctl is-active zenithgrid >/dev/null || exit 1
+for attempt in {1..12}; do
+    if curl -fsS http://127.0.0.1:8100/api/health; then
+        exit 0
+    fi
+    sleep 5
+done
+echo "ZenithGrid did not become healthy within 60 seconds" >&2
+journalctl -u zenithgrid --no-pager -n 40 >&2
+exit 1'
 echo
 echo "Deployed $VERSION ($MODE)"
