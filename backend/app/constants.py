@@ -31,6 +31,7 @@ def get_usd_equivalent_pair_price(product_id: str) -> float | None:
         return 1.0
     return None
 
+
 # Popular Coinbase trading pairs
 # Focus on X/BTC pairs as requested
 POPULAR_BTC_PAIRS = [

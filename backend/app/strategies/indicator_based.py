@@ -19,6 +19,7 @@ Migration from old strategies:
 """
 
 import logging
+import math
 from app.utils.timeutil import utcnow
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -854,7 +855,8 @@ class IndicatorBasedStrategy(TradingStrategy):
             return True, amount, f"Base order (conditions met): {amount:.8f}"
 
     def _check_dca_conditions(
-        self, signal_data: Dict[str, Any], position: Any, balance: float
+        self, signal_data: Dict[str, Any], position: Any, balance: float,
+        dca_rounding_tolerance: float = 0.0, quote_increment: float = 0.0,
     ) -> Tuple[bool, float, str]:
         """
         Check DCA/safety order conditions for an existing position.
@@ -907,6 +909,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         total_amount = 0.0
         orders_to_execute = 0
         remaining_balance = balance
+        rounding_adjusted = False
 
         for so_num in range(first_so, max_safety + 1):
             trigger = self.calculate_safety_order_price(reference_price, so_num, direction)
@@ -919,6 +922,24 @@ class IndicatorBasedStrategy(TradingStrategy):
             so_size = self._calculate_safety_order_amount(position, safety_orders_count + orders_to_execute, so_num)
 
             if so_size > remaining_balance:
+                shortfall = so_size - remaining_balance
+                if (
+                    orders_to_execute == 0
+                    and quote_increment > 0
+                    and 0 < shortfall <= dca_rounding_tolerance
+                ):
+                    # Prior fills can drift from ideal quote sizing when the product
+                    # only fills in coarse base increments. Use the remaining
+                    # allocation, rounded DOWN to the exchange quote increment, so
+                    # the final SO fits without weakening the position's hard cap.
+                    adjusted_size = math.floor(remaining_balance / quote_increment) * quote_increment
+                    if adjusted_size > 0:
+                        total_amount += adjusted_size
+                        remaining_balance -= adjusted_size
+                        orders_to_execute += 1
+                        rounding_adjusted = True
+                        break
+
                 # Budget only covers partial cascade — execute what fits
                 if orders_to_execute == 0:
                     # Can't even afford the first SO
@@ -941,6 +962,9 @@ class IndicatorBasedStrategy(TradingStrategy):
             reason = f"Safety order #{first_so}"
         else:
             reason = f"Safety order #{first_so}-#{last_so} (cascade: {orders_to_execute} orders)"
+
+        if rounding_adjusted:
+            reason += " (rounding-adjusted to remaining position budget)"
 
         # Record how many SO levels this (possibly combined) order deploys, so the
         # recorded trade carries dca_levels and the deployed-SO count stays accurate.
@@ -977,7 +1001,13 @@ class IndicatorBasedStrategy(TradingStrategy):
         if position is None:
             return self._check_base_order_conditions(signal_data, balance, **kwargs)
         else:
-            return self._check_dca_conditions(signal_data, position, balance)
+            return self._check_dca_conditions(
+                signal_data,
+                position,
+                balance,
+                dca_rounding_tolerance=kwargs.get("dca_rounding_tolerance", 0.0),
+                quote_increment=kwargs.get("quote_increment", 0.0),
+            )
 
     async def should_sell(
         self, signal_data: Dict[str, Any], position: Any,

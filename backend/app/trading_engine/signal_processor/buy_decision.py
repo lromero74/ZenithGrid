@@ -22,7 +22,7 @@ from app.trading_engine.order_logger import OrderLogEntry, log_order_to_history
 from app.trading_engine.perps_executor import execute_perps_open
 from app.trading_engine.position_manager import create_position, get_open_positions_count
 from app.trading_engine.sell_executor import execute_sell_short
-from app.order_validation import validate_order_size
+from app.order_validation import get_product_minimums, validate_order_size
 from app.trading_engine.signal_processor._shared import (
     _is_duplicate_failed_order,
     _record_signal,
@@ -282,15 +282,28 @@ async def _decide_buy(
     logger.debug(f"Bot active: {bot.is_active}, Position exists: {position is not None}")
     logger.info(f"  🤖 Bot active: {bot.is_active}, Position exists: {position is not None}")
 
+    dca_rounding_tolerance = 0.0
+    quote_increment = 0.0
+    if position is not None:
+        try:
+            minimums = await get_product_minimums(ctx.exchange, ctx.product_id)
+            base_increment = float(minimums.get("base_increment", 0) or 0)
+            quote_increment = float(minimums.get("quote_increment", 0) or 0)
+            dca_rounding_tolerance = max(base_increment * ctx.current_price, quote_increment)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Could not derive DCA rounding tolerance for %s: %s", ctx.product_id, exc)
+
     if not bot.is_active:
         return await _decide_buy_bot_stopped(
             ctx, signal_data, position, quote_balance, aggregate_value,
+            dca_rounding_tolerance, quote_increment,
         )
 
     # Active bot, existing position → DCA path
     if position is not None:
         return await _decide_buy_dca(
             ctx, signal_data, position, quote_balance, aggregate_value,
+            dca_rounding_tolerance, quote_increment,
         )
 
     # Active bot, no position → new-position path with preflight + blacklist gates
@@ -336,12 +349,16 @@ async def _decide_buy_dca(
     ctx: TradeContext, signal_data: Dict[str, Any],
     position: Position, quote_balance: float,
     aggregate_value: Optional[float],
+    dca_rounding_tolerance: float = 0.0,
+    quote_increment: float = 0.0,
 ) -> tuple:
     """Active-bot path when a position already exists (DCA check)."""
     strategy = ctx.strategy
     should_buy, quote_amount, buy_reason = await strategy.should_buy(
         signal_data, position, quote_balance,
         aggregate_value=aggregate_value,
+        dca_rounding_tolerance=dca_rounding_tolerance,
+        quote_increment=quote_increment,
     )
     if not should_buy:
         await _log_budget_blocker_if_applicable(
@@ -355,6 +372,8 @@ async def _decide_buy_bot_stopped(
     ctx: TradeContext, signal_data: Dict[str, Any],
     position: Optional[Position], quote_balance: float,
     aggregate_value: Optional[float],
+    dca_rounding_tolerance: float = 0.0,
+    quote_increment: float = 0.0,
 ) -> tuple:
     """Stopped-bot path: don't open new positions; still evaluate DCA for existing."""
     strategy = ctx.strategy
@@ -364,6 +383,8 @@ async def _decide_buy_bot_stopped(
     should_buy, quote_amount, buy_reason = await strategy.should_buy(
         signal_data, position, quote_balance,
         aggregate_value=aggregate_value,
+        dca_rounding_tolerance=dca_rounding_tolerance,
+        quote_increment=quote_increment,
     )
     if not should_buy:
         buy_reason = f"Bot stopped, DCA check: {buy_reason}"

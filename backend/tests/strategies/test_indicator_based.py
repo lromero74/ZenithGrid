@@ -600,6 +600,83 @@ class TestShouldBuy:
         assert "Safety order #1" in reason
 
     @pytest.mark.asyncio
+    async def test_final_safety_order_uses_remaining_budget_when_shortfall_is_rounding_drift(self):
+        """Whole-base fills may leave the final SO a few cents short of its ideal geometric size."""
+        strategy = _make_strategy({
+            "base_order_type": "fixed",
+            "auto_calculate_order_sizes": True,
+            "max_safety_orders": 3,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.62,
+            "price_deviation": 2.0,
+            "safety_order_step_scale": 1.0,
+        })
+        trades = []
+        for price in (0.146384, 0.142502, 0.131376):
+            trade = MagicMock(side="buy", price=price, timestamp=len(trades), dca_levels=1)
+            trades.append(trade)
+        position = _make_mock_position(
+            avg_price=0.139,
+            total_base=27.0,
+            total_quote=3.730089,
+            max_quote=6.3985617472,
+            trades=trades,
+        )
+        signal = {"price": 0.108979, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(
+            signal,
+            position=position,
+            balance=2.6684727472,
+            dca_rounding_tolerance=0.108979,
+            quote_increment=0.01,
+        )
+
+        assert should is True
+        assert amount == pytest.approx(2.66)
+        assert amount <= 2.6684727472
+        assert "rounding-adjusted" in reason
+        assert signal["dca_levels"] == 1
+
+    @pytest.mark.asyncio
+    async def test_safety_order_still_blocks_when_shortfall_exceeds_rounding_tolerance(self):
+        """A precision allowance must not turn a materially underfunded SO into a partial order."""
+        strategy = _make_strategy({
+            "base_order_type": "fixed",
+            "auto_calculate_order_sizes": True,
+            "max_safety_orders": 3,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.62,
+            "price_deviation": 2.0,
+            "safety_order_step_scale": 1.0,
+        })
+        trades = [
+            MagicMock(side="buy", price=price, timestamp=index, dca_levels=1)
+            for index, price in enumerate((0.146384, 0.142502, 0.131376))
+        ]
+        position = _make_mock_position(
+            avg_price=0.139,
+            total_quote=4.3985617472,
+            max_quote=6.3985617472,
+            trades=trades,
+        )
+        signal = {"price": 0.108979, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(
+            signal,
+            position=position,
+            balance=2.0,
+            dca_rounding_tolerance=0.108979,
+            quote_increment=0.01,
+        )
+
+        assert should is False
+        assert amount == 0.0
+        assert "Insufficient balance" in reason
+
+    @pytest.mark.asyncio
     async def test_pattern_position_skips_dca(self):
         """Bull flag position (has entry_stop_loss) should skip DCA."""
         strategy = _make_strategy({"max_safety_orders": 5})

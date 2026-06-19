@@ -16,6 +16,8 @@ from app.trading_engine.signal_processor import (
     _calculate_market_context_with_indicators,
     process_signal,
 )
+from app.trading_engine.signal_processor.buy_decision import _decide_buy
+from app.trading_engine.trade_context import TradeContext
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +151,36 @@ def _make_db():
 
     db.execute = AsyncMock(return_value=result_mock)
     return db
+
+
+@pytest.mark.asyncio
+async def test_stopped_bot_dca_passes_product_rounding_limits_to_strategy():
+    """Stopped-bot DCA derives drift tolerance from product precision, not a global fudge factor."""
+    db = _make_db()
+    exchange = _make_exchange()
+    bot = _make_bot(is_active=False)
+    strategy = _make_strategy()
+    position = _make_position(product_id="GWEI-USD")
+    ctx = TradeContext(
+        db=db,
+        exchange=exchange,
+        trading_client=_make_trading_client(),
+        bot=bot,
+        product_id="GWEI-USD",
+        current_price=0.108979,
+        strategy=strategy,
+    )
+
+    with patch(
+        "app.trading_engine.signal_processor.buy_decision.get_product_minimums",
+        new_callable=AsyncMock,
+        return_value={"base_increment": "1", "quote_increment": "0.01"},
+    ):
+        await _decide_buy(ctx, {"price": 0.108979}, position, 2.6684727472, None)
+
+    kwargs = strategy.should_buy.await_args.kwargs
+    assert kwargs["dca_rounding_tolerance"] == pytest.approx(0.108979)
+    assert kwargs["quote_increment"] == pytest.approx(0.01)
 
 
 def _make_candles(count=30, base_price=3000.0):
