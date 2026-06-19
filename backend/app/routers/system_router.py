@@ -16,9 +16,10 @@ from app.utils.timeutil import utcnow
 import subprocess
 import time
 from datetime import timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +32,8 @@ from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
-from app.auth.dependencies import get_current_user, require_permission, Perm
+from app.auth.dependencies import get_current_user, require_permission, require_superuser, Perm
+from app.performance_metrics import get_performance_snapshot, record_client_timings
 from app.services.brand_service import get_brand, get_brand_images_dir
 from app.schemas import (
     DashboardStats,
@@ -46,6 +48,12 @@ from app.services.shutdown_manager import shutdown_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["system"])
+
+
+class ClientPerformancePayload(BaseModel):
+    route: str = Field(max_length=80)
+    timings: Dict[str, float] = Field(max_length=20)
+
 
 # Captured once at process start — lets the frontend detect actual restarts
 # vs. just a tag push (where the live git version changes but the process hasn't restarted).
@@ -203,6 +211,23 @@ async def health_check():
 async def get_version():
     """Get the current application version from git tags"""
     return {"version": get_git_version_cached()}
+
+
+@router.post("/api/performance/client", status_code=204)
+async def submit_client_performance(
+    payload: ClientPerformancePayload,
+    current_user: User = Depends(get_current_user),
+):
+    """Accept anonymous aggregate startup timings from an authenticated browser."""
+    record_client_timings(payload.route, payload.timings)
+
+
+@router.get("/api/performance/summary")
+async def get_performance_summary(
+    current_user: User = Depends(require_superuser),
+):
+    """Return bounded p50/p95 performance aggregates to superusers."""
+    return get_performance_snapshot()
 
 
 def get_sorted_tags() -> list:
