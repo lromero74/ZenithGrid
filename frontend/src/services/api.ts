@@ -16,6 +16,7 @@ import type {
   AIBotLog,
   AIOpinionLog,
 } from '../types';
+import type { CompletedStats, RealizedPnL } from '../pages/positions/components/OverallStatsPanel';
 
 export const api = axios.create({
   baseURL: '/api',
@@ -282,6 +283,12 @@ export const positionsApi = {
       alltime_profit_usd: number;
       alltime_profit_by_quote: Record<string, number>;
     }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
+  getPageSummary: (accountId: number) =>
+    api.get<{
+      completed_stats: CompletedStats;
+      realized_pnl: RealizedPnL;
+      balances: Balances;
+    }>('/positions/page-summary', { params: { account_id: accountId } }).then((res) => res.data),
 
   panicSellSendMfa: () =>
     api.post<{ method: 'totp' | 'email' | 'none'; masked_email?: string }>(

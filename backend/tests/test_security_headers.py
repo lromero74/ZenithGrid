@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from app.main import SecurityHeadersMiddleware
+from app.main import SecurityHeadersMiddleware, ServerTimingMiddleware
 
 # Expected headers and their values.
 # Note: X-XSS-Protection is intentionally NOT set — modern browsers ignore/deprecated it
@@ -37,6 +37,18 @@ def app_with_middleware():
         raise RuntimeError("something broke")
 
     return test_app
+
+
+@pytest.fixture
+def timing_client():
+    test_app = FastAPI()
+    test_app.add_middleware(ServerTimingMiddleware)
+
+    @test_app.get("/ok")
+    async def ok_endpoint():
+        return {"status": "ok"}
+
+    return TestClient(test_app)
 
 
 @pytest.fixture
@@ -92,3 +104,10 @@ class TestSecurityHeadersMiddleware:
             assert header in response.headers, (
                 f"Missing security header: {header}"
             )
+
+
+def test_server_timing_header_reports_application_duration(timing_client):
+    response = timing_client.get("/ok")
+    assert response.status_code == 200
+    assert response.headers["server-timing"].startswith("app;dur=")
+    assert float(response.headers["server-timing"].split("=")[1]) >= 0

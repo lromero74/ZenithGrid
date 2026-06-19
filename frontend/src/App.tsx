@@ -36,6 +36,7 @@ import { ResetPassword } from './components/auth/ResetPassword'
 import MFAEmailVerify from './components/auth/MFAEmailVerify'
 import { AcceptInvite } from './pages/AcceptInvite'
 import Login from './pages/Login'
+import { markStartupMilestone } from './utils/startupPerformance'
 
 // App version - fetched from backend API at runtime (avoids Vite cache issues)
 
@@ -106,6 +107,10 @@ function AppContent() {
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const { summary: accountValueSummary } = useAccountValueSummary({ selectedAccount })
+
+  useEffect(() => {
+    markStartupMilestone(`shell-ready:${location.pathname}`)
+  }, [location.pathname])
 
   // Get market season for header display
   const { seasonInfo, headerGradient } = useMarketSeason()

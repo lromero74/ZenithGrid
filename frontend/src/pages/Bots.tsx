@@ -26,6 +26,7 @@ import type { SampleBot } from './bots/data/sampleBots'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
 import { BotBudgetRebalancer } from '../components/account/BotBudgetRebalancer'
+import { markStartupMilestone } from '../utils/startupPerformance'
 
 function Bots() {
   const location = useLocation()
@@ -70,7 +71,7 @@ function Bots() {
   const {
     bots,
     botsLoading,
-    botsFetching: _botsFetching,
+    botsFetching,
     strategies,
     portfolio,
     aggregateData,
@@ -78,6 +79,10 @@ function Bots() {
     templates,
     TRADING_PAIRS
   } = useBotsData({ selectedAccount, selectedAccountId, projectionTimeframe: projectionBasis })
+
+  useEffect(() => {
+    if (!botsLoading && !botsFetching) markStartupMilestone('bots-data-ready')
+  }, [botsFetching, botsLoading])
 
   // Use validation hook
   const { validateBotConfig, validateManualOrderSizing } = useValidation({

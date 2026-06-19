@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, lazy, Suspense } from 'react'
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react'
 import type { Bot } from '../types'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -22,6 +22,7 @@ import { usePositionsData } from './positions/hooks/usePositionsData'
 import { usePositionMutations } from './positions/hooks/usePositionMutations'
 import { usePositionFilters } from './positions/hooks/usePositionFilters'
 import { usePositionTrades } from './positions/hooks/usePositionTrades'
+import { markStartupMilestone } from '../utils/startupPerformance'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { buildVisualRows } from './positions/utils/visualRows'
 import { calculateOverallStats, checkSlippageBeforeMarketClose } from './positions/helpers'
@@ -132,10 +133,10 @@ export default function Positions() {
     showTradeHistoryModal,
   })
 
-  // Fetch completed trades statistics
-  const { data: completedStats } = useQuery({
-    queryKey: ['completed-trades-stats', selectedAccountId],
-    queryFn: () => positionsApi.getCompletedStats(selectedAccountId ?? undefined),
+  // One account-scoped startup request replaces three independent summary calls.
+  const { data: pageSummary, refetch: refetchBalances } = useQuery({
+    queryKey: ['positions-page-summary', selectedAccountId],
+    queryFn: () => positionsApi.getPageSummary(selectedAccountId!),
     enabled: selectedAccountId !== null,
     refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: false,
@@ -143,33 +144,13 @@ export default function Positions() {
     staleTime: 60000,
     refetchOnMount: 'always' as const,
   })
+  const completedStats = pageSummary?.completed_stats
+  const realizedPnL = pageSummary?.realized_pnl
+  const balances = pageSummary?.balances
 
-  // Fetch realized PnL (daily and weekly)
-  const { data: realizedPnL } = useQuery({
-    queryKey: ['realized-pnl', selectedAccountId],
-    queryFn: () => positionsApi.getRealizedPnL(selectedAccountId ?? undefined),
-    enabled: selectedAccountId !== null,
-    refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-    staleTime: 60000,
-    refetchOnMount: 'always' as const,
-  })
-
-  // Fetch account balances
-  const { data: balances, refetch: refetchBalances } = useQuery({
-    queryKey: ['account-balances', selectedAccountId],
-    queryFn: async () => {
-      const { accountApi } = await import('../services/api')
-      return accountApi.getBalances(selectedAccountId ?? undefined)
-    },
-    enabled: selectedAccountId !== null,
-    refetchInterval: POSITIONS_SUMMARY_REFETCH_INTERVAL_MS,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-    staleTime: 60000,
-    refetchOnMount: 'always' as const,
-  })
+  useEffect(() => {
+    if (allPositions && pageSummary) markStartupMilestone('positions-data-ready')
+  }, [allPositions, pageSummary])
 
   // Handler functions
   const handleClosePositionClick = async () => {

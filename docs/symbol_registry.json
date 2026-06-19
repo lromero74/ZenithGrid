@@ -1220,6 +1220,9 @@
     "classes": {
       "SecurityHeadersMiddleware": [
         "dispatch"
+      ],
+      "ServerTimingMiddleware": [
+        "dispatch"
       ]
     },
     "functions": [
@@ -1531,6 +1534,7 @@
       "get_position_ai_opinion",
       "get_position_trades",
       "get_positions",
+      "get_positions_summary",
       "get_realized_pnl"
     ]
   },

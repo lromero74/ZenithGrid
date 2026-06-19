@@ -2,6 +2,7 @@ import asyncio
 from app.utils.timeutil import utcnow, utcfromtimestamp
 import concurrent.futures
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -131,7 +132,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class ServerTimingMiddleware(BaseHTTPMiddleware):
+    """Expose application processing time to browser performance tooling."""
+
+    async def dispatch(self, request: Request, call_next):
+        started = time.perf_counter()
+        response: Response = await call_next(request)
+        duration_ms = (time.perf_counter() - started) * 1000
+        response.headers["Server-Timing"] = f"app;dur={duration_ms:.1f}"
+        return response
+
+
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ServerTimingMiddleware)
 app.add_middleware(PublicEndpointRateLimiter)
 app.add_middleware(IntrusionDetector)
 
