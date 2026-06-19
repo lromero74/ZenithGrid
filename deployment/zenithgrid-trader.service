@@ -1,0 +1,20 @@
+[Unit]
+Description=ZenithGrid Exclusive Trading Worker
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/ZenithGrid/backend
+EnvironmentFile=/home/ubuntu/ZenithGrid/backend/.env.banmonitor
+Environment=PROCESS_ROLE=trader
+ExecStart=/home/ubuntu/ZenithGrid/backend/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8101
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=75
+
+[Install]
+WantedBy=multi-user.target
