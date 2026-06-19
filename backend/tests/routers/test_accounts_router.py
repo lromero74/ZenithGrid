@@ -1232,9 +1232,16 @@ class TestRebalanceStatus:
         mock_coinbase.get_btc_balance = AsyncMock(return_value=0.5)
         mock_coinbase.get_eth_balance = AsyncMock(return_value=2.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=500.0)
-        mock_coinbase.get_current_price = AsyncMock(return_value=90000.0)
+        mock_coinbase.get_usdt_balance = AsyncMock(return_value=0.0)
+        bulk = _bulk_products({
+            "BTC-USD": 90000.0,
+            "ETH-USD": 3000.0,
+            "USDC-USD": 1.0,
+            "USDT-USD": 1.0,
+        })
 
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=test_account.id, db=db_session, current_user=test_user,
@@ -1512,11 +1519,16 @@ class TestAllocationIncludesOpenPositions:
         mock_coinbase.get_btc_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_eth_balance = AsyncMock(return_value=0.0)
         mock_coinbase.get_usdc_balance = AsyncMock(return_value=0.0)
-        mock_coinbase.get_current_price = AsyncMock(
-            side_effect=lambda pid: {"BTC-USD": 50000.0, "ETH-USD": 2000.0, "USDC-USD": 1.0}.get(pid, 0.0)
-        )
+        mock_coinbase.get_usdt_balance = AsyncMock(return_value=0.0)
+        bulk = _bulk_products({
+            "BTC-USD": 50000.0,
+            "ETH-USD": 2000.0,
+            "USDC-USD": 1.0,
+            "USDT-USD": 1.0,
+        })
 
-        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get:
+        with patch("app.services.exchange_service.get_coinbase_for_account", new_callable=AsyncMock) as mock_get, \
+             patch("app.coinbase_api.public_market_data.list_products", new_callable=AsyncMock, return_value=bulk):
             mock_get.return_value = mock_coinbase
             result = await get_rebalance_status(
                 account_id=account.id, db=db_session, current_user=user,

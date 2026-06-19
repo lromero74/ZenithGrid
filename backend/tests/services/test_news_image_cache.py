@@ -174,6 +174,12 @@ class TestCompressImage:
 class TestDownloadImage:
     """Tests for download_image() with mocked HTTP."""
 
+    @pytest.fixture(autouse=True)
+    def mock_public_url_validation(self):
+        """Keep HTTP unit tests deterministic without performing real DNS."""
+        with patch("app.utils.url_utils.validate_url_not_internal"):
+            yield
+
     @pytest.mark.asyncio
     async def test_download_success(self):
         """Happy path: successful image download returns bytes and mime."""

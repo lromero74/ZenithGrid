@@ -55,6 +55,8 @@ _STARTUP_TIME = utcnow().isoformat()
 _version_cache: Optional[str] = None
 _version_cache_at: float = 0.0
 _VERSION_TTL = 30.0
+_latest_tag_cache: Optional[str] = None
+_latest_tag_cache_at: float = 0.0
 
 
 def get_repo_root():
@@ -120,6 +122,36 @@ def get_latest_git_tag() -> str:
         pass
 
     return get_git_version()  # Fallback to current version
+
+
+def get_latest_git_tag_cached() -> str:
+    """Return the newest locally available tag without fetching the network.
+
+    The bootstrap endpoint uses this path so a hard refresh never waits for
+    GitHub. Explicit changelog refreshes retain the remote-fetching behavior in
+    ``get_latest_git_tag``.
+    """
+    global _latest_tag_cache, _latest_tag_cache_at
+    now = time.time()
+    if _latest_tag_cache and now - _latest_tag_cache_at < _VERSION_TTL:
+        return _latest_tag_cache
+
+    try:
+        result = subprocess.run(
+            ["git", "tag", "--sort=-version:refname"],
+            capture_output=True,
+            text=True,
+            cwd=str(get_repo_root()),
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            _latest_tag_cache = result.stdout.strip().split("\n")[0]
+        else:
+            _latest_tag_cache = get_git_version_cached()
+    except Exception:
+        _latest_tag_cache = get_git_version_cached()
+    _latest_tag_cache_at = now
+    return _latest_tag_cache
 
 
 def _git_ref_is_ancestor(ancestor: str, descendant: str) -> Optional[bool]:
@@ -437,8 +469,8 @@ def get_price_monitor() -> MultiBotMonitor:
 
 @router.get("/api/")
 async def root():
-    current_version = get_git_version()
-    latest_version = get_latest_git_tag()
+    current_version = get_git_version_cached()
+    latest_version = get_latest_git_tag_cached()
     brand = get_brand()
     return {
         "message": f"{brand['shortName']} Trading API",
