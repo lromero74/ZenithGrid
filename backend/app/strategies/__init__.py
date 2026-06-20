@@ -171,6 +171,8 @@ from app.strategies import (  # noqa: E402
     market_making,  # Market making — simultaneous bid/ask around mid-price
     # Custom DSL scripting strategy
     dsl_trading,  # User-authored sandboxed trading scripts
+    # Multi-agent AI team strategy
+    ai_team_trading,  # Orchestrated 5-agent LLM debate before trade decisions
 )
 
 __all__ = [
@@ -189,4 +191,6 @@ __all__ = [
     "market_making",
     # Custom DSL scripting strategy
     "dsl_trading",
+    # Multi-agent AI team strategy
+    "ai_team_trading",
 ]

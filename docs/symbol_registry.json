@@ -11,6 +11,123 @@
       "get_ai_client"
     ]
   },
+  "backend/app/ai_team/agent_memory.py": {
+    "classes": {
+      "AgentMemory": [
+        "recent_runs",
+        "save_run"
+      ]
+    },
+    "functions": [
+      "_json_dumps",
+      "_safe_parse"
+    ]
+  },
+  "backend/app/ai_team/bear_research_agent.py": {
+    "classes": {
+      "BearResearchAgent": [
+        "_build_prompt",
+        "_call_llm",
+        "_parse",
+        "run"
+      ]
+    },
+    "functions": [
+      "_credential_name_for"
+    ]
+  },
+  "backend/app/ai_team/bull_research_agent.py": {
+    "classes": {
+      "BullResearchAgent": [
+        "_build_prompt",
+        "_call_llm",
+        "_parse",
+        "run"
+      ]
+    },
+    "functions": [
+      "_credential_name_for"
+    ]
+  },
+  "backend/app/ai_team/distribution_agent.py": {
+    "classes": {
+      "DistributionAgent": [
+        "run"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/ai_team/risk_judge_agent.py": {
+    "classes": {
+      "RiskJudgeAgent": [
+        "_build_prompt",
+        "_call_llm",
+        "_parse",
+        "run"
+      ]
+    },
+    "functions": [
+      "_credential_name_for"
+    ]
+  },
+  "backend/app/ai_team/schemas.py": {
+    "classes": {
+      "AITeamResult": [
+        "action",
+        "deploy_amount",
+        "to_dict"
+      ],
+      "BearCase": [
+        "__post_init__",
+        "conservative_default",
+        "from_dict"
+      ],
+      "BullCase": [
+        "__post_init__",
+        "conservative_default",
+        "from_dict"
+      ],
+      "DistributionPlan": [
+        "__post_init__",
+        "from_dict",
+        "hold_default"
+      ],
+      "RiskVerdict": [
+        "__post_init__",
+        "from_dict",
+        "hold_default"
+      ],
+      "SignalAssessment": [
+        "__post_init__",
+        "conservative_default",
+        "from_dict"
+      ]
+    },
+    "functions": []
+  },
+  "backend/app/ai_team/signal_agent.py": {
+    "classes": {
+      "SignalAgent": [
+        "_build_prompt",
+        "_call_llm",
+        "_parse",
+        "run"
+      ]
+    },
+    "functions": [
+      "_credential_name_for"
+    ]
+  },
+  "backend/app/ai_team/team_orchestrator.py": {
+    "classes": {
+      "AITeamOrchestrator": [
+        "__init__",
+        "_run_pipeline",
+        "run"
+      ]
+    },
+    "functions": []
+  },
   "backend/app/auth/dependencies.py": {
     "classes": {},
     "functions": [
@@ -3564,6 +3681,20 @@
       ]
     },
     "functions": []
+  },
+  "backend/app/strategies/ai_team_trading.py": {
+    "classes": {
+      "AITeamTradingStrategy": [
+        "analyze_signal",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": [
+      "_hold_signal"
+    ]
   },
   "backend/app/strategies/basket_trading.py": {
     "classes": {

@@ -935,3 +935,44 @@ class AutomationRule(Base):
     # Relationships
     user = relationship("User")
     account = relationship("Account")
+
+
+class AITeamRun(Base):
+    """Audit record for one full AI-team orchestrator run.
+
+    Every column that filters or joins on account_id is indexed.
+    All reads and writes are scoped to account_id (enforced in agent_memory.py).
+    """
+    __tablename__ = "ai_team_runs"
+    __table_args__ = {'schema': 'trading'}
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Ownership — account_id is mandatory and indexed for fast per-account queries
+    account_id = Column(
+        Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    # Optional: link to the bot that triggered this run
+    bot_id = Column(
+        Integer, ForeignKey("trading.bots.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+
+    product_id = Column(String, nullable=False, index=True)
+
+    # Per-agent outputs stored as JSON for the full audit trail
+    signal_output = Column(JSON, nullable=True)
+    bull_output = Column(JSON, nullable=True)
+    bear_output = Column(JSON, nullable=True)
+    verdict_output = Column(JSON, nullable=True)
+    plan_output = Column(JSON, nullable=True)
+
+    # Denormalised final decision for fast queries / dashboards
+    final_action = Column(String, nullable=False, default="hold")
+
+    created_at = Column(DateTime, default=utcnow, index=True)
+
+    # Relationships
+    account = relationship("Account")
+    bot = relationship("Bot", foreign_keys=[bot_id])

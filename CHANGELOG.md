@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.9.0] - 2026-06-19
+
+### Added
+- Multi-agent AI trading team (`ai_team` strategy): instead of a single AI opinion, a team of specialized agents debates before each decision — a signal agent reads the setup, a bull and a bear agent argue both sides, a risk judge weighs the debate into a risk score and action, and a distribution step sizes the trade. Every decision is recorded with the full reasoning trail (per account) so you can see exactly why it chose buy/sell/hold. Conservative by design: it holds on any error, timeout, or low-confidence read, and never deploys more than the available budget. Opt-in per bot; configurable model, confidence floor, max risk, and max deploy fraction.
+
 ## [v3.8.0] - 2026-06-19
 
 ### Added

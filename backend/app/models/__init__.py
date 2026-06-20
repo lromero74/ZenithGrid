@@ -17,6 +17,7 @@ from app.models.trading import (
     BotRebalancerGroup,
     Position, Trade, Signal, PendingOrder, OrderHistory, BlacklistedCoin,
     AIOpinionLog, SpeculativeWeightsProposal, ProposalStatus, AutomationRule,
+    AITeamRun,
 )
 from app.models.content import (
     AIProviderCredential, NewsArticle, VideoArticle, ContentSource,
@@ -54,6 +55,7 @@ __all__ = [
     "BotRebalancerGroup",
     "Position", "Trade", "Signal", "PendingOrder", "OrderHistory", "BlacklistedCoin",
     "AIOpinionLog", "SpeculativeWeightsProposal", "ProposalStatus", "AutomationRule",
+    "AITeamRun",
     # Content
     "AIProviderCredential", "NewsArticle", "VideoArticle", "ContentSource",
     "UserSourceSubscription", "ArticleTTS", "UserVoiceSubscription",
