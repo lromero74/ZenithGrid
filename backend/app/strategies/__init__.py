@@ -169,6 +169,8 @@ from app.strategies import (  # noqa: E402
     statistical_arbitrage,
     # Liquidity strategies
     market_making,  # Market making — simultaneous bid/ask around mid-price
+    # Custom DSL scripting strategy
+    dsl_trading,  # User-authored sandboxed trading scripts
 )
 
 __all__ = [
@@ -185,4 +187,6 @@ __all__ = [
     "statistical_arbitrage",
     # Liquidity strategies
     "market_making",
+    # Custom DSL scripting strategy
+    "dsl_trading",
 ]

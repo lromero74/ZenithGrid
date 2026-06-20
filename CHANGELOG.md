@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.8.0] - 2026-06-19
+
+### Added
+- Custom DSL scripting strategy (`dsl_trading`): write your own trading logic in a small, sandboxed mini-language — e.g. `if rsi(14) < 30: limit('buy', 'ETH-USD', 0.05)` or `if price('BTC-USD') > 100000: market('sell', 'BTC-USD', all)`. Supports `price()`, `rsi()`, `macd()`, Bollinger `%B`, and `limit`/`market` order actions with an optional `price='-1%'` offset. The script is parsed and validated when you save the bot (clear errors with line/column), and runs in a strict sandbox that cannot import modules, read files, reach the network, or access attributes — only the whitelisted market-data and order functions.
+
 ## [v3.7.0] - 2026-06-19
 
 ### Added

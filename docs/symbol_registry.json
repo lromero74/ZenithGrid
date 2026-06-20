@@ -3605,6 +3605,39 @@
     },
     "functions": []
   },
+  "backend/app/strategies/dsl_interpreter.py": {
+    "classes": {
+      "DSLError": [
+        "__init__"
+      ]
+    },
+    "functions": [
+      "_build_order_intent",
+      "_eval_expr",
+      "_node_loc",
+      "_reject",
+      "_resolve_data_call",
+      "_validate_action_call",
+      "_validate_node_whitelist",
+      "_validate_top_level_stmt",
+      "evaluate",
+      "parse_script"
+    ]
+  },
+  "backend/app/strategies/dsl_trading.py": {
+    "classes": {
+      "DSLTradingStrategy": [
+        "__init__",
+        "_build_context",
+        "analyze_signal",
+        "get_definition",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
   "backend/app/strategies/grid_trading.py": {
     "classes": {
       "GridTradingStrategy": [
