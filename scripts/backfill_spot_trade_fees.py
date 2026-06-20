@@ -15,14 +15,13 @@ async def main(account_id: int, commit: bool) -> None:
     from app.database import async_session_maker
     from app.models import Position, Trade
     from app.services.exchange_service import get_exchange_client_for_account
-    from app.services.pnl_service import calculate_realized_spot_profit
+    from app.services.pnl_service import calculate_realized_short_profit, calculate_realized_spot_profit
 
     async with async_session_maker() as db:
         client = await get_exchange_client_for_account(db, account_id, use_cache=False)
         positions = (await db.execute(select(Position).where(
             Position.account_id == account_id,
             Position.product_type == "spot",
-            Position.direction == "long",
         ))).scalars().all()
         position_ids = [position.id for position in positions]
         trades = (await db.execute(select(Trade).where(
@@ -50,15 +49,26 @@ async def main(account_id: int, commit: bool) -> None:
 
         for position in positions:
             position_trades = trades_by_position.get(position.id, [])
-            position.entry_fees_quote = sum(t.fee_quote or 0.0 for t in position_trades if t.side == "buy")
-            position.exit_fees_quote = sum(t.fee_quote or 0.0 for t in position_trades if t.side == "sell")
+            is_short = position.direction == "short"
+            entry_side = "sell" if is_short else "buy"
+            exit_side = "buy" if is_short else "sell"
+            position.entry_fees_quote = sum(t.fee_quote or 0.0 for t in position_trades if t.side == entry_side)
+            position.exit_fees_quote = sum(t.fee_quote or 0.0 for t in position_trades if t.side == exit_side)
             if position.status != "closed":
                 continue
-            position.total_quote_received = sum(t.quote_amount for t in position_trades if t.side == "sell")
-            position.profit_quote, position.profit_percentage = calculate_realized_spot_profit(
-                position.total_quote_spent, position.total_quote_received,
-                position.entry_fees_quote, position.exit_fees_quote,
-            )
+            if is_short:
+                position.short_total_sold_quote = sum(t.quote_amount for t in position_trades if t.side == "sell")
+                quote_spent_to_cover = sum(t.quote_amount for t in position_trades if t.side == "buy")
+                position.profit_quote, position.profit_percentage = calculate_realized_short_profit(
+                    position.short_total_sold_quote, quote_spent_to_cover,
+                    position.entry_fees_quote, position.exit_fees_quote,
+                )
+            else:
+                position.total_quote_received = sum(t.quote_amount for t in position_trades if t.side == "sell")
+                position.profit_quote, position.profit_percentage = calculate_realized_spot_profit(
+                    position.total_quote_spent, position.total_quote_received,
+                    position.entry_fees_quote, position.exit_fees_quote,
+                )
             quote_currency = position.product_id.rsplit("-", 1)[-1]
             if quote_currency in {"USD", "USDC", "USDT"}:
                 position.profit_usd = position.profit_quote

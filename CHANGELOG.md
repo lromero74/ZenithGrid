@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.5.0] - 2026-06-19
+
+### Added
+- Closed deals now show whether the exit was manual or automatic, the triggering reason, exchange order ID, process role, and host that executed it.
+- Automatic exits from an unexpected production process display a persistent warning, making stale-host activity immediately visible.
+
+### Changed
+- Bidirectional short trades now record actual entry and cover fees and report fee-net realized P&L; the account-scoped fee backfill supports both long and short spot history.
+
 ## [v3.4.12] - 2026-06-19
 
 ### Fixed

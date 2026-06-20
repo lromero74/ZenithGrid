@@ -9,6 +9,12 @@ export interface Position {
   bot_config?: Record<string, any>;  // Snapshot of bot config at position open
   opened_at: string;
   closed_at: string | null;
+  exit_reason?: string | null;
+  exit_source?: string | null;
+  exit_trigger_reason?: string | null;
+  exit_process_role?: string | null;
+  exit_hostname?: string | null;
+  exit_order_id?: string | null;
 
   // Bidirectional DCA Grid Bot - Direction
   direction?: string;  // "long" or "short" (default: "long")

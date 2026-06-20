@@ -15,6 +15,20 @@ def calculate_realized_spot_profit(
     return profit_quote, profit_pct
 
 
+def calculate_realized_short_profit(
+    total_quote_received: float,
+    total_quote_spent_to_cover: float,
+    entry_fees_quote: float = 0.0,
+    exit_fees_quote: float = 0.0,
+) -> tuple[float, float]:
+    """Return fee-net realized short profit and percentage in quote currency."""
+    net_entry_proceeds = total_quote_received - entry_fees_quote
+    total_cover_cost = total_quote_spent_to_cover + exit_fees_quote
+    profit_quote = net_entry_proceeds - total_cover_cost
+    profit_pct = (profit_quote / net_entry_proceeds) * 100 if net_entry_proceeds > 0 else 0.0
+    return profit_quote, profit_pct
+
+
 def calculate_profit(position, current_price: float) -> dict:
     """
     Calculate P&L for long/short positions.

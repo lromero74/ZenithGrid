@@ -1,7 +1,11 @@
 """Tests for PnL service — extracted from Position.calculate_profit model method."""
 import pytest
 from unittest.mock import MagicMock
-from app.services.pnl_service import calculate_profit, calculate_realized_spot_profit
+from app.services.pnl_service import (
+    calculate_profit,
+    calculate_realized_short_profit,
+    calculate_realized_spot_profit,
+)
 
 
 class TestCalculateProfit:
@@ -109,3 +113,14 @@ def test_realized_spot_profit_subtracts_entry_and_exit_fees():
 
 def test_realized_spot_profit_handles_zero_cost():
     assert calculate_realized_spot_profit(0.0, 1.0, 0.0, 0.1) == (0.9, 0.0)
+
+
+def test_realized_short_profit_subtracts_entry_and_exit_fees():
+    profit, percentage = calculate_realized_short_profit(105.0, 95.0, 1.0, 2.0)
+
+    assert profit == pytest.approx(7.0)
+    assert percentage == pytest.approx(6.7307692308)
+
+
+def test_realized_short_profit_handles_zero_net_proceeds():
+    assert calculate_realized_short_profit(1.0, 0.0, 1.0, 0.0) == (0.0, 0.0)

@@ -579,6 +579,29 @@ describe('NotificationContext', () => {
     expect(body).toBeTruthy()
   })
 
+  test('warns when an automatic exit comes from an unexpected process', async () => {
+    render(
+      <NotificationProvider>
+        <TestConsumer />
+      </NotificationProvider>
+    )
+    act(() => { vi.advanceTimersByTime(0) })
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.simulateOpen() })
+
+    await act(async () => {
+      ws.simulateMessage({
+        type: 'order_fill', fill_type: 'sell_order', product_id: 'FORTH-USD',
+        base_amount: 1, quote_amount: 2, price: 2, position_id: 193,
+        unexpected_exit: true, exit_process_role: 'web', exit_hostname: 'stale-host',
+        exit_trigger_reason: 'Take profit conditions met',
+      })
+    })
+
+    expect(screen.getByText('Unexpected automatic exit')).toBeTruthy()
+    expect(screen.getByText(/web on stale-host/)).toBeTruthy()
+  })
+
   // ── Paper-notification suppression while on a real account ───────────────
 
   async function renderConnected() {

@@ -41,6 +41,7 @@ def _short_position(**ov):
         short_average_sell_price=ov.get("short_average_sell_price", 50000.0),
         short_total_sold_base=ov.get("short_total_sold_base", 0.5),
         short_total_sold_quote=ov.get("short_total_sold_quote", 25000.0),
+        entry_fees_quote=ov.get("entry_fees_quote", 0.0),
         last_error_message=None,
         last_error_timestamp=None,
     )
