@@ -154,7 +154,7 @@
       },
       {
         "file": "pages/positions/components/PositionCard.tsx",
-        "purpose": "Individual position display with P&L and actions; renders AIReasoningExpander for the position. Accepts optional prop forceCardLayout?: boolean to force the rich card layout at all viewport widths (used when the card is tiled inside the deals grid view)."
+        "purpose": "Individual position display with P&L and actions; closed deals expose durable exit provenance (manual/automatic source, trigger, process role, hostname, and exchange order ID). Renders AIReasoningExpander and accepts optional forceCardLayout?: boolean for tiled grid view."
       },
       {
         "file": "pages/positions/components/AIReasoningExpander.tsx",
@@ -646,7 +646,7 @@
         "NotificationProvider",
         "useNotifications"
       ],
-      "purpose": "WebSocket order fill notifications, toast alerts, audio; connect() is async \u2014 before opening the WebSocket it checks auth_token_expiry in localStorage and calls tryRefreshToken() from api.ts if the token is expired; skips connecting entirely if the refresh fails (no valid session). v2.165.0 adds a handler for the 'speculative_calibration_alert' event broadcast by speculative_calibration_monitor: surfaces a persistent toast with a 'Review in email' CTA until the user acknowledges."
+      "purpose": "WebSocket order fill notifications, toast alerts, and audio. Before connecting it refreshes expired auth tokens and skips the socket if no valid session remains. Handles speculative calibration alerts and surfaces a persistent warning when an automatic exit is reported from an unexpected process or host."
     },
     {
       "file": "contexts/VideoPlayerContext.tsx",

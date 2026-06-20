@@ -21,6 +21,7 @@ from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
 from app.services.pnl_service import calculate_realized_spot_profit
+from app.services.exit_provenance import record_exit_provenance
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,8 @@ async def _create_sell_trade_record(
     position.profit_percentage = profit_percentage
     position.btc_usd_price_at_close = btc_usd_price_at_close
     position.profit_usd = profit_usd
+    trigger_reason = (signal_data or {}).get("exit_trigger_reason") or position.exit_reason or "Automated exit"
+    record_exit_provenance(position, trigger_reason, order_id)
 
     # CRITICAL: Commit trade and position close IMMEDIATELY
     # This ensures we never lose a sell record even if subsequent operations fail
@@ -387,6 +390,7 @@ async def _reconcile_short_sell_fill(
     actual_base_sold = fallback_base
     quote_received = fallback_base * fallback_price
     actual_price = fallback_price
+    fee_quote = 0.0
 
     max_retries = 10
     for attempt in range(max_retries):
@@ -399,6 +403,7 @@ async def _reconcile_short_sell_fill(
             filled_size = float(order_details.get("filled_size", "0"))
             filled_value = float(order_details.get("filled_value", "0"))
             avg_price = float(order_details.get("average_filled_price", "0"))
+            fee_quote = float(order_details.get("total_fees", "0") or 0)
 
             if filled_size > 0 and filled_value > 0:
                 actual_base_sold = filled_size
@@ -408,7 +413,7 @@ async def _reconcile_short_sell_fill(
                     f"Short sell filled: {actual_base_sold:.8f} @ "
                     f"{actual_price:.8f} = {quote_received:.2f}"
                 )
-                return actual_base_sold, quote_received, actual_price
+                return actual_base_sold, quote_received, actual_price, fee_quote
 
             logger.warning(
                 f"Attempt {attempt + 1}/{max_retries}: "
@@ -426,7 +431,7 @@ async def _reconcile_short_sell_fill(
                 f"{max_retries} attempts. Using estimates."
             )
 
-    return actual_base_sold, quote_received, actual_price
+    return actual_base_sold, quote_received, actual_price, fee_quote
 
 
 async def _create_short_sell_trade_record(
@@ -437,6 +442,7 @@ async def _create_short_sell_trade_record(
     quote_received: float,
     actual_price: float,
     trade_type: str,
+    fee_quote: float = 0.0,
 ) -> Trade:
     """
     Create Trade record and update position's short tracking fields.
@@ -465,9 +471,11 @@ async def _create_short_sell_trade_record(
         price=actual_price,
         trade_type=trade_type,
         order_id=order_id,
+        fee_quote=fee_quote,
     )
 
     db.add(trade)
+    position.entry_fees_quote = (getattr(position, "entry_fees_quote", 0.0) or 0.0) + fee_quote
 
     # Update position's short tracking fields
     is_first_short = position.short_entry_price is None
@@ -621,13 +629,13 @@ async def _submit_short_sell_market_order(
             logger.error(f"Full exchange response: {order_response}")
             raise ValueError("No order_id in successful exchange response")
 
-        actual_base_sold, quote_received, actual_price = await _reconcile_short_sell_fill(
+        actual_base_sold, quote_received, actual_price, fee_quote = await _reconcile_short_sell_fill(
             exchange=exchange,
             order_id=order_id,
             fallback_base=base_amount_rounded,
             fallback_price=current_price,
         )
-        return order_id, actual_base_sold, quote_received, actual_price
+        return order_id, actual_base_sold, quote_received, actual_price, fee_quote
 
     except Exception as e:
         logger.error(f"Error executing short sell order: {e}")
@@ -733,7 +741,7 @@ async def execute_sell_short(
             await db.commit()
         raise ValueError(error)
 
-    order_id, actual_base_sold, quote_received, actual_price = await _submit_short_sell_market_order(
+    order_id, actual_base_sold, quote_received, actual_price, fee_quote = await _submit_short_sell_market_order(
         db=db,
         exchange=exchange,
         trading_client=trading_client,
@@ -753,6 +761,7 @@ async def execute_sell_short(
         quote_received=quote_received,
         actual_price=actual_price,
         trade_type=trade_type,
+        fee_quote=fee_quote,
     )
 
     # === NON-CRITICAL OPERATIONS BELOW ===
@@ -1044,6 +1053,12 @@ async def _post_sell_operations(
             profit_percentage=profit_percentage,
             user_id=position.user_id,
             is_paper_trading=is_paper,
+            exit_source=position.exit_source,
+            exit_trigger_reason=position.exit_trigger_reason,
+            exit_process_role=position.exit_process_role,
+            exit_hostname=position.exit_hostname,
+            exit_order_id=position.exit_order_id,
+            unexpected_exit=getattr(position, "exit_was_unexpected", False),
         ))
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
@@ -1115,6 +1130,7 @@ async def _close_sell_position_as_dust(
     position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
     position.profit_percentage = dust_pct
     position.total_quote_received = quote_value
+    record_exit_provenance(position, position.exit_reason or "Dust position close", None)
     await db.commit()
     try:
         from app.event_bus import event_bus, POSITION_CLOSED, PositionClosedPayload

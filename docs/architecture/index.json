@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v3.4.9",
+  "version": "v3.5.0",
   "updated": "2026-06-19",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "split_files": {
@@ -45,7 +45,7 @@
   "data_flow": {
     "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> PostgreSQL",
     "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient (-> PropGuard for prop firms) -> Exchange API",
-    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast(user_id) -> NotificationContext -> Toast component + Audio notification + portfolio:trade-completed DOM event (triggers Portfolio page force-refresh)",
+    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast(user_id) -> NotificationContext -> Toast component + Audio notification + portfolio:trade-completed DOM event (triggers Portfolio page force-refresh); unexpected automatic exits also produce a persistent origin warning",
     "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",
     "background_task_flow": "FastAPI startup -> asyncio.create_task() -> Periodic loop with sleep interval -> Database operations"
   },

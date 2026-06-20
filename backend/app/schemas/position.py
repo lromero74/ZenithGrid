@@ -39,6 +39,12 @@ class PositionResponse(BaseModel):
     last_error_message: Optional[str] = None  # Last error message
     last_error_timestamp: Optional[datetime] = None  # When error occurred
     notes: Optional[str] = None  # User notes
+    exit_reason: Optional[str] = None
+    exit_source: Optional[str] = None
+    exit_trigger_reason: Optional[str] = None
+    exit_process_role: Optional[str] = None
+    exit_hostname: Optional[str] = None
+    exit_order_id: Optional[str] = None
     closing_via_limit: bool = False  # Whether position is closing via limit order
     limit_close_order_id: Optional[str] = None  # Coinbase order ID for limit close
     limit_order_details: Optional["LimitOrderDetails"] = None  # Details of limit close order

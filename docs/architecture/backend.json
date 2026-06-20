@@ -505,7 +505,12 @@
         "side",
         "total_base_acquired",
         "total_quote_spent",
-        "average_buy_price"
+        "average_buy_price",
+        "exit_source",
+        "exit_trigger_reason",
+        "exit_process_role",
+        "exit_hostname",
+        "exit_order_id"
       ],
       "indexes": [
         "ix_positions_account_status_closed \u2014 compound on (account_id, status, closed_at); declared in __table_args__ and backfilled by migration 087; supports range-scan in _query_closed_pnl"
@@ -1488,6 +1493,11 @@
       "type": "background"
     },
     {
+      "file": "services/exit_provenance.py",
+      "purpose": "Authoritative exit-origin recorder for closed positions. Classifies manual versus automatic exits, stores the trigger, exchange order ID, process role, and hostname, and flags automatic exits from an unexpected production process.",
+      "type": "trading"
+    },
+    {
       "file": "services/paper_valuation_service.py",
       "purpose": "Shared paper-account valuation helpers used by both the dashboard summary and the Portfolio page so totals stay consistent without hammering Coinbase. build_paper_holdings_and_totals(account) loads JSON paper_balances, fetches the public BTC/USD price, then prices each non-stable asset with an asyncio.Semaphore(PAPER_PRICE_CONCURRENCY=5) \u2014 USD pair first, BTC pair fallback \u2014 and returns holdings + total_usd_value/total_btc_value. Stables (USD/USDC/USDT) short-circuit to $1. Extracted from account_service._build_paper_portfolio in v2.164.6.",
       "type": "trading"
@@ -1514,7 +1524,7 @@
     },
     {
       "file": "services/pnl_service.py",
-      "purpose": "P&L calculation for long/short positions: calculate_profit() returns profit_quote, profit_pct, unrealized_value; extracted from Position model",
+      "purpose": "Single source of truth for spot P&L: calculate_realized_spot_profit handles fee-net long closes, calculate_realized_short_profit handles fee-net short closes, and calculate_profit returns live profit_quote, profit_pct, and unrealized_value.",
       "type": "analysis"
     },
     {
@@ -2463,6 +2473,7 @@
       "085_more_performance_indexes.py",
       "086_trade_dca_levels.py",
       "087_positions_pnl_index.py",
+      "088_exit_provenance.py",
       "set_fk_delete_policies.py"
     ]
   }

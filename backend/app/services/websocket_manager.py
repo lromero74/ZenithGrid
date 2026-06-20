@@ -39,6 +39,12 @@ class OrderFillEvent:
     profit_percentage: Optional[float] = None
     user_id: Optional[int] = None
     is_paper_trading: bool = False
+    exit_source: Optional[str] = None
+    exit_trigger_reason: Optional[str] = None
+    exit_process_role: Optional[str] = None
+    exit_hostname: Optional[str] = None
+    exit_order_id: Optional[str] = None
+    unexpected_exit: bool = False
 
 
 class WebSocketManager:
@@ -196,6 +202,12 @@ class WebSocketManager:
             "profit": event.profit,
             "profit_percentage": event.profit_percentage,
             "is_paper_trading": event.is_paper_trading,
+            "exit_source": event.exit_source,
+            "exit_trigger_reason": event.exit_trigger_reason,
+            "exit_process_role": event.exit_process_role,
+            "exit_hostname": event.exit_hostname,
+            "exit_order_id": event.exit_order_id,
+            "unexpected_exit": event.unexpected_exit,
             "timestamp": utcnow().isoformat(),
         }
         logger.info(

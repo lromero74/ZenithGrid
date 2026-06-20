@@ -20,6 +20,8 @@ from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
+from app.services.exit_provenance import record_exit_provenance
+from app.services.pnl_service import calculate_realized_short_profit
 
 logger = logging.getLogger(__name__)
 
@@ -668,10 +670,13 @@ async def _reconcile_close_short_fill(
             order_details = await trading_client.get_order(order_id)
             filled_size = float(order_details.get("filled_size", 0))
             average_filled_price = float(order_details.get("average_filled_price", 0))
+            filled_value = float(order_details.get("filled_value", 0) or 0)
+            fee_quote = float(order_details.get("total_fees", 0) or 0)
 
             if filled_size > 0 and average_filled_price > 0:
                 logger.info(f"Order filled: {filled_size:.8f} BTC @ ${average_filled_price:.8f}")
-                return filled_size, average_filled_price
+                quote_spent = filled_value if filled_value > 0 else filled_size * average_filled_price
+                return filled_size, quote_spent, average_filled_price, fee_quote
 
             if attempt < max_retries - 1:
                 logger.warning(
@@ -697,7 +702,10 @@ async def _create_close_short_trade_record(
     product_id: str,
     order_id: str,
     filled_size: float,
+    quote_spent: float,
     average_filled_price: float,
+    fee_quote: float,
+    signal_data: Optional[Dict[str, Any]] = None,
 ) -> tuple:
     """
     Create Trade record, compute short profit, and close position.
@@ -716,11 +724,13 @@ async def _create_close_short_trade_record(
     """
     quote_currency = get_quote_currency(product_id)
 
-    usd_spent_to_close = filled_size * average_filled_price
+    usd_spent_to_close = quote_spent
     usd_received_from_short = position.short_total_sold_quote or 0.0
-
-    profit_quote = usd_received_from_short - usd_spent_to_close
-    profit_percentage = (profit_quote / usd_received_from_short) * 100 if usd_received_from_short > 0 else 0.0
+    exit_fees_quote = (position.exit_fees_quote or 0.0) + fee_quote
+    profit_quote, profit_percentage = calculate_realized_short_profit(
+        usd_received_from_short, usd_spent_to_close,
+        position.entry_fees_quote or 0.0, exit_fees_quote,
+    )
 
     logger.info(
         f"  SHORT CLOSED: Sold @ avg ${position.short_average_sell_price:.2f}, "
@@ -748,6 +758,7 @@ async def _create_close_short_trade_record(
         price=average_filled_price,
         trade_type="close_short",
         order_id=order_id,
+        fee_quote=fee_quote,
     )
 
     db.add(trade)
@@ -757,6 +768,9 @@ async def _create_close_short_trade_record(
     position.profit_quote = profit_quote
     position.profit_percentage = profit_percentage
     position.profit_usd = profit_usd
+    position.exit_fees_quote = exit_fees_quote
+    trigger_reason = (signal_data or {}).get("exit_trigger_reason") or position.exit_reason or "Automated exit"
+    record_exit_provenance(position, trigger_reason, order_id)
 
     await db.commit()
     await db.refresh(trade)
@@ -826,6 +840,12 @@ async def _post_close_short_operations(
             profit_percentage=profit_percentage,
             user_id=position.user_id,
             is_paper_trading=is_paper,
+            exit_source=position.exit_source,
+            exit_trigger_reason=position.exit_trigger_reason,
+            exit_process_role=position.exit_process_role,
+            exit_hostname=position.exit_hostname,
+            exit_order_id=position.exit_order_id,
+            unexpected_exit=getattr(position, "exit_was_unexpected", False),
         ))
     except Exception as e:
         logger.warning(f"Failed to broadcast short close WebSocket notification: {e}")
@@ -958,7 +978,7 @@ async def execute_buy_close_short(
         await shutdown_manager.decrement_in_flight()
 
     # Reconcile fill data from exchange
-    filled_size, average_filled_price = await _reconcile_close_short_fill(
+    filled_size, usd_spent_to_close, average_filled_price, fee_quote = await _reconcile_close_short_fill(
         trading_client=trading_client,
         order_id=order_id,
     )
@@ -971,11 +991,13 @@ async def execute_buy_close_short(
         product_id=product_id,
         order_id=order_id,
         filled_size=filled_size,
+        quote_spent=usd_spent_to_close,
         average_filled_price=average_filled_price,
+        fee_quote=fee_quote,
+        signal_data=signal_data,
     )
 
     # === NON-CRITICAL OPERATIONS BELOW ===
-    usd_spent_to_close = filled_size * average_filled_price
     await _post_close_short_operations(
         db=db,
         exchange=exchange,

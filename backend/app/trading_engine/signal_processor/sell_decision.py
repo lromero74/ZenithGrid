@@ -259,6 +259,7 @@ async def _decide_and_execute_sell(
     # Stop-loss / TSL always execute at market (force_market=True)
     sell_reason_lower = sell_reason.lower()
     is_stop_loss = "stop loss" in sell_reason_lower or "tsl triggered" in sell_reason_lower
+    signal_data["exit_trigger_reason"] = sell_reason
 
     # Pending limit-close dedup
     if position.closing_via_limit:
