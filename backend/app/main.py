@@ -59,6 +59,10 @@ from app.routers import display_name_router  # Display name management
 from app.routers import donations_router  # Donation tracking and goals
 from app.routers import sessions_router  # Session management for multiplayer
 from app.routers import chat_router  # Chat (DMs, groups, channels)
+from app.routers import webhook_router  # TradingView webhook integration
+from app.routers import telegram_router  # Telegram notifications & commands
+from app.routers import backtesting_router  # Strategy backtesting
+from app.routers import automation_router  # Automation rules
 from app.routers.bots import router as bots_router
 from app.routers.system_router import (
     build_changelog_cache,
@@ -235,6 +239,10 @@ app.include_router(display_name_router.router)  # Display name management
 app.include_router(donations_router.router)  # Donation tracking and goals
 app.include_router(sessions_router.router)  # Session management for multiplayer
 app.include_router(chat_router.router)  # Chat (DMs, groups, channels)
+app.include_router(webhook_router.router)  # TradingView webhooks (no JWT auth)
+app.include_router(telegram_router.router)  # Telegram notifications & commands
+app.include_router(backtesting_router.router)  # Strategy backtesting
+app.include_router(automation_router.router)  # Automation rules
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -460,8 +468,13 @@ def _wire_event_bus_subscribers() -> None:
     """
     from app.event_bus import (
         event_bus, ORDER_FILLED, BOT_STARTED, BOT_STOPPED, POSITION_CLOSED,
+        POSITION_OPENED,
     )
     from app.indicators.ai_opinion_logger import on_position_closed
+    from app.services.telegram_service import (
+        notify_order_filled, notify_position_opened,
+        notify_position_closed, notify_bot_started, notify_bot_stopped,
+    )
     from app.scheduler import scheduler as _scheduler
 
     async def _on_order_filled(payload) -> None:
@@ -483,13 +496,21 @@ def _wire_event_bus_subscribers() -> None:
         logger.info("Bot event: %s bot_id=%s", type(payload).__name__, payload.bot_id)
 
     event_bus.subscribe(ORDER_FILLED, _on_order_filled)
+    event_bus.subscribe(ORDER_FILLED, notify_order_filled)
     event_bus.subscribe(BOT_STARTED, _on_bot_event)
+    event_bus.subscribe(BOT_STARTED, notify_bot_started)
     event_bus.subscribe(BOT_STOPPED, _on_bot_event)
+    event_bus.subscribe(BOT_STOPPED, notify_bot_stopped)
     event_bus.subscribe(POSITION_CLOSED, on_position_closed)
+    event_bus.subscribe(POSITION_CLOSED, notify_position_closed)
+    event_bus.subscribe(POSITION_OPENED, notify_position_opened)
 
     logger.info(
         "Event bus: subscribers wired "
-        "(order.filled → auto_buy + rebalance, position.closed → ai_opinion_log backfill)"
+        "(order.filled → auto_buy + rebalance + telegram, "
+        "position.closed → ai_opinion_log + telegram, "
+        "position.opened → telegram, "
+        "bot.started/stopped → telegram)"
     )
 
 

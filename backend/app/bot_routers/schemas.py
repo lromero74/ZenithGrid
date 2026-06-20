@@ -23,6 +23,7 @@ class BotCreate(BaseModel):
     reserved_btc_balance: float = 0.0  # BTC allocated to this bot (legacy)
     reserved_usd_balance: float = 0.0  # USD allocated to this bot (legacy)
     budget_percentage: float = 0.0  # % of aggregate portfolio value (preferred)
+    webhook_enabled: bool = False  # Enable TradingView webhook for this bot
 
 
 class BotUpdate(BaseModel):
@@ -83,6 +84,7 @@ class BotResponse(BaseModel):
     bot_rebalancer_target_pct: float = 0.0  # Target allocation % set by rebalancer slider
     rebalancer_bot_overweight: bool = False  # True when deployed > target + tolerance
     soft_ceiling_effective_max: Optional[int] = None  # Last computed SC deal cap (None = SC disabled or not yet run)
+    webhook_token: Optional[str] = None  # TradingView webhook token (None = webhook not enabled)
 
     model_config = ConfigDict(from_attributes=True)
 

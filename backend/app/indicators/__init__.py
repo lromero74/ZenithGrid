@@ -18,6 +18,7 @@ from .ai_spot_opinion import AISpotOpinionEvaluator, AISpotOpinionParams
 from .bull_flag_indicator import BullFlagIndicatorEvaluator
 from .vwap_bounce_indicator import VWAPBounceIndicatorEvaluator, VWAPBounceParams
 from .qfl_indicator import QFLIndicatorEvaluator, QFLParams
+from .fear_greed_indicator import FearGreedIndicatorEvaluator, FearGreedParams
 
 
 __all__ = [
@@ -28,6 +29,8 @@ __all__ = [
     "VWAPBounceParams",
     "QFLIndicatorEvaluator",
     "QFLParams",
+    "FearGreedIndicatorEvaluator",
+    "FearGreedParams",
     "RISK_PRESETS",
     "get_risk_preset_defaults",
 ]

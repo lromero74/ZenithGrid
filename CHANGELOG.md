@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.7.0] - 2026-06-19
+
+### Added
+- TradingView webhook integration: bots can now receive alert webhooks from TradingView to trigger buy/sell actions. Each bot gets a unique webhook token (generated on creation with `webhook_enabled=True` or via the `POST /api/bots/{bot_id}/webhook-token` endpoint). Webhooks are rate-limited to 10 requests/minute per token and rejected for stopped bots.
+- Telegram notification integration: users can configure a Telegram bot token and chat ID in settings to receive trade fill, position opened/closed, and bot started/stopped notifications. Supports commands via Telegram webhook: `/status`, `/positions`, `/pnl`, `/start <bot>`, `/stop <bot>`, `/help`. Notification types are individually toggleable.
+- Fear & Greed Index indicator: adds FEAR_GREED as a tradeable aggregate indicator in the condition builder (e.g., `FEAR_GREED <= 25` to buy in extreme fear). Fetches from the alternative.me API with a 1-hour process-level cache and graceful fallback to the last known value on API failure.
+- Backtesting engine: replay historical candle data through any strategy and get a performance report (total return, win rate, max drawdown, Sharpe ratio, profit factor, equity curve, trade list). Available via `POST /api/backtesting/run`. Uses a SimulatedBroker that handles buys, DCA, sells, and fee deduction.
+- Automation rules: user-configurable if-then rules with trigger types (price threshold, holding threshold, profitability threshold, period check) and action types (cancel open orders, sell all positions, stop all bots, stop specific bots, start bot, send Telegram notification). Rules are account-scoped. CRUD via `/api/automation/rules`, manual trigger test via `/api/automation/rules/{id}/test`.
+- Crypto basket / index trading strategy: a new `basket_trading` strategy that maintains a weighted basket of cryptocurrencies and auto-rebalances when allocations drift beyond a configurable threshold. Supports JSON string or list composition, weight normalization, drift computation, and generates buy/sell rebalance signals.
+- Strategy optimizer / parameter sweep: sweep parameter permutations through the backtesting engine and rank results by fitness metrics (total return, Sharpe ratio, profit factor, win rate, max drawdown inverse). Generates all combinations from parameter ranges, runs a backtest for each, and returns a ranked report with the best configurations. Exposed via `POST /api/backtesting/optimize`.
+- Market making strategy: a new `market_making` strategy that provides liquidity by placing symmetric buy/sell limit orders around a reference (order-book mid) price, profiting from the spread. Supports configurable spread (bps), order size, max inventory, recenter threshold, and inventory-skew that biases quotes to mean-revert holdings. Account-scoped; created stopped.
+
 ## [v3.6.0] - 2026-06-19
 
 ### Changed

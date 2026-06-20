@@ -179,6 +179,59 @@
       "_validate_password_strength"
     ]
   },
+  "backend/app/automation/__init__.py": {
+    "classes": {},
+    "functions": [
+      "evaluate_all_rules",
+      "evaluate_holding_threshold",
+      "evaluate_period_check",
+      "evaluate_price_threshold",
+      "evaluate_profitability_threshold",
+      "evaluate_rule",
+      "execute_cancel_open_orders",
+      "execute_sell_all_positions",
+      "execute_send_notification",
+      "execute_start_bot",
+      "execute_stop_strategies",
+      "execute_stop_trading"
+    ]
+  },
+  "backend/app/backtesting/__init__.py": {
+    "classes": {
+      "BacktestResult": [
+        "to_dict"
+      ],
+      "SimulatedBroker": [
+        "__init__",
+        "buy",
+        "get_equity",
+        "sell"
+      ],
+      "_MockPosition": [
+        "__init__"
+      ]
+    },
+    "functions": [
+      "_compute_metrics",
+      "_update_drawdown_and_returns",
+      "run_backtest"
+    ]
+  },
+  "backend/app/backtesting/optimizer.py": {
+    "classes": {
+      "OptimizationReport": [
+        "to_dict"
+      ],
+      "OptimizationResult": [
+        "to_dict"
+      ]
+    },
+    "functions": [
+      "_compute_score",
+      "_generate_permutations",
+      "run_optimization"
+    ]
+  },
   "backend/app/bot_routers/bot_ai_logs_router.py": {
     "classes": {},
     "functions": [
@@ -215,6 +268,8 @@
       "get_strategy_definition",
       "list_bots",
       "list_strategies",
+      "regenerate_webhook_token",
+      "revoke_webhook_token",
       "update_bot"
     ]
   },
@@ -1170,6 +1225,21 @@
       "evaluate_bull_flag_indicator_with_details"
     ]
   },
+  "backend/app/indicators/fear_greed_indicator.py": {
+    "classes": {
+      "FearGreedIndicatorEvaluator": [
+        "_fallback",
+        "evaluate"
+      ],
+      "FearGreedParams": [
+        "from_config"
+      ]
+    },
+    "functions": [
+      "_classify",
+      "clear_fear_greed_cache"
+    ]
+  },
   "backend/app/indicators/qfl_indicator.py": {
     "classes": {
       "QFLIndicatorEvaluator": [
@@ -1786,6 +1856,25 @@
       "update_ai_credential"
     ]
   },
+  "backend/app/routers/automation_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_account_access",
+      "create_rule",
+      "delete_rule",
+      "list_rules",
+      "test_rule",
+      "update_rule"
+    ]
+  },
+  "backend/app/routers/backtesting_router.py": {
+    "classes": {},
+    "functions": [
+      "_prepare_backtest_inputs",
+      "optimize_strategy",
+      "run_backtest"
+    ]
+  },
   "backend/app/routers/blacklist_router.py": {
     "classes": {},
     "functions": [
@@ -2146,6 +2235,16 @@
       "trigger_pair_sync"
     ]
   },
+  "backend/app/routers/telegram_router.py": {
+    "classes": {},
+    "functions": [
+      "get_settings",
+      "remove_settings",
+      "send_test_notification",
+      "telegram_webhook",
+      "update_settings"
+    ]
+  },
   "backend/app/routers/templates.py": {
     "classes": {},
     "functions": [
@@ -2187,6 +2286,13 @@
       "get_transfer_summary",
       "list_transfers",
       "sync_transfers"
+    ]
+  },
+  "backend/app/routers/webhook_router.py": {
+    "classes": {},
+    "functions": [
+      "_check_rate_limit",
+      "tradingview_webhook"
     ]
   },
   "backend/app/scheduler.py": {
@@ -3362,6 +3468,27 @@
       "propose_weights"
     ]
   },
+  "backend/app/services/telegram_service.py": {
+    "classes": {},
+    "functions": [
+      "_cmd_pnl",
+      "_cmd_positions",
+      "_cmd_start_bot",
+      "_cmd_status",
+      "_cmd_stop_bot",
+      "_notify_user",
+      "delete_telegram_settings",
+      "get_telegram_settings",
+      "handle_telegram_command",
+      "notify_bot_started",
+      "notify_bot_stopped",
+      "notify_order_filled",
+      "notify_position_closed",
+      "notify_position_opened",
+      "save_telegram_settings",
+      "send_telegram_message"
+    ]
+  },
   "backend/app/services/trading_leader.py": {
     "classes": {
       "TradingLeaderLease": [
@@ -3438,6 +3565,23 @@
     },
     "functions": []
   },
+  "backend/app/strategies/basket_trading.py": {
+    "classes": {
+      "BasketTradingStrategy": [
+        "_parse_composition",
+        "analyze_signal",
+        "compute_current_weights",
+        "compute_drift",
+        "get_definition",
+        "get_target_weights",
+        "needs_rebalance",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
   "backend/app/strategies/bull_flag_scanner.py": {
     "classes": {},
     "functions": [
@@ -3486,6 +3630,7 @@
         "_calculate_ai_indicators",
         "_calculate_bidirectional_order_amount",
         "_calculate_bull_flag_indicators",
+        "_calculate_fear_greed_indicators",
         "_calculate_qfl_indicators",
         "_calculate_safety_order_amount",
         "_calculate_traditional_indicators",
@@ -3517,6 +3662,24 @@
       "flatten_conditions",
       "needs_aggregate_indicators"
     ]
+  },
+  "backend/app/strategies/market_making.py": {
+    "classes": {
+      "MarketMakingStrategy": [
+        "__init__",
+        "analyze_signal",
+        "compute_inventory_skew",
+        "compute_quote_prices",
+        "compute_reference_price",
+        "get_definition",
+        "needs_requote",
+        "record_quote",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
   },
   "backend/app/strategies/safety_order_calculator.py": {
     "classes": {},

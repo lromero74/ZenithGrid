@@ -175,6 +175,11 @@ async def create_bot(
         user_id=current_user.id,
     )
 
+    # Generate webhook token if webhook integration is requested
+    if getattr(bot_data, 'webhook_enabled', False):
+        import secrets as _secrets
+        bot.webhook_token = _secrets.token_urlsafe(32)
+
     # Validate bidirectional budget if enabled
     if bot.strategy_config.get("enable_bidirectional", False):
         logger.info(f"Validating bidirectional budget for new bot '{bot.name}'")
@@ -489,6 +494,49 @@ async def update_bot(
 
     bot_response = BotResponse.model_validate(bot)
     return bot_response
+
+
+@router.post("/{bot_id}/webhook-token", response_model=BotResponse)
+async def regenerate_webhook_token(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
+):
+    """Generate or regenerate the TradingView webhook token for a bot."""
+    import secrets as _secrets
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    result = await db.execute(query)
+    bot = result.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    bot.webhook_token = _secrets.token_urlsafe(32)
+    bot.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(bot)
+
+    return BotResponse.model_validate(bot)
+
+
+@router.delete("/{bot_id}/webhook-token", response_model=BotResponse)
+async def revoke_webhook_token(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
+):
+    """Revoke the TradingView webhook token for a bot."""
+    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    result = await db.execute(query)
+    bot = result.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    bot.webhook_token = None
+    bot.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(bot)
+
+    return BotResponse.model_validate(bot)
 
 
 @router.delete("/{bot_id}")

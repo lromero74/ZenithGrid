@@ -1,4 +1,4 @@
-"""System models: settings, market data, bot/scanner/indicator logs."""
+"""System models: settings, market data, bot/scanner/indicator logs, notifications."""
 
 from app.utils.timeutil import utcnow
 
@@ -12,6 +12,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -134,3 +135,42 @@ class IndicatorLog(Base):
 
     # Relationships
     bot = relationship("Bot", foreign_keys=[bot_id])
+
+
+class TelegramSettings(Base):
+    """Per-user Telegram notification configuration.
+
+    Stores the bot token and chat ID for sending trade notifications
+    and receiving commands via Telegram.
+    """
+    __tablename__ = "telegram_settings"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_telegram_settings_user"),
+        {'schema': 'system'},
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Telegram bot token (from @BotFather)
+    bot_token = Column(String, nullable=False)
+
+    # Chat ID to send notifications to (user's chat with the bot)
+    chat_id = Column(String, nullable=False)
+
+    # Notification toggles
+    notify_order_filled = Column(Boolean, default=True)
+    notify_position_opened = Column(Boolean, default=True)
+    notify_position_closed = Column(Boolean, default=True)
+    notify_bot_started = Column(Boolean, default=True)
+    notify_bot_stopped = Column(Boolean, default=True)
+
+    # Whether the Telegram webhook is active for receiving commands
+    commands_enabled = Column(Boolean, default=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    # Relationships
+    user = relationship("User")
