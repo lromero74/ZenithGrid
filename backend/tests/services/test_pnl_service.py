@@ -1,10 +1,14 @@
 """Tests for PnL service — extracted from Position.calculate_profit model method."""
 import pytest
 from unittest.mock import MagicMock
+from types import SimpleNamespace
 from app.services.pnl_service import (
+    DEFAULT_TAKER_FEE_RATE,
     calculate_profit,
     calculate_realized_short_profit,
     calculate_realized_spot_profit,
+    fee_adjusted_tp_floor,
+    position_exit_fee_rate,
 )
 
 
@@ -124,3 +128,44 @@ def test_realized_short_profit_subtracts_entry_and_exit_fees():
 
 def test_realized_short_profit_handles_zero_net_proceeds():
     assert calculate_realized_short_profit(1.0, 0.0, 1.0, 0.0) == (0.0, 0.0)
+
+
+class TestFeeAdjustedTakeProfit:
+    """The take-profit floor must be raised so the configured target is net of fees."""
+
+    def test_exit_fee_rate_calibrates_from_entry_leg(self):
+        # Paid $0.60 entry fee on $100 spent → 0.6% per-leg rate.
+        pos = SimpleNamespace(total_quote_spent=100.0, entry_fees_quote=0.60)
+        assert position_exit_fee_rate(pos) == pytest.approx(0.006)
+
+    def test_exit_fee_rate_falls_back_when_no_recorded_fee(self):
+        legacy = SimpleNamespace(total_quote_spent=100.0, entry_fees_quote=0.0)
+        assert position_exit_fee_rate(legacy) == pytest.approx(DEFAULT_TAKER_FEE_RATE)
+        empty = SimpleNamespace(total_quote_spent=0.0, entry_fees_quote=0.0)
+        assert position_exit_fee_rate(empty) == pytest.approx(DEFAULT_TAKER_FEE_RATE)
+
+    def test_floor_is_strictly_above_target(self):
+        pos = SimpleNamespace(total_quote_spent=100.0, entry_fees_quote=0.60)
+        floor = fee_adjusted_tp_floor(pos, 1.0)
+        assert floor > 1.0
+        assert floor == pytest.approx(2.2186, abs=1e-3)
+
+    def test_floor_makes_net_profit_equal_target(self):
+        # At exactly the floor gross%, realized net profit% must equal the target.
+        spent, entry_fee = 100.0, 0.60
+        pos = SimpleNamespace(total_quote_spent=spent, entry_fees_quote=entry_fee)
+        target = 1.0
+        floor = fee_adjusted_tp_floor(pos, target)
+        exit_value = spent * (1.0 + floor / 100.0)            # gross value at the floor
+        exit_fee = exit_value * position_exit_fee_rate(pos)
+        _, net_pct = calculate_realized_spot_profit(spent, exit_value, entry_fee, exit_fee)
+        assert net_pct == pytest.approx(target, abs=1e-6)
+
+    def test_zero_target_floor_covers_round_trip_fees(self):
+        # A 0% target must still require enough gross profit to not lose money to fees.
+        pos = SimpleNamespace(total_quote_spent=100.0, entry_fees_quote=0.60)
+        assert fee_adjusted_tp_floor(pos, 0.0) == pytest.approx(1.2072, abs=1e-3)
+
+    def test_degenerate_fee_rate_returns_target_unchanged(self):
+        absurd = SimpleNamespace(total_quote_spent=1.0, entry_fees_quote=5.0)  # 500% rate
+        assert fee_adjusted_tp_floor(absurd, 3.0) == 3.0

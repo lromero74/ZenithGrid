@@ -2899,7 +2899,9 @@
     "functions": [
       "calculate_profit",
       "calculate_realized_short_profit",
-      "calculate_realized_spot_profit"
+      "calculate_realized_spot_profit",
+      "fee_adjusted_tp_floor",
+      "position_exit_fee_rate"
     ]
   },
   "backend/app/services/portfolio_calculations.py": {

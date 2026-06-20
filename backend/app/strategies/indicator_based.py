@@ -21,6 +21,7 @@ Migration from old strategies:
 import logging
 import math
 from app.utils.timeutil import utcnow
+from app.services.pnl_service import fee_adjusted_tp_floor
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
@@ -1150,12 +1151,12 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # --- FIXED mode: hard sell at TP% ---
         if tp_mode == "fixed":
-            if tp_pct is not None and profit_pct >= tp_pct:
-                return True, f"Take profit target reached: {profit_pct:.2f}%"
+            if tp_pct is not None and profit_pct >= fee_adjusted_tp_floor(position, tp_pct):
+                return True, f"Take profit target reached (net of fees): {profit_pct:.2f}%"
 
         # --- TRAILING mode: activate trail when TP% hit, sell on deviation ---
         elif tp_mode == "trailing":
-            if tp_pct is not None and profit_pct >= tp_pct:
+            if tp_pct is not None and profit_pct >= fee_adjusted_tp_floor(position, tp_pct):
                 trailing_dev = self.config.get("trailing_deviation", 1.0)
                 if not hasattr(position, "trailing_tp_active"):
                     position.trailing_tp_active = True
@@ -1175,10 +1176,10 @@ class IndicatorBasedStrategy(TradingStrategy):
         # --- MINIMUM mode: TP% is floor, conditions trigger exit ---
         elif tp_mode == "minimum":
             if take_profit_signal and self.take_profit_conditions:
-                min_profit = tp_pct if tp_pct is not None else 3.0
+                min_profit = fee_adjusted_tp_floor(position, tp_pct if tp_pct is not None else 3.0)
                 if profit_pct >= min_profit:
-                    return True, f"Take profit conditions met (profit: {profit_pct:.2f}%)"
-                return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
+                    return True, f"Take profit conditions met (profit: {profit_pct:.2f}%, net of fees)"
+                return False, f"Conditions met but profit too low after fees ({profit_pct:.2f}% < {min_profit:.2f}%)"
             if not self.take_profit_conditions:
                 logger.warning("Minimum TP mode with no conditions configured - will never sell via TP")
 

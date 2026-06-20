@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.models import Position
+from app.services.pnl_service import fee_adjusted_tp_floor
 from app.trading_engine.book_depth_guard import check_sell_slippage
 from app.trading_engine.buy_executor import execute_buy_close_short
 from app.trading_engine.order_logger import save_ai_log
@@ -109,13 +110,15 @@ async def _verify_mark_profit_allows_sell(
         mark_value = position.total_base_acquired * mark_price
         mark_profit = mark_value - position.total_quote_spent
         mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
+        # Raise the floor so the configured target is met NET of round-trip fees.
+        tp_floor = fee_adjusted_tp_floor(position, tp_pct)
 
-        if mark_profit_pct < tp_pct:
+        if mark_profit_pct < tp_floor:
             logger.info(
                 f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
-                f"< take_profit ({tp_pct}%) - HOLDING"
+                f"< fee-adjusted take_profit floor ({tp_floor:.2f}% for {tp_pct}% net) - HOLDING"
             )
-            return False, f"Conditions met but mark profit {mark_profit_pct:.2f}% < {tp_pct}%"
+            return False, f"Conditions met but mark profit {mark_profit_pct:.2f}% < {tp_floor:.2f}% (net {tp_pct}%)"
 
         logger.info(
             f"  ✓ Mark price profit ({mark_profit_pct:.2f}%)"

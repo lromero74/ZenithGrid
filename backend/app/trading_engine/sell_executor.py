@@ -20,7 +20,7 @@ from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
 from app.trading_engine.fill_reconciler import reconcile_order_fill
-from app.services.pnl_service import calculate_realized_spot_profit
+from app.services.pnl_service import calculate_realized_spot_profit, fee_adjusted_tp_floor
 from app.services.exit_provenance import record_exit_provenance
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
@@ -215,9 +215,9 @@ async def _validate_market_fallback(
     profit_amount = current_value - position.total_quote_spent
     profit_pct = (profit_amount / position.total_quote_spent) * 100
 
-    # Get minimum profit threshold from config
-    # Use take_profit_percentage as the profit floor
-    min_profit = config.get("take_profit_percentage", 3.0)
+    # Get minimum profit threshold from config, raised so the configured target is
+    # honored NET of round-trip fees (gross profit_pct never subtracted them).
+    min_profit = fee_adjusted_tp_floor(position, config.get("take_profit_percentage", 3.0))
 
     if profit_pct < min_profit:
         logger.warning(
