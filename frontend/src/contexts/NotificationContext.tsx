@@ -20,6 +20,12 @@ interface OrderFillEvent {
   profit_percentage?: number
   position_id: number
   is_paper_trading?: boolean
+  exit_source?: string
+  exit_trigger_reason?: string
+  exit_process_role?: string
+  exit_hostname?: string
+  exit_order_id?: string
+  unexpected_exit?: boolean
   timestamp: string
 }
 
@@ -257,6 +263,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       profit,
       isPaperTrading: event.is_paper_trading,
     })
+
+    if (event.unexpected_exit) {
+      addToast({
+        type: 'info',
+        title: 'Unexpected automatic exit',
+        message: (
+          `${event.product_id} was closed by ${event.exit_process_role ?? 'an unknown process'} ` +
+          `on ${event.exit_hostname ?? 'an unknown host'}. ` +
+          `Reason: ${event.exit_trigger_reason ?? 'not recorded'}.`
+        ),
+        persistent: true,
+      })
+    }
 
     // Play audio if enabled
     if (audioEnabledRef.current) {

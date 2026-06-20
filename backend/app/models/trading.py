@@ -531,6 +531,11 @@ class Position(Base):
 
     # Exit reason tracking
     exit_reason = Column(String, nullable=True)  # "trailing_stop_loss", "trailing_take_profit", "manual", etc.
+    exit_source = Column(String, nullable=True)
+    exit_trigger_reason = Column(Text, nullable=True)
+    exit_process_role = Column(String, nullable=True)
+    exit_hostname = Column(String, nullable=True)
+    exit_order_id = Column(String, nullable=True)
 
     # Perpetual futures fields
     product_type = Column(String, default="spot")  # "spot" or "future"

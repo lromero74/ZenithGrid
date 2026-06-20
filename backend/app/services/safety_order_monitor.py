@@ -169,6 +169,7 @@ class SafetyOrderMonitor:
                 quote_received=new_quote,
                 actual_price=avg_price,
                 trade_type=pending_order.trade_type,
+                fee_quote=new_fee,
             )
         else:  # BUY → long add
             from app.trading_engine.buy_executor import _create_buy_trade_record

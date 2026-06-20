@@ -79,12 +79,17 @@ def _make_mock_position(
     direction="long",
     entry_stop_loss=None,
     entry_take_profit_target=None,
+    entry_fees_quote=0.0,
 ):
     """Create a mock position object."""
     pos = MagicMock()
     pos.average_buy_price = avg_price
     pos.total_base_acquired = total_base
     pos.total_quote_spent = total_quote
+    # Real numeric value so the fee-aware TP floor calibrates deterministically
+    # (a bare MagicMock attr would float() to 1.0 → bogus fee rate). 0.0 makes
+    # position_exit_fee_rate fall back to the default 0.6% taker rate.
+    pos.entry_fees_quote = entry_fees_quote
     pos.max_quote_allowed = max_quote
     pos.direction = direction
     pos.entry_stop_loss = entry_stop_loss
@@ -731,17 +736,21 @@ class TestShouldSell:
 
     @pytest.mark.asyncio
     async def test_take_profit_percentage_hit(self):
-        """Price risen enough => sell at take profit %."""
+        """Sell only when profit clears the target NET of round-trip fees."""
         strategy = _make_strategy({
             "take_profit_percentage": 3.0,
             "trailing_take_profit": False,
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
-        # Current value = 0.1 * 103.5 = 10.35, profit = 0.35/10 = 3.5%
         signal = {"take_profit_signal": False}
 
-        should, reason = await strategy.should_sell(signal, position, current_price=103.5)
+        # 3.5% gross is above the 3% target but does NOT clear it net of fees
+        # (floor ~4.24% at the 0.6% fallback rate) → hold.
+        should, _ = await strategy.should_sell(signal, position, current_price=103.5)
+        assert should is False
 
+        # 5% gross clears the fee-adjusted floor → sell.
+        should, reason = await strategy.should_sell(signal, position, current_price=105.0)
         assert should is True
         assert "Take profit" in reason
 
@@ -835,8 +844,8 @@ class TestShouldSell:
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
         signal = {"take_profit_signal": True}
 
-        # profit = 4% >= min 3% => conditions sell
-        should, reason = await strategy.should_sell(signal, position, current_price=104.0)
+        # 5% gross clears the 3% target net of fees (floor ~4.24%) => conditions sell
+        should, reason = await strategy.should_sell(signal, position, current_price=105.0)
         assert should is True
         assert "conditions met" in reason.lower()
 
@@ -867,8 +876,8 @@ class TestShouldSell:
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
         signal = {"take_profit_signal": True}
 
-        # profit = 2% >= min 1% => sell
-        should, reason = await strategy.should_sell(signal, position, current_price=102.0)
+        # 3% gross clears the 1% target net of fees (floor ~2.22%) => sell
+        should, reason = await strategy.should_sell(signal, position, current_price=103.0)
         assert should is True
 
     @pytest.mark.asyncio
@@ -933,8 +942,12 @@ class TestTakeProfitModes:
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
         signal = {"take_profit_signal": False}
 
-        # profit = 3.5% >= 3.0%
-        should, reason = await strategy.should_sell(signal, position, current_price=103.5)
+        # 3.5% gross sits above the 3% target but below it net of fees (floor ~4.24%) → hold
+        should, _ = await strategy.should_sell(signal, position, current_price=103.5)
+        assert should is False
+
+        # 5% gross clears the fee-adjusted floor → sell
+        should, reason = await strategy.should_sell(signal, position, current_price=105.0)
         assert should is True
         assert "Take profit target" in reason
 

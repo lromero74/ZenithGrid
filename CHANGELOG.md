@@ -5,7 +5,7 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v3.7.0] - 2026-06-19
 
 ### Added
 - TradingView webhook integration: bots can now receive alert webhooks from TradingView to trigger buy/sell actions. Each bot gets a unique webhook token (generated on creation with `webhook_enabled=True` or via the `POST /api/bots/{bot_id}/webhook-token` endpoint). Webhooks are rate-limited to 10 requests/minute per token and rejected for stopped bots.
@@ -14,7 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backtesting engine: replay historical candle data through any strategy and get a performance report (total return, win rate, max drawdown, Sharpe ratio, profit factor, equity curve, trade list). Available via `POST /api/backtesting/run`. Uses a SimulatedBroker that handles buys, DCA, sells, and fee deduction.
 - Automation rules: user-configurable if-then rules with trigger types (price threshold, holding threshold, profitability threshold, period check) and action types (cancel open orders, sell all positions, stop all bots, stop specific bots, start bot, send Telegram notification). Rules are account-scoped. CRUD via `/api/automation/rules`, manual trigger test via `/api/automation/rules/{id}/test`.
 - Crypto basket / index trading strategy: a new `basket_trading` strategy that maintains a weighted basket of cryptocurrencies and auto-rebalances when allocations drift beyond a configurable threshold. Supports JSON string or list composition, weight normalization, drift computation, and generates buy/sell rebalance signals.
-- Strategy optimizer / parameter sweep: sweep parameter permutations through the backtesting engine and rank results by fitness metrics (total return, Sharpe ratio, profit factor, win rate, max drawdown inverse). Generates all combinations from parameter ranges, runs a backtest for each, and returns a ranked report with the best configurations.
+- Strategy optimizer / parameter sweep: sweep parameter permutations through the backtesting engine and rank results by fitness metrics (total return, Sharpe ratio, profit factor, win rate, max drawdown inverse). Generates all combinations from parameter ranges, runs a backtest for each, and returns a ranked report with the best configurations. Exposed via `POST /api/backtesting/optimize`.
+- Market making strategy: a new `market_making` strategy that provides liquidity by placing symmetric buy/sell limit orders around a reference (order-book mid) price, profiting from the spread. Supports configurable spread (bps), order size, max inventory, recenter threshold, and inventory-skew that biases quotes to mean-revert holdings. Account-scoped; created stopped.
+
+## [v3.6.0] - 2026-06-19
+
+### Changed
+- Take-profit targets are now honored **net of trading fees**. A bot no longer sells the instant gross profit reaches your target if round-trip fees would drop the net below it — every take-profit path (fixed, trailing activation, condition/minimum, the limit-order and order-book profit guards, and the market-order fallback) now requires your configured target to clear *after* fees, calibrated from the fee rate each position was actually charged.
+
+## [v3.5.0] - 2026-06-19
+
+### Added
+- Closed deals now show whether the exit was manual or automatic, the triggering reason, exchange order ID, process role, and host that executed it.
+- Automatic exits from an unexpected production process display a persistent warning, making stale-host activity immediately visible.
+
+### Changed
+- Bidirectional short trades now record actual entry and cover fees and report fee-net realized P&L; the account-scoped fee backfill supports both long and short spot history.
 
 ## [v3.4.12] - 2026-06-19
 

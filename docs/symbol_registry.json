@@ -2738,6 +2738,12 @@
       "get_exchange_client_for_user"
     ]
   },
+  "backend/app/services/exit_provenance.py": {
+    "classes": {},
+    "functions": [
+      "record_exit_provenance"
+    ]
+  },
   "backend/app/services/expense_service.py": {
     "classes": {},
     "functions": [
@@ -2996,7 +3002,10 @@
     "classes": {},
     "functions": [
       "calculate_profit",
-      "calculate_realized_spot_profit"
+      "calculate_realized_short_profit",
+      "calculate_realized_spot_profit",
+      "fee_adjusted_tp_floor",
+      "position_exit_fee_rate"
     ]
   },
   "backend/app/services/portfolio_calculations.py": {

@@ -659,7 +659,9 @@ class TestExecuteBuyCloseShort:
         # Order details fetched by trading_client
         tc.get_order = AsyncMock(return_value={
             "filled_size": 0.5,
+            "filled_value": 1400.0,
             "average_filled_price": 2800.0,
+            "total_fees": 7.0,
         })
         bot = _make_bot()
         position = _make_position(
@@ -667,6 +669,7 @@ class TestExecuteBuyCloseShort:
             short_total_sold_base=0.5,
             short_total_sold_quote=1500.0,  # sold 0.5 BTC at $3000 avg
             short_average_sell_price=3000.0,
+            entry_fees_quote=5.0,
         )
 
         trade, profit_quote, profit_pct = await execute_buy_close_short(
@@ -682,9 +685,11 @@ class TestExecuteBuyCloseShort:
         assert trade is not None
         assert trade.side == "buy"
         assert trade.trade_type == "close_short"
-        # Profit: sold for 1500, bought back for 0.5 * 2800 = 1400, profit = 100
-        assert profit_quote == pytest.approx(100.0)
-        assert profit_pct == pytest.approx(100.0 / 1500.0 * 100)
+        # Net profit: (1500 - 5 entry fee) - (1400 + 7 exit fee) = 88
+        assert trade.fee_quote == pytest.approx(7.0)
+        assert position.exit_fees_quote == pytest.approx(7.0)
+        assert profit_quote == pytest.approx(88.0)
+        assert profit_pct == pytest.approx(88.0 / 1495.0 * 100)
         assert position.status == "closed"
         assert position.closed_at is not None
 

@@ -416,6 +416,22 @@ export const PositionCard = memo(function PositionCard({
           </div>
         </div>
 
+        {position.status === 'closed' && position.exit_source && (
+          <div className="mt-3 mx-4 rounded border border-slate-700 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-300">
+            <span className="font-semibold text-slate-200">Exit:</span>{' '}
+            {position.exit_source === 'manual' ? 'Manual' : 'Automatic'}
+            {position.exit_trigger_reason ? ` — ${position.exit_trigger_reason}` : ''}
+            {(position.exit_process_role || position.exit_hostname) && (
+              <span className="text-slate-500">
+                {' '}({position.exit_process_role ?? 'unknown process'} on {position.exit_hostname ?? 'unknown host'})
+              </span>
+            )}
+            {position.exit_order_id && (
+              <div className="mt-1 break-all text-slate-500">Exchange order: {position.exit_order_id}</div>
+            )}
+          </div>
+        )}
+
         {/* Budget Usage Bar */}
         <div className="mt-3 px-4">
           <div className="flex items-center justify-between text-xs mb-1">

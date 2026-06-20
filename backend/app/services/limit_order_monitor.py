@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exchange_clients.base import ExchangeClient
 from app.models import PendingOrder, Position, Trade
 from app.services.pnl_service import calculate_realized_spot_profit
+from app.services.exit_provenance import record_exit_provenance
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
@@ -600,6 +601,11 @@ class LimitOrderMonitor:
                 position.status = "closed"
                 position.closed_at = utcnow()
                 position.sell_price = avg_fill_price
+                record_exit_provenance(
+                    position,
+                    position.exit_reason or "Limit take profit order filled",
+                    pending_order.order_id,
+                )
 
                 # Use accumulated total_quote_received (includes partial fills)
                 # If no partial fills occurred, this will be set to filled_value
@@ -666,6 +672,12 @@ class LimitOrderMonitor:
                     profit_percentage=position.profit_percentage,
                     user_id=position.user_id,
                     is_paper_trading=is_paper,
+                    exit_source=position.exit_source,
+                    exit_trigger_reason=position.exit_trigger_reason,
+                    exit_process_role=position.exit_process_role,
+                    exit_hostname=position.exit_hostname,
+                    exit_order_id=position.exit_order_id,
+                    unexpected_exit=getattr(position, "exit_was_unexpected", False),
                 ))
 
                 # Publish domain event (best-effort)

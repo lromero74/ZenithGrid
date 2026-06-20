@@ -515,6 +515,12 @@ class TestExecuteSellShort:
         """Happy path: first short sell opens a short position."""
         db = _make_db()
         exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0.5",
+            "filled_value": "25000.0",
+            "average_filled_price": "50000.0",
+            "total_fees": "12.5",
+        })
         tc = _make_trading_client()
         bot = _make_bot()
         position = _make_position(
@@ -548,6 +554,8 @@ class TestExecuteSellShort:
         # First short: entry price set
         assert position.short_entry_price is not None
         assert position.short_total_sold_base is not None
+        assert trade.fee_quote == pytest.approx(12.5)
+        assert position.entry_fees_quote == pytest.approx(12.5)
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
