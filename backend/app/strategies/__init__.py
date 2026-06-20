@@ -167,6 +167,8 @@ from app.strategies import (  # noqa: E402
     spatial_arbitrage,
     triangular_arbitrage,
     statistical_arbitrage,
+    # Liquidity strategies
+    market_making,  # Market making — simultaneous bid/ask around mid-price
 )
 
 __all__ = [
@@ -181,4 +183,6 @@ __all__ = [
     "spatial_arbitrage",
     "triangular_arbitrage",
     "statistical_arbitrage",
+    # Liquidity strategies
+    "market_making",
 ]

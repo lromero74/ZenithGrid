@@ -1870,6 +1870,8 @@
   "backend/app/routers/backtesting_router.py": {
     "classes": {},
     "functions": [
+      "_prepare_backtest_inputs",
+      "optimize_strategy",
       "run_backtest"
     ]
   },
@@ -3660,6 +3662,24 @@
       "flatten_conditions",
       "needs_aggregate_indicators"
     ]
+  },
+  "backend/app/strategies/market_making.py": {
+    "classes": {
+      "MarketMakingStrategy": [
+        "__init__",
+        "analyze_signal",
+        "compute_inventory_skew",
+        "compute_quote_prices",
+        "compute_reference_price",
+        "get_definition",
+        "needs_requote",
+        "record_quote",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
   },
   "backend/app/strategies/safety_order_calculator.py": {
     "classes": {},
