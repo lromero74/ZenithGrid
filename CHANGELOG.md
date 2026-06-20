@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backtesting engine: replay historical candle data through any strategy and get a performance report (total return, win rate, max drawdown, Sharpe ratio, profit factor, equity curve, trade list). Available via `POST /api/backtesting/run`. Uses a SimulatedBroker that handles buys, DCA, sells, and fee deduction.
 - Automation rules: user-configurable if-then rules with trigger types (price threshold, holding threshold, profitability threshold, period check) and action types (cancel open orders, sell all positions, stop all bots, stop specific bots, start bot, send Telegram notification). Rules are account-scoped. CRUD via `/api/automation/rules`, manual trigger test via `/api/automation/rules/{id}/test`.
 - Crypto basket / index trading strategy: a new `basket_trading` strategy that maintains a weighted basket of cryptocurrencies and auto-rebalances when allocations drift beyond a configurable threshold. Supports JSON string or list composition, weight normalization, drift computation, and generates buy/sell rebalance signals.
+- Strategy optimizer / parameter sweep: sweep parameter permutations through the backtesting engine and rank results by fitness metrics (total return, Sharpe ratio, profit factor, win rate, max drawdown inverse). Generates all combinations from parameter ranges, runs a backtest for each, and returns a ranked report with the best configurations.
 
 ## [v3.4.12] - 2026-06-19
 

@@ -217,6 +217,21 @@
       "run_backtest"
     ]
   },
+  "backend/app/backtesting/optimizer.py": {
+    "classes": {
+      "OptimizationReport": [
+        "to_dict"
+      ],
+      "OptimizationResult": [
+        "to_dict"
+      ]
+    },
+    "functions": [
+      "_compute_score",
+      "_generate_permutations",
+      "run_optimization"
+    ]
+  },
   "backend/app/bot_routers/bot_ai_logs_router.py": {
     "classes": {},
     "functions": [
