@@ -3539,6 +3539,23 @@
     },
     "functions": []
   },
+  "backend/app/strategies/basket_trading.py": {
+    "classes": {
+      "BasketTradingStrategy": [
+        "_parse_composition",
+        "analyze_signal",
+        "compute_current_weights",
+        "compute_drift",
+        "get_definition",
+        "get_target_weights",
+        "needs_rebalance",
+        "should_buy",
+        "should_sell",
+        "validate_config"
+      ]
+    },
+    "functions": []
+  },
   "backend/app/strategies/bull_flag_scanner.py": {
     "classes": {},
     "functions": [
