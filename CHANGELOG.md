@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.9.1] - 2026-06-19
+
+### Fixed
+- News fetching no longer floods the server logs with error traces when a linked article page returns unusually large HTTP headers. Such pages are now read with a larger header allowance and, when one still can't be parsed, it's skipped quietly (the article simply appears without its preview image/description, as before).
+
 ## [v3.9.0] - 2026-06-19
 
 ### Added
