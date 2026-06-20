@@ -190,8 +190,11 @@ async def fetch_og_meta(session: aiohttp.ClientSession, url: str) -> Dict[str, O
                 result["description"] = desc[:200] if len(desc) > 200 else desc
 
             return result
-    except Exception:
-        logger.warning("Failed to fetch OG meta for %s, returning partial result", url, exc_info=True)
+    except Exception as e:
+        # Third-party article pages routinely fail to parse (oversized headers,
+        # transient 4xx/5xx). These are expected and already handled by returning
+        # a partial result — log concisely, not a full traceback per article.
+        logger.warning("Failed to fetch OG meta for %s: %s", url, e)
         return result
 
 
@@ -694,7 +697,9 @@ async def fetch_all_news(session_maker=None) -> None:
     source_key_to_id = await _get_source_key_to_id_map("news", session_maker=sm)
 
     connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector, max_field_size=16384) as session:
+    async with aiohttp.ClientSession(
+        connector=connector, max_field_size=65536, max_line_size=65536
+    ) as session:
         tasks = []
         for source_id, config in sources_to_use.items():
             if config["type"] == "reddit":
