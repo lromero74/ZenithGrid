@@ -15,6 +15,8 @@ Gracefully skips when book data is unavailable (paper trading, API errors).
 import logging
 from typing import Any, Dict, Optional, Tuple
 
+from app.services.pnl_service import fee_adjusted_tp_floor
+
 logger = logging.getLogger(__name__)
 
 
@@ -188,13 +190,14 @@ async def check_sell_slippage(
     if take_profit_mode in ("minimum", "trailing"):
         # Minimum/Trailing: TP% is the profit floor — check VWAP profit directly
         tp_pct = config.get("take_profit_percentage") or 3.0
+        tp_floor = fee_adjusted_tp_floor(position, tp_pct)
         avg_price = position.average_buy_price
         if avg_price and avg_price > 0:
             vwap_profit_pct = ((vwap - avg_price) / avg_price) * 100
-            if vwap_profit_pct < tp_pct:
+            if vwap_profit_pct < tp_floor:
                 reason = (
-                    f"VWAP profit {vwap_profit_pct:.2f}% < TP floor {tp_pct}%"
-                    f" (VWAP {_fmt_price(vwap)} vs avg {_fmt_price(avg_price)})"
+                    f"VWAP profit {vwap_profit_pct:.2f}% < fee-adjusted TP floor {tp_floor:.2f}%"
+                    f" (for {tp_pct}% net; VWAP {_fmt_price(vwap)} vs avg {_fmt_price(avg_price)})"
                 )
                 logger.warning(f"Slippage guard BLOCKED sell: {reason}")
                 return False, reason

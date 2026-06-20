@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.6.0] - 2026-06-19
+
+### Changed
+- Take-profit targets are now honored **net of trading fees**. A bot no longer sells the instant gross profit reaches your target if round-trip fees would drop the net below it — every take-profit path (fixed, trailing activation, condition/minimum, the limit-order and order-book profit guards, and the market-order fallback) now requires your configured target to clear *after* fees, calibrated from the fee rate each position was actually charged.
+
 ## [v3.5.0] - 2026-06-19
 
 ### Added
