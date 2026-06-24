@@ -364,6 +364,23 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                 ${balances ? balances.available_usdt.toFixed(2) : '...'}
               </span>
             </div>
+            {/* Untracked — wallet coins not backed by any open position (and not a
+                BTC/ETH/stablecoin row). Shown so Account Value reconciles with the
+                table; only rendered when there's a non-trivial amount. */}
+            {balances && (balances.untracked_usd ?? 0) >= 0.01 && (
+              <div
+                className="flex items-baseline gap-1 sm:gap-3 border-t border-slate-700/50 pt-1 mt-1"
+                title="USD value of coins in your wallet that aren't part of any open deal (e.g. leftovers or pre-existing holdings). Sell or import them to reconcile."
+              >
+                <span className="text-slate-400 font-medium text-xs w-10 sm:w-14 flex-shrink-0">Untracked</span>
+                <span className="flex-1 min-w-0 text-right text-slate-600 font-mono text-[10px] sm:text-xs">—</span>
+                <span className="flex-1 min-w-0 text-right text-slate-600 font-mono text-[10px] sm:text-xs">—</span>
+                <span className="hidden sm:flex sm:flex-1 sm:min-w-0 text-slate-600 text-right font-mono text-xs justify-end">—</span>
+                <span className="text-orange-400 flex-1 min-w-0 text-right font-mono text-[10px] sm:text-xs font-semibold">
+                  ${(balances.untracked_usd ?? 0).toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

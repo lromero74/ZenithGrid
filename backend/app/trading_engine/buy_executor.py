@@ -378,9 +378,9 @@ async def _submit_buy_market_order(
 
         if actual_base_amount == 0 or actual_quote_amount == 0:
             logger.error(
-                f"WARNING: Order {order_id} has zero fill amounts after all retries! "
-                f"Position #{position.id} will show 0% filled. "
-                f"Manual fix required using scripts/fix_position.py"
+                f"Order {order_id} has zero fill amounts after all retries — "
+                f"the buy did not execute. execute_buy() will refuse to book it "
+                f"and the position will be failed (new) or the DCA skipped."
             )
 
         return order_id, actual_base_amount, actual_quote_amount, actual_price, fee_quote
@@ -411,6 +411,59 @@ async def _submit_buy_market_order(
 
     finally:
         await shutdown_manager.decrement_in_flight()
+
+
+async def _handle_unconfirmed_buy(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    position: Position,
+    order_id: str,
+    product_id: str,
+    trade_type: str,
+) -> None:
+    """Handle a buy whose fill the exchange never confirmed.
+
+    Records the drift (audit + last_error), best-effort cancels the stray order,
+    and commits. Does NOT create a Trade or advance the position — the caller
+    raises afterwards so a new position is marked failed / a DCA add is skipped.
+    """
+    logger.error(
+        f"  Buy for {product_id} (order {order_id}, {trade_type}) reported zero "
+        f"fill. NOT booking a $0 trade — refusing to leave a phantom/empty "
+        f"position #{position.id}."
+    )
+
+    try:
+        if hasattr(exchange, "cancel_order"):
+            await exchange.cancel_order(order_id)
+    except Exception:
+        logger.debug(f"cancel_order({order_id}) failed (best-effort)", exc_info=True)
+
+    try:
+        from app.services.realmoney_audit import record_event
+        record_event(
+            "buy_unconfirmed",
+            account_id=getattr(position, "account_id", None),
+            position_id=getattr(position, "id", None),
+            product_id=product_id,
+            order_id=order_id,
+            trade_type=trade_type,
+        )
+    except Exception:
+        logger.debug("buy_unconfirmed audit failed", exc_info=True)
+
+    if not position.last_error_message:
+        position.last_error_message = (
+            f"Buy not confirmed: exchange reported zero fill ({trade_type})."
+        )
+        position.last_error_timestamp = utcnow()
+    try:
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not persist unconfirmed-buy state on position %s",
+            position.id, exc_info=True,
+        )
 
 
 async def execute_buy(
@@ -524,6 +577,22 @@ async def execute_buy(
         trade_type=trade_type,
         commit_on_error=commit_on_error,
     )
+
+    # A buy may only be booked from a confirmed fill. If the exchange reported
+    # nothing filled, do NOT write a $0 trade or advance the position — that
+    # leaves an empty "open" base-order position (0 coins) or a no-op DCA on the
+    # books. Cancel the stray order, flag it, and raise so the caller's existing
+    # handling runs: a new position is marked failed; a DCA add is logged and the
+    # bot cycle continues. (Mirror of the sell/short unconfirmed-fill guard.)
+    if actual_base_amount <= 0 or actual_quote_amount <= 0:
+        await _handle_unconfirmed_buy(
+            db=db, exchange=exchange, position=position,
+            order_id=order_id, product_id=product_id, trade_type=trade_type,
+        )
+        raise ValueError(
+            f"Buy for {product_id} (order {order_id}) did not confirm a fill "
+            f"— not booking."
+        )
 
     # Record trade with ACTUAL filled amounts from exchange
     trade = await _create_buy_trade_record(

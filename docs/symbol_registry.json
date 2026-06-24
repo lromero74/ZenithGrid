@@ -3134,7 +3134,8 @@
       "_build_portfolio_holdings",
       "_compute_balance_breakdown",
       "_compute_position_pnl",
-      "aggregate_pnl_rows"
+      "aggregate_pnl_rows",
+      "compute_untracked_usd"
     ]
   },
   "backend/app/services/portfolio_conversion_service.py": {
@@ -3927,6 +3928,7 @@
     "functions": [
       "_create_buy_trade_record",
       "_create_close_short_trade_record",
+      "_handle_unconfirmed_buy",
       "_post_buy_operations",
       "_post_close_short_operations",
       "_reconcile_buy_fill",

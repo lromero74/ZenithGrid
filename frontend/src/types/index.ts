@@ -240,6 +240,10 @@ export interface Balances {
   available_eth: number;
   available_usdc: number;
   available_usdt: number;
+
+  // USD value of wallet coins not backed by an open position (and not a BTC/ETH/
+  // stablecoin row). Surfaced so the Balances panel reconciles with Account Value.
+  untracked_usd?: number;
 }
 
 export interface AggregateValue {
