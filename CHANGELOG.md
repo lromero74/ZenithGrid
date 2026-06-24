@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.9.2] - 2026-06-23
+
+### Fixed
+- Positions can no longer be marked "closed" for a sell that didn't actually execute. Previously, if a market close order didn't fill (or only partially filled) and the exchange returned no fill data, the bot would assume the full amount sold, book phantom proceeds, and close the position — leaving the coins stranded in the wallet, untracked by any open position. Now a close is only recorded from a confirmed, (substantially) complete exchange fill; an unconfirmed or partial fill leaves the position open to retry on the next cycle, defensively cancels the stray order, and flags the position for audit. No more "sold but didn't sell."
+- The same fix was applied to the short-selling path (bidirectional bots): a short position is no longer opened or grown from a sell the exchange didn't confirm. An unconfirmed short fill is now rejected instead of inflating the short's recorded size with coins that never left the wallet.
+
 ## [v3.9.1] - 2026-06-19
 
 ### Fixed

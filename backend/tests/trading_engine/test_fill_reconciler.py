@@ -243,6 +243,43 @@ class TestReconcileOrderFill:
         assert result.filled_value == pytest.approx(500.0)  # 0.01 * 50000
         assert result.average_price == pytest.approx(50000.0)
         assert result.total_fees == 0.0
+        # A fabricated estimate must NOT be flagged as a confirmed fill — this is
+        # what lets the sell/close path refuse to book a phantom sale.
+        assert result.reconciled is False
+
+    @pytest.mark.asyncio
+    async def test_reconciled_true_only_for_real_fill(self):
+        """A real exchange fill is flagged reconciled=True."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "0.01",
+            "filled_value": "500.00",
+            "average_filled_price": "50000.00",
+            "total_fees": "2.50",
+        }
+
+        result = await reconcile_order_fill(
+            exchange=exchange, order_id="order-real", product_id="BTC-USD", max_retries=1,
+        )
+
+        assert result.reconciled is True
+
+    @pytest.mark.asyncio
+    async def test_reconciled_false_when_zeros_no_fallback(self):
+        """Zero fill with no fallback returns reconciled=False (caller must handle)."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        }
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            result = await reconcile_order_fill(
+                exchange=exchange, order_id="order-zero", product_id="BTC-USD", max_retries=2,
+            )
+
+        assert result.filled_size == 0.0
+        assert result.reconciled is False
 
     @pytest.mark.asyncio
     async def test_fallback_only_base_without_price_returns_zeros(self):

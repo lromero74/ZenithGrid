@@ -237,24 +237,28 @@ async def _reconcile_sell_fill(
     exchange: ExchangeClient,
     order_id: str,
     product_id: str,
-    fallback_base: float,
     fallback_price: float,
 ) -> tuple:
     """
     Fetch actual sell fill data from exchange with retry logic.
 
-    Uses the shared fill reconciler with fallback estimates for cases where
-    fill data is unavailable after all retries.
+    CRITICAL: unlike the buy path, the sell path does NOT pass a ``fallback_base``
+    to the reconciler. A close must be booked only from a confirmed fill — if the
+    exchange never reports a fill, fabricating one would mark the position closed
+    while the coins are still in the wallet (the stranded-balance bug). When the
+    fill is unconfirmed the reconciler returns zeros with ``reconciled=False`` and
+    the caller leaves the position open to retry. ``fallback_price`` is used only
+    to label the (zero-amount) result's price, never to invent a quantity.
 
     Args:
         exchange: Exchange client instance
         order_id: The exchange order ID to check
         product_id: Trading pair
-        fallback_base: Estimated base amount if fill data unavailable
-        fallback_price: Estimated price if fill data unavailable
+        fallback_price: Price used only for the price field when no fill data
 
     Returns:
-        Tuple of (actual_base_sold, quote_received, actual_price)
+        Tuple of (actual_base_sold, quote_received, actual_price, total_fees,
+        reconciled) where ``reconciled`` is True only for a real exchange fill.
     """
     logger.info(f"Fetching fill data for sell order {order_id}")
 
@@ -265,12 +269,18 @@ async def _reconcile_sell_fill(
         max_retries=10,
         adjust_btc_fees=False,
         round_base_to_precision=False,
-        fallback_base=fallback_base,
-        fallback_price=fallback_price,
+        fallback_base=None,
+        fallback_price=None,
     )
 
     actual_price = fill_data.average_price if fill_data.average_price > 0 else fallback_price
-    return fill_data.filled_size, fill_data.filled_value, actual_price, fill_data.total_fees
+    return (
+        fill_data.filled_size,
+        fill_data.filled_value,
+        actual_price,
+        fill_data.total_fees,
+        fill_data.reconciled,
+    )
 
 
 async def _create_sell_trade_record(
@@ -371,26 +381,28 @@ async def _create_sell_trade_record(
 async def _reconcile_short_sell_fill(
     exchange: ExchangeClient,
     order_id: str,
-    fallback_base: float,
     fallback_price: float,
 ) -> tuple:
     """
     Fetch actual short sell fill data from exchange with retry logic.
 
+    CRITICAL: like the long-close path, this NEVER fabricates a fill. If the
+    exchange doesn't confirm a fill after all retries, it returns zero amounts
+    with ``reconciled=False`` — booking the requested size as "sold" would inflate
+    the short position's tracking (sold_base / sold_quote / average price) with
+    base that never left the wallet. ``fallback_price`` only labels the price of
+    the (zero-amount) unconfirmed result.
+
     Args:
         exchange: Exchange client instance
         order_id: The exchange order ID to check
-        fallback_base: Estimated base amount if fill data unavailable
-        fallback_price: Estimated price if fill data unavailable
+        fallback_price: Price used only for the price field when no fill data
 
     Returns:
-        Tuple of (actual_base_sold, quote_received, actual_price)
+        Tuple of (actual_base_sold, quote_received, actual_price, fee_quote,
+        reconciled) — reconciled is True only for a real exchange fill.
     """
     logger.info(f"Fetching fill data for short sell order {order_id}")
-    actual_base_sold = fallback_base
-    quote_received = fallback_base * fallback_price
-    actual_price = fallback_price
-    fee_quote = 0.0
 
     max_retries = 10
     for attempt in range(max_retries):
@@ -406,14 +418,12 @@ async def _reconcile_short_sell_fill(
             fee_quote = float(order_details.get("total_fees", "0") or 0)
 
             if filled_size > 0 and filled_value > 0:
-                actual_base_sold = filled_size
-                quote_received = filled_value
                 actual_price = avg_price if avg_price > 0 else fallback_price
                 logger.info(
-                    f"Short sell filled: {actual_base_sold:.8f} @ "
-                    f"{actual_price:.8f} = {quote_received:.2f}"
+                    f"Short sell filled: {filled_size:.8f} @ "
+                    f"{actual_price:.8f} = {filled_value:.2f}"
                 )
-                return actual_base_sold, quote_received, actual_price, fee_quote
+                return filled_size, filled_value, actual_price, fee_quote, True
 
             logger.warning(
                 f"Attempt {attempt + 1}/{max_retries}: "
@@ -426,12 +436,12 @@ async def _reconcile_short_sell_fill(
             )
 
         if attempt == max_retries - 1:
-            logger.warning(
-                f"Could not fetch fill data for {order_id} after "
-                f"{max_retries} attempts. Using estimates."
+            logger.error(
+                f"Short sell order {order_id} did not confirm a fill after "
+                f"{max_retries} attempts. Refusing to fabricate — not booking."
             )
 
-    return actual_base_sold, quote_received, actual_price, fee_quote
+    return 0.0, 0.0, fallback_price, 0.0, False
 
 
 async def _create_short_sell_trade_record(
@@ -592,12 +602,13 @@ async def _submit_short_sell_market_order(
     base_amount_rounded: float,
     current_price: float,
     commit_on_error: bool,
-) -> Tuple[str, float, float, float]:
+) -> Tuple[str, float, float, float, float, bool]:
     """Submit a market short-sell order and reconcile the fill.
 
     Mirrors _submit_sell_market_order but uses the short-sell reconciler
     and the short-specific error message. Re-raises on failure after
-    optionally recording the error on the position.
+    optionally recording the error on the position. The trailing ``reconciled``
+    flag is True only when the returned amounts came from a real exchange fill.
     """
     await shutdown_manager.increment_in_flight()
     try:
@@ -629,13 +640,12 @@ async def _submit_short_sell_market_order(
             logger.error(f"Full exchange response: {order_response}")
             raise ValueError("No order_id in successful exchange response")
 
-        actual_base_sold, quote_received, actual_price, fee_quote = await _reconcile_short_sell_fill(
+        actual_base_sold, quote_received, actual_price, fee_quote, reconciled = await _reconcile_short_sell_fill(
             exchange=exchange,
             order_id=order_id,
-            fallback_base=base_amount_rounded,
             fallback_price=current_price,
         )
-        return order_id, actual_base_sold, quote_received, actual_price, fee_quote
+        return order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled
 
     except Exception as e:
         logger.error(f"Error executing short sell order: {e}")
@@ -741,16 +751,38 @@ async def execute_sell_short(
             await db.commit()
         raise ValueError(error)
 
-    order_id, actual_base_sold, quote_received, actual_price, fee_quote = await _submit_short_sell_market_order(
-        db=db,
-        exchange=exchange,
-        trading_client=trading_client,
-        position=position,
-        product_id=product_id,
-        base_amount_rounded=base_amount_rounded,
-        current_price=current_price,
-        commit_on_error=commit_on_error,
+    order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled = (
+        await _submit_short_sell_market_order(
+            db=db,
+            exchange=exchange,
+            trading_client=trading_client,
+            position=position,
+            product_id=product_id,
+            base_amount_rounded=base_amount_rounded,
+            current_price=current_price,
+            commit_on_error=commit_on_error,
+        )
     )
+
+    # Only update the short position from a confirmed, (substantially) complete
+    # fill. An unconfirmed/partial short sell must NOT inflate the position's
+    # short tracking with base that never left the wallet — leave the position
+    # untouched and flag it (mirrors the long-close guard).
+    if not sell_fill_is_complete(reconciled, actual_base_sold, quote_received, base_amount_rounded):
+        await _handle_unconfirmed_short(
+            db=db, exchange=exchange, bot=bot, product_id=product_id,
+            position=position, order_id=order_id, trade_type=trade_type,
+            requested_base=base_amount_rounded, actual_base_sold=actual_base_sold,
+            quote_received=quote_received, reconciled=reconciled,
+        )
+        # Raise (don't silently return) so the caller's existing handling runs:
+        # a NEW short position gets marked "failed" / cleaned up, while a DCA add
+        # to an existing short is logged and the bot cycle continues. Returning a
+        # Trade or None here would leave a phantom/empty short on the books.
+        raise ValueError(
+            f"Short sell for {product_id} (order {order_id}) did not confirm a "
+            f"complete fill — not booking."
+        )
 
     # Record trade and update position
     trade = await _create_short_sell_trade_record(
@@ -1156,12 +1188,14 @@ async def _submit_sell_market_order(
     position: Position,
     base_amount: float,
     current_price: float,
-) -> Tuple[str, float, float, float]:
+) -> Tuple[str, float, float, float, float, bool]:
     """Submit a market sell order and reconcile the fill.
 
     Wraps exchange-submission bookkeeping (shutdown-manager counters,
-    PropGuard gate, error-path position + order-history logging) and
-    returns (order_id, actual_base_sold, quote_received, actual_price).
+    PropGuard gate, error-path position + order-history logging) and returns
+    (order_id, actual_base_sold, quote_received, actual_price, fee_quote,
+    reconciled). ``reconciled`` is True only when the returned amounts came from
+    a real exchange fill — the caller must not close the position on a False.
 
     Re-raises the original exception on failure after logging.
     """
@@ -1196,14 +1230,13 @@ async def _submit_sell_market_order(
                 f"Response keys: {list(order_response.keys())}"
             )
 
-        actual_base_sold, quote_received, actual_price, fee_quote = await _reconcile_sell_fill(
+        actual_base_sold, quote_received, actual_price, fee_quote, reconciled = await _reconcile_sell_fill(
             exchange=exchange,
             order_id=order_id,
             product_id=product_id,
-            fallback_base=base_amount,
             fallback_price=current_price,
         )
-        return order_id, actual_base_sold, quote_received, actual_price, fee_quote
+        return order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled
 
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
@@ -1236,6 +1269,196 @@ async def _submit_sell_market_order(
 
     finally:
         await shutdown_manager.decrement_in_flight()
+
+
+# A close is only booked when the exchange confirms a substantially complete
+# fill. The slack (1%) absorbs precision/fee rounding on the filled size; below
+# it the order did not (fully) execute, so the position must stay OPEN rather
+# than be marked closed with proceeds that never arrived.
+SELL_COMPLETE_FILL_RATIO = 0.99
+
+
+def sell_fill_is_complete(
+    reconciled: bool,
+    actual_base_sold: float,
+    quote_received: float,
+    requested_base: float,
+) -> bool:
+    """Decide whether a sell fill is safe to book as a position close.
+
+    Returns True ONLY for a confirmed (``reconciled``) fill whose size covers at
+    least ``SELL_COMPLETE_FILL_RATIO`` of the submitted amount and that received
+    quote currency. An unconfirmed, zero, or partial fill returns False so the
+    caller leaves the position open to retry — never fabricating a sale.
+    """
+    if not reconciled or actual_base_sold <= 0 or quote_received <= 0:
+        return False
+    if requested_base <= 0:
+        return False
+    return actual_base_sold >= requested_base * SELL_COMPLETE_FILL_RATIO
+
+
+async def _handle_unconfirmed_close(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    order_id: str,
+    requested_base: float,
+    actual_base_sold: float,
+    quote_received: float,
+    reconciled: bool,
+) -> Tuple[None, float, float]:
+    """Handle a sell whose fill the exchange did not confirm as complete.
+
+    Leaves the position OPEN (never marks it closed), best-effort cancels the
+    order so a late fill can't slip through unaccounted, records the drift for
+    audit, and returns the ``(None, 0.0, 0.0)`` "not closed" sentinel. The next
+    monitor cycle re-attempts the close, clamping to the live wallet balance — so
+    coins are never abandoned and proceeds are never fabricated.
+    """
+    logger.error(
+        f"  Sell for {product_id} (order {order_id}) did NOT confirm a complete "
+        f"fill: requested {requested_base:.8f}, exchange reported "
+        f"{actual_base_sold:.8f} sold (reconciled={reconciled}). Leaving position "
+        f"#{position.id} OPEN to retry — refusing to book a phantom close."
+    )
+
+    # Best-effort cancel: a market order showing no fill after ~30s has almost
+    # certainly failed, but cancel defensively so a stray resting order can't
+    # fill later without the position being open to record it.
+    try:
+        if hasattr(exchange, "cancel_order"):
+            await exchange.cancel_order(order_id)
+    except Exception:
+        logger.debug(f"cancel_order({order_id}) failed (best-effort)", exc_info=True)
+
+    position.last_error_message = (
+        f"Sell not confirmed: exchange reported {actual_base_sold:.8f}/"
+        f"{requested_base:.8f} sold. Position left open to retry."
+    )
+    position.last_error_timestamp = utcnow()
+
+    try:
+        from app.services.realmoney_audit import record_event
+        record_event(
+            "sell_unconfirmed",
+            account_id=getattr(position, "account_id", None),
+            position_id=getattr(position, "id", None),
+            product_id=product_id,
+            order_id=order_id,
+            requested=requested_base,
+            actual_sold=actual_base_sold,
+            quote_received=quote_received,
+            reconciled=reconciled,
+        )
+    except Exception:
+        logger.debug("sell_unconfirmed audit failed", exc_info=True)
+
+    try:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type="sell", quote_amount=quote_received,
+                price=0.0, status="failed", order_id=order_id,
+                base_amount=actual_base_sold,
+                error_message="Sell did not confirm a complete fill",
+            ),
+        )
+    except Exception:
+        logger.debug("order-history log for unconfirmed sell failed", exc_info=True)
+
+    try:
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not persist unconfirmed-sell state on position %s",
+            position.id, exc_info=True,
+        )
+
+    return None, 0.0, 0.0
+
+
+async def _handle_unconfirmed_short(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    order_id: str,
+    trade_type: str,
+    requested_base: float,
+    actual_base_sold: float,
+    quote_received: float,
+    reconciled: bool,
+) -> None:
+    """Handle a short sell whose fill the exchange did not confirm as complete.
+
+    Mirrors ``_handle_unconfirmed_close`` for the short-open/add path: it does NOT
+    create a Trade or mutate the position's short tracking (sold_base/quote/avg),
+    best-effort cancels the order, records the drift for audit, and flags the
+    position. Booking the requested size here would grow the short with base that
+    never left the wallet.
+    """
+    logger.error(
+        f"  Short sell for {product_id} (order {order_id}, {trade_type}) did NOT "
+        f"confirm a complete fill: requested {requested_base:.8f}, exchange "
+        f"reported {actual_base_sold:.8f} (reconciled={reconciled}). NOT updating "
+        f"short position #{position.id} — refusing to book a phantom short."
+    )
+
+    try:
+        if hasattr(exchange, "cancel_order"):
+            await exchange.cancel_order(order_id)
+    except Exception:
+        logger.debug(f"cancel_order({order_id}) failed (best-effort)", exc_info=True)
+
+    position.last_error_message = (
+        f"Short sell not confirmed: exchange reported {actual_base_sold:.8f}/"
+        f"{requested_base:.8f} sold ({trade_type}). Short tracking left unchanged."
+    )
+    position.last_error_timestamp = utcnow()
+
+    try:
+        from app.services.realmoney_audit import record_event
+        record_event(
+            "short_sell_unconfirmed",
+            account_id=getattr(position, "account_id", None),
+            position_id=getattr(position, "id", None),
+            product_id=product_id,
+            order_id=order_id,
+            trade_type=trade_type,
+            requested=requested_base,
+            actual_sold=actual_base_sold,
+            quote_received=quote_received,
+            reconciled=reconciled,
+        )
+    except Exception:
+        logger.debug("short_sell_unconfirmed audit failed", exc_info=True)
+
+    try:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type=trade_type, quote_amount=quote_received,
+                price=0.0, status="failed", order_id=order_id,
+                base_amount=actual_base_sold,
+                error_message="Short sell did not confirm a complete fill",
+            ),
+        )
+    except Exception:
+        logger.debug("order-history log for unconfirmed short sell failed", exc_info=True)
+
+    try:
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not persist unconfirmed-short state on position %s",
+            position.id, exc_info=True,
+        )
 
 
 async def execute_sell(
@@ -1384,7 +1607,7 @@ async def execute_sell(
                 db, bot, product_id, position, current_price,
             )
 
-    order_id, actual_base_sold, quote_received, actual_price, fee_quote = await _submit_sell_market_order(
+    order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled = await _submit_sell_market_order(
         db=db,
         exchange=exchange,
         trading_client=trading_client,
@@ -1394,6 +1617,24 @@ async def execute_sell(
         base_amount=base_amount,
         current_price=current_price,
     )
+
+    # A close may ONLY be booked from a confirmed, (substantially) complete fill.
+    # If the exchange did not confirm the sale, the coins are still in the wallet
+    # — marking the position closed here would fabricate proceeds and orphan the
+    # coins (the v3.9.x stranded-balance bug). Leave the position open to retry.
+    if not sell_fill_is_complete(reconciled, actual_base_sold, quote_received, base_amount):
+        return await _handle_unconfirmed_close(
+            db=db,
+            exchange=exchange,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            order_id=order_id,
+            requested_base=base_amount,
+            actual_base_sold=actual_base_sold,
+            quote_received=quote_received,
+            reconciled=reconciled,
+        )
 
     # Create trade record, compute profit, and close position
     trade, profit_quote, profit_percentage = await _create_sell_trade_record(
