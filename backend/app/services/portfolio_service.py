@@ -29,6 +29,7 @@ from app.services.portfolio_calculations import (
     _compute_balance_breakdown,
     _compute_position_pnl,
     aggregate_pnl_rows,
+    compute_untracked_usd,
 )
 
 logger = logging.getLogger(__name__)
@@ -664,6 +665,19 @@ async def get_account_balances(
     total_btc_value = btc_balance + (eth_balance * current_price)
     total_usd_value = (total_btc_value * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
 
+    # USD value of wallet coins not backed by an open position (and not already a
+    # row in the Balances table). Surfacing this lets the panel reconcile —
+    # otherwise Account Value silently exceeds cost-basis "In Pos." + Available.
+    # Reuses the cached portfolio breakdown; never blocks the balances response.
+    untracked_usd = 0.0
+    if not account.is_paper_trading and account.type == "cex":
+        try:
+            from app.services.exchange_service import get_coinbase_for_account
+            portfolio = await get_cex_portfolio(account, db, get_coinbase_for_account)
+            untracked_usd = compute_untracked_usd(portfolio.get("holdings", []))
+        except Exception:
+            logger.debug("untracked_usd computation failed", exc_info=True)
+
     return {
         "btc": btc_balance, "eth": eth_balance, "usd": usd_balance,
         "usdc": usdc_balance, "usdt": usdt_balance,
@@ -677,6 +691,7 @@ async def get_account_balances(
         "current_eth_btc_price": current_price,
         "btc_usd_price": btc_usd_price,
         "total_usd_value": total_usd_value,
+        "untracked_usd": untracked_usd,
     }
 
 

@@ -250,6 +250,37 @@ def _compute_balance_breakdown(params: BalanceBreakdownParams) -> dict:
     }
 
 
+# Currencies that already have their own row in the Balances table (shown as
+# Budget / In Pos. / In Grids / Available). Coins outside this set that sit in the
+# wallet without backing an open position are "untracked".
+_BALANCE_TABLE_ROWS = frozenset({"BTC", "ETH", "USD", "USDC", "USDT"})
+
+
+def compute_untracked_usd(holdings: list) -> float:
+    """USD value of wallet coins not backed by an open position.
+
+    These are holdings (excluding the BTC/ETH/stablecoin rows the Balances table
+    already shows) whose wallet balance exceeds what open positions account for —
+    e.g. leftovers from a closed/partial sell or pre-existing coins. This is the
+    surplus that makes Account Value exceed cost-basis "In Pos." + Available, so
+    surfacing it lets the Balances panel reconcile.
+
+    Each holding is expected to have ``asset``, ``total_balance``, ``in_positions``
+    (base units already in open positions), and ``usd_value`` (market value).
+    """
+    total = 0.0
+    for h in holdings:
+        if h.get("asset") in _BALANCE_TABLE_ROWS:
+            continue
+        balance = h.get("total_balance") or 0.0
+        if balance <= 0:
+            continue
+        in_positions = h.get("in_positions") or 0.0
+        surplus_fraction = max(0.0, (balance - in_positions) / balance)
+        total += (h.get("usd_value") or 0.0) * surplus_fraction
+    return total
+
+
 def aggregate_pnl_rows(rows) -> tuple:
     """
     Bucket pre-aggregated closed-PnL sums into usd/btc/usdc.

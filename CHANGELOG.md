@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.10.0] - 2026-06-23
+
+### Added
+- "Untracked" row in the Balances panel: shows the USD value of coins sitting in your wallet that aren't backed by any open deal (e.g. leftovers from a partial/closed sell, or pre-existing holdings). This makes the panel reconcile with Account Value — previously such holdings were invisible, so In Pos. + Available could silently fall short of the total. The row only appears when there's a non-trivial amount.
+
+### Fixed
+- A buy (base order or DCA) that the exchange never confirmed as filled is no longer booked as a $0 trade. Previously a non-filling buy would record an empty trade and, for a base order, leave a phantom "open" position holding nothing. Now an unconfirmed buy is rejected: the stray order is cancelled and the position is failed (new) or the DCA add skipped — mirroring the sell/short safeguards. No money was ever at risk here (buys never fabricated holdings); this removes the empty-position bookkeeping artifact.
+
 ## [v3.9.2] - 2026-06-23
 
 ### Fixed

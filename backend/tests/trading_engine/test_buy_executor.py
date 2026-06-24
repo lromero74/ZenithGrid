@@ -529,6 +529,63 @@ class TestExecuteBuy:
         tc.buy.assert_awaited_once()
 
 
+class TestExecuteBuyUnconfirmed:
+    """A buy must not be booked from an unconfirmed (zero) fill — no $0 trade,
+    no empty/advanced position. Mirror of the sell/short unconfirmed-fill guard."""
+
+    @pytest.mark.asyncio
+    async def test_zero_fill_buy_raises_and_does_not_book(self):
+        """Order placed but exchange reports zero fill → raise, no trade, position untouched."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        bot = _make_bot()
+        position = _make_position(total_quote_spent=0.0, total_base_acquired=0.0)
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(ValueError, match="did not confirm"):
+                await execute_buy(
+                    db=db, exchange=exchange, trading_client=_make_trading_client(),
+                    bot=bot, product_id="ETH-USD", position=position,
+                    quote_amount=100.0, current_price=3000.0, trade_type="initial",
+                )
+
+        # No $0 trade booked; position totals never advanced.
+        db.add.assert_not_called()
+        assert position.total_base_acquired == 0.0
+        assert position.total_quote_spent == 0.0
+        assert position.last_error_message is not None
+        exchange.cancel_order.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_zero_fill_dca_does_not_advance_existing_position(self):
+        """A DCA add that doesn't fill must not change an existing position's totals."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        position = _make_position(total_quote_spent=1000.0, total_base_acquired=0.5)
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(ValueError, match="did not confirm"):
+                await execute_buy(
+                    db=db, exchange=exchange, trading_client=_make_trading_client(),
+                    bot=_make_bot(), product_id="ETH-USD", position=position,
+                    quote_amount=50.0, current_price=2900.0, trade_type="safety_order_1",
+                )
+
+        # Existing totals unchanged (no phantom DCA add).
+        assert position.total_quote_spent == 1000.0
+        assert position.total_base_acquired == 0.5
+
+
 # ===========================================================================
 # execute_limit_buy
 # ===========================================================================
