@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v3.9.2] - 2026-06-23
 
 ### Fixed
-- Positions can no longer be marked "closed" for a sell that didn't actually execute. Previously, if a market close order didn't fill (or only partially filled) and the exchange returned no fill data, the bot would assume the full amount sold, book phantom proceeds, and close the position — leaving the coins stranded in the wallet, untracked by any open position. Now a close is only recorded from a confirmed, (substantially) complete exchange fill; an unconfirmed or partial fill leaves the position open to retry on the next cycle, defensively cancels the stray order, and flags the position for audit. No more "sold but didn't sell."
+- Positions can no longer be marked "closed" from a sell the exchange didn't confirm. If a market close order returned no fill data after retries (a true non-fill), the close logic could have assumed the full amount sold and booked phantom proceeds — closing the position while the coins stayed in the wallet. Now a close is only recorded from a confirmed, (substantially) complete exchange fill; an unconfirmed or partial fill leaves the position open to retry on the next cycle, defensively cancels the stray order, and flags the position for audit. This closes a latent path that could otherwise strand coins on a non-fill.
 - The same fix was applied to the short-selling path (bidirectional bots): a short position is no longer opened or grown from a sell the exchange didn't confirm. An unconfirmed short fill is now rejected instead of inflating the short's recorded size with coins that never left the wallet.
 
 ## [v3.9.1] - 2026-06-19
