@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.10.1] - 2026-06-24
+
+### Fixed
+- Charts page now renders again. A performance change that lazy-loads the charting library caused the chart to be created while its container was briefly hidden during data load, leaving it 0 pixels wide with no way to recover — so no chart ever appeared (unless you happened to resize the browser window). The chart now tracks its container size directly and draws correctly once data loads.
+
 ## [v3.10.0] - 2026-06-23
 
 ### Added
