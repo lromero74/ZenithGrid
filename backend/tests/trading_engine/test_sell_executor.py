@@ -503,6 +503,126 @@ class TestExecuteSell:
 
 
 # ===========================================================================
+# Unconfirmed-fill guard — a close must NEVER be booked from an unconfirmed
+# fill (regression for the v3.9.x stranded-balance bug, where a market sell the
+# exchange never filled was booked as fully sold and the coins were orphaned).
+# ===========================================================================
+
+
+class TestSellFillIsComplete:
+    """Unit tests for the sell_fill_is_complete guard."""
+
+    def test_confirmed_full_fill_is_complete(self):
+        from app.trading_engine.sell_executor import sell_fill_is_complete
+        assert sell_fill_is_complete(True, 0.5, 1500.0, 0.5) is True
+
+    def test_unconfirmed_fill_is_not_complete(self):
+        from app.trading_engine.sell_executor import sell_fill_is_complete
+        # reconciled False (fabricated estimate) — never bookable
+        assert sell_fill_is_complete(False, 0.5, 1500.0, 0.5) is False
+
+    def test_zero_fill_is_not_complete(self):
+        from app.trading_engine.sell_executor import sell_fill_is_complete
+        assert sell_fill_is_complete(True, 0.0, 0.0, 0.5) is False
+
+    def test_partial_fill_below_ratio_is_not_complete(self):
+        from app.trading_engine.sell_executor import sell_fill_is_complete
+        # Only 20% filled — TROLL/NMR class of partial fill
+        assert sell_fill_is_complete(True, 0.1, 300.0, 0.5) is False
+
+    def test_fill_with_no_quote_received_is_not_complete(self):
+        from app.trading_engine.sell_executor import sell_fill_is_complete
+        assert sell_fill_is_complete(True, 0.5, 0.0, 0.5) is False
+
+
+class TestExecuteSellUnconfirmed:
+    """execute_sell must leave the position OPEN when the fill isn't confirmed."""
+
+    @pytest.mark.asyncio
+    async def test_unfilled_market_sell_does_not_close_position(self):
+        """Order placed but never fills → position stays open, no phantom close."""
+        db = _make_db()
+        exchange = _make_exchange()
+        # Exchange accepts the order but reports zero fill on every poll.
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            total_quote_spent=1000.0, total_base_acquired=0.5,
+            strategy_config_snapshot={"take_profit_order_type": "market"},
+        )
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            trade, profit_quote, profit_pct = await execute_sell(
+                db=db, exchange=exchange, trading_client=tc,
+                bot=bot, product_id="ETH-USD", position=position,
+                current_price=3000.0,
+            )
+
+        # No trade booked, position NOT closed, coins not abandoned.
+        assert trade is None
+        assert profit_quote == 0.0
+        assert position.status == "open"
+        assert position.closed_at is None
+        assert position.total_quote_received is None
+        assert position.last_error_message is not None
+        # Defensive cancel of the unfilled order.
+        exchange.cancel_order.assert_awaited_once_with("sell-order-789")
+
+    @pytest.mark.asyncio
+    async def test_partial_market_sell_does_not_close_position(self):
+        """Exchange fills only a fraction → leave open, do not book a full close."""
+        db = _make_db()
+        exchange = _make_exchange()
+        # Confirmed fill, but only 20% of the 0.5 requested.
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0.1", "filled_value": "300.0",
+            "average_filled_price": "3000.0", "total_fees": "0.0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        position = _make_position(
+            total_quote_spent=1000.0, total_base_acquired=0.5,
+            strategy_config_snapshot={"take_profit_order_type": "market"},
+        )
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            trade, profit_quote, profit_pct = await execute_sell(
+                db=db, exchange=exchange, trading_client=_make_trading_client(),
+                bot=_make_bot(), product_id="ETH-USD", position=position,
+                current_price=3000.0,
+            )
+
+        assert trade is None
+        assert position.status == "open"
+        assert position.total_quote_received is None
+        assert position.last_error_message is not None
+
+    @pytest.mark.asyncio
+    async def test_confirmed_full_fill_still_closes(self):
+        """Sanity: a real, complete fill still closes the position normally."""
+        db = _make_db()
+        exchange = _make_exchange()  # default get_order returns full 0.5 fill
+        position = _make_position(
+            total_quote_spent=1000.0, total_base_acquired=0.5,
+            strategy_config_snapshot={"take_profit_order_type": "market"},
+        )
+
+        trade, profit_quote, profit_pct = await execute_sell(
+            db=db, exchange=exchange, trading_client=_make_trading_client(),
+            bot=_make_bot(), product_id="ETH-USD", position=position,
+            current_price=3000.0,
+        )
+
+        assert trade is not None
+        assert position.status == "closed"
+        assert profit_quote == pytest.approx(500.0)
+
+
+# ===========================================================================
 # execute_sell_short (open/add to short positions)
 # ===========================================================================
 
@@ -1232,3 +1352,82 @@ class TestResolveRealCloseAmount:
         )
         assert clamped is True
         assert 0 < amount <= 296.7
+
+
+# ===========================================================================
+# Unconfirmed-fill guard — SHORT side (same fabrication bug as the long close).
+# A short open/add must never be booked from a fill the exchange didn't confirm.
+# ===========================================================================
+
+
+class TestExecuteSellShortUnconfirmed:
+    """execute_sell_short must not book a short from an unconfirmed/zero fill."""
+
+    @pytest.mark.asyncio
+    async def test_unfilled_initial_short_raises_and_leaves_short_untouched(self):
+        """Order placed but never fills → raise, short tracking untouched."""
+        db = _make_db()
+        exchange = _make_exchange()
+        # Order accepted but reports zero fill on every poll.
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        position = _make_position(
+            direction="short",
+            short_entry_price=None, short_average_sell_price=None,
+            short_total_sold_base=None, short_total_sold_quote=None,
+        )
+
+        with (
+            patch("app.order_validation.validate_order_size", new_callable=AsyncMock,
+                  return_value=(True, None)),
+            patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.trading_engine.sell_executor.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            with pytest.raises(ValueError, match="did not confirm"):
+                await execute_sell_short(
+                    db=db, exchange=exchange, trading_client=_make_trading_client(),
+                    bot=_make_bot(), product_id="BTC-USD", position=position,
+                    base_amount=0.5, current_price=50000.0, trade_type="initial",
+                )
+
+        # No phantom short booked.
+        assert position.short_entry_price is None
+        assert position.short_total_sold_base is None
+        assert position.last_error_message is not None
+        exchange.cancel_order.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unfilled_safety_short_does_not_inflate_existing_short(self):
+        """Unconfirmed safety add → raise, existing short totals unchanged."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.get_order = AsyncMock(return_value={
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0",
+        })
+        exchange.cancel_order = AsyncMock(return_value={"success": True})
+        position = _make_position(
+            direction="short",
+            short_entry_price=50000.0, short_average_sell_price=50000.0,
+            short_total_sold_base=0.5, short_total_sold_quote=25000.0,
+        )
+
+        with (
+            patch("app.order_validation.validate_order_size", new_callable=AsyncMock,
+                  return_value=(True, None)),
+            patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.trading_engine.sell_executor.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            with pytest.raises(ValueError, match="did not confirm"):
+                await execute_sell_short(
+                    db=db, exchange=exchange, trading_client=_make_trading_client(),
+                    bot=_make_bot(), product_id="BTC-USD", position=position,
+                    base_amount=0.3, current_price=48000.0, trade_type="safety_order_1",
+                )
+
+        # Existing short totals must be unchanged (no phantom add).
+        assert position.short_total_sold_base == 0.5
+        assert position.short_total_sold_quote == 25000.0

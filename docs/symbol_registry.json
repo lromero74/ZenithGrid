@@ -3979,6 +3979,8 @@
       "_close_sell_position_as_dust",
       "_create_sell_trade_record",
       "_create_short_sell_trade_record",
+      "_handle_unconfirmed_close",
+      "_handle_unconfirmed_short",
       "_post_sell_operations",
       "_post_short_sell_operations",
       "_reconcile_sell_fill",
@@ -3992,7 +3994,8 @@
       "execute_limit_sell",
       "execute_limit_sell_safety",
       "execute_sell",
-      "execute_sell_short"
+      "execute_sell_short",
+      "sell_fill_is_complete"
     ]
   },
   "backend/app/trading_engine/signal_processor/__init__.py": {

@@ -24,6 +24,11 @@ class FillData:
     filled_value: float  # Quote currency amount
     average_price: float  # Average fill price
     total_fees: float  # Total fees charged
+    reconciled: bool = False  # True ONLY when amounts came from real exchange
+    # fill data. False for the fabricated-estimate fallback and for zero fills.
+    # The close path MUST refuse to book a sale unless this is True — booking a
+    # fabricated fill marks a position closed while the coins are still in the
+    # wallet (the stranded-balance bug fixed in v3.9.x).
 
 
 async def reconcile_order_fill(
@@ -131,6 +136,7 @@ async def reconcile_order_fill(
                 filled_value=raw_filled_value,
                 average_price=raw_avg_price,
                 total_fees=raw_total_fees,
+                reconciled=True,
             )
 
         logger.warning(
@@ -142,7 +148,13 @@ async def reconcile_order_fill(
                 f"attempts (~30s)."
             )
 
-    # All retries exhausted - use fallbacks if provided
+    # All retries exhausted - use fallbacks if provided.
+    # NOTE: this is a fabricated ESTIMATE, not a confirmed fill — reconciled
+    # stays False. It is safe for BUY orders (which almost always fill, and
+    # under-recording a buy is the conservative error). It is NEVER safe for a
+    # SELL/close: a position closed on this estimate is booked as fully sold
+    # while the coins remain in the wallet. The sell path therefore does not
+    # pass fallbacks and refuses to close unless reconciled is True.
     if fallback_base is not None and fallback_price is not None:
         logger.warning(
             f"Could not fetch fill data for {order_id} after "
@@ -154,6 +166,7 @@ async def reconcile_order_fill(
             filled_value=fallback_base * fallback_price,
             average_price=fallback_price,
             total_fees=0.0,
+            reconciled=False,
         )
 
     # No fallback - return zeros (caller must handle)
