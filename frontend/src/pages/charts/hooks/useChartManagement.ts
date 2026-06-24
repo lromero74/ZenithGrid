@@ -59,6 +59,7 @@ export function useChartManagement(
 
     isCleanedUpRef.current = false
     let disposed = false
+    let resizeObserver: ResizeObserver | null = null
 
     loadChartLib().then(({ createChart, ColorType }) => {
       if (disposed || !chartContainerRef.current) return
@@ -131,24 +132,33 @@ export function useChartManagement(
       })
 
       volumeSeriesRef.current = volumeSeries
+
+      // Track the container's actual size with a ResizeObserver instead of only
+      // the window 'resize' event. The chart is created lazily/asynchronously and
+      // may be created while its container is hidden (the page applies a `hidden`
+      // class during load/error → display:none → clientWidth 0). A window resize
+      // never fires when the container later un-hides, so a width-0 chart would
+      // stay invisible forever. The observer fires on the 0→N size change (and on
+      // sidebar toggles, layout changes, etc.), keeping the chart correctly sized.
+      resizeObserver = new ResizeObserver((entries) => {
+        const width = Math.floor(entries[0]?.contentRect.width ?? 0)
+        if (width > 0 && chartRef.current && !isCleanedUpRef.current) {
+          chartRef.current.applyOptions({ width })
+        }
+      })
+      resizeObserver.observe(chartContainerRef.current)
+
       setChartReady(true)
     })
-
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
 
     return () => {
       disposed = true
       isCleanedUpRef.current = true
       setChartReady(false)
-      window.removeEventListener('resize', handleResize)
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+        resizeObserver = null
+      }
       // Unsubscribe main chart from time scale changes
       const mainCallback = syncCallbacksRef.current.get('main')
       if (mainCallback && chartRef.current) {
