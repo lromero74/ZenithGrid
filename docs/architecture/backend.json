@@ -2404,7 +2404,7 @@
     }
   ],
   "migrations": {
-    "count": 105,
+    "count": 106,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2513,6 +2513,7 @@
       "090_automation_rules.py",
       "091_bots_webhook_token.py",
       "092_ai_team_runs.py",
+      "093_fix_bots_id_sequence.py",
       "add_perf_indexes_tier3.py",
       "set_fk_delete_policies.py"
     ]
