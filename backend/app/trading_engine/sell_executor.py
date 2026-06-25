@@ -1141,6 +1141,7 @@ async def _post_sell_operations(
 
 async def _close_sell_position_as_dust(
     db: AsyncSession,
+    exchange: ExchangeClient,
     bot: Bot,
     product_id: str,
     position: Position,
@@ -1149,7 +1150,11 @@ async def _close_sell_position_as_dust(
     """Close a long position as dust (rounds to zero base) with no exchange order.
 
     Calculates profit at current price, finalizes the Position row, and
-    publishes a POSITION_CLOSED event (best-effort).
+    publishes a POSITION_CLOSED event (best-effort). Writes the same fields the
+    normal market close does (``sell_price``, BTC→USD-converted ``profit_usd``) so
+    dust closes aren't inconsistent — ``sell_price`` is the persisted column
+    (``close_price`` is not a column), and ``profit_usd`` must be converted for
+    BTC-quoted pairs rather than booking the BTC amount as USD.
     """
     quote_value = position.total_base_acquired * current_price
     spent = position.total_quote_spent or 0
@@ -1157,11 +1162,23 @@ async def _close_sell_position_as_dust(
     dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
     position.status = "closed"
     position.closed_at = utcnow()
-    position.close_price = current_price
+    position.sell_price = current_price
     position.profit_quote = dust_profit
-    position.profit_usd = dust_profit  # USD-like pairs; BTC pairs will be approximate
     position.profit_percentage = dust_pct
     position.total_quote_received = quote_value
+
+    # Convert profit to USD using the quote currency (matches _create_sell_trade_record).
+    if get_quote_currency(product_id) == "BTC":
+        try:
+            btc_usd_price_at_close = await exchange.get_btc_usd_price()
+            position.btc_usd_price_at_close = btc_usd_price_at_close
+            position.profit_usd = dust_profit * btc_usd_price_at_close
+        except Exception:
+            logger.warning("Dust close: failed to fetch BTC/USD for profit_usd", exc_info=True)
+            position.profit_usd = None
+    else:  # USD/USDC/USDT-quoted
+        position.profit_usd = dust_profit
+
     record_exit_provenance(position, position.exit_reason or "Dust position close", None)
     await db.commit()
     try:
@@ -1588,7 +1605,7 @@ async def execute_sell(
             f"(raw={raw_amount:.8f}, precision={precision}). Closing as dust."
         )
         return await _close_sell_position_as_dust(
-            db, bot, product_id, position, current_price,
+            db, exchange, bot, product_id, position, current_price,
         )
 
     # If the wallet balance forced a clamp, the remaining base may now sit below
@@ -1604,7 +1621,7 @@ async def execute_sell(
                 f"exchange minimum ({_vmsg}). Closing as dust."
             )
             return await _close_sell_position_as_dust(
-                db, bot, product_id, position, current_price,
+                db, exchange, bot, product_id, position, current_price,
             )
 
     order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled = await _submit_sell_market_order(

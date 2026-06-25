@@ -57,7 +57,11 @@ def _make_monitor():
     monitor = MagicMock()
     monitor.exchange = MagicMock()
     monitor.exchange.get_current_price = AsyncMock(return_value=50000.0)
-    monitor.exchange.create_market_sell_order = AsyncMock(return_value={"order_id": "sell-123"})
+    # The exit path uses create_market_order(side="SELL") (create_market_sell_order
+    # does not exist on ExchangeClient) and only closes on a confirmed success.
+    monitor.exchange.create_market_order = AsyncMock(
+        return_value={"success": True, "success_response": {"order_id": "sell-123"}}
+    )
     monitor.exchange.create_market_buy_order = AsyncMock(return_value={"order_id": "buy-456"})
     monitor.exchange.calculate_market_budget = AsyncMock(return_value=10000.0)
     return monitor
@@ -114,7 +118,7 @@ class TestBullFlagExitSignals:
 
         assert len(result["exits"]) == 1
         assert result["exits"][0]["reason"] == "Trailing stop loss triggered"
-        monitor.exchange.create_market_sell_order.assert_called_once()
+        monitor.exchange.create_market_order.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_exit_not_triggered_holds(self, db_session):
@@ -147,7 +151,7 @@ class TestBullFlagExitSignals:
             result = await process_bull_flag_bot(monitor, db_session, bot)
 
         assert len(result["exits"]) == 0
-        monitor.exchange.create_market_sell_order.assert_not_called()
+        monitor.exchange.create_market_order.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_exit_price_fetch_fails_skips_position(self, db_session):
@@ -181,7 +185,7 @@ class TestBullFlagExitSignals:
     async def test_exit_sell_order_failure_logged(self, db_session):
         """When sell order execution fails, error is logged."""
         monitor = _make_monitor()
-        monitor.exchange.create_market_sell_order = AsyncMock(side_effect=Exception("Exchange down"))
+        monitor.exchange.create_market_order = AsyncMock(side_effect=Exception("Exchange down"))
 
         bot = _make_bot()
         pos = _make_position()

@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.1] - 2026-06-25
+
+### Fixed
+- Short (bidirectional) positions now manage correctly: their take-profit/stop-loss are computed from the short's actual cost basis (previously they used long-only fields, so a short showed 0% profit and could hit a divide-by-zero), trailing stops/take-profits trail in the right direction (price falling = winning), the mandatory price-drop check now applies to short safety orders, and grace safety orders activate on shorts.
+- Dust position closes (when a remaining amount is too small to sell) now record the sale price and convert profit to USD correctly for BTC-quoted pairs, matching normal closes.
+- Bull-flag exits now actually place the sell order (an internal call used a method that didn't exist, so the exit silently failed and left the position open) and only close the position once the exchange confirms the sale.
+- Limit-order repricing (moving a resting limit order to the bid) now works on Coinbase — the cancel-confirmation was read incorrectly and always reported failure.
+- Admin "force end session" now verifies the session belongs to the specified user before ending it.
+- Bot statistics for a shared account now use that account's exchange credentials instead of the viewer's.
+- Portfolio cache is now namespaced per account vs. per user (so a user whose account id coincides with their user id can't get the wrong portfolio served) and ignores stale on-disk entries after a restart.
+- AI-decision history for a position now returns the full set (a null-position-id filter wasn't matching).
+
 ## [v3.11.0] - 2026-06-24
 
 ### Added

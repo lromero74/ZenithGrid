@@ -7,6 +7,7 @@ Includes persistent portfolio cache that survives restarts.
 
 import asyncio
 from app.utils.timeutil import utcnow
+from datetime import datetime
 import json
 import logging
 import os
@@ -184,22 +185,34 @@ class PersistentPortfolioCache:
         # (no await), so threading.Lock is correct and works from any event loop.
         self._lock = threading.Lock()
 
-    def _path(self, user_id: int) -> str:
-        return os.path.join(self._cache_dir, f"user_{user_id}.json")
+    # Reject entries older than this so a restart can't serve hours-old data.
+    # Keep generous vs the 25s in-memory TTL — this is the cold-start fallback.
+    _MAX_AGE_SECONDS = 120
 
-    async def get(self, user_id: int) -> Optional[dict]:
-        """Load cached portfolio from disk. Returns None if missing."""
+    def _path(self, key: str) -> str:
+        # key is namespaced by the caller (e.g. "acct_5" vs "user_5") so an
+        # account-scoped portfolio and a user-aggregate never collide on disk.
+        return os.path.join(self._cache_dir, f"{key}.json")
+
+    async def get(self, key: str) -> Optional[dict]:
+        """Load cached portfolio from disk. Returns None if missing or stale."""
         with self._lock:
-            path = self._path(user_id)
+            path = self._path(key)
             if not os.path.exists(path):
                 return None
             try:
                 with open(path, "r") as f:
                     data = json.load(f)
                 saved_at = data.get("_saved_at", "")
+                try:
+                    age = (utcnow() - datetime.fromisoformat(saved_at)).total_seconds() if saved_at else None
+                except Exception:
+                    age = None
+                if age is None or age > self._MAX_AGE_SECONDS:
+                    return None  # missing/unparseable timestamp or too old → treat as miss
                 logger.info(
-                    f"Loaded persistent portfolio cache for user {user_id} "
-                    f"(saved {saved_at})"
+                    f"Loaded persistent portfolio cache for {key} "
+                    f"(saved {saved_at}, age {age:.0f}s)"
                 )
                 # Remove internal metadata before returning
                 data.pop("_saved_at", None)
@@ -208,10 +221,10 @@ class PersistentPortfolioCache:
                 logger.warning(f"Failed to read portfolio cache: {e}")
                 return None
 
-    async def save(self, user_id: int, portfolio_data: dict):
+    async def save(self, key: str, portfolio_data: dict):
         """Persist portfolio response to disk."""
         with self._lock:
-            path = self._path(user_id)
+            path = self._path(key)
             try:
                 data = dict(portfolio_data)
                 data["_saved_at"] = utcnow().isoformat()
@@ -220,11 +233,11 @@ class PersistentPortfolioCache:
             except Exception as e:
                 logger.warning(f"Failed to write portfolio cache: {e}")
 
-    async def invalidate(self, user_id: Optional[int] = None):
+    async def invalidate(self, key: Optional[str] = None):
         """Remove cached portfolio files."""
         with self._lock:
-            if user_id is not None:
-                path = self._path(user_id)
+            if key is not None:
+                path = self._path(key)
                 if os.path.exists(path):
                     os.remove(path)
             else:

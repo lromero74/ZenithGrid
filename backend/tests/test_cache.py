@@ -295,7 +295,7 @@ class TestPersistentPortfolioCache:
 
         await cache.save(1, {"total_value": 10000})
         await cache.save(2, {"total_value": 20000})
-        await cache.invalidate(user_id=1)
+        await cache.invalidate(key=1)
         assert await cache.get(1) is None
         assert (await cache.get(2))["total_value"] == 20000
 
