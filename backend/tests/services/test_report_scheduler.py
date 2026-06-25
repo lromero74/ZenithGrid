@@ -502,6 +502,25 @@ class TestComputeFullPriorBounds:
         assert start == datetime(2025, 1, 1, 0, 0, 0)
         assert end == datetime(2025, 4, 1, 0, 0, 0)
 
+    def test_quarterly_bounds_non_jan_start_january_run(self):
+        """Wrap case: quarters start Mar/Jun/Sep/Dec and the run is in January.
+        The current quarter began in DECEMBER of the prior year, so the prior
+        full quarter is Sep 1 – Dec 1 of the prior year (not a year-off window)."""
+        sched = _make_schedule(quarter_start_month=3)
+        period_end = datetime(2026, 1, 15, 0, 0, 0)
+        start, end = _compute_full_prior_bounds("quarterly", period_end, sched)
+        assert start == datetime(2025, 9, 1, 0, 0, 0)
+        assert end == datetime(2025, 12, 1, 0, 0, 0)
+
+    def test_quarterly_bounds_calendar_february_run(self):
+        """Calendar quarters (start Jan), run in February → prior quarter is the
+        previous Oct 1 – Jan 1."""
+        sched = _make_schedule(quarter_start_month=1)
+        period_end = datetime(2026, 2, 10, 0, 0, 0)
+        start, end = _compute_full_prior_bounds("quarterly", period_end, sched)
+        assert start == datetime(2025, 10, 1, 0, 0, 0)
+        assert end == datetime(2026, 1, 1, 0, 0, 0)
+
     def test_unknown_type_fallback(self):
         """Failure: unknown type falls back to 7-day window."""
         sched = _make_schedule()

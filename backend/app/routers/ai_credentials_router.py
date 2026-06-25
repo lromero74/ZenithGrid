@@ -142,37 +142,38 @@ async def get_ai_providers_status(
     This endpoint helps users understand which providers are available
     and whether they're using their own key or the system fallback.
     """
-    from app.config import settings
+    from app.config import settings, AI_PROVIDER_BILLING_URLS
 
+    _urls = AI_PROVIDER_BILLING_URLS
     # Provider info
     providers_info = {
         "claude": {
             "name": "Anthropic (Claude)",
-            "billing_url": "https://console.anthropic.com/settings/usage",
+            "billing_url": _urls["claude"],
             "system_key": settings.anthropic_api_key,
             "free_tier": None,
         },
         "gemini": {
             "name": "Google Gemini",
-            "billing_url": "https://aistudio.google.com/app/apikey",
+            "billing_url": _urls["gemini"],
             "system_key": settings.gemini_api_key,
             "free_tier": None,
         },
         "grok": {
             "name": "xAI (Grok)",
-            "billing_url": "https://console.x.ai/",
+            "billing_url": _urls["grok"],
             "system_key": settings.grok_api_key,
             "free_tier": None,
         },
         "groq": {
             "name": "Groq (Llama 3.1 70B)",
-            "billing_url": "https://console.groq.com/keys",
+            "billing_url": _urls["groq"],
             "system_key": settings.groq_api_key,
             "free_tier": "14,400 RPD",
         },
         "openai": {
             "name": "OpenAI (GPT)",
-            "billing_url": "https://platform.openai.com/usage",
+            "billing_url": _urls["openai"],
             "system_key": settings.openai_api_key,
             "free_tier": None,
         },

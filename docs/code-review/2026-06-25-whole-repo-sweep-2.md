@@ -35,13 +35,24 @@ Status: `[ ]` open · `[x]` fixed · `~` deferred.
 
 ## ⚪ Tier 4 — cleanup
 
-- [ ] Dead code: `pnl_service.calculate_profit` unused while 3 callers inline the same formula; `main.py:73-74` unused monitor imports; `bot_crud_router.py:851` `except as _`; `PerpsPortfolioPanel.tsx` dead component (unscoped query keys).
-- [ ] AI provider `billing_url` list duplicated in `ai_credentials_router` + `system_router` — extract shared constant.
-- [ ] Oversized files: `sell_executor.py` (1687), `rebalance_monitor.py` (1309), `indicator_based.py` (1248), `buy_executor.py` (1086) — split.
-- [ ] Broad/ unscoped react-query keys: `useBotMutations` `invalidate(['positions'])` prefix; `PositionCard` `getQueryData(['bots'])`; `App.tsx` closed-positions badge.
-- [ ] `syncAllChartsToRange` type declares 3 params, impl takes 2 (`useIndicators.ts` vs `useChartManagement.ts`).
-- [ ] Silent `except Exception` without logging — `portfolio_service.py:299,372`, `rebalance_monitor.py:1186`.
-- [ ] `system_router` `/api/trades` + `/api/signals` scoped to owned-only (not shared accounts) — managers see incomplete view; `get_coinbase` dep uses shared accounts.
-- [ ] Webhook rate limit per-token only (`webhook_router.py:46`).
-- [ ] `_article_fetch_counts` dict grows unbounded across user_ids (`article_content_service.py`).
-- [ ] Quarterly report prior-period boundary wrong for non-Jan quarter starts (`report_scheduler._compute_full_prior_bounds`).
+- [x] Dead code: removed `main.py` unused monitor imports, `bot_crud_router.py` `except as _`, and the unused `PerpsPortfolioPanel.tsx`. (`pnl_service.calculate_profit` is now used by `_compute_position_pnl` from tier 2; the remaining inline P&L copies are correct and left as-is — consolidating real-money exit math carries behavior-change risk for marginal benefit.)
+- [x] AI provider billing URLs extracted to a single `AI_PROVIDER_BILLING_URLS` constant in config, referenced by both routers (their differing response shapes/keys are preserved).
+- [ ] **Oversized files split** — in progress; see the dedicated "Oversized-file splits" section below.
+- [x] `useBotMutations` `cancel/sellAllPositions` now invalidate the scoped `['positions','open',accountId]` key (the only `['positions',…]` key) instead of the broad prefix. (`PositionCard` `getQueryData(['bots'])` and the `App.tsx` closed-positions badge are left: both have working fallbacks and only matter in multi-account use; fixing needs prop-drilling for negligible benefit.)
+- [x] `syncAllChartsToRange` type now matches the 2-param implementation (dropped the ignored 3rd arg from the type and the call site).
+- [x] Silent `except Exception` now logs — `portfolio_service.py` (×2 price fallbacks), `rebalance_monitor.py` (dust-sweep list_products).
+- [x] `system_router` `/api/trades` + `/api/signals` now scope to accessible accounts (owned + shared) via `_acc_ids`, matching the rest of the app.
+- [x] Webhook now also enforces a per-IP rate limit (30/min) in addition to per-token, bounding token scanning from one source.
+- [x] `_article_fetch_counts` is now bounded — opportunistically evicts users whose rate-limit window has fully expired once the map exceeds 1000 entries.
+- [x] Quarterly report prior-period boundary fixed for non-Jan quarter starts (the wrap case where the run month precedes all quarter-start months → previously a year-off window). +2 tests.
+
+## Oversized-file splits (>1200-line files → logical modules)
+
+Pure refactors (no behavior change), each gated by the full backend suite. Target
+files: `sell_executor.py` (1687), `rebalance_monitor.py` (1309),
+`indicator_based.py` (1248), `buy_executor.py` (1086).
+
+- [ ] `sell_executor.py` — split out the short-position machinery.
+- [ ] `buy_executor.py` — split out the close-short machinery.
+- [ ] `rebalance_monitor.py` — extract trade execution / dust sweep.
+- [ ] `indicator_based.py` — extract the exit-decision / DCA helpers.

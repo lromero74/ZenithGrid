@@ -848,7 +848,7 @@ async def get_bot_stats(
                 current_price = await coinbase.get_current_price(position.product_id)
                 position_value = position.total_base_acquired * current_price
                 total_in_positions_value += position_value
-            except Exception as _:  # noqa: F841
+            except Exception:
                 # Fallback to quote spent if can't get current price
                 logger.warning(f"Could not get current price for position {position.id}, using quote spent")
                 total_in_positions_value += position.total_quote_spent

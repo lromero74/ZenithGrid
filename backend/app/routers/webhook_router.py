@@ -25,7 +25,7 @@ import logging
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,27 +42,35 @@ router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 # Rate limiting (in-process, per-token)
 # ---------------------------------------------------------------------------
 
-_MAX_REQUESTS_PER_MINUTE = 10
-_rate_limit_store: dict[str, list[float]] = {}  # token -> [timestamps]
+_MAX_REQUESTS_PER_MINUTE = 10            # per bot webhook token
+_MAX_REQUESTS_PER_MINUTE_PER_IP = 30    # per source IP (bounds token scanning)
+_rate_limit_store: dict[str, list[float]] = {}     # token -> [timestamps]
+_ip_rate_limit_store: dict[str, list[float]] = {}  # ip -> [timestamps]
+
+
+def _within_limit(store: dict[str, list[float]], key: str, limit: int) -> bool:
+    """Sliding-window (1 min) limiter. Returns True if allowed (recording the
+    hit), False if the key is over its limit."""
+    now = time.time()
+    cutoff = now - 60.0
+    timestamps = [ts for ts in store.get(key, []) if ts > cutoff]
+    if len(timestamps) >= limit:
+        store[key] = timestamps
+        return False
+    timestamps.append(now)
+    store[key] = timestamps
+    return True
 
 
 def _check_rate_limit(token: str) -> bool:
-    """Return True if the request is allowed, False if rate-limited."""
-    now = time.time()
-    window = 60.0  # 1 minute
-    cutoff = now - window
+    """Per-token rate limit. Return True if allowed, False if rate-limited."""
+    return _within_limit(_rate_limit_store, token, _MAX_REQUESTS_PER_MINUTE)
 
-    timestamps = _rate_limit_store.get(token, [])
-    # Drop expired timestamps
-    timestamps = [ts for ts in timestamps if ts > cutoff]
 
-    if len(timestamps) >= _MAX_REQUESTS_PER_MINUTE:
-        _rate_limit_store[token] = timestamps
-        return False
-
-    timestamps.append(now)
-    _rate_limit_store[token] = timestamps
-    return True
+def _check_ip_rate_limit(ip: str) -> bool:
+    """Per-IP rate limit — caps how fast a single source can probe tokens.
+    Without it the per-token limit lets one caller scan many tokens unbounded."""
+    return _within_limit(_ip_rate_limit_store, ip, _MAX_REQUESTS_PER_MINUTE_PER_IP)
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +105,7 @@ class WebhookResponse(BaseModel):
 @router.post("/tradingview", response_model=WebhookResponse)
 async def tradingview_webhook(
     alert: TradingViewAlert,
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> WebhookResponse:
     """Process a TradingView alert webhook.
@@ -104,7 +113,11 @@ async def tradingview_webhook(
     Authenticated by the per-bot webhook token in the payload (no JWT).
     The bot must be active and have a configured webhook_token.
     """
-    # 1. Rate limit
+    # 1. Rate limit — per source IP first (bounds token scanning), then per token.
+    client_ip = request.client.host if (request and request.client) else None
+    if client_ip and not _check_ip_rate_limit(client_ip):
+        logger.warning(f"Webhook IP rate-limited: {client_ip}")
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
     if not _check_rate_limit(alert.token):
         logger.warning(f"Webhook rate-limited for token prefix {alert.token[:8]}...")
         raise HTTPException(status_code=429, detail="Rate limit exceeded")

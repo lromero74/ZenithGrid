@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import FileResponse
 
 from app.coinbase_unified_client import CoinbaseClient
-from app.config import settings
+from app.config import settings, AI_PROVIDER_BILLING_URLS
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
@@ -537,28 +537,28 @@ async def get_ai_provider_info(current_user: User = Depends(get_current_user)):
         "providers": {
             "anthropic": {
                 "name": "Anthropic (Claude)",
-                "billing_url": "https://console.anthropic.com/settings/usage",
+                "billing_url": AI_PROVIDER_BILLING_URLS["claude"],
                 "has_api_key": bool(settings.anthropic_api_key),
             },
             "gemini": {
                 "name": "Google Gemini",
-                "billing_url": "https://aistudio.google.com/app/apikey",
+                "billing_url": AI_PROVIDER_BILLING_URLS["gemini"],
                 "has_api_key": bool(settings.gemini_api_key),
             },
             "grok": {
                 "name": "xAI (Grok)",
-                "billing_url": "https://console.x.ai/",
+                "billing_url": AI_PROVIDER_BILLING_URLS["grok"],
                 "has_api_key": bool(settings.grok_api_key),
             },
             "groq": {
                 "name": "Groq (Llama 3.1 70B)",
-                "billing_url": "https://console.groq.com/keys",
+                "billing_url": AI_PROVIDER_BILLING_URLS["groq"],
                 "has_api_key": bool(settings.groq_api_key),
                 "free_tier": "14,400 RPD",
             },
             "openai": {
                 "name": "OpenAI (GPT)",
-                "billing_url": "https://platform.openai.com/usage",
+                "billing_url": AI_PROVIDER_BILLING_URLS["openai"],
                 "has_api_key": bool(settings.openai_api_key),
             },
         }
@@ -692,13 +692,11 @@ async def get_trades(
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    """Get recent trades (scoped to current user)"""
-    # Get user's account IDs to scope trades via positions
-    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    user_accounts_r = await db.execute(user_accounts_q)
-    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+    """Get recent trades (scoped to the user's accessible accounts — owned or shared)."""
+    # Owned + shared accounts, matching the rest of the app's scoping helper.
+    user_account_ids = await _acc_ids(db, current_user.id)
 
-    # Get position IDs for user's accounts
+    # Get position IDs for those accounts
     user_position_ids_q = select(Position.id).where(
         Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
     )
@@ -717,13 +715,10 @@ async def get_signals(
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    """Get recent signals (scoped to current user)"""
-    # Get user's account IDs to scope signals via positions
-    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
-    user_accounts_r = await db.execute(user_accounts_q)
-    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+    """Get recent signals (scoped to the user's accessible accounts — owned or shared)."""
+    user_account_ids = await _acc_ids(db, current_user.id)
 
-    # Get position IDs for user's accounts
+    # Get position IDs for those accounts
     user_position_ids_q = select(Position.id).where(
         Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
     )

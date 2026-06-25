@@ -18,7 +18,7 @@ interface UseIndicatorsProps {
   chartRef: MutableRefObject<IChartApi | null>
   selectedPair: string
   indicatorChartsRef: MutableRefObject<Map<string, IChartApi>>
-  syncAllChartsToRange: (sourceChartId: string, timeRange: Range<Time> | null, indicatorChartsRef: Map<string, IChartApi>) => void
+  syncAllChartsToRange: (sourceChartId: string, timeRange: Range<Time> | null) => void
   syncCallbacksRef: MutableRefObject<Map<string, (timeRange: Range<Time> | null) => void>>
 }
 
@@ -480,7 +480,7 @@ export function useIndicators({
 
       // Subscribe this indicator chart to sync all charts when it's scrolled/zoomed
       const indicatorSyncCallback = (timeRange: Range<Time> | null) => {
-        syncAllChartsToRange(indicator.id, timeRange, indicatorChartsRef.current)
+        syncAllChartsToRange(indicator.id, timeRange)
       }
       chart.timeScale().subscribeVisibleTimeRangeChange(indicatorSyncCallback)
       syncCallbacksRef.current.set(indicator.id, indicatorSyncCallback)

@@ -236,6 +236,12 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
 
     # Per-user rate limit on external article fetches
     now_ts = time.time()
+    # Opportunistically evict users whose window has fully expired so this
+    # in-process map can't grow without bound across user ids over a long uptime.
+    if len(_article_fetch_counts) > 1000:
+        for _uid in [u for u, ts in list(_article_fetch_counts.items())
+                     if all(now_ts - t >= _ARTICLE_FETCH_WINDOW for t in ts)]:
+            del _article_fetch_counts[_uid]
     user_fetches = _article_fetch_counts.get(user_id, [])
     user_fetches = [t for t in user_fetches if now_ts - t < _ARTICLE_FETCH_WINDOW]
     _article_fetch_counts[user_id] = user_fetches

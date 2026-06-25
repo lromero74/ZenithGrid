@@ -298,6 +298,7 @@ async def get_dex_portfolio(
             raise ValueError("No CEX account available for price data")
     except Exception:
         # Fallback prices if Coinbase is not available
+        logger.warning("DEX portfolio: price fetch failed; using stale fallback prices", exc_info=True)
         eth_usd_price = 3500.0
         btc_usd_price = 95000.0
 
@@ -370,6 +371,7 @@ async def get_generic_cex_portfolio(
     try:
         btc_usd_price = await exchange.get_btc_usd_price()
     except Exception:
+        logger.warning("get_generic_cex_portfolio: BTC/USD price fetch failed; using fallback", exc_info=True)
         btc_usd_price = 95000.0  # fallback
 
     # Build holdings from coin balances

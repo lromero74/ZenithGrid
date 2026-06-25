@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.12.5] - 2026-06-25
+
+### Fixed
+- Quarterly performance reports now compute the correct prior quarter when the schedule's quarter-start month isn't January and the run lands in an early month (previously the window could be a full year off).
+- The trades and signals lists now include data from accounts shared with you, not only accounts you own — matching every other view.
+
+### Security
+- The TradingView webhook endpoint now also rate-limits per source IP (in addition to per bot token), so a single source can't probe many tokens unbounded.
+
+### Changed
+- Code-review sweep #2 (tier 4, cleanup). Internal tidy-ups with no user-facing behavior change: removed dead code, de-duplicated the AI-provider billing URLs into one place, narrowed a position-list refresh so it no longer needlessly refetches other accounts, added logging to a few previously-silent error fallbacks, bounded an in-memory rate-limit map, and corrected a chart-sync type signature.
+
 ## [v3.12.4] - 2026-06-25
 
 ### Changed
