@@ -103,6 +103,11 @@ def get_sync_engine():
         kwargs = {}
         if "sqlite" in sync_url:
             kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            # Long-running prod: validate/recycle pooled conns so a stale one doesn't
+            # raise OperationalError on the next use after an idle period.
+            kwargs["pool_pre_ping"] = True
+            kwargs["pool_recycle"] = 3600
         _sync_engine = create_engine(sync_url, **kwargs)
     return _sync_engine
 

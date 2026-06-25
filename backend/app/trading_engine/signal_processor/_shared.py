@@ -76,8 +76,11 @@ async def _is_duplicate_failed_order(
     last_error = result.scalar_one_or_none()
     return last_error == error_message
 
-# Cache previous market context for crossing detection (bot_id_product_id -> context)
+# Cache previous market context for crossing detection (bot_id_product_id -> context).
+# Bounded (LRU-ish: writers pop+reinsert, then evict the oldest) so entries for deleted
+# bots / dropped pairs don't accumulate forever in a long-running process.
 _previous_market_context: Dict[str, Dict[str, Any]] = {}
+_MARKET_CONTEXT_MAX = 1000
 
 
 def _calculate_market_context_with_indicators(
