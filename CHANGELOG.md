@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.3] - 2026-06-25
+
+### Fixed
+- **Creating and cloning bots works again.** On the production database the `bots` table had lost the auto-numbering that assigns each new bot its id, so the "New Bot" and "Clone" actions failed behind the scenes. Bot id numbering is restored, and a self-healing database migration now re-checks and repairs it on every deploy so it can't quietly break again. (Live trading was never affected — only the creation of new bots.)
+
 ## [v3.13.2] - 2026-06-25
 
 ### Changed
