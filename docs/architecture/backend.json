@@ -148,7 +148,12 @@
     {
       "file": "routers/transfers_router.py",
       "prefix": "/api/transfers",
-      "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats. v2.168.10: the GET read endpoints (GET /api/transfers, GET /api/transfers/summary, GET /api/transfers/recent-summary) use accessible_account_ids from app.services.account_access so shared-account members (manager and shadow roles) can view transfer history, summary, and the dashboard recent-transfers widget for accounts shared with them, not just the account owner."
+      "purpose": "Deposit/withdrawal tracking: sync transfers from Coinbase, list with filtering, manual entry, summary stats. GET /api/transfers/summary and GET /api/transfers/recent-summary now aggregate in SQL (GROUP BY + SUM) instead of loading all rows into Python. v2.168.10: the GET read endpoints use accessible_account_ids from app.services.account_access so shared-account members (manager and shadow roles) can view transfer history, summary, and the dashboard recent-transfers widget for accounts shared with them, not just the account owner."
+    },
+    {
+      "file": "routers/webhook_router.py",
+      "prefix": "/api/webhooks",
+      "purpose": "Inbound webhook endpoints (e.g. exchange order-fill callbacks). Applies a per-IP rate limit so a single source cannot flood the endpoint."
     },
     {
       "file": "routers/display_name_router.py",
@@ -1258,6 +1263,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/account_purge.py",
+      "purpose": "FK-safe account history purge in dependency order: trades -> signals -> pending_orders -> order_history -> ai_opinion_log -> snapshots -> positions (one transaction; preserves account + bots). Also zeroes bot reserved_balance fields so no stale reservation persists after a purge. Single source of truth for purge order — consumed by scripts/purge_account.py. Does NOT liquidate holdings; caller must sell first.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/account_service.py",
       "purpose": "Account business logic: prop firm config validation, exchange account creation with credential encryption and connectivity testing, per-account portfolio retrieval. get_portfolio_for_account() accepts include_details=False to skip per-asset holdings expansion and CEX paper-portfolio price fanouts were moved to paper_valuation_service in v2.164.6 (module trimmed to the orchestration path only).",
       "type": "infrastructure"
@@ -1269,7 +1279,7 @@
     },
     {
       "file": "services/account_snapshot_service.py",
-      "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture; aggregates daily activity (closed trades, transfers) for chart markers",
+      "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture. get_daily_activity() now aggregates closed trades and transfers in SQL (GROUP BY date) instead of loading all rows into Python, reducing memory overhead for accounts with large trade histories.",
       "type": "background"
     },
     {
@@ -1379,7 +1389,7 @@
     },
     {
       "file": "services/email_service.py",
-      "purpose": "AWS SES email sending for verification, password reset, MFA codes. v2.165.0 adds send_speculative_calibration_email() with HTML/plain body builders that include verbatim copy-paste markers for the calibration alert so users can review the recommendation in email and click the signed dismiss link back into Settings. v2.166.0 extends send_speculative_calibration_email() and build_speculative_calibration_text_body() with optional proposal + apply_url params; new helper _render_proposal_block() renders the AUTOMATED PROPOSAL section (before/after weights table + one-click apply URL) between the components-performance block and the Claude copy-paste block, and the HTML wrapper rewrites the apply URL into an anchor tag.",
+      "purpose": "AWS SES email sending for verification, password reset, MFA codes. Now uses explicit IAM credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from .env) via boto3 Session rather than implicit instance-role auth, so the service works identically on Lightsail (no instance role) and local dev. v2.165.0 adds send_speculative_calibration_email() with HTML/plain body builders that include verbatim copy-paste markers for the calibration alert so users can review the recommendation in email and click the signed dismiss link back into Settings. v2.166.0 extends send_speculative_calibration_email() and build_speculative_calibration_text_body() with optional proposal + apply_url params; new helper _render_proposal_block() renders the AUTOMATED PROPOSAL section (before/after weights table + one-click apply URL) between the components-performance block and the Claude copy-paste block, and the HTML wrapper rewrites the apply URL into an anchor tag.",
       "type": "infrastructure"
     },
     {
@@ -1548,6 +1558,11 @@
       "type": "trading"
     },
     {
+      "file": "services/rebalance_planning.py",
+      "purpose": "Stateless rebalance trade-planning functions extracted from rebalance_monitor.py. Exports plan_topup_trades(), plan_rebalance_trades(), plan_dust_sweep_trades(), and reconcile_locked_balances() plus shared module-level constants (EXCHANGE_MIN_USD, DEFAULT_MIN_TRADE_PCT). Extracted to keep rebalance_monitor.py under the 1200-LOC cap; rebalance_monitor._process_account delegates all planning math here.",
+      "type": "trading"
+    },
+    {
       "file": "services/report_access.py",
       "purpose": "Shared access-control helpers for report goals, schedules, and reports: get_accessible_goal (owner or observer/manager), get_writable_goal (owner or manager), get_writable_schedule, report_to_dict. Used by both reports_crud_router and reports_generation_router; extracted from reports_crud_router in Phase 5.3.",
       "type": "infrastructure"
@@ -1666,7 +1681,11 @@
       },
       {
         "file": "trading_engine/fill_reconciler.py",
-        "purpose": "Shared fill reconciliation logic with retry-based order fill retrieval and exponential backoff, used by buy_executor and sell_executor"
+        "purpose": "Shared fill reconciliation logic with retry-based order fill retrieval and exponential backoff, used by buy_executor and sell_executor. Reconcilers gate on terminal order status (FILLED / CANCELLED / EXPIRED) before recording a fill, preventing premature position updates on partially-settled orders."
+      },
+      {
+        "file": "trading_engine/sell_executor_short.py",
+        "purpose": "Short-position sell execution extracted from sell_executor.py. Handles open/add fills for short entries, fill reconciliation with terminal-status gate, short trade record creation, the short-only limit safety path, and unconfirmed order handling. Extracted to keep sell_executor.py under the 1200-LOC cap; consumed by trading_engine_v2 via the same call surface as the long-side executor."
       }
     ],
     "monitor_modules": [
@@ -1777,6 +1796,11 @@
       "file": "strategies/indicator_based_helpers.py",
       "class": "N/A (module-level helpers)",
       "purpose": "Pure, side-effect-free helpers extracted from IndicatorBasedStrategy in Phase 5: flatten_conditions(expression), needs_aggregate_indicators(base, safety, take_profit), build_ai_params(config), build_bull_flag_params(config). Callable without an instance."
+    },
+    {
+      "file": "strategies/indicator_based_indicators.py",
+      "class": "IndicatorCalculationMixin",
+      "purpose": "Per-cycle indicator snapshot methods extracted from indicator_based.py. IndicatorCalculationMixin provides the methods that compute and cache indicator values (RSI, MACD, Bollinger Bands, EMA, etc.) for a single candle window; IndicatorBasedStrategy composes this mixin rather than inheriting a bloated base class. Extracted to keep indicator_based.py under the 1200-LOC cap."
     },
     {
       "file": "strategies/spatial_arbitrage.py",
@@ -2206,7 +2230,7 @@
       "provider": "AWS SES",
       "region": "us-east-1",
       "sender": "noreply@romerotechsolutions.com",
-      "auth": "Production runs on fedora.local; SES credentials are provided via host/container environment",
+      "auth": "Explicit IAM key pair (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env); boto3 Session constructed with those credentials so the service works on Lightsail (no instance role).",
       "features": [
         "Email verification",
         "Password reset",
@@ -2380,7 +2404,7 @@
     }
   ],
   "migrations": {
-    "count": 97,
+    "count": 105,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2481,9 +2505,15 @@
       "083_ai_opinion_log_speculative.py",
       "084_speculative_weights_proposals.py",
       "085_more_performance_indexes.py",
+      "086_spot_trade_fees.py",
       "086_trade_dca_levels.py",
       "087_positions_pnl_index.py",
       "088_exit_provenance.py",
+      "089_telegram_settings.py",
+      "090_automation_rules.py",
+      "091_bots_webhook_token.py",
+      "092_ai_team_runs.py",
+      "add_perf_indexes_tier3.py",
       "set_fk_delete_policies.py"
     ]
   }

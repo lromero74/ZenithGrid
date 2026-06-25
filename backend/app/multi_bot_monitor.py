@@ -314,11 +314,16 @@ class MultiBotMonitor:
         """Evict expired/stale entries from all in-memory caches. Returns counts."""
         now = utcnow().timestamp()
 
-        # Candle cache — remove expired entries (and their fetch locks)
-        stale_candles = [
-            k for k, (ts, _) in self._candle_cache.items()
-            if now - ts > CANDLE_CACHE_DEFAULT_TTL
-        ]
+        # Candle cache — remove expired entries (and their fetch locks). Use the
+        # PER-GRANULARITY TTL (keys are "product:granularity:lookback") to match
+        # _cached_candles_if_fresh; the flat default would prematurely evict still-
+        # valid hourly/daily candles and force needless refetches.
+        stale_candles = []
+        for k, (ts, _) in self._candle_cache.items():
+            parts = k.split(":")
+            granularity = parts[1] if len(parts) >= 2 else ""
+            if now - ts > CANDLE_CACHE_TTL.get(granularity, CANDLE_CACHE_DEFAULT_TTL):
+                stale_candles.append(k)
         for k in stale_candles:
             del self._candle_cache[k]
             self._candle_fetch_locks.pop(k, None)
@@ -1138,6 +1143,7 @@ class MultiBotMonitor:
                         ]
                         for k in stale_candle_keys:
                             del self._candle_cache[k]
+                            self._candle_fetch_locks.pop(k, None)
                         if stale_candle_keys:
                             logger.debug(
                                 f"Pruned {len(stale_candle_keys)} stale "

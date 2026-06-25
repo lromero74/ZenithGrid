@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 # Track QFL base_timeframe fallback warnings — log once per product+TF combo, not every cycle
 _qfl_base_fallback_warned: set = set()
 
+# Timeframe prefixes used to split indicator keys (e.g. "FIVE_MINUTE_RSI"). Module-level
+# so it isn't reallocated every strategy cycle in the per-pair hot path.
+_TF_PREFIXES = frozenset([
+    "ONE", "TWO", "THREE", "FOUR", "FIVE",
+    "SIX", "TEN", "FIFTEEN", "THIRTY",
+])
+
 
 class IndicatorCalculationMixin:
     """Indicator-snapshot computation methods mixed into IndicatorBasedStrategy."""
@@ -74,10 +81,6 @@ class IndicatorCalculationMixin:
         )
 
         # E9: Single-pass to build timeframe→indicator mapping (O(I) instead of O(T×I))
-        _TF_PREFIXES = frozenset([
-            "ONE", "TWO", "THREE", "FOUR", "FIVE",
-            "SIX", "TEN", "FIFTEEN", "THIRTY",
-        ])
         tf_to_indicators: dict = {}
         for indicator_key in required_indicators:
             parts = indicator_key.split("_", 2)

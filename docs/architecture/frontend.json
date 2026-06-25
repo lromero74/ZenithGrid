@@ -48,7 +48,7 @@
     {
       "file": "pages/Reports.tsx",
       "route": "/reports",
-      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor"
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule."
     },
     {
       "file": "pages/Admin.tsx",
@@ -60,7 +60,7 @@
     "bot_management": [
       {
         "file": "components/trading/DCABudgetConfigForm.tsx",
-        "purpose": "DCA budget configuration form. v2.167.10: uses the shared calculateSoftCeiling helper from botUtils.ts instead of an inline copy (no more divergent client implementations). Accepts a new optional prop backendEffectiveCeiling?: number | null (the backend's authoritative Bot.soft_ceiling_effective_max). The 'Current effective ceiling' display and DCA budget breakdown prefer the live client estimate; fall back to backendEffectiveCeiling when the live estimate is null, then to the configured max. Shows 'calculating\u2026' when neither is available."
+        "purpose": "DCA budget configuration form. v2.167.10: uses the shared calculateSoftCeiling helper from botUtils.ts instead of an inline copy. Accepts backendEffectiveCeiling?: number | null (backend's authoritative Bot.soft_ceiling_effective_max) as a fallback display value. v3.11.0: adds a 'Grace Safety Orders' numeric input (grace_safety_orders strategy param, default 0) that lets users specify extra DCA layers beyond max_safety_orders without permanently raising the bot's configured maximum."
       },
       {
         "file": "components/ConditionalStrategyForm.tsx",
@@ -204,7 +204,11 @@
       },
       {
         "file": "components/trading/AccountValueChart.tsx",
-        "purpose": "Account value over time line chart with activity markers (trade wins/losses, deposits, withdrawals) on BTC/USD series"
+        "purpose": "Account value over time line chart with activity markers (trade wins/losses, deposits, withdrawals) on BTC/USD series. Refactored: series-building logic extracted to the pure helper buildAccountValueSeries() in accountValueChartData.ts; component now imports that helper, keeping the chart component free of data-transform logic."
+      },
+      {
+        "file": "components/trading/accountValueChartData.ts",
+        "purpose": "Pure data-transform module for AccountValueChart. Exports buildAccountValueSeries(snapshots, activity) which converts raw AccountValueSnapshot rows and daily activity markers into the lightweight-charts line-series format with annotated markers. No React, no side effects — unit-testable in isolation."
       },
       {
         "file": "components/PnLChart.tsx",

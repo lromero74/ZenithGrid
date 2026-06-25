@@ -53,6 +53,11 @@ def _within_limit(store: dict[str, list[float]], key: str, limit: int) -> bool:
     hit), False if the key is over its limit."""
     now = time.time()
     cutoff = now - 60.0
+    # Bound the store: token/IP scanning would otherwise grow it without limit.
+    # When it gets large, evict keys whose entire window has expired.
+    if len(store) > 5000:
+        for _k in [k for k, ts in list(store.items()) if all(t <= cutoff for t in ts)]:
+            del store[_k]
     timestamps = [ts for ts in store.get(key, []) if ts > cutoff]
     if len(timestamps) >= limit:
         store[key] = timestamps

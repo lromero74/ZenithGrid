@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.2] - 2026-06-25
+
+### Changed
+- Code-review sweep #3 (tier 3/4) — performance and cleanup, no user-facing behavior change. The candle cache is no longer over-evicted on its periodic cleanup (it now honors each timeframe's TTL instead of a flat 5 minutes, cutting needless re-fetches of hourly/daily data), and orphaned fetch locks are released with their cache entries. The webhook rate-limit memory is now bounded against scanning. The portfolio chart modal cancels superseded candle requests. The positions list no longer re-renders every card on each refresh tick. Plus internal tidy-ups: a duplicated safety-haircut constant single-sourced, a hot-path allocation lifted out of the loop, stale comments corrected, and the architecture docs re-synced.
+
 ## [v3.13.1] - 2026-06-25
 
 ### Fixed

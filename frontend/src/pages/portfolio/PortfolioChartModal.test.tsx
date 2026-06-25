@@ -68,6 +68,7 @@ describe('PortfolioChartModal', () => {
     await waitFor(() => expect(createChart).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/candles', {
       params: { product_id: 'ETH-USD', granularity: 'FIFTEEN_MINUTE', limit: 200 },
+      signal: expect.any(AbortSignal),
     }))
   })
 
@@ -79,6 +80,7 @@ describe('PortfolioChartModal', () => {
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/candles', {
       params: { product_id: 'ETH-BTC', granularity: 'FIFTEEN_MINUTE', limit: 200 },
+      signal: expect.any(AbortSignal),
     }))
   })
 

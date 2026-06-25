@@ -130,10 +130,13 @@ function PortfolioChartModal({ asset, onClose }: PortfolioChartModalProps) {
     }
   }, [asset, chartPairType])
 
-  // Fetch chart data
+  // Fetch chart data. AbortController + cancelled guard so a slow response for a
+  // previously-selected asset/pair/timeframe can't overwrite the current chart.
   useEffect(() => {
     if (!mainSeriesRef.current || !volumeSeriesRef.current) return
 
+    const controller = new AbortController()
+    let cancelled = false
     const fetchChartData = async () => {
       setChartLoading(true)
       setChartError(null)
@@ -148,8 +151,10 @@ function PortfolioChartModal({ asset, onClose }: PortfolioChartModalProps) {
               granularity: chartTimeframe,
               limit: 200,
             },
+            signal: controller.signal,
           }
         )
+        if (cancelled) return
 
         const { candles } = response.data
 
@@ -180,15 +185,17 @@ function PortfolioChartModal({ asset, onClose }: PortfolioChartModalProps) {
           }
         }
       } catch (err: unknown) {
+        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.name === 'CanceledError') return
         console.error('Error fetching chart data:', err)
         const e = err as { response?: { data?: { detail?: string } } }
         setChartError(e.response?.data?.detail || 'Failed to load chart data')
       } finally {
-        setChartLoading(false)
+        if (!cancelled) setChartLoading(false)
       }
     }
 
     fetchChartData()
+    return () => { cancelled = true; controller.abort() }
   }, [asset, chartPairType, chartTimeframe])
 
   return (
