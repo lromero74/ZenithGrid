@@ -52,6 +52,13 @@ INDICATOR_PARAMS = [
      "description": "Maximum number of DCA safety orders",
      "type": "int", "default": 5, "min_value": 0, "max_value": 100,
      "group": "Safety Orders"},
+    {"name": "grace_safety_orders", "display_name": "Grace Safety Orders",
+     "description": "Bonus safety orders beyond Max, used only after the configured ones "
+                    "are spent. NOT counted in budget — they intentionally overallocate "
+                    "(accepted risk), expanding the deal's budget just-in-time like a "
+                    "manual bump.",
+     "type": "int", "default": 0, "min_value": 0, "max_value": 100,
+     "group": "Safety Orders"},
     {"name": "safety_order_type", "display_name": "Safety Order Type",
      "description": "How to calculate safety order size",
      "type": "str", "default": "percentage_of_base",

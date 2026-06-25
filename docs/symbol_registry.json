@@ -3852,6 +3852,7 @@
       "calculate_base_order_size",
       "calculate_safety_order_size",
       "count_deployed_safety_orders",
+      "effective_max_safety_orders",
       "entry_trades_for_position",
       "get_total_multiplier"
     ]
@@ -3967,6 +3968,7 @@
       "all_positions_exhausted_safety_orders",
       "calculate_expected_position_budget",
       "calculate_max_deal_cost",
+      "compute_grace_expanded_budget",
       "create_position",
       "get_active_position",
       "get_active_positions_for_pair",

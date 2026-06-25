@@ -638,29 +638,37 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         const priceDeviation = Number(cfgSnapshot.price_deviation || 0)
         const stepScale = Number(cfgSnapshot.safety_order_step_scale || 1.0)
         const maxSafetyOrders = Number(cfgSnapshot.max_safety_orders || 0)
+        // Grace (bonus) SOs fire after the configured ones; draw their pips in a
+        // distinct amber so non-standard levels are easy to spot. Grace is excluded
+        // from budget but extends the trigger ladder past maxSafetyOrders.
+        const graceSafetyOrders = Number(cfgSnapshot.grace_safety_orders || 0)
+        const effectiveMaxSO = maxSafetyOrders + graceSafetyOrders
+        const STANDARD_SO_COLOR = '#64748b'  // slate
+        const GRACE_SO_COLOR = '#eab308'     // amber — non-standard / grace
         const dcaReference = (cfgSnapshot.dca_target_reference as string) || 'average_price'
 
         // Prefer the backend's authoritative count (sums cascade levels); fall
         // back to trade_count - 1, which undercounts cascades.
         const soTriggered = position.safety_orders_deployed
           ?? Math.max(0, (position.trade_count || 1) - 1)
-        const soRemaining = maxSafetyOrders - soTriggered
+        const soRemaining = effectiveMaxSO - soTriggered
 
         if (priceDeviation > 0 && soRemaining > 0) {
           if (dcaReference === 'base_order') {
             // All future SO prices are fixed from the initial entry — draw all remaining.
             const basePrice = position.first_buy_price || position.average_buy_price
             let cumulativeDeviation = priceDeviation
-            for (let i = 0; i < maxSafetyOrders; i++) {
+            for (let i = 0; i < effectiveMaxSO; i++) {
               if (i >= soTriggered) {
+                const isGrace = i + 1 > maxSafetyOrders
                 const soPrice = basePrice * (1 - cumulativeDeviation / 100)
                 const priceLine = mainSeriesRef.current.createPriceLine({
                   price: soPrice,
-                  color: '#64748b',
+                  color: isGrace ? GRACE_SO_COLOR : STANDARD_SO_COLOR,
                   lineWidth: 1,
                   lineStyle: LineStyle.Dashed,
                   axisLabelVisible: true,
-                  title: `SO${i + 1}`,
+                  title: isGrace ? `G${i + 1 - maxSafetyOrders}` : `SO${i + 1}`,
                 })
                 soPriceLinesRef.current.push(priceLine)
               }
@@ -669,17 +677,20 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
           } else {
             // "average_price" or "last_buy": reference changes after each fill,
             // so only draw the immediately-next SO trigger price.
+            const isGrace = soTriggered + 1 > maxSafetyOrders
             const refPrice = dcaReference === 'last_buy'
               ? (position.last_buy_price || position.average_buy_price)
               : position.average_buy_price
             const nextSOPrice = refPrice * (1 - priceDeviation / 100)
             const priceLine = mainSeriesRef.current.createPriceLine({
               price: nextSOPrice,
-              color: '#64748b',
+              color: isGrace ? GRACE_SO_COLOR : STANDARD_SO_COLOR,
               lineWidth: 1,
               lineStyle: LineStyle.Dashed,
               axisLabelVisible: true,
-              title: `SO${soTriggered + 1}`,
+              title: isGrace
+                ? `G${soTriggered + 1 - maxSafetyOrders}`
+                : `SO${soTriggered + 1}`,
             })
             soPriceLinesRef.current.push(priceLine)
           }
@@ -719,8 +730,10 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
           })
         }
 
-        // DCA markers (safety orders)
+        // DCA markers (safety orders). Grace SOs (index beyond configured max) get a
+        // distinct amber marker + "G" label so non-standard fills stand out.
         if (trades && trades.length > 0) {
+          const cfgMaxSO = Number(cfgSnapshot.max_safety_orders || 0)
           const positionTrades = trades.filter(t => t.position_id === position.id)
           const dcaTrades = positionTrades
             .filter(t => t.side === 'buy' && t.trade_type === 'dca')
@@ -733,12 +746,13 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
             )
 
             if (nearestCandle) {
+              const isGrace = cfgMaxSO > 0 && index + 1 > cfgMaxSO
               markers.push({
                 time: nearestCandle.time as Time,
                 position: 'belowBar',
-                color: '#f97316', // Orange for DCA
+                color: isGrace ? '#eab308' : '#f97316', // amber = grace, orange = standard DCA
                 shape: 'arrowUp',
-                text: `DCA${index + 1}`,
+                text: isGrace ? `G${index + 1 - cfgMaxSO}` : `DCA${index + 1}`,
               })
             }
           })

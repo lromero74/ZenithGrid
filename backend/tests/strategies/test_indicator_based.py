@@ -554,6 +554,69 @@ class TestShouldBuy:
         assert "Max safety orders" in reason
 
     @pytest.mark.asyncio
+    async def test_grace_allows_safety_order_beyond_configured(self):
+        """With grace, an SO fires past the configured max (like a manual bump)."""
+        strategy = _make_strategy({
+            "max_safety_orders": 1,
+            "grace_safety_orders": 2,  # effective ceiling = 3
+            "price_deviation": 2.0,
+            "safety_order_step_scale": 1.0,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.0,
+            "safety_order_conditions": [],
+        })
+        # base + 1 configured SO already deployed (configured max reached)
+        position = _make_mock_position(avg_price=100.0, total_quote=1.0, max_quote=10.0)
+        trade2 = MagicMock(side="buy", price=98.0, timestamp=2000, dca_levels=1)
+        position.trades = position.trades + [trade2]
+        # SO#2 trigger from avg 100 @ 2% deviation = 98.0; price below it
+        signal = {"price": 95.0, "base_order_signal": False, "safety_order_signal": False}
+
+        should, amount, reason = await strategy.should_buy(signal, position=position, balance=1.0)
+
+        assert should is True
+        assert amount > 0
+        assert "Safety order #2" in reason
+
+    @pytest.mark.asyncio
+    async def test_grace_ceiling_blocks_beyond_configured_plus_grace(self):
+        """Once configured + grace SOs are all deployed, no more fire."""
+        strategy = _make_strategy({
+            "max_safety_orders": 1,
+            "grace_safety_orders": 2,  # effective ceiling = 3
+            "price_deviation": 2.0,
+            "safety_order_step_scale": 1.0,
+        })
+        position = _make_mock_position()
+        # base + 3 SOs deployed = effective max (1 + 2) reached
+        for i, price in enumerate((98.0, 96.0, 94.0)):
+            position.trades = position.trades + [
+                MagicMock(side="buy", price=price, timestamp=2000 + i, dca_levels=1)
+            ]
+        signal = {"price": 80.0, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(signal, position=position, balance=1.0)
+
+        assert should is False
+        assert "Max safety orders reached (3/3)" in reason
+
+    @pytest.mark.asyncio
+    async def test_grace_zero_identical_to_today(self):
+        """grace=0 must behave exactly like no grace key — gate blocks at configured max."""
+        strategy = _make_strategy({"max_safety_orders": 1, "grace_safety_orders": 0})
+        position = _make_mock_position()
+        position.trades = position.trades + [
+            MagicMock(side="buy", price=95.0, timestamp=2000, dca_levels=1)
+        ]
+        signal = {"price": 90.0, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(signal, position=position, balance=1.0)
+
+        assert should is False
+        assert "Max safety orders reached (1/1)" in reason
+
+    @pytest.mark.asyncio
     async def test_safety_order_disabled(self):
         """max_safety_orders=0 => safety orders disabled."""
         strategy = _make_strategy({"max_safety_orders": 0})

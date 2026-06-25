@@ -7,7 +7,50 @@ from app.trading_engine.position_manager import (
     all_positions_exhausted_safety_orders,
     calculate_expected_position_budget,
     calculate_max_deal_cost,
+    compute_grace_expanded_budget,
 )
+
+
+# ---------------------------------------------------------------------------
+# compute_grace_expanded_budget (just-in-time grace budget)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeGraceExpandedBudget:
+    """Grace expands a deal's budget only after configured SOs are spent, using the
+    same deal-cost formula a manual bump would (rule 13)."""
+
+    def _cfg(self, **o):
+        base = {
+            "base_order_type": "fixed", "base_order_fixed": 0.001,
+            "max_safety_orders": 3, "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 50.0, "safety_order_volume_scale": 1.0,
+        }
+        base.update(o)
+        return base
+
+    def test_zero_when_no_grace(self):
+        cfg = self._cfg(grace_safety_orders=0)
+        assert compute_grace_expanded_budget(cfg, deployed_safety_orders=3,
+                                             base_order_size=0.001, aggregate_value=0.0) == 0.0
+
+    def test_zero_before_configured_exhausted(self):
+        cfg = self._cfg(grace_safety_orders=2)
+        # only 2 of 3 configured deployed → grace not active yet
+        assert compute_grace_expanded_budget(cfg, 2, 0.001, 0.0) == 0.0
+
+    def test_expands_to_manual_bump_value_once_exhausted(self):
+        cfg = self._cfg(grace_safety_orders=2)
+        # Grace budget must equal the deal cost for configured+grace = 5 SOs —
+        # i.e. exactly what editing Max Safety Orders to 5 would compute.
+        expected = calculate_expected_position_budget({**cfg, "max_safety_orders": 5}, 0.0)
+        assert compute_grace_expanded_budget(cfg, 3, 0.001, 0.0) == pytest.approx(expected)
+        # ...and strictly greater than the configured-only budget.
+        assert expected > calculate_expected_position_budget(cfg, 0.0)
+
+    def test_zero_when_safety_orders_disabled(self):
+        cfg = self._cfg(max_safety_orders=0, grace_safety_orders=2)
+        assert compute_grace_expanded_budget(cfg, 0, 0.001, 0.0) == 0.0
 
 
 # ---------------------------------------------------------------------------

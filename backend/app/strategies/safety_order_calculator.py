@@ -11,6 +11,22 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+def effective_max_safety_orders(config: Dict) -> int:
+    """Placement ceiling for safety orders = configured count + grace bonus.
+
+    ``max_safety_orders`` is the budgeted count (drives sizing/soft-ceiling/budget — see
+    ``get_total_multiplier`` / ``calculate_*_budget``). ``grace_safety_orders`` adds bonus
+    SOs that fire only after the configured ones are spent; grace is NEVER part of any
+    up-front budget/sizing calc. This helper is the single source for the *limit* used at
+    the placement gate and cascade, so every limit site agrees. (Grace expands a deal's
+    budget just-in-time when it actually crosses into grace — see _shared.py — exactly
+    like manually bumping Max Safety Orders.)
+    """
+    configured = int(config.get("max_safety_orders", 0) or 0)
+    grace = int(config.get("grace_safety_orders", 0) or 0)
+    return configured + max(0, grace)
+
+
 def get_total_multiplier(config: Dict) -> float:
     """Calculate the total multiplier for a full DCA cycle (base + all safety orders).
 

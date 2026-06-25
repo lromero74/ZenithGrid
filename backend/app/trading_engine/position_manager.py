@@ -175,6 +175,29 @@ def calculate_max_deal_cost(config: dict, base_order_size: float) -> float:
     return total
 
 
+def compute_grace_expanded_budget(
+    config: dict, deployed_safety_orders: int, base_order_size: float, aggregate_value: float,
+) -> float:
+    """Just-in-time deal budget once a deal has crossed into its GRACE safety orders.
+
+    Returns the deal cost for (configured + grace) safety orders — the exact value a
+    manual bump of "Max Safety Orders" to that count would compute — but ONLY after the
+    deal has already deployed its configured SOs. Returns 0.0 when grace doesn't apply,
+    so the caller leaves ``max_quote_allowed`` untouched (grace stays invisible to the
+    planned budget until actually needed). Reuses the SAME budget formulas with an
+    effective count — no separate grace math (CLAUDE.md rule 13).
+    """
+    configured = int(config.get("max_safety_orders", 0) or 0)
+    grace = int(config.get("grace_safety_orders", 0) or 0)
+    if configured <= 0 or grace <= 0 or deployed_safety_orders < configured:
+        return 0.0
+    eff_config = {**config, "max_safety_orders": configured + grace}
+    expanded = calculate_expected_position_budget(eff_config, aggregate_value or 0.0)
+    if expanded <= 0:
+        expanded = calculate_max_deal_cost(eff_config, base_order_size or 0.0)
+    return expanded
+
+
 async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Optional[Position]:
     """Get currently active position for this bot/pair combination"""
     query = (

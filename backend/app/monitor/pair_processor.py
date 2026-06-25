@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Bot, Position
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import StrategyRegistry
-from app.strategies.safety_order_calculator import count_deployed_safety_orders, entry_trades_for_position
+from app.strategies.safety_order_calculator import (
+    count_deployed_safety_orders,
+    effective_max_safety_orders,
+    entry_trades_for_position,
+)
 from app.trading_engine_v2 import StrategyTradingEngine
 from app.utils.candle_utils import get_timeframes_for_phases
 
@@ -132,13 +136,15 @@ async def _fetch_indicator_candles(
     from app.trading_engine.position_manager import all_positions_exhausted_safety_orders
 
     max_same_pair = strategy_config.get("max_simultaneous_same_pair", 1)
-    max_safety = strategy_config.get("max_safety_orders", 5)
+    # Include grace: a deal isn't "exhausted" (eligible to open a new same-pair deal)
+    # until its grace SOs are also spent.
+    effective_max = effective_max_safety_orders(strategy_config)
     same_pair_count = len(all_pair_positions)
 
     # Determine which phases to check based on position status
     if existing_position:
         if (same_pair_count < max_same_pair
-                and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
+                and all_positions_exhausted_safety_orders(all_pair_positions, effective_max)):
             phases_to_check = ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]
             logger.debug(f"  {same_pair_count} position(s), all SOs exhausted - checking entry + DCA + exit phases")
         else:
@@ -406,10 +412,10 @@ async def _log_indicator_evaluations(
     dca_slots_available = False
     if has_position and existing_position:
         config = existing_position.strategy_config_snapshot or bot.strategy_config or {}
-        max_safety_orders = config.get("max_safety_orders", 5)
+        effective_max = effective_max_safety_orders(config)  # configured + grace
         entry_trades = entry_trades_for_position(existing_position)  # buys for long, sells for short
         safety_orders_completed = count_deployed_safety_orders(entry_trades)  # sums cascade levels
-        dca_slots_available = safety_orders_completed < max_safety_orders
+        dca_slots_available = safety_orders_completed < effective_max
 
     logged_any = False
     for phase, details in condition_details.items():
@@ -452,7 +458,9 @@ async def _execute_trades(
     from app.trading_engine.position_manager import all_positions_exhausted_safety_orders
 
     max_same_pair = strategy_config.get("max_simultaneous_same_pair", 1)
-    max_safety = strategy_config.get("max_safety_orders", 5)
+    # Grace-inclusive: don't open a new same-pair deal until existing deals have spent
+    # their grace SOs too.
+    effective_max = effective_max_safety_orders(strategy_config)
     same_pair_count = len(all_pair_positions)
 
     # Process each existing position for DCA/sell
@@ -485,7 +493,7 @@ async def _execute_trades(
     if (bot.is_active
             and same_pair_count > 0
             and same_pair_count < max_same_pair
-            and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
+            and all_positions_exhausted_safety_orders(all_pair_positions, effective_max)):
         logger.info(f"  🔄 All {same_pair_count} position(s) exhausted SOs — evaluating new simultaneous deal")
         new_engine = StrategyTradingEngine(
             db=db, exchange=monitor.exchange, bot=bot, strategy=strategy, product_id=product_id,

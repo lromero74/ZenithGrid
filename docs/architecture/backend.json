@@ -237,7 +237,7 @@
     "position_routers": [
       {
         "file": "position_routers/position_query_router.py",
-        "purpose": "Position listing (with offset/limit pagination, default limit 500), details, trades, AI logs, P&L timeseries; populates coin_category on each position from BlacklistedCoin reason prefix (e.g. [APPROVED], [MEME], [BLACKLISTED]); GET /api/positions/{position_id}/ai-opinion returns the most recent AIOpinionLog row (including tool_calls[]) for the position, scoped to accessible_account_ids. v2.164.5: returns 200 with null body when no opinion is logged yet instead of 404 (the Positions page prefetches per row; 404s produced browser-console spam for the common empty case). 404 is now reserved for actually-inaccessible or nonexistent positions. v2.164.10: the list endpoint no longer hydrates full trades/pending-order collections for every row; it now uses aggregate queries for trade counts, buy-price bounds, pending counts, targeted limit-close order lookups, page-scoped blacklist fetches, and narrower bot preloads for resize-budget calculation. v2.164.11: the hot list route now also reuses aggregated first-buy quote amounts for resize-budget hints and omits fill-by-fill limit-close history from the list payload, keeping only the summary fields the Positions cards render. v2.164.12: the list route also trims strategy_config_snapshot down to the subset of frozen config keys the open-positions UI actually reads, while the single-position detail route continues to return the full snapshot. v2.164.13: the open-position list now also clears several optional fields that the active-deals UI never reads (account_id, user_attempt_number, close/profit-at-close values, limit_close_order_id), while detail and closed-position paths keep them. v3.4.7: list metrics now ride on the account-scoped position SELECT as correlated, indexed aggregates, removing four extra database round-trips while retaining deterministic first/last-buy ordering."
+        "purpose": "Position listing (with offset/limit pagination, default limit 500), details, trades, AI logs, P&L timeseries; populates coin_category on each position from BlacklistedCoin reason prefix (e.g. [APPROVED], [MEME], [BLACKLISTED]); GET /api/positions/{position_id}/ai-opinion returns the most recent AIOpinionLog row (including tool_calls[]) for the position, scoped to accessible_account_ids. v2.164.5: returns 200 with null body when no opinion is logged yet instead of 404 (the Positions page prefetches per row; 404s produced browser-console spam for the common empty case). 404 is now reserved for actually-inaccessible or nonexistent positions. v2.164.10: the list endpoint no longer hydrates full trades/pending-order collections for every row; it now uses aggregate queries for trade counts, buy-price bounds, pending counts, targeted limit-close order lookups, page-scoped blacklist fetches, and narrower bot preloads for resize-budget calculation. v2.164.11: the hot list route now also reuses aggregated first-buy quote amounts for resize-budget hints and omits fill-by-fill limit-close history from the list payload, keeping only the summary fields the Positions cards render. v2.164.12: the list route also trims strategy_config_snapshot down to the subset of frozen config keys the open-positions UI actually reads, while the single-position detail route continues to return the full snapshot. v2.164.13: the open-position list now also clears several optional fields that the active-deals UI never reads (account_id, user_attempt_number, close/profit-at-close values, limit_close_order_id), while detail and closed-position paths keep them. v3.4.7: list metrics now ride on the account-scoped position SELECT as correlated, indexed aggregates, removing four extra database round-trips while retaining deterministic first/last-buy ordering. v3.11.0: grace_safety_orders added to the per-position config field whitelist exposed to the frontend."
       },
       {
         "file": "position_routers/position_actions_router.py",
@@ -1638,7 +1638,7 @@
     "modules": [
       {
         "file": "trading_engine/signal_processor/",
-        "purpose": "Signal processing and trading decision orchestration (Phase 5 package, split from a 1308-LOC monolith). __init__.py exports process_signal() orchestrator; _shared.py holds context/budget/indicator/signal-log helpers; buy_decision.py holds _decide_buy + _execute_buy_trade (Phase 5.2 helpers: _log_budget_blocker_if_applicable, _run_new_position_preflight, _evaluate_blacklist_category, new/DCA/stopped path handlers) and v2.165.0 adds a speculative-bucket preflight check via speculative_bucket_service.validate_speculative_entry so new speculative-preset entries cannot exceed the per-account speculative cap; sell_decision.py holds _decide_and_execute_sell (Phase 5.2 helpers: _build_market_context, _resolve_take_profit_mode, _verify_mark_profit_allows_sell, _execute_position_close). v2.167.11: _decide_buy (new-position path) passes effective_max_deals=bot.soft_ceiling_effective_max into strategy.should_buy when soft ceiling is enabled, so IndicatorBasedStrategy._calculate_bidirectional_order_amount divides by the effective ceiling rather than the raw configured max_concurrent_deals."
+        "purpose": "Signal processing and trading decision orchestration (Phase 5 package, split from a 1308-LOC monolith). __init__.py exports process_signal() orchestrator; _shared.py holds context/budget/indicator/signal-log helpers; buy_decision.py holds _decide_buy + _execute_buy_trade (Phase 5.2 helpers: _log_budget_blocker_if_applicable, _run_new_position_preflight, _evaluate_blacklist_category, new/DCA/stopped path handlers) and v2.165.0 adds a speculative-bucket preflight check via speculative_bucket_service.validate_speculative_entry so new speculative-preset entries cannot exceed the per-account speculative cap; sell_decision.py holds _decide_and_execute_sell (Phase 5.2 helpers: _build_market_context, _resolve_take_profit_mode, _verify_mark_profit_allows_sell, _execute_position_close). v2.167.11: _decide_buy (new-position path) passes effective_max_deals=bot.soft_ceiling_effective_max into strategy.should_buy when soft ceiling is enabled, so IndicatorBasedStrategy._calculate_bidirectional_order_amount divides by the effective ceiling rather than the raw configured max_concurrent_deals. v3.11.0: _shared.py DCA budget path calls position_manager.compute_grace_expanded_budget and expands max_quote_allowed just-in-time when a deal enters grace safety order territory."
       },
       {
         "file": "trading_engine/buy_executor.py",
@@ -1654,7 +1654,7 @@
       },
       {
         "file": "trading_engine/position_manager.py",
-        "purpose": "Position CRUD operations and lifecycle management"
+        "purpose": "Position CRUD operations and lifecycle management. v3.11.0: adds compute_grace_expanded_budget(config, deployed_safety_orders, base_order_size, aggregate_value) — just-in-time deal budget expansion once a deal crosses into grace safety order territory, mirroring a manual Max-SO bump without altering the bot config."
       },
       {
         "file": "trading_engine/order_logger.py",
@@ -1676,7 +1676,7 @@
       },
       {
         "file": "monitor/pair_processor.py",
-        "purpose": "Signal processing for a single bot/pair combination; extracted from MultiBotMonitor.process_bot_pair()"
+        "purpose": "Signal processing for a single bot/pair combination; extracted from MultiBotMonitor.process_bot_pair(). v3.11.0: safety-order placement gate and cascade use effective_max_safety_orders(config) so grace layers are respected at the monitor level."
       },
       {
         "file": "monitor/bull_flag_processor.py",
@@ -1771,7 +1771,7 @@
     {
       "file": "strategies/indicator_based.py",
       "class": "IndicatorBasedStrategy",
-      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit. Pure helpers (flatten_conditions, needs_aggregate_indicators, build_ai_params, build_bull_flag_params) extracted to strategies/indicator_based_helpers.py in Phase 5 to stay under the 1200-LOC cap. v2.165.0 adds a time-based max-hold exit: when speculative_max_hold_hours is set in the strategy config, positions older than the threshold are force-exited regardless of take-profit/stop-loss (used by the 'speculative' risk preset for catalyst trades). v2.167.11: _calculate_bidirectional_order_amount now accepts an effective_max_deals kwarg; when soft ceiling is enabled, it divides the per-direction budget by effective_max_deals (the soft ceiling value persisted by the preflight) rather than the raw configured max_concurrent_deals, matching how batch_analyzer.py sizes the long-only path. Falls back to max_concurrent_deals when the soft ceiling is disabled or effective_max_deals is not supplied. should_buy and _check_base_order_conditions forward the kwarg via **kwargs."
+      "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit. Pure helpers (flatten_conditions, needs_aggregate_indicators, build_ai_params, build_bull_flag_params) extracted to strategies/indicator_based_helpers.py in Phase 5 to stay under the 1200-LOC cap. v2.165.0 adds a time-based max-hold exit: when speculative_max_hold_hours is set in the strategy config, positions older than the threshold are force-exited regardless of take-profit/stop-loss (used by the 'speculative' risk preset for catalyst trades). v2.167.11: _calculate_bidirectional_order_amount now accepts an effective_max_deals kwarg; when soft ceiling is enabled, it divides the per-direction budget by effective_max_deals (the soft ceiling value persisted by the preflight) rather than the raw configured max_concurrent_deals, matching how batch_analyzer.py sizes the long-only path. Falls back to max_concurrent_deals when the soft ceiling is disabled or effective_max_deals is not supplied. should_buy and _check_base_order_conditions forward the kwarg via **kwargs. v3.11.0: safety-order placement gate and cascade use the effective ceiling from safety_order_calculator.effective_max_safety_orders(config) (max_safety_orders + grace_safety_orders) instead of the raw max_safety_orders."
     },
     {
       "file": "strategies/indicator_based_helpers.py",
@@ -1802,6 +1802,16 @@
       "file": "strategies/condition_mirror.py",
       "class": "ConditionMirror",
       "purpose": "Mirrors long conditions to short conditions for bidirectional bots"
+    },
+    {
+      "file": "strategies/safety_order_calculator.py",
+      "class": "N/A (module-level helpers)",
+      "purpose": "Safety order placement math. v3.11.0: effective_max_safety_orders(config) returns max_safety_orders + grace_safety_orders as the placement ceiling, allowing deals to absorb extra DCA layers beyond the configured max without a manual bot edit."
+    },
+    {
+      "file": "strategies/indicator_params.py",
+      "class": "N/A (config schema)",
+      "purpose": "Strategy parameter schema for indicator-based bots. v3.11.0: adds grace_safety_orders (int, default 0) — the number of additional safety orders permitted beyond max_safety_orders when a deal crosses into grace territory."
     }
   ],
   "core_modules": [
