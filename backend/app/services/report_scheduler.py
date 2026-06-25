@@ -344,7 +344,7 @@ async def generate_report_for_schedule(
     # Send email to all recipients (same report for everyone)
     if send_email and save and schedule.recipients:
         recipients = [_normalize_recipient(r) for r in schedule.recipients]
-        email_sent = await _deliver_report(DeliverReportParams(
+        email_sent, delivery_error = await _deliver_report(DeliverReportParams(
             report=report, recipients=recipients, ai_summary=ai_summary,
             report_data=report_data, user_name=user_name,
             period_label=period_label, pdf_content=pdf_content,
@@ -356,7 +356,7 @@ async def generate_report_for_schedule(
             report.delivery_recipients = schedule.recipients
         else:
             report.delivery_status = "failed"
-            report.delivery_error = "Email delivery failed"
+            report.delivery_error = (delivery_error or "Email delivery failed")[:500]
 
     if save:
         # Only advance schedule timing for automated runs,
@@ -395,13 +395,17 @@ class DeliverReportParams:
     account_name: Optional[str] = None
 
 
-async def _deliver_report(params: DeliverReportParams) -> bool:
+async def _deliver_report(params: DeliverReportParams) -> tuple[bool, str | None]:
     """
     Send the report email to all recipients.
 
     All recipients get the same email-mode HTML (Summary tier as default).
-    Returns True if at least one email was sent successfully.
+    Returns ``(any_sent, last_error)``: ``any_sent`` is True if at least one
+    email was sent successfully; ``last_error`` is the most recent failure
+    reason (None on full success) so the caller can record it on the report.
     """
+    from botocore.exceptions import ClientError
+
     from app.services.brand_service import get_brand
     from app.services.email_service import send_report_email
     from app.services.report_generator_service import BuildReportHtmlParams, build_report_html
@@ -409,7 +413,7 @@ async def _deliver_report(params: DeliverReportParams) -> bool:
     b = get_brand()
 
     if not params.recipients:
-        return False
+        return False, "No recipients configured"
 
     report_title = params.schedule_name or "Performance Report"
     subject = f"{b['shortName']} {report_title} \u2014 {params.period_label}"
@@ -435,6 +439,7 @@ async def _deliver_report(params: DeliverReportParams) -> bool:
     # Build HTML per color scheme (cache to avoid re-generating)
     html_cache: dict = {}  # color_scheme → (html, inline_images)
     any_sent = False
+    last_error: str | None = None
 
     for recipient in params.recipients:
         if isinstance(recipient, dict):
@@ -474,15 +479,24 @@ async def _deliver_report(params: DeliverReportParams) -> bool:
                     f"Report email sent to {email} (scheme={scheme})"
                 )
             else:
+                # send_report_email returns False only when SES is disabled.
+                last_error = "Email sending is disabled (SES_ENABLED is false)"
                 logger.warning(
-                    f"Failed to send report email to {email}"
+                    f"Failed to send report email to {email}: {last_error}"
                 )
-        except Exception as e:
+        except ClientError as e:
+            err = e.response.get("Error", {})
+            last_error = f"{err.get('Code', 'ClientError')}: {err.get('Message', str(e))}"
             logger.error(
-                f"Error sending report email to {email}: {e}"
+                f"Error sending report email to {email}: {last_error}"
+            )
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+            logger.error(
+                f"Error sending report email to {email}: {last_error}"
             )
 
-    return any_sent
+    return any_sent, last_error
 
 
 def _compute_expense_changes(report_data: dict, prior_data: dict) -> None:

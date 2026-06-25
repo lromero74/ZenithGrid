@@ -2,7 +2,8 @@
 Email Service - Send transactional emails via Amazon SES
 
 Uses boto3 SDK (HTTPS API calls, no SMTP needed).
-Auth via EC2 instance IAM role — no API keys to manage.
+Auth via explicit IAM-user credentials from settings (.env) when set, else
+boto3's default credential chain (instance role). See _get_ses_client().
 Brand values (name, tagline, copyright) loaded from brand_service.
 """
 
@@ -18,7 +19,21 @@ logger = logging.getLogger(__name__)
 
 
 def _get_ses_client():
-    """Get SES client using IAM instance role credentials."""
+    """Get an SES client.
+
+    Prefers explicit IAM-user credentials from settings (.env) when both are set —
+    required on hosts whose instance role can't send via SES (e.g. AWS Lightsail,
+    whose default role is in a different AWS account than the SES-verified domain).
+    Falls back to boto3's default credential chain (env / ~/.aws / instance role)
+    when they're unset.
+    """
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        return boto3.client(
+            "ses",
+            region_name=settings.ses_region,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+        )
     return boto3.client("ses", region_name=settings.ses_region)
 
 
@@ -316,10 +331,12 @@ def send_report_email(
         logger.error(
             "SES error sending report to %s: %s - %s", to, error_code, error_msg
         )
-        return False
+        # Propagate so the caller can record the real reason (e.g. AccessDenied,
+        # MessageRejected) against the report instead of a generic failure string.
+        raise
     except Exception as e:
         logger.error("Failed to send report email to %s: %s", to, e)
-        return False
+        raise
 
 
 def send_invitation_email(
