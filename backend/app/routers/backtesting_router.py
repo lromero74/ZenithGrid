@@ -87,6 +87,20 @@ async def _prepare_backtest_inputs(
         if not account:
             raise HTTPException(status_code=400, detail="No active CEX account to fetch historical data")
         account_id = account.id
+    else:
+        # A caller-supplied account_id must belong to the caller — otherwise
+        # get_exchange_client_for_account would build a client from another
+        # user's decrypted API credentials. 404 (not 403) so account IDs can't
+        # be probed for existence.
+        from app.models import Account
+        owned = await db.execute(
+            select(Account.id).where(
+                Account.id == account_id,
+                Account.user_id == current_user.id,
+            )
+        )
+        if owned.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Account not found")
 
     exchange = await get_exchange_client_for_account(db, account_id)
     if not exchange:

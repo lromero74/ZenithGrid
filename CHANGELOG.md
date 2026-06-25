@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.12.0] - 2026-06-25
+
+### Added
+- **Pause / resume a report schedule in one click.** Each schedule in Reports → Report Schedules now has a pause button — pause one to stop it from generating/emailing reports without deleting it or opening the editor, and resume it the same way. The Active/Paused badge updates immediately.
+
+### Fixed
+- Code-review sweep #2 (tier 1 — real-money & security). Closing a short position now waits for the buy-back order to fully complete before recording it (a partial mid-fill could previously mark the short closed while the rest was still filling — the same class of bug fixed for buys/long-sells in v3.11.6). Closing a position as "dust" when the wallet holds less than recorded no longer over-books proceeds it never received (it now values only what's actually held). Backtesting now verifies a supplied account belongs to you before using it.
+
 ## [v3.11.6] - 2026-06-25
 
 ### Fixed

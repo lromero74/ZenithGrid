@@ -18,7 +18,7 @@ from app.services.shutdown_manager import shutdown_manager
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
-from app.trading_engine.fill_reconciler import reconcile_order_fill
+from app.trading_engine.fill_reconciler import reconcile_order_fill, _TERMINAL_ORDER_STATUSES
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 from app.services.exit_provenance import record_exit_provenance
 from app.services.pnl_service import calculate_realized_short_profit
@@ -741,8 +741,14 @@ async def _reconcile_close_short_fill(
             average_filled_price = float(order_details.get("average_filled_price", 0))
             filled_value = float(order_details.get("filled_value", 0) or 0)
             fee_quote = float(order_details.get("total_fees", 0) or 0)
+            status = str(order_details.get("status", "")).upper()
+            # Accept the fill ONLY once the order is terminal — otherwise a buy-back
+            # caught mid-fill records a partial and books the short closed while the
+            # rest keeps filling (the v3.11.6 mid-fill bug, on the short side).
+            # Clients with no status field (paper/some adapters) are treated terminal.
+            order_is_terminal = (not status) or (status in _TERMINAL_ORDER_STATUSES)
 
-            if filled_size > 0 and average_filled_price > 0:
+            if filled_size > 0 and average_filled_price > 0 and order_is_terminal:
                 logger.info(f"Order filled: {filled_size:.8f} BTC @ ${average_filled_price:.8f}")
                 quote_spent = filled_value if filled_value > 0 else filled_size * average_filled_price
                 return filled_size, quote_spent, average_filled_price, fee_quote
