@@ -154,8 +154,11 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     }
   }
 
-  // Fetch candle data
+  // Fetch candle data. AbortController + cancelled guard so a slow response for
+  // a previously-selected pair/timeframe can't overwrite the current chart data.
   useEffect(() => {
+    const controller = new AbortController()
+    let cancelled = false
     const fetchCandles = async () => {
       try {
         const response = await api.get('/candles', {
@@ -164,7 +167,9 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
             granularity: timeframe,
             limit: 300,
           },
+          signal: controller.signal,
         })
+        if (cancelled) return
         let candles = response.data.candles || []
 
         // Add synthetic candle for position entry if needed
@@ -175,10 +180,12 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         setChartData(candles)
         candleDataRef.current = candles
       } catch (err) {
+        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.name === 'CanceledError') return
         console.error('Error fetching candles:', err)
       }
     }
     fetchCandles()
+    return () => { cancelled = true; controller.abort() }
   }, [selectedPair, timeframe, position])
 
   // Initialize main chart

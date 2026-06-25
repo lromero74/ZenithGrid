@@ -49,22 +49,24 @@ async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_posi
     raw_max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
     quote_currency = bot.get_quote_currency()
 
-    try:
-        aggregate_value = await monitor.exchange.calculate_market_budget(
-            quote_currency, bypass_cache=True
-        )
-    except Exception as e:
-        logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
-        aggregate_value = 0.001
+    async def _fetch_aggregate():
+        try:
+            return await monitor.exchange.calculate_market_budget(quote_currency, bypass_cache=True)
+        except Exception as e:
+            logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
+            return 0.001
 
-    try:
-        if quote_currency == "BTC":
-            actual_available = await monitor.exchange.get_btc_balance()
-        else:
-            actual_available = await monitor.exchange.get_usd_balance()
-    except Exception as e:
-        logger.warning(f"  ⚠️  Failed to get actual available balance: {e}")
-        actual_available = 0.0
+    async def _fetch_available():
+        try:
+            if quote_currency == "BTC":
+                return await monitor.exchange.get_btc_balance()
+            return await monitor.exchange.get_usd_balance()
+        except Exception as e:
+            logger.warning(f"  ⚠️  Failed to get actual available balance: {e}")
+            return 0.0
+
+    # Independent exchange calls — run concurrently to halve per-cycle latency.
+    aggregate_value, actual_available = await asyncio.gather(_fetch_aggregate(), _fetch_available())
 
     if aggregate_value < 0.0001:
         logger.warning(

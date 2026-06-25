@@ -5,7 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3.12.2] - 2026-06-25
+## [v3.12.3] - 2026-06-25
+
+### Fixed
+- Bull-flag/pattern take-profit now honors the bot's configured trailing deviation instead of always trailing by 1%.
+
+### Changed
+- Performance (code-review sweep #2, tier 3). The Account Value chart is now created once and updated in place rather than being torn down and rebuilt on every refresh and live-value update — which also means it no longer resets your zoom each time. Deal-chart and chart-modal candle fetches now cancel superseded requests so a slow response for a previous pair can't overwrite the current view. The transfer summary is aggregated in the database instead of loading every transfer into memory. Per-bot budget checks now make their two exchange calls concurrently. And the positions price feed no longer refetches just because open positions changed order.
 
 ### Fixed
 - Manual safety-order sizing (code-review sweep #2). For bots that size safety orders as a percentage of the base order and don't use auto-calculated sizes, the base-order reference is now taken from the deal's actual first order rather than averaged from total spent. Previously, with volume scaling (or a safety-order percentage other than 100%), safety orders were mis-sized — and increasingly so deeper into a deal. Bots using auto-calculated sizes or fixed safety-order amounts were unaffected.

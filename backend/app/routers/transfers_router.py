@@ -231,29 +231,25 @@ async def get_transfer_summary(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid end date")
 
-    result = await db.execute(
-        select(AccountTransfer).where(and_(*filters))
+    # Aggregate in SQL (sum + count grouped by type) rather than hydrating every
+    # transfer row into Python — bounds the work to one row per transfer_type.
+    agg = await db.execute(
+        select(
+            AccountTransfer.transfer_type,
+            func.coalesce(func.sum(AccountTransfer.amount_usd), 0.0),
+            func.count(),
+        ).where(and_(*filters)).group_by(AccountTransfer.transfer_type)
     )
-    transfers = result.scalars().all()
-
-    total_deposits = sum(
-        t.amount_usd or 0 for t in transfers if t.transfer_type == "deposit"
-    )
-    total_withdrawals = sum(
-        t.amount_usd or 0 for t in transfers
-        if t.transfer_type == "withdrawal"
-    )
+    by_type = {row[0]: (float(row[1] or 0.0), int(row[2] or 0)) for row in agg.all()}
+    total_deposits, deposit_count = by_type.get("deposit", (0.0, 0))
+    total_withdrawals, withdrawal_count = by_type.get("withdrawal", (0.0, 0))
 
     return {
         "net_deposits_usd": round(total_deposits - total_withdrawals, 2),
         "total_deposits_usd": round(total_deposits, 2),
         "total_withdrawals_usd": round(total_withdrawals, 2),
-        "deposit_count": sum(
-            1 for t in transfers if t.transfer_type == "deposit"
-        ),
-        "withdrawal_count": sum(
-            1 for t in transfers if t.transfer_type == "withdrawal"
-        ),
+        "deposit_count": deposit_count,
+        "withdrawal_count": withdrawal_count,
     }
 
 

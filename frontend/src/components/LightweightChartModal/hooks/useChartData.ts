@@ -20,6 +20,8 @@ export function useChartData(
   useEffect(() => {
     if (!isOpen || !symbol) return
 
+    const controller = new AbortController()
+    let cancelled = false
     const fetchCandles = async () => {
       try {
         const response = await api.get('/candles', {
@@ -28,7 +30,9 @@ export function useChartData(
             granularity: timeframe,
             limit: 300,
           },
+          signal: controller.signal,
         })
+        if (cancelled) return
 
         const candles = response.data.candles || []
         const formattedCandles = candles
@@ -63,14 +67,17 @@ export function useChartData(
           )
           .sort((a: CandleData, b: CandleData) => (a.time as number) - (b.time as number))
 
+        if (cancelled) return
         candleDataRef.current = formattedCandles
         setChartData(formattedCandles)
       } catch (error) {
+        if ((error as any)?.code === 'ERR_CANCELED' || (error as any)?.name === 'CanceledError') return
         console.error('Error fetching candles:', error)
       }
     }
 
     fetchCandles()
+    return () => { cancelled = true; controller.abort() }
   }, [isOpen, symbol, timeframe])
 
   return {

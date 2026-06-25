@@ -256,8 +256,9 @@ describe('usePositionsData', () => {
       expect(vi.mocked(api.get)).toHaveBeenCalled()
     })
 
+    // Deduplicated AND sorted (sorted so the query key is stable under reordering).
     expect(vi.mocked(api.get)).toHaveBeenCalledWith('/prices/batch', {
-      params: { products: 'ETH-USD,BTC-USD' },
+      params: { products: 'BTC-USD,ETH-USD' },
       signal: expect.any(AbortSignal),
     })
   })
