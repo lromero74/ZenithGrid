@@ -754,7 +754,7 @@ async def get_dust_sweep_settings(
                 balances = {}
 
         # Subtract amounts locked in open positions
-        from app.services.rebalance_monitor import (
+        from app.services.rebalance_planning import (
             get_position_locked_amounts, subtract_locked_amounts,
         )
         locked = await get_position_locked_amounts(db, account.id)

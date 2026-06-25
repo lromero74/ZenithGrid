@@ -112,7 +112,7 @@ class TestSafetyOrderReconciler:
         sell_op = AsyncMock()
         buy_op = AsyncMock()
         with (
-            _patch("app.trading_engine.sell_executor._post_short_sell_operations", sell_op),
+            _patch("app.trading_engine.sell_executor_short._post_short_sell_operations", sell_op),
             _patch("app.trading_engine.buy_executor._post_buy_operations", buy_op),
         ):
             yield SimpleNamespace(sell=sell_op, buy=buy_op)

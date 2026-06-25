@@ -160,7 +160,7 @@ class SafetyOrderMonitor:
         # position's running totals and recompute the average entry. They NEVER
         # set status="closed" or compute realized P&L.
         if pending_order.side == "SELL":
-            from app.trading_engine.sell_executor import _create_short_sell_trade_record
+            from app.trading_engine.sell_executor_short import _create_short_sell_trade_record
             await _create_short_sell_trade_record(
                 db=self.db,
                 position=position,
@@ -221,7 +221,7 @@ class SafetyOrderMonitor:
             return
 
         if pending_order.side == "SELL":
-            from app.trading_engine.sell_executor import _post_short_sell_operations
+            from app.trading_engine.sell_executor_short import _post_short_sell_operations
             await _post_short_sell_operations(
                 db=self.db, exchange=self.exchange, bot=bot,
                 product_id=pending_order.product_id, position=position,

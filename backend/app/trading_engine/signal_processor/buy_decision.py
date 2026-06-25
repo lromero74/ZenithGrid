@@ -21,7 +21,7 @@ from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.order_logger import OrderLogEntry, log_order_to_history
 from app.trading_engine.perps_executor import execute_perps_open
 from app.trading_engine.position_manager import create_position, get_open_positions_count
-from app.trading_engine.sell_executor import execute_sell_short
+from app.trading_engine.sell_executor_short import execute_sell_short
 from app.order_validation import get_product_minimums, validate_order_size
 from app.trading_engine.signal_processor._shared import (
     _is_duplicate_failed_order,
