@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.0] - 2026-06-25
+
+### Added
+- **Grace Safety Orders is now configurable in the bot editor** — a new field next to "Max Safety Orders" (in the DCA/budget config). Grace safety orders were introduced in v3.11.0 with full engine support and amber chart markers, but there was no way to set them from the editor; now you can. Help text explains they fire only after the configured safety orders are spent, are excluded from the budget (intentional just-in-time overallocation), and default to 0 (off).
+
 ## [v3.12.6] - 2026-06-25
 
 ### Changed
