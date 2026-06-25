@@ -1184,7 +1184,10 @@ class RebalanceMonitor(SessionMakerMixin):
                     if pid:
                         available_products.add(pid)
             except Exception:
-                pass
+                # If the product list can't be fetched, the availability check
+                # below skips every sell — log it rather than swallowing silently.
+                logger.warning("Rebalance dust sweep: list_products failed; "
+                               "product-availability check will skip sells", exc_info=True)
 
             targets = {
                 "usd_pct": account.rebalance_target_usd_pct if account.rebalance_target_usd_pct is not None else 34.0,

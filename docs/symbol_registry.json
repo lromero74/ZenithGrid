@@ -2410,7 +2410,9 @@
   "backend/app/routers/webhook_router.py": {
     "classes": {},
     "functions": [
+      "_check_ip_rate_limit",
       "_check_rate_limit",
+      "_within_limit",
       "tradingview_webhook"
     ]
   },

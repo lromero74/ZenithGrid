@@ -158,7 +158,9 @@ export function useBotMutations({
     mutationFn: (id: number) => botsApi.cancelAllPositions(id, true),
     onSuccess: (data, botId) => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
-      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      // Scope to the current account's open-positions query (the only ['positions',…]
+      // key) instead of a prefix match that refetches every account's positions.
+      queryClient.invalidateQueries({ queryKey: ['positions', 'open', selectedAccount?.id] })
 
       const bot = bots?.find(b => b.id === botId)
       const botName = bot?.name || `Bot #${botId}`
@@ -176,7 +178,7 @@ export function useBotMutations({
     mutationFn: (id: number) => botsApi.sellAllPositions(id, true),
     onSuccess: (data, botId) => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
-      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['positions', 'open', selectedAccount?.id] })
 
       const bot = bots?.find(b => b.id === botId)
       const botName = bot?.name || `Bot #${botId}`

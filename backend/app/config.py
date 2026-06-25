@@ -152,3 +152,15 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# Billing / usage-dashboard URLs per AI provider — single source for the routers
+# that surface them (ai_credentials_router, system_router) so a URL change is made
+# in exactly one place. Keyed by the internal provider id.
+AI_PROVIDER_BILLING_URLS = {
+    "claude": "https://console.anthropic.com/settings/usage",
+    "gemini": "https://aistudio.google.com/app/apikey",
+    "grok": "https://console.x.ai/",
+    "groq": "https://console.groq.com/keys",
+    "openai": "https://platform.openai.com/usage",
+}

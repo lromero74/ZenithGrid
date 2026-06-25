@@ -876,15 +876,18 @@ def _compute_full_prior_bounds(
         q_months = sorted(
             [(qstart + 3 * i - 1) % 12 + 1 for i in range(4)]
         )
-        # Find the most recent quarter start <= current month
-        current_q_start = q_months[0]
-        for m in q_months:
-            if m <= period_end.month:
-                current_q_start = m
-        # The prior quarter ends at current_q_start
-        q_end = period_end.replace(month=current_q_start, day=1)
-        if current_q_start > period_end.month:
-            q_end = q_end.replace(year=period_end.year - 1)
+        # The current quarter began at the most recent quarter-start month <= the
+        # current month. If none this year (period_end falls before the first
+        # quarter-start month, e.g. January with quarters Mar/Jun/Sep/Dec), the
+        # current quarter began with the LAST quarter-start month of the prior
+        # year — not the first of this year (which would shift the window a year).
+        candidates = [m for m in q_months if m <= period_end.month]
+        if candidates:
+            cur_month, cur_year = max(candidates), period_end.year
+        else:
+            cur_month, cur_year = max(q_months), period_end.year - 1
+        # The prior full quarter is the 3 months ending where the current began.
+        q_end = period_end.replace(year=cur_year, month=cur_month, day=1)
         q_start = q_end - relativedelta(months=3)
         return q_start, q_end
 

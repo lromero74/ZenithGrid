@@ -70,8 +70,6 @@ from app.routers.system_router import (
     get_latest_git_tag_cached,
     set_trading_pair_monitor,
 )
-from app.services.auto_buy_monitor import auto_buy_monitor  # noqa: F401
-from app.services.rebalance_monitor import rebalance_monitor  # noqa: F401
 from app.services.delisted_pair_monitor import trading_pair_monitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.perps_monitor import PerpsMonitor
