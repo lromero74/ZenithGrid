@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.6] - 2026-06-25
+
+### Fixed
+- **Order fills are now recorded only after the order is actually complete.** A market order can fill in several pieces across price levels; the bot was reading the fill too early and recording a partial as if it were the whole order — e.g. a buy that ultimately filled 1.9 units was booked as 0.1, marking the deal "done" while the remaining 1.8 landed in the wallet untracked (and the mirror case on sells, under-booking a sale and misattributing its proceeds). The fill reconciler now waits for the exchange to report the order in a terminal state and records the full filled quantity. If an order can't be confirmed complete within the retry window, it's treated as unconfirmed and **not** booked (rather than booked at a partial), and the order-reconciliation monitor corrects it once it settles. This is what caused the "Untracked" balance to jump.
+
 ## [v3.11.5] - 2026-06-25
 
 ### Fixed
