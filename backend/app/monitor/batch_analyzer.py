@@ -92,16 +92,18 @@ async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_posi
     has_actual_balance = actual_available >= min_per_position
     has_budget_for_new = has_allocation_room and has_actual_balance
 
-    logger.warning(
+    # Routine per-cycle budget breakdown — info, not warning (these aren't problems
+    # and at WARNING they flood aggregators and bury real warnings).
+    logger.info(
         f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})"
     )
-    logger.warning(
+    logger.info(
         f"  💰 In positions: {total_in_positions:.8f} {quote_currency},"
         f" Available allocation: {available_budget:.8f} {quote_currency}"
     )
-    logger.warning(f"  💰 Actual {quote_currency} balance: {actual_available:.8f} {quote_currency}")
-    logger.warning(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}")
-    logger.warning(
+    logger.info(f"  💰 Actual {quote_currency} balance: {actual_available:.8f} {quote_currency}")
+    logger.info(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}")
+    logger.info(
         f"  💰 Has allocation room: {has_allocation_room},"
         f" Has actual balance: {has_actual_balance},"
         f" Can open new: {has_budget_for_new}"

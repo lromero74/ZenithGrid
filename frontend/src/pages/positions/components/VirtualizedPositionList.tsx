@@ -7,7 +7,7 @@
  * measureElement; estimateSize only seeds unmeasured rows.
  */
 
-import { useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 
@@ -30,11 +30,24 @@ export function VirtualizedPositionList<T>({
 }: VirtualizedPositionListProps<T>) {
   const listRef = useRef<HTMLDivElement | null>(null)
 
+  // listRef is null during the first render, so reading offsetTop inline always
+  // yielded 0 → items were positioned relative to the viewport top instead of the
+  // list's actual offset. Measure after mount (and on window resize) instead.
+  const [scrollMargin, setScrollMargin] = useState(0)
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (listRef.current) setScrollMargin(listRef.current.offsetTop)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
   const virtualizer = useWindowVirtualizer({
     count: items.length,
     estimateSize: () => estimateSize,
     overscan,
-    scrollMargin: listRef.current?.offsetTop ?? 0,
+    scrollMargin,
     getItemKey,
   })
 

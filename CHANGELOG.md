@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.4] - 2026-06-25
+
+### Security
+- Requesting another account's coin blacklist when you aren't a member now returns a generic "account not found" instead of "not a member of this account," so account existence can't be probed.
+
+### Fixed
+- The virtualized positions list now measures its scroll offset after mount (and on window resize) instead of on first render, so rows line up with the list's actual position rather than the top of the viewport.
+
+### Changed
+- Code-review sweep (tier 4, cleanup). Routine per-cycle budget-breakdown log lines are now emitted at info level instead of warning — they aren't problems, and at warning they flooded log aggregators and buried real warnings. Plus internal tidy-ups with no behavior change (removed a dead query, a redundant parameter-type label).
+
 ## [v3.11.3] - 2026-06-25
 
 ### Changed

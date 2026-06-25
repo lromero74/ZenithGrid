@@ -456,13 +456,10 @@ async def create_or_update_cex_account(
 
     # If making this default, unset other defaults
     if make_default:
-        await db.execute(
-            select(Account).where(
-                Account.user_id == user_id,
-                Account.type == "cex",
-                Account.id != (account.id if account.id else -1)
-            )
-        )
+        # Flush first so a newly-created account has its id assigned — otherwise the
+        # "id != account.id" filter below is built with id=None (-1) and the autoflush
+        # triggered by the query would re-match this very account, unsetting its default.
+        await db.flush()
         # Update all other accounts to not be default
         other_result = await db.execute(
             select(Account).where(

@@ -689,10 +689,10 @@ class TestListBlacklistedCoinsTenantIsolation:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_list_non_member_raises_403(
+    async def test_list_non_member_raises_404(
         self, db_session, test_user,
     ):
-        """Failure case: user is not owner and not member of the account → 403."""
+        """Failure case: non-owner/non-member → 404 (not 403, to avoid confirming the account exists)."""
         # Create another user's account
         from app.models import Account
         other_user = User(
@@ -713,7 +713,7 @@ class TestListBlacklistedCoinsTenantIsolation:
             await list_blacklisted_coins(
                 db=db_session, current_user=test_user, account_id=acct.id,
             )
-        assert exc_info.value.status_code == 403
+        assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_list_owner_sees_own_overrides_via_account_id(

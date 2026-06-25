@@ -86,7 +86,7 @@ INDICATOR_PARAMS = [
      "group": "Safety Orders"},
     {"name": "dca_target_reference", "display_name": "DCA Target Reference",
      "description": "Price to calculate DCA target deviation from",
-     "type": "string", "default": "average_price",
+     "type": "str", "default": "average_price",
      "options": ["base_order", "average_price", "last_buy"],
      "group": "Safety Orders"},
     {"name": "dca_execution_type", "display_name": "DCA Order Execution",
