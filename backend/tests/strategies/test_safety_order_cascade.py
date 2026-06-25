@@ -7,6 +7,7 @@ than requiring one cycle per SO level.
 """
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from app.strategies.indicator_based import IndicatorBasedStrategy
 
@@ -360,3 +361,53 @@ class TestSafetyOrderLevelCount:
         assert should is True
         assert "#3" in reason
         assert "#2" not in reason  # level 2 already deployed; must not re-place it
+
+
+class TestManualBaseOrderSizing:
+    """Manual (non-auto-calculate) percentage_of_base safety-order sizing must
+    reference the actual base order (the earliest entry trade), NOT the average
+    total_quote_spent/(1+count) — which over/under-sizes whenever orders aren't
+    all equal to the base (any volume scaling, or percentage != 100%)."""
+
+    def _scaled_position(self):
+        # Base order 10, then SO1=20, SO2=40 (volume_scale=2) → total spent 70.
+        def trade(q, ts):
+            return SimpleNamespace(side="buy", quote_amount=q, timestamp=ts, dca_levels=1)
+        return SimpleNamespace(
+            direction="long", total_quote_spent=70.0, max_quote_allowed=100.0,
+            trades=[trade(10.0, 1), trade(20.0, 2), trade(40.0, 3)],
+        )
+
+    def _manual_strategy(self):
+        return _make_strategy({
+            "auto_calculate_order_sizes": False,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 2.0,
+        })
+
+    def test_uses_first_trade_not_backcalc(self):
+        strategy = self._manual_strategy()
+        pos = self._scaled_position()
+        # SO #3 = base(10) * 100% * 2^(3-1) = 40. The buggy back-calc would give
+        # total/(1+2)=23.33 * 4 = 93.3.
+        assert strategy._calculate_safety_order_amount(pos, 2, 3) == pytest.approx(40.0)
+
+    def test_independent_of_passed_count(self):
+        strategy = self._manual_strategy()
+        pos = self._scaled_position()
+        # Same SO number → same size regardless of the cascade-inflated count arg.
+        assert strategy._calculate_safety_order_amount(pos, 0, 3) == pytest.approx(40.0)
+        assert strategy._calculate_safety_order_amount(pos, 99, 3) == pytest.approx(40.0)
+
+    def test_falls_back_to_average_without_trades(self):
+        strategy = _make_strategy({
+            "auto_calculate_order_sizes": False,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.0,
+        })
+        pos = SimpleNamespace(direction="long", total_quote_spent=4.0,
+                              max_quote_allowed=100.0, trades=[])
+        # No entry trades → average fallback 4.0/(1+1)=2.0; SO#1 = 2.0*100%*1 = 2.0.
+        assert strategy._calculate_safety_order_amount(pos, 1, 1) == pytest.approx(2.0)
