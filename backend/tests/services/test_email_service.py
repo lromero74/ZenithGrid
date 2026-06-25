@@ -55,6 +55,8 @@ def ses_enabled():
         mock_settings.ses_enabled = True
         mock_settings.ses_region = "us-east-1"
         mock_settings.ses_sender_email = "noreply@test.com"
+        mock_settings.aws_access_key_id = ""
+        mock_settings.aws_secret_access_key = ""
         yield mock_settings
 
 
@@ -65,6 +67,8 @@ def ses_disabled():
         mock_settings.ses_enabled = False
         mock_settings.ses_region = "us-east-1"
         mock_settings.ses_sender_email = "noreply@test.com"
+        mock_settings.aws_access_key_id = ""
+        mock_settings.aws_secret_access_key = ""
         yield mock_settings
 
 
@@ -75,13 +79,29 @@ class TestGetSesClient:
     """Tests for _get_ses_client()"""
 
     def test_creates_boto3_ses_client_with_configured_region(self, ses_enabled):
-        """Happy path: creates boto3 SES client with the configured region."""
+        """Happy path: no explicit creds → region-only (boto3 default chain)."""
         from app.services.email_service import _get_ses_client
 
         with patch("app.services.email_service.boto3") as mock_boto3:
             _get_ses_client()
             mock_boto3.client.assert_called_once_with(
                 "ses", region_name="us-east-1"
+            )
+
+    def test_passes_explicit_credentials_when_configured(self, ses_enabled):
+        """When .env supplies AWS creds, they're passed explicitly to boto3
+        (required on hosts whose instance role can't send via SES)."""
+        from app.services.email_service import _get_ses_client
+
+        ses_enabled.aws_access_key_id = "AKIAEXAMPLE"
+        ses_enabled.aws_secret_access_key = "secret-key-value"
+        with patch("app.services.email_service.boto3") as mock_boto3:
+            _get_ses_client()
+            mock_boto3.client.assert_called_once_with(
+                "ses",
+                region_name="us-east-1",
+                aws_access_key_id="AKIAEXAMPLE",
+                aws_secret_access_key="secret-key-value",
             )
 
 
@@ -572,10 +592,11 @@ class TestSendReportEmail:
         )
         assert result is False
 
-    def test_report_email_ses_client_error_returns_false(
+    def test_report_email_ses_client_error_raises(
         self, ses_enabled, patch_ses
     ):
-        """Failure: SES ClientError returns False."""
+        """Failure: SES ClientError propagates (so the caller can record the
+        real reason instead of a generic 'Email delivery failed')."""
         from app.services.email_service import send_report_email
 
         patch_ses.send_raw_email.side_effect = ClientError(
@@ -587,30 +608,30 @@ class TestSendReportEmail:
             },
             "SendRawEmail",
         )
-        result = send_report_email(
-            to="user@example.com",
-            cc=[],
-            subject="Report",
-            html_body="<p>Body</p>",
-            text_body="Body",
-        )
-        assert result is False
+        with pytest.raises(ClientError):
+            send_report_email(
+                to="user@example.com",
+                cc=[],
+                subject="Report",
+                html_body="<p>Body</p>",
+                text_body="Body",
+            )
 
-    def test_report_email_unexpected_error_returns_false(
+    def test_report_email_unexpected_error_raises(
         self, ses_enabled, patch_ses
     ):
-        """Failure: unexpected exception returns False."""
+        """Failure: an unexpected exception propagates (no silent swallow)."""
         from app.services.email_service import send_report_email
 
         patch_ses.send_raw_email.side_effect = RuntimeError("Network error")
-        result = send_report_email(
-            to="user@example.com",
-            cc=[],
-            subject="Report",
-            html_body="<p>Body</p>",
-            text_body="Body",
-        )
-        assert result is False
+        with pytest.raises(RuntimeError):
+            send_report_email(
+                to="user@example.com",
+                cc=[],
+                subject="Report",
+                html_body="<p>Body</p>",
+                text_body="Body",
+            )
 
     def test_report_email_without_pdf_has_no_attachment_header(
         self, ses_enabled, patch_ses

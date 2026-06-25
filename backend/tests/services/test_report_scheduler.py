@@ -785,18 +785,18 @@ class TestDeliverReport:
                 account_name="Main",
             ))
 
-        assert result is True
+        assert result == (True, None)
         mock_send.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_empty_recipients_returns_false(self):
-        """Edge case: empty recipients list returns False immediately."""
+        """Edge case: empty recipients list returns (False, reason) immediately."""
         from app.services.report_scheduler import _deliver_report, DeliverReportParams
 
         report = MagicMock()
         report.period_end = datetime(2026, 3, 15)
 
-        result = await _deliver_report(DeliverReportParams(
+        any_sent, error = await _deliver_report(DeliverReportParams(
             report=report,
             recipients=[],
             ai_summary=None,
@@ -806,4 +806,41 @@ class TestDeliverReport:
             pdf_content=None,
         ))
 
-        assert result is False
+        assert any_sent is False
+        assert error == "No recipients configured"
+
+    @pytest.mark.asyncio
+    async def test_ses_client_error_captured_as_delivery_error(self):
+        """Failure: a propagated SES ClientError is captured as the real
+        delivery error (code + message), not a generic string."""
+        from botocore.exceptions import ClientError
+        from app.services.report_scheduler import _deliver_report, DeliverReportParams
+
+        report = MagicMock()
+        report.period_end = datetime(2026, 3, 15)
+        report.report_data = None
+
+        client_error = ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "not authorized for ses:SendRawEmail"}},
+            "SendRawEmail",
+        )
+        mock_brand = {"shortName": "TestBot", "colors": {"primary": "#123456"}}
+        with patch("app.services.brand_service.get_brand", return_value=mock_brand), \
+                patch("app.services.email_service.send_report_email", side_effect=client_error), \
+                patch("app.services.report_generator_service.build_report_html", return_value="<html>x</html>"):
+            any_sent, error = await _deliver_report(DeliverReportParams(
+                report=report,
+                recipients=[{"email": "a@b.com", "color_scheme": "dark"}],
+                ai_summary=None,
+                report_data={"account_value_usd": 100, "period_profit_usd": 10,
+                             "total_trades": 5, "win_rate": 60.0},
+                user_name="TestUser",
+                period_label="Mar 1-15",
+                pdf_content=None,
+                schedule_name="Weekly Report",
+                account_name="Main",
+            ))
+
+        assert any_sent is False
+        assert "AccessDenied" in error
+        assert "ses:SendRawEmail" in error

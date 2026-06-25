@@ -121,6 +121,12 @@ class Settings(BaseSettings):
     ses_region: str = "us-east-1"
     ses_sender_email: str = ""  # Must be set in .env (e.g. noreply@yourdomain.com)
     ses_enabled: bool = True
+    # AWS IAM-user credentials for SES. When set, they are passed explicitly to
+    # boto3 (required on hosts whose instance role can't send via SES — e.g. AWS
+    # Lightsail). When blank, boto3 falls back to its default credential chain
+    # (env vars / ~/.aws / instance role).
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
     frontend_url: str = ""  # Must be set in .env (e.g. https://yourdomain.com)
     public_signup_enabled: bool = True
     mfa_email_code_lifetime_minutes: int = 5

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.5] - 2026-06-25
+
+### Fixed
+- **Report emails (and all other emails) now send.** On the production host they were authenticating with the server's cloud instance role, which has no permission to send email — so every scheduled/report email silently failed (and so did verification, password-reset, and MFA emails, which use the same path). Email now uses the configured sender credentials. When a report email *does* fail, Report History now shows the real reason (e.g. the actual delivery error) instead of a generic "Email delivery failed," and email errors are no longer swallowed.
+
 ## [v3.11.4] - 2026-06-25
 
 ### Security
