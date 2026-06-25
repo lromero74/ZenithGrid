@@ -1169,8 +1169,10 @@ class IndicatorBasedStrategy(TradingStrategy):
                         position.highest_price_since_tp = current_price
                         highest_since_tp = current_price
 
-                    # TTP triggers when price drops 1% from peak (after reaching target)
-                    ttp_deviation = 1.0  # 1% trailing deviation after TTP activation
+                    # TTP triggers when price drops by the configured trailing
+                    # deviation from the peak (matches the regular trailing-TP path;
+                    # was hardcoded 1%, ignoring the bot's trailing_deviation).
+                    ttp_deviation = self.config.get("trailing_deviation", 1.0)
                     ttp_trigger = highest_since_tp * (1.0 - ttp_deviation / 100.0)
 
                     if current_price <= ttp_trigger:

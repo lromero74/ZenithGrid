@@ -25,13 +25,13 @@ Status: `[ ]` open · `[x]` fixed · `~` deferred.
 
 ## 🟡 Tier 3 — performance
 
-- [ ] Chart instance recreated on every poll tick — `AccountValueChart.tsx:199` (`history` in init effect deps). Init once, then `setData`.
-- [ ] Missing AbortController/stale-guard — `DealChart.tsx:158`, `LightweightChartModal/hooks/useChartData.ts` (stale pair response can overwrite).
-- [ ] `account_snapshot_service.get_daily_activity` hydrates all closed positions in Python — aggregate in SQL.
-- [ ] `transfers_router.get_transfer_summary` full-table hydration, no limit/window — SQL aggregate.
-- [ ] `batch_analyzer._calculate_batch_budget` two independent sequential awaits — `asyncio.gather`.
-- [ ] `usePositionsData.ts:70` batch-price query key not sorted → refetch on reorder.
-- [ ] Bull-flag TTP trailing deviation hardcoded 1% — `indicator_based.py:1146` ignores `trailing_deviation` config.
+- [x] Missing AbortController/stale-guard — added to `DealChart.tsx` candle fetch and `LightweightChartModal/hooks/useChartData.ts` (cancelled guard + abort on cleanup, ignore canceled errors). A slow response for a previously-selected pair can no longer overwrite the current chart.
+- [x] `transfers_router.get_transfer_summary` now aggregates in SQL (sum + count grouped by `transfer_type`) instead of hydrating every transfer row.
+- [x] `batch_analyzer._calculate_batch_budget` now `asyncio.gather`s the two independent exchange calls (aggregate value + available balance), preserving each fallback.
+- [x] `usePositionsData.ts` batch-price products are now `.sort()`ed so the query key is stable under position reordering (no needless refetch).
+- [x] Bull-flag/pattern TTP now uses the configured `trailing_deviation` (was hardcoded 1%, ignoring the bot's setting; default still 1%). `indicator_based.py`
+- [x] Chart instance recreated on every poll tick — `AccountValueChart.tsx`. Untangled into (a) a pure `buildAccountValueSeries` helper (split/total value selection + live-point append — now single-source and unit-tested), (b) an **init** effect keyed on container-readiness + `chartMode` that creates the chart/series once (rebuilds only on mode/range change, not on 5-min refetch or live-value ticks), and (c) a **data** effect that `setData`s in place and only re-fits the time-scale on a real data-shape change (so a live tick no longer resets zoom). Guarded by `accountValueChartData.test.ts` (8) + `AccountValueChart.test.tsx` (2: create-once, update-without-recreate). Also fixed two pre-existing frontend tests that sweep #1's AbortController/this change touched.
+- [~] `account_snapshot_service.get_daily_activity` SQL aggregation — DEFERRED: needs `get_quote_currency()`, `strftime` date bucketing, and cardspend/currency logic translated to SQL CASE — DB-dialect-sensitive (SQLite dev vs Postgres prod) and risky for a non-hot endpoint. Wants its own dialect-aware change + equivalence test.
 
 ## ⚪ Tier 4 — cleanup
 

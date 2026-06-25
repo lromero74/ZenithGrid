@@ -5,17 +5,7 @@ import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from '../shared/LoadingSpinner'
 import { useAccount } from '../../contexts/AccountContext'
 import { accountValueApi, type ActivityItem } from '../../services/api'
-
-interface AccountValueSnapshot {
-  date: string
-  timestamp: string
-  total_value_btc: number
-  total_value_usd: number
-  usd_portion_usd?: number | null
-  btc_portion_btc?: number | null
-}
-
-type ChartMode = 'total' | 'split'
+import { buildAccountValueSeries, type AccountValueSnapshot, type ChartMode } from './accountValueChartData'
 
 export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 
@@ -77,6 +67,10 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
   const chartRef = useRef<IChartApi | null>(null)
   const btcSeriesRef = useRef<any>(null)
   const usdSeriesRef = useRef<any>(null)
+  // Tracks the last data shape we fit the time-scale to, so we only re-fit on a
+  // real history/mode change — not on every live-value tick (which would reset
+  // the user's zoom).
+  const lastFitKeyRef = useRef<string>('')
   const [chartVersion, setChartVersion] = useState(0)
   const [maxDataSpanDays, setMaxDataSpanDays] = useState(0)
   const { selectedAccount } = useAccount()
@@ -116,6 +110,13 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
     refetchInterval: 300000, // Refresh every 5 minutes
     enabled: !!selectedAccount,
   })
+
+  // The chart container only mounts once data is present (the component renders a
+  // spinner / empty-state otherwise). Keying chart creation on this readiness —
+  // rather than on `history` directly — means the chart is created ONCE when data
+  // first arrives and rebuilt only on an explicit mode/range change, instead of
+  // being destroyed and recreated on every 5-minute refetch and live-value tick.
+  const chartReady = !isLoading && !!history && history.length > 0
 
   // Fetch activity data for chart markers
   const { data: activity } = useQuery<ActivityItem[]>({
@@ -196,16 +197,13 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
   }, [activity, visibleMarkers, chartVersion])
 
   // Initialize chart
+  // Create the chart + series. Keyed on chartMode (series titles/scales differ)
+  // and chartReady (the container only mounts once data is present) — NOT on
+  // history or live values — so a 5-minute refetch or a live-value tick updates
+  // data in place (see the data effect below) instead of tearing down and
+  // rebuilding the whole chart (and resetting the user's zoom) every time.
   useEffect(() => {
-    if (!chartContainerRef.current || !history || history.length === 0) return
-
-    // Clear existing chart and series refs
-    if (chartRef.current) {
-      chartRef.current.remove()
-      chartRef.current = null
-      btcSeriesRef.current = null
-      usdSeriesRef.current = null
-    }
+    if (!chartReady || !chartContainerRef.current) return
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -247,8 +245,6 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
     chartRef.current = chart
 
     const isSplit = chartMode === 'split'
-    const btcLabel = isSplit ? 'BTC Portion' : 'BTC'
-    const usdLabel = isSplit ? 'USD Portion' : 'USD'
 
     // Add BTC line series (left scale - orange)
     const btcSeries = chart.addLineSeries({
@@ -256,7 +252,7 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
       lineWidth: 2,
       lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'left',
-      title: btcLabel,
+      title: isSplit ? 'BTC Portion' : 'BTC',
       priceFormat: {
         type: 'custom',
         minMove: 0.00000001,
@@ -273,46 +269,15 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
       lineWidth: 2,
       lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'right',
-      title: usdLabel,
+      title: isSplit ? 'USD Portion' : 'USD',
       lastValueVisible: false,
       priceLineVisible: false,
     })
     usdSeriesRef.current = usdSeries
 
-    // Filter data based on chart mode
-    const chartData = isSplit
-      ? history.filter(s => s.usd_portion_usd != null && s.btc_portion_btc != null)
-      : history
-
-    // Prepare data
-    const btcData: LineData<Time>[] = chartData.map(snapshot => ({
-      time: snapshot.date as Time,
-      value: isSplit ? (snapshot.btc_portion_btc ?? 0) : snapshot.total_value_btc,
-    }))
-
-    const usdData: LineData<Time>[] = chartData.map(snapshot => ({
-      time: snapshot.date as Time,
-      value: isSplit ? (snapshot.usd_portion_usd ?? 0) : snapshot.total_value_usd,
-    }))
-
-    // Append live "now" point (total mode only — split requires portion data we don't have live)
-    if (!isSplit && liveBtcValue != null && liveUsdValue != null) {
-      const today = new Date().toISOString().slice(0, 10) as Time
-      const lastDate = chartData.length > 0 ? chartData[chartData.length - 1].date : null
-      if (lastDate !== today) {
-        btcData.push({ time: today, value: liveBtcValue })
-        usdData.push({ time: today, value: liveUsdValue })
-      }
-    }
-
-    btcSeries.setData(btcData)
-    usdSeries.setData(usdData)
-
-    // Signal markers effect to re-apply after chart recreation
+    // New series → force the data effect to re-fit and the markers effect to re-apply.
+    lastFitKeyRef.current = ''
     setChartVersion(v => v + 1)
-
-    // Fit content
-    chart.timeScale().fitContent()
 
     // Handle resize
     const handleResize = () => {
@@ -334,7 +299,29 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
         usdSeriesRef.current = null
       }
     }
-  }, [history, chartMode, liveBtcValue, liveUsdValue])
+  }, [chartMode, chartReady])
+
+  // Push data into the existing series (no chart recreation). The time-scale is
+  // re-fit only when the data SHAPE changes (mode / range / a new history set),
+  // not on live-value-only updates — so a live tick doesn't reset the zoom.
+  useEffect(() => {
+    const btcSeries = btcSeriesRef.current
+    const usdSeries = usdSeriesRef.current
+    if (!btcSeries || !usdSeries || !history) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const { btcData, usdData } = buildAccountValueSeries(
+      history, chartMode, liveBtcValue, liveUsdValue, today,
+    )
+    btcSeries.setData(btcData as LineData<Time>[])
+    usdSeries.setData(usdData as LineData<Time>[])
+
+    const fitKey = `${chartMode}|${history.length}|${history[0]?.date ?? ''}|${history[history.length - 1]?.date ?? ''}`
+    if (fitKey !== lastFitKeyRef.current) {
+      chartRef.current?.timeScale().fitContent()
+      lastFitKeyRef.current = fitKey
+    }
+  }, [history, chartMode, liveBtcValue, liveUsdValue, chartReady])
 
   // Calculate which time range buttons should be enabled based on max seen data span.
   // Uses maxDataSpanDays (the widest range ever fetched) rather than the current history

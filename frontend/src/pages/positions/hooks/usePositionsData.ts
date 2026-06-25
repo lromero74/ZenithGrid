@@ -62,7 +62,9 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
   )
 
   const batchPriceProducts = useMemo(
-    () => [...new Set(openPositions.map((position) => position.product_id || 'ETH-BTC'))],
+    // Sorted so the query key is stable when positions merely reorder (an
+    // unsorted set re-keys the query and forces a needless refetch each time).
+    () => [...new Set(openPositions.map((position) => position.product_id || 'ETH-BTC'))].sort(),
     [openPositions]
   )
 

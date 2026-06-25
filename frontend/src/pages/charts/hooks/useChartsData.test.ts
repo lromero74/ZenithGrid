@@ -62,6 +62,7 @@ describe('useChartsData candle fetching', () => {
 
     expect(api.get).toHaveBeenCalledWith('/candles', {
       params: { product_id: 'BTC-USD', granularity: '300', limit: 300 },
+      signal: expect.any(AbortSignal),
     })
     expect(result.current.candleDataRef.current).toEqual(mockCandles)
     expect(result.current.error).toBeNull()
