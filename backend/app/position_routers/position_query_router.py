@@ -33,6 +33,7 @@ LIST_SAFE_STRATEGY_CONFIG_KEYS = {
     "price_deviation",
     "safety_order_step_scale",
     "max_safety_orders",
+    "grace_safety_orders",
     "dca_target_reference",
     "base_order_size",
     "trailing_take_profit",

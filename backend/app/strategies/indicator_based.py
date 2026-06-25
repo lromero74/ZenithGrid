@@ -50,6 +50,7 @@ from app.strategies.safety_order_calculator import (
     calculate_base_order_size as _calc_base_order_size,
     calculate_safety_order_size as _calc_safety_order_size,
     count_deployed_safety_orders,
+    effective_max_safety_orders,
     entry_trades_for_position,
 )
 
@@ -896,11 +897,16 @@ class IndicatorBasedStrategy(TradingStrategy):
         if max_safety == 0:
             return False, 0.0, "Safety orders disabled"
 
+        # Placement ceiling includes grace (bonus) SOs that fire after the configured
+        # ones are spent. Grace is excluded from budget/sizing (see safety_order_calculator
+        # / _shared.py); only the limit grows here.
+        effective_max = effective_max_safety_orders(self.config)
+
         # Count entry trades (buys for long, sells for short) = safety orders completed
         entry_trades = entry_trades_for_position(position)
         safety_orders_count = count_deployed_safety_orders(entry_trades)  # sums cascade levels
-        if safety_orders_count >= max_safety:
-            return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
+        if safety_orders_count >= effective_max:
+            return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{effective_max})"
 
         # Determine reference price for DCA target calculation
         reference_price = self._get_dca_reference_price(position, entry_trades)
@@ -932,7 +938,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         remaining_balance = balance
         rounding_adjusted = False
 
-        for so_num in range(first_so, max_safety + 1):
+        for so_num in range(first_so, effective_max + 1):
             trigger = self.calculate_safety_order_price(reference_price, so_num, direction)
 
             if direction == "long" and current_price > trigger:

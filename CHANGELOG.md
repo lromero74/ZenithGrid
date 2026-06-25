@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.0] - 2026-06-24
+
+### Added
+- **Grace safety orders.** A new per-bot setting, "Grace Safety Orders," lets a deal fire a few bonus safety orders *beyond* its configured maximum once the configured ones are used up — automatically, so you no longer have to manually bump a deal mid-dip. Grace orders are excluded from your up-front budget and concurrent-deal planning (so they don't reserve capital or reduce how many deals you can run); a deal's budget only expands — just-in-time, exactly like manually bumping "Max Safety Orders" — once that deal actually crosses into grace. They size and trigger by continuing the normal volume-scale/step ladder, and stack on top of any manual per-deal bump. On the deal chart, grace trigger levels and fills are drawn in a distinct amber so non-standard orders are easy to spot. Default is 0 (off) — existing bots are unchanged.
+
 ## [v3.10.1] - 2026-06-24
 
 ### Fixed

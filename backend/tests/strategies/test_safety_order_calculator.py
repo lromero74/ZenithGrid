@@ -18,6 +18,7 @@ import pytest
 
 from app.strategies.safety_order_calculator import (
     calculate_base_order_size,
+    effective_max_safety_orders,
     get_total_multiplier,
 )
 
@@ -45,6 +46,55 @@ _SO_PCTS = [50.0, 100.0]
 _GRID = list(
     itertools.product(_SAFETY_TYPES, _VOLUME_SCALES, _MAX_SOS, _SO_PCTS)
 )
+
+
+class TestEffectiveMaxSafetyOrders:
+    """Grace safety orders extend the placement ceiling only."""
+
+    def test_no_grace_returns_configured(self):
+        assert effective_max_safety_orders(_cfg(max_safety_orders=3)) == 3
+
+    def test_grace_adds_on_top(self):
+        assert effective_max_safety_orders(
+            _cfg(max_safety_orders=3, grace_safety_orders=2)
+        ) == 5
+
+    def test_grace_missing_defaults_zero(self):
+        cfg = _cfg(max_safety_orders=4)
+        cfg.pop("grace_safety_orders", None)
+        assert effective_max_safety_orders(cfg) == 4
+
+    def test_negative_grace_clamped(self):
+        assert effective_max_safety_orders(
+            _cfg(max_safety_orders=3, grace_safety_orders=-5)
+        ) == 3
+
+    def test_zero_configured_with_grace(self):
+        # SOs disabled (0 configured) — grace alone still reports as the ceiling,
+        # but the gate also short-circuits on max_safety_orders==0 upstream.
+        assert effective_max_safety_orders(
+            _cfg(max_safety_orders=0, grace_safety_orders=2)
+        ) == 2
+
+
+class TestGraceExcludedFromBudget:
+    """Grace must NEVER enter the budget/sizing math (rule 13). The multiplier and
+    auto-calc base size must be byte-for-byte identical with and without grace."""
+
+    def test_multiplier_ignores_grace(self):
+        for st in _SAFETY_TYPES:
+            for vs in _VOLUME_SCALES:
+                for n in _MAX_SOS:
+                    base = _cfg(safety_order_type=st, safety_order_volume_scale=vs,
+                                max_safety_orders=n)
+                    withg = dict(base, grace_safety_orders=3)
+                    assert get_total_multiplier(withg) == get_total_multiplier(base)
+
+    def test_base_order_size_ignores_grace(self):
+        base = _cfg(base_order_type="fixed", auto_calculate_order_sizes=True,
+                    max_safety_orders=3, safety_order_volume_scale=1.62)
+        withg = dict(base, grace_safety_orders=2)
+        assert calculate_base_order_size(withg, 1000.0) == calculate_base_order_size(base, 1000.0)
 
 
 class TestGetTotalMultiplier:

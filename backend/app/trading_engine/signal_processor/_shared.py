@@ -350,6 +350,34 @@ async def _calculate_budget(
         if position and position.max_quote_allowed:
             quote_balance = position.max_quote_allowed - position.total_quote_spent
 
+            # Grace safety orders: once a deal has spent its CONFIGURED safety orders,
+            # expand THIS deal's budget just-in-time to cover the grace (bonus) SOs —
+            # exactly what manually bumping "Max Safety Orders" does (compute_resize_budget).
+            # Grace is excluded from every up-front/planning budget (those keep using the
+            # configured count); only an already-in-grace deal's own ceiling grows, so
+            # most deals keep the lean planned budget. (PRP: grace-safety-orders; rule 13:
+            # same budget formula, just the effective count.)
+            cfg = position.strategy_config_snapshot or {}
+            if int(cfg.get("grace_safety_orders", 0) or 0) > 0:
+                from app.strategies.safety_order_calculator import (
+                    count_deployed_safety_orders, entry_trades_for_position,
+                )
+                from app.trading_engine.position_manager import compute_grace_expanded_budget
+                deployed = count_deployed_safety_orders(entry_trades_for_position(position))
+                buys = sorted(
+                    [t for t in (position.trades or []) if t.side == "buy"],
+                    key=lambda t: t.timestamp,
+                )
+                base_sz = (buys[0].quote_amount if buys else 0.0) or 0.0
+                eff_cost = compute_grace_expanded_budget(cfg, deployed, base_sz, aggregate_value or 0.0)
+                if eff_cost > position.max_quote_allowed:
+                    logger.info(
+                        f"  🌱 Grace SOs active for position #{position.id}: budget"
+                        f" {position.max_quote_allowed:.8f} → {eff_cost:.8f}"
+                    )
+                    position.max_quote_allowed = eff_cost
+                    quote_balance = position.max_quote_allowed - position.total_quote_spent
+
         split_mode = "SPLIT" if bot.split_budget_across_pairs else "FULL"
         if bot.budget_percentage > 0:
             logger.info(
