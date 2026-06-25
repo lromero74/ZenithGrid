@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.12.4] - 2026-06-25
+
+### Changed
+- Performance (code-review sweep #2, tier 3). The daily-activity breakdown (the chart's win/loss/deposit/withdrawal markers) is now aggregated in the database instead of loading every closed position and transfer into memory and summing them in Python. Behavior is unchanged — verified by the full existing test suite plus new coverage for card-spends and sub-$1 transfers.
+
 ## [v3.12.3] - 2026-06-25
 
 ### Fixed

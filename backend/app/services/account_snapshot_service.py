@@ -11,9 +11,7 @@ import logging
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from collections import defaultdict
-
-from sqlalchemy import and_, func, select
+from sqlalchemy import String, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, AccountTransfer, AccountValueSnapshot, Position
@@ -460,12 +458,7 @@ async def get_daily_activity(
             )
         )
 
-    pos_result = await db.execute(
-        select(Position).where(and_(*pos_filters))
-    )
-    positions = pos_result.scalars().all()
-
-    # --- Transfers ---
+    # --- Transfers filter ---
     xfer_filters = [
         AccountTransfer.user_id == user_id,
         AccountTransfer.occurred_at >= cutoff,
@@ -473,55 +466,72 @@ async def get_daily_activity(
     if account_id is not None:
         xfer_filters.append(AccountTransfer.account_id == account_id)
 
-    xfer_result = await db.execute(
-        select(AccountTransfer).where(and_(*xfer_filters))
+    # Aggregate in SQL (GROUP BY date/line/category) instead of hydrating every
+    # closed position and transfer into Python. The date is truncated with
+    # substr(cast(ts AS str), 1, 10) — "YYYY-MM-DD" on both SQLite (dev) and
+    # Postgres (prod), which emit ISO date-first text — so no dialect-specific
+    # date function is needed. Positions and transfers use disjoint categories
+    # (trade_win/trade_loss vs deposit/withdrawal), so their grouped rows never
+    # share a (date, line, category) key and can simply be concatenated.
+    def _date_str(col):
+        return func.substr(cast(col, String), 1, 10)
+
+    # Positions: a BTC quote means the pair ends in "-BTC"; win/loss and the
+    # micro-trade filter key off profit_usd (matching get_quote_currency + the
+    # old Python), while the recorded amount uses profit_quote for BTC pairs.
+    pos_is_btc = Position.product_id.like("%-BTC")
+    pos_line = case((pos_is_btc, "btc"), else_="usd")
+    pos_amount = case(
+        (pos_is_btc, func.coalesce(Position.profit_quote, 0.0)),
+        else_=func.coalesce(Position.profit_usd, 0.0),
     )
-    transfers = xfer_result.scalars().all()
+    pos_date = _date_str(Position.closed_at)
+    pos_rows = (await db.execute(
+        select(
+            pos_date,
+            pos_line,
+            case((Position.profit_usd > 0, "trade_win"), else_="trade_loss"),
+            func.sum(pos_amount),
+            func.count(),
+        )
+        .where(and_(*pos_filters, func.abs(func.coalesce(Position.profit_usd, 0.0)) >= 0.01))
+        .group_by(pos_date, pos_line, case((Position.profit_usd > 0, "trade_win"), else_="trade_loss"))
+    )).all()
 
-    # --- Aggregate into buckets: (date_str, line, category) ---
-    buckets: Dict[tuple, Dict[str, Any]] = defaultdict(
-        lambda: {"amount": 0.0, "count": 0}
+    # Transfers: BTC line only when the currency is BTC AND it isn't a card spend
+    # (card spends are BTC-denominated but are really USD purchases → USD line).
+    xfer_is_btc = and_(
+        func.upper(AccountTransfer.currency) == "BTC",
+        func.coalesce(AccountTransfer.original_type, "") != "cardspend",
     )
+    xfer_line = case((xfer_is_btc, "btc"), else_="usd")
+    xfer_amount = case(
+        (xfer_is_btc, func.coalesce(AccountTransfer.amount, 0.0)),
+        else_=func.coalesce(AccountTransfer.amount_usd, 0.0),
+    )
+    xfer_date = _date_str(AccountTransfer.occurred_at)
+    xfer_rows = (await db.execute(
+        select(
+            xfer_date,
+            xfer_line,
+            AccountTransfer.transfer_type,
+            func.sum(xfer_amount),
+            func.count(),
+        )
+        # Skip micro-transfers (e.g. staking rewards < $1) — they clutter the chart.
+        .where(and_(*xfer_filters, func.coalesce(AccountTransfer.amount_usd, 0.0) >= 1.0))
+        .group_by(xfer_date, xfer_line, AccountTransfer.transfer_type)
+    )).all()
 
-    for p in positions:
-        profit = p.profit_usd or 0
-        if abs(profit) < 0.01:
-            continue
-        is_btc = p.get_quote_currency() == "BTC"
-        line = "btc" if is_btc else "usd"
-        category = "trade_win" if profit > 0 else "trade_loss"
-        amount = (p.profit_quote or 0) if is_btc else profit
-        date_str = p.closed_at.strftime("%Y-%m-%d")
-        key = (date_str, line, category)
-        buckets[key]["amount"] += amount
-        buckets[key]["count"] += 1
-
-    for t in transfers:
-        # Skip micro-transfers (e.g. staking rewards < $1) — they clutter
-        # the chart with misleading deposit markers
-        if (t.amount_usd or 0) < 1.0:
-            continue
-        # Card spends are BTC-denominated on Coinbase but are really
-        # USD purchases — show them on the USD line with their USD value
-        is_cardspend = (t.original_type or "") == "cardspend"
-        is_btc = (t.currency or "").upper() == "BTC" and not is_cardspend
-        line = "btc" if is_btc else "usd"
-        category = t.transfer_type  # "deposit" or "withdrawal"
-        amount = t.amount if is_btc else (t.amount_usd or 0)
-        date_str = t.occurred_at.strftime("%Y-%m-%d")
-        key = (date_str, line, category)
-        buckets[key]["amount"] += amount
-        buckets[key]["count"] += 1
-
-    # --- Build sorted result ---
+    # --- Build sorted result (round per line: 8 dp for BTC, 2 for USD) ---
     result = []
-    for (date_str, line, category), agg in buckets.items():
+    for date_str, line, category, amount, count in list(pos_rows) + list(xfer_rows):
         result.append({
             "date": date_str,
             "line": line,
             "category": category,
-            "amount": round(agg["amount"], 8 if line == "btc" else 2),
-            "count": agg["count"],
+            "amount": round(float(amount or 0.0), 8 if line == "btc" else 2),
+            "count": int(count or 0),
         })
 
     result.sort(key=lambda r: r["date"])
