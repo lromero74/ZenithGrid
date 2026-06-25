@@ -579,6 +579,25 @@ function DCABudgetConfigForm({
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
+              Grace Safety Orders
+            </label>
+            <input
+              type="number"
+              {...numericProps(config.grace_safety_orders, 0, v => updateConfig('grace_safety_orders', v), true)}
+              min="0"
+              max="100"
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Bonus safety orders beyond Max, used only after the configured ones are spent.
+              Excluded from your budget &mdash; they intentionally overallocate (accepted
+              risk), expanding the deal&rsquo;s budget just-in-time like a manual bump.
+              They appear in amber on the deal chart. 0 = off.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Safety Order Type
               {useBudgetCalculator && (
                 <span className="text-xs text-slate-400 ml-2">(Auto: Fixed)</span>
