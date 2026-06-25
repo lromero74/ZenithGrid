@@ -195,7 +195,13 @@ class PersistentPortfolioCache:
         return os.path.join(self._cache_dir, f"{key}.json")
 
     async def get(self, key: str) -> Optional[dict]:
-        """Load cached portfolio from disk. Returns None if missing or stale."""
+        """Load cached portfolio from disk. Returns None if missing or stale.
+
+        Runs the blocking file I/O in a thread so it never stalls the event loop.
+        """
+        return await asyncio.to_thread(self._get_sync, key)
+
+    def _get_sync(self, key: str) -> Optional[dict]:
         with self._lock:
             path = self._path(key)
             if not os.path.exists(path):
@@ -222,7 +228,10 @@ class PersistentPortfolioCache:
                 return None
 
     async def save(self, key: str, portfolio_data: dict):
-        """Persist portfolio response to disk."""
+        """Persist portfolio response to disk (blocking I/O off the event loop)."""
+        await asyncio.to_thread(self._save_sync, key, portfolio_data)
+
+    def _save_sync(self, key: str, portfolio_data: dict):
         with self._lock:
             path = self._path(key)
             try:

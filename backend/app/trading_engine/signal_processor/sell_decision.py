@@ -17,6 +17,7 @@ from app.trading_engine.perps_executor import execute_perps_close
 from app.trading_engine.sell_executor import execute_sell
 from app.trading_engine.signal_processor._shared import (
     _calculate_market_context_with_indicators,
+    _MARKET_CONTEXT_MAX,
     _previous_market_context,
     _record_signal,
 )
@@ -213,11 +214,15 @@ async def _decide_and_execute_sell(
 
     market_context = _build_market_context(signal_data, candles, candles_by_timeframe, current_price)
 
-    # Crossing detection: previous-context cache, keyed by bot + product
+    # Crossing detection: previous-context cache, keyed by bot + product.
+    # pop+reinsert keeps the active key most-recent; then evict oldest beyond the cap
+    # so stale entries (deleted bots / dropped pairs) can't grow the dict unbounded.
     cache_key = f"{bot.id}_{product_id}"
-    previous_context = _previous_market_context.get(cache_key)
+    previous_context = _previous_market_context.pop(cache_key, None)
     market_context["_previous"] = previous_context
     _previous_market_context[cache_key] = {k: v for k, v in market_context.items() if k != "_previous"}
+    while len(_previous_market_context) > _MARKET_CONTEXT_MAX:
+        _previous_market_context.pop(next(iter(_previous_market_context)))
 
     should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
 

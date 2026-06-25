@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.3] - 2026-06-25
+
+### Changed
+- Performance (code-review sweep, tier 3). Added database indexes for several hot-path lookups (per-account AI win-rate history, a bot's pending orders, the latest speculative-weights proposal per account, and the auth rate limiter) that were previously doing full table scans. The disk-backed portfolio cache no longer blocks the server's event loop while reading/writing, the sync database connections self-heal after idle periods, and an internal market-context cache is now memory-bounded so it can't grow without limit over a long uptime. No behavior change — these only make things faster/leaner.
+
 ## [v3.11.2] - 2026-06-25
 
 ### Fixed

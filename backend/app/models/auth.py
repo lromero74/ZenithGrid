@@ -7,6 +7,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -260,7 +261,12 @@ class RateLimitAttempt(Base):
     A periodic cleanup job prunes rows older than their window.
     """
     __tablename__ = "rate_limit_attempts"
-    __table_args__ = {'schema': 'auth'}
+    __table_args__ = (
+        # The rate limiter counts WHERE category=? AND key=? AND attempted_at>=? on
+        # every auth attempt — a single compound beats intersecting two index scans.
+        Index("ix_rate_limit_attempts_cat_key_at", "category", "key", "attempted_at"),
+        {'schema': 'auth'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     category = Column(String(30), nullable=False, index=True)   # login, signup, forgot_pw, mfa, resend

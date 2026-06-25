@@ -659,6 +659,8 @@ class PendingOrder(Base):
     __table_args__ = (
         # Pending-order counts filter by position_id(s) + status='pending'
         Index("ix_pending_orders_position_status", "position_id", "status"),
+        # Open-order lookups during bot stop/cleanup filter by bot_id.
+        Index("ix_pending_orders_bot_id", "bot_id"),
         {'schema': 'trading'},
     )
 
@@ -723,7 +725,11 @@ class OrderHistory(Base):
     """
 
     __tablename__ = "order_history"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # GET /api/order-history joins on bot_id then sorts by timestamp DESC.
+        Index("ix_order_history_bot_id_timestamp", "bot_id", "timestamp"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=utcnow, nullable=False, index=True)
@@ -771,7 +777,13 @@ class AIOpinionLog(Base):
     """
 
     __tablename__ = "ai_opinion_log"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # Per-account win-rate / speculative-calibration scoping.
+        Index("ix_ai_opinion_log_account_id", "account_id"),
+        # get_prior_ai_signals range scan: WHERE user_id=? AND product_id=? ORDER BY created_at.
+        Index("idx_ai_opinion_log_user_product_created", "user_id", "product_id", "created_at"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
@@ -868,7 +880,11 @@ class SpeculativeWeightsProposal(Base):
     """
 
     __tablename__ = "speculative_weights_proposals"
-    __table_args__ = {'schema': 'trading'}
+    __table_args__ = (
+        # "Latest applied proposal per account" drives every speculative scoring run.
+        Index("ix_spec_prop_account_id", "account_id"),
+        {'schema': 'trading'},
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)

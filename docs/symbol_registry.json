@@ -428,7 +428,9 @@
       ],
       "PersistentPortfolioCache": [
         "__init__",
+        "_get_sync",
         "_path",
+        "_save_sync",
         "get",
         "invalidate",
         "save"

@@ -47,7 +47,15 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [ ] pair_processor candle cache key excludes `lookback_candles` → indicator strategy gets 100 candles when 200 requested. `pair_processor.py:107,170`
 - [ ] `float(... )` without `or 0` on possibly-null fill fields → TypeError on null. `limit_order_monitor.py:151-152,559-561`
 
-## 🟡 Performance
+## 🟡 Performance  (in progress on `perf/sweep-tier3`)
+
+- [x] **Missing prod indexes** added via idempotent migration `add_perf_indexes_tier3.py` (verified genuinely absent on prod): `ai_opinion_log(account_id)`, `pending_orders(bot_id)`, `speculative_weights_proposals(account_id)`, `rate_limit_attempts(category,key,attempted_at)`. Also added all of these + the existing compounds (`order_history(bot_id,timestamp)`, `ai_opinion_log(user,product,created_at)`) to the ORM `__table_args__` with matching names → fresh installs match prod, no redundant indexes. **Requires a prod migration run.**
+- [x] Sync engine now uses `pool_pre_ping` + `pool_recycle` (stale-conn errors). `database.py`
+- [x] `_previous_market_context` bounded (LRU-ish evict, cap 1000) — no longer grows forever. `_shared.py`/`sell_decision.py`
+- [x] Persistent portfolio cache file I/O moved off the event loop (`asyncio.to_thread`). `cache.py`
+- [~] **Deferred (more involved, lower urgency):** unbounded full-history loads (`get_generic_cex_portfolio`, `get_daily_activity` → aggregate in SQL); `get_account_balances` 2nd Coinbase breakdown for `untracked_usd` (cache usually warm); chart re-init on every poll tick; `Positions.tsx` `useCallback`; batch budget `gather`; transfer-summary / copy-bot loops; `batch_price` query re-key.
+
+## 🟡 Performance (original list)
 
 - [ ] **Missing indexes** (also absent from ORM → fresh installs lack them): `OrderHistory.bot_id`, `AIOpinionLog.account_id`, `PendingOrder.bot_id`, `SpeculativeWeightsProposal.account_id`; compound indexes (`ai_opinion_log`, `order_history`, rate-limit) only in migrations. `models/trading.py`, `models/auth.py`
 - [ ] **Unbounded full-history loads**: `get_generic_cex_portfolio` and `get_daily_activity` hydrate all closed positions in Python — aggregate in SQL (Coinbase path already does). `portfolio_service.py:459`, `account_snapshot_service.py:463`
