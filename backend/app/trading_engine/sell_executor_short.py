@@ -22,6 +22,7 @@ from app.services.shutdown_manager import shutdown_manager
 from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 from app.trading_client import TradingClient
+from app.trading_engine.fill_reconciler import _TERMINAL_ORDER_STATUSES
 from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 from app.trading_engine.sell_executor import sell_fill_is_complete
 
@@ -66,8 +67,14 @@ async def _reconcile_short_sell_fill(
             filled_value = float(order_details.get("filled_value", "0"))
             avg_price = float(order_details.get("average_filled_price", "0"))
             fee_quote = float(order_details.get("total_fees", "0") or 0)
+            status = str(order_details.get("status", "")).upper()
+            # Only accept the fill once the order is terminal — a market short-open
+            # read mid-fill would book a partial as the complete sale, stranding the
+            # rest (the v3.11.6 mid-fill bug, on the short-open side). Clients with
+            # no status field (paper/some adapters) are treated terminal.
+            order_is_terminal = (not status) or (status in _TERMINAL_ORDER_STATUSES)
 
-            if filled_size > 0 and filled_value > 0:
+            if filled_size > 0 and filled_value > 0 and order_is_terminal:
                 actual_price = avg_price if avg_price > 0 else fallback_price
                 logger.info(
                     f"Short sell filled: {filled_size:.8f} @ "
@@ -77,7 +84,7 @@ async def _reconcile_short_sell_fill(
 
             logger.warning(
                 f"Attempt {attempt + 1}/{max_retries}: "
-                f"Short sell not yet filled"
+                f"Short sell not yet filled or not terminal (status={status or 'n/a'})"
             )
         except Exception as fill_err:
             logger.warning(

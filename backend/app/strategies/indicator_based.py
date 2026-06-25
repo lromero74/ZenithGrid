@@ -820,7 +820,12 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
         # PATTERN-BASED TSL/TTP (e.g., Bull Flag positions)
         # If position has pattern targets, use those instead of percentage-based
         # =============================================================
-        if hasattr(position, "entry_stop_loss") and position.entry_stop_loss is not None:
+        # Pattern TSL/TTP is long/bull-flag oriented (risk measured DOWN from entry,
+        # trailing the high). Its math breaks for shorts (entry_price=avg_buy=0 →
+        # negative risk distance), so shorts skip it and use the standard inverted
+        # trailing stop below.
+        if (direction != "short" and hasattr(position, "entry_stop_loss")
+                and position.entry_stop_loss is not None):
             entry_price = avg_price
             entry_sl = position.entry_stop_loss
             entry_tp = getattr(position, "entry_take_profit_target", None)

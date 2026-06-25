@@ -351,7 +351,15 @@ async def _calculate_budget(
         # For safety orders (position already exists), use the position's own allocated budget
         # instead of pair-level budget which can over-subtract when multiple positions share a pair
         if position and position.max_quote_allowed:
-            quote_balance = position.max_quote_allowed - position.total_quote_spent
+            # "Spent so far" is direction-aware: longs accumulate total_quote_spent,
+            # shorts accumulate short_total_sold_quote (total_quote_spent stays 0 for
+            # shorts, which otherwise left the remainder at the FULL budget).
+            _deployed_quote = (
+                float(position.short_total_sold_quote or 0.0)
+                if getattr(position, "direction", "long") == "short"
+                else float(position.total_quote_spent or 0.0)
+            )
+            quote_balance = position.max_quote_allowed - _deployed_quote
 
             # Grace safety orders: once a deal has spent its CONFIGURED safety orders,
             # expand THIS deal's budget just-in-time to cover the grace (bonus) SOs —
@@ -381,7 +389,7 @@ async def _calculate_budget(
                         f" {position.max_quote_allowed:.8f} → {eff_cost:.8f}"
                     )
                     position.max_quote_allowed = eff_cost
-                    quote_balance = position.max_quote_allowed - position.total_quote_spent
+                    quote_balance = position.max_quote_allowed - _deployed_quote
 
         split_mode = "SPLIT" if bot.split_budget_across_pairs else "FULL"
         if bot.budget_percentage > 0:

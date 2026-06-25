@@ -21,7 +21,7 @@ from app.trading_engine.sell_executor import (
     _close_sell_position_as_dust,
     SELL_BALANCE_HAIRCUT,
 )
-from app.trading_engine.sell_executor_short import execute_sell_short
+from app.trading_engine.sell_executor_short import execute_sell_short, _reconcile_short_sell_fill
 
 
 # ---------------------------------------------------------------------------
@@ -1508,3 +1508,59 @@ class TestExecuteSellShortUnconfirmed:
         # Existing short totals must be unchanged (no phantom add).
         assert position.short_total_sold_base == 0.5
         assert position.short_total_sold_quote == 25000.0
+
+
+class TestReconcileShortSellFill:
+    """Short-OPEN fill reconciliation must wait for a TERMINAL order status before
+    booking — a mid-fill partial would record a partial short as the full sale,
+    stranding the rest (the v3.11.6 mid-fill bug, on the short-open side)."""
+
+    @pytest.mark.asyncio
+    async def test_waits_for_terminal_status_then_returns_full_fill(self):
+        ex = AsyncMock()
+        ex.get_order.side_effect = [
+            {"filled_size": "0.1", "filled_value": "3000.0",
+             "average_filled_price": "30000.0", "total_fees": "1.5", "status": "OPEN"},
+            {"filled_size": "0.5", "filled_value": "15000.0",
+             "average_filled_price": "30000.0", "total_fees": "7.5", "status": "FILLED"},
+        ]
+        with patch("app.trading_engine.sell_executor_short.asyncio.sleep", new_callable=AsyncMock):
+            base, value, price, fee, reconciled = await _reconcile_short_sell_fill(ex, "o1", 30000.0)
+        assert base == pytest.approx(0.5)
+        assert value == pytest.approx(15000.0)
+        assert reconciled is True
+        assert ex.get_order.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_terminal_first_attempt_returns_immediately(self):
+        ex = AsyncMock()
+        ex.get_order.return_value = {
+            "filled_size": "0.5", "filled_value": "15000.0",
+            "average_filled_price": "30000.0", "total_fees": "7.5", "status": "FILLED"}
+        base, _v, _p, _f, reconciled = await _reconcile_short_sell_fill(ex, "o2", 30000.0)
+        assert base == pytest.approx(0.5)
+        assert reconciled is True
+        ex.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_status_accepts_first_fill_backcompat(self):
+        ex = AsyncMock()
+        ex.get_order.return_value = {
+            "filled_size": "0.5", "filled_value": "15000.0",
+            "average_filled_price": "30000.0", "total_fees": "7.5"}
+        base, _v, _p, _f, reconciled = await _reconcile_short_sell_fill(ex, "o3", 30000.0)
+        assert base == pytest.approx(0.5)
+        assert reconciled is True
+        ex.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_never_terminal_returns_unconfirmed(self):
+        ex = AsyncMock()
+        ex.get_order.return_value = {
+            "filled_size": "0.1", "filled_value": "3000.0",
+            "average_filled_price": "30000.0", "total_fees": "1.5", "status": "OPEN"}
+        with patch("app.trading_engine.sell_executor_short.asyncio.sleep", new_callable=AsyncMock):
+            base, value, _p, _f, reconciled = await _reconcile_short_sell_fill(ex, "o4", 30000.0)
+        assert base == 0.0
+        assert value == 0.0
+        assert reconciled is False
