@@ -1,8 +1,47 @@
 """Tests for pure helpers in app/services/portfolio_calculations.py."""
 
 import pytest
+from types import SimpleNamespace
 
-from app.services.portfolio_calculations import compute_untracked_usd
+from app.services.portfolio_calculations import compute_untracked_usd, _compute_position_pnl
+
+
+def _pos(product_id, direction="long", **kw):
+    base, quote = product_id.split("-")
+    p = SimpleNamespace(
+        direction=direction,
+        total_base_acquired=kw.get("total_base_acquired", 0.0),
+        total_quote_spent=kw.get("total_quote_spent", 0.0),
+        short_total_sold_base=kw.get("short_total_sold_base", 0.0),
+        short_total_sold_quote=kw.get("short_total_sold_quote", 0.0),
+    )
+    p.get_base_currency = lambda: base
+    p.get_quote_currency = lambda: quote
+    return p
+
+
+class TestComputePositionPnl:
+    """_compute_position_pnl must handle shorts (own cost basis) and USDC pairs."""
+
+    def test_usdc_pair_included(self):
+        # USDC-quoted long: bought 1 SOL for $100, now worth $150 → +$50 USD.
+        pos = _pos("SOL-USDC", total_base_acquired=1.0, total_quote_spent=100.0)
+        result = _compute_position_pnl([pos], {"SOL": 150.0}, btc_usd_price=60000.0)
+        assert result["SOL"]["pnl_usd"] == pytest.approx(50.0)
+        assert result["SOL"]["cost_usd"] == pytest.approx(100.0)
+
+    def test_short_uses_short_cost_basis(self):
+        # Short: sold 1 ETH for $2000; price fell to $1800 → +$200 profit.
+        pos = _pos("ETH-USD", direction="short",
+                   short_total_sold_base=1.0, short_total_sold_quote=2000.0)
+        result = _compute_position_pnl([pos], {"ETH": 1800.0}, btc_usd_price=60000.0)
+        assert result["ETH"]["pnl_usd"] == pytest.approx(200.0)
+        assert result["ETH"]["cost_usd"] == pytest.approx(2000.0)
+
+    def test_long_usd_unchanged(self):
+        pos = _pos("BTC-USD", total_base_acquired=0.01, total_quote_spent=600.0)
+        result = _compute_position_pnl([pos], {"BTC": 65000.0}, btc_usd_price=65000.0)
+        assert result["BTC"]["pnl_usd"] == pytest.approx(0.01 * 65000.0 - 600.0)
 
 
 class TestComputeUntrackedUsd:

@@ -1127,9 +1127,14 @@ class MultiBotMonitor:
                         all_active_pairs = set()
                         for b in bots:
                             all_active_pairs.update(b.get_trading_pairs())
+                        # Cache keys are "product:granularity:lookback"; the
+                        # product id is the FIRST segment. (rsplit(":",1)[0] left
+                        # "product:granularity", which never matched the bare
+                        # product in all_active_pairs, so the cache was pruned
+                        # entirely every cycle → a fresh fetch per pair per tick.)
                         stale_candle_keys = [
                             k for k in self._candle_cache
-                            if k.rsplit(":", 1)[0] not in all_active_pairs
+                            if k.split(":", 1)[0] not in all_active_pairs
                         ]
                         for k in stale_candle_keys:
                             del self._candle_cache[k]

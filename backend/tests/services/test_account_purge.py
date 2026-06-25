@@ -93,3 +93,19 @@ class TestPurgeAccountHistory:
         await db_session.flush()
         deleted = await purge_account_history(db_session, 9)
         assert all(v == 0 for v in deleted.values())
+
+    async def test_zeroes_bot_reserved_balances(self, db_session):
+        """After purge the bot's reserved balances must be 0 — otherwise the bot
+        thinks capital is still deployed and refuses to open new positions."""
+        await _seed_account(db_session, 1)
+        bot = (await db_session.execute(
+            select(Bot).where(Bot.account_id == 1))).scalars().first()
+        bot.reserved_btc_balance = 0.05
+        bot.reserved_usd_balance = 123.45
+        await db_session.flush()
+
+        await purge_account_history(db_session, 1)
+
+        await db_session.refresh(bot)
+        assert bot.reserved_btc_balance == 0.0
+        assert bot.reserved_usd_balance == 0.0

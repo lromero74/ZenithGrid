@@ -129,36 +129,36 @@ def _compute_position_pnl(
     Returns:
         Dict mapping asset name to {"pnl_usd": float, "cost_usd": float}.
     """
+    # Direction-aware P&L via the single-source helper, so shorts use their own
+    # cost basis (short_total_sold_*) instead of the long-only fields.
+    from app.services.pnl_service import calculate_profit
+
     asset_pnl = {}
     for position in open_positions:
         base = position.get_base_currency()
         quote = position.get_quote_currency()
 
-        if quote == "USD":
+        # current_price and the cost basis are in the QUOTE currency; quote_to_usd
+        # converts both to USD. USDC is treated as USD (≈1:1) — previously it fell
+        # through and was silently dropped from the unrealized-P&L view.
+        if quote in ("USD", "USDC"):
             current_price = breakdown_prices.get(base)
+            quote_to_usd = 1.0
         elif quote == "BTC":
             base_usd = breakdown_prices.get(base)
-            if base_usd and btc_usd_price > 0:
-                current_price = base_usd / btc_usd_price
-            else:
-                current_price = None
+            current_price = (base_usd / btc_usd_price) if (base_usd and btc_usd_price > 0) else None
+            quote_to_usd = btc_usd_price
         else:
             current_price = None
 
         if current_price is None:
             continue
 
-        current_value_quote = position.total_base_acquired * current_price
-        profit_quote = current_value_quote - position.total_quote_spent
-
-        if quote == "USD":
-            profit_usd = profit_quote
-            cost_usd = position.total_quote_spent
-        elif quote == "BTC":
-            profit_usd = profit_quote * btc_usd_price
-            cost_usd = position.total_quote_spent * btc_usd_price
-        else:
-            continue
+        profit_quote = calculate_profit(position, current_price)["profit_quote"]
+        cost_quote = (position.total_quote_spent if position.direction == "long"
+                      else (position.short_total_sold_quote or 0.0))
+        profit_usd = profit_quote * quote_to_usd
+        cost_usd = cost_quote * quote_to_usd
 
         if base not in asset_pnl:
             asset_pnl[base] = {"pnl_usd": 0.0, "cost_usd": 0.0}
