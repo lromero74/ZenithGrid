@@ -44,6 +44,11 @@ def position_exit_fee_rate(position, fallback: float = DEFAULT_TAKER_FEE_RATE) -
     taker rate when the position has no recorded entry fee (legacy positions).
     """
     spent = float(getattr(position, "total_quote_spent", 0.0) or 0.0)
+    if spent <= 0:
+        # Shorts never set total_quote_spent — their entry notional is the quote
+        # received from the opening short-sell. Without this, every short fell
+        # through to the flat fallback rate, skewing its fee-adjusted TP floor.
+        spent = float(getattr(position, "short_total_sold_quote", 0.0) or 0.0)
     entry_fee = float(getattr(position, "entry_fees_quote", 0.0) or 0.0)
     if spent > 0 and entry_fee > 0:
         return entry_fee / spent

@@ -278,15 +278,22 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
 
     # Fetch and extract
     try:
-        # Respect per-source crawl delay
+        # Respect per-source crawl delay — WITHOUT blocking the event loop.
+        # Compute the wait under the lock and reserve the (post-sleep) slot so
+        # concurrent fetches to the same domain serialize, then await outside the
+        # lock (time.sleep here froze the whole event loop for the crawl delay).
         if crawl_delay > 0:
             fetch_domain = urlparse(url).netloc.lower()
+            sleep_for = 0.0
             with _domain_last_fetch_lock:
+                now = time.time()
                 last_fetch = _domain_last_fetch.get(fetch_domain, 0)
-                elapsed = time.time() - last_fetch
+                elapsed = now - last_fetch
                 if elapsed < crawl_delay:
-                    time.sleep(crawl_delay - elapsed)
-                _domain_last_fetch[fetch_domain] = time.time()
+                    sleep_for = crawl_delay - elapsed
+                _domain_last_fetch[fetch_domain] = now + sleep_for
+            if sleep_for > 0:
+                await asyncio.sleep(sleep_for)
 
         async with aiohttp.ClientSession(
             max_line_size=32768, max_field_size=32768,

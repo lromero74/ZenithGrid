@@ -213,7 +213,7 @@ async def _validate_market_fallback(
     """
     current_value = position.total_base_acquired * current_price
     profit_amount = current_value - position.total_quote_spent
-    profit_pct = (profit_amount / position.total_quote_spent) * 100
+    profit_pct = (profit_amount / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0.0
 
     # Get minimum profit threshold from config, raised so the configured target is
     # honored NET of round-trip fees (gross profit_pct never subtracted them).

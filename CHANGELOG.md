@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.12.1] - 2026-06-25
+
+### Fixed
+- Code-review sweep #2 (tier 2). Several correctness and stats fixes: the candle cache is no longer thrown away and re-fetched from Coinbase every monitor cycle (a key-matching bug defeated it, adding needless API load); limit-order closes on USD/USDC pairs now count toward win-rate stats (previously only BTC-quoted closes did); portfolio unrealized P&L is now correct for short positions and includes USDC-quoted positions (shorts previously showed $0 and USDC was omitted); short positions now use their actual paid fee rate for the fee-adjusted take-profit threshold instead of always assuming the default; wiping an account's history now also clears its bots' reserved balances so they can open new positions immediately; and a couple of guards against divide-by-zero in profit checks. Also, fetching news article content no longer briefly blocks the server while honoring a source's crawl delay.
+
 ## [v3.12.0] - 2026-06-25
 
 ### Added

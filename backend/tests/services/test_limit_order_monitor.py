@@ -564,6 +564,41 @@ class TestProcessOrderCompletion:
 
     @pytest.mark.asyncio
     @patch('app.services.limit_order_monitor.broadcast_backend')
+    async def test_filled_usd_pair_sets_profit_usd(self, mock_ws):
+        """USD/USDC limit-close must set profit_usd (= profit_quote) so the close
+        is counted by win-rate stats — previously only BTC pairs set it."""
+        db = AsyncMock()
+        db.add = MagicMock()
+        exchange = AsyncMock()
+        exchange.is_paper_trading = MagicMock(return_value=False)
+        monitor = LimitOrderMonitor(db, exchange)
+        mock_ws.broadcast_order_fill = AsyncMock()
+
+        position = _make_position(
+            product_id="SOL-USD",
+            total_quote_spent=100.0,
+            total_quote_received=None,
+            total_base_acquired=1.0,
+            quote_currency="USD",
+        )
+        pending_order = _make_pending_order(filled_base_amount=0)
+        order_data = {"filled_size": "1.0", "filled_value": "150.0"}
+
+        mock_bot = MagicMock()
+        mock_bot.reserved_usd_balance = 0.0
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = mock_bot
+        db.execute = AsyncMock(return_value=mock_result)
+
+        await monitor._process_order_completion(position, pending_order, order_data, "FILLED")
+
+        assert position.status == "closed"
+        assert position.profit_quote == pytest.approx(50.0)   # 150 - 100
+        assert position.profit_usd == pytest.approx(50.0)     # USD pair → quote == USD
+        exchange.get_btc_usd_price.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.services.limit_order_monitor.broadcast_backend')
     async def test_cancelled_order_resets_position_flags(self, mock_ws):
         """Happy path: CANCELLED order resets closing flags."""
         db = AsyncMock()

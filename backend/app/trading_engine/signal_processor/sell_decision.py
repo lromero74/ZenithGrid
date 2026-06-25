@@ -110,7 +110,7 @@ async def _verify_mark_profit_allows_sell(
 
         mark_value = position.total_base_acquired * mark_price
         mark_profit = mark_value - position.total_quote_spent
-        mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
+        mark_profit_pct = (mark_profit / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0.0
         # Raise the floor so the configured target is met NET of round-trip fees.
         tp_floor = fee_adjusted_tp_floor(position, tp_pct)
 

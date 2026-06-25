@@ -623,12 +623,17 @@ class LimitOrderMonitor:
                     position.entry_fees_quote or 0.0, position.exit_fees_quote or 0.0,
                 )
 
-                # Calculate USD profit if BTC pair
+                # Calculate USD profit. BTC-quoted pairs convert via the BTC/USD
+                # rate; USD/USDC-quoted pairs are already USD. Without the else,
+                # USD/USDC limit-closes left profit_usd=None and were invisible to
+                # win-rate stats (which count profit_usd is not None and > 0).
                 quote_currency = position.get_quote_currency()
                 if quote_currency == "BTC":
                     btc_usd_price = await self.exchange.get_btc_usd_price()
                     position.btc_usd_price_at_close = btc_usd_price
                     position.profit_usd = position.profit_quote * btc_usd_price
+                else:
+                    position.profit_usd = position.profit_quote
 
                 # Update pending order
                 pending_order.status = "filled"

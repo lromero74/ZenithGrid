@@ -144,6 +144,13 @@ class TestFeeAdjustedTakeProfit:
         empty = SimpleNamespace(total_quote_spent=0.0, entry_fees_quote=0.0)
         assert position_exit_fee_rate(empty) == pytest.approx(DEFAULT_TAKER_FEE_RATE)
 
+    def test_exit_fee_rate_uses_short_notional_for_shorts(self):
+        # Shorts set short_total_sold_quote (not total_quote_spent); the rate must
+        # calibrate from that instead of falling through to the flat default.
+        short = SimpleNamespace(total_quote_spent=0.0, short_total_sold_quote=200.0,
+                                entry_fees_quote=1.20)
+        assert position_exit_fee_rate(short) == pytest.approx(0.006)
+
     def test_floor_is_strictly_above_target(self):
         pos = SimpleNamespace(total_quote_spent=100.0, entry_fees_quote=0.60)
         floor = fee_adjusted_tp_floor(pos, 1.0)

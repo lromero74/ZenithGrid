@@ -15,7 +15,7 @@ want the wallet flat (see scripts/), then purge the records.
 import logging
 from typing import Dict
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -76,6 +76,14 @@ async def purge_account_history(db: AsyncSession, account_id: int) -> Dict[str, 
     await db.execute(delete(AccountValueSnapshot).where(
         AccountValueSnapshot.account_id == account_id))
     await db.execute(delete(Position).where(Position.account_id == account_id))
+    # Zero the bots' reserved balances — their positions are gone, so any lingering
+    # reservation would make the bot think capital is still deployed and refuse to
+    # open new positions until restarted.
+    await db.execute(
+        update(Bot).where(Bot.account_id == account_id).values(
+            reserved_btc_balance=0.0, reserved_usd_balance=0.0,
+        )
+    )
     await db.commit()
 
     logger.info("Purged account %s history: %s", account_id, counts)
