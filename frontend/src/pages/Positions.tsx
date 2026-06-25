@@ -191,7 +191,9 @@ export default function Positions() {
     }
   }
 
-  const handleCheckSlippage = async (positionId: number) => {
+  // useCallback so these stable handlers don't defeat PositionCard's memo on every
+  // 10-second positions refetch (which re-renders this component).
+  const handleCheckSlippage = useCallback(async (positionId: number) => {
     await checkSlippageBeforeMarketClose(
       positionId,
       (slippage, posId) => {
@@ -204,28 +206,25 @@ export default function Positions() {
         setShowCloseConfirm(true)
       }
     )
-  }
+  }, [])
 
-  const openAddFundsModal = (position: Position) => {
+  const openAddFundsModal = useCallback((position: Position) => {
     if (isObserver) return
     setAddFundsPosition(position)
     setShowAddFundsModal(true)
-  }
+  }, [isObserver])
 
-  const openNotesModal = (position: Position) => {
+  const openNotesModal = useCallback((position: Position) => {
     if (isObserver) return
     setEditingNotesPositionId(position.id)
     setNotesText(position.notes || '')
     setShowNotesModal(true)
-  }
+  }, [isObserver])
 
-  const togglePosition = (positionId: number) => {
-    if (selectedPosition === positionId) {
-      setSelectedPosition(null)
-    } else {
-      setSelectedPosition(positionId)
-    }
-  }
+  const togglePosition = useCallback((positionId: number) => {
+    // Functional update so the callback stays stable (no selectedPosition dep).
+    setSelectedPosition(prev => (prev === positionId ? null : positionId))
+  }, [])
 
   // Memoized handlers for PositionCard (F1)
   const handleOpenChart = useCallback((productId: string, pos: Position) => {

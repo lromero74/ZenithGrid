@@ -28,6 +28,7 @@ from app.precision import format_base_amount
 from app.services.realmoney_audit import set_subsystem
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
+from app.trading_engine.sell_executor import SELL_BALANCE_HAIRCUT
 from app.services.rebalance_planning import (
     EXCHANGE_MIN_USD, DEFAULT_MIN_TRADE_PCT, TARGET_CURRENCIES,
     calculate_current_allocations, needs_rebalance, plan_topup_trades,
@@ -41,13 +42,6 @@ logger = logging.getLogger(__name__)
 # Max concurrent dust price lookups — parallelize the per-coin price fetches
 # while staying well under exchange rate limits.
 DUST_PRICE_CONCURRENCY = 8
-
-# Absolute safety floor for a single rebalance order. The real per-product
-# minimum is fetched live from the exchange (order_validation.get_product_minimums)
-# and takes precedence when higher; this floor only guards against the API
-# reporting a sub-cent granularity value (Coinbase spot exposes ~$0.00000001 as
-# quote_min_size, which is not a usable notional). Previously a flat $10 — that is
-# the Coinbase *perps* notional, not spot, and wrongly blocked small spot sells.
 
 # ---------------------------------------------------------------------------
 # Per-account allocation cache (written by rebalance monitor, read by bot gate)
@@ -732,7 +726,7 @@ class RebalanceMonitor(SessionMakerMixin):
                     # and apply a tiny haircut to avoid "Insufficient balance"
                     # from rounding/hold timing differences
                     coin = sweep["coin"]
-                    sell_amount = sweep["amount"] * 0.999
+                    sell_amount = sweep["amount"] * SELL_BALANCE_HAIRCUT
                     size_str = format_base_amount(sell_amount, coin)
                     if float(size_str) <= 0:
                         continue

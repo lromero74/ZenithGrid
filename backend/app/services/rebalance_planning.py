@@ -494,8 +494,9 @@ def _get_trade_params(from_currency: str, to_currency: str) -> Tuple[str, str]:
 
     Returns (product_id, side).
     """
-    # USD↔USDC: _execute_trade uses convert_currency() instead of market orders,
-    # but plan functions still need these entries to build trade dicts.
+    # USD↔USDC and other cross pairs are routed by _execute_trade via a BTC
+    # intermediary (e.g. USD→BTC→USDC), not a single market order; these entries
+    # let the plan functions build the trade dicts.
     pair_map = {
         ("USD", "BTC"): ("BTC-USD", "BUY"),
         ("BTC", "USD"): ("BTC-USD", "SELL"),

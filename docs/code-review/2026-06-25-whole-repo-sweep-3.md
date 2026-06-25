@@ -22,20 +22,20 @@ but would if shorts/bidirectional are ever enabled. Fixed defensively anyway.
 
 ## 🟡 Tier 3 — performance
 
-- [ ] Webhook rate-limit dicts (`_rate_limit_store`, `_ip_rate_limit_store`) never evict stale keys — add a prune to `cleanup_in_memory_caches` (pattern used by every other rate-limit dict).
-- [ ] `multi_bot_monitor.cleanup_caches` evicts candles with the flat 300s default TTL instead of the per-granularity TTL → prematurely drops still-valid hourly/daily candles. Use `CANDLE_CACHE_TTL.get(granularity, …)`.
-- [ ] `multi_bot_monitor` pair-prune deletes a candle cache entry without popping its fetch lock (orphaned locks until next TTL sweep). Add `_candle_fetch_locks.pop(k, None)`.
-- [ ] `PortfolioChartModal.tsx` candle fetch missing AbortController/stale-guard (the pattern applied to DealChart/useChartData this session was missed here).
-- [ ] `Positions.tsx` handlers (`openAddFundsModal`, `openNotesModal`, `togglePosition`, `handleCheckSlippage`) not `useCallback` → defeats `memo` on `PositionCard` every poll tick.
+- [x] Webhook rate-limit dicts now self-evict — `_within_limit` sweeps fully-expired keys once a store exceeds 5000 entries (bounds token/IP scanning growth). `webhook_router.py`
+- [x] `multi_bot_monitor.cleanup_caches` now uses the per-granularity `CANDLE_CACHE_TTL` (was the flat 300s default → premature eviction of hourly/daily candles). `multi_bot_monitor.py`
+- [x] `multi_bot_monitor` pair-prune now pops the fetch lock alongside the candle entry. `multi_bot_monitor.py`
+- [x] `PortfolioChartModal.tsx` candle fetch now has AbortController + cancelled guard (test updated for the new `signal`).
+- [x] `Positions.tsx` handlers wrapped in `useCallback` (`togglePosition` uses functional setState to stay dep-free) so they no longer defeat `PositionCard`'s memo each poll.
 - [~] `get_generic_cex_portfolio` unbounded closed-position load (non-Coinbase path) — pre-existing sweep-1 deferral; non-Coinbase accounts only.
 - [~] `coin_review_service` / `cache.invalidate` sync I/O on loop — background/dead paths; low urgency.
 - [~] `speculative_weights_cache` no periodic eviction — ~100 bytes/user, negligible.
 
 ## ⚪ Tier 4 — cleanup
 
-- [ ] Architecture docs (`backend.json`) missing the 3 new split modules — run `architecture-sync`.
-- [ ] `0.999` haircut literal duplicated 3× (`rebalance_monitor:735`, `position_coin_audit`, vs `sell_executor.SELL_BALANCE_HAIRCUT`) — single-source it.
-- [ ] Orphaned `EXCHANGE_MIN_USD` comment left in `rebalance_monitor` after the split (constant moved to `rebalance_planning`).
-- [ ] `_TF_PREFIXES` frozenset allocated per call in `indicator_based_indicators._calculate_traditional_indicators` — lift to module level.
-- [ ] Stale `_get_trade_params` comment (says `convert_currency`, code routes via BTC).
+- [x] Architecture docs synced (`architecture-sync` run) — the 3 split modules + email/SQL-aggregation/grace changes now documented; also fixed a stale migration count.
+- [x] `0.999` haircut at `rebalance_monitor:735` now imports `SELL_BALANCE_HAIRCUT` (single-source; no import cycle). (`position_coin_audit`'s copy is named + documented, left.)
+- [x] Orphaned `EXCHANGE_MIN_USD` comment removed from `rebalance_monitor`.
+- [x] `_TF_PREFIXES` lifted to module level in `indicator_based_indicators.py`.
+- [x] Stale `_get_trade_params` comment corrected (BTC-intermediary routing).
 - [~] Shadow-member ticker/slippage endpoints use manager scope (UX asymmetry, not a leak); `copy_bot_to_account` sets `user_id=manager`; `request: Request = None` idiom; `btcSeriesRef: any` typing — minor, low value.
