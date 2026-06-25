@@ -411,7 +411,8 @@ async def list_blacklisted_coins(
             )
             membership = membership_result.scalars().first()
             if not membership or membership.is_expired:
-                raise HTTPException(status_code=403, detail="Not a member of this account")
+                # 404 (not 403) so a non-member can't confirm the account exists.
+                raise HTTPException(status_code=404, detail="Account not found")
             # Show the account owner's overrides
             override_user_id = account.user_id
 

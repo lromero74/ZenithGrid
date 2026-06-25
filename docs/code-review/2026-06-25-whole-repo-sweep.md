@@ -68,7 +68,18 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [ ] Unbounded loops in `get_transfer_summary` and `copy_bot_to_account` name-collision. `transfers_router.py:234`, `bot_crud_router.py:736`
 - [ ] `batch_price` query re-keyed by new array ref each render. `usePositionsData.ts:70`
 
-## ⚪ Low / cleanup
+## ⚪ Low / cleanup  (in progress on `cleanup/sweep-tier4`)
+
+- [x] `dca_target_reference` param type `"string"` → `"str"`. `indicator_params.py`
+- [x] Removed dead `db.execute(select(...))` (discarded result) in `create_or_update_cex_account`. `exchange_service.py`
+- [x] Routine per-cycle budget lines `logger.warning` → `logger.info`. `batch_analyzer.py`
+- [x] Blacklist account enumeration: 403 → 404. `blacklist_router.py`
+- [x] `VirtualizedPositionList` `scrollMargin` now measured after mount (was always 0). `VirtualizedPositionList.tsx`
+- [~] **Deferred — focused FK-parity pass:** ORM/migration `ondelete` divergences (`AIOpinionLog.user_id`, `BotRebalancerGroup.account_id` missing CASCADE; `Position.signals` cascade-vs-SET NULL) — fresh-install-only (prod is correct via migrations); risky to edit among identical FK lines, best done with the FK introspection guard.
+- [~] **Deferred:** migration number collisions (`077`/`086` ×2) — renaming applied migrations risks re-runs; collision is cosmetic (both run).
+- [~] **Deferred (low):** `manual_max_dca_orders` percentage back-calc; webhook per-IP rate limit; `syncAllChartsToRange` 3-vs-2-param interface; broad react-query invalidations; `fill_reconciler` BTC-fee comment wording.
+
+## ⚪ Low / cleanup (original list)
 
 - [ ] Migration number collisions: `077_*` ×2, `086_*` ×2. `backend/migrations/`
 - [ ] ORM/migration FK `ondelete` divergence on fresh installs: `AIOpinionLog.user_id` (CASCADE in migration, none in model), `BotRebalancerGroup.account_id` (same); `Position.signals` cascade vs SET NULL. `models/trading.py`
