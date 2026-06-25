@@ -16,6 +16,14 @@ from app.product_precision import get_base_precision
 
 logger = logging.getLogger(__name__)
 
+# Order statuses that mean the order is DONE filling — its filled_size is final.
+# Anything else the exchange reports (OPEN, PENDING, QUEUED, UNKNOWN…) means the
+# order is still actively filling and filled_size will keep growing, so a partial
+# read MUST NOT be recorded as the complete fill.
+_TERMINAL_ORDER_STATUSES = frozenset({
+    "FILLED", "CANCELLED", "CANCELED", "EXPIRED", "FAILED", "DONE", "SETTLED",
+})
+
 
 @dataclass
 class FillData:
@@ -98,6 +106,7 @@ async def reconcile_order_fill(
         raw_filled_value = float(order_details.get("filled_value", "0"))
         raw_avg_price = float(order_details.get("average_filled_price", "0"))
         raw_total_fees = float(order_details.get("total_fees", "0"))
+        order_status = str(order_details.get("status", "")).upper()
 
         # Apply BTC pair fee adjustment if requested
         actual_base = raw_filled_size
@@ -125,11 +134,21 @@ async def reconcile_order_fill(
                     f"rounded={actual_base:.8f} (precision={precision} decimals)"
                 )
 
-        # Check if order has filled (non-zero amounts)
-        if actual_base > 0 and raw_filled_value > 0:
+        # Order is DONE only when the exchange reports a terminal status. Clients
+        # that don't report status at all (paper / some adapters) are treated as
+        # terminal for back-compat.
+        order_is_terminal = (not order_status) or (order_status in _TERMINAL_ORDER_STATUSES)
+
+        # Accept the fill ONLY when the order is terminal — its filled_size is then
+        # final. A non-terminal order is still actively filling; recording its
+        # current partial as the complete fill marks the deal done while the rest
+        # keeps filling into the wallet, stranding it untracked (the AERO bug,
+        # 2026-06-24: a 1.9-AERO order was read mid-fill at 0.1 and booked as done).
+        if actual_base > 0 and raw_filled_value > 0 and order_is_terminal:
             logger.info(
                 f"Order filled - Base: {actual_base}, "
-                f"Quote: {raw_filled_value}, Avg Price: {raw_avg_price}"
+                f"Quote: {raw_filled_value}, Avg Price: {raw_avg_price}, "
+                f"Status: {order_status or 'n/a'}"
             )
             return FillData(
                 filled_size=actual_base,
@@ -139,22 +158,31 @@ async def reconcile_order_fill(
                 reconciled=True,
             )
 
-        logger.warning(
-            f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)"
-        )
+        if actual_base > 0 and not order_is_terminal:
+            # Still filling — keep polling for the complete fill, do NOT record.
+            logger.info(
+                f"Attempt {attempt + 1}/{max_retries}: order {order_id} still "
+                f"filling (status={order_status}, partial={actual_base}); "
+                f"waiting for complete fill"
+            )
+        else:
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)"
+            )
         if attempt == max_retries - 1:
             logger.error(
-                f"Order {order_id} did not fill after {max_retries} "
-                f"attempts (~30s)."
+                f"Order {order_id} did not reach a terminal fill after "
+                f"{max_retries} attempts (~30s) (last status={order_status or 'n/a'})."
             )
 
-    # All retries exhausted - use fallbacks if provided.
+    # All retries exhausted without the order reaching a terminal fill.
     # NOTE: this is a fabricated ESTIMATE, not a confirmed fill — reconciled
-    # stays False. It is safe for BUY orders (which almost always fill, and
-    # under-recording a buy is the conservative error). It is NEVER safe for a
-    # SELL/close: a position closed on this estimate is booked as fully sold
-    # while the coins remain in the wallet. The sell path therefore does not
-    # pass fallbacks and refuses to close unless reconciled is True.
+    # stays False. Neither buy nor sell passes fallbacks today, so both get the
+    # zero result below and treat the order as unconfirmed: the buy's zero-guard
+    # refuses to book it and the sell refuses to close. That is deliberate — an
+    # order still filling when we give up must NOT be recorded as complete
+    # (recording a partial strands the rest in the wallet); the order
+    # reconciliation monitor corrects the record once the fill settles.
     if fallback_base is not None and fallback_price is not None:
         logger.warning(
             f"Could not fetch fill data for {order_id} after "

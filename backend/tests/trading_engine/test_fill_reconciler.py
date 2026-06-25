@@ -379,6 +379,115 @@ class TestReconcileOrderFill:
         # floor to 2 decimals: 9.9 -> 9.9 (already at precision)
         assert result.filled_size == pytest.approx(9.9)
 
+    @pytest.mark.asyncio
+    async def test_waits_for_terminal_status_then_returns_full_fill(self):
+        """Regression (AERO 2026-06-24): a market order caught mid-fill reports a
+        partial with a non-terminal status; the reconciler must wait for the
+        terminal status and record the FULL fill, not the first partial."""
+        exchange = AsyncMock()
+        exchange.get_order.side_effect = [
+            # First poll: order still OPEN, only 0.1 filled so far
+            {
+                "filled_size": "0.1", "filled_value": "0.0505",
+                "average_filled_price": "0.505", "total_fees": "0.001",
+                "status": "OPEN",
+            },
+            # Second poll: order now FILLED with the full 1.9
+            {
+                "filled_size": "1.9", "filled_value": "0.9587",
+                "average_filled_price": "0.5046", "total_fees": "0.0115",
+                "status": "FILLED",
+            },
+        ]
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            result = await reconcile_order_fill(
+                exchange=exchange, order_id="order-aero", product_id="AERO-USD",
+                max_retries=5,
+            )
+
+        assert result.filled_size == pytest.approx(1.9)
+        assert result.reconciled is True
+        assert exchange.get_order.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_terminal_status_first_attempt_returns_immediately(self):
+        """Happy path: a FILLED order on the first poll returns immediately."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "1.9", "filled_value": "0.9587",
+            "average_filled_price": "0.5046", "total_fees": "0.0115",
+            "status": "FILLED",
+        }
+
+        result = await reconcile_order_fill(
+            exchange=exchange, order_id="order-fast", product_id="AERO-USD",
+            max_retries=5,
+        )
+
+        assert result.filled_size == pytest.approx(1.9)
+        exchange.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_status_accepts_first_fill_backcompat(self):
+        """Back-compat: when the exchange reports no status (paper/other clients),
+        the first non-zero fill is accepted (prior behavior)."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "0.1", "filled_value": "0.0505",
+            "average_filled_price": "0.505", "total_fees": "0.001",
+        }
+
+        result = await reconcile_order_fill(
+            exchange=exchange, order_id="order-nostatus", product_id="AERO-USD",
+            max_retries=5,
+        )
+
+        assert result.filled_size == pytest.approx(0.1)
+        exchange.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_non_terminal_until_exhaustion_does_not_record_partial(self):
+        """Edge case: order stays non-terminal (still filling) for every retry —
+        the partial is NEVER recorded as a complete fill. The result is
+        unconfirmed (reconciled=False, zero) so the buy's zero-guard refuses to
+        book it and the order-reconciliation monitor corrects it once it settles."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "0.1", "filled_value": "0.0505",
+            "average_filled_price": "0.505", "total_fees": "0.001",
+            "status": "OPEN",
+        }
+
+        with patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock):
+            result = await reconcile_order_fill(
+                exchange=exchange, order_id="order-stuck", product_id="AERO-USD",
+                max_retries=3,
+            )
+
+        assert result.filled_size == 0.0
+        assert result.reconciled is False
+        assert exchange.get_order.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_cancelled_with_partial_fill_returns_partial(self):
+        """Edge case: a partially-filled order that terminates as CANCELLED
+        (e.g. IOC remainder cancelled) records the executed partial immediately."""
+        exchange = AsyncMock()
+        exchange.get_order.return_value = {
+            "filled_size": "0.1", "filled_value": "0.0505",
+            "average_filled_price": "0.505", "total_fees": "0.001",
+            "status": "CANCELLED",
+        }
+
+        result = await reconcile_order_fill(
+            exchange=exchange, order_id="order-ioc", product_id="AERO-USD",
+            max_retries=5,
+        )
+
+        assert result.filled_size == pytest.approx(0.1)
+        exchange.get_order.assert_called_once()
+
 
 # =============================================================================
 # FillData dataclass
