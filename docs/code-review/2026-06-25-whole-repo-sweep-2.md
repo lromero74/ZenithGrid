@@ -37,7 +37,7 @@ Status: `[ ]` open · `[x]` fixed · `~` deferred.
 
 - [x] Dead code: removed `main.py` unused monitor imports, `bot_crud_router.py` `except as _`, and the unused `PerpsPortfolioPanel.tsx`. (`pnl_service.calculate_profit` is now used by `_compute_position_pnl` from tier 2; the remaining inline P&L copies are correct and left as-is — consolidating real-money exit math carries behavior-change risk for marginal benefit.)
 - [x] AI provider billing URLs extracted to a single `AI_PROVIDER_BILLING_URLS` constant in config, referenced by both routers (their differing response shapes/keys are preserved).
-- [ ] **Oversized files split** — in progress; see the dedicated "Oversized-file splits" section below.
+- [x] **Oversized files split** — `sell_executor`/`rebalance_monitor`/`indicator_based` all now under 1200 (`buy_executor` already was). See the dedicated section below.
 - [x] `useBotMutations` `cancel/sellAllPositions` now invalidate the scoped `['positions','open',accountId]` key (the only `['positions',…]` key) instead of the broad prefix. (`PositionCard` `getQueryData(['bots'])` and the `App.tsx` closed-positions badge are left: both have working fallbacks and only matter in multi-account use; fixing needs prop-drilling for negligible benefit.)
 - [x] `syncAllChartsToRange` type now matches the 2-param implementation (dropped the ignored 3rd arg from the type and the call site).
 - [x] Silent `except Exception` now logs — `portfolio_service.py` (×2 price fallbacks), `rebalance_monitor.py` (dust-sweep list_products).
@@ -48,11 +48,20 @@ Status: `[ ]` open · `[x]` fixed · `~` deferred.
 
 ## Oversized-file splits (>1200-line files → logical modules)
 
-Pure refactors (no behavior change), each gated by the full backend suite. Target
-files: `sell_executor.py` (1687), `rebalance_monitor.py` (1309),
-`indicator_based.py` (1248), `buy_executor.py` (1086).
+Pure refactors (no behavior change) — code *moved* (consumers updated, no re-export
+shims), each gated by the full backend suite (7375+ tests).
 
-- [ ] `sell_executor.py` — split out the short-position machinery.
-- [ ] `buy_executor.py` — split out the close-short machinery.
-- [ ] `rebalance_monitor.py` — extract trade execution / dust sweep.
-- [ ] `indicator_based.py` — extract the exit-decision / DCA helpers.
+- [x] `sell_executor.py` (1687 → **1072**) — short-position machinery (open/add,
+  fill reconcile, trade record, the short-only limit safety path, unconfirmed
+  handling) extracted to `sell_executor_short.py` (650). One-way import of the
+  shared `sell_fill_is_complete`. Consumers updated: `buy_decision`,
+  `safety_order_monitor`, tests (incl. patch targets → `sell_executor_short`).
+- [x] `rebalance_monitor.py` (1309 → **825**) — the stateless planning functions
+  (allocations, top-up/rebalance/dust-sweep planning, locked-balance reconcile) +
+  their shared constants extracted to `rebalance_planning.py` (514). Class imports
+  them one-way; `accounts_query_router` updated to the new source.
+- [x] `indicator_based.py` (1248 → **983**) — the 7 indicator-snapshot methods
+  extracted to an `IndicatorCalculationMixin` in `indicator_based_indicators.py`
+  (321); `IndicatorBasedStrategy` composes it (call sites unchanged).
+- [~] `buy_executor.py` — **already 1092 (< 1200)** after this session's earlier
+  changes; no split needed (the close-short machinery would be the cut if it grows).

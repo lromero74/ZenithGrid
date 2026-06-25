@@ -15,13 +15,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.trading_engine.sell_executor import (
     execute_sell,
-    execute_sell_short,
     execute_limit_sell,
     clamp_sell_base_amount,
     _resolve_real_close_amount,
     _close_sell_position_as_dust,
     SELL_BALANCE_HAIRCUT,
 )
+from app.trading_engine.sell_executor_short import execute_sell_short
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +134,12 @@ def _patch_externals():
         patch("app.trading_engine.sell_executor.broadcast_backend", AsyncMock()),
         patch("app.trading_engine.sell_executor.log_order_to_history", new_callable=AsyncMock),
         patch("app.trading_engine.sell_executor.get_base_precision", return_value=8),
+        # Short functions were extracted to sell_executor_short; patch their module
+        # globals too so short tests exercise the same mocked externals.
+        patch("app.trading_engine.sell_executor_short.shutdown_manager", sm),
+        patch("app.trading_engine.sell_executor_short.broadcast_backend", AsyncMock()),
+        patch("app.trading_engine.sell_executor_short.log_order_to_history", new_callable=AsyncMock),
+        patch("app.trading_engine.sell_executor_short.get_base_precision", return_value=8),
     ):
         yield sm
 
@@ -1455,7 +1461,7 @@ class TestExecuteSellShortUnconfirmed:
             patch("app.order_validation.validate_order_size", new_callable=AsyncMock,
                   return_value=(True, None)),
             patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock),
-            patch("app.trading_engine.sell_executor.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.trading_engine.sell_executor_short.asyncio.sleep", new_callable=AsyncMock),
         ):
             with pytest.raises(ValueError, match="did not confirm"):
                 await execute_sell_short(
@@ -1490,7 +1496,7 @@ class TestExecuteSellShortUnconfirmed:
             patch("app.order_validation.validate_order_size", new_callable=AsyncMock,
                   return_value=(True, None)),
             patch("app.trading_engine.fill_reconciler.asyncio.sleep", new_callable=AsyncMock),
-            patch("app.trading_engine.sell_executor.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.trading_engine.sell_executor_short.asyncio.sleep", new_callable=AsyncMock),
         ):
             with pytest.raises(ValueError, match="did not confirm"):
                 await execute_sell_short(

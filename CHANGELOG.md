@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.12.6] - 2026-06-25
+
+### Changed
+- Internal refactor (code-review sweep #2, tier 4) — no user-facing or behavior change. Three oversized modules were split into focused files to stay under the project's size limit: short-position sell handling, portfolio rebalance trade-planning, and the strategy engine's indicator-calculation methods now live in dedicated modules. Verified behavior-preserving by the full test suite (7376 backend tests passing).
+
 ## [v3.12.5] - 2026-06-25
 
 ### Fixed
