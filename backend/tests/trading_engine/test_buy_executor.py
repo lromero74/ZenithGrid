@@ -15,6 +15,7 @@ from app.trading_engine.buy_executor import (
     execute_buy,
     execute_limit_buy,
     execute_buy_close_short,
+    _reconcile_close_short_fill,
 )
 
 
@@ -888,3 +889,56 @@ class TestExecuteBuyCloseShort:
                 position=position,
                 current_price=2800.0,
             )
+
+
+class TestReconcileCloseShortFill:
+    """Close-short fill reconciliation must wait for a TERMINAL order status
+    before recording — a mid-fill partial would book the short closed while the
+    buy-back keeps filling (the v3.11.6 fill bug, on the short side)."""
+
+    @pytest.mark.asyncio
+    async def test_waits_for_terminal_status_then_returns_full_fill(self):
+        tc = AsyncMock()
+        tc.get_order.side_effect = [
+            # Still filling: partial, non-terminal
+            {"filled_size": "0.001", "filled_value": "30.0",
+             "average_filled_price": "30000.0", "total_fees": "0.15", "status": "OPEN"},
+            # Terminal: full fill
+            {"filled_size": "0.002", "filled_value": "60.0",
+             "average_filled_price": "30000.0", "total_fees": "0.30", "status": "FILLED"},
+        ]
+        with patch("app.trading_engine.buy_executor.asyncio.sleep", new_callable=AsyncMock):
+            filled, quote, price, fee = await _reconcile_close_short_fill(tc, "ord-1")
+        assert filled == pytest.approx(0.002)
+        assert quote == pytest.approx(60.0)
+        assert tc.get_order.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_terminal_first_attempt_returns_immediately(self):
+        tc = AsyncMock()
+        tc.get_order.return_value = {
+            "filled_size": "0.002", "filled_value": "60.0",
+            "average_filled_price": "30000.0", "total_fees": "0.30", "status": "FILLED"}
+        filled, quote, price, fee = await _reconcile_close_short_fill(tc, "ord-2")
+        assert filled == pytest.approx(0.002)
+        tc.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_status_accepts_first_fill_backcompat(self):
+        tc = AsyncMock()
+        tc.get_order.return_value = {
+            "filled_size": "0.002", "filled_value": "60.0",
+            "average_filled_price": "30000.0", "total_fees": "0.30"}
+        filled, quote, price, fee = await _reconcile_close_short_fill(tc, "ord-3")
+        assert filled == pytest.approx(0.002)
+        tc.get_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_never_fills_raises(self):
+        tc = AsyncMock()
+        tc.get_order.return_value = {
+            "filled_size": "0", "filled_value": "0",
+            "average_filled_price": "0", "total_fees": "0", "status": "OPEN"}
+        with patch("app.trading_engine.buy_executor.asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(ValueError, match="Failed to fetch fill data"):
+                await _reconcile_close_short_fill(tc, "ord-4")

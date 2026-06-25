@@ -1146,6 +1146,7 @@ async def _close_sell_position_as_dust(
     product_id: str,
     position: Position,
     current_price: float,
+    available_base: Optional[float] = None,
 ) -> Tuple[None, float, float]:
     """Close a long position as dust (rounds to zero base) with no exchange order.
 
@@ -1156,7 +1157,13 @@ async def _close_sell_position_as_dust(
     (``close_price`` is not a column), and ``profit_usd`` must be converted for
     BTC-quoted pairs rather than booking the BTC amount as USD.
     """
-    quote_value = position.total_base_acquired * current_price
+    # Value the retained dust at the ACTUAL base on hand. The round-to-zero caller
+    # leaves available_base=None (the recorded amount IS what's held, just too small
+    # to sell). The clamped caller passes the clamped wallet balance — there the
+    # recorded total_base_acquired exceeds what's actually in the wallet, so booking
+    # the recorded amount would over-book proceeds the position never received.
+    effective_base = available_base if available_base is not None else position.total_base_acquired
+    quote_value = effective_base * current_price
     spent = position.total_quote_spent or 0
     dust_profit = quote_value - spent
     dust_pct = (dust_profit / spent * 100) if spent > 0 else -100.0
@@ -1622,6 +1629,7 @@ async def execute_sell(
             )
             return await _close_sell_position_as_dust(
                 db, exchange, bot, product_id, position, current_price,
+                available_base=base_amount,
             )
 
     order_id, actual_base_sold, quote_received, actual_price, fee_quote, reconciled = await _submit_sell_market_order(

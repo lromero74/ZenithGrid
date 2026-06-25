@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
-  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare, TrendingUp
+  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare, TrendingUp,
+  Pause, PlayCircle
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
@@ -472,6 +473,16 @@ export default function Reports() {
                       title="Generate Now"
                     >
                       <Play className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canWriteReports && (
+                    <button
+                      onClick={() => updateSchedule.mutate({ id: schedule.id, data: { is_enabled: !schedule.is_enabled } })}
+                      disabled={updateSchedule.isPending}
+                      className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors"
+                      title={schedule.is_enabled ? 'Pause schedule' : 'Resume schedule'}
+                    >
+                      {schedule.is_enabled ? <Pause className="w-4 h-4" /> : <PlayCircle className="w-4 h-4" />}
                     </button>
                   )}
                   <button

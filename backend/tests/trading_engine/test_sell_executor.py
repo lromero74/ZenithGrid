@@ -19,6 +19,7 @@ from app.trading_engine.sell_executor import (
     execute_limit_sell,
     clamp_sell_base_amount,
     _resolve_real_close_amount,
+    _close_sell_position_as_dust,
     SELL_BALANCE_HAIRCUT,
 )
 
@@ -1134,6 +1135,48 @@ class TestDustClose:
         assert trade is not None
         assert position.status == "closed"
         tc.sell.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dust_close_clamped_books_available_base_not_recorded(self):
+        """Clamped dust close values the retained dust at the ACTUAL available
+        base, not the larger recorded total_base_acquired (which would over-book
+        proceeds for coins the wallet never held)."""
+        db = _make_db()
+        exchange = _make_exchange()
+        bot = _make_bot()
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=1.0,      # recorded (drifted above wallet)
+            total_quote_spent=2000.0,
+        )
+        with patch("app.trading_engine.sell_executor.record_exit_provenance"):
+            trade, profit, pct = await _close_sell_position_as_dust(
+                db, exchange, bot, "ETH-USD", position, 3000.0,
+                available_base=0.0001,    # what the wallet actually holds
+            )
+        assert trade is None
+        # 0.0001 * 3000 = 0.3, NOT 1.0 * 3000 = 3000
+        assert position.total_quote_received == pytest.approx(0.3)
+        assert position.profit_quote == pytest.approx(0.3 - 2000.0)
+        assert profit == pytest.approx(0.3 - 2000.0)
+
+    @pytest.mark.asyncio
+    async def test_dust_close_no_available_base_uses_recorded(self):
+        """Round-to-zero path (available_base omitted) values the retained dust at
+        the recorded amount — the coins are genuinely held, just unsellable."""
+        db = _make_db()
+        exchange = _make_exchange()
+        bot = _make_bot()
+        position = _make_position(
+            product_id="ETH-USD",
+            total_base_acquired=0.000001,
+            total_quote_spent=0.002,
+        )
+        with patch("app.trading_engine.sell_executor.record_exit_provenance"):
+            trade, profit, pct = await _close_sell_position_as_dust(
+                db, exchange, bot, "ETH-USD", position, 3000.0,
+            )
+        assert position.total_quote_received == pytest.approx(0.003, abs=1e-9)
 
 
 # ===========================================================================
