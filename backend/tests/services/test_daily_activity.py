@@ -238,6 +238,44 @@ class TestGetDailyActivity:
         assert result[0]["amount"] == 500.0
 
     @pytest.mark.asyncio
+    async def test_cardspend_btc_currency_goes_on_usd_line(self, db_session):
+        """A card spend is BTC-denominated but is really a USD purchase → it must
+        land on the USD line with its USD value, not the BTC line/amount."""
+        user, account = await _seed_user_and_account(db_session)
+        now = utcnow()
+
+        db_session.add(AccountTransfer(
+            user_id=user.id, account_id=account.id,
+            transfer_type="withdrawal", amount=0.001, currency="BTC",
+            amount_usd=65.0, original_type="cardspend",
+            occurred_at=now - timedelta(days=1),
+        ))
+        await db_session.flush()
+
+        result = await get_daily_activity(db_session, user.id, days=30)
+
+        assert len(result) == 1
+        assert result[0]["line"] == "usd"          # NOT btc, despite BTC currency
+        assert result[0]["amount"] == 65.0          # USD value, not the 0.001 BTC
+        assert result[0]["category"] == "withdrawal"
+
+    @pytest.mark.asyncio
+    async def test_micro_transfer_excluded(self, db_session):
+        """Transfers worth < $1 (e.g. staking dust) are dropped from the chart."""
+        user, account = await _seed_user_and_account(db_session)
+        now = utcnow()
+
+        db_session.add(AccountTransfer(
+            user_id=user.id, account_id=account.id,
+            transfer_type="deposit", amount=0.5, currency="USD",
+            amount_usd=0.5, occurred_at=now - timedelta(days=1),
+        ))
+        await db_session.flush()
+
+        result = await get_daily_activity(db_session, user.id, days=30)
+        assert result == []
+
+    @pytest.mark.asyncio
     async def test_empty_result_no_data(self, db_session):
         """Empty list when no positions or transfers in range."""
         user, account = await _seed_user_and_account(db_session)
