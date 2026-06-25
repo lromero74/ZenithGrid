@@ -363,12 +363,14 @@ async def _calculate_budget(
                     count_deployed_safety_orders, entry_trades_for_position,
                 )
                 from app.trading_engine.position_manager import compute_grace_expanded_budget
-                deployed = count_deployed_safety_orders(entry_trades_for_position(position))
-                buys = sorted(
-                    [t for t in (position.trades or []) if t.side == "buy"],
+                # entry trades = buys for a long, sells for a short — using buys-only
+                # left base_sz = 0 for shorts, silently disabling grace on short deals.
+                entries = sorted(
+                    entry_trades_for_position(position),
                     key=lambda t: t.timestamp,
                 )
-                base_sz = (buys[0].quote_amount if buys else 0.0) or 0.0
+                deployed = count_deployed_safety_orders(entries)
+                base_sz = (entries[0].quote_amount if entries else 0.0) or 0.0
                 eff_cost = compute_grace_expanded_budget(cfg, deployed, base_sz, aggregate_value or 0.0)
                 if eff_cost > position.max_quote_allowed:
                     logger.info(

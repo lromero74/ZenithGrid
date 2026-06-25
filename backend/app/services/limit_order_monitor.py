@@ -431,12 +431,18 @@ class LimitOrderMonitor:
         """
         old_order_id = pending_order.order_id
 
-        # Cancel the old order
+        # Cancel the old order. Coinbase cancel goes through the batch endpoint and
+        # returns {"results": [{"order_id": ..., "success": bool}]} — there is NO
+        # top-level "success" key, so the old `.get("success")` check was always False
+        # and every reprice-to-bid raised "Cancel failed". Read the per-order result.
         cancel_result = await self.exchange.cancel_order(old_order_id)
-        if not cancel_result.get("success", False):
-            raise Exception(
-                f"Cancel failed: {cancel_result.get('error', 'unknown')}"
-            )
+        results = cancel_result.get("results") if isinstance(cancel_result, dict) else None
+        if results is not None:
+            cancelled_ok = bool(results and results[0].get("success", False))
+        else:  # tolerate clients that already normalize to a top-level success
+            cancelled_ok = bool(isinstance(cancel_result, dict) and cancel_result.get("success", False))
+        if not cancelled_ok:
+            raise Exception(f"Cancel failed: {cancel_result}")
 
         # Check if the cancelled order filled between our last check
         # and the cancel. This prevents double-selling.

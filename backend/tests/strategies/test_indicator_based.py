@@ -80,12 +80,17 @@ def _make_mock_position(
     entry_stop_loss=None,
     entry_take_profit_target=None,
     entry_fees_quote=0.0,
+    short_total_sold_quote=0.0,
+    short_total_sold_base=0.0,
 ):
     """Create a mock position object."""
     pos = MagicMock()
     pos.average_buy_price = avg_price
     pos.total_base_acquired = total_base
     pos.total_quote_spent = total_quote
+    # Short positions carry their cost basis in the short_* fields (long fields are 0).
+    pos.short_total_sold_quote = short_total_sold_quote
+    pos.short_total_sold_base = short_total_sold_base
     # Real numeric value so the fee-aware TP floor calibrates deterministically
     # (a bare MagicMock attr would float() to 1.0 → bogus fee rate). 0.0 makes
     # position_exit_fee_rate fall back to the default 0.6% taker rate.
@@ -1382,3 +1387,74 @@ class TestBidirectionalSoftCeilingSizing:
             "long", 0.0, aggregate_usd_value=1000.0
         )
         assert pytest.approx(amount) == 5.0
+
+
+# =====================================================================
+# should_sell — SHORT positions (direction-aware P&L / trailing)
+# =====================================================================
+
+
+class TestShouldSellShort:
+    """Shorts profit by buying back cheaper; should_sell must use the short_* fields
+    (the long fields are 0 for shorts → previously a constant 0% and ZeroDivisionError)."""
+
+    def _short(self, sold_quote=100.0, sold_base=1.0, **o):
+        # A short that sold `sold_base` for `sold_quote` (avg sell price = quote/base).
+        return _make_mock_position(
+            direction="short", avg_price=0.0, total_base=0.0, total_quote=0.0,
+            short_total_sold_quote=sold_quote, short_total_sold_base=sold_base, **o
+        )
+
+    @pytest.mark.asyncio
+    async def test_short_profit_when_price_falls_hits_fixed_tp(self):
+        """Sold 1 @ 100; price now 95 → +5% → fixed TP (3%) sells."""
+        strategy = _make_strategy({"take_profit_mode": "fixed", "take_profit_percentage": 3.0})
+        pos = self._short(sold_quote=100.0, sold_base=1.0)
+        should, reason = await strategy.should_sell({}, pos, current_price=95.0)
+        assert should is True
+        assert "Take profit" in reason
+
+    @pytest.mark.asyncio
+    async def test_short_loss_when_price_rises_no_tp(self):
+        """Price rose to 104 → short is down ~4% → no take-profit."""
+        strategy = _make_strategy({"take_profit_mode": "fixed", "take_profit_percentage": 3.0})
+        pos = self._short(sold_quote=100.0, sold_base=1.0)
+        should, reason = await strategy.should_sell({}, pos, current_price=104.0)
+        assert should is False
+
+    @pytest.mark.asyncio
+    async def test_short_stop_loss_triggers_when_price_rises(self):
+        """Short loss past the stop-loss % closes the position (no long-field crash)."""
+        strategy = _make_strategy({
+            "take_profit_mode": "fixed", "take_profit_percentage": 3.0,
+            "stop_loss_enabled": True, "stop_loss_percentage": -10.0,
+        })
+        pos = self._short(sold_quote=100.0, sold_base=1.0)
+        should, reason = await strategy.should_sell({}, pos, current_price=115.0)  # -15%
+        assert should is True
+        assert "Stop loss" in reason
+
+    @pytest.mark.asyncio
+    async def test_short_zero_cost_basis_does_not_crash(self):
+        """Degenerate short (no sold quote) must not ZeroDivisionError."""
+        strategy = _make_strategy()
+        pos = self._short(sold_quote=0.0, sold_base=0.0)
+        should, reason = await strategy.should_sell({}, pos, current_price=50.0)
+        assert should is False  # 0% profit, no TP
+
+    @pytest.mark.asyncio
+    async def test_short_trailing_tp_triggers_on_rise_from_trough(self):
+        """Trailing TP for a short: arms in profit, trails the low, exits when price rises back."""
+        strategy = _make_strategy({
+            "take_profit_mode": "trailing", "take_profit_percentage": 3.0,
+            "trailing_deviation": 1.0,
+        })
+        pos = self._short(sold_quote=100.0, sold_base=1.0)
+        # Price 90 → +10% arms trailing, trough tracked at 90 (90 < 90*1.01 → hold)
+        should, _ = await strategy.should_sell({}, pos, current_price=90.0)
+        assert should is False
+        # Price rises to 91.5 (> 90*1.01 = 90.9) while still +8.5% (above fee floor)
+        # → adverse reversal past the deviation → trailing TP triggers.
+        should, reason = await strategy.should_sell({}, pos, current_price=91.5)
+        assert should is True
+        assert "Trailing TP" in reason

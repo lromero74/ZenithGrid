@@ -76,6 +76,11 @@ if settings.is_postgres:
     _read_engine_kwargs["max_overflow"] = _rp.read_pool_overflow
     _read_engine_kwargs["pool_timeout"] = 10
     _read_engine_kwargs["execution_options"] = {"postgresql_readonly": True}
+    # Mirror the write pool's search_path so unqualified table names in raw SQL
+    # resolve on read sessions too (otherwise read-pool raw SQL hits "relation not found").
+    _read_engine_kwargs["connect_args"] = {
+        "server_settings": {"search_path": "auth,trading,reporting,social,content,system,public"}
+    }
 else:
     _read_engine_kwargs["connect_args"] = {"check_same_thread": False}
 

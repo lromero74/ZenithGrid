@@ -526,9 +526,12 @@ class IndicatorBasedStrategy(TradingStrategy):
             )
             safety_order_details = indicator_details
 
-            # For DCA, also require price drop below target (this is a mandatory condition)
-            # The price drop condition is ALWAYS required for DCA, regardless of other conditions
-            if position is not None and hasattr(position, "average_buy_price") and position.average_buy_price:
+            # For DCA, also require the price-move condition (mandatory, regardless of
+            # other conditions). _evaluate_dca_price_condition is direction-aware (it
+            # uses the short sell-side reference for shorts); the old
+            # `position.average_buy_price` guard skipped it for shorts (avg = 0), letting
+            # short safety orders fire on indicator signal alone with no price gate.
+            if position is not None:
                 safety_order_signal = self._evaluate_dca_price_condition(
                     position, current_price, indicator_signal, safety_order_details
                 )
@@ -1060,14 +1063,30 @@ class IndicatorBasedStrategy(TradingStrategy):
                     f"exiting to free the bucket slot"
                 )
 
-        # Calculate current profit
-        current_value = position.total_base_acquired * current_price
-        profit_amount = current_value - position.total_quote_spent
-        profit_pct = (profit_amount / position.total_quote_spent) * 100
+        # Calculate current profit (direction-aware). Longs profit as price rises;
+        # shorts sold base for quote up front and profit by buying it back cheaper, so
+        # they use the short_total_sold_* fields (the long fields are 0 for shorts —
+        # using them gave a constant 0% and a divide-by-zero). Guard zero cost basis.
+        direction = getattr(position, "direction", "long")
+        if direction == "short":
+            sold_quote = position.short_total_sold_quote or 0.0
+            sold_base = position.short_total_sold_base or 0.0
+            buyback_value = sold_base * current_price
+            profit_amount = sold_quote - buyback_value
+            profit_pct = (profit_amount / sold_quote * 100.0) if sold_quote > 0 else 0.0
+        else:
+            spent = position.total_quote_spent or 0.0
+            current_value = position.total_base_acquired * current_price
+            profit_amount = current_value - spent
+            profit_pct = (profit_amount / spent * 100.0) if spent > 0 else 0.0
 
-        # Track highest price for trailing
+        # Track the most-favorable price since entry for trailing: the highest price for
+        # longs, the lowest for shorts (a short's gains grow as price falls).
         if not hasattr(position, "highest_price_since_entry") or position.highest_price_since_entry is None:
             position.highest_price_since_entry = current_price
+        elif direction == "short":
+            if current_price < position.highest_price_since_entry:
+                position.highest_price_since_entry = current_price
         elif current_price > position.highest_price_since_entry:
             position.highest_price_since_entry = current_price
 
@@ -1149,13 +1168,19 @@ class IndicatorBasedStrategy(TradingStrategy):
         # PERCENTAGE-BASED TP/SL (standard positions without pattern targets)
         # =============================================================
 
-        # Check trailing stop loss
+        # Check trailing stop loss (direction-aware: longs trail below the high and
+        # exit on a drop; shorts trail above the low and exit on a rise).
         if self.config.get("trailing_stop_loss", False):
             deviation = self.config.get("trailing_stop_deviation", 5.0)
-            highest = position.highest_price_since_entry or avg_price
-            tsl_price = highest * (1.0 - deviation / 100.0)
-            if current_price <= tsl_price:
-                return True, f"Trailing stop loss triggered at {current_price:.8f}"
+            extreme = position.highest_price_since_entry or avg_price or current_price
+            if direction == "short":
+                tsl_price = extreme * (1.0 + deviation / 100.0)
+                if current_price >= tsl_price:
+                    return True, f"Trailing stop loss triggered at {current_price:.8f}"
+            else:
+                tsl_price = extreme * (1.0 - deviation / 100.0)
+                if current_price <= tsl_price:
+                    return True, f"Trailing stop loss triggered at {current_price:.8f}"
 
         # Check regular stop loss
         if self.config.get("stop_loss_enabled", False):
@@ -1188,15 +1213,25 @@ class IndicatorBasedStrategy(TradingStrategy):
                     position.trailing_tp_active = True
                     position.highest_price_since_tp = current_price
 
+                # Track the favorable extreme since TP armed (peak for long, trough for
+                # short) and trigger on the adverse reversal past the deviation.
                 if position.highest_price_since_tp is None:
                     position.highest_price_since_tp = current_price
+                elif direction == "short":
+                    if current_price < position.highest_price_since_tp:
+                        position.highest_price_since_tp = current_price
                 elif current_price > position.highest_price_since_tp:
                     position.highest_price_since_tp = current_price
 
-                peak = position.highest_price_since_tp
-                trigger = peak * (1.0 - trailing_dev / 100.0)
-                if current_price <= trigger:
-                    return True, f"Trailing TP triggered (profit: {profit_pct:.2f}%)"
+                extreme = position.highest_price_since_tp
+                if direction == "short":
+                    trigger = extreme * (1.0 + trailing_dev / 100.0)
+                    if current_price >= trigger:
+                        return True, f"Trailing TP triggered (profit: {profit_pct:.2f}%)"
+                else:
+                    trigger = extreme * (1.0 - trailing_dev / 100.0)
+                    if current_price <= trigger:
+                        return True, f"Trailing TP triggered (profit: {profit_pct:.2f}%)"
                 return False, f"Trailing TP active (profit: {profit_pct:.2f}%)"
 
         # --- MINIMUM mode: TP% is floor, conditions trigger exit ---

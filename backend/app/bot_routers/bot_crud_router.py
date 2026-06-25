@@ -826,7 +826,13 @@ async def get_bot_stats(
     )
 
     try:
-        coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
+        # Use the BOT'S account credentials, not the requester's. A shared-account
+        # manager viewing another owner's bot would otherwise compute budget/balances
+        # with their own exchange keys (wrong account / cross-account creds).
+        from app.services.exchange_service import get_exchange_client_for_account
+        coinbase = await get_exchange_client_for_account(db, bot.account_id)
+        if coinbase is None:
+            raise RuntimeError(f"No exchange client for account {bot.account_id}")
         quote_currency = bot.get_quote_currency()
 
         aggregate_value = await coinbase.calculate_market_budget(

@@ -82,14 +82,19 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
                 if should_sell:
                     logger.info(f"  🔔 Exit signal for {position.product_id}: {reason}")
 
-                    # Execute sell order
+                    # Execute sell order. create_market_sell_order does not exist on
+                    # ExchangeClient — the only market primitive is create_market_order —
+                    # so the old call raised AttributeError on every exit (swallowed
+                    # below) and the position was never sold. Only close the position
+                    # when the exchange confirms the order succeeded.
                     try:
-                        order = await monitor.exchange.create_market_sell_order(
+                        order = await monitor.exchange.create_market_order(
                             product_id=position.product_id,
-                            quantity=position.total_base_acquired
+                            side="SELL",
+                            size=str(position.total_base_acquired),
                         )
 
-                        if order:
+                        if order and (order.get("success") or order.get("success_response")):
                             # Update position
                             position.status = "closed"
                             position.closed_at = utcnow()

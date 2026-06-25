@@ -859,7 +859,7 @@ async def get_position_ai_logs(
                 & (AIBotLog.product_id == position.product_id)
                 & (AIBotLog.timestamp >= time_before)
                 & (AIBotLog.timestamp <= time_after)
-                & (AIBotLog.position_id is None)
+                & (AIBotLog.position_id.is_(None))  # SQL IS NULL (not Python `is None`)
             )
         )
 

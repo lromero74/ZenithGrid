@@ -152,7 +152,7 @@ async def get_cex_portfolio(
     Uses Coinbase's portfolio breakdown which returns USD values for every
     position in a single API call — no individual price fetches needed.
     """
-    cache_key = f"portfolio_response_{account.id}"
+    cache_key = f"portfolio_acct_{account.id}"
 
     if not force_fresh:
         # Check in-memory cache first (25s TTL — expires before 30s frontend poll)
@@ -164,7 +164,7 @@ async def get_cex_portfolio(
         # Check persistent cache (survives restarts). Keyed by account.id — a
         # user owns multiple accounts, so keying by user_id would let one
         # account's portfolio overwrite/serve another's.
-        persistent = await portfolio_cache.get(account.id)
+        persistent = await portfolio_cache.get(f"acct_{account.id}")
         if persistent is not None:
             await api_cache.set(cache_key, persistent, 25)
             logger.info(f"Serving persistent portfolio cache for account {account.id}")
@@ -257,7 +257,7 @@ async def get_cex_portfolio(
 
     # Cache in-memory (25s — expires before 30s frontend poll) and persist to disk
     await api_cache.set(cache_key, result, 25)
-    await portfolio_cache.save(account.id, result)  # account-scoped, not user-scoped
+    await portfolio_cache.save(f"acct_{account.id}", result)  # account-scoped, not user-scoped
     return result
 
 
@@ -781,7 +781,7 @@ async def get_account_portfolio_data(
     # accounts (owned + shared), so user-level scoping is correct here.
     # (Per-account portfolio caching is handled by get_cex_portfolio() which
     # keys by account.id.)
-    cache_key = f"portfolio_response_{current_user.id}"
+    cache_key = f"portfolio_user_{current_user.id}"
 
     if not force_fresh:
         cached = await api_cache.get(cache_key)
@@ -789,7 +789,7 @@ async def get_account_portfolio_data(
             logger.debug("Using cached portfolio response")
             return cached
 
-        persistent = await portfolio_cache.get(current_user.id)
+        persistent = await portfolio_cache.get(f"user_{current_user.id}")
         if persistent is not None:
             await api_cache.set(cache_key, persistent, 60)
             logger.info("Serving persistent portfolio cache while fresh data loads")
@@ -864,5 +864,5 @@ async def get_account_portfolio_data(
     }
 
     await api_cache.set(cache_key, result, 60)
-    await portfolio_cache.save(current_user.id, result)
+    await portfolio_cache.save(f"user_{current_user.id}", result)
     return result

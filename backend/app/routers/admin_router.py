@@ -637,6 +637,19 @@ async def force_end_session(
 ):
     """Force-end a specific user session."""
     from app.services.session_service import end_session
+    from app.models import ActiveSession
+
+    # Verify the session belongs to the {user_id} in the path before ending it —
+    # end_session() looks up by session_id alone, so without this any valid session_id
+    # could be terminated regardless of the user segment (IDOR).
+    owns = await db.execute(
+        select(ActiveSession).where(
+            ActiveSession.session_id == session_id,
+            ActiveSession.user_id == user_id,
+        )
+    )
+    if owns.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Active session not found")
 
     ended = await end_session(session_id, db)
     if not ended:

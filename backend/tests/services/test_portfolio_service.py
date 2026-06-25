@@ -153,8 +153,9 @@ class TestGetCexPortfolio:
                 get_coinbase_for_account_func=get_coinbase_func, force_fresh=False,
             )
 
-        # The persistent lookup must use the ACCOUNT id (7), never the user id (99)
-        mock_portfolio_cache.get.assert_awaited_with(account.id)
+        # The persistent lookup must use the ACCOUNT-namespaced key (acct_7), never
+        # the user id (99) — account-scoped and user-aggregate caches must not collide.
+        mock_portfolio_cache.get.assert_awaited_with(f"acct_{account.id}")
 
     @pytest.mark.asyncio
     async def test_skips_dust_below_one_cent(self, db_session):

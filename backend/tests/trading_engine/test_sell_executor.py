@@ -994,15 +994,43 @@ class TestDustClose:
 
         assert trade is None  # No exchange order placed
         assert position.status == "closed"
-        assert position.close_price == 3000.0
+        # Dust close writes the persisted `sell_price` column (matches the normal close),
+        # not the non-existent `close_price`.
+        assert position.sell_price == 3000.0
+        # USD-quoted pair → profit_usd equals quote profit (no BTC conversion).
+        assert position.profit_usd == pytest.approx(0.001, abs=1e-9)
         # Actual profit: 0.000001 * 3000 - 0.002 = 0.003 - 0.002 = 0.001
         assert profit == pytest.approx(0.001, abs=1e-9)
         assert position.profit_quote == pytest.approx(0.001, abs=1e-9)
-        assert position.profit_usd == pytest.approx(0.001, abs=1e-9)
         assert position.total_quote_received == pytest.approx(0.003, abs=1e-9)
         # Profit %: (0.001 / 0.002) * 100 = 50%
         assert pct == pytest.approx(50.0, abs=0.1)
         assert position.profit_percentage == pytest.approx(50.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_dust_close_btc_pair_converts_profit_to_usd(self):
+        """Dust close on a BTC-quoted pair must convert profit_quote (BTC) to USD."""
+        db = _make_db()
+        exchange = _make_exchange()
+        exchange.is_paper_trading = MagicMock(return_value=False)
+        exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
+        position = _make_position(
+            product_id="ETH-BTC",
+            total_base_acquired=0.000001,
+            total_quote_spent=0.00001,   # BTC spent
+            average_buy_price=10.0,
+        )
+        with patch("app.trading_engine.sell_executor.get_base_precision", return_value=4):
+            trade, profit, pct = await execute_sell(
+                db=db, exchange=exchange, trading_client=_make_trading_client(),
+                bot=_make_bot(), product_id="ETH-BTC", position=position,
+                current_price=12.0, signal_data={"signal_type": "sell"},
+            )
+        assert trade is None and position.status == "closed"
+        # profit_quote (BTC) = 0.000001*12 - 0.00001 = 0.000012 - 0.00001 = 0.000002 BTC
+        assert position.profit_quote == pytest.approx(0.000002, abs=1e-12)
+        # profit_usd = profit_quote * 50000 (NOT the raw BTC number booked as USD)
+        assert position.profit_usd == pytest.approx(0.000002 * 50000.0, abs=1e-9)
 
     @pytest.mark.asyncio
     async def test_dust_close_loss_not_negative_100(self):
