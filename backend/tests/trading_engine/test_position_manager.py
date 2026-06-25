@@ -16,6 +16,28 @@ from app.trading_engine.position_manager import (
 # ---------------------------------------------------------------------------
 
 
+class TestFixedUsdBudget:
+    """fixed_usd is a real base_order_type — it must get a per-deal budget cap, not 0
+    (0 made max_quote_allowed fall back to the whole balance)."""
+
+    def test_fixed_usd_returns_nonzero_budget(self):
+        cfg = {
+            "base_order_type": "fixed_usd", "base_order_fixed": 100.0,
+            "max_safety_orders": 2, "safety_order_type": "fixed_usd",
+            "safety_order_fixed": 50.0, "safety_order_volume_scale": 1.0,
+        }
+        budget = calculate_expected_position_budget(cfg, 0.0)
+        # base 100 + 2 SOs * 50 = 200
+        assert budget == pytest.approx(200.0)
+
+    def test_fixed_usd_matches_fixed_btc_structure(self):
+        """fixed_usd budget must be > 0 (was 0 before the fix)."""
+        cfg = {"base_order_type": "fixed_usd", "base_order_fixed": 25.0,
+               "max_safety_orders": 1, "safety_order_type": "fixed_usd",
+               "safety_order_fixed": 25.0, "safety_order_volume_scale": 1.0}
+        assert calculate_expected_position_budget(cfg, 0.0) > 0
+
+
 class TestComputeGraceExpandedBudget:
     """Grace expands a deal's budget only after configured SOs are spent, using the
     same deal-cost formula a manual bump would (rule 13)."""
@@ -234,48 +256,58 @@ class TestCalculateMaxDealCost:
 # all_positions_exhausted_safety_orders
 # ---------------------------------------------------------------------------
 
+def _pos(*trades, direction="long"):
+    """A mock position with the given entry trades (default long)."""
+    pos = MagicMock()
+    pos.direction = direction
+    pos.trades = list(trades)
+    return pos
+
+
+def _t(side="buy", dca_levels=1):
+    """A mock trade carrying a real int dca_levels (count_deployed sums these)."""
+    return MagicMock(side=side, dca_levels=dca_levels)
+
+
 class TestAllPositionsExhaustedSafetyOrders:
     def test_empty_positions_returns_true(self):
         assert all_positions_exhausted_safety_orders([], 3) is True
 
     def test_position_with_all_safety_orders_used(self):
-        pos = MagicMock()
         # 1 initial buy + 3 safety orders = 4 buy trades
-        buy_trades = [MagicMock(side="buy") for _ in range(4)]
-        pos.trades = buy_trades
-
+        pos = _pos(*[_t("buy") for _ in range(4)])
         assert all_positions_exhausted_safety_orders([pos], 3) is True
 
     def test_position_with_safety_orders_remaining(self):
-        pos = MagicMock()
-        # 1 initial buy only, 0 safety orders used
-        pos.trades = [MagicMock(side="buy")]
-
+        pos = _pos(_t("buy"))  # 1 initial buy only, 0 safety orders used
         assert all_positions_exhausted_safety_orders([pos], 3) is False
 
     def test_multiple_positions_mixed(self):
         """Returns False if ANY position hasn't exhausted safety orders"""
-        pos1 = MagicMock()
-        pos1.trades = [MagicMock(side="buy") for _ in range(4)]  # 3 safety = exhausted
-
-        pos2 = MagicMock()
-        pos2.trades = [MagicMock(side="buy")]  # 0 safety = NOT exhausted
-
+        pos1 = _pos(*[_t("buy") for _ in range(4)])  # 3 safety = exhausted
+        pos2 = _pos(_t("buy"))                        # 0 safety = NOT exhausted
         assert all_positions_exhausted_safety_orders([pos1, pos2], 3) is False
 
     def test_position_with_no_trades(self):
         pos = MagicMock()
+        pos.direction = "long"
         pos.trades = None
-
         assert all_positions_exhausted_safety_orders([pos], 3) is False
 
     def test_sell_trades_not_counted(self):
-        pos = MagicMock()
-        pos.trades = [
-            MagicMock(side="buy"),
-            MagicMock(side="sell"),
-            MagicMock(side="buy"),
-        ]
         # 2 buys: 1 initial + 1 safety = 1/3 safety used
-
+        pos = _pos(_t("buy"), _t("sell"), _t("buy"))
         assert all_positions_exhausted_safety_orders([pos], 3) is False
+
+    def test_cascade_levels_counted_not_trade_rows(self):
+        """A single cascade trade deploying 3 SO levels counts as 3 (not 1) — the old
+        buy_count-1 form undercounted and let a new deal open prematurely."""
+        # base order (1 level) + one cascade trade that filled 3 SO levels
+        pos = _pos(_t("buy", dca_levels=1), _t("buy", dca_levels=3))
+        assert all_positions_exhausted_safety_orders([pos], 3) is True   # 3 >= 3
+        assert all_positions_exhausted_safety_orders([pos], 4) is False  # 3 < 4
+
+    def test_short_position_entry_trades_are_sells(self):
+        """For shorts, entry trades are sells — they must be counted as safety orders."""
+        pos = _pos(_t("sell"), _t("sell"), _t("sell"), _t("sell"), direction="short")
+        assert all_positions_exhausted_safety_orders([pos], 3) is True

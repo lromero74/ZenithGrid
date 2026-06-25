@@ -148,8 +148,8 @@ class LimitOrderMonitor:
         """Process partial fills for a limit order"""
         try:
             # Extract fill information from order data
-            filled_size = float(order_data.get("filled_size", 0))
-            filled_value = float(order_data.get("filled_value", 0))
+            filled_size = float(order_data.get("filled_size") or 0)
+            filled_value = float(order_data.get("filled_value") or 0)
 
             if filled_size > 0:
                 # Check if there are NEW fills since last check
@@ -311,7 +311,7 @@ class LimitOrderMonitor:
                 return  # Not yet time to fallback
 
             # Check if already partially filled (don't adjust if partially filled)
-            filled_size = float(order_data.get("filled_size", 0))
+            filled_size = float(order_data.get("filled_size") or 0)
             if filled_size > 0:
                 logger.info(f"Position {position.id}: Order partially filled ({filled_size}), skipping bid fallback")
                 return
@@ -561,8 +561,8 @@ class LimitOrderMonitor:
         try:
             if order_status == "FILLED":
                 # Order fully filled - close the position
-                filled_size = float(order_data.get("filled_size", 0))
-                filled_value = float(order_data.get("filled_value", 0))
+                filled_size = float(order_data.get("filled_size") or 0)
+                filled_value = float(order_data.get("filled_value") or 0)
                 total_fees = float(order_data.get("total_fees", 0) or 0)
                 avg_fill_price = filled_value / filled_size if filled_size > 0 else 0
 

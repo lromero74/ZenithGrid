@@ -28,12 +28,18 @@ export interface RebalancerSavePayload {
   bots: Array<{ bot_id: number; enabled: boolean; target_pct: number }>
 }
 
-export const getRebalancerState = (accountId: number): Promise<RebalancerCurrencyGroup[]> =>
-  authFetch(`/api/bots/rebalancer?account_id=${accountId}`).then((r) => r.json())
+export const getRebalancerState = async (accountId: number): Promise<RebalancerCurrencyGroup[]> => {
+  const r = await authFetch(`/api/bots/rebalancer?account_id=${accountId}`)
+  if (!r.ok) throw new Error(`Failed to load rebalancer state (${r.status})`)
+  return r.json()
+}
 
-export const saveRebalancerGroup = (payload: RebalancerSavePayload): Promise<RebalancerCurrencyGroup[]> =>
-  authFetch('/api/bots/rebalancer', {
+export const saveRebalancerGroup = async (payload: RebalancerSavePayload): Promise<RebalancerCurrencyGroup[]> => {
+  const r = await authFetch('/api/bots/rebalancer', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then((r) => r.json())
+  })
+  if (!r.ok) throw new Error(`Failed to save rebalancer group (${r.status})`)
+  return r.json()
+}

@@ -223,8 +223,8 @@ export const PositionCard = memo(function PositionCard({
               {bot?.strategy_type && (
                 <div>[{bot.strategy_type.toUpperCase()}]</div>
               )}
-              {strategyConfig.take_profit_percent && (
-                <div>MP: {strategyConfig.take_profit_percent}%</div>
+              {strategyConfig.take_profit_percentage && (
+                <div>MP: {strategyConfig.take_profit_percentage}%</div>
               )}
               {strategyConfig.base_order_size && (
                 <div>BO: {strategyConfig.base_order_size}</div>

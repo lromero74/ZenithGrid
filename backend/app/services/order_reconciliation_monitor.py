@@ -260,7 +260,9 @@ class MissingOrderDetector:
             stuck_pending_orders = []
 
             num_products = len(positions_by_product)
-            fetch_limit = max(200, num_products * 200)
+            # Coinbase list_orders caps at 1000 server-side; requesting more silently
+            # truncates to 1000, so with many products we'd miss fills. Clamp.
+            fetch_limit = min(max(200, num_products * 200), 1000)
 
             try:
                 exchange_orders = await self.exchange.list_orders(

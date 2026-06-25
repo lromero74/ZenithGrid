@@ -489,8 +489,12 @@ class MultiBotMonitor:
         This dramatically reduces API calls since candles don't change until the next
         candle closes.
         """
-        # Candle data is public (same for all users/accounts)
-        cache_key = f"{product_id}:{granularity}"
+        # Candle data is public (same for all users/accounts). The cache key includes
+        # lookback_candles so a 200-candle indicator request is never served a cached
+        # 100-candle price fetch (each size is cached/coalesced independently — and a
+        # sparse pair that returns fewer than requested is still cached, not re-fetched
+        # every call).
+        cache_key = f"{product_id}:{granularity}:{lookback_candles}"
 
         cached = self._cached_candles_if_fresh(cache_key, product_id, granularity)
         if cached is not None:
@@ -509,7 +513,10 @@ class MultiBotMonitor:
     def _cached_candles_if_fresh(
         self, cache_key: str, product_id: str, granularity: str
     ) -> Optional[List[Dict[str, Any]]]:
-        """Return cached candles if present and within their TTL, else None."""
+        """Return cached candles if present and within their TTL, else None.
+
+        (Distinct lookback sizes are kept under distinct cache keys, so this no longer
+        needs a length check — a given key always holds the size it was fetched for.)"""
         if cache_key not in self._candle_cache:
             return None
         now = utcnow().timestamp()

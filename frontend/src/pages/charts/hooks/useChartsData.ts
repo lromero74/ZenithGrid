@@ -76,7 +76,15 @@ export function useChartsData(
     candleDataRef.current = []
     setLoading(true)
 
+    // Guard against a stale in-flight response (from the previous pair/interval)
+    // resolving after we've switched — without this it could overwrite the new
+    // pair's candles. `cancelled` blocks late state writes; abort() cancels the
+    // network request itself.
+    let cancelled = false
+    const controller = new AbortController()
+
     const fetchCandles = async () => {
+      if (cancelled) return
       setError(null)
 
       try {
@@ -88,8 +96,10 @@ export function useChartsData(
               granularity: selectedInterval,
               limit: 300,
             },
+            signal: controller.signal,
           }
         )
+        if (cancelled) return
 
         const { candles, product_id: returnedProductId } = response.data as { candles: CandleData[], product_id?: string }
 
@@ -107,17 +117,23 @@ export function useChartsData(
         candleDataRef.current = candles
         setDataVersion(v => v + 1)
       } catch (err: any) {
+        // Ignore aborts (pair/interval switched) — not a real error.
+        if (cancelled || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return
         console.error('Error fetching candles:', err)
         setError(err.response?.data?.detail || 'Failed to load chart data')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchCandles()
     const interval = setInterval(fetchCandles, 30000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      controller.abort()
+      clearInterval(interval)
+    }
   }, [selectedPair, selectedInterval])
 
   return {

@@ -276,7 +276,8 @@ class TestGetCandlesCached:
             result = await monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 100)
 
         assert result == candles
-        assert "ETH-BTC:FIVE_MINUTE" in monitor._candle_cache
+        # Cache key now includes the lookback size so distinct sizes don't collide.
+        assert "ETH-BTC:FIVE_MINUTE:100" in monitor._candle_cache
 
     @pytest.mark.asyncio
     async def test_cache_hit_returns_cached(self):
@@ -284,12 +285,30 @@ class TestGetCandlesCached:
         monitor = MultiBotMonitor(exchange=exchange)
         cached = [{"close": 99}]
         # Set a fresh timestamp
-        monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (utcnow().timestamp(), cached)
+        monitor._candle_cache["ETH-BTC:FIVE_MINUTE:100"] = (utcnow().timestamp(), cached)
 
         result = await monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 100)
         assert result is cached
         # Should not have called exchange
         exchange.get_candles.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_larger_lookback_not_served_from_smaller_cache(self):
+        """A 200-candle request must NOT be served a cached 100-candle entry — distinct
+        lookbacks use distinct cache keys, so the larger request triggers its own fetch."""
+        exchange = _make_exchange()
+        monitor = MultiBotMonitor(exchange=exchange)
+        small = [{"close": 1}] * 100
+        monitor._candle_cache["ETH-BTC:FIVE_MINUTE:100"] = (utcnow().timestamp(), small)
+        big = [{"open": 1, "high": 2, "low": 0.5, "close": 2, "volume": 5}] * 200
+        exchange.get_candles = AsyncMock(return_value=big)
+
+        with patch("app.multi_bot_monitor.fill_candle_gaps", return_value=big), \
+             patch("app.multi_bot_monitor.timeframe_to_seconds", return_value=300):
+            result = await monitor.get_candles_cached("ETH-BTC", "FIVE_MINUTE", 200)
+
+        assert len(result) == 200            # got the larger set, not the cached 100
+        exchange.get_candles.assert_awaited()  # a real fetch happened for the 200 key
 
     @pytest.mark.asyncio
     async def test_cache_expired_fetches_new(self):
@@ -298,7 +317,7 @@ class TestGetCandlesCached:
         old_candles = [{"close": 99}]
         # Set an old timestamp (10 minutes ago)
         expired_time = utcnow().timestamp() - 600
-        monitor._candle_cache["ETH-BTC:FIVE_MINUTE"] = (expired_time, old_candles)
+        monitor._candle_cache["ETH-BTC:FIVE_MINUTE:100"] = (expired_time, old_candles)
 
         new_candles = [{"open": 1, "high": 2, "low": 0.5, "close": 2, "volume": 50}]
         exchange.get_candles = AsyncMock(return_value=new_candles)
