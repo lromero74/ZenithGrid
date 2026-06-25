@@ -34,8 +34,11 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
     }
 
     const currentPriceValue = pnl.currentPrice
-    // Use bot's min_profit_percentage setting instead of hardcoded 2%
-    const minProfitPercent = strategyConfig.min_profit_percentage || 1.5
+    // Match the deal chart's take-profit target: prefer take_profit_percentage, then
+    // min_profit_percentage (the chart's getTakeProfitPercent uses the same priority).
+    // Using min_profit alone showed a different TP marker than the chart line.
+    const minProfitPercent =
+      strategyConfig.take_profit_percentage ?? strategyConfig.min_profit_percentage ?? 1.5
     const targetPrice = entryPrice * (1 + minProfitPercent / 100)
 
     // Calculate DCA levels using price_deviation and step_scale

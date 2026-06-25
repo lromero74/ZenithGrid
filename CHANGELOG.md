@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.11.2] - 2026-06-25
+
+### Fixed
+- Code-review sweep (tier 2). `fixed_usd` bots now get a proper per-deal budget cap (previously their budget could fall back to the whole balance). Safety-order exhaustion is now counted correctly across cascade fills and short positions when deciding whether to open another same-pair deal. The order-reconciliation monitor no longer requests more orders than the exchange will return in one page (which could miss fills). Chart data fetches are cancelled when you switch pairs/intervals, so a slow response can't briefly show the wrong pair. Candle caching no longer serves a 100-candle price fetch to a 200-candle indicator request. Order-fill parsing is null-safe. A few resilience fixes: batch processing rolls back cleanly on error; the rebalancer API surfaces HTTP errors instead of returning malformed data; the position card's take-profit label and the in-card price bar's profit target now match the deal chart.
+
 ## [v3.11.1] - 2026-06-25
 
 ### Fixed

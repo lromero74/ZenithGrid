@@ -526,4 +526,10 @@ async def process_bot_batch(
         logger.error(f"Error in batch processing: {e}")
         import traceback
         traceback.print_exc()
+        # Roll back any partial writes from mid-batch trade execution so the session
+        # isn't left dirty/unusable on the next cycle.
+        try:
+            await db.rollback()
+        except Exception:
+            logger.debug("rollback after batch error failed", exc_info=True)
         return {"error": str(e)}

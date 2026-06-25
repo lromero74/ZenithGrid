@@ -23,16 +23,23 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [x] **Portfolio cache key collision** — persistent cache now namespaced (`acct_<id>` vs `user_<id>`) + in-memory keys namespaced; also added the missing **age-check** (rejects >120s-old entries). `cache.py`, `portfolio_service.py`
 - [x] **Read pool missing `search_path`** — read pool now sets the same `search_path` as the write pool. `database.py`
 
-## 🟠 Notable bugs
+## 🟠 Notable bugs  (in progress on `fix/sweep-tier2-notable`)
 
-- [ ] Persistent portfolio cache **never age-checks** → serves stale after restart; also **sync file I/O under lock in async** (blocks loop). `backend/app/cache.py`
-- [ ] `all_positions_exhausted_safety_orders` **undercounts cascades** (`buy_count-1` vs summing `dca_levels`) → premature new same-pair deal. `backend/app/trading_engine/position_manager.py`
-- [ ] **`fixed_usd` missing from budget type checks** → `max_quote_allowed` = full balance (no per-deal cap). `position_manager.py:74`, `safety_order_calculator.py:102`
-- [ ] Frontend candle fetch **no AbortController** (wrong pair's data overwrites). `useChartsData.ts:79`, `DealChart.tsx:158`
-- [ ] `PositionCard` `getQueryData(['bots'])` **wrong key** (missing `accountId`) → toggles stale value. `PositionCard.tsx:112`
-- [ ] `take_profit_percent` **typo** (→ `take_profit_percentage`) → blank label. `PositionCard.tsx:226`; `PriceBar.tsx:38` uses only `min_profit_percentage`.
-- [ ] `botRebalancerApi` **no `r.ok` check** → parses error body as data. `botRebalancerApi.ts:32,38`
-- [ ] react-query keys **missing `account_id`** (PerpsPortfolioPanel, transfer summary, dashboard) → stale data across accounts.
+- [x] Persistent portfolio cache **age-check** — added in v3.11.1 (rejects >120s entries). (sync-I/O-under-lock perf item still open below.)
+- [x] `all_positions_exhausted_safety_orders` **cascade undercount + short-blindness** — now uses `count_deployed_safety_orders`/`entry_trades_for_position`. +2 tests. `position_manager.py`
+- [x] **`fixed_usd` budget cap** — added to the budget gate so `fixed_usd` bots get a real per-deal cap (sizing paths already routed to the USD fields). +2 tests. `position_manager.py`
+- [x] `order_reconciliation_monitor` **fetch_limit clamp** to Coinbase's 1000 cap. `order_reconciliation_monitor.py`
+- [x] `take_profit_percent` **typo** → `take_profit_percentage`. `PositionCard.tsx`
+- [x] `botRebalancerApi` **`r.ok` checks** added (throws on HTTP error). `botRebalancerApi.ts`
+- [x] `batch_analyzer` outer except now `db.rollback()`s before returning. `batch_analyzer.py`
+- [x] Null-safe `float(... or 0)` on fill fields (was TypeError on null). `limit_order_monitor.py` (×5)
+- [x] Candle cache is **length-aware** — a 200-candle request is no longer served a cached 100 (key stays shared; reused only when it holds ≥ requested). `multi_bot_monitor.py`
+- [x] Frontend candle fetch **AbortController + cancelled guard** — stale pair's response can't overwrite. `useChartsData.ts`
+- [x] `PriceBar` TP target now matches the chart (`take_profit_percentage` first). `PriceBar.tsx`
+- [~] Persistent cache **sync file I/O under lock** — moved to 🟡 perf (wrap in `asyncio.to_thread`). `cache.py`
+- [~] `PositionCard` `getQueryData(['bots'])` key — **deferred**: needs account-context threading; has a `bot.is_active` fallback; low impact.
+- [~] react-query keys missing `account_id` (PerpsPortfolioPanel, transfer summary) — **deferred**: those endpoints are user-aggregate by design (scope by all accessible accounts), so the key isn't a cross-account bug; making them account-specific is a feature, not a fix.
+- [~] `limit_order_monitor`:144 / `batch_analyzer`:434 swallow-and-continue — **deferred**: intentional resilience (errors are logged and the fill is re-detected next cycle); re-raising would abort the whole monitor cycle. Revisit only if misses are observed.
 - [ ] `_close_sell_position_as_dust` clamped path over-books proceeds (related to dust fix above).
 - [ ] `order_reconciliation_monitor` `fetch_limit` can exceed Coinbase 1000 cap → missed fills. `order_reconciliation_monitor.py:263`
 - [ ] limit_order_monitor catches+logs and swallows `_process_order_completion`'s deliberate re-raise → fills unrecorded until next cycle. `limit_order_monitor.py:144`

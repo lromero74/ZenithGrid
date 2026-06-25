@@ -71,7 +71,11 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
     max_safety_orders = config.get("max_safety_orders", 0)
 
     # Only calculate total budget for fixed orders with safety orders enabled
-    if base_order_type in ["fixed", "fixed_btc"] and max_safety_orders > 0:
+    # NOTE: "fixed_usd" must be included — it's a real base_order_type option
+    # (indicator_params), and omitting it made this return 0 for USD-fixed bots, so
+    # max_quote_allowed fell back to the whole balance (no per-deal cap). The base/SO
+    # sizing below already routes fixed_usd to the *_fixed (USD) fields via their else.
+    if base_order_type in ["fixed", "fixed_btc", "fixed_usd"] and max_safety_orders > 0:
         total_expected = 0.0
 
         # Get base order size
@@ -232,12 +236,21 @@ async def get_active_positions_for_pair(db: AsyncSession, bot: Bot, product_id: 
 
 
 def all_positions_exhausted_safety_orders(positions: List[Position], max_safety_orders: int) -> bool:
-    """Check if every position has used all its safety orders"""
+    """Check if every position has used all its safety orders.
+
+    Uses count_deployed_safety_orders/entry_trades_for_position (the canonical
+    SO-counting helpers) rather than ``buy_count - 1``: the old form under-counted
+    cascade fills (one trade can deploy several SO levels via ``dca_levels``) and
+    ignored shorts (whose entry trades are sells), so a new same-pair deal could
+    open before existing positions truly ran out of safety orders.
+    """
+    from app.strategies.safety_order_calculator import (
+        count_deployed_safety_orders, entry_trades_for_position,
+    )
     if not positions:
         return True  # No positions = allowed to open first one
     for pos in positions:
-        buy_count = sum(1 for t in pos.trades if t.side == "buy") if pos.trades else 0
-        safety_count = max(0, buy_count - 1)
+        safety_count = count_deployed_safety_orders(entry_trades_for_position(pos))
         if safety_count < max_safety_orders:
             return False
     return True
