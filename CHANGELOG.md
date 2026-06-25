@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.1] - 2026-06-25
+
+### Fixed
+- Code-review sweep #3 (tier 1/2) — short-position robustness. These are forward-looking: the account currently runs long-only, so none could trigger today. Short-position *opens* now wait for the order to fully complete before recording (the short-open twin of the mid-fill bug fixed for buys/long-sells); a short position's safety-order/grace budget remainder is now computed from what the short actually deployed instead of always showing the full budget; and the pattern/bull-flag trailing stop no longer applies its long-oriented math to shorts.
+
+### Security
+- The report viewer now sandboxes the report-HTML iframe, so the generated report content can't run scripts or submit forms in the app's origin.
+
 ## [v3.13.0] - 2026-06-25
 
 ### Added

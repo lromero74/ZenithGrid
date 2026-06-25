@@ -36,10 +36,14 @@ export function ReportViewModal({
           </div>
         </div>
 
-        {/* Report Content — srcDoc renders HTML inline (CSS-only tabs, no JS needed) */}
+        {/* Report Content — srcDoc renders HTML inline (CSS-only tabs, no JS needed).
+            Sandboxed: the report HTML is backend/AI-generated, so no scripts, forms,
+            or top-level navigation run in the app origin. allow-same-origin is needed
+            for the CSS/inline styling to apply; scripts are NOT allowed. */}
         <div className="flex-1 overflow-hidden">
           <iframe
             srcDoc={htmlContent}
+            sandbox="allow-same-origin allow-popups"
             className="w-full h-full border-0"
             title="Report Preview"
           />
