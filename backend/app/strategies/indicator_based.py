@@ -1011,14 +1011,41 @@ class IndicatorBasedStrategy(TradingStrategy):
         For auto-calculate mode, recalculates base order size from the position's
         allocated budget. For manual mode, infers from average spent per order.
         """
-        # CRITICAL FIX: For auto-calculate mode, recalculate base order size using the same logic
-        # Don't try to reverse-engineer it from total_quote_spent (which doesn't account for volume scaling)
+        # For auto-calculate mode, recalculate base order size from the allocated
+        # budget (don't reverse-engineer from total_quote_spent, which ignores
+        # volume scaling).
         if self.config.get("auto_calculate_order_sizes", False):
             base_order_size = self.calculate_base_order_size(position.max_quote_allowed)
         else:
-            base_order_size = position.total_quote_spent / (1 + safety_orders_count)
+            base_order_size = self._manual_base_order_size(position, safety_orders_count)
 
         return self.calculate_safety_order_size(base_order_size, next_order_number)
+
+    def _manual_base_order_size(self, position: Any, safety_orders_count: int) -> float:
+        """Base-order quote size for manual (non-auto-calculate) sizing.
+
+        For ``percentage_of_base`` safety orders, the SO size is a percentage of
+        the BASE order scaled by ``volume_scale^(n-1)``. The base order is the
+        position's earliest entry trade — its actual recorded quote. Reverse-
+        engineering it as ``total_quote_spent / (1 + count)`` assumes every order
+        equalled the base, which is wrong for any volume scaling or for
+        ``safety_order_percentage != 100`` — and skews further mid-cascade as the
+        count grows. Falls back to that average only when no usable entry trade is
+        available (e.g. test mocks), so behavior is unchanged for those.
+        """
+        entry_trades = entry_trades_for_position(position)
+        if entry_trades:
+            try:
+                first = min(entry_trades, key=lambda t: t.timestamp)
+            except TypeError:
+                first = entry_trades[0]
+            try:
+                q = float(getattr(first, "quote_amount", None))
+                if q > 0:
+                    return q
+            except (TypeError, ValueError):
+                pass
+        return position.total_quote_spent / (1 + safety_orders_count)
 
     async def should_buy(
         self, signal_data: Dict[str, Any], position: Optional[Any], balance: float, **kwargs
