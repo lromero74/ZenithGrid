@@ -64,6 +64,8 @@ def _make_client(**overrides):
         "success_response": {"order_id": "perps-close-001"},
     })
     client.cancel_order = AsyncMock()
+    # Default: no fill detail → close P&L falls back to the pre-trade estimate.
+    client.get_order = AsyncMock(return_value={})
     for k, v in overrides.items():
         setattr(client, k, v)
     return client
@@ -273,7 +275,26 @@ class TestExecutePerpsOpen:
 
         assert position is None
         assert trade is None
-        db.rollback.assert_awaited()
+        # Exchange threw before any DB write — nothing should be committed.
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_open_db_commit_failure_is_orphaned_not_rejection(self):
+        """If the order is placed but the DB commit fails, the position is reported as
+        orphaned (None,None) AND rolled back — not silently treated as a rejection."""
+        db = _make_db()
+        db.commit = AsyncMock(side_effect=Exception("DB down"))
+        client = _make_client()  # create_perps_order succeeds with an order_id
+        bot = _make_bot()
+
+        position, trade = await execute_perps_open(
+            db=db, client=client, bot=bot, product_id="BTC-PERP-INTX",
+            side="BUY", size_usdc=100.0, current_price=100000.0,
+        )
+
+        assert position is None
+        assert trade is None
+        db.rollback.assert_awaited()  # the order was live; we roll back the DB attempt
 
     @pytest.mark.asyncio
     async def test_no_tp_sl_when_not_provided(self):
@@ -339,6 +360,30 @@ class TestExecutePerpsClose:
         assert position.tp_order_id is None
         assert position.sl_order_id is None
         db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_close_books_pnl_at_confirmed_fill_price(self):
+        """Sweep #5 B2: P&L is booked at the confirmed average fill, not the estimate."""
+        db = _make_db()
+        client = _make_client(
+            get_order=AsyncMock(return_value={"average_filled_price": "104000.0"}),
+        )
+        position = _make_position(
+            direction="long",
+            total_base_acquired=0.001,
+            total_quote_spent=100.0,
+            average_buy_price=100000.0,
+            funding_fees_total=0.0,
+        )
+
+        # Estimate is 105000 (→ 5.0), but the order actually filled at 104000 (→ 4.0).
+        success, profit, pct = await execute_perps_close(
+            db=db, client=client, position=position, current_price=105000.0, reason="signal",
+        )
+
+        assert success is True
+        assert profit == pytest.approx(4.0)
+        assert position.sell_price == pytest.approx(104000.0)
 
     @pytest.mark.asyncio
     async def test_close_short_with_profit(self):

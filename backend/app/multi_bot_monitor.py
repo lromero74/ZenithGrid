@@ -986,7 +986,7 @@ class MultiBotMonitor:
                     )
 
                 except Exception as e:
-                    logger.error(f"Error processing bot {bot.name}: {e}")
+                    logger.error(f"Error processing bot {bot.name}: {e}", exc_info=True)
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""

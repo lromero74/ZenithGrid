@@ -62,13 +62,16 @@ async def _check_all_prop_accounts():
         for account in accounts:
             try:
                 await _check_account(db, account)
+                # Commit per account so one account's later failure can't roll back
+                # the equity snapshots / kill state already written for earlier ones.
+                await db.commit()
             except Exception as e:
+                await db.rollback()
                 logger.error(
                     f"PropGuard: Error checking account "
-                    f"{account.id}: {e}"
+                    f"{account.id}: {e}",
+                    exc_info=True,
                 )
-
-        await db.commit()
 
 
 async def _check_account(db, account):
@@ -285,6 +288,12 @@ async def _kill_account(db, state, account, reason: str):
     state.is_killed = True
     state.kill_reason = reason
     state.kill_timestamp = utcnow()
+
+    # Persist the kill decision BEFORE attempting liquidation. Liquidation is a
+    # network call that can fail; the kill state must be durable regardless (a
+    # breached account stays flagged), and a sibling account's later error must not
+    # be able to roll back this kill.
+    await db.commit()
 
     # Emergency liquidation
     try:

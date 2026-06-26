@@ -102,19 +102,26 @@ async def execute_perps_open(
             tp_price=tp_price_str,
             sl_price=sl_price_str,
         )
+    except Exception as e:
+        logger.error(f"Failed to place perps order {product_id}: {e}", exc_info=True)
+        return None, None
 
-        # Extract order details
-        success_response = result.get("success_response", result.get("order", {}))
-        order_id = success_response.get("order_id", "")
+    # Extract order details
+    success_response = result.get("success_response", result.get("order", {}))
+    order_id = success_response.get("order_id", "")
 
-        if not order_id:
-            error_response = result.get("error_response", {})
-            error_msg = error_response.get("message", str(result))
-            logger.error(f"Perps order failed: {error_msg}")
-            return None, None
+    if not order_id:
+        error_response = result.get("error_response", {})
+        error_msg = error_response.get("message", str(result))
+        logger.error(f"Perps order failed: {error_msg}")
+        return None, None
 
-        direction = "long" if side == "BUY" else "short"
+    direction = "long" if side == "BUY" else "short"
 
+    # The order is LIVE on the exchange now. A DB failure below must NOT be reported
+    # like a rejection — the position exists at the broker and would be orphaned
+    # (unmonitored), so log loudly with the order_id for manual reconciliation.
+    try:
         # Create Position record
         position = Position(
             bot_id=bot.id,
@@ -168,8 +175,20 @@ async def execute_perps_open(
         return position, trade
 
     except Exception as e:
-        logger.error(f"Failed to open perps position {product_id}: {e}", exc_info=True)
         await db.rollback()
+        logger.critical(
+            f"Perps order {order_id} for {product_id} placed on the exchange but the "
+            f"DB write failed — position is ORPHANED and needs manual reconciliation: {e}",
+            exc_info=True,
+        )
+        try:
+            from app.services.realmoney_audit import record_event
+            record_event(
+                "perps_open_orphaned", account_id=bot.account_id, bot_id=bot.id,
+                product_id=product_id, order_id=order_id, side=side,
+            )
+        except Exception:
+            logger.debug("orphan audit failed", exc_info=True)
         return None, None
 
 
@@ -259,13 +278,35 @@ async def execute_perps_close(
             logger.error(f"Perps close order failed: {error_msg}")
             return False, 0.0, 0.0
 
+        # Book P&L at the CONFIRMED average fill price, not the pre-trade estimate —
+        # perps can slip on thin INTX books, and the estimate would mis-state realized
+        # P&L vs. the exchange statement.
+        fill_price = current_price
+        try:
+            order_details = await client.get_order(order_id)
+            afp = float(order_details.get("average_filled_price", 0) or 0)
+            if afp > 0:
+                fill_price = afp
+        except Exception:
+            logger.warning(
+                f"Perps close #{position.id}: could not fetch fill price; using estimate",
+                exc_info=True,
+            )
+
+        if position.direction == "long":
+            profit_usdc = (fill_price - position.average_buy_price) * base_size
+        else:
+            profit_usdc = (position.short_average_sell_price - fill_price) * base_size
+        profit_usdc -= position.funding_fees_total or 0.0
+        profit_pct = (profit_usdc / cost_basis * 100) if cost_basis > 0 else 0.0
+
         # Create closing trade record
         trade = Trade(
             position_id=position.id,
             side=close_side.lower(),
-            quote_amount=base_size * current_price,
+            quote_amount=base_size * fill_price,
             base_amount=base_size,
-            price=current_price,
+            price=fill_price,
             trade_type="sell",
             order_id=order_id,
         )
@@ -274,7 +315,7 @@ async def execute_perps_close(
         # Update position
         position.status = "closed"
         position.closed_at = utcnow()
-        position.sell_price = current_price
+        position.sell_price = fill_price
         position.profit_quote = profit_usdc
         position.profit_percentage = profit_pct
         position.profit_usd = profit_usdc  # USDC-denominated perps

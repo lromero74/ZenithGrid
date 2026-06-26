@@ -86,16 +86,20 @@ async def _run_one_pass() -> None:
     check each against the cooldown + analysis thresholds."""
     async with _session_factory() as db:
         user_ids = await _users_with_speculative_bots(db)
-        if not user_ids:
-            return
-        for user_id in user_ids:
-            try:
+    if not user_ids:
+        return
+    # Per-user session: a PostgreSQL error mid-check leaves that session in a failed
+    # transaction state; a fresh session per user prevents one user's DB error from
+    # silently skipping every remaining user in the pass.
+    for user_id in user_ids:
+        try:
+            async with _session_factory() as db:
                 await _check_user(db, user_id)
-            except Exception:
-                logger.exception(
-                    "speculative_calibration_monitor: check failed for user %s",
-                    user_id,
-                )
+        except Exception:
+            logger.exception(
+                "speculative_calibration_monitor: check failed for user %s",
+                user_id,
+            )
 
 
 async def _users_with_speculative_bots(db) -> list[int]:

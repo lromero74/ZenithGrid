@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.7] - 2026-06-25
+
+### Fixed
+- Code-review sweep #5 (batch B — reliability & observability). Perpetual-futures positions: a close now books its profit at the **confirmed fill price** instead of the pre-trade estimate, and if an order is placed but the database write then fails, it's flagged loudly as an **orphaned position** needing reconciliation rather than looking like a plain rejection. The PropGuard kill-switch now records the kill decision **durably before** attempting emergency liquidation (so a breached prop account stays flagged even if the liquidation call fails), and each account is committed independently so one account's error can't discard another's equity snapshot. The speculative-calibration pass now uses a **fresh database session per user**, so one user's database error can't silently skip everyone after them. Plus better diagnostics: failed bot cycles and a close-short BTC-price lookup now log full detail instead of swallowing it.
+
 ## [v3.13.6] - 2026-06-25
 
 ### Security
