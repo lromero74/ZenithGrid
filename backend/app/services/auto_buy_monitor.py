@@ -18,6 +18,7 @@ from typing import Dict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import BUY_FEE_RESERVE
 from app.models import Account, Bot, Position
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
@@ -228,7 +229,7 @@ class AutoBuyMonitor(SessionMakerMixin):
 
             # Reserve 1% for exchange fees (taker fee ~0.6%) to avoid
             # "Insufficient balance" rejections from Coinbase
-            spend_amount = round(available * 0.99, 2)
+            spend_amount = round(available * BUY_FEE_RESERVE, 2)
 
             if order_type == "market":
                 # Place market order

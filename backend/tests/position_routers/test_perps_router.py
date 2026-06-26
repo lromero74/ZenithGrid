@@ -462,13 +462,14 @@ class TestModifyTpSl:
 
         request = ModifyTpSlRequest(tp_price=115000.0, sl_price=85000.0)
 
-        result = await modify_tp_sl(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["success"] is True
         assert result["tp_price"] == 115000.0
@@ -490,13 +491,14 @@ class TestModifyTpSl:
         request = ModifyTpSlRequest(tp_price=110000.0)
 
         with pytest.raises(HTTPException) as exc_info:
-            await modify_tp_sl(
-                position_id=99999,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user,
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await modify_tp_sl(
+                    position_id=99999,
+                    request=request,
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -524,13 +526,14 @@ class TestModifyTpSl:
 
         request = ModifyTpSlRequest(tp_price=120000.0)
 
-        result = await modify_tp_sl(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["tp_price"] == 120000.0
         # SL stays at the old value since request.sl_price was None
@@ -564,13 +567,14 @@ class TestClosePerpsPosition:
 
         request = ClosePositionRequest(reason="manual")
 
-        result = await close_perps_position(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await close_perps_position(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["success"] is True
         assert result["profit_usdc"] == 500.0
@@ -590,13 +594,14 @@ class TestClosePerpsPosition:
         request = ClosePositionRequest(reason="manual")
 
         with pytest.raises(HTTPException) as exc_info:
-            await close_perps_position(
-                position_id=99999,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user,
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await close_perps_position(
+                    position_id=99999,
+                    request=request,
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -620,13 +625,14 @@ class TestClosePerpsPosition:
         request = ClosePositionRequest(reason="manual")
 
         with pytest.raises(HTTPException) as exc_info:
-            await close_perps_position(
-                position_id=pos.id,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user,
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await close_perps_position(
+                    position_id=pos.id,
+                    request=request,
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 500
         assert "Failed to close" in exc_info.value.detail
 
@@ -649,13 +655,14 @@ class TestClosePerpsPosition:
 
         request = ClosePositionRequest(reason="manual")
 
-        result = await close_perps_position(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await close_perps_position(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         # Should succeed using fallback price
         assert result["success"] is True
@@ -699,13 +706,14 @@ class TestModifyTpSlAdditional:
 
         request = ModifyTpSlRequest(sl_price=85000.0)
 
-        result = await modify_tp_sl(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         # TP should stay at the old value
         assert result["tp_price"] == 110000.0
@@ -731,13 +739,14 @@ class TestModifyTpSlAdditional:
         request = ModifyTpSlRequest(tp_price=999999.0)
 
         with pytest.raises(HTTPException) as exc_info:
-            await modify_tp_sl(
-                position_id=pos.id,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user2,  # Wrong user
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await modify_tp_sl(
+                    position_id=pos.id,
+                    request=request,
+                    db=db_session,
+                    current_user=user2,  # Wrong user
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -768,13 +777,14 @@ class TestModifyTpSlAdditional:
         request = ModifyTpSlRequest(tp_price=115000.0)
 
         # Should not raise despite cancel failure
-        result = await modify_tp_sl(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["success"] is True
         assert result["tp_price"] == 115000.0
@@ -806,13 +816,14 @@ class TestModifyTpSlAdditional:
 
         request = ModifyTpSlRequest(tp_price=80000.0)
 
-        result = await modify_tp_sl(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await modify_tp_sl(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["success"] is True
         assert result["tp_price"] == 80000.0
@@ -841,13 +852,14 @@ class TestClosePerpsPositionAdditional:
         request = ClosePositionRequest(reason="manual")
 
         with pytest.raises(HTTPException) as exc_info:
-            await close_perps_position(
-                position_id=pos.id,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user2,
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await close_perps_position(
+                    position_id=pos.id,
+                    request=request,
+                    db=db_session,
+                    current_user=user2,
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -870,13 +882,14 @@ class TestClosePerpsPositionAdditional:
         request = ClosePositionRequest(reason="manual")
 
         with pytest.raises(HTTPException) as exc_info:
-            await close_perps_position(
-                position_id=pos.id,
-                request=request,
-                db=db_session,
-                exchange=exchange,
-                current_user=user,
-            )
+            with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                       AsyncMock(return_value=exchange)):
+                await close_perps_position(
+                    position_id=pos.id,
+                    request=request,
+                    db=db_session,
+                    current_user=user,
+                )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -900,13 +913,14 @@ class TestClosePerpsPositionAdditional:
 
         request = ClosePositionRequest(reason="stop_loss_triggered")
 
-        result = await close_perps_position(
-            position_id=pos.id,
-            request=request,
-            db=db_session,
-            exchange=exchange,
-            current_user=user,
-        )
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)):
+            result = await close_perps_position(
+                position_id=pos.id,
+                request=request,
+                db=db_session,
+                current_user=user,
+            )
 
         assert result["success"] is True
         call_kwargs = mock_execute_close.call_args.kwargs
@@ -972,3 +986,56 @@ class TestListPerpsPositionsAdditional:
         )
 
         assert result["count"] == 0
+
+
+class TestPerpsBrokerScoping:
+    """Sweep #4 C: mutating endpoints must route orders to the POSITION's account
+    broker (get_exchange_client_for_account(position.account_id)), not the caller's
+    default CEX — the wrong-broker class fixed for spot positions in v2.166.5."""
+
+    @pytest.mark.asyncio
+    @patch("app.coinbase_api.order_api.create_stop_limit_order", new_callable=AsyncMock)
+    async def test_modify_tp_sl_resolves_position_account_broker(self, mock_stop_limit, db_session):
+        from app.position_routers.perps_router import modify_tp_sl, ModifyTpSlRequest
+
+        mock_stop_limit.return_value = {"success_response": {"order_id": "tp-x"}}
+        user, account = await _create_user_with_account(db_session, email="broker_mod@example.com")
+        pos = await _create_perps_position(db_session, account, tp_order_id=None, sl_order_id=None)
+
+        exchange = MagicMock()
+        exchange._client = AsyncMock()
+
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)) as mock_get_exchange:
+            await modify_tp_sl(
+                position_id=pos.id,
+                request=ModifyTpSlRequest(tp_price=120000.0),
+                db=db_session,
+                current_user=user,
+            )
+
+        mock_get_exchange.assert_awaited_once_with(db_session, account.id)
+
+    @pytest.mark.asyncio
+    @patch("app.trading_engine.perps_executor.execute_perps_close", new_callable=AsyncMock)
+    async def test_close_resolves_position_account_broker(self, mock_execute_close, db_session):
+        from app.position_routers.perps_router import close_perps_position, ClosePositionRequest
+
+        mock_execute_close.return_value = (True, 1.0, 1.0)
+        user, account = await _create_user_with_account(db_session, email="broker_close@example.com")
+        pos = await _create_perps_position(db_session, account)
+
+        exchange = MagicMock()
+        exchange._client = AsyncMock()
+        exchange._client.get_current_price = AsyncMock(return_value=105000.0)
+
+        with patch("app.position_routers.perps_router.get_exchange_client_for_account",
+                   AsyncMock(return_value=exchange)) as mock_get_exchange:
+            await close_perps_position(
+                position_id=pos.id,
+                request=ClosePositionRequest(reason="manual"),
+                db=db_session,
+                current_user=user,
+            )
+
+        mock_get_exchange.assert_awaited_once_with(db_session, account.id)

@@ -110,6 +110,11 @@ AGGREGATE_VALUE_CACHE_TTL = 300  # Cache aggregate portfolio values for 5 minute
 PRODUCT_STATS_CACHE_TTL = 600  # Cache product stats (24h volume, etc.) for 10 minutes
 MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations
 
+# Market-buy fee reserve: spend this fraction of available quote on a market buy,
+# leaving ~1% headroom for taker fees. Single source for the 0.99 used across the
+# auto-buy, rebalance, and USD↔USDC conversion monitors.
+BUY_FEE_RESERVE = 0.99
+
 # Candle Cache TTL (seconds) - Per-timeframe optimization
 # Cache TTL = candle interval duration (candles don't change until next candle closes)
 # This dramatically reduces API calls: 15-min candles only re-fetched every 15 minutes

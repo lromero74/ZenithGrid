@@ -24,6 +24,7 @@ Future Expansion (Phase 5):
 
 import asyncio
 import logging
+import time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -642,8 +643,6 @@ class DEXClient(ExchangeClient):
             # Sell 0.1 WETH for USDC
             order = await client.create_market_order("WETH-USDC", "SELL", size="0.1")
         """
-        import time
-
         try:
             logger.info(f"DEX swap: {product_id} {side} size={size} funds={funds}")
 

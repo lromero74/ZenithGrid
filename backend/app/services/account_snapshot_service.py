@@ -73,7 +73,10 @@ async def capture_account_snapshot(db: AsyncSession, account: Account, session_m
             try:
                 btc_usd_price = await client.get_current_price("BTC-USD")
             except Exception:
-                pass
+                logger.debug(
+                    "Snapshot: BTC price fetch failed for account %s; proceeding without it",
+                    account.id, exc_info=True,
+                )
 
             # Compute quote-currency deployment portions.
             # Use calculate_market_budget (free balance + open position
@@ -160,7 +163,10 @@ async def capture_account_snapshot(db: AsyncSession, account: Account, session_m
                 try:
                     btc_usd_price = await cb_client.get_current_price("BTC-USD")
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Snapshot: BTC price fetch failed for account %s; proceeding without it",
+                        account.id, exc_info=True,
+                    )
         elif account.type == "dex":
             portfolio = await get_dex_portfolio(account, db, get_coinbase_for_account)
             # DEX: portions not applicable

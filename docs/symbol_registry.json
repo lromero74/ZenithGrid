@@ -1684,6 +1684,7 @@
   "backend/app/position_routers/perps_router.py": {
     "classes": {},
     "functions": [
+      "_client_for_position",
       "_get_coinbase_client",
       "_get_portfolio_uuid",
       "close_perps_position",
