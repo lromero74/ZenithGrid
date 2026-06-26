@@ -180,6 +180,32 @@ Secondary Event Loop (Tier 2/3):
 
 ---
 
+## Deferred Tech-Debt & Perf Backlog (tactical, unscheduled)
+
+Tracked-but-deferred items from the 2026-06 code-review sweeps (#1–#5). Each was
+**verified low-priority** at the time — none touch correctness, money, or security
+(those were all fixed and shipped through v3.13.8). Pick these up opportunistically
+when touching the relevant area; none warrant a release on their own.
+
+**Performance (non-blocking):**
+- [ ] Non-Coinbase portfolio paths hydrate all closed positions in Python — aggregate in SQL like the Coinbase path's `_query_closed_pnl`. *Deferred: non-Coinbase only; account is Coinbase.* `portfolio_service.py` (`get_generic_cex_portfolio`), `account_snapshot_service.py` (`get_daily_activity`)
+- [ ] `get_account_balances` does a 2nd full Coinbase breakdown for `untracked_usd` — fetch once. *Deferred: cache usually warm.* `portfolio_service.py`
+- [ ] Frontend: charts re-create the instance every poll tick (init once + `setData`); `batch_price` query re-keyed by a new array ref each render; broad react-query `['positions']` invalidations touch other accounts. *Deferred: micro-perf; regression risk > benefit.* `AccountValueChart.tsx`, `usePositionsData.ts`, `useBotMutations.ts`
+- [ ] Unbounded loops in `get_transfer_summary` / `copy_bot_to_account` name-collision. `transfers_router.py`, `bot_crud_router.py`
+- [ ] `speculative_weights_cache` / `_rebalancer_group_cache` no periodic eviction (~100 bytes/user, negligible). `coin_review_service` / `cache.invalidate` sync I/O on background/dead paths.
+
+**Cleanup / minor:**
+- [ ] Migration number collisions `077_*` ×2, `086_*` ×2. *Deferred: cosmetic; renaming applied migrations risks re-runs.* `backend/migrations/`
+- [ ] Webhook rate-limit is per-token only (enumerable across IPs) — add per-IP. `webhook_router.py`
+- [ ] `manual_max_dca_orders` percentage-mode base-size back-calc overstates (volume-scaled). `indicator_based.py`
+- [ ] `syncAllChartsToRange` 3-param interface vs 2-param impl (silently ignored arg). `useIndicators.ts` / `useChartManagement.ts`
+- [ ] Misleading BTC-fee comment. `fill_reconciler.py`
+- [ ] `Position.signals` relationship-level `delete-orphan` vs the FK's SET NULL — left as-is (account-purge is the real deletion path; `db.delete(position)` isn't used on a money path). `models/trading.py`
+
+**Concurrency (no real race; documented):**
+- [ ] `rebalance_monitor._processing` / `auto_buy_monitor._pending_orders` / `multi_bot_monitor` caches — single-threaded asyncio means no torn writes; only logical-ordering windows around the admin-triggered `cleanup_caches`, off any money path. Revisit only if a symptom appears.
+- [ ] `get_perps_portfolio` owner-only scope vs `list_perps_positions` accessible-member scope — functional asymmetry, not a data leak. `position_routers/perps_router.py`
+
 ## Phase 2 — Prep Work (Enabling Future Extraction)
 
 These are **internal refactors** that don't change behavior but reduce coupling. Each one makes a future microservice extraction cheaper. Do them opportunistically — when touching a related area anyway.
