@@ -1,4 +1,5 @@
 import logging
+import os
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -8,6 +9,12 @@ from app.config import settings
 from app.server_resources import get_resource_plan
 
 logger = logging.getLogger(__name__)
+
+_process_role = os.environ.get("PROCESS_ROLE", "combined").lower()
+_pg_server_settings = {
+    "search_path": "auth,trading,reporting,social,content,system,public",
+    "application_name": f"zenithgrid-{_process_role}",
+}
 
 
 class Base(DeclarativeBase):
@@ -34,9 +41,7 @@ if settings.is_postgres:
     # across all 6 domain schemas. SQLAlchemy ORM uses fully-qualified names,
     # so this is mainly for ad-hoc queries and any legacy unqualified references.
     # asyncpg uses server_settings (not psycopg2-style "options").
-    _engine_kwargs["connect_args"] = {
-        "server_settings": {"search_path": "auth,trading,reporting,social,content,system,public"}
-    }
+    _engine_kwargs["connect_args"] = {"server_settings": _pg_server_settings}
 else:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 
@@ -78,9 +83,7 @@ if settings.is_postgres:
     _read_engine_kwargs["execution_options"] = {"postgresql_readonly": True}
     # Mirror the write pool's search_path so unqualified table names in raw SQL
     # resolve on read sessions too (otherwise read-pool raw SQL hits "relation not found").
-    _read_engine_kwargs["connect_args"] = {
-        "server_settings": {"search_path": "auth,trading,reporting,social,content,system,public"}
-    }
+    _read_engine_kwargs["connect_args"] = {"server_settings": _pg_server_settings}
 else:
     _read_engine_kwargs["connect_args"] = {"check_same_thread": False}
 
@@ -108,6 +111,10 @@ def get_sync_engine():
             # raise OperationalError on the next use after an idle period.
             kwargs["pool_pre_ping"] = True
             kwargs["pool_recycle"] = 3600
+            kwargs["connect_args"] = {
+                "options": "-c search_path=auth,trading,reporting,social,content,system,public",
+                "application_name": f"zenithgrid-{_process_role}-sync",
+            }
         _sync_engine = create_engine(sync_url, **kwargs)
     return _sync_engine
 

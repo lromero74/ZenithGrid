@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.12] - 2026-06-26
+
+### Fixed
+- **Mobile and dashboard loading no longer stall behind saturated backend/database work.** The Lightsail nginx config now serves the frontend shell and hashed assets directly, so Safari does not sit on a white page while FastAPI is busy. Split web/trader processes also get separate PostgreSQL connection budgets, preventing the two pools from collectively exhausting the database and blanking the Positions page summary cards.
+- **Active Deals price loading no longer blocks the stats and balances cards.** The batch prices endpoint now uses the cached public Coinbase product list for the common path instead of launching one ticker request per deal, then falls back to per-product pricing only for missing symbols.
+
 ## [v3.13.11] - 2026-06-26
 
 ### Added

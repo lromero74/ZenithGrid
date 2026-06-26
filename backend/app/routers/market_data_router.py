@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import SimpleCache
+from app.coinbase_api.public_market_data import bulk_prices_for_products
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.constants import CANDLE_CACHE_TTL, CANDLE_CACHE_DEFAULT_TTL
@@ -96,7 +97,11 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
         if not product_list:
             raise HTTPException(status_code=400, detail="No products specified")
 
-        # Fetch all prices concurrently
+        prices = await bulk_prices_for_products(product_list)
+        missing_products = [p for p in product_list if p not in prices]
+
+        # Fall back to per-product ticker calls only for products missing from
+        # the bulk public list, keeping the common path to one cached API fetch.
         async def fetch_price(product_id: str):
             try:
                 price = await coinbase.get_current_price(product_id)
@@ -105,10 +110,9 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
                 logger.warning(f"Failed to fetch price for {product_id}: {e}")
                 return (product_id, None)
 
-        results = await asyncio.gather(*[fetch_price(p) for p in product_list])
-
-        # Build response dict, filtering out failed requests
-        prices = {product_id: price for product_id, price in results if price is not None}
+        if missing_products:
+            results = await asyncio.gather(*[fetch_price(p) for p in missing_products])
+            prices.update({product_id: price for product_id, price in results if price is not None})
 
         return {
             "prices": prices,

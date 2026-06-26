@@ -5,6 +5,7 @@ FRONTEND_ROOT="${FRONTEND_ROOT:-$HOME/ZenithGrid/frontend}"
 RELEASES_DIR="$FRONTEND_ROOT/releases"
 DIST_LINK="$FRONTEND_ROOT/dist"
 PREVIOUS_FILE="$FRONTEND_ROOT/.previous-frontend-release"
+NGINX_FRONTEND_ROOT="${NGINX_FRONTEND_ROOT:-/var/www/zenithgrid/current}"
 
 fail() {
     echo "ERROR: $*" >&2
@@ -13,6 +14,15 @@ fail() {
 
 atomic_replace_link() {
     python3 -c 'import os, sys; os.replace(sys.argv[1], sys.argv[2])' "$1" "$2"
+}
+
+publish_nginx_frontend_root() {
+    local release_dir="$1"
+    sudo mkdir -p "$NGINX_FRONTEND_ROOT"
+    sudo rsync -a --delete "$release_dir/" "$NGINX_FRONTEND_ROOT/"
+    sudo chown -R root:root "$NGINX_FRONTEND_ROOT"
+    sudo find "$NGINX_FRONTEND_ROOT" -type d -exec chmod 755 {} +
+    sudo find "$NGINX_FRONTEND_ROOT" -type f -exec chmod 644 {} +
 }
 
 activate_release() {
@@ -43,6 +53,7 @@ activate_release() {
     rm -f "$DIST_LINK.next"
     ln -s "releases/$release_name" "$DIST_LINK.next"
     atomic_replace_link "$DIST_LINK.next" "$DIST_LINK"
+    publish_nginx_frontend_root "$release_dir"
     echo "Activated frontend $release_name"
 }
 
@@ -58,6 +69,7 @@ rollback_release() {
     rm -f "$DIST_LINK.next"
     ln -s "$previous_target" "$DIST_LINK.next"
     atomic_replace_link "$DIST_LINK.next" "$DIST_LINK"
+    publish_nginx_frontend_root "$FRONTEND_ROOT/$previous_target"
     [ -n "$current_target" ] && printf '%s\n' "$current_target" > "$PREVIOUS_FILE"
     echo "Rolled frontend back to $previous_target"
 }

@@ -65,10 +65,41 @@ class TestGetPricesBatch:
 
         mock_coinbase.get_current_price = mock_price
 
-        result = await get_prices_batch(products="BTC-USD,ETH-USD", coinbase=mock_coinbase)
+        with patch(
+            "app.routers.market_data_router.bulk_prices_for_products",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            result = await get_prices_batch(products="BTC-USD,ETH-USD", coinbase=mock_coinbase)
         assert "BTC-USD" in result["prices"]
         assert "ETH-USD" in result["prices"]
         assert result["prices"]["BTC-USD"] == 50000.0
+
+    @pytest.mark.asyncio
+    async def test_uses_bulk_public_prices_before_per_product_fallback(self):
+        """Batch endpoint uses one bulk public lookup and only falls back for misses."""
+        from app.routers.market_data_router import get_prices_batch
+
+        mock_coinbase = MagicMock()
+        mock_coinbase.get_current_price = AsyncMock(return_value=42.0)
+
+        with patch(
+            "app.routers.market_data_router.bulk_prices_for_products",
+            new_callable=AsyncMock,
+            return_value={"BTC-USD": 50000.0, "ETH-USD": 3000.0},
+        ) as bulk_prices:
+            result = await get_prices_batch(
+                products="BTC-USD,ETH-USD,MISSING-USD",
+                coinbase=mock_coinbase,
+            )
+
+        bulk_prices.assert_awaited_once_with(["BTC-USD", "ETH-USD", "MISSING-USD"])
+        mock_coinbase.get_current_price.assert_awaited_once_with("MISSING-USD")
+        assert result["prices"] == {
+            "BTC-USD": 50000.0,
+            "ETH-USD": 3000.0,
+            "MISSING-USD": 42.0,
+        }
 
     @pytest.mark.asyncio
     async def test_empty_products_returns_400(self):
@@ -96,7 +127,12 @@ class TestGetPricesBatch:
 
         mock_coinbase.get_current_price = mock_price
 
-        result = await get_prices_batch(products="BTC-USD,BAD-USD", coinbase=mock_coinbase)
+        with patch(
+            "app.routers.market_data_router.bulk_prices_for_products",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            result = await get_prices_batch(products="BTC-USD,BAD-USD", coinbase=mock_coinbase)
         assert "BTC-USD" in result["prices"]
         assert "BAD-USD" not in result["prices"]
 

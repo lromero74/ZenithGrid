@@ -8,6 +8,7 @@ everything else recalculates when you bump hardware.
 
 import logging
 import math
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,13 @@ PG_SUPERUSER_RESERVED = 4
 
 # Fraction reserved for the read-only analytics pool (reports, account values).
 READ_POOL_SHARE = 0.12
+
+# Split-process deployments run a web process and a trader process on the same
+# database. Each process must budget only its own slice of pg_max_connections.
+WEB_API_SHARE = 0.18
+WEB_READ_SHARE = 0.08
+TRADER_MONITOR_SHARE = 0.45
+TRADER_READ_SHARE = 0.04
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -48,9 +56,9 @@ class ResourcePlan:
 
     Allocation logic:
       usable = pg_max - PG_SUPERUSER_RESERVED
-      monitor_slots = floor(usable * MONITOR_RESOURCE_SHARE)
-      read_slots   = max(3, floor(usable * READ_POOL_SHARE))
-      api_slots    = usable - monitor_slots - read_slots
+      combined: original single-process allocation
+      web:      small API/read pools; no monitor slots
+      trader:   monitor pool only, with a tiny read reserve
 
     Write pool covers both monitor and API slots.
     Concurrency maxes are derived from monitor_slots:
@@ -60,6 +68,7 @@ class ResourcePlan:
 
     __slots__ = (
         'pg_max_connections', 'usable',
+        'process_role',
         'monitor_slots', 'api_slots', 'read_slots',
         'write_pool_size', 'write_pool_overflow',
         'read_pool_size', 'read_pool_overflow',
@@ -69,34 +78,55 @@ class ResourcePlan:
     def __init__(self) -> None:
         pg_max = _get_pg_max_connections()
         usable = max(10, pg_max - PG_SUPERUSER_RESERVED)
-        monitor = max(3, math.floor(usable * MONITOR_RESOURCE_SHARE))
-        read = max(3, math.floor(usable * READ_POOL_SHARE))
-        api = max(3, usable - monitor - read)
+        role = os.environ.get('PROCESS_ROLE', 'combined').lower()
+
+        if role == 'web':
+            monitor = 0
+            read = max(4, math.floor(usable * WEB_READ_SHARE))
+            api = max(8, math.floor(usable * WEB_API_SHARE))
+        elif role == 'trader':
+            monitor = max(12, math.floor(usable * TRADER_MONITOR_SHARE))
+            read = max(2, math.floor(usable * TRADER_READ_SHARE))
+            api = 0
+        else:
+            monitor = max(3, math.floor(usable * MONITOR_RESOURCE_SHARE))
+            read = max(3, math.floor(usable * READ_POOL_SHARE))
+            api = max(3, usable - monitor - read)
 
         write_total = monitor + api
+        read_total = read
         self.pg_max_connections = pg_max
         self.usable = usable
+        self.process_role = role
         self.monitor_slots = monitor
         self.api_slots = api
         self.read_slots = read
 
         # ~2:1 base:overflow split so burst capacity doesn't exhaust the pool
-        self.write_pool_size = max(5, math.floor(write_total * 0.67))
-        self.write_pool_overflow = max(2, write_total - self.write_pool_size)
+        if write_total == 0:
+            self.write_pool_size = 1
+            self.write_pool_overflow = 0
+        else:
+            self.write_pool_size = max(3, math.floor(write_total * 0.67))
+            self.write_pool_overflow = max(1, write_total - self.write_pool_size)
 
-        self.read_pool_size = max(2, math.floor(read * 0.75))
-        self.read_pool_overflow = max(1, read - self.read_pool_size)
+        self.read_pool_size = max(2, math.floor(read_total * 0.75))
+        self.read_pool_overflow = max(1, read_total - self.read_pool_size)
 
-        # Concurrency: balance depth (pair parallelism) vs breadth (bot parallelism)
-        # sqrt heuristic: pair_max ≈ sqrt(monitor_slots) - 1
-        self.pair_concurrency_max = max(1, math.floor(math.sqrt(monitor)) - 1)
-        self.bot_concurrency_max = max(1, math.floor(monitor / (1 + self.pair_concurrency_max)))
+        if monitor == 0:
+            self.pair_concurrency_max = 0
+            self.bot_concurrency_max = 0
+        else:
+            # Concurrency: balance depth (pair parallelism) vs breadth (bot parallelism)
+            # sqrt heuristic: pair_max ≈ sqrt(monitor_slots) - 1
+            self.pair_concurrency_max = max(1, math.floor(math.sqrt(monitor)) - 1)
+            self.bot_concurrency_max = max(1, math.floor(monitor / (1 + self.pair_concurrency_max)))
 
         logger.info(
-            'ResourcePlan: pg_max=%d usable=%d | '
+            'ResourcePlan(%s): pg_max=%d usable=%d | '
             'write_pool=%d+%d  read_pool=%d+%d | '
             'monitor_slots=%d (bot_max=%d pair_max=%d)  api_slots=%d',
-            pg_max, usable,
+            role, pg_max, usable,
             self.write_pool_size, self.write_pool_overflow,
             self.read_pool_size, self.read_pool_overflow,
             monitor, self.bot_concurrency_max, self.pair_concurrency_max, api,
