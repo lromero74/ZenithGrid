@@ -203,8 +203,9 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
           {/* DCA Level Tick Marks - show all remaining DCA targets */}
           {priceData.dcaPrices.map((dca, idx) => {
             const dcaBarPosition = ((dca.price - priceData.minPrice) / priceData.priceRange) * 100
-            // Alternate label positions to avoid overlap
-            const showLabel = idx === 0 || idx === priceData.dcaPrices.length - 1 || priceData.dcaPrices.length <= 3
+            // Show every SO label; stagger adjacent ones onto two rows so they don't
+            // overlap (the old "first + last only when >3" rule hid every middle label
+            // once a deal had 4+ safety orders).
             return (
               <div
                 key={`dca-${dca.level}`}
@@ -216,11 +217,9 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
                 }}
               >
                 <div className={`w-px ${idx === 0 ? 'h-3' : 'h-2'} bg-purple-400`} />
-                {showLabel && (
-                  <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
-                    SO{dca.level}
-                  </div>
-                )}
+                <div className={`text-[8px] text-purple-400 whitespace-nowrap ${idx % 2 === 0 ? 'mt-0.5' : 'mt-3'}`}>
+                  SO{dca.level}
+                </div>
               </div>
             )
           })}

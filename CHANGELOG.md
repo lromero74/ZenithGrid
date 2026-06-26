@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.9] - 2026-06-26
+
+### Fixed
+- **Deal price-bar shows every safety-order label again.** Once a deal had 4 or more safety orders, the price bar only drew the first and last SO labels and hid all the middle ones — so bumping a deal's Max Safety Orders made the other SO labels vanish. All SO labels now render, staggered onto two rows so they don't overlap.
+
+### Changed
+- The safety-order "budget blocker" log now records the position, product, and full budget context (max allowed, configured/grace/effective max, deployed count) — added to diagnose why a grace safety order can occasionally fail to be funded (investigation ongoing).
+
 ## [v3.13.8] - 2026-06-26
 
 ### Fixed
