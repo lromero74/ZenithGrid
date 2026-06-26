@@ -653,6 +653,22 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
 
             so_size = self._calculate_safety_order_amount(position, safety_orders_count + orders_to_execute, so_num)
 
+            # Grace safety orders are intentional just-in-time OVERALLOCATION: when the
+            # price has dropped to a grace level (so_num beyond the configured max), fund
+            # the order even if it exceeds the deal's configured budget — the whole point
+            # is to catch a deep dip / rebound. Bounded by effective_max (configured +
+            # grace) and sized off the real base order; the wallet is the real backstop at
+            # execution. Configured SOs (so_num <= max_safety) still respect the budget below.
+            if so_num > max_safety and so_size > remaining_balance:
+                overalloc = so_size - remaining_balance
+                position.max_quote_allowed = (position.max_quote_allowed or 0.0) + overalloc
+                remaining_balance += overalloc
+                logger.info(
+                    f"  🌱 Grace overallocation: position #{getattr(position, 'id', '?')} "
+                    f"{getattr(position, 'product_id', '?')} funding grace SO #{so_num} "
+                    f"(+{overalloc:.8f} beyond configured budget)"
+                )
+
             if so_size > remaining_balance:
                 shortfall = so_size - remaining_balance
                 if (

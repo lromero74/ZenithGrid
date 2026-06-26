@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.11] - 2026-06-26
+
+### Added
+- **Grace safety orders now fire on a deep dip to catch the rebound.** When the price drops to a grace safety-order level, the bot funds that order even if it exceeds the deal's configured budget — intentional just-in-time overallocation, bounded by the configured grace count and sized off the deal's actual base order. Previously a grace order could be blocked by the configured budget cap and had to be added by hand. Regular (configured) safety orders still respect the deal's budget — only grace orders overallocate.
+
 ## [v3.13.10] - 2026-06-26
 
 ### Fixed

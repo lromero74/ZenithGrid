@@ -748,6 +748,51 @@ class TestShouldBuy:
         assert so3 < 5673.0
 
     @pytest.mark.asyncio
+    async def test_grace_so_overallocates_to_catch_deep_dip(self):
+        """A grace-level SO (beyond the configured max) is funded even when it exceeds the
+        deal's configured budget — intentional just-in-time overallocation to catch a dip."""
+        strategy = _make_strategy({
+            "base_order_type": "fixed", "auto_calculate_order_sizes": True,
+            "max_safety_orders": 2, "grace_safety_orders": 2,
+            "safety_order_type": "percentage_of_base", "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.62, "price_deviation": 2.5, "safety_order_step_scale": 1.0,
+            "safety_order_conditions": [],
+        })
+        # base + 2 configured SOs deployed (count_deployed = 3 levels - 1 = 2) → SO#3 is grace.
+        trades = [MagicMock(side="buy", quote_amount=10.0, timestamp=i, dca_levels=1) for i in range(3)]
+        position = _make_mock_position(avg_price=100.0, max_quote=30.0, trades=trades)
+        initial_cap = position.max_quote_allowed
+        # Price 91 triggers SO#3 (92.5) but not SO#4 (90.0) at step_scale 1.0, deviation 2.5%.
+        signal = {"price": 91.0, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(signal, position=position, balance=5.0)
+
+        assert should is True                       # funded despite balance(5) < grace SO size
+        assert amount > 5.0                          # overallocated beyond the available budget
+        assert "Safety order #3" in reason
+        assert position.max_quote_allowed > initial_cap  # cap expanded to fund the grace SO
+
+    @pytest.mark.asyncio
+    async def test_configured_so_still_respects_budget(self):
+        """A CONFIGURED safety order (within max) is NOT overallocated — it must respect the
+        budget and block when short (only grace orders overallocate)."""
+        strategy = _make_strategy({
+            "base_order_type": "fixed", "auto_calculate_order_sizes": True,
+            "max_safety_orders": 3, "grace_safety_orders": 2,
+            "safety_order_type": "percentage_of_base", "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.62, "price_deviation": 2.5, "safety_order_step_scale": 1.0,
+            "safety_order_conditions": [],
+        })
+        # base + 1 SO deployed (count_deployed = 1) → SO#2 is still CONFIGURED (2 <= 3).
+        trades = [MagicMock(side="buy", quote_amount=10.0, timestamp=i, dca_levels=1) for i in range(2)]
+        position = _make_mock_position(avg_price=100.0, max_quote=30.0, trades=trades)
+        signal = {"price": 89.0, "base_order_signal": False, "safety_order_signal": True}
+
+        should, amount, reason = await strategy.should_buy(signal, position=position, balance=1.0)
+
+        assert should is False  # configured SO is budget-blocked, not overallocated
+
+    @pytest.mark.asyncio
     async def test_safety_order_still_blocks_when_shortfall_exceeds_rounding_tolerance(self):
         """A precision allowance must not turn a materially underfunded SO into a partial order."""
         strategy = _make_strategy({
