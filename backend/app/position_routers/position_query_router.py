@@ -708,6 +708,46 @@ async def get_positions_summary(
     }
 
 
+@router.get("/ai-opinions", response_model=Dict[int, Optional[AIOpinionLogResponse]])
+async def get_position_ai_opinions(
+    position_ids: List[int] = Query(..., min_length=1, max_length=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the latest AI opinion for each authorized position in one query batch."""
+    deduped_ids = list(dict.fromkeys(position_ids))
+    if len(deduped_ids) > 200:
+        raise HTTPException(status_code=400, detail="At most 200 position_ids are allowed")
+
+    user_account_ids = await accessible_account_ids(db, current_user.id)
+    if not user_account_ids:
+        return {}
+
+    positions_query = select(Position.id).where(
+        Position.id.in_(deduped_ids),
+        Position.account_id.in_(user_account_ids),
+    )
+    authorized_ids = list((await db.execute(positions_query)).scalars().all())
+    if not authorized_ids:
+        return {}
+
+    opinions_by_position: Dict[int, Optional[AIOpinionLogResponse]] = {
+        position_id: None for position_id in authorized_ids
+    }
+    opinions_query = (
+        select(AIOpinionLog)
+        .where(AIOpinionLog.position_id.in_(authorized_ids))
+        .order_by(AIOpinionLog.position_id, desc(AIOpinionLog.created_at))
+    )
+    opinions = (await db.execute(opinions_query)).scalars().all()
+    for opinion in opinions:
+        position_id = opinion.position_id
+        if position_id is not None and opinions_by_position.get(position_id) is None:
+            opinions_by_position[position_id] = AIOpinionLogResponse.model_validate(opinion)
+
+    return opinions_by_position
+
+
 @router.get("/{position_id}", response_model=PositionResponse)
 async def get_position(
     position_id: int,

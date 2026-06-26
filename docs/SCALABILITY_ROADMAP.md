@@ -28,6 +28,24 @@ This document is divided into three phases:
 6. **Module-level cache singletons** — `api_cache`, `portfolio_cache` with a single shared cleanup job
 7. **No inter-service messaging** — all coordination via direct shared DB queries
 
+## Capacity Watch — 2026-06-26
+
+Production has already shown that a single-user workload can briefly max out the
+local PostgreSQL connection budget when the web app fans out requests while the
+trader is holding many long-lived sessions. v3.13.14 reduces the immediate
+pressure by batching Positions AI-opinion reads, lowering trader concurrency,
+and making indicator logging best-effort.
+
+**Deferred multi-user infrastructure step:** before opening the app to roughly
+5-10 additional account managers, revisit the hosting/database shape rather
+than only tuning in-process pools. The likely next move is some combination of:
+PgBouncer transaction pooling in front of PostgreSQL, moving PostgreSQL off the
+Lightsail app host (managed RDS or a larger EC2/Postgres host), keeping web and
+trader as separate systemd roles, and upgrading away from bursty/noisy Lightsail
+CPU if CPU steal remains high under load. Keep the new `/api/performance/capacity`
+endpoint, `/api/performance/summary`, `pg_stat_activity`, and `vmstat`/CPU-steal
+samples as the decision inputs.
+
 ---
 
 ## Phase 1 — Immediate Wins (Do Now)

@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings, AI_PROVIDER_BILLING_URLS
-from app.database import get_db
+from app.database import get_db, get_pool_capacity_snapshot
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, MarketData, Position, Signal, Trade, User
@@ -229,6 +229,14 @@ async def get_performance_summary(
 ):
     """Return bounded p50/p95 performance aggregates to superusers."""
     return get_performance_snapshot()
+
+
+@router.get("/api/performance/capacity")
+async def get_performance_capacity(
+    current_user: User = Depends(require_superuser),
+):
+    """Return DB pool and resource-plan capacity guard data to superusers."""
+    return get_pool_capacity_snapshot()
 
 
 def get_sorted_tags() -> list:

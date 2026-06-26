@@ -216,6 +216,12 @@ export const positionsApi = {
     api.get<AIBotLog[]>(`/positions/${id}/ai-logs`, { params: { include_before_open: includeBeforeOpen } }).then((res) => res.data),
   getAIOpinion: (id: number) =>
     api.get<AIOpinionLog | null>(`/positions/${id}/ai-opinion`).then((res) => res.data),
+  getAIOpinions: (ids: number[]) => {
+    const params = new URLSearchParams()
+    ids.forEach((id) => params.append('position_ids', String(id)))
+    return api.get<Record<number, AIOpinionLog | null>>('/positions/ai-opinions', { params })
+      .then((res) => res.data)
+  },
   close: (id: number, skipSlippageGuard = false) =>
     api.post<{
       message?: string; profit_quote?: number; profit_percentage?: number;

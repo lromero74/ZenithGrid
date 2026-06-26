@@ -29,8 +29,10 @@ READ_POOL_SHARE = 0.12
 # database. Each process must budget only its own slice of pg_max_connections.
 WEB_API_SHARE = 0.18
 WEB_READ_SHARE = 0.08
-TRADER_MONITOR_SHARE = 0.45
+TRADER_MONITOR_SHARE = 0.30
 TRADER_READ_SHARE = 0.04
+TRADER_BOT_CONCURRENCY_CAP = 4
+TRADER_PAIR_CONCURRENCY_CAP = 3
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -121,6 +123,9 @@ class ResourcePlan:
             # sqrt heuristic: pair_max ≈ sqrt(monitor_slots) - 1
             self.pair_concurrency_max = max(1, math.floor(math.sqrt(monitor)) - 1)
             self.bot_concurrency_max = max(1, math.floor(monitor / (1 + self.pair_concurrency_max)))
+            if role == 'trader':
+                self.pair_concurrency_max = min(self.pair_concurrency_max, TRADER_PAIR_CONCURRENCY_CAP)
+                self.bot_concurrency_max = min(self.bot_concurrency_max, TRADER_BOT_CONCURRENCY_CAP)
 
         logger.info(
             'ResourcePlan(%s): pg_max=%d usable=%d | '

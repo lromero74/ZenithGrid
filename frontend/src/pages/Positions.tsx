@@ -288,6 +288,16 @@ export default function Positions() {
   // variable-height blocks keeps the window virtualizer in play for all modes.
   const visualRows = useMemo(() => buildVisualRows(positionRows, columns), [positionRows, columns])
 
+  const aiOpinionPositionIds = useMemo(() => openPositions.map((position: Position) => position.id), [openPositions])
+  const { data: aiOpinionsByPosition, isLoading: isLoadingAIOpinions } = useQuery({
+    queryKey: ['position-ai-opinions', selectedAccountId, aiOpinionPositionIds.join(',')],
+    queryFn: () => positionsApi.getAIOpinions(aiOpinionPositionIds),
+    enabled: aiOpinionPositionIds.length > 0,
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
+  })
+  const aiOpinionsFetched = aiOpinionPositionIds.length === 0 || !isLoadingAIOpinions
+
   // Pre-compute bot lookup map for O(1) access in PositionCard
   const botsById = useMemo(
     () => new Map((bots || []).map((b: Bot) => [b.id, b])),
@@ -565,6 +575,8 @@ export default function Positions() {
                         onRefetch={refetchPositions}
                         onEditBot={handleEditBot}
                         canWrite={canWritePositions}
+                        aiOpinion={aiOpinionsByPosition?.[position.id] ?? null}
+                        aiOpinionFetched={aiOpinionsFetched}
                         forceCardLayout={viewMode !== 'table'}
                       />
                     ))}

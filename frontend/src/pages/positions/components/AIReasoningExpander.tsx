@@ -7,6 +7,8 @@ import { SpeculativeSignalBreakdown } from './SpeculativeSignalBreakdown'
 
 interface Props {
   positionId: number
+  opinion?: AIOpinionLog | null
+  fetched?: boolean
 }
 
 const signalColor = (sig: string) => {
@@ -20,32 +22,37 @@ const signalColor = (sig: string) => {
   }
 }
 
-export function AIReasoningExpander({ positionId }: Props) {
+export function AIReasoningExpander({ positionId, opinion: preloadedOpinion, fetched: preloadedFetched }: Props) {
   const [open, setOpen] = useState(false)
-  const [opinion, setOpinion] = useState<AIOpinionLog | null>(null)
-  const [fetched, setFetched] = useState(false)
+  const [localOpinion, setLocalOpinion] = useState<AIOpinionLog | null>(null)
+  const [localFetched, setLocalFetched] = useState(false)
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set())
+  const hasPreloadedState = preloadedOpinion !== undefined || preloadedFetched !== undefined
 
   // Prefetch once so the component can hide itself entirely when there are no
   // tool calls to surface (single-shot fallback — PRP Phase E). The endpoint
   // returns null when no opinion is logged yet, so we don't need special 404
   // handling here.
   useEffect(() => {
+    if (hasPreloadedState) return
     let cancelled = false
     ;(async () => {
       try {
         const data = await positionsApi.getAIOpinion(positionId)
-        if (!cancelled) setOpinion(data)
+        if (!cancelled) setLocalOpinion(data)
       } catch {
         // Non-critical audit widget — stay quiet on any fetch error.
       } finally {
-        if (!cancelled) setFetched(true)
+        if (!cancelled) setLocalFetched(true)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [positionId])
+  }, [hasPreloadedState, positionId])
+
+  const opinion = hasPreloadedState ? (preloadedOpinion ?? null) : localOpinion
+  const fetched = hasPreloadedState ? Boolean(preloadedFetched) : localFetched
 
   const toggle = () => setOpen((prev) => !prev)
 

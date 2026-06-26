@@ -13,6 +13,7 @@ import asyncio
 from app.utils.timeutil import utcnow
 import contextvars
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -35,6 +36,7 @@ from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.paper_trading_client import simulate_slippage_ctx
 from app.models import Bot
+from app.performance_metrics import record_server_timing
 from app.services.realmoney_audit import set_subsystem
 from app.monitor.batch_analyzer import process_bot_batch as _process_bot_batch
 from app.monitor.bull_flag_processor import process_bull_flag_bot as _process_bull_flag_bot
@@ -994,6 +996,7 @@ class MultiBotMonitor:
         # Note: self.running is set to True in start() to prevent race conditions
 
         while self.running:
+            loop_started_at = time.perf_counter()
             logger.debug(f"Monitor loop iteration, self.running={self.running}")
             # Recompute concurrency from current available RAM each cycle.
             # Sigmoid scaling keeps us within DB pool budget while adapting to
@@ -1150,6 +1153,8 @@ class MultiBotMonitor:
                                 "entries from candle cache"
                             )
 
+                record_server_timing("TRADER", "monitor_loop", (time.perf_counter() - loop_started_at) * 1000)
+
                 # Wait for next interval - check frequently so bots with short intervals are responsive
                 logger.debug("Sleeping 10 seconds before next iteration...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
@@ -1162,6 +1167,7 @@ class MultiBotMonitor:
                     logger.warning(f"Database corruption in monitor loop; retrying next cycle: {e}")
                 else:
                     logger.error(f"Error in monitor loop: {e}", exc_info=True)
+                record_server_timing("TRADER", "monitor_loop", (time.perf_counter() - loop_started_at) * 1000)
                 # Wait a bit before retrying
                 await asyncio.sleep(10)
 

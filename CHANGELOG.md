@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.14] - 2026-06-26
+
+### Fixed
+- **Active Deals no longer fires one AI-reasoning request per position card.** The Positions page now batch-loads the latest AI opinion rows for visible active deals, which keeps a single page from spawning dozens of database-backed requests and starving the web pool.
+- **Trader diagnostics no longer compete with order-critical database work.** Indicator evaluation logs now use a tiny best-effort lane and are dropped when that lane is full, instead of waiting on a saturated pool. The trader process also keeps a smaller PostgreSQL connection budget and lower bot/pair concurrency caps so web/API work has more headroom.
+
+### Added
+- **Capacity guard endpoint for production checks.** Superusers can now inspect `/api/performance/capacity` for web/trader pool utilization, resource-plan limits, host memory, load average, and CPU steal percentage when available. Trader loop duration is also recorded in the existing performance summary.
+
 ## [v3.13.13] - 2026-06-26
 
 ### Fixed

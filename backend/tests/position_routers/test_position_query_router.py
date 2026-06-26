@@ -1194,6 +1194,50 @@ class TestGetPositionAiOpinion:
             )
         assert exc_info.value.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_batch_returns_latest_authorized_opinions_only(self, db_session):
+        """Batch endpoint avoids one DB-backed request per visible position."""
+        from app.models import AIOpinionLog
+        from app.position_routers.position_query_router import get_position_ai_opinions
+
+        user1, account1 = await _create_user_with_account(db_session, "opinion-batch-owner@test.com")
+        user2, account2 = await _create_user_with_account(db_session, "opinion-batch-other@test.com")
+        bot1 = await _create_bot(db_session, user1, account1)
+        bot2 = await _create_bot(db_session, user2, account2)
+        pos1 = await _create_position(db_session, account1, bot=bot1)
+        pos2 = await _create_position(db_session, account1, bot=bot1)
+        foreign_pos = await _create_position(db_session, account2, bot=bot2)
+
+        db_session.add_all([
+            AIOpinionLog(
+                user_id=user1.id, account_id=account1.id, bot_id=bot1.id, position_id=pos1.id,
+                product_id=pos1.product_id, signal="buy", confidence=55,
+                reasoning="older", ai_model="claude", created_at=utcnow() - timedelta(minutes=5),
+            ),
+            AIOpinionLog(
+                user_id=user1.id, account_id=account1.id, bot_id=bot1.id, position_id=pos1.id,
+                product_id=pos1.product_id, signal="hold", confidence=88,
+                reasoning="latest", ai_model="claude", created_at=utcnow(),
+            ),
+            AIOpinionLog(
+                user_id=user2.id, account_id=account2.id, bot_id=bot2.id, position_id=foreign_pos.id,
+                product_id=foreign_pos.product_id, signal="sell", confidence=99,
+                reasoning="private", ai_model="claude", created_at=utcnow(),
+            ),
+        ])
+        await db_session.flush()
+
+        result = await get_position_ai_opinions(
+            position_ids=[pos1.id, pos2.id, foreign_pos.id],
+            db=db_session,
+            current_user=user1,
+        )
+
+        assert set(result) == {pos1.id, pos2.id}
+        assert result[pos1.id] is not None
+        assert result[pos1.id].signal == "hold"
+        assert result[pos2.id] is None
+
 
 # =============================================================================
 # GET /positions/pnl-timeseries

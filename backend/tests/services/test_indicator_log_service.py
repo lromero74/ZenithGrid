@@ -142,6 +142,36 @@ class TestLogIndicatorEvaluation:
 
             assert result is None
 
+    @pytest.mark.asyncio
+    async def test_drops_log_when_diagnostic_lane_is_full(self, db_session):
+        """Indicator logging is non-critical and must not wait on a saturated pool."""
+        bot = await _create_bot(db_session, name="BusyLaneBot")
+
+        class BusySemaphore:
+            def locked(self):
+                return True
+
+        called = False
+
+        def session_maker():
+            nonlocal called
+            called = True
+            return _mock_session_maker(db_session)()
+
+        with patch("app.services.indicator_log_service.get_indicator_log_semaphore", return_value=BusySemaphore()):
+            result = await log_indicator_evaluation(
+                db=db_session,
+                bot_id=bot.id,
+                product_id="ETH-BTC",
+                phase="base_order",
+                conditions_met=True,
+                conditions_detail=[{"type": "RSI", "result": True}],
+                session_maker=session_maker,
+            )
+
+        assert result is None
+        assert called is False
+
 
 class TestGetIndicatorLogs:
     """Tests for get_indicator_logs()."""

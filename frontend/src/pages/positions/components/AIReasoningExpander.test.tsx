@@ -85,6 +85,13 @@ describe('AIReasoningExpander', () => {
     expect(screen.queryByText(/tools called/i)).not.toBeInTheDocument()
   })
 
+  it('uses preloaded batch data without fetching per card', async () => {
+    render(<AIReasoningExpander positionId={42} opinion={buildOpinion()} fetched />)
+    const btn = await screen.findByRole('button', { name: /toggle ai reasoning detail/i })
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(mockGetAIOpinion).not.toHaveBeenCalled()
+  })
+
   it('expands to show signal, confidence, reasoning and tool-call names', async () => {
     mockGetAIOpinion.mockResolvedValue(buildOpinion())
     render(<AIReasoningExpander positionId={42} />)

@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Any
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -92,6 +93,83 @@ read_engine = create_async_engine(settings.database_url, **_read_engine_kwargs)
 read_async_session_maker = async_sessionmaker(
     read_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
 )
+
+
+def _pool_metric(pool: Any, method_name: str) -> int | None:
+    method = getattr(pool, method_name, None)
+    if not callable(method):
+        return None
+    try:
+        return int(method())
+    except Exception:
+        return None
+
+
+def _pool_snapshot(async_engine, label: str) -> dict[str, Any]:
+    pool = async_engine.sync_engine.pool
+    size = _pool_metric(pool, "size")
+    checked_in = _pool_metric(pool, "checkedin")
+    checked_out = _pool_metric(pool, "checkedout")
+    overflow = _pool_metric(pool, "overflow")
+    max_overflow = getattr(pool, "_max_overflow", None)
+    if isinstance(max_overflow, int) and size is not None:
+        capacity = size + max(0, max_overflow)
+    elif size is not None and overflow is not None:
+        capacity = size + max(0, overflow)
+    else:
+        capacity = None
+
+    utilization_pct = None
+    if capacity and checked_out is not None:
+        utilization_pct = round((checked_out / capacity) * 100, 2)
+
+    return {
+        "label": label,
+        "pool_class": type(pool).__name__,
+        "size": size,
+        "checked_in": checked_in,
+        "checked_out": checked_out,
+        "overflow": overflow,
+        "max_overflow": max_overflow if isinstance(max_overflow, int) else None,
+        "capacity": capacity,
+        "utilization_pct": utilization_pct,
+    }
+
+
+def get_pool_capacity_snapshot() -> dict[str, Any]:
+    """Return current SQLAlchemy pool utilization for capacity guard endpoints."""
+    plan = get_resource_plan()
+    host: dict[str, Any] = {}
+    try:
+        import psutil
+        cpu_times = psutil.cpu_times_percent(interval=None)
+        host["cpu"] = {
+            "percent": psutil.cpu_percent(interval=None),
+            "steal_pct": getattr(cpu_times, "steal", None),
+            "load_avg": os.getloadavg() if hasattr(os, "getloadavg") else None,
+        }
+        mem = psutil.virtual_memory()
+        host["memory"] = {
+            "available_mb": round(mem.available / (1024 * 1024), 1),
+            "percent": mem.percent,
+        }
+    except Exception:
+        host["cpu"] = {"percent": None, "steal_pct": None, "load_avg": None}
+    return {
+        "process_role": _process_role,
+        "resource_plan": {
+            "pg_max_connections": plan.pg_max_connections,
+            "usable": plan.usable,
+            "monitor_slots": plan.monitor_slots,
+            "api_slots": plan.api_slots,
+            "read_slots": plan.read_slots,
+            "bot_concurrency_max": plan.bot_concurrency_max,
+            "pair_concurrency_max": plan.pair_concurrency_max,
+        },
+        "host": host,
+        "write": _pool_snapshot(engine, "write"),
+        "read": _pool_snapshot(read_engine, "read"),
+    }
 
 
 # Sync engine for non-async contexts (balance API, settings lookup)

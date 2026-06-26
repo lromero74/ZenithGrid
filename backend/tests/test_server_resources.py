@@ -42,3 +42,12 @@ def test_web_role_keeps_small_responsive_pool(monkeypatch):
     assert plan.read_pool_size + plan.read_pool_overflow <= 8
     assert plan.bot_concurrency_max == 0
     assert plan.pair_concurrency_max == 0
+
+
+def test_trader_role_keeps_headroom_for_web_and_postgres(monkeypatch):
+    server_resources = _load_server_resources(monkeypatch, "trader")
+    plan = server_resources.ResourcePlan()
+
+    assert plan.write_pool_size + plan.write_pool_overflow <= 28
+    assert plan.bot_concurrency_max <= 4
+    assert plan.pair_concurrency_max <= 3

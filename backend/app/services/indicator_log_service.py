@@ -6,6 +6,7 @@ This allows users to see which conditions matched and why.
 """
 
 import logging
+import asyncio
 from app.utils.timeutil import utcnow
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +16,19 @@ from app.database import async_session_maker as _default_session_maker
 from app.models import IndicatorLog
 
 logger = logging.getLogger(__name__)
+
+INDICATOR_LOG_CONCURRENCY = 2
+_indicator_log_semaphores: Dict[int, asyncio.Semaphore] = {}
+
+
+def get_indicator_log_semaphore() -> asyncio.Semaphore:
+    """Return a loop-local lane for best-effort indicator diagnostic writes."""
+    loop_id = id(asyncio.get_running_loop())
+    semaphore = _indicator_log_semaphores.get(loop_id)
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(INDICATOR_LOG_CONCURRENCY)
+        _indicator_log_semaphores[loop_id] = semaphore
+    return semaphore
 
 
 async def log_indicator_evaluation(
@@ -53,20 +67,30 @@ async def log_indicator_evaluation(
 
     try:
         sm = session_maker or _default_session_maker
-
-        async with sm() as log_db:
-            log_entry = IndicatorLog(
-                bot_id=bot_id,
-                timestamp=utcnow(),
-                product_id=product_id,
-                phase=phase,
-                conditions_met=conditions_met,
-                conditions_detail=conditions_detail,
-                indicators_snapshot=indicators_snapshot,
-                current_price=current_price,
+        semaphore = get_indicator_log_semaphore()
+        if semaphore.locked():
+            logger.debug(
+                "Dropping indicator evaluation log: diagnostic lane busy bot=%s pair=%s phase=%s",
+                bot_id,
+                product_id,
+                phase,
             )
-            log_db.add(log_entry)
-            await log_db.commit()
+            return None
+
+        async with semaphore:
+            async with sm() as log_db:
+                log_entry = IndicatorLog(
+                    bot_id=bot_id,
+                    timestamp=utcnow(),
+                    product_id=product_id,
+                    phase=phase,
+                    conditions_met=conditions_met,
+                    conditions_detail=conditions_detail,
+                    indicators_snapshot=indicators_snapshot,
+                    current_price=current_price,
+                )
+                log_db.add(log_entry)
+                await log_db.commit()
 
         logger.debug(
             f"Logged indicator evaluation: bot={bot_id}, pair={product_id}, "

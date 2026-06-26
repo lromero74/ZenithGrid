@@ -685,7 +685,10 @@
   "backend/app/database.py": {
     "classes": {},
     "functions": [
+      "_pool_metric",
+      "_pool_snapshot",
       "get_db",
+      "get_pool_capacity_snapshot",
       "get_read_db",
       "get_sync_engine",
       "init_db"
@@ -1032,10 +1035,13 @@
     "classes": {
       "PaperTradingClient": [
         "__init__",
+        "_available_product_ids",
         "_calculate_vwap_fill_price",
         "_is_known_unresolvable",
         "_price_in_btc",
         "_price_in_usd",
+        "_price_product_if_available",
+        "_product_exists",
         "_reload_balances",
         "_save_balances",
         "adjust_balance",
@@ -1734,6 +1740,7 @@
       "get_position",
       "get_position_ai_logs",
       "get_position_ai_opinion",
+      "get_position_ai_opinions",
       "get_position_trades",
       "get_positions",
       "get_positions_summary",
@@ -2335,6 +2342,7 @@
       "get_latest_git_tag_cached",
       "get_market_data",
       "get_pair_monitor_status",
+      "get_performance_capacity",
       "get_performance_summary",
       "get_price_monitor",
       "get_repo_root",
@@ -2997,6 +3005,7 @@
     "classes": {},
     "functions": [
       "cleanup_old_indicator_logs",
+      "get_indicator_log_semaphore",
       "get_indicator_logs",
       "log_indicator_evaluation"
     ]

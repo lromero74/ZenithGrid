@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo, lazy, Suspense } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
-import type { Position, Bot, Trade } from '../../../types'
+import type { Position, Bot, Trade, AIOpinionLog } from '../../../types'
 import type { PositionWithPnL } from '../helpers'
 import CoinIcon from '../../../components/shared/CoinIcon'
 import {
@@ -44,6 +44,8 @@ interface PositionCardProps {
   onRefetch: () => void
   onEditBot?: (bot: Bot) => void
   canWrite?: boolean
+  aiOpinion?: AIOpinionLog | null
+  aiOpinionFetched?: boolean
   /**
    * Force the rich "card" layout at all widths instead of the responsive
    * table row. Used by the deals list's card-list and tiled-grid view modes,
@@ -73,6 +75,8 @@ export const PositionCard = memo(function PositionCard({
   onRefetch,
   onEditBot,
   canWrite = true,
+  aiOpinion,
+  aiOpinionFetched,
   forceCardLayout = false,
 }: PositionCardProps) {
   // Collapsed-row layout classes. In card mode the `sm:` table upgrades are
@@ -638,7 +642,7 @@ export const PositionCard = memo(function PositionCard({
 
         {/* AI Reasoning Expander — tool-use transparency (Phase E) */}
         <div className="px-4 pb-3" onClick={(e) => e.stopPropagation()}>
-          <AIReasoningExpander positionId={position.id} />
+          <AIReasoningExpander positionId={position.id} opinion={aiOpinion} fetched={aiOpinionFetched} />
         </div>
       </div>
 
