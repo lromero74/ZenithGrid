@@ -108,9 +108,16 @@ async def _verify_mark_profit_allows_sell(
         best_ask = float(ticker.get("best_ask", 0))
         mark_price = (best_bid + best_ask) / 2 if best_bid > 0 and best_ask > 0 else current_price
 
-        mark_value = position.total_base_acquired * mark_price
-        mark_profit = mark_value - position.total_quote_spent
-        mark_profit_pct = (mark_profit / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0.0
+        # Direction-aware mark profit: a short's basis is the quote it sold
+        # (short_total_sold_quote) and its cost is buying the base back at mark — the
+        # long formula yields 0 for shorts and would permanently block a limit-TP close.
+        if getattr(position, "direction", "long") == "short":
+            basis = float(position.short_total_sold_quote or 0.0)
+            mark_profit = basis - float(position.short_total_sold_base or 0.0) * mark_price
+        else:
+            basis = float(position.total_quote_spent or 0.0)
+            mark_profit = float(position.total_base_acquired or 0.0) * mark_price - basis
+        mark_profit_pct = (mark_profit / basis * 100) if basis > 0 else 0.0
         # Raise the floor so the configured target is met NET of round-trip fees.
         tp_floor = fee_adjusted_tp_floor(position, tp_pct)
 

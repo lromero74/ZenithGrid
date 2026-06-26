@@ -992,3 +992,58 @@ class TestProcessSignal:
 
         assert result["action"] == "limit_close_pending"
         assert result.get("limit_order_placed") is True
+
+
+class TestVerifyMarkProfitAllowsSellShort:
+    """D (sweep #4): the limit-TP mark-profit gate must use the short formula for
+    shorts. The long formula (base*price - quote_spent) is 0 for shorts, so the gate
+    would permanently block closing a short via a limit take-profit order."""
+
+    @staticmethod
+    def _ctx(exchange, current_price):
+        return TradeContext(
+            db=_make_db(), exchange=exchange, trading_client=_make_trading_client(),
+            bot=_make_bot(), product_id="BTC-USD", current_price=current_price,
+            strategy=_make_strategy(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_short_in_profit_allowed(self):
+        """Happy path: a profitable short (mark below avg sell) is allowed to close."""
+        from app.trading_engine.signal_processor.sell_decision import _verify_mark_profit_allows_sell
+        exchange = _make_exchange(get_ticker=AsyncMock(return_value={"best_bid": "2799", "best_ask": "2801"}))
+        pos = _make_position(direction="short", short_total_sold_base=0.5,
+                             short_total_sold_quote=1500.0, total_base_acquired=0.0, total_quote_spent=0.0)
+        ctx = self._ctx(exchange, current_price=2800.0)
+        with patch("app.trading_engine.signal_processor.sell_decision.fee_adjusted_tp_floor", return_value=3.0):
+            allowed, _ = await _verify_mark_profit_allows_sell(
+                ctx, pos, {"take_profit_order_type": "limit", "take_profit_percentage": 3.0})
+        # mark 2800: 1500 - 0.5*2800 = 100 profit on 1500 basis = 6.67% >= 3% floor
+        assert allowed is True
+
+    @pytest.mark.asyncio
+    async def test_short_not_in_profit_blocked(self):
+        """Failure: a short underwater at mark is correctly blocked."""
+        from app.trading_engine.signal_processor.sell_decision import _verify_mark_profit_allows_sell
+        exchange = _make_exchange(get_ticker=AsyncMock(return_value={"best_bid": "3099", "best_ask": "3101"}))
+        pos = _make_position(direction="short", short_total_sold_base=0.5,
+                             short_total_sold_quote=1500.0, total_base_acquired=0.0, total_quote_spent=0.0)
+        ctx = self._ctx(exchange, current_price=3100.0)
+        with patch("app.trading_engine.signal_processor.sell_decision.fee_adjusted_tp_floor", return_value=3.0):
+            allowed, _ = await _verify_mark_profit_allows_sell(
+                ctx, pos, {"take_profit_order_type": "limit", "take_profit_percentage": 3.0})
+        # mark 3100: 1500 - 0.5*3100 = -50 → -3.3% < 3% floor → blocked
+        assert allowed is False
+
+    @pytest.mark.asyncio
+    async def test_long_unaffected(self):
+        """Edge: the long path is unchanged by the direction-aware split."""
+        from app.trading_engine.signal_processor.sell_decision import _verify_mark_profit_allows_sell
+        exchange = _make_exchange(get_ticker=AsyncMock(return_value={"best_bid": "2199", "best_ask": "2201"}))
+        pos = _make_position(direction="long", total_base_acquired=0.5, total_quote_spent=1000.0)
+        ctx = self._ctx(exchange, current_price=2200.0)
+        with patch("app.trading_engine.signal_processor.sell_decision.fee_adjusted_tp_floor", return_value=3.0):
+            allowed, _ = await _verify_mark_profit_allows_sell(
+                ctx, pos, {"take_profit_order_type": "limit", "take_profit_percentage": 3.0})
+        # long mark 2200: 0.5*2200 - 1000 = 100 on 1000 basis = 10% >= 3%
+        assert allowed is True

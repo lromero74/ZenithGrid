@@ -1046,31 +1046,42 @@ async def execute_buy_close_short(
             else:
                 raise ValueError(f"Close-short buy failed. Full response: {order_response}")
 
+        # Reconcile fill data from exchange — kept INSIDE the in-flight barrier so a
+        # shutdown can't fire between order placement and the position being booked
+        # closed (which would strand the short open with no trade record).
+        filled_size, usd_spent_to_close, average_filled_price, fee_quote = await _reconcile_close_short_fill(
+            trading_client=trading_client,
+            order_id=order_id,
+        )
+
+        # Refuse to book a phantom close on a zero/unconfirmed fill — defensive even
+        # though _reconcile_close_short_fill raises on exhaustion (mirrors the
+        # long-close sell_fill_is_complete guard).
+        if filled_size <= 0 or usd_spent_to_close <= 0:
+            raise ValueError(
+                f"Close-short fill unconfirmed for position #{position.id} "
+                f"(filled_size={filled_size}, usd_spent={usd_spent_to_close}) - not booking"
+            )
+
+        # Record trade and close position (inside the barrier; see above)
+        trade, profit_quote, profit_percentage = await _create_close_short_trade_record(
+            db=db,
+            exchange=exchange,
+            position=position,
+            product_id=product_id,
+            order_id=order_id,
+            filled_size=filled_size,
+            quote_spent=usd_spent_to_close,
+            average_filled_price=average_filled_price,
+            fee_quote=fee_quote,
+            signal_data=signal_data,
+        )
+
     except Exception as e:
         logger.error(f"Error executing close-short buy order: {e}")
         raise
     finally:
         await shutdown_manager.decrement_in_flight()
-
-    # Reconcile fill data from exchange
-    filled_size, usd_spent_to_close, average_filled_price, fee_quote = await _reconcile_close_short_fill(
-        trading_client=trading_client,
-        order_id=order_id,
-    )
-
-    # Record trade and close position
-    trade, profit_quote, profit_percentage = await _create_close_short_trade_record(
-        db=db,
-        exchange=exchange,
-        position=position,
-        product_id=product_id,
-        order_id=order_id,
-        filled_size=filled_size,
-        quote_spent=usd_spent_to_close,
-        average_filled_price=average_filled_price,
-        fee_quote=fee_quote,
-        signal_data=signal_data,
-    )
 
     # === NON-CRITICAL OPERATIONS BELOW ===
     await _post_close_short_operations(

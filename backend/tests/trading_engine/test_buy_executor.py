@@ -942,3 +942,37 @@ class TestReconcileCloseShortFill:
         with patch("app.trading_engine.buy_executor.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(ValueError, match="Failed to fetch fill data"):
                 await _reconcile_close_short_fill(tc, "ord-4")
+
+
+class TestExecuteBuyCloseShortUnconfirmed:
+    """H (sweep #4): a zero/unconfirmed close-short fill must NOT book the position
+    closed (mirrors the long-close sell_fill_is_complete guard)."""
+
+    @pytest.mark.asyncio
+    async def test_zero_fill_does_not_book_close_short(self):
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            direction="short",
+            short_total_sold_base=0.5,
+            short_total_sold_quote=1500.0,
+            short_average_sell_price=3000.0,
+        )
+        # Reconciler reports a zero fill — the guard must refuse to book the close.
+        with patch(
+            "app.trading_engine.buy_executor._reconcile_close_short_fill",
+            AsyncMock(return_value=(0.0, 0.0, 0.0, 0.0)),
+        ):
+            with pytest.raises(ValueError, match="unconfirmed"):
+                await execute_buy_close_short(
+                    db=db,
+                    exchange=exchange,
+                    trading_client=tc,
+                    bot=bot,
+                    product_id="BTC-USD",
+                    position=position,
+                    current_price=2800.0,
+                )
+        assert position.status != "closed"

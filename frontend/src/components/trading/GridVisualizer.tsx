@@ -49,8 +49,10 @@ export function GridVisualizer({ gridState, currentPrice, productId }: GridVisua
   const filledBuys = buyLevels.filter(l => l.status === 'filled').length
   const filledSells = sellLevels.filter(l => l.status === 'filled').length
 
-  // Calculate price range for visualization
-  const priceRange = gridState.current_range_upper - gridState.current_range_lower
+  // Calculate price range for visualization.
+  // Guard a degenerate range (upper == lower) so priceToPercent can't divide by zero
+  // (which would push Infinity/NaN into a CSS `bottom:` style and break the layout).
+  const priceRange = (gridState.current_range_upper - gridState.current_range_lower) || 1
   const priceToPercent = (price: number) => {
     return ((price - gridState.current_range_lower) / priceRange) * 100
   }

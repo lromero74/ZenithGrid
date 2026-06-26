@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.4] - 2026-06-25
+
+### Fixed
+- Code-review sweep #4 (correctness batch). Two chart fixes that affect everyone: the grid visualizer no longer breaks its layout when a grid's price range collapses to a single value, and the TradingView chart's profit-target line now uses the correct per-exchange fee (it always assumed Coinbase's, so the target was slightly off for ByBit/MT5). Plus a set of forward-looking short/bidirectional trading fixes — these matter once short trading is enabled (now being exercised on a paper bot, not with real money): a short can again be closed by a limit take-profit (it was getting permanently held); short safety-order trigger prices no longer collapse to zero; short budget accounting no longer overstates available capital; and closing a short is now crash-safe (a shutdown mid-close can't strand the position open or record a phantom close). The duplicated "deployed capital" calculation behind several of these was consolidated into one shared, tested implementation.
+
 ## [v3.13.3] - 2026-06-25
 
 ### Fixed
