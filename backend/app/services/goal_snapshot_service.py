@@ -114,6 +114,19 @@ async def capture_goal_snapshots(
 
         profit_cache[acct_id] = {"usd": p_usd, "btc": p_btc}
 
+    # Pre-fetch today's existing snapshots for all goals in one query (avoids an
+    # N+1 SELECT-per-goal in the upsert loop below).
+    existing_snaps: Dict[int, GoalProgressSnapshot] = {}
+    goal_ids = [g.id for g in goals]
+    if goal_ids:
+        snap_rows = await db.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id.in_(goal_ids),
+                GoalProgressSnapshot.snapshot_date == snapshot_date,
+            )
+        )
+        existing_snaps = {s.goal_id: s for s in snap_rows.scalars().all()}
+
     count = 0
     for goal in goals:
         profits = profit_cache.get(goal.account_id, {"usd": 0.0, "btc": 0.0})
@@ -147,14 +160,8 @@ async def capture_goal_snapshots(
         time_pct = (elapsed / total_duration * 100) if total_duration > 0 else 100
         on_track = progress_pct >= time_pct
 
-        # Upsert snapshot
-        existing = await db.execute(
-            select(GoalProgressSnapshot).where(
-                GoalProgressSnapshot.goal_id == goal.id,
-                GoalProgressSnapshot.snapshot_date == snapshot_date,
-            )
-        )
-        snap = existing.scalar_one_or_none()
+        # Upsert snapshot (existing snapshots pre-fetched above to avoid N+1)
+        snap = existing_snaps.get(goal.id)
 
         if snap:
             snap.current_value = current_value

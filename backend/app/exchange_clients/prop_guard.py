@@ -16,6 +16,7 @@ database modules (avoids circular imports).
 """
 
 import asyncio
+import time
 from app.utils.timeutil import utcnow
 import logging
 from typing import Any, Callable, Dict, List, Optional
@@ -197,6 +198,8 @@ class PropGuardClient(ExchangeClient):
 
     # Maximum age for WS equity data before falling back to REST
     _WS_EQUITY_MAX_AGE_SECONDS = 60
+    # Lookback window for the 1-hour volatility adjustment (matches ONE_HOUR granularity)
+    _VOL_LOOKBACK_SECONDS = 3600
 
     async def _get_current_equity(self) -> float:
         """Get current equity from WS state or REST.
@@ -452,11 +455,10 @@ class PropGuardClient(ExchangeClient):
             return str(float(val_str) * (1 - factor))
 
         try:
-            import time
             now = int(time.time())
             candles = await self._inner.get_candles(
                 product_id=product_id,
-                start=now - 3600,
+                start=now - self._VOL_LOOKBACK_SECONDS,
                 end=now,
                 granularity="ONE_HOUR",
             )

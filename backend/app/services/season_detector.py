@@ -23,6 +23,7 @@ Seasons (in cycle order - NEVER retrograde):
 Anti-Retrograde: Once confirmed in a season, only forward progression allowed.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -440,10 +441,12 @@ def get_seasonality_mode(season_info: SeasonInfo) -> tuple[SeasonalityMode, bool
 
 
 async def get_current_season() -> SeasonInfo:
-    """Fetch all indicators and determine current season."""
-    fear_greed = await fetch_fear_greed()
-    ath_data = await fetch_ath_data()
-    btc_dominance = await fetch_btc_dominance()
+    """Fetch all indicators concurrently and determine current season."""
+    # The three indicator fetches are independent external calls — run them in
+    # parallel so the worst-case latency is one slow API, not the sum of all three.
+    fear_greed, ath_data, btc_dominance = await asyncio.gather(
+        fetch_fear_greed(), fetch_ath_data(), fetch_btc_dominance()
+    )
 
     return determine_season(fear_greed, ath_data, btc_dominance)
 

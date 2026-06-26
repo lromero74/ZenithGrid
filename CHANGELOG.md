@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.5] - 2026-06-25
+
+### Fixed
+- Code-review sweep #4 (batch 2). Perpetual-futures positions: modifying TP/SL or closing a position now routes those orders to the exchange account that actually owns the position, not the signed-in user's default exchange. This only affected managed/shared accounts, but could otherwise have sent orders to the wrong broker. Reliability/clarity too: account-value snapshots now log a failed BTC-price fetch instead of silently swallowing it, and the DEX/non-Coinbase portfolio fallback reports prices as unavailable rather than substituting a stale hardcoded guess.
+
+### Changed
+- Performance and internal cleanup: market-season indicators are now fetched in parallel (faster bot starts and seasonality checks), goal-progress snapshots are captured with one batched query instead of one query per goal, and a duplicated buy-fee-reserve value was consolidated into a single shared constant.
+
 ## [v3.13.4] - 2026-06-25
 
 ### Fixed

@@ -24,6 +24,7 @@ from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.account_access import accessible_account_ids, manager_account_ids
+from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,24 @@ def _get_coinbase_client(exchange) -> CoinbaseClient:
             detail="Cannot access Coinbase client for perpetuals"
         )
     return client
+
+
+async def _client_for_position(db: AsyncSession, position: Position) -> CoinbaseClient:
+    """Resolve the CoinbaseClient for the account that OWNS this position.
+
+    A shared-account manager's default CEX credentials are NOT where the position's
+    orders live; routing cancels/closes/brackets through the caller's broker would hit
+    the wrong account's funds (the wrong-broker class fixed for spot positions in
+    v2.166.5 — perps was missed). Use this for any endpoint that MUTATES a perps
+    position, never the per-caller get_coinbase dependency.
+    """
+    exchange = await get_exchange_client_for_account(db, position.account_id)
+    if not exchange:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not create exchange client for this position's account.",
+        )
+    return _get_coinbase_client(exchange)
 
 
 # ===== Endpoints =====
@@ -176,12 +195,9 @@ async def modify_tp_sl(
     position_id: int,
     request: ModifyTpSlRequest,
     db: AsyncSession = Depends(get_db),
-    exchange=Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Update TP/SL prices on an existing perps position"""
-    client = _get_coinbase_client(exchange)
-
     # Accounts the user can act on (owned + manager-role shared accounts)
     user_account_ids = await manager_account_ids(db, current_user.id)
 
@@ -195,6 +211,9 @@ async def modify_tp_sl(
     position = result.scalars().first()
     if not position:
         raise HTTPException(status_code=404, detail="Open perps position not found")
+
+    # Resolve the broker FROM THE POSITION's account, not the caller's default CEX.
+    client = await _client_for_position(db, position)
 
     # Cancel existing TP/SL orders
     for order_id in [position.tp_order_id, position.sl_order_id]:
@@ -275,12 +294,9 @@ async def close_perps_position(
     position_id: int,
     request: ClosePositionRequest,
     db: AsyncSession = Depends(get_db),
-    exchange=Depends(get_coinbase),
     current_user: User = Depends(require_permission(Perm.POSITIONS_WRITE)),
 ):
     """Manually close a perps position"""
-    client = _get_coinbase_client(exchange)
-
     # Accounts the user can act on (owned + manager-role shared accounts)
     user_account_ids = await manager_account_ids(db, current_user.id)
 
@@ -294,6 +310,9 @@ async def close_perps_position(
     position = result.scalars().first()
     if not position:
         raise HTTPException(status_code=404, detail="Open perps position not found")
+
+    # Resolve the broker FROM THE POSITION's account, not the caller's default CEX.
+    client = await _client_for_position(db, position)
 
     # Get current price for PnL calculation
     try:

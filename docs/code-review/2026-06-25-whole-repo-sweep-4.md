@@ -17,15 +17,15 @@ short-path shakedown will exercise. Status: `[ ]` open · `[x]` fixed · `~` def
 - [x] **F+G** `batch_analyzer.py:89` (bot-level) and `_shared.py:344` (pair-level SQL) summed only `total_quote_spent` → understated a short's deployed capital → budget over-allocation. Consolidated the direction-aware "deployed quote" into one source of truth `trading_engine/position_quote.deployed_quote` (rule 13); the SQL aggregate mirrors it with a CASE. +7 tests (incl. SQL/Python parity).
 - [x] **H** `buy_executor.py:1026-1062` — close-short reconcile + position-close commit happened *after* the in-flight shutdown barrier was released (a shutdown mid-reconcile would strand the short open), and there was no zero-fill guard. Both calls moved inside the barrier; added a zero/unconfirmed-fill guard. +1 test.
 
-## 🟠 Batch 2 — deferred (next tier)
+## 🟠 Batch 2 — shipped v3.13.5 (except P)
 
-- [ ] **C** `perps_router.py:179,278` — `modify_tp_sl` + `close_perps_position` read the position via `manager_account_ids` but place/cancel/close orders against the **caller's** broker, not `position.account_id`'s (the wrong-broker class fixed in v2.166.5 elsewhere; perps was missed). Fix: build the exchange client from `position.account_id`.
-- [ ] **K** `account_snapshot_service.py:74,160` — two `except Exception: pass` silently swallow BTC price-fetch failures (snapshots write NULL, broken API key unnoticed). Add a debug log.
-- [ ] **L** `portfolio_service.py:302,375` — hardcoded `$95,000`/`$3,500` fallback prices → misleading valuations. Use last-known cache or 0/None.
-- [ ] **M** `season_detector.get_current_season` — 3 sequential uncached external API calls (fresh session each) per bot-start/poll; dups `market_metrics_service`. `asyncio.gather` + reuse cache.
-- [ ] **N** `goal_snapshot_service` — N+1 SELECT per goal; pre-fetch in one `IN` query.
-- [ ] **O** quick wins — shared `BUY_FEE_RESERVE=0.99` constant (3 copies), module-level `import time` (prop_guard/dex_client), `_VOL_LOOKBACK_SECONDS`.
-- [ ] **P** `grid_trading_service.check_and_run_rotation` — dead re-export shim; remove.
+- [x] **C** `perps_router.py` — `modify_tp_sl` + `close_perps_position` dropped the per-caller `get_coinbase` dependency; they now resolve the broker from `position.account_id` via a new `_client_for_position` helper (matches the v2.166.5 spot-position fix). +2 broker-scoping tests; existing perps tests updated to patch `get_exchange_client_for_account`.
+- [x] **K** `account_snapshot_service.py` — the two `except Exception: pass` around the BTC price fetch now `logger.debug(...)` instead of swallowing silently.
+- [x] **L** `portfolio_service.py` — the DEX + generic-CEX fallback no longer substitutes `$95,000`/`$3,500`; it reports prices as unavailable (`0.0`) so missing data is visible, not silently misvalued.
+- [x] **M** `season_detector.get_current_season` — the three indicator fetches now run via `asyncio.gather` (worst-case latency = one slow API, not the sum). (The market_metrics cache-dedup is a larger refactor, left for later.)
+- [x] **N** `goal_snapshot_service` — pre-fetches all of today's snapshots in one `IN` query before the loop (was N+1 SELECT-per-goal).
+- [x] **O** — `BUY_FEE_RESERVE = 0.99` consolidated into `app/constants.py` and imported by the auto-buy / rebalance / conversion monitors; `import time` lifted to module level in `prop_guard`/`dex_client`; `_VOL_LOOKBACK_SECONDS` named in `prop_guard`.
+- [~] **P** `grid_trading_service.check_and_run_rotation` — **kept**. The reviewer called it dead, but `tests/services/test_grid_trading_service.py` imports and tests that wrapper; removing it would delete tested code on a shaky premise. Not worth the churn.
 
 ## ⚪ Verified NOT bugs (dismissed)
 

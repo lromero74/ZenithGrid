@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import BUY_FEE_RESERVE
 from app.models import Account, Position
 from app.precision import format_base_amount
 from app.services.realmoney_audit import set_subsystem
@@ -396,7 +397,7 @@ class RebalanceMonitor(SessionMakerMixin):
             usd_amount = trade["usd_amount"]
 
             # Reserve 1% for fees (same as auto-buy)
-            usd_amount = round(usd_amount * 0.99, 2)
+            usd_amount = round(usd_amount * BUY_FEE_RESERVE, 2)
 
             # Hard safety floor — the exchange API often reports a sub-cent
             # quote_min_size (granularity, not a usable notional), so a flat floor

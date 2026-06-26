@@ -6,6 +6,7 @@ from app.utils.timeutil import utcnow
 import logging
 from typing import Dict, List, Optional
 
+from app.constants import BUY_FEE_RESERVE
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ async def _convert_intermediate_currency(
 
         if from_currency == "USD":
             # Buying target with USD (funds-based buy)
-            spend_amount = round(available * 0.99, 2)
+            spend_amount = round(available * BUY_FEE_RESERVE, 2)
             pair_map = {
                 "BTC": "BTC-USD",
                 "USDC": "USDC-USD",

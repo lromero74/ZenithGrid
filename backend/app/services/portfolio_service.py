@@ -298,9 +298,11 @@ async def get_dex_portfolio(
             raise ValueError("No CEX account available for price data")
     except Exception:
         # Fallback prices if Coinbase is not available
-        logger.warning("DEX portfolio: price fetch failed; using stale fallback prices", exc_info=True)
-        eth_usd_price = 3500.0
-        btc_usd_price = 95000.0
+        # No live price source — surface missing data as zero-valued rather than a stale
+        # hardcoded guess that silently misvalues the portfolio (rule 13 spirit).
+        logger.warning("DEX portfolio: price fetch failed; reporting prices as unavailable (0)", exc_info=True)
+        eth_usd_price = 0.0
+        btc_usd_price = 0.0
 
     # Fetch wallet portfolio from blockchain
     portfolio = await dex_wallet_service.get_wallet_portfolio(
@@ -371,8 +373,9 @@ async def get_generic_cex_portfolio(
     try:
         btc_usd_price = await exchange.get_btc_usd_price()
     except Exception:
-        logger.warning("get_generic_cex_portfolio: BTC/USD price fetch failed; using fallback", exc_info=True)
-        btc_usd_price = 95000.0  # fallback
+        logger.warning("get_generic_cex_portfolio: BTC/USD price fetch failed; reporting as unavailable (0)",
+                       exc_info=True)
+        btc_usd_price = 0.0  # no live price source — surface as missing, not a stale guess
 
     # Build holdings from coin balances
     portfolio_holdings = []
