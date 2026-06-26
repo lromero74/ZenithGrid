@@ -689,6 +689,10 @@ class TestShouldBuy:
         for price in (0.146384, 0.142502, 0.131376):
             trade = MagicMock(side="buy", price=price, timestamp=len(trades), dca_levels=1)
             trades.append(trade)
+        # Safety orders size off the recorded base order (earliest entry trade). For a
+        # normally-allocated auto-calc deal that equals the budget-derived base, so set
+        # the base trade's quote accordingly (a MagicMock's auto quote_amount floats to 1.0).
+        trades[0].quote_amount = strategy.calculate_base_order_size(6.3985617472)
         position = _make_mock_position(
             avg_price=0.139,
             total_base=27.0,
@@ -711,6 +715,37 @@ class TestShouldBuy:
         assert amount <= 2.6684727472
         assert "rounding-adjusted" in reason
         assert signal["dca_levels"] == 1
+
+    def test_grace_safety_order_sizes_off_actual_base_not_inflated_budget(self):
+        """Auto-calc: a grace SO must size off the deal's ACTUAL base order, not a base
+        re-derived from max_quote_allowed. When max_quote_allowed is larger than the
+        placed base ladder (the #651 case), re-deriving inflated the base so the grace SO
+        overshot the budget and got blocked. Sizing off the recorded base fits."""
+        strategy = _make_strategy({
+            "base_order_type": "fixed",
+            "auto_calculate_order_sizes": True,
+            "max_safety_orders": 2,
+            "grace_safety_orders": 2,
+            "safety_order_type": "percentage_of_base",
+            "safety_order_percentage": 100.0,
+            "safety_order_volume_scale": 1.62,
+            "price_deviation": 2.5,
+            "safety_order_step_scale": 1.62,
+        })
+        base_quote = 540.0
+        base_trade = MagicMock(side="buy", quote_amount=base_quote, timestamp=0, dca_levels=1)
+        # max_quote_allowed inflated relative to the actual base ladder (the #651 case).
+        position = _make_mock_position(avg_price=0.07, max_quote=5673.0, trades=[base_trade])
+
+        # SO #3 is the first GRACE order (configured max is 2); 2 already deployed.
+        so3 = strategy._calculate_safety_order_amount(position, safety_orders_count=2, next_order_number=3)
+
+        # Sized off the ACTUAL base (540), NOT the budget-re-derived (inflated) base.
+        assert so3 == pytest.approx(strategy.calculate_safety_order_size(base_quote, 3))
+        inflated = strategy.calculate_safety_order_size(strategy.calculate_base_order_size(5673.0), 3)
+        assert so3 < inflated
+        # And the grace SO fits within the deal's allocated budget (the bug was it didn't).
+        assert so3 < 5673.0
 
     @pytest.mark.asyncio
     async def test_safety_order_still_blocks_when_shortfall_exceeds_rounding_tolerance(self):

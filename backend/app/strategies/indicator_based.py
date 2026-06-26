@@ -719,30 +719,31 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
         """
         Compute the order size for the next safety order.
 
-        For auto-calculate mode, recalculates base order size from the position's
-        allocated budget. For manual mode, infers from average spent per order.
+        Safety orders scale off the deal's ACTUAL base order (earliest entry trade), so
+        sizing matches what was placed AND compute_grace_expanded_budget. Re-deriving the
+        base from max_quote_allowed (auto-calculate) overshot once max_quote_allowed
+        diverged from the placed base — grace SOs were sized off an inflated base and blew
+        the deal budget (a grace SO ended up larger than the whole remaining allocation).
+        Falls back to the prior per-mode derivation only when there's no usable entry
+        trade (e.g. test mocks / a brand-new position).
         """
-        # For auto-calculate mode, recalculate base order size from the allocated
-        # budget (don't reverse-engineer from total_quote_spent, which ignores
-        # volume scaling).
-        if self.config.get("auto_calculate_order_sizes", False):
-            base_order_size = self.calculate_base_order_size(position.max_quote_allowed)
-        else:
-            base_order_size = self._manual_base_order_size(position, safety_orders_count)
+        base_order_size = self._recorded_base_order_size(position)
+        if base_order_size <= 0:
+            if self.config.get("auto_calculate_order_sizes", False):
+                base_order_size = self.calculate_base_order_size(position.max_quote_allowed)
+            else:
+                base_order_size = self._manual_base_order_size(position, safety_orders_count)
 
         return self.calculate_safety_order_size(base_order_size, next_order_number)
 
-    def _manual_base_order_size(self, position: Any, safety_orders_count: int) -> float:
-        """Base-order quote size for manual (non-auto-calculate) sizing.
+    def _recorded_base_order_size(self, position: Any) -> float:
+        """The deal's ACTUAL base order quote (earliest entry trade), or 0.0 if none.
 
-        For ``percentage_of_base`` safety orders, the SO size is a percentage of
-        the BASE order scaled by ``volume_scale^(n-1)``. The base order is the
-        position's earliest entry trade — its actual recorded quote. Reverse-
-        engineering it as ``total_quote_spent / (1 + count)`` assumes every order
-        equalled the base, which is wrong for any volume scaling or for
-        ``safety_order_percentage != 100`` — and skews further mid-cascade as the
-        count grows. Falls back to that average only when no usable entry trade is
-        available (e.g. test mocks), so behavior is unchanged for those.
+        Safety orders scale off the base order that was really placed, so this is the
+        single source for SO sizing in BOTH modes — keeping sizes consistent with what
+        was placed and with compute_grace_expanded_budget. 0.0 means 'no usable entry
+        trade' (e.g. a brand-new position or a test mock), letting each caller apply its
+        own fallback.
         """
         entry_trades = entry_trades_for_position(position)
         if entry_trades:
@@ -756,6 +757,19 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
                     return q
             except (TypeError, ValueError):
                 pass
+        return 0.0
+
+    def _manual_base_order_size(self, position: Any, safety_orders_count: int) -> float:
+        """Base-order quote size for manual (non-auto-calculate) sizing.
+
+        Prefers the deal's actual base order (earliest entry trade). Reverse-engineering
+        it as ``total_quote_spent / (1 + count)`` assumes every order equalled the base,
+        which is wrong for any volume scaling or for ``safety_order_percentage != 100``.
+        Falls back to that average only when no usable entry trade is available.
+        """
+        recorded = self._recorded_base_order_size(position)
+        if recorded > 0:
+            return recorded
         return position.total_quote_spent / (1 + safety_orders_count)
 
     async def should_buy(

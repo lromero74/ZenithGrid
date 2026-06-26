@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.10] - 2026-06-26
+
+### Fixed
+- **Grace (and regular) safety orders are now sized off the deal's actual base order.** For auto-calculated deals, each safety order's size was re-derived from the deal's current budget rather than the base order that was actually placed. When a deal's allocated budget exceeded its base-order ladder, this inflated every safety order — so a grace safety order could come out larger than the entire remaining budget and get blocked (you had to add it by hand). Safety orders now scale off the recorded base order, matching what was placed and the deal's budget math, so grace orders fit and fire on their own. Normally-allocated deals are unaffected.
+
 ## [v3.13.9] - 2026-06-26
 
 ### Fixed
