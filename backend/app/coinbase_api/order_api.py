@@ -5,6 +5,7 @@ Handles order creation, management, and trading helpers
 
 import logging
 import time
+import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -48,7 +49,7 @@ async def create_market_order(
         raise ValueError("Must specify either size or funds")
 
     data = {
-        "client_order_id": f"{int(time.time() * 1000)}",
+        "client_order_id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex}",
         "product_id": product_id,
         "side": side,
         "order_configuration": order_config,
@@ -125,7 +126,7 @@ async def create_limit_order(
         raise ValueError("Must specify either size or funds")
 
     data = {
-        "client_order_id": f"{int(time.time() * 1000)}",
+        "client_order_id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex}",
         "product_id": product_id,
         "side": side,
         "order_configuration": order_config,
@@ -317,7 +318,7 @@ async def create_bracket_order(
         }
 
     data: Dict[str, Any] = {
-        "client_order_id": f"{int(time.time() * 1000)}",
+        "client_order_id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex}",
         "product_id": product_id,
         "side": side,
         "order_configuration": order_config,
@@ -376,7 +377,7 @@ async def create_stop_limit_order(
     }
 
     data = {
-        "client_order_id": f"{int(time.time() * 1000)}",
+        "client_order_id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex}",
         "product_id": product_id,
         "side": side,
         "order_configuration": order_config,

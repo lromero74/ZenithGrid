@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.6] - 2026-06-25
+
+### Security
+- Closed a server-side request forgery (SSRF) hole: a logged-in user could register a custom news source whose website pointed at an internal or cloud-metadata address, which would then let the article-content fetcher reach that internal address server-side. Custom-source URLs and websites are now validated when added, and the article fetcher refuses internal/loopback/metadata addresses even if a source's domain is on the allow-list.
+
+### Fixed
+- Code-review sweep #5 (security + correctness batch). Every order now gets a globally-unique id, so two orders placed in the same millisecond can no longer be silently de-duplicated by the exchange (which previously could drop one of them). Order sizes are now always rounded **down** to the exchange's precision instead of to-nearest, preventing "insufficient funds"/invalid-precision rejections when a size rounded up past the available balance. And during an exchange-API outage the budget check no longer falls back to a tiny fabricated balance — it reports zero and declines to open new positions, so the bot can't trade on invented data.
+
 ## [v3.13.5] - 2026-06-25
 
 ### Fixed

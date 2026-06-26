@@ -154,6 +154,37 @@ class TestFetchArticleContentL1Cache:
 
 
 # ===========================================================================
+# fetch_article_content — SSRF guard
+# ===========================================================================
+
+
+class TestFetchArticleContentSSRF:
+    """Sweep #5: the SSRF guard blocks internal/metadata addresses even when the
+    (user-poisonable) domain allowlist contains them."""
+
+    @pytest.mark.asyncio
+    async def test_internal_address_blocked_despite_allowlist(self):
+        url = "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None  # no cached article → proceed
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch.object(acs_mod, "async_session_maker", return_value=mock_cm), \
+             patch.object(acs_mod, "get_source_scrape_policy", AsyncMock(return_value=(True, 0))), \
+             patch.object(acs_mod, "get_allowed_article_domains",
+                          AsyncMock(return_value={"169.254.169.254"})):
+            result = await acs_mod.fetch_article_content(url, user_id=1)
+
+        assert result.success is False
+        assert "not allowed" in (result.error or "").lower()
+
+
+# ===========================================================================
 # fetch_article_content — L2 DB cache
 # ===========================================================================
 

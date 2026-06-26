@@ -23,6 +23,7 @@ from app.database import async_session_maker
 from app.models import ContentSource, NewsArticle
 from app.news_data import ArticleContentResponse
 from app.utils.timeutil import utcnow
+from app.utils.url_utils import validate_url_not_internal
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +278,15 @@ async def fetch_article_content(url: str, user_id: int) -> ArticleContentRespons
                 success=False,
                 error="This source requires a subscription. Open on the website to read the full article."
             )
+
+        # SSRF guard: the allowlist is built from user-supplied source websites and could
+        # be poisoned with an internal host, so never fetch a private/loopback/metadata
+        # address server-side even when the domain is allow-listed.
+        try:
+            validate_url_not_internal(url)
+        except ValueError:
+            logger.warning("Blocked SSRF attempt to internal address via article-content: %s", domain)
+            return ArticleContentResponse(url=url, success=False, error="Domain not allowed.")
     except Exception as e:
         return ArticleContentResponse(
             url=url, success=False, error=f"URL validation failed: {str(e)}"
