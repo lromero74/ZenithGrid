@@ -81,6 +81,7 @@ class PaperTradingClient(ExchangeClient):
         self.real_client = real_client  # For fetching real prices
         self._session_maker = session_maker  # None → falls back to global async_session_maker
         self._order_cache: Dict[str, Dict[str, Any]] = {}
+        self._available_product_ids_cache: Optional[set[str]] = None
 
         # Load virtual balances
         if account.paper_balances:
@@ -580,6 +581,39 @@ class PaperTradingClient(ExchangeClient):
         except ImportError:
             return False
 
+    async def _available_product_ids(self) -> Optional[set[str]]:
+        """Return known exchange product IDs, or None if the product list is unavailable."""
+        if self._available_product_ids_cache is not None:
+            return self._available_product_ids_cache
+
+        try:
+            products = await self.list_products()
+        except Exception:
+            logger.debug("Product list unavailable while pricing paper balances", exc_info=True)
+            return None
+
+        product_ids = {
+            str(product.get("product_id"))
+            for product in products
+            if product.get("product_id")
+        }
+        if not product_ids:
+            return None
+        self._available_product_ids_cache = product_ids
+        return product_ids
+
+    async def _product_exists(self, product_id: str) -> bool:
+        """Return False only when the cached product list proves the pair is absent."""
+        product_ids = await self._available_product_ids()
+        return product_ids is None or product_id in product_ids
+
+    async def _price_product_if_available(self, product_id: str) -> Optional[float]:
+        """Fetch a product price only when the product list says the pair exists."""
+        if not await self._product_exists(product_id):
+            logger.debug("Skipping unavailable paper valuation pair %s", product_id)
+            return None
+        return await self.get_price(product_id)
+
     async def _price_in_usd(self, currency: str, balance: float, btc_usd: float) -> float:
         """Convert a crypto balance to USD.  Try direct pair first, fall back via BTC."""
         if self._is_known_unresolvable(currency):
@@ -587,7 +621,7 @@ class PaperTradingClient(ExchangeClient):
             return 0.0
         # Try direct USD pair
         try:
-            price = await self.get_price(f"{currency}-USD")
+            price = await self._price_product_if_available(f"{currency}-USD")
             if price and price > 0:
                 return balance * price
         except Exception:
@@ -595,7 +629,7 @@ class PaperTradingClient(ExchangeClient):
         # Fallback: convert via BTC (for coins with only a BTC pair)
         if btc_usd and btc_usd > 0:
             try:
-                btc_price = await self.get_price(f"{currency}-BTC")
+                btc_price = await self._price_product_if_available(f"{currency}-BTC")
                 if btc_price and btc_price > 0:
                     return balance * btc_price * btc_usd
             except Exception:
@@ -610,7 +644,7 @@ class PaperTradingClient(ExchangeClient):
             return 0.0
         # Try direct BTC pair
         try:
-            price = await self.get_price(f"{currency}-BTC")
+            price = await self._price_product_if_available(f"{currency}-BTC")
             if price and price > 0:
                 return balance * price
         except Exception:
@@ -618,7 +652,7 @@ class PaperTradingClient(ExchangeClient):
         # Fallback: convert via USD (for coins with only a USD pair)
         if btc_usd and btc_usd > 0:
             try:
-                usd_price = await self.get_price(f"{currency}-USD")
+                usd_price = await self._price_product_if_available(f"{currency}-USD")
                 if usd_price and usd_price > 0:
                     return balance * usd_price / btc_usd
             except Exception:

@@ -675,6 +675,52 @@ class TestAggregateValues:
         assert result == pytest.approx(1.00125)
 
     @pytest.mark.asyncio
+    async def test_aggregate_btc_value_skips_unlisted_btc_pair_before_usd_fallback(self):
+        """USD-only coins should not probe missing COIN-BTC pairs before USD fallback."""
+        balances = {
+            "BTC": 1.0, "ETH": 0.0,
+            "USD": 0.0, "USDC": 0.0, "USDT": 0.0,
+            "HBAR": 1000.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+        real_client.list_products = AsyncMock(return_value=[
+            {"product_id": "BTC-USD"},
+            {"product_id": "HBAR-USD"},
+        ])
+        real_client.get_current_price = AsyncMock(return_value=0.10)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_btc_value()
+
+        assert result == pytest.approx(1.00125)
+        real_client.get_current_price.assert_awaited_once_with("HBAR-USD")
+
+    @pytest.mark.asyncio
+    async def test_aggregate_usd_value_skips_unlisted_usd_pair_before_btc_fallback(self):
+        """BTC-only coins should not probe missing COIN-USD pairs before BTC fallback."""
+        balances = {
+            "USD": 1000.0, "USDC": 0.0, "USDT": 0.0,
+            "BTC": 0.0, "ETH": 0.0,
+            "OBSCURE": 10.0,
+        }
+        account = _make_mock_account(paper_balances=balances)
+        real_client = AsyncMock()
+        real_client.get_btc_usd_price = AsyncMock(return_value=80000.0)
+        real_client.list_products = AsyncMock(return_value=[
+            {"product_id": "BTC-USD"},
+            {"product_id": "OBSCURE-BTC"},
+        ])
+        real_client.get_current_price = AsyncMock(return_value=0.001)
+
+        client = PaperTradingClient(account, real_client=real_client)
+        result = await client.calculate_aggregate_usd_value()
+
+        assert result == pytest.approx(1800.0)
+        real_client.get_current_price.assert_awaited_once_with("OBSCURE-BTC")
+
+    @pytest.mark.asyncio
     async def test_aggregate_usd_value_altcoin_price_failure_skipped(self):
         """Edge case: failing altcoin price doesn't break aggregate calculation."""
         balances = {

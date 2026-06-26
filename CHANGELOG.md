@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.13] - 2026-06-26
+
+### Fixed
+- **Paper-trading portfolio valuation no longer hammers Coinbase for missing direct pairs.** The trader now checks the cached Coinbase product list before probing `COIN-BTC` or `COIN-USD` fallback pairs, so USD-only coins do not generate repeated `COIN-BTC` 404s and BTC-only coins still price through their valid BTC pair.
+
 ## [v3.13.12] - 2026-06-26
 
 ### Fixed
