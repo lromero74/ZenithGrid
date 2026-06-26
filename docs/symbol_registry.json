@@ -3811,6 +3811,7 @@
         "_evaluate_phase_conditions",
         "_get_dca_reference_price",
         "_manual_base_order_size",
+        "_recorded_base_order_size",
         "analyze_signal",
         "calculate_base_order_size",
         "calculate_safety_order_price",
