@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import PAIR_PROCESSING_DELAY_SECONDS
 from app.models import Bot
+from app.trading_engine.position_quote import deployed_quote
 from app.trading_engine.signal_processor import calculate_soft_ceiling
 from app.trading_engine.trade_context import TradeContext
 from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
@@ -86,7 +87,9 @@ async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_posi
         max_concurrent_deals = await calculate_soft_ceiling(ctx, aggregate_value)
         bot.soft_ceiling_effective_max = max_concurrent_deals
     budget_pct = bot.budget_percentage
-    total_in_positions = sum(p.total_quote_spent for p in open_positions)
+    # Direction-aware (shorts deploy quote into short_total_sold_quote, not
+    # total_quote_spent) — single source of truth in trading_engine.position_quote.
+    total_in_positions = sum(deployed_quote(p) for p in open_positions)
     available_budget = reserved_balance - total_in_positions
     min_per_position = reserved_balance / max(max_concurrent_deals, 1)
 

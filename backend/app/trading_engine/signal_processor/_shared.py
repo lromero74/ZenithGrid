@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.indicator_calculator import IndicatorCalculator
 from app.models import OrderHistory, Position, Signal
+from app.trading_engine.position_quote import deployed_quote
 from app.trading_engine.sell_executor import execute_sell
 from app.trading_engine.trade_context import TradeContext
 from app.trading_engine.soft_ceiling_config import is_soft_ceiling_enabled
@@ -339,9 +340,17 @@ async def _calculate_budget(
             per_position_budget = reserved_balance
 
         # Calculate how much is available for THIS position (per-position budget - already spent in this position)
-        from sqlalchemy import func as sa_func
+        from sqlalchemy import func as sa_func, case
+        # Direction-aware deployed quote (SQL mirror of position_quote.deployed_quote):
+        # longs accumulate total_quote_spent, shorts accumulate short_total_sold_quote
+        # (total_quote_spent stays 0 for shorts, which would otherwise under-count
+        # deployed quote and over-allocate concurrent same-pair shorts).
+        _deployed_col = case(
+            (Position.direction == "short", Position.short_total_sold_quote),
+            else_=Position.total_quote_spent,
+        )
         sum_result = await db.execute(
-            select(sa_func.coalesce(sa_func.sum(Position.total_quote_spent), 0.0)).where(
+            select(sa_func.coalesce(sa_func.sum(_deployed_col), 0.0)).where(
                 Position.bot_id == bot.id, Position.status == "open", Position.product_id == product_id
             )
         )
@@ -351,14 +360,11 @@ async def _calculate_budget(
         # For safety orders (position already exists), use the position's own allocated budget
         # instead of pair-level budget which can over-subtract when multiple positions share a pair
         if position and position.max_quote_allowed:
-            # "Spent so far" is direction-aware: longs accumulate total_quote_spent,
+            # "Spent so far" is direction-aware (single source of truth in
+            # trading_engine.position_quote): longs accumulate total_quote_spent,
             # shorts accumulate short_total_sold_quote (total_quote_spent stays 0 for
             # shorts, which otherwise left the remainder at the FULL budget).
-            _deployed_quote = (
-                float(position.short_total_sold_quote or 0.0)
-                if getattr(position, "direction", "long") == "short"
-                else float(position.total_quote_spent or 0.0)
-            )
+            _deployed_quote = deployed_quote(position)
             quote_balance = position.max_quote_allowed - _deployed_quote
 
             # Grace safety orders: once a deal has spent its CONFIGURED safety orders,

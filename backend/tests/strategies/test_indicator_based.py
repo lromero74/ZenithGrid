@@ -1458,3 +1458,46 @@ class TestShouldSellShort:
         should, reason = await strategy.should_sell({}, pos, current_price=91.5)
         assert should is True
         assert "Trailing TP" in reason
+
+
+class TestGetDcaReferencePrice:
+    """E (sweep #4): a short's DCA reference price must fall back to the first short
+    entry price, NEVER average_buy_price (which is 0 for shorts and would collapse
+    every safety-order trigger to 0 → DCA firing at any price)."""
+
+    @staticmethod
+    def _entries(*prices):
+        out = []
+        for i, p in enumerate(prices):
+            t = MagicMock()
+            t.price = p
+            t.timestamp = 1000 + i
+            out.append(t)
+        return out
+
+    def test_long_uses_average_buy_price(self):
+        """Happy path (long): reference is average_buy_price."""
+        strategy = _make_strategy({"dca_target_reference": "average_price"})
+        pos = _make_mock_position(avg_price=100.0, direction="long")
+        assert strategy._get_dca_reference_price(pos, self._entries(100.0)) == 100.0
+
+    def test_short_uses_short_average_sell_price(self):
+        """Happy path (short): reference is short_average_sell_price when present."""
+        strategy = _make_strategy({"dca_target_reference": "average_price"})
+        pos = _make_mock_position(direction="short", avg_price=0.0)
+        pos.short_average_sell_price = 200.0
+        assert strategy._get_dca_reference_price(pos, self._entries(195.0)) == 200.0
+
+    def test_short_falls_back_to_first_entry_not_zero(self):
+        """Edge: short_average_sell_price falsy → first short entry price, not 0."""
+        strategy = _make_strategy({"dca_target_reference": "average_price"})
+        pos = _make_mock_position(direction="short", avg_price=0.0)
+        pos.short_average_sell_price = None
+        assert strategy._get_dca_reference_price(pos, self._entries(195.0, 198.0)) == 195.0
+
+    def test_short_no_entries_no_avg_returns_zero(self):
+        """Failure: no entries and no short avg → 0.0 (guarded downstream)."""
+        strategy = _make_strategy({"dca_target_reference": "average_price"})
+        pos = _make_mock_position(direction="short", avg_price=0.0)
+        pos.short_average_sell_price = None
+        assert strategy._get_dca_reference_price(pos, []) == 0.0

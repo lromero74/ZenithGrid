@@ -130,10 +130,13 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
         ) if entry_trades else []
 
         is_short = getattr(position, "direction", "long") == "short"
-        avg_entry = (
-            getattr(position, "short_average_sell_price", None) if is_short
-            else position.average_buy_price
-        ) or position.average_buy_price
+        if is_short:
+            # average_buy_price is always 0 for shorts; fall back to the first short
+            # entry's price (NOT average_buy_price, which would collapse SO triggers to 0).
+            avg_entry = (getattr(position, "short_average_sell_price", None)
+                         or (sorted_entries[0].price if sorted_entries else 0.0))
+        else:
+            avg_entry = position.average_buy_price
 
         if dca_reference == "base_order" and sorted_entries:
             first = sorted_entries[0]

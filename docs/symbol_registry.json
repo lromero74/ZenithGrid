@@ -3994,6 +3994,12 @@
       "get_open_positions_count"
     ]
   },
+  "backend/app/trading_engine/position_quote.py": {
+    "classes": {},
+    "functions": [
+      "deployed_quote"
+    ]
+  },
   "backend/app/trading_engine/sell_executor.py": {
     "classes": {},
     "functions": [

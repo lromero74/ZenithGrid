@@ -1672,6 +1672,10 @@
         "purpose": "Position CRUD operations and lifecycle management. v3.11.0: adds compute_grace_expanded_budget(config, deployed_safety_orders, base_order_size, aggregate_value) — just-in-time deal budget expansion once a deal crosses into grace safety order territory, mirroring a manual Max-SO bump without altering the bot config."
       },
       {
+        "file": "trading_engine/position_quote.py",
+        "purpose": "Single source of truth for a position's direction-aware 'deployed quote' (deployed_quote): longs use total_quote_spent, shorts use short_total_sold_quote (their total_quote_spent stays 0). Consumed by batch_analyzer's budget gate and signal_processor/_shared's per-position remainder; the pair-level SQL aggregate mirrors it with a CASE (parity-tested). v3.13.4 (sweep #4, rule 13)."
+      },
+      {
         "file": "trading_engine/order_logger.py",
         "purpose": "Order logging, AI decision logging, audit trail"
       },

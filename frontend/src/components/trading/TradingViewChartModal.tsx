@@ -1,19 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { X, ChevronDown } from 'lucide-react'
-import { SELL_FEE_RATE, calculateSOLevels } from '../positions/positionUtils'
-
-const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
-  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
-  return netMultiplier / (1 - SELL_FEE_RATE)
-}
-
-const getTakeProfitPercent = (position: any): number => {
-  return position?.strategy_config_snapshot?.take_profit_percentage
-    ?? position?.strategy_config_snapshot?.min_profit_percentage
-    ?? position?.bot_config?.take_profit_percentage
-    ?? position?.bot_config?.min_profit_percentage
-    ?? 2.0
-}
+import { calculateSOLevels, getFeeAdjustedProfitMultiplier, getTakeProfitPercent } from '../positions/positionUtils'
 
 const TV_EXCHANGE_PREFIX: Record<string, string> = {
   coinbase: 'COINBASE',
@@ -218,6 +205,10 @@ export default function TradingViewChartModal({
 
   if (!isOpen) return null
 
+  // Map the position's frozen bot_config onto the shape getTakeProfitPercent expects
+  // ({ strategy_config }) so the TP fallback chain still resolves from the bot config.
+  const botShim = position?.bot_config ? { strategy_config: position.bot_config } : null
+
   return (
     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
       <div className="bg-slate-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col pb-16 sm:pb-0" onClick={e => e.stopPropagation()}>
@@ -237,9 +228,9 @@ export default function TradingViewChartModal({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-0.5 bg-green-500" />
-                  <span className="text-slate-400">Target (+{getTakeProfitPercent(position)}%):</span>
+                  <span className="text-slate-400">Target (+{getTakeProfitPercent(position, botShim)}%):</span>
                   <span className="text-green-400 font-semibold">
-                    {(position.average_buy_price * getFeeAdjustedProfitMultiplier(getTakeProfitPercent(position)))?.toFixed(8)}
+                    {(position.average_buy_price * getFeeAdjustedProfitMultiplier(getTakeProfitPercent(position, botShim), exchange))?.toFixed(8)}
                   </span>
                 </div>
                 {(() => {
