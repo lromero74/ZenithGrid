@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.15] - 2026-06-26
+
+### Changed
+- **Trader concurrency is capped more conservatively on Lightsail.** Post-deploy checks still showed trader sessions sitting idle-in-transaction during active bot-processing windows, so the trader now runs at most 2 bots x 2 pairs and uses a smaller PostgreSQL connection slice. This favors web/API responsiveness over bot throughput until the deeper trader session-scope refactor is done.
+
 ## [v3.13.14] - 2026-06-26
 
 ### Fixed
