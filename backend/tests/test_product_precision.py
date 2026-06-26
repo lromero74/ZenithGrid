@@ -208,17 +208,17 @@ class TestFormatQuoteAmountForProduct:
     """Tests for format_quote_amount_for_product()."""
 
     def test_btc_pair_rounds_to_precision(self):
-        """Happy path: BTC pair rounds to quote precision."""
+        """Happy path: BTC pair floors to quote precision (ROUND_DOWN, never up)."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
-        # DASH-BTC: quote_decimals=6
+        # DASH-BTC: quote_decimals=6 → 0.00010174 floors to 0.000101
         result = pp.format_quote_amount_for_product(0.00010174, "DASH-BTC")
-        assert result == "0.00010200"
+        assert result == "0.00010100"
 
     def test_usd_pair_rounds_to_2(self):
-        """Happy path: USD pair rounds to 2 decimals then formats to 8."""
+        """Happy path: USD pair floors to 2 decimals then formats to 8."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         result = pp.format_quote_amount_for_product(10.5678, "ETH-USD")
-        assert result == "10.57000000"
+        assert result == "10.56000000"
 
     def test_zero_amount(self):
         """Edge case: zero amount formatted correctly."""
@@ -242,24 +242,24 @@ class TestFormatBaseAmountForProduct:
     """Tests for format_base_amount_for_product()."""
 
     def test_decimal_precision(self):
-        """Happy path: formats with correct base precision."""
+        """Happy path: floors with correct base precision (ROUND_DOWN, never up)."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
-        # DASH-BTC: base_increment="0.001" -> 3 decimals
+        # DASH-BTC: base_increment="0.001" -> 3 decimals → 1.23456 floors to 1.234
         result = pp.format_base_amount_for_product(1.23456, "DASH-BTC")
-        assert result == "1.23500000"
+        assert result == "1.23400000"
 
     def test_whole_numbers_only(self):
-        """Happy path: base_increment=1 rounds to whole numbers."""
+        """Happy path: base_increment=1 floors to whole numbers (never up)."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
-        # XLM-BTC: base_increment="1" -> 0 decimals
+        # XLM-BTC: base_increment="1" -> 0 decimals → 42.789 floors to 42
         result = pp.format_base_amount_for_product(42.789, "XLM-BTC")
-        assert result == "43.00000000"
+        assert result == "42.00000000"
 
     def test_unknown_product_8_decimals(self):
-        """Edge case: unknown product uses 8 decimal precision."""
+        """Edge case: unknown product uses 8 decimal precision (floored)."""
         pp._PRECISION_CACHE = {}
         result = pp.format_base_amount_for_product(1.123456789, "UNKNOWN-USD")
-        assert result == "1.12345679"
+        assert result == "1.12345678"
 
     def test_zero_amount(self):
         """Edge case: zero amount."""
@@ -350,3 +350,25 @@ class TestEnsureProductPrecision:
         assert "BOBBOB-USD" in pp._PRECISION_CACHE
         assert pp._PRECISION_CACHE["BOBBOB-USD"]["base_increment"] == "1"
         assert pp._PRECISION_CACHE["BOBBOB-USD"]["quote_decimals"] == 2
+
+
+class TestFormatAmountRoundsDown:
+    """Sweep #5: formatters must quantize DOWN, never up — rounding a size up can
+    exceed the wallet balance and trigger INSUFFICIENT_FUND / invalid-precision rejects."""
+
+    def test_base_amount_rounds_down_not_up(self):
+        """0.00010174 at 6 dp: banker's round() → 0.000102 (UP); ROUND_DOWN → 0.000101."""
+        pp._PRECISION_CACHE = {"TEST-BTC": {"base_increment": "0.000001"}}
+        assert pp.format_base_amount_for_product(0.00010174, "TEST-BTC") == "0.00010100"
+
+    def test_quote_amount_rounds_down_not_up(self):
+        pp._PRECISION_CACHE = {"TEST-BTC": {"quote_decimals": 6}}
+        assert pp.format_quote_amount_for_product(0.00010174, "TEST-BTC") == "0.00010100"
+
+    def test_exact_value_unchanged(self):
+        pp._PRECISION_CACHE = {"TEST-BTC": {"base_increment": "0.000001"}}
+        assert pp.format_base_amount_for_product(0.000101, "TEST-BTC") == "0.00010100"
+
+    def test_shorter_value_padded(self):
+        pp._PRECISION_CACHE = {"TEST-BTC": {"base_increment": "0.000001"}}
+        assert pp.format_base_amount_for_product(0.0001, "TEST-BTC") == "0.00010000"

@@ -12,6 +12,7 @@ calls are served from the file without a network round-trip.
 import json
 import logging
 import os
+from decimal import ROUND_DOWN, Decimal
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -136,8 +137,9 @@ def format_quote_amount_for_product(amount: float, product_id: str) -> str:
     """
     precision = get_quote_precision(product_id)
 
-    # Round to required precision
-    rounded = round(float(amount), precision)
+    # Quantize DOWN to the required precision — never round up (rounding a size up can
+    # exceed the wallet balance and trigger INSUFFICIENT_FUND / invalid-precision rejects).
+    rounded = Decimal(str(amount)).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_DOWN)
 
     # Format with 8 decimal places (standard for crypto display)
     # This pads with trailing zeros if needed
@@ -205,8 +207,9 @@ def format_base_amount_for_product(amount: float, product_id: str) -> str:
     """
     precision = get_base_precision(product_id)
 
-    # Round to required precision
-    rounded = round(float(amount), precision)
+    # Quantize DOWN to the required precision — never round up (rounding a size up can
+    # exceed the wallet balance and trigger INSUFFICIENT_FUND / invalid-precision rejects).
+    rounded = Decimal(str(amount)).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_DOWN)
 
     # Format with 8 decimal places (standard for crypto display)
     return f"{rounded:.8f}"

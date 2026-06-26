@@ -54,8 +54,11 @@ async def _calculate_batch_budget(monitor, db: AsyncSession, bot: Bot, open_posi
         try:
             return await monitor.exchange.calculate_market_budget(quote_currency, bypass_cache=True)
         except Exception as e:
-            logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
-            return 0.001
+            # Refuse to trade on invented data: return 0.0 (like _fetch_available) so the
+            # budget gate blocks new positions during an aggregate-balance API outage,
+            # rather than a tiny fabricated balance that yields a near-zero min_per_position.
+            logger.error(f"  ⚠️  Failed to get aggregate balance (API error); returning 0.0 (no-trade): {e}")
+            return 0.0
 
     async def _fetch_available():
         try:

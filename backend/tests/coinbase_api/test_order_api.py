@@ -68,14 +68,20 @@ class TestCreateMarketOrder:
 
     @pytest.mark.asyncio
     @patch("app.coinbase_api.order_api.time.time", return_value=1700000.123)
-    async def test_client_order_id_is_timestamp(self, mock_time):
-        """Edge case: client_order_id is derived from timestamp."""
+    async def test_client_order_id_is_unique_timestamp_uuid(self, mock_time):
+        """client_order_id is a timestamp prefix + a unique uuid suffix, so two orders
+        in the same millisecond don't collide (Coinbase dedups on client_order_id)."""
         mock_request = AsyncMock(return_value={})
 
         await create_market_order(mock_request, "ETH-BTC", "SELL", size="1.0")
+        first = (mock_request.call_args[1].get("data") or mock_request.call_args[0][2])["client_order_id"]
+        await create_market_order(mock_request, "ETH-BTC", "SELL", size="1.0")
+        second = (mock_request.call_args[1].get("data") or mock_request.call_args[0][2])["client_order_id"]
 
-        call_data = mock_request.call_args[1].get("data") or mock_request.call_args[0][2]
-        assert call_data["client_order_id"] == str(int(1700000.123 * 1000))
+        # Same (mocked) millisecond, but the uuid suffix makes them distinct.
+        assert first.startswith(str(int(1700000.123 * 1000)) + "-")
+        assert second.startswith(str(int(1700000.123 * 1000)) + "-")
+        assert first != second
 
 
 # ---------------------------------------------------------------------------

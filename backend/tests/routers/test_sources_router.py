@@ -179,6 +179,14 @@ class TestSubscription:
 class TestAddCustomSource:
     """Tests for add_custom_source endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _allow_external_urls(self):
+        """Neutralize the SSRF guard's DNS lookup for tests that use real domains,
+        so the suite stays network-free. The guard itself is covered network-free by
+        TestAddCustomSourceSSRF using an IP literal."""
+        with patch("app.routers.sources_router.validate_url_not_internal"):
+            yield
+
     @pytest.mark.asyncio
     @patch("app.routers.sources_router.check_robots_txt", new_callable=AsyncMock)
     @patch("app.routers.sources_router.domain_blacklist_service")
@@ -285,6 +293,39 @@ class TestAddCustomSource:
             )
         assert exc_info.value.status_code == 400
         assert "limit" in exc_info.value.detail.lower()
+
+
+class TestAddCustomSourceSSRF:
+    """Sweep #5: the SSRF guard rejects internal/metadata targets (url or website)
+    before storing — IP literal keeps this test network-free."""
+
+    @pytest.mark.asyncio
+    async def test_internal_website_rejected(self, db_session, test_user):
+        from app.routers.sources_router import add_custom_source, AddSourceRequest
+        request = AddSourceRequest(
+            source_key="ssrf", name="SSRF", type="news",
+            url="http://8.8.8.8/feed",  # public IP literal (no DNS) so the test is network-free
+            website="http://169.254.169.254",  # AWS metadata — must be blocked
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await add_custom_source(
+                request=request, current_user=test_user, db=db_session,
+            )
+        assert exc_info.value.status_code == 400
+        assert "internal" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_internal_url_rejected(self, db_session, test_user):
+        from app.routers.sources_router import add_custom_source, AddSourceRequest
+        request = AddSourceRequest(
+            source_key="ssrf2", name="SSRF2", type="news",
+            url="http://127.0.0.1:8101/feed",  # loopback — must be blocked
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await add_custom_source(
+                request=request, current_user=test_user, db=db_session,
+            )
+        assert exc_info.value.status_code == 400
 
 
 # =============================================================================
