@@ -674,10 +674,19 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
 
                 # Budget only covers partial cascade — execute what fits
                 if orders_to_execute == 0:
-                    # Can't even afford the first SO
-                    logger.warning(f"\U0001f4b0 BUDGET BLOCKER: Insufficient balance for safety order #{so_num}")
-                    logger.warning(f"   Available balance: {balance:.8f}")
-                    logger.warning(f"   Required for SO #{so_num}: {so_size:.8f}")
+                    # Can't even afford the first SO. Log the position + budget context so a
+                    # grace-budget-expansion miss (max_quote_allowed not grown to cover the
+                    # grace SOs) is diagnosable vs. a genuine wallet shortfall.
+                    _pid = getattr(position, "id", "?")
+                    _prod = getattr(position, "product_id", "?")
+                    _mqa = getattr(position, "max_quote_allowed", None)
+                    _grace = int((self.config.get("grace_safety_orders", 0) or 0))
+                    logger.warning(
+                        f"\U0001f4b0 BUDGET BLOCKER: Position #{_pid} {_prod} can't afford safety order "
+                        f"#{so_num} — need {so_size:.8f}, have {balance:.8f} "
+                        f"(max_quote_allowed={_mqa}, configured_max={max_safety}, grace={_grace}, "
+                        f"effective_max={effective_max}, deployed={safety_orders_count})"
+                    )
                     return (
                         False, 0.0,
                         f"Insufficient balance for safety order #{so_num}"
