@@ -821,6 +821,7 @@ async def _create_close_short_trade_record(
         else:
             profit_usd = profit_quote
     except Exception:
+        logger.warning("Close-short: failed to fetch BTC/USD for profit_usd", exc_info=True)
         btc_usd_price_at_close = None
         profit_usd = profit_quote if quote_currency == "USD" else None
 

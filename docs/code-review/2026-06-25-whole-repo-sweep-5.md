@@ -26,23 +26,28 @@ current source** by the orchestrator. Status: `[ ]` open · `[x]` fixed · `~` d
   returned `0.001` (while the sibling available-balance fetch returns `0.0`), so the budget
   was computed off invented data during an API outage. Now returns `0.0` + `logger.error`.
 
-## 🟠 Batch B — reliability cluster (deferred, next release)
+## 🟠 Batch B — reliability cluster (shipped v3.13.7, except A)
 
-- [ ] **`shutdown_manager.prepare_shutdown` TOCTOU** — flag set + in-flight count read outside
-  the lock; a narrow window can let an order increment after "ready," exiting mid-order.
-- [ ] **`perps_executor`** — close booked at the pre-trade `current_price` estimate, not the
-  confirmed fill price; and a post-order DB failure returns `(None,None)` (indistinguishable
-  from rejection) → live position on the exchange with no DB record.
-- [ ] **`prop_guard_monitor`** — kill-switch flag can be committed even when liquidation fails
-  (account marked killed, positions still open); also one DB session spans all accounts.
-- [ ] **Observability** — close-short BTC-price fetch swallowed with no log (`buy_executor`);
-  `multi_bot_monitor._process_single_bot` logs without `exc_info`.
-- [ ] **`speculative_calibration_monitor`** — one shared session across all users; a PG error
-  mid-loop leaves the session failed and silently skips the rest. (Per-user session.)
+- [~] **`shutdown_manager.prepare_shutdown` TOCTOU** — **dismissed on verification.** In a
+  single-threaded asyncio loop there is no `await` between setting `_shutting_down=True` and
+  reading `_in_flight_count`, so the read is atomic; and `increment_in_flight` re-checks the
+  flag under the lock and fails closed. No real race. (The reviewer applied threading
+  reasoning that doesn't hold in asyncio.)
+- [x] **`perps_executor`** — close now books P&L at the confirmed `average_filled_price`
+  (fetched via `get_order`), not the pre-trade estimate; and a DB failure *after* the order is
+  placed now logs CRITICAL + `realmoney_audit("perps_open_orphaned")` with the order_id
+  instead of returning a rejection-shaped `(None,None)` silently. +2 tests.
+- [x] **`prop_guard_monitor`** — `_kill_account` commits the kill state **before** liquidation
+  (durable even if liquidation fails); the account loop commits per-account with rollback on
+  error so one account can't discard another's snapshot.
+- [x] **Observability** — close-short BTC-price fetch now `logger.warning(exc_info=True)`;
+  `multi_bot_monitor._process_single_bot` now logs with `exc_info=True`.
+- [x] **`speculative_calibration_monitor`** — now opens a fresh session per user, so a
+  PostgreSQL error on one user can't poison the rest of the pass.
 - [~] **`rebalance_monitor._processing`** / **`auto_buy_monitor._pending_orders`** /
-  **`multi_bot_monitor` caches** — in-asyncio single-thread these can't tear, but a few
-  logical TOCTOU/ordering windows exist around the admin-triggered `cleanup_caches`. Low
-  urgency; revisit with the lifecycle batch.
+  **`multi_bot_monitor` caches** — **left as-is.** Single-threaded asyncio means no torn
+  writes; the only windows are logical ordering around the admin-triggered `cleanup_caches`,
+  which is not on a money path. Not worth the lock churn.
 
 ## ⚪ Dismissed / won't-fix (verified)
 
