@@ -352,7 +352,11 @@ class BotRebalancerGroup(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("trading.accounts.id"), nullable=False, index=True)
+    # CASCADE: rebalancer-group settings are per-account config (not financial history),
+    # so they go with the account. Matches migration 076 (fresh-install parity).
+    account_id = Column(
+        Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     base_currency = Column(String(20), nullable=False)
     max_total_pct = Column(Float, default=100.0)
     overweight_tolerance_pct = Column(Float, default=5.0)
@@ -786,7 +790,10 @@ class AIOpinionLog(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("auth.users.id"), nullable=False, index=True)
+    # CASCADE: an opinion row is owned by its user — deleting the user removes their
+    # opinion logs. Matches migration 080 (fresh-install parity). The account/bot/
+    # position links below are SET NULL (analysis history outlives those).
+    user_id = Column(Integer, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False, index=True)
     # SET NULL on all three: an AI-opinion row is analysis history. When the
     # account/bot/position it referenced is deleted, keep the row (for win-rate
     # backtesting) but unlink it rather than cascading it away.

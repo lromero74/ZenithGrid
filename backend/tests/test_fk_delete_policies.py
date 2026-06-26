@@ -20,7 +20,7 @@ import sys
 import pytest
 
 from app.models import (
-    Trade, Position, PendingOrder, OrderHistory, Signal, AIOpinionLog,
+    Trade, Position, PendingOrder, OrderHistory, Signal, AIOpinionLog, BotRebalancerGroup,
 )
 from app.models.reporting import AccountValueSnapshot
 
@@ -74,6 +74,10 @@ SET_NULL_FKS = [
 
 CASCADE_FKS = [
     (AccountValueSnapshot, "account_id", "CASCADE", "trading.accounts.id"),
+    # Config/ownership rows (not financial history) cascade with their parent — ORM
+    # parity with their create migrations (080 ai_opinion_log.user_id, 076 rebalancer).
+    (AIOpinionLog, "user_id", "CASCADE", "auth.users.id"),
+    (BotRebalancerGroup, "account_id", "CASCADE", "trading.accounts.id"),
 ]
 
 ALL_FKS = RESTRICT_FKS + SET_NULL_FKS + CASCADE_FKS

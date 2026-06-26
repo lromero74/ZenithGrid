@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.8] - 2026-06-26
+
+### Fixed
+- Fresh-install database parity: the ORM now declares the same `ON DELETE CASCADE` behavior the migrations already apply in production for two foreign keys (an AI-opinion row's owner, and a rebalancer group's account), so a brand-new install matches a long-migrated one. Production was already correct — this only affects fresh installs — and a guard test now keeps the two in sync. (Also reconciled the original code-review tracking doc so its status reflects what's actually fixed.)
+
 ## [v3.13.7] - 2026-06-25
 
 ### Fixed

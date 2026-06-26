@@ -40,12 +40,14 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [~] `PositionCard` `getQueryData(['bots'])` key — **deferred**: needs account-context threading; has a `bot.is_active` fallback; low impact.
 - [~] react-query keys missing `account_id` (PerpsPortfolioPanel, transfer summary) — **deferred**: those endpoints are user-aggregate by design (scope by all accessible accounts), so the key isn't a cross-account bug; making them account-specific is a feature, not a fix.
 - [~] `limit_order_monitor`:144 / `batch_analyzer`:434 swallow-and-continue — **deferred**: intentional resilience (errors are logged and the fill is re-detected next cycle); re-raising would abort the whole monitor cycle. Revisit only if misses are observed.
-- [ ] `_close_sell_position_as_dust` clamped path over-books proceeds (related to dust fix above).
-- [ ] `order_reconciliation_monitor` `fetch_limit` can exceed Coinbase 1000 cap → missed fills. `order_reconciliation_monitor.py:263`
-- [ ] limit_order_monitor catches+logs and swallows `_process_order_completion`'s deliberate re-raise → fills unrecorded until next cycle. `limit_order_monitor.py:144`
-- [ ] batch_analyzer per-product `except` swallows trade-exec errors without rollback; `process_bot_batch` outer `except` no `db.rollback()`. `batch_analyzer.py:434,525`
-- [ ] pair_processor candle cache key excludes `lookback_candles` → indicator strategy gets 100 candles when 200 requested. `pair_processor.py:107,170`
-- [ ] `float(... )` without `or 0` on possibly-null fill fields → TypeError on null. `limit_order_monitor.py:151-152,559-561`
+<!-- Reconciled 2026-06-26: the raw findings below were triaged into the [x]/~ entries
+     above and re-verified fixed against current source. -->
+- [x] `_close_sell_position_as_dust` clamped over-book — fixed (values dust at `effective_base`/clamped wallet balance).
+- [x] `order_reconciliation_monitor` `fetch_limit` — clamped to Coinbase's 1000 cap (`:265`).
+- [~] limit_order_monitor swallow-and-continue — deferred (intentional resilience; fill re-detected next cycle).
+- [x] batch_analyzer outer `except` now `db.rollback()`s; per-product swallow deferred (resilience).
+- [x] pair_processor candle cache — lookback/length-aware (distinct sizes kept under distinct keys).
+- [x] `float(... or 0)` null guards present on fill fields.
 
 ## 🟡 Performance  (in progress on `perf/sweep-tier3`)
 
@@ -55,19 +57,6 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [x] Persistent portfolio cache file I/O moved off the event loop (`asyncio.to_thread`). `cache.py`
 - [~] **Deferred (more involved, lower urgency):** unbounded full-history loads (`get_generic_cex_portfolio`, `get_daily_activity` → aggregate in SQL); `get_account_balances` 2nd Coinbase breakdown for `untracked_usd` (cache usually warm); chart re-init on every poll tick; `Positions.tsx` `useCallback`; batch budget `gather`; transfer-summary / copy-bot loops; `batch_price` query re-key.
 
-## 🟡 Performance (original list)
-
-- [ ] **Missing indexes** (also absent from ORM → fresh installs lack them): `OrderHistory.bot_id`, `AIOpinionLog.account_id`, `PendingOrder.bot_id`, `SpeculativeWeightsProposal.account_id`; compound indexes (`ai_opinion_log`, `order_history`, rate-limit) only in migrations. `models/trading.py`, `models/auth.py`
-- [ ] **Unbounded full-history loads**: `get_generic_cex_portfolio` and `get_daily_activity` hydrate all closed positions in Python — aggregate in SQL (Coinbase path already does). `portfolio_service.py:459`, `account_snapshot_service.py:463`
-- [ ] **`get_account_balances` 2nd full Coinbase breakdown** for `untracked_usd` (v3.10.0) — fetch once. `portfolio_service.py:668`
-- [ ] Charts **recreate instance every poll tick** — init once, then `setData`. `AccountValueChart.tsx:199`, `DealChart.tsx`
-- [ ] `_previous_market_context` module dict **never pruned** (unbounded). `_shared.py:80`
-- [ ] Sync engine lacks `pool_pre_ping`/`pool_recycle`. `database.py:96`
-- [ ] `Positions.tsx` handlers not `useCallback` → defeats `memo`. Card double-fetches bot already in props (`DealChart.tsx:90`).
-- [ ] Batch budget calls sequential (could `gather`); semaphore allocated inside retry loop. `batch_analyzer.py:53,252`
-- [ ] Unbounded loops in `get_transfer_summary` and `copy_bot_to_account` name-collision. `transfers_router.py:234`, `bot_crud_router.py:736`
-- [ ] `batch_price` query re-keyed by new array ref each render. `usePositionsData.ts:70`
-
 ## ⚪ Low / cleanup  (in progress on `cleanup/sweep-tier4`)
 
 - [x] `dca_target_reference` param type `"string"` → `"str"`. `indicator_params.py`
@@ -75,24 +64,9 @@ This doc is the tracking list. Tier-1 + short-position items are being fixed fir
 - [x] Routine per-cycle budget lines `logger.warning` → `logger.info`. `batch_analyzer.py`
 - [x] Blacklist account enumeration: 403 → 404. `blacklist_router.py`
 - [x] `VirtualizedPositionList` `scrollMargin` now measured after mount (was always 0). `VirtualizedPositionList.tsx`
-- [~] **Deferred — focused FK-parity pass:** ORM/migration `ondelete` divergences (`AIOpinionLog.user_id`, `BotRebalancerGroup.account_id` missing CASCADE; `Position.signals` cascade-vs-SET NULL) — fresh-install-only (prod is correct via migrations); risky to edit among identical FK lines, best done with the FK introspection guard.
+- [x] **FK-parity pass (v3.13.8):** added `ondelete="CASCADE"` to the ORM for `AIOpinionLog.user_id` (migration 080) and `BotRebalancerGroup.account_id` (migration 076) so fresh installs (`create_all`) match migrated prod; both now covered by the `test_fk_delete_policies` guard. `Position.signals` is already SET NULL at the FK; its relationship-level `delete-orphan` is left as-is (account-purge is the real deletion path; direct `db.delete(position)` isn't used on a money path).
 - [~] **Deferred:** migration number collisions (`077`/`086` ×2) — renaming applied migrations risks re-runs; collision is cosmetic (both run).
 - [~] **Deferred (low):** `manual_max_dca_orders` percentage back-calc; webhook per-IP rate limit; `syncAllChartsToRange` 3-vs-2-param interface; broad react-query invalidations; `fill_reconciler` BTC-fee comment wording.
-
-## ⚪ Low / cleanup (original list)
-
-- [ ] Migration number collisions: `077_*` ×2, `086_*` ×2. `backend/migrations/`
-- [ ] ORM/migration FK `ondelete` divergence on fresh installs: `AIOpinionLog.user_id` (CASCADE in migration, none in model), `BotRebalancerGroup.account_id` (same); `Position.signals` cascade vs SET NULL. `models/trading.py`
-- [ ] Dead query in `create_or_update_cex_account` (line 458). `exchange_service.py`
-- [ ] `dca_target_reference` type `"string"` vs `"str"`. `indicator_params.py:89`
-- [ ] Routine budget lines logged at `warning`. `batch_analyzer.py:95,103`
-- [ ] Account enumeration via 403-vs-404. `blacklist_router.py:414`
-- [ ] Webhook rate-limit per-token only (enumerable across IPs). `webhook_router.py:46`
-- [ ] Misleading BTC-fee comment. `fill_reconciler.py:104`
-- [ ] `manual_max_dca_orders` percentage-mode base-size back-calc overstates (volume-scaled). `indicator_based.py:1016`
-- [ ] Broad react-query invalidations (`['positions']` prefix hits other accounts). `useBotMutations.ts`, etc.
-- [ ] `VirtualizedPositionList` `scrollMargin` reads ref before mount → 0. `VirtualizedPositionList.tsx:37`
-- [ ] `syncAllChartsToRange` 3-param interface vs 2-param impl (silent ignored arg). `useIndicators.ts` / `useChartManagement.ts`
 
 ## Likely false positive (not fixing)
 - `is_paper` "used before assignment" in `_post_sell_operations`/close-short — Python doesn't block-scope and the assignment is the first statement in the `try`; defined before any await that could fail. Not a real bug.
