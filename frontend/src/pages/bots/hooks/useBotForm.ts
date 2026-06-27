@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNotifications } from '../../../contexts/NotificationContext'
-import type { Bot, StrategyParameter } from '../../../types'
-import { blacklistApi, BlacklistEntry } from '../../../services/api'
+import type { Bot, StrategyParameter, StrategyDefinition, BotCreate, MutationLike } from '../../../types'
+import { blacklistApi, BlacklistEntry, type BotTemplate } from '../../../services/api'
 import type {
   BotFormData,
   ValidationError,
@@ -13,10 +13,8 @@ interface UseBotFormProps {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
   editingBot: Bot | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  templates: any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategies: any[]
+  templates: BotTemplate[]
+  strategies: StrategyDefinition[]
   TRADING_PAIRS: TradingPair[]
   validationErrors: ValidationError[]
   selectedAccount: {
@@ -25,10 +23,8 @@ interface UseBotFormProps {
     type?: string
     chain_id?: number
   } | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createBot: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateBot: any
+  createBot: MutationLike<BotCreate>
+  updateBot: MutationLike<{ id: number; data: BotCreate }>
 }
 
 interface CoinCategoryData {
@@ -180,15 +176,14 @@ export function useBotForm({
   }, [showModal, effectiveMaxDeals, setFormData])
 
   const loadTemplate = useCallback((templateId: number) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const template = templates.find((t: any) => t.id === templateId)
+    const template = templates.find((t: BotTemplate) => t.id === templateId)
     if (!template) return
 
     setFormData({
       name: `${template.name} (Copy)`,
       description: template.description || '',
       market_type: template.market_type || 'spot',
-      strategy_type: template.strategy_type,
+      strategy_type: template.strategy_type || "",
       product_id: template.product_ids?.[0] || 'ETH-BTC',
       product_ids: template.product_ids || [],
       split_budget_across_pairs:
@@ -200,7 +195,7 @@ export function useBotForm({
       budget_percentage: template.budget_percentage || 0,
       check_interval_seconds:
         template.check_interval_seconds || 300,
-      strategy_config: template.strategy_config,
+      strategy_config: template.strategy_config || {},
       exchange_type: template.exchange_type || 'cex',
     })
   }, [templates, setFormData])
@@ -212,8 +207,7 @@ export function useBotForm({
       )
       if (!strategy) return
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const config: Record<string, any> = {}
+      const config: Record<string, unknown> = {}
       strategy.parameters.forEach(
         (param: StrategyParameter) => {
           config[param.name] = param.default
@@ -230,10 +224,8 @@ export function useBotForm({
   )
 
   const handleParamChange = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (paramName: string, value: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updates: Record<string, any> = {
+    (paramName: string, value: unknown) => {
+      const updates: Record<string, unknown> = {
         [paramName]: value,
       }
 
@@ -243,7 +235,7 @@ export function useBotForm({
         const maxSim =
           formData.strategy_config
             .max_simultaneous_same_pair || 1
-        if (maxSim > value) {
+        if (maxSim > (value as number)) {
           updates.max_simultaneous_same_pair = value
         }
       }
@@ -252,7 +244,7 @@ export function useBotForm({
       if (paramName === 'max_simultaneous_same_pair') {
         const maxDeals =
           formData.strategy_config.max_concurrent_deals || 1
-        if (value > maxDeals) {
+        if ((value as number) > maxDeals) {
           updates.max_simultaneous_same_pair = maxDeals
         }
       }
@@ -312,8 +304,7 @@ export function useBotForm({
       const budget_percentage =
         formData.budget_percentage ?? 0
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const botData: any = {
+      const botData: BotCreate = {
         name: formData.name,
         description: formData.description || undefined,
         account_id:

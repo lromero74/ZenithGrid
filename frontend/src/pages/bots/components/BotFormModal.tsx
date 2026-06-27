@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react'
-import type { Bot } from '../../../types'
+import type { Bot, BotCreate, StrategyDefinition, AggregateValue, MutationLike } from '../../../types'
+import type { BotTemplate } from '../../../services/api'
 import DexConfigSection from '../../../components/trading/DexConfigSection'
 import type {
   BotFormData,
@@ -27,13 +28,10 @@ interface BotFormModalProps {
   editingBot: Bot | null
   formData: BotFormData
   setFormData: (data: BotFormData) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  templates: any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategies: any[]
+  templates: BotTemplate[]
+  strategies: StrategyDefinition[]
   TRADING_PAIRS: TradingPair[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectedStrategy: any
+  selectedStrategy: StrategyDefinition | undefined
   validationWarnings: ValidationWarning[]
   validationErrors: ValidationError[]
   selectedAccount: {
@@ -43,13 +41,10 @@ interface BotFormModalProps {
     chain_id?: number
     is_paper_trading?: boolean
   } | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createBot: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateBot: any
+  createBot: MutationLike<BotCreate>
+  updateBot: MutationLike<{ id: number; data: Partial<BotCreate> }>
   resetForm: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  aggregateData: any
+  aggregateData?: AggregateValue
   rebalanceStatus?: RebalanceStatus
   readOnly?: boolean
   readOnlyTitle?: string
@@ -517,8 +512,7 @@ function TemplateSelector({
   templates,
   loadTemplate,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  templates: any[]
+  templates: BotTemplate[]
   loadTemplate: (id: number) => void
 }) {
   return (
@@ -538,8 +532,7 @@ function TemplateSelector({
         <option value="">
           Select a template to pre-fill settings...
         </option>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {templates.map((template: any) => (
+        {templates.map((template: BotTemplate) => (
           <option key={template.id} value={template.id}>
             {template.is_default ? '* ' : ''}
             {template.name} - {template.description}
@@ -821,10 +814,8 @@ function StrategySelectionSection({
   handleStrategyChange,
 }: {
   formData: BotFormData
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategies: any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectedStrategy: any
+  strategies: StrategyDefinition[]
+  selectedStrategy: StrategyDefinition | undefined
   handleStrategyChange: (strategyType: string) => void
 }) {
   return (
@@ -847,8 +838,7 @@ function StrategySelectionSection({
         >
           <option value="">Select a strategy...</option>
           {strategies.map(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (strategy: any) => (
+            (strategy: StrategyDefinition) => (
               <option
                 key={strategy.id}
                 value={strategy.id}
@@ -1187,10 +1177,8 @@ function FormActions({
 }: {
   readOnly: boolean
   editingBot: Bot | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createBot: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateBot: any
+  createBot: MutationLike<BotCreate>
+  updateBot: MutationLike<{ id: number; data: Partial<BotCreate> }>
   validationErrors: ValidationError[]
   setShowModal: (show: boolean) => void
   resetForm: () => void

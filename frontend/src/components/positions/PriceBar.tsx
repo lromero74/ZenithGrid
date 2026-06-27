@@ -7,17 +7,14 @@
 
 import { memo, useMemo } from 'react'
 import { formatPrice, calculateDCAPrices } from './index'
-import type { Position } from '../../types'
+import type { Position, StrategyConfig } from '../../types'
 import type { CachedPnL } from '../../pages/positions/helpers'
 
 interface PriceBarProps {
   position: Position
   currentPrice: number
   pnl: CachedPnL | null | undefined
-  // strategyConfig is a dynamic per-strategy config blob from the bot; keyed
-  // lookups with sensible defaults below keep this loose on purpose.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategyConfig: any
+  strategyConfig: StrategyConfig
   fundsUsedPercent: number
 }
 

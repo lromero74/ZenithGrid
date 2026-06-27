@@ -88,8 +88,7 @@ export function AddIndicatorModal({
 interface IndicatorSettingsModalProps {
   indicator: IndicatorConfig | null
   onClose: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onUpdateSettings: (indicatorId: string, newSettings: Record<string, any>) => void
+  onUpdateSettings: (indicatorId: string, newSettings: Record<string, unknown>) => void
 }
 
 export function IndicatorSettingsModal({

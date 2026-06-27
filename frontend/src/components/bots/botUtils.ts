@@ -13,8 +13,7 @@ export interface BotFormData {
   reserved_usd_balance: number | undefined  // USD allocated to this bot (legacy)
   budget_percentage: number | undefined  // % of aggregate portfolio value (preferred)
   check_interval_seconds: number | undefined  // How often bot monitors positions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategy_config: Record<string, any>
+  strategy_config: StrategyConfig
   // DEX-specific fields
   exchange_type: 'cex' | 'dex'  // Exchange type
   chain_id?: number  // Blockchain ID (1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum)
@@ -94,10 +93,10 @@ export const EXCHANGE_MINIMUMS = {
   EUR: 1.0, // 1 EUR minimum for EUR pairs
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const convertProductsToTradingPairs = (products: any[]): TradingPair[] => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pairs = products.map((product: any) => {
+export const convertProductsToTradingPairs = (
+  products: { base_currency: string; quote_currency: string; product_id: string }[]
+): TradingPair[] => {
+  const pairs = products.map((product) => {
     const base = product.base_currency
     const quote = product.quote_currency
     // Group by quote currency type
@@ -150,8 +149,7 @@ export const convertProductsToTradingPairs = (products: any[]): TradingPair[] =>
 // and paper_trading_only flag
 export const isParameterVisible = (
   param: StrategyParameter,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  strategyConfig: Record<string, any>,
+  strategyConfig: StrategyConfig,
   isPaperTrading?: boolean,
 ): boolean => {
   // Hide paper-trading-only params on live accounts

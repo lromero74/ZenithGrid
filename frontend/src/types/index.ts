@@ -3,6 +3,7 @@
 // `UseMutationResult` object (with isPending, etc.) is assignable to this.
 export interface MutationLike<TVars = void> {
   mutate: (variables: TVars) => void;
+  isPending?: boolean;
 }
 
 // Bot strategy configuration. Stored backend-side as an open JSON dict, so the
@@ -65,11 +66,16 @@ export interface StrategyConfig {
   max_simultaneous_same_pair?: number;
   check_interval_seconds?: number;
   enable_soft_ceiling?: boolean;
+  // multi-pair management
+  auto_add_new_pairs?: boolean;
+  skip_stable_pairs?: boolean;
   // categories / AI
   ai_provider?: string;
   ai_risk_preset?: string;
   allowed_categories?: string[];
-  is_speculative?: boolean;
+  is_speculative?: boolean | string;  // stored as JSON string "true" by the speculative preset; boolean tolerated
+  speculative_mode?: boolean;
+  target_multiple?: number;
   max_synthetic_pct?: number;
   // direction / perps
   direction?: string;
@@ -421,6 +427,15 @@ export interface BotCreate {
   strategy_type: string;
   strategy_config: StrategyConfig;
   product_id: string;
+  product_ids?: string[];
+  split_budget_across_pairs?: boolean;
+  account_id?: number | null;
+  check_interval_seconds?: number;
+  exchange_type?: 'cex' | 'dex';
+  chain_id?: number;
+  dex_router?: string;
+  wallet_private_key?: string;
+  rpc_url?: string;
   reserved_btc_balance?: number;
   reserved_usd_balance?: number;
   budget_percentage?: number;

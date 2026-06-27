@@ -1,4 +1,4 @@
-import type { ISeriesApi } from 'lightweight-charts'
+import type { ISeriesApi, SeriesType } from 'lightweight-charts'
 import type { Position, StrategyConfig } from '../../types'
 
 // Fee adjustment for profit targets
@@ -46,8 +46,7 @@ export interface IndicatorConfig {
   enabled: boolean
   settings: Record<string, unknown>
   color?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  series?: ISeriesApi<any>[]
+  series?: ISeriesApi<SeriesType>[]
 }
 
 // Utility functions for price formatting

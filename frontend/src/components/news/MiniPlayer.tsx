@@ -326,8 +326,7 @@ export function MiniPlayer() {
                 title={currentVideo.title}
                 className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                {...({ playsinline: 'true' } as any)}
+                {...({ playsinline: 'true' } as React.IframeHTMLAttributes<HTMLIFrameElement>)}
                 allowFullScreen
               />
             </div>

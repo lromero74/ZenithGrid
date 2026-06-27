@@ -1,7 +1,7 @@
 import React from 'react'
-import type { StrategyParameter, AggregateValue } from '../../../types'
+import type { StrategyParameter, AggregateValue, StrategyDefinition } from '../../../types'
 import DCABudgetConfigForm from '../../../components/trading/DCABudgetConfigForm'
-import PhaseConditionSelector from '../../../components/trading/PhaseConditionSelector'
+import PhaseConditionSelector, { type PhaseCondition } from '../../../components/trading/PhaseConditionSelector'
 import { isParameterVisible, computeEffectiveAggregateValues } from '../../../components/bots'
 import type { BotFormData } from '../../../components/bots'
 import type { RebalanceStatus } from '../../../services/api'
@@ -9,10 +9,8 @@ import type { RebalanceStatus } from '../../../services/api'
 interface StrategyConfigSectionProps {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectedStrategy: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleParamChange: (paramName: string, value: any) => void
+  selectedStrategy: StrategyDefinition | undefined
+  handleParamChange: (paramName: string, value: unknown) => void
   aggregateData?: AggregateValue
   rebalanceStatus?: RebalanceStatus
   isPaperTrading?: boolean
@@ -31,8 +29,7 @@ function ParameterInput({
 }: {
   param: StrategyParameter
   formData: BotFormData
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleParamChange: (name: string, value: any) => void
+  handleParamChange: (name: string, value: unknown) => void
 }) {
   const value = formData.strategy_config[param.name]
 
@@ -82,7 +79,7 @@ function ParameterInput({
         title={param.display_name || ''}
         description={param.description || ''}
         conditions={
-          formData.strategy_config[param.name] || []
+          (formData.strategy_config[param.name] as PhaseCondition[]) || []
         }
         onChange={(conditions) =>
           handleParamChange(param.name, conditions)
@@ -138,7 +135,7 @@ function ParameterInput({
     return (
       <div>
         <textarea
-          value={value || ''}
+          value={(value as string) || ''}
           onChange={(e) =>
             handleParamChange(param.name, e.target.value)
           }
@@ -188,7 +185,7 @@ function ParameterInput({
     value === null ||
     (typeof value === 'number' && isNaN(value))
       ? ''
-      : value
+      : (value as string | number)
 
   return (
     <input
@@ -343,10 +340,8 @@ function StrategyParameterGroups({
 }: {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectedStrategy: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleParamChange: (name: string, value: any) => void
+  selectedStrategy: StrategyDefinition | undefined
+  handleParamChange: (name: string, value: unknown) => void
   renderParameterInput: (
     param: StrategyParameter
   ) => React.ReactNode
@@ -365,7 +360,7 @@ function StrategyParameterGroups({
 
   // Group parameters, excluding custom budget params
   const parametersByGroup =
-    selectedStrategy.parameters.reduce(
+    (selectedStrategy?.parameters ?? []).reduce(
       (
         acc: Record<string, StrategyParameter[]>,
         param: StrategyParameter
@@ -389,12 +384,12 @@ function StrategyParameterGroups({
     )
 
   const maxConcurrentDealsParam =
-    selectedStrategy.parameters.find(
+    selectedStrategy?.parameters.find(
       (p: StrategyParameter) =>
         p.name === 'max_concurrent_deals'
     )
   const maxSimSamePairParam =
-    selectedStrategy.parameters.find(
+    selectedStrategy?.parameters.find(
       (p: StrategyParameter) =>
         p.name === 'max_simultaneous_same_pair'
     )
@@ -424,7 +419,7 @@ function StrategyParameterGroups({
 
   const isNonAIStrategy =
     formData.strategy_type === 'bull_flag' ||
-    !selectedStrategy.parameters.some(
+    !selectedStrategy?.parameters.some(
       (p: StrategyParameter) =>
         p.group === 'AI Configuration'
     )
