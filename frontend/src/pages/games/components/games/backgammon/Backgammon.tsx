@@ -17,7 +17,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { BackgammonMultiplayer } from './BackgammonMultiplayer'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 // ── Help modal ───────────────────────────────────────────────────────
 

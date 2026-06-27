@@ -578,6 +578,24 @@
           "purpose": "Position calculation and formatting utilities; exports calculateDCAPrices(completedDCAs, maxDCAOrders, priceDeviation, stepScale, referencePrice) using an O(d) closed-form formula. v2.168.13 adds three exports that are the single source of truth for quote-currency price precision: STABLE_QUOTE_CURRENCIES (string array: USD, USDT, USDC), getQuotePrecision(quoteCurrency) (2 for stables, 8 for crypto), and formatPriceForQuote(price, quoteCurrency) (bare decimal string at the correct precision). Consumed by SlippageWarningModal, LimitCloseModal, and DepthChart."
         }
       ],
+      "shared": [
+        {
+          "file": "components/shared/coinIdMap.ts",
+          "purpose": "COIN_ID_MAP constant: maps coin ticker symbols to CoinGecko/exchange IDs. Extracted from a component file in v3.14.10 lint-debt refactor."
+        },
+        {
+          "file": "components/auth/passwordValidation.ts",
+          "purpose": "isPasswordValid() helper: pure function encapsulating password strength rules. Extracted from an auth component in v3.14.10."
+        },
+        {
+          "file": "components/donationSchedule.ts",
+          "purpose": "shouldShowDonationModal() and getCurrentQuarter() helpers for the donation prompt scheduling logic. Extracted in v3.14.10."
+        },
+        {
+          "file": "components/trading/advancedConditionHelpers.ts",
+          "purpose": "RISK_PRESETS constant, createEmptyExpression(), convertLegacyConditions(), and flattenExpression() — shared helpers for AdvancedConditionBuilder. Extracted from AdvancedConditionBuilder.tsx in v3.14.10."
+        }
+      ],
       "chart_internals": [
         {
           "file": "components/LightweightChartModal/hooks/useChartData.ts",
@@ -619,50 +637,91 @@
     {
       "file": "contexts/AuthContext.tsx",
       "exports": [
-        "AuthProvider",
         "useAuth"
       ],
-      "purpose": "User authentication, JWT token management, session state"
+      "purpose": "User authentication, JWT token management, session state (hook + createContext only; v3.14.10: Provider moved to AuthProvider.tsx)"
+    },
+    {
+      "file": "contexts/AuthProvider.tsx",
+      "exports": [
+        "AuthProvider",
+        "RequireAuth"
+      ],
+      "purpose": "Provider component and RequireAuth guard for AuthContext; extracted from AuthContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/AccountContext.tsx",
       "exports": [
-        "AccountProvider",
-        "useAccount"
+        "useAccount",
+        "useAccountOptional",
+        "invitationsApi",
+        "SUPPORTED_CHAINS"
       ],
-      "purpose": "Multi-account state (CEX/DEX), account switching. v2.165.0: AccountData and AccountResponse types gain speculative_allocation_pct so the Dashboard card, Settings panel, and bot form can read the per-account speculative cap."
+      "purpose": "Multi-account state (CEX/DEX), account switching — hook, optional accessor, invitations API, and chain helpers. v2.165.0: AccountData and AccountResponse types gain speculative_allocation_pct so the Dashboard card, Settings panel, and bot form can read the per-account speculative cap. v3.14.10: Provider moved to AccountProvider.tsx."
+    },
+    {
+      "file": "contexts/AccountProvider.tsx",
+      "exports": [
+        "AccountProvider"
+      ],
+      "purpose": "Provider component for AccountContext; extracted from AccountContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/BrandContext.tsx",
       "exports": [
-        "BrandProvider",
         "useBrand"
       ],
-      "purpose": "White-label branding configuration (app name, logo, colors)"
+      "purpose": "White-label branding configuration (app name, logo, colors) — hook + createContext only; v3.14.10: Provider moved to BrandProvider.tsx"
+    },
+    {
+      "file": "contexts/BrandProvider.tsx",
+      "exports": [
+        "BrandProvider"
+      ],
+      "purpose": "Provider component for BrandContext; extracted from BrandContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/ThemeContext.tsx",
       "exports": [
-        "ThemeProvider",
         "useTheme"
       ],
-      "purpose": "Dark/light theme state management"
+      "purpose": "Dark/light theme state management — hook + createContext only; v3.14.10: Provider moved to ThemeProvider.tsx"
+    },
+    {
+      "file": "contexts/ThemeProvider.tsx",
+      "exports": [
+        "ThemeProvider"
+      ],
+      "purpose": "Provider component for ThemeContext; extracted from ThemeContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/NotificationContext.tsx",
       "exports": [
-        "NotificationProvider",
-        "useNotifications"
+        "useNotifications",
+        "useNotificationsOptional"
       ],
-      "purpose": "WebSocket order fill notifications, toast alerts, and audio. Before connecting it refreshes expired auth tokens and skips the socket if no valid session remains. Handles speculative calibration alerts and surfaces a persistent warning when an automatic exit is reported from an unexpected process or host."
+      "purpose": "WebSocket order fill notifications, toast alerts, and audio — hooks + createContext only. Before connecting it refreshes expired auth tokens and skips the socket if no valid session remains. Handles speculative calibration alerts and surfaces a persistent warning when an automatic exit is reported from an unexpected process or host. v3.14.10: Provider moved to NotificationProvider.tsx."
+    },
+    {
+      "file": "contexts/NotificationProvider.tsx",
+      "exports": [
+        "NotificationProvider"
+      ],
+      "purpose": "Provider component for NotificationContext; extracted from NotificationContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/VideoPlayerContext.tsx",
       "exports": [
-        "VideoPlayerProvider",
         "useVideoPlayer"
       ],
-      "purpose": "Persistent video player state across page navigation"
+      "purpose": "Persistent video player state across page navigation — hook + createContext only; v3.14.10: Provider moved to VideoPlayerProvider.tsx"
+    },
+    {
+      "file": "contexts/VideoPlayerProvider.tsx",
+      "exports": [
+        "VideoPlayerProvider"
+      ],
+      "purpose": "Provider component for VideoPlayerContext; extracted from VideoPlayerContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/ArticleReaderContext.tsx",
@@ -675,10 +734,16 @@
     {
       "file": "contexts/ConfirmContext.tsx",
       "exports": [
-        "ConfirmProvider",
         "useConfirm"
       ],
-      "purpose": "Styled async confirm dialog replacing native window.confirm(); useConfirm() returns a promise-based function accepting title, message, labels, and variant (danger/warning/default)"
+      "purpose": "Styled async confirm dialog replacing native window.confirm(); useConfirm() returns a promise-based function accepting title, message, labels, and variant (danger/warning/default). v3.14.10: Provider moved to ConfirmProvider.tsx."
+    },
+    {
+      "file": "contexts/ConfirmProvider.tsx",
+      "exports": [
+        "ConfirmProvider"
+      ],
+      "purpose": "Provider component for ConfirmContext; extracted from ConfirmContext.tsx in v3.14.10 lint-debt refactor"
     },
     {
       "file": "contexts/mediaCoordinator.ts",
@@ -798,6 +863,12 @@
           "file": "pages/news/hooks/useSeenStatus.ts",
           "purpose": "Track and query user seen/unseen status for content"
         }
+      ],
+      "games": [
+        {
+          "file": "pages/games/components/multiplayer/useRaceMode.ts",
+          "purpose": "useRaceMode hook: multiplayer race-mode state and logic; extracted from RaceOverlay.tsx in v3.14.10 to keep the overlay component free of state management."
+        }
       ]
     }
   },
@@ -900,14 +971,14 @@
   "state_management": {
     "pattern": "React Context (app state) + React Query (server state)",
     "contexts": [
-      "AuthContext",
-      "AccountContext",
-      "BrandContext",
-      "ThemeContext",
-      "NotificationContext",
-      "VideoPlayerContext",
+      "AuthContext + AuthProvider",
+      "AccountContext + AccountProvider",
+      "BrandContext + BrandProvider",
+      "ThemeContext + ThemeProvider",
+      "NotificationContext + NotificationProvider",
+      "VideoPlayerContext + VideoPlayerProvider",
       "ArticleReaderContext",
-      "ConfirmContext"
+      "ConfirmContext + ConfirmProvider"
     ],
     "react_query": {
       "purpose": "Centralized data caching with automatic refetch",
@@ -1045,6 +1116,10 @@
     {
       "file": "pages/positions/utils/visualRows.ts",
       "purpose": "buildVisualRows(rows, columns): packs position rows into virtualized 'visual rows' for the deals grid view \u2014 group-header rows span the full width (columns=1), card rows are bundled columns-wide; consumed by Positions.tsx grid mode and VirtualizedPositionList."
+    },
+    {
+      "file": "pages/games/components/gameLastPath.ts",
+      "purpose": "set/clear/getLastGamePath() helpers: persist and retrieve the last-visited games sub-route in sessionStorage for resume-on-return navigation. Extracted from a games component in v3.14.10."
     },
     {
       "file": "utils/apiError.ts",

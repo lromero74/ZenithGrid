@@ -8,7 +8,8 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 
-import { ConfirmProvider, useConfirm } from './ConfirmContext'
+import { ConfirmProvider } from './ConfirmProvider'
+import { useConfirm } from './ConfirmContext'
 
 // TestConsumer that triggers confirm dialogs and reports the result
 function TestConsumer() {

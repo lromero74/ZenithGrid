@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { Plus, X, Parentheses, CircleSlash } from 'lucide-react'
+import { RISK_PRESETS } from './advancedConditionHelpers'
 
 // Condition types for indicator-based strategies
 export type ConditionType =
@@ -66,38 +67,6 @@ export interface Condition {
   base_timeframe?: Timeframe
 }
 
-// Risk preset defaults for AI indicators
-export const RISK_PRESETS: Record<RiskPreset, {
-  label: string
-  description: string
-  min_confluence_score: number
-  ai_confidence_threshold: number
-}> = {
-  aggressive: {
-    label: 'Aggressive',
-    description: 'Lower thresholds, more signals',
-    min_confluence_score: 50,
-    ai_confidence_threshold: 60,
-  },
-  moderate: {
-    label: 'Moderate',
-    description: 'Balanced risk/reward',
-    min_confluence_score: 65,
-    ai_confidence_threshold: 70,
-  },
-  conservative: {
-    label: 'Conservative',
-    description: 'Higher thresholds, fewer but stronger signals',
-    min_confluence_score: 80,
-    ai_confidence_threshold: 80,
-  },
-  speculative: {
-    label: 'Speculative (2x Hunter)',
-    description: 'Catalyst-hunt mode — respects the account Speculative Allocation cap; expect low win rate with asymmetric upside',
-    min_confluence_score: 35,
-    ai_confidence_threshold: 70,
-  },
-}
 
 const AI_PROVIDERS: Record<AIProvider, string> = {
   claude: 'Claude',
@@ -200,38 +169,6 @@ const createDefaultGroup = (): ConditionGroup => ({
   logic: 'and',
 })
 
-// Create empty expression
-export const createEmptyExpression = (): ConditionExpression => ({
-  groups: [],
-  groupLogic: 'and',
-})
-
-// Convert old flat format to new grouped format
-export const convertLegacyConditions = (
-  conditions: Condition[],
-  logic: 'and' | 'or'
-): ConditionExpression => {
-  if (conditions.length === 0) {
-    return createEmptyExpression()
-  }
-  return {
-    groups: [{
-      id: `grp_legacy_${Date.now()}`,
-      conditions: conditions.map(c => ({ ...c, negate: c.negate || false })),
-      logic,
-    }],
-    groupLogic: 'and',
-  }
-}
-
-// Flatten expression back to simple conditions (for backward compatibility)
-export const flattenExpression = (expression: ConditionExpression): { conditions: Condition[], logic: 'and' | 'or' } => {
-  const allConditions = expression.groups.flatMap(g => g.conditions)
-  return {
-    conditions: allConditions,
-    logic: expression.groups[0]?.logic || 'and',
-  }
-}
 
 function AdvancedConditionBuilder({
   title,

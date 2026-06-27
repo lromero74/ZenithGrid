@@ -16,7 +16,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay, getSuitSymbol } from '../../../utils/cardUtils'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { SpeedMultiplayer } from './SpeedMultiplayer'
 import {
   createSpeedGame,

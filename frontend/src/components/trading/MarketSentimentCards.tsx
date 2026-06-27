@@ -41,8 +41,7 @@ import type {
   MetricHistoryResponse,
 } from '../../types'
 
-// Re-export for backward compatibility
-export { determineMarketSeason } from '../../utils/seasonDetection'
+// Re-export types for backward compatibility
 export type { MarketSeason, SeasonInfo } from '../../utils/seasonDetection'
 
 // Carousel configuration

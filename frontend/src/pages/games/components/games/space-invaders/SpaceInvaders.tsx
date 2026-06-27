@@ -22,7 +22,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 // ---------------------------------------------------------------------------
 // Drawing helpers

@@ -1,9 +1,9 @@
 import {
   ConditionExpression,
   ConditionGroup,
-  createEmptyExpression,
   Condition,
 } from './AdvancedConditionBuilder'
+import { createEmptyExpression } from './advancedConditionHelpers'
 import { ConditionType } from './PhaseConditionSelector'
 
 // Safe number parsing that returns undefined for invalid input (instead of NaN)

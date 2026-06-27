@@ -8,14 +8,7 @@ import { Heart, X, Copy, Check, ExternalLink, ChevronDown, ChevronUp } from 'luc
 import { QRCodeSVG } from 'qrcode.react'
 import { donationsApi, type DonationGoal } from '../services/api'
 
-const DONATION_DISMISSED_QUARTER_KEY = 'donation_modal_dismissed_quarter'
-
-/** Get current quarter string like "2026-Q1" */
-function getCurrentQuarter(): string {
-  const now = new Date()
-  const q = Math.ceil((now.getMonth() + 1) / 3)
-  return `${now.getFullYear()}-Q${q}`
-}
+import { DONATION_DISMISSED_QUARTER_KEY, getCurrentQuarter } from './donationSchedule'
 
 const CRYPTO_METHODS = [
   {
@@ -314,11 +307,4 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
       </div>
     </div>
   )
-}
-
-/** Check if the donation modal should auto-show this quarter. */
-export function shouldShowDonationModal(): boolean {
-  const currentQuarter = getCurrentQuarter()
-  const dismissedQuarter = localStorage.getItem(DONATION_DISMISSED_QUARTER_KEY)
-  return dismissedQuarter !== currentQuarter
 }

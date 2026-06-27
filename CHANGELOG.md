@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.10] - 2026-06-27
+
+### Changed
+- **Zero frontend lint warnings — the lint-debt cleanup is complete (no behavior change).** Cleared the last of the long-standing warnings on two fronts. First, the remaining `react-hooks/exhaustive-deps` warnings in the multiplayer games (the final 32) are resolved, so every game effect now has correct, lint-clean dependencies. Second, every `react-refresh/only-export-components` warning (25) is gone: the app's context files (Theme, Brand, Confirm, Video, Notification, Account, Auth) were split so each context file exports only its hook(s) and the matching `…Provider` component lives in its own file, and a handful of shared constants/helpers (coin-id map, password-validation, donation schedule, game last-path, advanced-condition presets) were moved out of component files into small sibling modules. The net effect for users is faster, more reliable hot-reload during development; nothing about the running app changes. Verified behavior-identical by the full 2,792-test suite, a clean type-check, and a zero-warning lint run.
+
 ## [v3.14.9] - 2026-06-27
 
 ### Changed

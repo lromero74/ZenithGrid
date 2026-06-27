@@ -17,7 +17,8 @@ import { useNotifications } from '../contexts/NotificationContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useIsAdmin, usePermission } from '../hooks/usePermission'
 import { settingsApi, speculativeBucketApi } from '../services/api'
-import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
+import { PasswordStrengthMeter, CapsLockWarning } from '../components/auth/PasswordStrengthMeter'
+import { isPasswordValid } from '../components/auth/passwordValidation'
 import { useCapsLock } from '../hooks/useCapsLock'
 
 

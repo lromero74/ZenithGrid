@@ -23,7 +23,8 @@ import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { HelpCircle, X, Eye } from 'lucide-react'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 // ---------------------------------------------------------------------------
 // Colors

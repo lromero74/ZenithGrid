@@ -37,7 +37,8 @@ import {
   type Difficulty,
 } from './blackjackEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { BlackjackMultiplayer } from './BlackjackMultiplayer'
 
 interface SavedState {

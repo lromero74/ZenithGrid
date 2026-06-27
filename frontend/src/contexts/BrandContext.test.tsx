@@ -8,7 +8,8 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 
-import { BrandProvider, useBrand } from './BrandContext'
+import { BrandProvider } from './BrandProvider'
+import { useBrand } from './BrandContext'
 
 // TestConsumer to expose context values
 function TestConsumer() {

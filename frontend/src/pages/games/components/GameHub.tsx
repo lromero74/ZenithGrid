@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, LayoutList, Swords, Flag, Shield, TrendingUp, Users, LogIn } from 'lucide-react'
 import { GAMES, GAME_CATEGORIES, CARD_SUBCATEGORIES, GROUP_OPTIONS, GAME_ICONS } from '../constants'
 import { useGameScores } from '../hooks/useGameScores'
+import { getLastGamePath } from './gameLastPath'
 import { useRecentlyPlayed } from '../hooks/useRecentlyPlayed'
 import { useOnlineFriends, type OnlineFriendInfo } from '../hooks/useFriends'
 import { gameSocket } from '../../../services/gameSocket'
@@ -73,20 +74,9 @@ function FriendsLobbies({ navigate }: { navigate: ReturnType<typeof useNavigate>
   )
 }
 
-const LAST_GAME_KEY = 'zenith-games-last-path'
 const CATEGORY_KEY = 'zenith-games-category'
 const SUBCATEGORY_KEY = 'zenith-games-subcategory'
 const GROUP_KEY = 'zenith-games-group'
-
-/** Store the current game path so we can resume it later. */
-export function setLastGamePath(path: string): void {
-  try { sessionStorage.setItem(LAST_GAME_KEY, path) } catch { /* ignore */ }
-}
-
-/** Clear the stored game path (used when explicitly going back to hub). */
-export function clearLastGamePath(): void {
-  try { sessionStorage.removeItem(LAST_GAME_KEY) } catch { /* ignore */ }
-}
 
 export function GameHub() {
   const navigate = useNavigate()
@@ -94,7 +84,7 @@ export function GameHub() {
   // Auto-navigate to last-played game if returning from another page
   useEffect(() => {
     try {
-      const lastPath = sessionStorage.getItem(LAST_GAME_KEY)
+      const lastPath = getLastGamePath()
       if (lastPath) {
         navigate(lastPath, { replace: true })
       }

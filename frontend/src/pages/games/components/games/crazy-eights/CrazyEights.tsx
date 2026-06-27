@@ -24,7 +24,8 @@ import {
   type CrazyEightsState,
 } from './crazyEightsEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { CrazyEightsMultiplayer } from './CrazyEightsMultiplayer'
 
 interface SavedState {

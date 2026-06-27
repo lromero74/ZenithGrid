@@ -15,7 +15,8 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { CribbageMultiplayer } from './CribbageMultiplayer'
 import {
   createCribbageGame,
