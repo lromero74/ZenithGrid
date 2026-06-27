@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.17] - 2026-06-26
+
+### Fixed
+- **Account value activity no longer 500s on PostgreSQL.** The daily activity aggregation now reuses the same grouped win/loss expression in SELECT and GROUP BY, avoiding a Postgres grouping error that showed up as repeated `/api/account-value/activity` failures while browsing charts.
+
 ## [v3.13.16] - 2026-06-26
 
 ### Fixed

@@ -491,17 +491,18 @@ async def get_daily_activity(
         (pos_is_btc, func.coalesce(Position.profit_quote, 0.0)),
         else_=func.coalesce(Position.profit_usd, 0.0),
     )
+    pos_category = case((Position.profit_usd > 0, "trade_win"), else_="trade_loss")
     pos_date = _date_str(Position.closed_at)
     pos_rows = (await db.execute(
         select(
             pos_date,
             pos_line,
-            case((Position.profit_usd > 0, "trade_win"), else_="trade_loss"),
+            pos_category,
             func.sum(pos_amount),
             func.count(),
         )
         .where(and_(*pos_filters, func.abs(func.coalesce(Position.profit_usd, 0.0)) >= 0.01))
-        .group_by(pos_date, pos_line, case((Position.profit_usd > 0, "trade_win"), else_="trade_loss"))
+        .group_by(pos_date, pos_line, pos_category)
     )).all()
 
     # Transfers: BTC line only when the currency is BTC AND it isn't a card spend
