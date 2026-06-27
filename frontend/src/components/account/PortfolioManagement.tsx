@@ -131,6 +131,10 @@ export function PortfolioManagement({ accounts }: PortfolioManagementProps) {
     }).finally(() => {
       fetchingRef.current = false
     })
+    // Intentionally keyed on the cex-account *count*: re-fetch when accounts are
+    // added/removed, not on every render (cexAccounts is a fresh filter() result
+    // each render, so depending on the array would re-fetch continuously).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cexAccounts.length])
 
   // Initialize reserves open/closed state from localStorage + settings
