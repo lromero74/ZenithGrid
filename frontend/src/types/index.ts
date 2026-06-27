@@ -357,6 +357,7 @@ export interface Bot {
   reserved_btc_balance: number;
   reserved_usd_balance: number;
   budget_percentage: number;
+  check_interval_seconds?: number;  // Bot poll interval (model column; defaults to 300)
   is_active: boolean;
   created_at: string;
   updated_at: string;

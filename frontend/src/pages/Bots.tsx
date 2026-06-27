@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Bot } from '../types'
+import { Bot, StrategyConfig } from '../types'
 import { Plus, Activity, Building2, Wallet, Upload, ClipboardPaste, X, CheckCircle, AlertCircle } from 'lucide-react'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useNotifications } from '../contexts/NotificationContext'
@@ -27,6 +27,20 @@ import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
 import { BotBudgetRebalancer } from '../components/account/BotBudgetRebalancer'
 import { markStartupMilestone } from '../utils/startupPerformance'
+
+// Shape of a bot-config JSON blob pasted/uploaded via the import modal. All
+// fields are optional — the source is untrusted user JSON, validated before use.
+interface ImportedBotConfig {
+  name?: string
+  description?: string | null
+  market_type?: 'spot' | 'perps'
+  strategy_type?: string
+  strategy_config?: StrategyConfig
+  product_id?: string
+  product_ids?: string[]
+  split_budget_across_pairs?: boolean
+  budget_percentage?: number
+}
 
 function Bots() {
   const location = useLocation()
@@ -57,7 +71,7 @@ function Bots() {
     isValid: boolean | null
     errors: string[]
     warnings: string[]
-    parsedData: any | null
+    parsedData: ImportedBotConfig | null
   }>({ isValid: null, errors: [], warnings: [], parsedData: null })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -102,7 +116,7 @@ function Bots() {
       setReadOnly(false)
       setReadOnlyTitle('')
       // Handle both legacy single pair and new multi-pair bots
-      const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
+      const productIds = bot.product_ids || (bot.product_id ? [bot.product_id] : [])
       setFormData({
         name: bot.name,
         description: bot.description || '',
@@ -110,11 +124,11 @@ function Bots() {
         reserved_btc_balance: bot.reserved_btc_balance || 0,
         reserved_usd_balance: bot.reserved_usd_balance || 0,
         budget_percentage: bot.budget_percentage || 0,
-        check_interval_seconds: (bot as any).check_interval_seconds || 300,
+        check_interval_seconds: bot.check_interval_seconds || 300,
         strategy_type: bot.strategy_type,
         product_id: bot.product_id,  // Keep for backward compatibility
         product_ids: productIds,
-        split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
+        split_budget_across_pairs: bot.split_budget_across_pairs || false,
         strategy_config: bot.strategy_config,
         exchange_type: bot.exchange_type || 'cex',
       })
@@ -143,7 +157,7 @@ function Bots() {
   // Handle opening cloned bot in edit modal
   const handleCloneSuccess = (clonedBot: Bot) => {
     // Open the cloned bot in edit modal so user can review/modify
-    const productIds = (clonedBot as any).product_ids || (clonedBot.product_id ? [clonedBot.product_id] : [])
+    const productIds = clonedBot.product_ids || (clonedBot.product_id ? [clonedBot.product_id] : [])
     setEditingBot(clonedBot)
     setReadOnly(false)
     setReadOnlyTitle('')
@@ -154,11 +168,11 @@ function Bots() {
       reserved_btc_balance: clonedBot.reserved_btc_balance || 0,
       reserved_usd_balance: clonedBot.reserved_usd_balance || 0,
       budget_percentage: clonedBot.budget_percentage || 0,
-      check_interval_seconds: (clonedBot as any).check_interval_seconds || 300,
+      check_interval_seconds: clonedBot.check_interval_seconds || 300,
       strategy_type: clonedBot.strategy_type,
       product_id: clonedBot.product_id,
       product_ids: productIds,
-      split_budget_across_pairs: (clonedBot as any).split_budget_across_pairs || false,
+      split_budget_across_pairs: clonedBot.split_budget_across_pairs || false,
       strategy_config: clonedBot.strategy_config,
       exchange_type: clonedBot.exchange_type || 'cex',
     })
@@ -246,7 +260,7 @@ function Bots() {
     setReadOnly(forceReadOnly)
     setReadOnlyTitle(forceReadOnly ? `View Bot: ${bot.name}` : '')
     // Handle both legacy single pair and new multi-pair bots
-    const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
+    const productIds = bot.product_ids || (bot.product_id ? [bot.product_id] : [])
     setFormData({
       name: bot.name,
       description: bot.description || '',
@@ -254,11 +268,11 @@ function Bots() {
       reserved_btc_balance: bot.reserved_btc_balance || 0,
       reserved_usd_balance: bot.reserved_usd_balance || 0,
       budget_percentage: bot.budget_percentage || 0,
-      check_interval_seconds: (bot as any).check_interval_seconds || 300,
+      check_interval_seconds: bot.check_interval_seconds || 300,
       strategy_type: bot.strategy_type,
       product_id: bot.product_id,  // Keep for backward compatibility
       product_ids: productIds,
-      split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
+      split_budget_across_pairs: bot.split_budget_across_pairs || false,
       strategy_config: bot.strategy_config,
       exchange_type: bot.exchange_type || 'cex',
     })
@@ -280,11 +294,11 @@ function Bots() {
     isValid: boolean
     errors: string[]
     warnings: string[]
-    parsedData: any | null
+    parsedData: ImportedBotConfig | null
   } => {
     const errors: string[] = []
     const warnings: string[] = []
-    let parsedData: any = null
+    let parsedData: ImportedBotConfig
 
     // Step 1: Parse JSON
     try {
@@ -320,7 +334,7 @@ function Bots() {
     // Step 5: Check for duplicate bot (same strategy_type, same pairs, same strategy_config)
     if (errors.length === 0) {
       const isDuplicate = bots.some(existingBot => {
-        const existingPairs = (existingBot as any).product_ids || [existingBot.product_id]
+        const existingPairs = existingBot.product_ids || [existingBot.product_id]
         const newPairs = parsedData.product_ids || [parsedData.product_id]
 
         const sameStrategy = existingBot.strategy_type === parsedData.strategy_type
@@ -401,7 +415,7 @@ function Bots() {
       name: importedData.name ? `${importedData.name} (Imported)` : 'Imported Bot',
       description: importedData.description || '',
       market_type: importedData.market_type || 'spot',
-      strategy_type: importedData.strategy_type,
+      strategy_type: importedData.strategy_type || '',
       strategy_config: importedData.strategy_config || {},
       product_id: productIds[0],
       product_ids: productIds,
