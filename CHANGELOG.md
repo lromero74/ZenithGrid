@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.1] - 2026-06-27
+
+### Changed
+- **Internal type-safety cleanup (no behavior change).** Began eliminating loose `any` types across the web app's TypeScript, replacing them with precise types so more bugs are caught at build time. This batch covers the bot list and bot import/edit flows, the trading charts, the closed/failed-orders history, the admin user/role/group/security/donations screens, and the reports goal & expense editors. A new shared helper now handles API error messages and canceled-request detection consistently everywhere (replacing dozens of ad-hoc error casts). 121 of the app's 352 `any` warnings are gone so far; the rest follow in later releases.
+
 ## [v3.14.0] - 2026-06-27
 
 ### Changed
