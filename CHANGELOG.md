@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.29] - 2026-06-27
+
+### Changed
+- **Bot decision log components now use shared API response types.** The AI, scanner, indicator, and position decision log views no longer rely on local explicit `any` casts for typed log data.
+
 ## [v3.13.28] - 2026-06-27
 
 ### Changed

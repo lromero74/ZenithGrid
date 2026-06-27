@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { botsApi } from '../../services/api'
+import { botsApi, type BotLogEntry, type IndicatorConditionDetail } from '../../services/api'
 import { Brain, TrendingUp, TrendingDown, Clock, Target, CircleDot } from 'lucide-react'
 import { formatDateTime } from '../../utils/dateFormat'
 
@@ -41,7 +41,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
 
   if (!isOpen) return null
 
-  const filteredLogs = logs.filter((log: any) => {
+  const filteredLogs = logs.filter((log: BotLogEntry) => {
     if (filterDecision === 'all') return true
     // For AI logs, filter by decision
     if (log.log_type === 'ai') {
@@ -146,14 +146,14 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                 : `No "${filterDecision}" decisions logged yet.`}
             </div>
           ) : (
-            filteredLogs.map((log: any) => {
+            filteredLogs.map((log: BotLogEntry) => {
               // Determine display values based on log type
               const isAILog = log.log_type === 'ai'
               const isIndicatorLog = log.log_type === 'indicator'
 
               let decision = 'hold'
               if (isAILog) {
-                decision = log.decision
+                decision = log.decision || 'hold'
               } else if (isIndicatorLog) {
                 if (log.phase === 'base_order' || log.phase === 'safety_order') {
                   decision = log.conditions_met ? 'buy' : 'hold'
@@ -175,7 +175,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                         <div className="flex items-center space-x-2">
                           {isIndicatorLog && (
                             <span className="px-2 py-1 rounded text-xs font-medium bg-cyan-600/20 border border-cyan-600/50 text-cyan-300">
-                              {log.phase.replace('_', ' ').toUpperCase()}
+                              {(log.phase || '').replace('_', ' ').toUpperCase()}
                             </span>
                           )}
                           <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(decision)}`}>
@@ -236,7 +236,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                     <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
                       <p className="text-sm font-medium text-cyan-300 mb-2">📊 Indicator Conditions:</p>
                       <div className="space-y-1">
-                        {log.conditions_detail.map((cond: any, idx: number) => {
+                        {log.conditions_detail.map((cond: IndicatorConditionDetail, idx: number) => {
                           // Handle both old format (met/value/actual) and new format (result/threshold/actual_value)
                           const conditionMet = cond.result !== undefined ? cond.result : cond.met
                           const thresholdValue = cond.threshold !== undefined ? cond.threshold : cond.value

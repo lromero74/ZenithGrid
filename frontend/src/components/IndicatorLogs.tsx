@@ -32,7 +32,7 @@ interface IndicatorLog {
   phase: string
   conditions_met: boolean
   conditions_detail: ConditionDetail[]
-  indicators_snapshot: Record<string, any> | null
+  indicators_snapshot: Record<string, unknown> | null
   current_price: number | null
 }
 

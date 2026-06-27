@@ -445,12 +445,10 @@ export interface BotLogEntry {
   phase?: string | null;
   conditions_met?: boolean | null;
   position_status?: string | null;
+  thinking?: string | null;
+  conditions_detail?: IndicatorConditionDetail[] | null;
+  indicators_snapshot?: Record<string, unknown> | null;
   [key: string]: unknown;
-}
-
-export interface ScannerLogEntry extends BotLogEntry {
-  scan_type: string;
-  decision: string;
 }
 
 export interface IndicatorConditionDetail {
@@ -458,13 +456,36 @@ export interface IndicatorConditionDetail {
   timeframe?: string;
   operator?: string;
   threshold?: number;
+  value?: number | string | null;
   actual_value: number | null;
+  actual?: number | string | null;
   result: boolean;
+  met?: boolean;
   negated?: boolean;
   error?: string;
   reason?: string;
   previous_value?: number;
   indicator?: string;
+  ai_reasoning?: string;
+}
+
+export interface ScannerPatternData {
+  entry_price?: number;
+  stop_loss?: number;
+  take_profit_target?: number;
+  risk_reward_ratio?: number;
+  pole_gain_pct?: number;
+  retracement_pct?: number;
+  volume_ratio?: number;
+  pullback_candles?: number;
+}
+
+export interface ScannerLogEntry extends BotLogEntry {
+  scan_type: string;
+  decision: string;
+  reason?: string | null;
+  volume_ratio?: number | null;
+  pattern_data?: ScannerPatternData | null;
 }
 
 export interface IndicatorLogEntry extends BotLogEntry {

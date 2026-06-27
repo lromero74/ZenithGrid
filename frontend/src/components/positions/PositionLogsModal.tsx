@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { botsApi } from '../../services/api'
+import { botsApi, type BotLogEntry, type IndicatorConditionDetail } from '../../services/api'
 import { Brain, TrendingUp, TrendingDown, CircleDot, Clock, Target, X, BarChart3, CheckCircle, XCircle } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact } from '../../utils/dateFormat'
 
@@ -29,7 +29,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
       // Only keep full condition matches:
       // - AI logs: always keep (each is a full decision)
       // - Indicator logs: only keep where conditions_met === true
-      const matchedLogs = allLogs.filter((log: any) =>
+      const matchedLogs = allLogs.filter((log: BotLogEntry) =>
         log.log_type === 'ai' || (log.log_type === 'indicator' && log.conditions_met)
       )
 
@@ -84,7 +84,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
 
   if (!isOpen) return null
 
-  const filteredLogs = logs.filter((log: any) => {
+  const filteredLogs = logs.filter((log: BotLogEntry) => {
     if (filterDecision === 'all') return true
     if (filterDecision === 'ai') return log.log_type === 'ai'
     if (filterDecision === 'indicator') return log.log_type === 'indicator'
@@ -183,7 +183,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                 : `No "${filterDecision}" logs found for this position.`}
             </div>
           ) : (
-            filteredLogs.map((log: any) => (
+            filteredLogs.map((log: BotLogEntry) => (
               <div
                 key={`${log.log_type}-${log.id}`}
                 className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
@@ -194,17 +194,17 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                     {/* Header Row */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-3">
-                        {getDecisionIcon(log.decision)}
+                        {getDecisionIcon(log.decision || 'hold')}
                         <div>
                           <div className="flex items-center space-x-2">
                             <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 text-purple-300 rounded text-xs font-medium">
                               AI
                             </span>
-                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(log.decision)}`}>
-                              {log.decision.toUpperCase()}
+                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(log.decision || 'hold')}`}>
+                              {(log.decision || 'hold').toUpperCase()}
                             </span>
                             {log.confidence !== null && (
-                              <span className={`text-sm font-medium ${getConfidenceColor(log.confidence)}`}>
+                              <span className={`text-sm font-medium ${getConfidenceColor(log.confidence ?? null)}`}>
                                 {log.confidence}% confidence
                               </span>
                             )}
@@ -249,7 +249,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                               INDICATOR
                             </span>
                             <span className="px-2 py-1 rounded text-xs font-medium border bg-slate-700 border-slate-600 text-slate-300">
-                              {log.phase.replace('_', ' ').toUpperCase()}
+                              {(log.phase || '').replace('_', ' ').toUpperCase()}
                             </span>
                             {log.conditions_met ? (
                               <CheckCircle className="w-4 h-4 text-green-400" />
@@ -279,7 +279,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                     {/* Indicator Conditions */}
                     <div className="bg-slate-900/50 rounded p-3 border border-slate-700 space-y-2">
                       <p className="text-sm font-medium text-blue-300 mb-2">📊 Indicator Conditions:</p>
-                      {log.conditions_detail && log.conditions_detail.map((condition: any, idx: number) => (
+                      {log.conditions_detail && log.conditions_detail.map((condition: IndicatorConditionDetail, idx: number) => (
                         <div key={idx} className="flex items-start space-x-2 text-xs">
                           {condition.result ? (
                             <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
@@ -291,7 +291,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                               {condition.type.toUpperCase()} ({condition.timeframe})
                             </span>
                             <span className="text-slate-400">
-                              {' '}{condition.operator.replace('_', ' ')} {condition.threshold}
+                              {' '}{(condition.operator || '').replace('_', ' ')} {condition.threshold}
                             </span>
                             <span className={condition.result ? 'text-green-400' : 'text-red-400'}>
                               {' '}→ {typeof condition.actual_value === 'number' ? condition.actual_value.toFixed(2) : condition.actual_value}
@@ -308,7 +308,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                           View all indicator values ({Object.keys(log.indicators_snapshot).length} indicators)
                         </summary>
                         <div className="mt-2 bg-slate-900/50 rounded p-3 border border-slate-700 text-xs space-y-1 max-h-40 overflow-y-auto">
-                          {Object.entries(log.indicators_snapshot).map(([key, value]: [string, any]) => (
+                          {Object.entries(log.indicators_snapshot).map(([key, value]) => (
                             <div key={key} className="flex justify-between">
                               <span className="text-slate-400">{key}:</span>
                               <span className="text-slate-300 font-mono">

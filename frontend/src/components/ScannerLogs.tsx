@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { botsApi } from '../services/api'
+import { botsApi, type ScannerLogEntry } from '../services/api'
 import { ScanLine, TrendingUp, TrendingDown, Clock, Target, Activity, AlertTriangle, CheckCircle, XCircle, Pause } from 'lucide-react'
 import { formatDateTime } from '../utils/dateFormat'
 
@@ -42,7 +42,7 @@ function ScannerLogs({ botId, isOpen, onClose }: ScannerLogsProps) {
 
   if (!isOpen) return null
 
-  const filteredLogs = logs.filter((log: any) => {
+  const filteredLogs = logs.filter((log: ScannerLogEntry) => {
     const matchesScanType = filterScanType === 'all' || log.scan_type === filterScanType
     const matchesDecision = filterDecision === 'all' || log.decision === filterDecision
     return matchesScanType && matchesDecision
@@ -199,7 +199,7 @@ function ScannerLogs({ botId, isOpen, onClose }: ScannerLogsProps) {
                 : 'No matching logs found for the selected filters.'}
             </div>
           ) : (
-            filteredLogs.map((log: any) => (
+            filteredLogs.map((log: ScannerLogEntry) => (
               <div
                 key={log.id}
                 className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
