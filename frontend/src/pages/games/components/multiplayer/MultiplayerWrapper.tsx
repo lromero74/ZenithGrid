@@ -228,7 +228,7 @@ export function MultiplayerWrapper({
       setHostUserId(undefined)
     })
     return () => { unsubSuccess(); unsubFailed(); unsubLobbyReset(); unsubJoined(); unsubAlready(); unsubLeft(); unsubClosed() }
-  }, [gameMode])
+  }, [gameMode, config.gameId])
 
   const navigate = useNavigate()
 

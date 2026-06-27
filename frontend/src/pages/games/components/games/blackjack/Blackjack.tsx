@@ -324,7 +324,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       else if (gameState.message.toLowerCase().includes('bust')) sfx.play('bust')
       onScoreChange?.(gameState.chips)
     }
-  }, [gameState.phase, sfx])
+  }, [gameState.phase, sfx, gameState.message, gameState.chips, onScoreChange])
 
   // Dealer draws one card at a time
   useEffect(() => {

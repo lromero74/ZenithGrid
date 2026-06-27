@@ -121,7 +121,7 @@ function VideoPokerSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSt
       if (gameState.lastResult.name === 'Royal Flush') sfx.play('jackpot')
       else if (gameState.lastResult.multiplier > 0) sfx.play('win')
     }
-  }, [gameState.phase, sfx])
+  }, [gameState.phase, sfx, gameState.lastResult])
 
   const handleBetChange = useCallback((delta: number) => {
     setGameState(prev => setBet(prev, prev.bet + delta))

@@ -243,7 +243,7 @@ function CheatSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultipl
       }, 2000)
       return () => clearTimeout(timer)
     }
-  }, [gameState.phase, sfx])
+  }, [gameState.phase, sfx, gameState.lastPlay])
 
   const toggleCard = useCallback((index: number) => {
     setSelectedCards(prev => {

@@ -212,7 +212,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     setKeyboardState({})
     music.start()
     clear()
-  }, [mode, music])
+  }, [mode, music, clear])
 
   const handleModeChange = useCallback((newMode: 'daily' | 'random') => {
     setMode(newMode)
