@@ -1,4 +1,4 @@
-import { StrategyParameter, AggregateValue } from '../../types'
+import { StrategyParameter, AggregateValue, StrategyConfig } from '../../types'
 import { RebalanceStatus } from '../../services/api'
 
 export interface BotFormData {
@@ -309,7 +309,7 @@ export function computeEffectiveAggregateValues(
 /**
  * Helper to calculate total capital multiplier for one full DCA cycle.
  */
-export function getDCAMultiplier(config: Record<string, any>): number {
+export function getDCAMultiplier(config: StrategyConfig): number {
   const maxSafetyOrders = config.max_safety_orders || 0
   if (maxSafetyOrders <= 0) return 1.0
 
@@ -356,7 +356,7 @@ export function getDCAMultiplier(config: Record<string, any>): number {
  * ceiling to the configured max.
  */
 export function calculateSoftCeiling(
-  config: Record<string, any>,
+  config: StrategyConfig,
   aggregateValue: number,
   budgetPercentage: number,
   worstCaseMin: number,

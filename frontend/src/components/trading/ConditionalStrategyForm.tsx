@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import ConditionBuilder, { ConditionGroup } from './ConditionBuilder'
+import type { StrategyConfig } from '../../types'
 
 interface ConditionalStrategyFormProps {
-  config: Record<string, any>
-  onChange: (config: Record<string, any>) => void
+  config: StrategyConfig
+  onChange: (config: StrategyConfig) => void
 }
 
 const DEFAULT_BUY_CONDITIONS: ConditionGroup = {
@@ -41,12 +42,12 @@ const DEFAULT_SELL_CONDITIONS: ConditionGroup = {
 function ConditionalStrategyForm({ config, onChange }: ConditionalStrategyFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const updateConfig = (key: string, value: any) => {
+  const updateConfig = (key: string, value: unknown) => {
     onChange({ ...config, [key]: value })
   }
 
-  const buyConditions = config.buy_conditions || DEFAULT_BUY_CONDITIONS
-  const sellConditions = config.sell_conditions || DEFAULT_SELL_CONDITIONS
+  const buyConditions = (config.buy_conditions as ConditionGroup) || DEFAULT_BUY_CONDITIONS
+  const sellConditions = (config.sell_conditions as ConditionGroup) || DEFAULT_SELL_CONDITIONS
 
   return (
     <div className="space-y-6">

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.3] - 2026-06-27
+
+### Changed
+- **Bot-config forms are now fully strongly-typed (no behavior change).** The DCA budget configuration form, the conditional-strategy builder, and the soft-ceiling / DCA-multiplier sizing helpers no longer use loose `any`-typed config objects — they share one strongly-typed bot-configuration shape covering every field (sizing, profit/risk, execution, and entry/exit conditions). This catches config-field typos and type mismatches at build time in exactly the area that drives position sizing. Verified behavior-identical by the existing sizing/soft-ceiling parity tests. Brings the campaign to 165 of 352 `any` warnings eliminated.
+
 ## [v3.14.2] - 2026-06-27
 
 ### Changed
