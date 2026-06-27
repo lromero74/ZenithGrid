@@ -20,7 +20,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 
 interface ConnectFourMultiplayerProps {
@@ -57,7 +57,7 @@ export function ConnectFourMultiplayer({ roomId, players, playerNames = {}, onLe
 
   // Listen for opponent's moves — stable deps, reads board via ref
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage>('game:action', (msg) => {
       const action = msg.action
       if (!action || action.type !== 'drop') return
       if (msg.playerId === user?.id) return

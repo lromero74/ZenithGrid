@@ -24,7 +24,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 
 interface TicTacToeMultiplayerProps {
@@ -59,7 +59,7 @@ export function TicTacToeMultiplayer({ roomId, players, playerNames = {}, onLeav
 
   // Listen for opponent's moves — stable deps, reads board via ref
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage>('game:action', (msg) => {
       const action = msg.action
       if (!action || action.type !== 'mark') return
       if (msg.playerId === user?.id) return

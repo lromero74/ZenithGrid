@@ -21,7 +21,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 import { createSeededRandom } from '../../../utils/seededRandom'
 
@@ -213,7 +213,7 @@ export function MemoryMultiplayer({
 
   // ----- WS listener -----
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg: any) => {
+    const unsub = gameSocket.on<GameActionMessage<{ type?: string; index?: number; state?: { cards: Card[]; currentPlayer: 0 | 1; scores: [number, number]; flippedIndices: number[]; locked: boolean } }>>('game:action', (msg) => {
       if (msg.playerId === user?.id) return
       const action = msg.action
       if (!action) return
@@ -224,6 +224,7 @@ export function MemoryMultiplayer({
       } else if (action.type === 'state_sync' && !isHost) {
         // Guest receives authoritative state
         const s = action.state
+        if (!s) return
         setCards(s.cards)
         setCurrentPlayer(s.currentPlayer as 0 | 1)
         setScores(s.scores as [number, number])

@@ -5,7 +5,61 @@
  * Singleton instance with event-based message handling.
  */
 
-type MessageHandler = (data: any) => void
+// Internal storage type for listeners — payloads are dynamic JSON, narrowed by
+// each subscriber via the generic on<T>() below.
+type MessageHandler = (data: unknown) => void
+
+/** A multiplayer message addressed to a room. */
+export interface RoomMessage {
+  roomId: string
+}
+
+/** game:action — a player's move. `action` is game-specific (narrow per game). */
+export interface GameActionMessage<A = Record<string, unknown>> extends RoomMessage {
+  playerId: number
+  action?: A
+}
+
+// Room config is a games-domain type (carries Difficulty etc.) defined in the
+// games layer; at the transport layer it's an opaque record cast on receipt.
+type TransportConfig = Record<string, unknown>
+
+/** game:joined — the room a player just joined, with its roster and config. */
+export interface GameJoinedMessage extends RoomMessage {
+  players?: number[]
+  playerNames?: Record<number, string>
+  config?: TransportConfig
+}
+
+/**
+ * Broad shape for the lobby/room lifecycle messages (player_joined, room_info,
+ * config_updated, started, chat, error, connection, …). Different message types
+ * carry different subsets, so every field is optional.
+ */
+export interface LobbyMessage {
+  roomId?: string
+  gameId?: string
+  mode?: string
+  players?: number[]
+  playerNames?: Record<number, string>
+  readyPlayers?: number[]
+  playerId?: number
+  playerName?: string
+  displayName?: string
+  fromDisplayName?: string
+  name?: string
+  hostUserId?: number
+  isHost?: boolean
+  midGame?: boolean
+  status?: string
+  state?: unknown
+  config?: TransportConfig
+  text?: string
+  error?: string
+  connected?: boolean
+  reconnectWindowSeconds?: number
+  action?: unknown
+}
 
 class GameSocketClient {
   private ws: WebSocket | null = null
@@ -16,7 +70,7 @@ class GameSocketClient {
   /** Room ID of an active game — used for auto-rejoin on reconnect. */
   private _activeRoomId: string | null = null
   /** Buffered game:joined response — survives navigation between pages. */
-  private _pendingJoinResult: any = null
+  private _pendingJoinResult: unknown = null
 
   get connected(): boolean {
     return this._connected
@@ -103,14 +157,19 @@ class GameSocketClient {
     }
   }
 
-  /** Subscribe to a message type. Returns an unsubscribe function. */
-  on(type: string, handler: MessageHandler): () => void {
+  /**
+   * Subscribe to a message type. Returns an unsubscribe function.
+   * The payload type `T` is supplied by the caller (or its handler's param
+   * annotation); it defaults to `unknown` so subscribers must narrow.
+   */
+  on<T = unknown>(type: string, handler: (data: T) => void): () => void {
+    const stored = handler as MessageHandler
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set())
     }
-    this.listeners.get(type)!.add(handler)
+    this.listeners.get(type)!.add(stored)
     return () => {
-      this.listeners.get(type)?.delete(handler)
+      this.listeners.get(type)?.delete(stored)
     }
   }
 
@@ -172,7 +231,7 @@ class GameSocketClient {
   }
 
   /** Consume the buffered game:joined result (returns null if none). */
-  consumeJoinResult(): any {
+  consumeJoinResult(): unknown {
     const result = this._pendingJoinResult
     this._pendingJoinResult = null
     return result
@@ -180,7 +239,7 @@ class GameSocketClient {
 
   // ----- Internal -----
 
-  private _emit(type: string, data: any): void {
+  private _emit(type: string, data: unknown): void {
     this.listeners.get(type)?.forEach(handler => {
       try { handler(data) } catch { /* handler error */ }
     })

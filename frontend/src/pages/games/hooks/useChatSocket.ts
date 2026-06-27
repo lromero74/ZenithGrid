@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { gameSocket } from '../../../services/gameSocket'
 import { useAuth } from '../../../contexts/AuthContext'
 import type { ChatMessage } from './useChat'
@@ -45,7 +45,7 @@ export function useChatSocket(activeChannelId: number | null) {
   useEffect(() => {
     const unsub = gameSocket.on('chat:message', (msg: ChatMessage) => {
       // Optimistically prepend message to the infinite query cache
-      qc.setQueryData(['chat-messages', msg.channel_id], (old: any) => {
+      qc.setQueryData(['chat-messages', msg.channel_id], (old: InfiniteData<ChatMessage[]> | undefined) => {
         if (!old?.pages?.length) return old
         const firstPage = old.pages[0] as ChatMessage[]
         // Deduplicate: skip if message already in cache

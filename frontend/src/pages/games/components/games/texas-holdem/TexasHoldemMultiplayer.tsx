@@ -19,7 +19,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { InGameInvite } from '../../multiplayer/InGameInvite'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage, type LobbyMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 import {
   createTexasHoldemGame,
@@ -159,7 +159,7 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
 
   // ── Listen for mid-game player joins ──
   useEffect(() => {
-    const unsub = gameSocket.on('game:mid_player_joined', (msg) => {
+    const unsub = gameSocket.on<LobbyMessage>('game:mid_player_joined', (msg) => {
       if (msg.roomId !== roomId) return
       const newPlayerId = msg.playerId as number
       const newName = msg.playerName as string
@@ -175,21 +175,21 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
 
   // ── Listen for game action WS messages ──
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage<{ type?: string; state?: TexasHoldemState; actionText?: string; action?: string; amount?: number }>>("game:action", (msg) => {
       const action = msg.action
       if (!action) return
 
       // State sync from host
       if (action.type === 'holdem_sync') {
         if (!isHost) {
-          setGameState(action.state)
+          setGameState(action.state ?? null)
         }
         if (action.actionText) {
           setActionText(action.actionText)
           setTimeout(() => setActionText(null), 2000)
         }
         // SFX for community cards
-        if (action.state.community?.length > 0) {
+        if ((action.state?.community?.length ?? 0) > 0) {
           sfx.play('reveal')
         }
         return

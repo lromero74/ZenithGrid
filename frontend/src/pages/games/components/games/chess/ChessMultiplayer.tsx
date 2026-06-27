@@ -21,7 +21,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 
 // ── Piece symbols for promotion modal ────────────────────────────────
@@ -102,7 +102,7 @@ export function ChessMultiplayer({ roomId, players, playerNames = {}, onLeave }:
 
   // Listen for opponent's moves
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage>('game:action', (msg) => {
       const action = msg.action
       if (!action || action.type !== 'move') return
       if (msg.playerId === user?.id) return

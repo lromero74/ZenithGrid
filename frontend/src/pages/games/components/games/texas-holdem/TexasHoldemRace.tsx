@@ -131,7 +131,7 @@ export function TexasHoldemRace({ roomId, onLeave }: TexasHoldemRaceProps) {
   const validActions = gameState.currentPlayer === 0 ? getValidActions(gameState) : []
   const minRaise = getMinRaise(gameState)
 
-  const handleAction = useCallback((actionFn: (s: TexasHoldemState, ...args: any[]) => TexasHoldemState, ...args: any[]) => {
+  const handleAction = useCallback(<A extends unknown[]>(actionFn: (s: TexasHoldemState, ...args: A) => TexasHoldemState, ...args: A) => {
     music.init()
     sfx.init()
     music.start()
