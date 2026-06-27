@@ -146,7 +146,7 @@ function Bots() {
     }, 500) // Debounce 500ms
 
     return () => clearTimeout(timeoutId)
-  }, [formData.product_ids, formData.strategy_config, portfolio])
+  }, [formData.product_ids, formData.strategy_config, portfolio, validateBotConfig, validateManualOrderSizing])
 
   // Reset form helper function
   const resetForm = () => {
