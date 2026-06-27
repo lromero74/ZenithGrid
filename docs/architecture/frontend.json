@@ -960,7 +960,7 @@
         "StrategyParameter",
         "StrategyDefinition",
         "OrderHistory",
-        "StrategyConfig (v3.14.1: strict interface for the open bot-config JSON dict \u2014 known fields typed, [key: string]: unknown tail; used for Bot.strategy_config, BotCreate.strategy_config, bot_config, and position strategy_config_snapshot)",
+        "StrategyConfig (v3.14.1; expanded v3.14.3 to cover all ~50 bot-config fields \u2014 sizing, profit/risk, execution, and condition blocks \u2014 so the DCA budget form, conditional-strategy form, and soft-ceiling/DCA-multiplier helpers in botUtils are fully typed instead of Record<string, any>)",
         "PerpsSummary (v3.14.1)",
         "MutationLike<TVars> (v3.14.1: minimal structural type for a React Query mutation passed to a child component as a prop)"
       ],
