@@ -13,9 +13,10 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
    - Update `docs/architecture/index.json` version field
    - Run `python3 scripts/check_version_consistency.py --expected vX.Y.Z` with the release version you are about to tag
    - Wait for architecture-sync to complete before tagging — all docs must be in the same commit as the version bump
-6. Commit all changes (code + all documentation updates) in a single commit, then tag on main
+6. Commit all changes (code + all documentation updates) in a single commit, then tag on main.
+   - **Create the tag ANNOTATED** (`git tag -a vX.Y.Z -m "vX.Y.Z: …"`), not lightweight. This repo historically used lightweight tags, and `git push --follow-tags` silently skips lightweight tags — so the tag never reaches origin/prod and `/api/health` keeps reporting the OLD version.
 7. Delete dev branch locally and on remote (if applicable)
-8. Push main with tags (`git push origin main --follow-tags`), deploy:
+8. Push main, then push the tag EXPLICITLY — `git push origin main` followed by `git push origin vX.Y.Z` (do NOT rely on `--follow-tags` alone; it does not push lightweight tags, and a missed tag is the #1 cause of prod reporting a stale version). Confirm the tag is on origin (`git ls-remote --tags origin | grep vX.Y.Z`) before deploying. Then deploy:
 
    **PRODUCTION = AWS Lightsail (`zenithgrid-ls`), native systemd — NOT `bot.sh`.** (`bot.sh` is the local dev / fedora warm-standby path only.) Real prod deploy:
    - `ssh zenithgrid-ls 'cd ~/ZenithGrid && git pull origin main'`
