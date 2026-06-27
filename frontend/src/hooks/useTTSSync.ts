@@ -289,6 +289,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         currentAudioUrlRef.current = null
       }
     }
+    // Audio-element setup uses the current volume at setup time; ongoing volume
+    // changes are applied by the dedicated volume effect below, so this effect
+    // must not re-run (and recreate the audio element) on every volume change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startAnimationLoop, stopAnimationLoop])
 
   // Background audio recovery: if the browser paused the audio element while

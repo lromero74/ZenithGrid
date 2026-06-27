@@ -21,17 +21,18 @@ export function useAccountValueSummary({ selectedAccount }: UseAccountValueSumma
     placeholderData: keepPreviousData,
   })
   const summary = query.data
+  const { refetch } = query
 
   useEffect(() => {
     if (!selectedAccount || !summary) return
     if (!summary.is_stale && !summary.is_refreshing) return
 
     const timer = window.setTimeout(() => {
-      void query.refetch()
+      void refetch()
     }, STALE_SUMMARY_RECHECK_MS)
 
     return () => window.clearTimeout(timer)
-  }, [query.refetch, selectedAccount, summary])
+  }, [refetch, selectedAccount, summary])
 
   return {
     summary,
