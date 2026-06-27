@@ -15,7 +15,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
 import { SpadesMultiplayer } from './SpadesMultiplayer'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import {
   createSpadesGame,
   placeBid,

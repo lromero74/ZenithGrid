@@ -24,7 +24,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper, type RoomConfig } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay, CountdownOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { setGameRngStreams, resetGameRng } from './dinoRunnerEngine'
 import { createSeededRandom } from '../../../utils/seededRandom'
 
@@ -762,7 +763,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
     }
 
     rafRef.current = requestAnimationFrame(gameLoop)
-  }, [render, saveScore, music, sfx])
+  }, [render, saveScore, music, sfx, bestScore, onGameEnd])
 
   const restartGame = useCallback(() => {
     const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))

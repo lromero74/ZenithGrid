@@ -13,7 +13,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Monitor, ArrowLeft, Swords, Timer, Trophy, Skull, Lock, X, Loader2, DoorOpen } from 'lucide-react'
 import { GameLobby } from './GameLobby'
 import { SessionGate } from './SessionGate'
-import { clearLastGamePath } from '../GameHub'
+import { clearLastGamePath } from '../gameLastPath'
 import { gameSocket, type LobbyMessage } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 import type { Difficulty } from '../../types'
@@ -228,7 +228,7 @@ export function MultiplayerWrapper({
       setHostUserId(undefined)
     })
     return () => { unsubSuccess(); unsubFailed(); unsubLobbyReset(); unsubJoined(); unsubAlready(); unsubLeft(); unsubClosed() }
-  }, [gameMode])
+  }, [gameMode, config.gameId])
 
   const navigate = useNavigate()
 
@@ -377,9 +377,7 @@ export function MultiplayerWrapper({
         hasDifficulty={config.hasDifficulty ?? false}
         availableModes={config.modes}
         selectedMultiplayerMode={selectedMultiplayerMode}
-        onModeChange={(m) => {
-          setSelectedMultiplayerMode(m)
-        }}
+        onModeChange={setSelectedMultiplayerMode}
         onGameStart={handleGameStart}
         onBack={handleBackToSelect}
         initialRoom={roomId ? { roomId, players, playerNames, config: roomConfig, hostUserId } : undefined}

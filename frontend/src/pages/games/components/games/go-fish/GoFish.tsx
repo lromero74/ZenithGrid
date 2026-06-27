@@ -15,7 +15,8 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { GoFishMultiplayer } from './GoFishMultiplayer'
 import {
   createGoFishGame,
@@ -217,7 +218,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       onGameEnd?.(tied ? 'draw' : humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, sfx])
+  }, [gameState, clear, sfx, onGameEnd])
 
   // Auto-run AI turn
   useEffect(() => {

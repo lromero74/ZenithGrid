@@ -30,7 +30,8 @@ import {
   setBlinds,
   type TexasHoldemState,
 } from './TexasHoldemEngine'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 const RACE_TARGET = 2000 // double starting chips
 

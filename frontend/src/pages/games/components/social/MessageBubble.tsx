@@ -38,7 +38,7 @@ function EmojiPicker({ onSelect, onClose }: {
 
 // ----- @Mention Renderer -----
 
-export function renderContent(content: string, members: ChatMember[]) {
+function renderContent(content: string, members: ChatMember[]) {
   if (!content) return null
   const memberNames = members.map(m => m.display_name)
   const regex = new RegExp(`@(${memberNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g')

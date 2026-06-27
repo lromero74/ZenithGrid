@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react'
 import { Trophy, RotateCcw, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { clearLastGamePath } from './GameHub'
+import { clearLastGamePath } from './gameLastPath'
 import type { GameStatus } from '../types'
 import type { GameMusicControls } from '../audio/useGameMusic'
 import type { GameSFXControls } from '../audio/useGameSFX'

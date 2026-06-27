@@ -37,7 +37,8 @@ import {
   type Difficulty,
 } from './blackjackEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { BlackjackMultiplayer } from './BlackjackMultiplayer'
 
 interface SavedState {
@@ -324,7 +325,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       else if (gameState.message.toLowerCase().includes('bust')) sfx.play('bust')
       onScoreChange?.(gameState.chips)
     }
-  }, [gameState.phase, sfx])
+  }, [gameState.phase, sfx, gameState.message, gameState.chips, onScoreChange])
 
   // Dealer draws one card at a time
   useEffect(() => {
@@ -338,6 +339,9 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       })
     }, delay)
     return () => clearTimeout(timer)
+  // Sequences dealer draws: keyed on dealerHand.length so each card re-runs with
+  // fresh state; depending on whole gameState would restart the timer every change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.dealerHand.length, sfx])
 
   // AI opponents play one step at a time

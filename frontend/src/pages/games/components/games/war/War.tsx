@@ -21,7 +21,8 @@ import {
   type WarState,
 } from './WarEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { WarMultiplayer } from './WarMultiplayer'
 
 interface SavedState {

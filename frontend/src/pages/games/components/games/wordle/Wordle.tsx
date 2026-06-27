@@ -25,7 +25,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 const MAX_GUESSES = 6
 
@@ -186,7 +187,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       sfx.play('key')
       setCurrentGuess(g => g + key)
     }
-  }, [gameStatus, currentGuess, guesses, evaluations, answer, hardMode, showToast, triggerShake, music, sfx])
+  }, [gameStatus, currentGuess, guesses, evaluations, answer, hardMode, showToast, triggerShake, music, sfx, onGameEnd])
 
   // Physical keyboard
   useEffect(() => {
@@ -212,7 +213,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     setKeyboardState({})
     music.start()
     clear()
-  }, [mode, music])
+  }, [mode, music, clear])
 
   const handleModeChange = useCallback((newMode: 'daily' | 'random') => {
     setMode(newMode)

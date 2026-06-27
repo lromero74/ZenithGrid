@@ -12,9 +12,9 @@ import {
   getChainById,
   getChainName,
   SUPPORTED_CHAINS,
-  AccountProvider,
   useAccount,
 } from './AccountContext'
+import { AccountProvider } from './AccountProvider'
 import type { Account } from './AccountContext'
 
 // Mock authFetch

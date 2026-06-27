@@ -10,7 +10,8 @@ import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider, useAuth, RequireAuth } from './AuthContext'
+import { AuthProvider, RequireAuth } from './AuthProvider'
+import { useAuth } from './AuthContext'
 import type { ReactNode } from 'react'
 
 // Reusable mock user

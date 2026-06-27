@@ -8,7 +8,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { setLastGamePath, clearLastGamePath } from './GameHub'
+import { setLastGamePath, clearLastGamePath } from './gameLastPath'
 
 interface GameLayoutProps {
   title: string

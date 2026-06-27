@@ -33,7 +33,8 @@ vi.mock('./BrandContext', () => ({
   }),
 }))
 
-import { ThemeProvider, useTheme } from './ThemeContext'
+import { ThemeProvider } from './ThemeProvider'
+import { useTheme } from './ThemeContext'
 
 const STORAGE_KEY = 'btcbot-theme'
 

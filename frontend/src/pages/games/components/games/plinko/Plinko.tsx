@@ -23,7 +23,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 // ── Help modal ──────────────────────────────────────────────────────
 function PlinkoHelp({ onClose }: { onClose: () => void }) {
@@ -441,7 +442,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
         setBet(balanceRef.current)
       }
     }
-  }, [drawBoard, sfx])
+  }, [drawBoard, sfx, onGameEnd])
 
   const dropBall = useCallback(() => {
     if (betRef.current < MIN_BET || balanceRef.current < betRef.current) return

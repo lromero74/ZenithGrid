@@ -34,7 +34,8 @@ vi.mock('../components/shared/Toast', () => ({
   ),
 }))
 
-import { NotificationProvider, useNotifications } from './NotificationContext'
+import { NotificationProvider } from './NotificationProvider'
+import { useNotifications } from './NotificationContext'
 
 // Mock WebSocket
 class MockWebSocket {

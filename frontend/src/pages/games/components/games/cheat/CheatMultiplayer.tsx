@@ -149,6 +149,9 @@ export function CheatMultiplayer({ roomId, players, playerNames, onLeave }: Prop
       })
     }, 2500)
     return () => clearTimeout(timer)
+  // Host sync timer keyed on phase; reads state via the setGameState updater.
+  // Depending on gameState would restart the sync timer on every change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, gameState?.phase, roomId, playerCount, players, buildGuestView])
 
   // ── Process actions (host) ───────────────────────────────────

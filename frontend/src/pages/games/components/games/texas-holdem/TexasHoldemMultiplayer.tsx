@@ -113,6 +113,10 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
       })
     }, 5000)
     return () => clearInterval(timer)
+  // Host-only 5s blinds-increase interval, keyed on isHost/gameStatus. It calls the
+  // broadcastState sender; depending on that (re-created each render) would restart the
+  // interval continuously. roomId is effectively constant for the room's lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, gameStatus])
 
   // ── Host: Auto-run AI turns ──
@@ -137,7 +141,7 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
   useEffect(() => {
     if (!gameState || gameState.phase !== 'gameOver') return
     setGameStatus(gameState.chips[mySeat] > 0 ? 'won' : 'lost')
-  }, [gameState?.phase, mySeat])
+  }, [gameState?.phase, mySeat, gameState])
 
   // ── Broadcast state (host only) ──
   function broadcastState(state: TexasHoldemState, action?: string) {
@@ -283,7 +287,7 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
     if (!gameState) return
     const min = getMinRaise(gameState)
     setRaiseAmount(Math.min(min, gameState.chips[mySeat] + gameState.bets[mySeat]))
-  }, [gameState?.phase, gameState?.currentBet, mySeat])
+  }, [gameState?.phase, gameState?.currentBet, mySeat, gameState])
 
   // ── Render ──
   if (!gameState) {

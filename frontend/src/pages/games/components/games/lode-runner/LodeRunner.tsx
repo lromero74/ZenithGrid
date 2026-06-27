@@ -23,7 +23,8 @@ import { MusicToggle } from '../../MusicToggle'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { HelpCircle, X, Eye } from 'lucide-react'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -1011,7 +1012,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
     draw()
     onStateChange?.(gsRef.current, 200)
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore, saveState, clearSaved, onStateChange, sfx])
+  }, [draw, saveScore, saveState, clearSaved, onStateChange, sfx, onGameEnd])
 
   // -------------------------------------------------------------------------
   // Start / restart

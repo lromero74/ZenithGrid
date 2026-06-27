@@ -16,7 +16,8 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { CheatMultiplayer } from './CheatMultiplayer'
 import {
   createCheatGame,
@@ -243,7 +244,7 @@ function CheatSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultipl
       }, 2000)
       return () => clearTimeout(timer)
     }
-  }, [gameState.phase, sfx])
+  }, [gameState.phase, sfx, gameState.lastPlay])
 
   const toggleCard = useCallback((index: number) => {
     setSelectedCards(prev => {

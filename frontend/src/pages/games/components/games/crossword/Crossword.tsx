@@ -17,7 +17,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import type { Difficulty as SharedDifficulty, GameStatus } from '../../../types'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { getThemeBackground } from './crosswordBackgrounds'
 import {
   generatePuzzle,

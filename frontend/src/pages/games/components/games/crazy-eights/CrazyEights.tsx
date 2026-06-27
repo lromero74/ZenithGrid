@@ -24,7 +24,8 @@ import {
   type CrazyEightsState,
 } from './crazyEightsEngine'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import { CrazyEightsMultiplayer } from './CrazyEightsMultiplayer'
 
 interface SavedState {
@@ -207,7 +208,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
       onGameEnd?.(humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, sfx])
+  }, [gameState, clear, sfx, onGameEnd])
 
   const handlePlay = useCallback((cardIdx: number) => {
     music.init()

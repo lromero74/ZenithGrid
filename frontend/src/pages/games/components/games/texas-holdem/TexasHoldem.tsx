@@ -313,7 +313,7 @@ function TexasHoldemSinglePlayer() {
   useEffect(() => {
     const min = getMinRaise(gameState)
     setRaiseAmount(Math.min(min, gameState.chips[0] + gameState.bets[0]))
-  }, [gameState.phase, gameState.currentBet])
+  }, [gameState.phase, gameState.currentBet, gameState])
 
   const handleFold = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('fold'); setGameState(prev => fold(prev)) }, [music, sfx])
   const handleCheck = useCallback(() => { music.init(); sfx.init(); music.start(); setGameState(prev => check(prev)) }, [music, sfx])

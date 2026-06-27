@@ -9,7 +9,8 @@ import { useState, FormEvent } from 'react'
 import { Truck, Lock, AlertCircle, CheckCircle, Check } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBrand } from '../../contexts/BrandContext'
-import { PasswordStrengthMeter, isPasswordValid, CapsLockWarning } from './PasswordStrengthMeter'
+import { PasswordStrengthMeter, CapsLockWarning } from './PasswordStrengthMeter'
+import { isPasswordValid } from './passwordValidation'
 import { useCapsLock } from '../../hooks/useCapsLock'
 
 interface ResetPasswordProps {

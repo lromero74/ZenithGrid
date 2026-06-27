@@ -23,7 +23,8 @@ import { getSongForGame } from '../../../audio/songRegistry'
 import { HelpCircle, X } from 'lucide-react'
 import { MusicToggle } from '../../MusicToggle'
 import { MultiplayerWrapper } from '../../multiplayer/MultiplayerWrapper'
-import { useRaceMode, RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { RaceOverlay } from '../../multiplayer/RaceOverlay'
+import { useRaceMode } from '../../multiplayer/useRaceMode'
 import {
   createSpoonsGame,
   drawCard,
@@ -211,7 +212,7 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
     if (gameStatus !== 'won' && gameStatus !== 'lost' && gameStatus !== 'draw') {
       save({ gameState, gameStatus })
     }
-  }, [gameState, gameStatus, save])
+  }, [gameState, gameStatus, save, showModeSelect])
 
   // Detect game over
   useEffect(() => {
@@ -223,7 +224,7 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
       onGameEnd?.(human.eliminated ? 'loss' : 'win')
       clear()
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, showModeSelect])
 
   // ── Turn-based AI: draw + discard ─────────────────────────────────
   useEffect(() => {
@@ -250,6 +251,9 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
       })
     }, 300)
     return () => clearTimeout(timer)
+  // AI-move timer keyed on the turn (currentPlayer/phase); reads gameState.players
+  // for the AI decision. Depending on players would churn the timer / double-move.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.currentPlayer, gameState.mode, gameStatus, sfx, showModeSelect])
 
   // ── Real-time AI: draw + discard with human-modeled delays ────────
@@ -280,6 +284,9 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
       })
     }, delay)
     return () => clearTimeout(timer)
+  // AI-move timer keyed on the turn (currentPlayer/phase); reads gameState.players
+  // for the AI decision. Depending on players would churn the timer / double-move.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.currentPlayer, gameState.mode, gameStatus, sfx, showModeSelect])
 
   // Auto-draw for human when it's their turn (dealer draws from pile)
@@ -314,6 +321,9 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
       }, delay)
     )
     return () => timers.forEach(clearTimeout)
+  // Sets up AI grab timers once per round/phase; depending on the whole gameState
+  // would re-create the timers on every state change and cause duplicate grabs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.spoonGrabber, gameStatus, sfx, showModeSelect])
 
   // Human grabs spoon
