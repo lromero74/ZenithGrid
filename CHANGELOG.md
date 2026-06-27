@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.2] - 2026-06-27
+
+### Changed
+- **Continued internal type-safety cleanup (no behavior change).** Second batch of the `any`-elimination effort, covering the trading & account-value charts, the TradingView chart modal, the closed/failed-orders and bot-list display fields, the login/demo-login error handling, the bot-config validation hook, the P&L chart tooltip, and the chart indicator-settings system (now uses the shared strongly-typed settings interface). 158 of the app's 352 `any` warnings are now gone; the remainder follow in later releases.
+
 ## [v3.14.1] - 2026-06-27
 
 ### Changed
