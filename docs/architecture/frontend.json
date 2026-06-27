@@ -1028,7 +1028,7 @@
     },
     {
       "file": "constants/voices.ts",
-      "purpose": "TTS voice definitions (Microsoft Edge TTS Neural and Multilingual Neural voices including davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi added in v2.137), CHILD_VOICE_IDS set, adult-content keyword list, containsAdultContent() filter \u2014 child voices are automatically swapped for adult voices when article content matches"
+      "purpose": "TTS voice definitions for the article reader, including Microsoft Edge TTS Neural/Multilingual Neural voices, higher-fidelity US multilingual voices, and curated global accented news-reader voices; automatic article cycling skips child voices while CHILD_VOICE_IDS remains available for manual-selection filtering"
     },
     {
       "file": "utils/chartLib.ts",

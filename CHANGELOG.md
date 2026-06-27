@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.18] - 2026-06-26
+
+### Added
+- **More article-reader voices for a global news-anchor feel.** The TTS picker and automatic article rotation now include the newer high-fidelity US multilingual voices plus a curated set of Spanish, French, German, Italian, Brazilian Portuguese, Indian, Japanese, Korean, Arabic, and Mandarin neural voices, so English news articles can rotate through polished accented readers.
+
+### Changed
+- **Article voice rotation now favors adult news-reader voices.** Child voices remain available as manual choices, but automatic article cycling skips them so routine news playback feels more consistent.
+
 ## [v3.13.17] - 2026-06-26
 
 ### Fixed

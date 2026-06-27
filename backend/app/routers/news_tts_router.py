@@ -170,7 +170,7 @@ TTS_VOICES = {
     "maisie": "en-GB-MaisieNeural",
     # Australian voices
     "natasha": "en-AU-NatashaNeural",
-    "william": "en-AU-WilliamNeural",
+    "william": "en-AU-WilliamMultilingualNeural",
     # Canadian voices
     "clara": "en-CA-ClaraNeural",
     "liam": "en-CA-LiamNeural",
@@ -179,6 +179,7 @@ TTS_VOICES = {
     "emily": "en-IE-EmilyNeural",
     # Indian English voices
     "neerja": "en-IN-NeerjaNeural",
+    "neerja-expressive": "en-IN-NeerjaExpressiveNeural",
     "prabhat": "en-IN-PrabhatNeural",
     # New Zealand voices
     "mitchell": "en-NZ-MitchellNeural",
@@ -204,6 +205,30 @@ TTS_VOICES = {
     # Tanzania voices
     "elimu": "en-TZ-ElimuNeural",
     "imani": "en-TZ-ImaniNeural",
+    # Global neural voices selected as accented English news anchors
+    "dalia": "es-MX-DaliaNeural",
+    "jorge": "es-MX-JorgeNeural",
+    "elvira": "es-ES-ElviraNeural",
+    "ximena": "es-ES-XimenaNeural",
+    "alvaro": "es-ES-AlvaroNeural",
+    "vivienne": "fr-FR-VivienneMultilingualNeural",
+    "remy": "fr-FR-RemyMultilingualNeural",
+    "seraphina": "de-DE-SeraphinaMultilingualNeural",
+    "florian": "de-DE-FlorianMultilingualNeural",
+    "isabella": "it-IT-IsabellaNeural",
+    "giuseppe": "it-IT-GiuseppeMultilingualNeural",
+    "francisca": "pt-BR-FranciscaNeural",
+    "thalita": "pt-BR-ThalitaMultilingualNeural",
+    "swara": "hi-IN-SwaraNeural",
+    "madhur": "hi-IN-MadhurNeural",
+    "nanami": "ja-JP-NanamiNeural",
+    "keita": "ja-JP-KeitaNeural",
+    "sunhi": "ko-KR-SunHiNeural",
+    "hyunsu": "ko-KR-HyunsuMultilingualNeural",
+    "zariyah": "ar-SA-ZariyahNeural",
+    "hamed": "ar-SA-HamedNeural",
+    "xiaoxiao": "zh-CN-XiaoxiaoNeural",
+    "yunyang": "zh-CN-YunyangNeural",
 }
 
 DEFAULT_VOICE = "aria"

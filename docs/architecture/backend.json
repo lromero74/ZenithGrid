@@ -78,7 +78,7 @@
     {
       "file": "routers/news_tts_router.py",
       "prefix": "/api/news",
-      "purpose": "Text-to-speech generation, audio caching, voice subscriptions; voices include Microsoft Edge TTS Neural voices and 7 added Neural/Multilingual Neural variants: davis, nancy, tony, ava-multi, emma-multi, brian-multi, andrew-multi"
+      "purpose": "Text-to-speech generation, audio caching, voice subscriptions; voices include Microsoft Edge TTS Neural/Multilingual Neural readers plus curated global accented voices for article narration"
     },
     {
       "file": "routers/order_history.py",

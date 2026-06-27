@@ -17,8 +17,8 @@ import {
 } from './voices'
 
 describe('TTS_VOICES data integrity', () => {
-  test('has at least 40 voices', () => {
-    expect(TTS_VOICES.length).toBeGreaterThanOrEqual(40)
+  test('has at least 70 voices', () => {
+    expect(TTS_VOICES.length).toBeGreaterThanOrEqual(70)
   })
 
   test('every voice has required fields', () => {
@@ -42,6 +42,16 @@ describe('TTS_VOICES data integrity', () => {
     expect(locales.has('US')).toBe(true)
     expect(locales.has('UK')).toBe(true)
     expect(locales.has('AU')).toBe(true)
+    expect(locales.has('MX')).toBe(true)
+    expect(locales.has('FR')).toBe(true)
+    expect(locales.has('JP')).toBe(true)
+  })
+
+  test('includes curated global news voices', () => {
+    expect(TTS_VOICES_BY_ID['emma-multi']?.desc).toContain('Higher-fidelity')
+    expect(TTS_VOICES_BY_ID['neerja-expressive']?.locale).toBe('IN')
+    expect(TTS_VOICES_BY_ID['vivienne']?.locale).toBe('FR')
+    expect(TTS_VOICES_BY_ID['xiaoxiao']?.style).toBe('News')
   })
 
   test('includes both male and female voices', () => {
@@ -71,8 +81,12 @@ describe('TTS_VOICES_BY_ID lookup', () => {
 })
 
 describe('VOICE_CYCLE_IDS', () => {
-  test('only includes voices from allowed locales', () => {
-    const allowedLocales = new Set(['US', 'UK', 'AU', 'CA', 'IE', 'IN', 'NZ', 'ZA'])
+  test('only includes voices from allowed news-reader locales', () => {
+    const allowedLocales = new Set([
+      'US', 'UK', 'AU', 'CA', 'IE', 'IN', 'NZ', 'ZA',
+      'SG', 'HK', 'KE', 'NG', 'PH', 'TZ',
+      'MX', 'ES', 'FR', 'DE', 'IT', 'BR', 'JP', 'KR', 'SA', 'CN',
+    ])
 
     for (const id of VOICE_CYCLE_IDS) {
       const voice = TTS_VOICES_BY_ID[id]
@@ -81,17 +95,20 @@ describe('VOICE_CYCLE_IDS', () => {
     }
   })
 
-  test('does not include voices from excluded locales', () => {
-    const excludedLocales = new Set(['SG', 'HK', 'KE', 'NG', 'PH', 'TZ'])
-
-    for (const id of VOICE_CYCLE_IDS) {
-      const voice = TTS_VOICES_BY_ID[id]
-      expect(excludedLocales.has(voice.locale)).toBe(false)
-    }
+  test('does not include child voices in automatic article cycling', () => {
+    expect(VOICE_CYCLE_IDS).not.toContain('ana')
+    expect(VOICE_CYCLE_IDS).not.toContain('maisie')
   })
 
-  test('has more than 20 voices in the cycle', () => {
-    expect(VOICE_CYCLE_IDS.length).toBeGreaterThan(20)
+  test('has more than 60 voices in the cycle', () => {
+    expect(VOICE_CYCLE_IDS.length).toBeGreaterThan(60)
+  })
+
+  test('includes accented global voices in automatic article cycling', () => {
+    expect(VOICE_CYCLE_IDS).toContain('vivienne')
+    expect(VOICE_CYCLE_IDS).toContain('seraphina')
+    expect(VOICE_CYCLE_IDS).toContain('nanami')
+    expect(VOICE_CYCLE_IDS).toContain('yunyang')
   })
 
   test('all cycle IDs exist in the main voices list', () => {

@@ -122,6 +122,16 @@ class TestTTSVoices:
             assert "name" in voice
             assert "gender" in voice
 
+    def test_tts_voice_map_includes_global_news_anchors(self):
+        """Happy path: curated global article voices map to live Edge neural voice names."""
+        from app.routers.news_tts_router import TTS_VOICES
+
+        assert TTS_VOICES["william"] == "en-AU-WilliamMultilingualNeural"
+        assert TTS_VOICES["neerja-expressive"] == "en-IN-NeerjaExpressiveNeural"
+        assert TTS_VOICES["vivienne"] == "fr-FR-VivienneMultilingualNeural"
+        assert TTS_VOICES["seraphina"] == "de-DE-SeraphinaMultilingualNeural"
+        assert TTS_VOICES["xiaoxiao"] == "zh-CN-XiaoxiaoNeural"
+
 
 # =============================================================================
 # text_to_speech_with_sync

@@ -19,6 +19,22 @@ export const TTS_VOICES: TTSVoice[] = [
   { id: 'ava', name: 'Ava', gender: 'Female', locale: 'US' },
   { id: 'ana', name: 'Ana', gender: 'Female', locale: 'US', child: true },
   { id: 'christopher', name: 'Christopher', gender: 'Male', locale: 'US' },
+  {
+    id: 'ava-multi', name: 'Ava Multilingual', gender: 'Female', locale: 'US',
+    style: 'Premium', desc: 'Higher-fidelity',
+  },
+  {
+    id: 'emma-multi', name: 'Emma Multilingual', gender: 'Female', locale: 'US',
+    style: 'Premium', desc: 'Higher-fidelity',
+  },
+  {
+    id: 'brian-multi', name: 'Brian Multilingual', gender: 'Male', locale: 'US',
+    style: 'Premium', desc: 'Higher-fidelity',
+  },
+  {
+    id: 'andrew-multi', name: 'Andrew Multilingual', gender: 'Male', locale: 'US',
+    style: 'Premium', desc: 'Higher-fidelity',
+  },
   { id: 'eric', name: 'Eric', gender: 'Male', locale: 'US' },
   { id: 'michelle', name: 'Michelle', gender: 'Female', locale: 'US' },
   { id: 'roger', name: 'Roger', gender: 'Male', locale: 'US' },
@@ -40,6 +56,10 @@ export const TTS_VOICES: TTSVoice[] = [
   { id: 'emily', name: 'Emily', gender: 'Female', locale: 'IE' },
   // Indian English voices
   { id: 'neerja', name: 'Neerja', gender: 'Female', locale: 'IN' },
+  {
+    id: 'neerja-expressive', name: 'Neerja Expressive', gender: 'Female', locale: 'IN',
+    style: 'Expressive', desc: 'Bright',
+  },
   { id: 'prabhat', name: 'Prabhat', gender: 'Male', locale: 'IN' },
   // New Zealand voices
   { id: 'mitchell', name: 'Mitchell', gender: 'Male', locale: 'NZ' },
@@ -65,6 +85,30 @@ export const TTS_VOICES: TTSVoice[] = [
   // Tanzania voices
   { id: 'elimu', name: 'Elimu', gender: 'Male', locale: 'TZ' },
   { id: 'imani', name: 'Imani', gender: 'Female', locale: 'TZ' },
+  // Global accented English news anchors
+  { id: 'dalia', name: 'Dalia', gender: 'Female', locale: 'MX', style: 'General', desc: 'Mexican Spanish accent' },
+  { id: 'jorge', name: 'Jorge', gender: 'Male', locale: 'MX', style: 'General', desc: 'Mexican Spanish accent' },
+  { id: 'elvira', name: 'Elvira', gender: 'Female', locale: 'ES', style: 'General', desc: 'Spanish accent' },
+  { id: 'ximena', name: 'Ximena', gender: 'Female', locale: 'ES', style: 'General', desc: 'Spanish accent' },
+  { id: 'alvaro', name: 'Alvaro', gender: 'Male', locale: 'ES', style: 'General', desc: 'Spanish accent' },
+  { id: 'vivienne', name: 'Vivienne', gender: 'Female', locale: 'FR', style: 'Premium', desc: 'French accent' },
+  { id: 'remy', name: 'Remy', gender: 'Male', locale: 'FR', style: 'Premium', desc: 'French accent' },
+  { id: 'seraphina', name: 'Seraphina', gender: 'Female', locale: 'DE', style: 'Premium', desc: 'German accent' },
+  { id: 'florian', name: 'Florian', gender: 'Male', locale: 'DE', style: 'Premium', desc: 'German accent' },
+  { id: 'isabella', name: 'Isabella', gender: 'Female', locale: 'IT', style: 'General', desc: 'Italian accent' },
+  { id: 'giuseppe', name: 'Giuseppe', gender: 'Male', locale: 'IT', style: 'Premium', desc: 'Italian accent' },
+  { id: 'francisca', name: 'Francisca', gender: 'Female', locale: 'BR', style: 'General', desc: 'Brazilian accent' },
+  { id: 'thalita', name: 'Thalita', gender: 'Female', locale: 'BR', style: 'Premium', desc: 'Brazilian accent' },
+  { id: 'swara', name: 'Swara', gender: 'Female', locale: 'IN', style: 'General', desc: 'Indian accent' },
+  { id: 'madhur', name: 'Madhur', gender: 'Male', locale: 'IN', style: 'General', desc: 'Indian accent' },
+  { id: 'nanami', name: 'Nanami', gender: 'Female', locale: 'JP', style: 'General', desc: 'Japanese accent' },
+  { id: 'keita', name: 'Keita', gender: 'Male', locale: 'JP', style: 'General', desc: 'Japanese accent' },
+  { id: 'sunhi', name: 'SunHi', gender: 'Female', locale: 'KR', style: 'General', desc: 'Korean accent' },
+  { id: 'hyunsu', name: 'Hyunsu', gender: 'Male', locale: 'KR', style: 'Premium', desc: 'Korean accent' },
+  { id: 'zariyah', name: 'Zariyah', gender: 'Female', locale: 'SA', style: 'General', desc: 'Arabic accent' },
+  { id: 'hamed', name: 'Hamed', gender: 'Male', locale: 'SA', style: 'General', desc: 'Arabic accent' },
+  { id: 'xiaoxiao', name: 'Xiaoxiao', gender: 'Female', locale: 'CN', style: 'News', desc: 'Mandarin accent' },
+  { id: 'yunyang', name: 'Yunyang', gender: 'Male', locale: 'CN', style: 'News', desc: 'Mandarin accent' },
 ]
 
 export const TTS_VOICES_BY_ID: Record<string, TTSVoice> = Object.fromEntries(
@@ -72,7 +116,7 @@ export const TTS_VOICES_BY_ID: Record<string, TTSVoice> = Object.fromEntries(
 )
 
 export const VOICE_CYCLE_IDS: string[] = TTS_VOICES
-  .filter(v => ['US', 'UK', 'AU', 'CA', 'IE', 'IN', 'NZ', 'ZA'].includes(v.locale))
+  .filter(v => !v.child)
   .map(v => v.id)
 
 // Child voice IDs — used for adult content filtering
