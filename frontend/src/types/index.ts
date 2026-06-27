@@ -65,11 +65,16 @@ export interface StrategyConfig {
   max_simultaneous_same_pair?: number;
   check_interval_seconds?: number;
   enable_soft_ceiling?: boolean;
+  // multi-pair management
+  auto_add_new_pairs?: boolean;
+  skip_stable_pairs?: boolean;
   // categories / AI
   ai_provider?: string;
   ai_risk_preset?: string;
   allowed_categories?: string[];
-  is_speculative?: boolean;
+  is_speculative?: boolean | string;  // stored as JSON string "true" by the speculative preset; boolean tolerated
+  speculative_mode?: boolean;
+  target_multiple?: number;
   max_synthetic_pct?: number;
   // direction / perps
   direction?: string;
